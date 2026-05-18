@@ -43,27 +43,29 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-accent-50 flex items-center justify-center p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center p-8">
       <div className="w-full max-w-md">
         <Link href="/" className="flex items-center space-x-2 mb-8">
-          <Zap className="w-8 h-8 text-primary-600" />
-          <span className="text-xl font-bold gradient-text">RecoverFlow</span>
+          <div className="w-8 h-8 bg-gradient-to-br from-primary-600 to-primary-800 rounded-lg flex items-center justify-center">
+            <Zap className="w-5 h-5 text-white" />
+          </div>
+          <span className="text-xl font-bold text-white">CartGain</span>
         </Link>
 
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome back</h1>
-          <p className="text-gray-600">Sign in to your account to continue</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Welcome back</h1>
+          <p className="text-blue-200">Sign in to your account to continue</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-blue-200 mb-1">Email</label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400" />
               <input
                 type="email"
                 required
-                className="input pl-10"
+                className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70"
                 placeholder="john@example.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -72,20 +74,20 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label className="block text-sm font-medium text-blue-200 mb-1">Password</label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400" />
               <input
                 type="password"
                 required
-                className="input pl-10"
+                className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70"
                 placeholder="••••••••"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               />
             </div>
             <div className="flex justify-end mt-1">
-              <Link href="/forgot-password" className="text-sm text-primary-600 hover:text-primary-700">
+              <Link href="/forgot-password" className="text-sm text-blue-400 hover:text-blue-300">
                 Forgot password?
               </Link>
             </div>
@@ -103,16 +105,16 @@ export default function LoginPage() {
 
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300"></div>
+            <div className="w-full border-t border-blue-700/30"></div>
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-gray-50 text-gray-500">Or continue with</span>
+            <span className="px-2 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-blue-300">Or continue with</span>
           </div>
         </div>
 
         <button
           onClick={handleGoogleSignIn}
-          className="w-full btn-secondary flex items-center justify-center"
+          className="w-full btn-secondary flex items-center justify-center bg-slate-800/40 border border-blue-700/50 text-white hover:border-blue-500/70"
         >
           <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
             <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -123,9 +125,9 @@ export default function LoginPage() {
           Sign in with Google
         </button>
 
-        <p className="text-center text-sm text-gray-600 mt-6">
-          Don't have an account?{' '}
-          <Link href="/signup" className="text-primary-600 hover:text-primary-700 font-medium">
+        <p className="text-center text-sm text-blue-300 mt-6">
+          Don&apos;t have an account?{' '}
+          <Link href="/signup" className="text-blue-400 hover:text-blue-300 font-medium">
             Sign up for free
           </Link>
         </p>
