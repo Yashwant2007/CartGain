@@ -59,7 +59,7 @@ export async function createShopifyWebhook(
   webhookUrl: string
 ): Promise<boolean> {
   try {
-    const response = await fetch(`https://${shopDomain}/admin/api/2024-04/webhooks.json`, {
+    const response = await fetch(`https://${shopDomain}/admin/api/2026-01/webhooks.json`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
