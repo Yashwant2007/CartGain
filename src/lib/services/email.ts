@@ -1,14 +1,23 @@
-import nodemailer from 'nodemailer'
+let transporter: any = null;
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_SERVER_HOST || 'smtp.sendgrid.net',
-  port: parseInt(process.env.EMAIL_SERVER_PORT || '587'),
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_SERVER_USER,
-    pass: process.env.EMAIL_SERVER_PASSWORD,
-  },
-})
+// Server-side only - load nodemailer when needed
+if (typeof window === 'undefined') {
+  try {
+    // eslint-disable-next-line global-require
+    const nodemailer = require('nodemailer');
+    transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_SERVER_HOST || 'smtp.sendgrid.net',
+      port: parseInt(process.env.EMAIL_SERVER_PORT || '587'),
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_SERVER_USER,
+        pass: process.env.EMAIL_SERVER_PASSWORD,
+      },
+    });
+  } catch (e) {
+    console.error('Failed to load email transporter:', e);
+  }
+}
 
 export interface EmailOptions {
   to: string

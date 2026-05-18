@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
 import prisma from '@/lib/db'
+
+// Server-side only - load bcrypt when needed
+let bcrypt: any = null;
+if (typeof window === 'undefined') {
+  try {
+    // eslint-disable-next-line global-require
+    bcrypt = require('bcryptjs');
+  } catch (e) {
+    console.error('Failed to load bcryptjs:', e);
+  }
+}
 
 export const dynamic = 'force-dynamic'
 

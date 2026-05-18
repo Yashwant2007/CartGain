@@ -1,10 +1,20 @@
 import { PrismaAdapter } from '@auth/prisma-adapter'
-import bcrypt from 'bcryptjs'
 import GoogleProvider from 'next-auth/providers/google'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import EmailProvider from 'next-auth/providers/email'
 import type { NextAuthOptions } from 'next-auth'
 import prisma from '@/lib/db'
+
+// Server-side only - load bcrypt when needed
+let bcrypt: any = null;
+if (typeof window === 'undefined') {
+  try {
+    // eslint-disable-next-line global-require
+    bcrypt = require('bcryptjs');
+  } catch (e) {
+    console.error('Failed to load bcryptjs:', e);
+  }
+}
 
 // Shopify OAuth Provider (disabled - can be re-enabled with proper types)
 /*
