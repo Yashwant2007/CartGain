@@ -90,7 +90,7 @@ async function handlePaymentCaptured(payment: any) {
     await prisma.subscription.create({
       data: {
         userId,
-        customerId: payment.id,
+        customerId: payment.id || `customer_${userId}_${Date.now()}`,
         plan,
         status: "active",
         smsCredits: plan === "pro" ? 5000 : 100,
