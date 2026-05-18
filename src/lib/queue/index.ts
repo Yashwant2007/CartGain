@@ -1,10 +1,19 @@
-import Bull from 'bull'
+let Bull: any = null;
+let queueInstance: any = null;
 
-let queueInstance: Bull.Queue | null = null
+// Server-side only - load Bull when needed
+if (typeof window === 'undefined') {
+  try {
+    // eslint-disable-next-line global-require
+    Bull = require('bull');
+  } catch (e) {
+    console.error('Failed to load Bull:', e);
+  }
+}
 
 // Lazy initialization - only create queue when needed
-function getCartQueue(): Bull.Queue {
-  if (!queueInstance) {
+function getCartQueue(): any {
+  if (!queueInstance && Bull) {
     queueInstance = new Bull('process-carts', {
       redis: {
         host: process.env.REDIS_HOST || 'localhost',
@@ -33,7 +42,7 @@ function getCartQueue(): Bull.Queue {
   return queueInstance
 }
 
-export function getQueue(): Bull.Queue {
+export function getQueue(): any {
   return getCartQueue()
 }
 

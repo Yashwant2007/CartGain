@@ -1,10 +1,23 @@
-import Razorpay from "razorpay";
 import crypto from "crypto";
 
-export const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID!,
-  key_secret: process.env.RAZORPAY_KEY_SECRET!,
-});
+let razorpayInstance: any = null;
+
+// Server-side only initialization
+if (typeof window === 'undefined') {
+  try {
+    // eslint-disable-next-line global-require
+    const Razorpay = require("razorpay");
+    razorpayInstance = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID!,
+      key_secret: process.env.RAZORPAY_KEY_SECRET!,
+    });
+  } catch (e) {
+    // Fail silently if razorpay not available
+    console.error("Failed to load Razorpay:", e);
+  }
+}
+
+export const razorpay = razorpayInstance;
 
 export function verifyWebhookSignature(body: string, signature: string): boolean {
   const expected = crypto
