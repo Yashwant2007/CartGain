@@ -5,25 +5,33 @@ let razorpayInstance: any = null;
 // Server-side only initialization
 if (typeof window === 'undefined') {
   try {
-    // eslint-disable-next-line global-require
-    const Razorpay = require("razorpay");
-    razorpayInstance = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID!,
-      key_secret: process.env.RAZORPAY_KEY_SECRET!,
-    });
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    if (keyId && keySecret) {
+      // eslint-disable-next-line global-require
+      const Razorpay = require("razorpay");
+      razorpayInstance = new Razorpay({
+        key_id: keyId,
+        key_secret: keySecret,
+      });
+    }
   } catch (e) {
-    // Fail silently if razorpay not available
-    console.error("Failed to load Razorpay:", e);
+    console.warn("Failed to load Razorpay client");
   }
 }
 
 export const razorpay = razorpayInstance;
 
 export function verifyWebhookSignature(body: string, signature: string): boolean {
+  const secret = process.env.RAZORPAY_KEY_SECRET;
+  if (!secret || !signature) return false;
+
   const expected = crypto
-    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
+    .createHmac("sha256", secret)
     .update(body)
     .digest("hex");
+
+  if (signature.length !== expected.length) return false;
 
   return crypto.timingSafeEqual(
     Buffer.from(signature),
