@@ -57,19 +57,19 @@ export const cartQueue = {
 export function setupQueueListeners() {
   const queue = getCartQueue()
 
-  queue.on('completed', (job) => {
+  queue.on('completed', (job: any) => {
     console.log(`✅ Job ${job.id} completed`)
   })
 
-  queue.on('failed', (job, err) => {
+  queue.on('failed', (job: any, err: any) => {
     console.error(`❌ Job ${job.id} failed:`, err.message)
   })
 
-  queue.on('error', (err) => {
+  queue.on('error', (err: any) => {
     console.error('Queue error:', err.message)
   })
 
-  queue.on('active', (job) => {
+  queue.on('active', (job: any) => {
     console.log(`🔄 Job ${job.id} is processing...`)
   })
 
