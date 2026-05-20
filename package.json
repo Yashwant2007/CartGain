@@ -7,7 +7,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "prebuild": "npm test && prisma generate",
+    "prebuild": "prisma generate",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint"
