@@ -16,7 +16,7 @@ if (typeof window === 'undefined') {
       });
     }
   } catch (e) {
-    console.warn("Failed to load Razorpay client");
+    console.warn("Failed to load Razorpay client:", e);
   }
 }
 

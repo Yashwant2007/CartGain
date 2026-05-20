@@ -1,3 +1,5 @@
+import type { Job } from "bull";
+
 let Bull: any = null;
 let queueInstance: any = null;
 
@@ -57,19 +59,19 @@ export const cartQueue = {
 export function setupQueueListeners() {
   const queue = getCartQueue()
 
-  queue.on('completed', (job: any) => {
+  queue.on('completed', (job: Job) => {
     console.log(`✅ Job ${job.id} completed`)
   })
 
-  queue.on('failed', (job: any, err: any) => {
+  queue.on('failed', (job: Job, err: Error) => {
     console.error(`❌ Job ${job.id} failed:`, err.message)
   })
 
-  queue.on('error', (err: any) => {
+  queue.on('error', (err: Error) => {
     console.error('Queue error:', err.message)
   })
 
-  queue.on('active', (job: any) => {
+  queue.on('active', (job: Job) => {
     console.log(`🔄 Job ${job.id} is processing...`)
   })
 
