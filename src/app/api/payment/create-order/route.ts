@@ -22,6 +22,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!razorpay) {
+      return NextResponse.json(
+        { error: "Payment gateway is not configured" },
+        { status: 503 }
+      );
+    }
+
     // Create Razorpay order
     const options = {
       amount: Math.round(amount * 100), // Razorpay expects amount in paise

@@ -90,7 +90,7 @@ async function handlePaymentCaptured(payment: any) {
     await prisma.subscription.create({
       data: {
         userId,
-        customerId: payment.id || `customer_${userId}_${Date.now()}`,
+        stripeCustomerId: payment.id || `customer_${userId}_${Date.now()}`,
         plan,
         status: "active",
         smsCredits: plan === "pro" ? 5000 : 100,
@@ -125,7 +125,7 @@ async function handleSubscriptionActivated(subscription: any) {
       where: { id: existingSubscription.id },
       data: {
         status: "active",
-        subscriptionId: subscription.id,
+        stripeSubscriptionId: subscription.id,
         currentPeriodEnd: new Date(subscription.current_period_end * 1000),
       },
     });
@@ -133,8 +133,8 @@ async function handleSubscriptionActivated(subscription: any) {
     await prisma.subscription.create({
       data: {
         userId,
-        customerId: subscription.customer_id,
-        subscriptionId: subscription.id,
+        stripeCustomerId: subscription.customer_id,
+        stripeSubscriptionId: subscription.id,
         plan: plan || "pro",
         status: "active",
         smsCredits: 5000,

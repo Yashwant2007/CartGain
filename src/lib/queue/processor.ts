@@ -1,5 +1,6 @@
 import { getQueue } from './index'
 import { processAbandonedCarts } from '@/lib/jobs/processAbandonedCarts'
+import type { Job } from 'bull'
 
 let processorRegistered = false
 
@@ -12,7 +13,7 @@ function registerProcessor() {
   try {
     const queue = getQueue()
 
-    queue.process(async (job) => {
+    queue.process(async (job: Job) => {
       console.log(`Processing job ${job.id} at ${new Date().toISOString()}`)
 
       try {
