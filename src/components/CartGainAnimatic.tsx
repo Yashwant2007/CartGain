@@ -122,7 +122,7 @@ export default function CartGainAnimatic() {
       <div className={styles.wrap}>
         <div className={styles.screen} id="screen" ref={screenRef}>
           {/* Scene 1: Intro */}
-          <div className={`${styles.scene} ${styles.active}`} id="s1">
+          <div className={`${styles.scene} ${currentScene === 0 ? styles.active : ''}`} id="s1">
             <div className={styles.s1Bg}></div>
             <div className={styles.phoneGrid}>
               {[...Array(6)].map((_, i) => (
@@ -144,7 +144,7 @@ export default function CartGainAnimatic() {
           </div>
 
           {/* Scene 2: SMS Recovery $89 */}
-          <div className={styles.scene} id="s2">
+          <div className={`${styles.scene} ${currentScene === 1 ? styles.active : ''}`} id="s2">
             <div className={styles.s2Bg}></div>
             <div className={styles.smsCard}>
               <div className={styles.smsHeader}>
@@ -171,7 +171,7 @@ export default function CartGainAnimatic() {
           </div>
 
           {/* Scene 3: Checkout & $156 */}
-          <div className={styles.scene} id="s3">
+          <div className={`${styles.scene} ${currentScene === 2 ? styles.active : ''}`} id="s3">
             <div className={styles.s3Bg}></div>
             <div className={styles.notifToast}>
               <div className={styles.ntTitle}>⏰ CartGain — Urgent</div>
@@ -206,7 +206,7 @@ export default function CartGainAnimatic() {
           </div>
 
           {/* Scene 4: Narrator */}
-          <div className={styles.scene} id="s4">
+          <div className={`${styles.scene} ${currentScene === 3 ? styles.active : ''}`} id="s4">
             <div className={styles.s4Bg}></div>
             <div className={styles.narratorFrame}>
               <div className={styles.avatarCircle}>
@@ -228,7 +228,7 @@ export default function CartGainAnimatic() {
           </div>
 
           {/* Scene 5: Dashboard */}
-          <div className={styles.scene} id="s5">
+          <div className={`${styles.scene} ${currentScene === 4 ? styles.active : ''}`} id="s5">
             <div className={styles.s5Bg}></div>
             <div className={styles.dashboard}>
               <div className={styles.dashHeader}>
@@ -238,7 +238,7 @@ export default function CartGainAnimatic() {
               <div className={styles.metricBig}>
                 <div className={styles.metricLabel}>Total Recovered</div>
                 <div className={styles.metricValue} ref={counterRef}>
-                  $0
+                  ${counterValue.toLocaleString()}
                 </div>
                 <div className={styles.metricSub}>+18.4% vs last week</div>
               </div>
@@ -258,7 +258,7 @@ export default function CartGainAnimatic() {
           </div>
 
           {/* Scene 6: CTA */}
-          <div className={styles.scene} id="s6">
+          <div className={`${styles.scene} ${currentScene === 5 ? styles.active : ''}`} id="s6">
             <div className={styles.s6Bg}></div>
             <div className={styles.endFrame}>
               <div className={styles.logoMark}>C</div>
@@ -275,16 +275,24 @@ export default function CartGainAnimatic() {
         </div>
 
         <div className={styles.progressBar}>
-          <div className={styles.progressFill} ref={progressFillRef}></div>
+          <div className={styles.progressFill} style={{ width: `${progress}%` }}></div>
         </div>
 
         <div className={styles.controls}>
-          <button className={styles.ctrlBtn} ref={playBtnRef}>
-            ▶ Play
+          <button className={`${styles.ctrlBtn} ${isPlaying ? styles.active : ''}`} onClick={togglePlay}>
+            {isPlaying ? '⏸ Pause' : '▶ Play'}
           </button>
-          <div className={styles.sceneDots} ref={dotsContainerRef}></div>
-          <div className={styles.timerLbl} ref={timerLblRef}>
-            0s
+          <div className={styles.sceneDots}>
+            {scenes.map((scene, idx) => (
+              <div
+                key={scene.id}
+                className={`${styles.dot} ${currentScene === idx ? styles.active : ''}`}
+                onClick={() => goToScene(idx)}
+              />
+            ))}
+          </div>
+          <div className={styles.timerLbl}>
+            {Math.floor(time)}s
           </div>
         </div>
       </div>

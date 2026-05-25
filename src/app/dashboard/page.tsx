@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   ShoppingCart,
   DollarSign,
@@ -42,12 +43,20 @@ type Overview = {
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
   const { storeId, loading: resolvingStore, error: storeError } = useResolvedStoreId()
   const [overview, setOverview] = useState<Overview | null>(null)
   const [carts, setCarts] = useState<Cart[]>([])
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loadingData, setLoadingData] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+
+  // Check for auth errors from useResolvedStoreId
+  useEffect(() => {
+    if (storeError && storeError.includes('Sign in')) {
+      router.push('/login')
+    }
+  }, [storeError, router])
 
   useEffect(() => {
     let cancelled = false
@@ -137,21 +146,23 @@ export default function DashboardPage() {
   const error = storeError || loadError
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 p-8 space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-3 xs:gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-blue-300 mt-1">Track your cart recovery performance</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">Dashboard</h1>
+          <p className="text-blue-300 text-sm sm:text-base mt-1">Track your cart recovery performance</p>
         </div>
-        <button className="btn-primary flex items-center">
-          <Plus className="w-5 h-5 mr-2" />
-          New Campaign
+        <button 
+          onClick={() => router.push('/dashboard/campaigns')}
+          className="w-full xs:w-auto py-2.5 sm:py-3 px-4 sm:px-6 bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm sm:text-base font-semibold rounded-lg border border-cyan-400/50 hover:shadow-lg hover:shadow-cyan-500/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 transition-all active:scale-95 flex items-center justify-center gap-2 min-h-10">
+          <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+          <span>New Campaign</span>
         </button>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
         <MetricCard
           title="Carts Abandoned"
           value={stats.cartsAbandoned.toLocaleString()}
@@ -259,7 +270,7 @@ export default function DashboardPage() {
                     <td className="py-3">
                       <StatusBadge status={cart.status} />
                     </td>
-                    <td className="py-3 text-gray-500">{cart.time}</td>
+                    <td className="py-3 text-blue-300/70">{cart.time}</td>
                   </tr>
                 ))}
                 {recentCarts.length === 0 && (

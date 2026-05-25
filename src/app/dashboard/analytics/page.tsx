@@ -249,39 +249,39 @@ export default function AnalyticsPage() {
 
       {/* ROI Calculator */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">ROI Analysis</h3>
+        <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+          <h3 className="text-lg font-semibold text-cyan-300 mb-4">ROI Analysis</h3>
           <div className="space-y-4">
-            <div className="flex justify-between items-center py-3 border-b">
-              <span className="text-gray-600">Revenue Recovered</span>
-              <span className="font-semibold text-green-600">+${metrics.totalRevenue.toLocaleString()}</span>
+            <div className="flex justify-between items-center py-3 border-b border-blue-700/30">
+              <span className="text-blue-300/80">Revenue Recovered</span>
+              <span className="font-semibold text-emerald-400">+${metrics.totalRevenue.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between items-center py-3 border-b">
-              <span className="text-gray-600">SMS Costs</span>
-              <span className="font-semibold text-red-600">-$1,245</span>
+            <div className="flex justify-between items-center py-3 border-b border-blue-700/30">
+              <span className="text-blue-300/80">SMS Costs</span>
+              <span className="font-semibold text-red-400">-$1,245</span>
             </div>
-            <div className="flex justify-between items-center py-3 border-b">
-              <span className="text-gray-600">WhatsApp Costs</span>
-              <span className="font-semibold text-red-600">-$892</span>
+            <div className="flex justify-between items-center py-3 border-b border-blue-700/30">
+              <span className="text-blue-300/80">WhatsApp Costs</span>
+              <span className="font-semibold text-red-400">-$892</span>
             </div>
-            <div className="flex justify-between items-center py-3 border-b">
-              <span className="text-gray-600">Email Costs</span>
-              <span className="font-semibold text-red-600">-$156</span>
+            <div className="flex justify-between items-center py-3 border-b border-blue-700/30">
+              <span className="text-blue-300/80">Email Costs</span>
+              <span className="font-semibold text-red-400">-$156</span>
             </div>
-            <div className="flex justify-between items-center py-4 bg-green-50 -mx-4 px-4">
-              <span className="font-semibold text-gray-900">Net ROI</span>
-              <span className="font-bold text-green-600 text-xl">{metrics.roi}%</span>
+            <div className="flex justify-between items-center py-4 bg-slate-700/40 border border-blue-700/30 -mx-4 px-4 rounded">
+              <span className="font-semibold text-cyan-300">Net ROI</span>
+              <span className="font-bold text-emerald-400 text-xl">{metrics.roi}%</span>
             </div>
           </div>
         </div>
 
-        <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Recovery Funnel</h3>
+        <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+          <h3 className="text-lg font-semibold text-cyan-300 mb-4">Recovery Funnel</h3>
           <div className="space-y-4">
-            <FunnelStep label="Carts Abandoned" value={metrics.cartsAbandoned} percentage={100} color="bg-gray-500" />
+            <FunnelStep label="Carts Abandoned" value={metrics.cartsAbandoned} percentage={100} color="bg-slate-600" />
             <FunnelStep label="Messages Sent" value={metrics.messagesSent} percentage={metrics.messagesSent / metrics.cartsAbandoned * 100} color="bg-blue-500" />
-            <FunnelStep label="Messages Clicked" value={metrics.messagesClicked} percentage={metrics.messagesClicked / metrics.cartsAbandoned * 100} color="bg-purple-500" />
-            <FunnelStep label="Carts Recovered" value={metrics.cartsRecovered} percentage={metrics.recoveryRate} color="bg-green-500" />
+            <FunnelStep label="Messages Clicked" value={metrics.messagesClicked} percentage={metrics.messagesClicked / metrics.cartsAbandoned * 100} color="bg-cyan-500" />
+            <FunnelStep label="Carts Recovered" value={metrics.cartsRecovered} percentage={metrics.recoveryRate} color="bg-emerald-500" />
           </div>
         </div>
       </div>
@@ -313,10 +313,10 @@ function FunnelStep({ label, value, percentage, color }: {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-sm text-gray-700">{label}</span>
-        <span className="text-sm font-medium text-gray-900">{value.toLocaleString()}</span>
+        <span className="text-sm text-blue-300/80">{label}</span>
+        <span className="text-sm font-medium text-cyan-300">{value.toLocaleString()}</span>
       </div>
-      <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+      <div className="h-3 bg-slate-700/40 rounded-full overflow-hidden border border-blue-700/30">
         <div
           className={`h-full ${color} rounded-full transition-all duration-500`}
           style={{ width: `${Math.min(percentage, 100)}%` }}

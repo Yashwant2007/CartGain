@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, Copy, Edit2, Trash2, Play, Pause, BarChart3 } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 
@@ -24,11 +25,19 @@ type CreateCampaignConfig = {
 }
 
 export default function CampaignsPage() {
+  const router = useRouter()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const { storeId, loading: resolvingStore, error: storeError } = useResolvedStoreId()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loadingData, setLoadingData] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+
+  // Check for auth errors from useResolvedStoreId
+  useEffect(() => {
+    if (storeError && storeError.includes('Sign in')) {
+      router.push('/login')
+    }
+  }, [storeError, router])
 
   useEffect(() => {
     let cancelled = false
@@ -119,19 +128,22 @@ export default function CampaignsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Campaigns</h1>
           <p className="text-blue-300/80 mt-1">Create and manage cart recovery sequences</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="btn-primary flex items-center bg-gradient-to-r from-cyan-500 to-blue-500 text-white border border-cyan-400/50 hover:shadow-lg hover:shadow-cyan-500/50"
+          className="btn-primary flex items-center justify-center sm:justify-start bg-gradient-to-r from-cyan-500 to-blue-500 text-white border border-cyan-400/50 hover:shadow-lg hover:shadow-cyan-500/50 px-4 py-2 rounded-lg transition-all w-full sm:w-auto"
         >
           <Plus className="w-5 h-5 mr-2" />
           New Campaign
         </button>
       </div>
+
+      {isLoading && <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 text-sm text-blue-300/80">Loading campaigns...</div>}
+      {error && <div className="bg-slate-800/50 border border-red-700/30 rounded-xl p-6 text-sm text-red-300/80">{error}</div>}
 
       {/* Campaigns Grid */}
       <div className="grid gap-6">
@@ -159,14 +171,49 @@ export default function CampaignsPage() {
 
 function CampaignCard({ campaign }: { campaign: Campaign }) {
   const [isActive, setIsActive] = useState(campaign.isActive)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const handleDelete = async () => {
+    if (window.confirm('Are you sure you want to delete this campaign?')) {
+      try {
+        setIsDeleting(true)
+        const response = await fetch(`/api/campaigns/${campaign.id}`, {
+          method: 'DELETE',
+        })
+        if (!response.ok) {
+          throw new Error('Failed to delete campaign')
+        }
+        window.location.reload()
+      } catch (error) {
+        alert('Error deleting campaign: ' + (error instanceof Error ? error.message : 'Unknown error'))
+      } finally {
+        setIsDeleting(false)
+      }
+    }
+  }
+
+  const handleToggleActive = async () => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaign.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !isActive }),
+      })
+      if (response.ok) {
+        setIsActive(!isActive)
+      }
+    } catch (error) {
+      console.error('Error toggling campaign:', error)
+    }
+  }
 
   return (
-    <div className="card">
+    <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 hover:border-blue-700/60 transition-all">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center space-x-3 mb-2">
-            <h3 className="text-lg font-semibold text-gray-900">{campaign.name}</h3>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+            <h3 className="text-lg font-semibold text-cyan-300">{campaign.name}</h3>
+            <span className={`px-3 py-1 rounded-full text-xs font-medium ${isActive ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50' : 'bg-slate-600/50 text-slate-300 border border-slate-500/50'}`}>
               {isActive ? 'Active' : 'Paused'}
             </span>
           </div>
@@ -176,26 +223,49 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
             ))}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <Stat label="Total Carts" value="-" />
-            <Stat label="Recovered" value="-" />
-            <Stat label="Recovery Rate" value="-" />
-            <Stat label="Revenue" value="-" />
+            <Stat label="Total Carts" value="0" />
+            <Stat label="Recovered" value="0" />
+            <Stat label="Recovery Rate" value="0%" />
+            <Stat label="Revenue" value="₹0" />
           </div>
         </div>
-        <div className="flex flex-col items-end space-y-2">
+        <div className="flex flex-col items-end space-y-2 ml-4">
           <button
-            onClick={() => setIsActive(!isActive)}
-            className={`p-2 rounded-lg transition-colors ${isActive ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+            onClick={handleToggleActive}
+            className={`p-2 rounded-lg transition-colors ${isActive ? 'bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 border border-yellow-500/50' : 'bg-green-500/20 text-green-300 hover:bg-green-500/30 border border-green-500/50'}`}
+            title={isActive ? 'Pause' : 'Resume'}
           >
             {isActive ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
           </button>
           <div className="flex items-center space-x-1">
-            <ActionButton icon={<BarChart3 className="w-4 h-4" />} label="Analytics" />
-            <ActionButton icon={<Copy className="w-4 h-4" />} label="Duplicate" />
-            <ActionButton icon={<Edit2 className="w-4 h-4" />} label="Edit" />
-            <ActionButton icon={<Trash2 className="w-4 h-4" />} label="Delete" danger />
+            <ActionButton icon={<BarChart3 className="w-4 h-4" />} label="Analytics" onClick={() => {
+              window.location.href = `/dashboard/campaigns/${campaign.id}/analytics`
+            }} />
+            <ActionButton icon={<Copy className="w-4 h-4" />} label="Duplicate" onClick={async () => {
+              try {
+                const response = await fetch(`/api/campaigns/${campaign.id}/duplicate`, { method: 'POST' })
+                if (response.ok) {
+                  alert('Campaign duplicated successfully')
+                  window.location.reload()
+                } else {
+                  alert('Error duplicating campaign')
+                }
+              } catch (error) {
+                alert('Error duplicating campaign')
+              }
+            }} />
+            <ActionButton icon={<Edit2 className="w-4 h-4" />} label="Edit" onClick={() => {
+              window.location.href = `/dashboard/campaigns/${campaign.id}/edit`
+            }} />
+            <ActionButton 
+              icon={<Trash2 className="w-4 h-4" />} 
+              label="Delete" 
+              danger 
+              onClick={handleDelete}
+              disabled={isDeleting}
+            />
           </div>
-          <p className="text-xs text-gray-500">Created {new Date(campaign.createdAt).toLocaleDateString()}</p>
+          <p className="text-xs text-blue-300/60">Created {new Date(campaign.createdAt).toLocaleDateString()}</p>
         </div>
       </div>
     </div>
@@ -205,8 +275,8 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="text-lg font-semibold text-gray-900">{value}</p>
+      <p className="text-sm text-blue-300/60">{label}</p>
+      <p className="text-lg font-semibold text-cyan-300">{value}</p>
     </div>
   )
 }
@@ -228,9 +298,14 @@ function ChannelIcon({ channel }: { channel: string }) {
   )
 }
 
-function ActionButton({ icon, label, danger = false }: { icon: React.ReactNode; label: string; danger?: boolean }) {
+function ActionButton({ icon, label, danger = false, onClick, disabled = false }: { icon: React.ReactNode; label: string; danger?: boolean; onClick: () => void; disabled?: boolean }) {
   return (
-    <button className={`p-1.5 rounded transition-colors ${danger ? 'text-red-600 hover:bg-red-50' : 'text-gray-500 hover:bg-gray-100'}`}>
+    <button 
+      onClick={onClick}
+      disabled={disabled}
+      className={`p-2 rounded-lg transition-colors ${danger ? 'text-red-400 hover:bg-red-500/20 hover:border-red-500/50 border border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed' : 'text-blue-400 hover:bg-blue-500/20 hover:border-blue-500/50 border border-blue-500/30'}`}
+      title={label}
+    >
       {icon}
     </button>
   )

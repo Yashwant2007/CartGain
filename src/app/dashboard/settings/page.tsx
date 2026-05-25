@@ -235,21 +235,6 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
             <option value="Asia/Singapore">Singapore (SGT)</option>
           </select>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-blue-200 mb-2">Currency</label>
-          <select
-            className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
-            value={form.currency}
-            onChange={(e) => setForm({ ...form, currency: e.target.value })}
-          >
-            <option value="USD">USD ($)</option>
-            <option value="EUR">EUR (€)</option>
-            <option value="GBP">GBP (£)</option>
-            <option value="CAD">CAD ($)</option>
-            <option value="AUD">AUD ($)</option>
-            <option value="INR">INR (₹)</option>
-          </select>
-        </div>
         <button onClick={handleSave} disabled={saving} className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all mt-4">
           {saving ? 'Saving...' : 'Save Changes'}
         </button>

@@ -9,6 +9,7 @@ import { Zap, Mail, Lock, User, ArrowRight, CheckCircle } from 'lucide-react'
 export default function SignUpPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -19,58 +20,89 @@ export default function SignUpPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
     setIsLoading(true)
 
     try {
+      // Basic validation
+      if (formData.password.length < 8) {
+        setError('Password must be at least 8 characters')
+        setIsLoading(false)
+        return
+      }
+
+      if (!formData.storeDomain.length) {
+        setError('Please enter a valid store domain')
+        setIsLoading(false)
+        return
+      }
+
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       })
 
+      const data = await response.json()
+
       if (response.ok) {
         router.push('/dashboard')
+        router.refresh()
       } else {
-        const error = await response.json()
-        alert(error.message || 'Registration failed')
+        setError(data.message || 'Registration failed. Please try again.')
       }
-    } catch (error) {
-      alert('Something went wrong. Please try again.')
+    } catch (err) {
+      setError('Something went wrong. Please try again.')
+      console.error(err)
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleGoogleSignIn = async () => {
-    await signIn('google', { callbackUrl: '/dashboard' })
+    setIsLoading(true)
+    try {
+      await signIn('google', { callbackUrl: '/dashboard' })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex flex-col md:flex-row">
       {/* Left Side - Form */}
-      <div className="w-full md:w-1/2 flex items-center justify-center p-8">
+      <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
         <div className="w-full max-w-md">
-          <Link href="/" className="flex items-center space-x-2 mb-8">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary-600 to-primary-800 rounded-lg flex items-center justify-center">
+          <Link href="/" className="flex items-center space-x-2 mb-8 group">
+            <div className="w-8 h-8 bg-gradient-to-br from-primary-600 to-primary-800 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:shadow-lg group-hover:shadow-primary-600/50 transition-all">
               <Zap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-white">CartGain</span>
+            <span className="text-lg font-bold text-white group-hover:text-blue-200 transition">CartGain</span>
           </Link>
 
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">Start Your Free Trial</h1>
-            <p className="text-blue-200">No credit card required. First cart recovered free.</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Start Your Free Trial</h1>
+            <p className="text-sm sm:text-base text-blue-200">No credit card required. First cart recovered free.</p>
           </div>
+
+          {error && (
+            <div className="mb-6 p-3 sm:p-4 bg-red-900/20 border border-red-700/40 rounded-lg">
+              <p className="text-xs sm:text-sm text-red-300">{error}</p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-blue-200 mb-1">Full Name</label>
+              <label htmlFor="name" className="block text-xs sm:text-sm font-medium text-blue-200 mb-2">Full Name</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-blue-400 flex-shrink-0 pointer-events-none" />
                 <input
+                  id="name"
                   type="text"
                   required
-                  className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70"
+                  autoComplete="name"
+                  disabled={isLoading}
+                  className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base"
                   placeholder="John Doe"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -79,13 +111,16 @@ export default function SignUpPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-blue-200 mb-1">Email</label>
+              <label htmlFor="email" className="block text-xs sm:text-sm font-medium text-blue-200 mb-2">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-blue-400 flex-shrink-0 pointer-events-none" />
                 <input
+                  id="email"
                   type="email"
                   required
-                  className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70"
+                  autoComplete="email"
+                  disabled={isLoading}
+                  className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base"
                   placeholder="john@example.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -94,27 +129,33 @@ export default function SignUpPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-blue-200 mb-1">Password</label>
+              <label htmlFor="password" className="block text-xs sm:text-sm font-medium text-blue-200 mb-2">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-blue-400 flex-shrink-0 pointer-events-none" />
                 <input
+                  id="password"
                   type="password"
                   required
                   minLength={8}
-                  className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70"
+                  autoComplete="new-password"
+                  disabled={isLoading}
+                  className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base"
                   placeholder="••••••••"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 />
               </div>
+              <p className="text-xs text-blue-400/70 mt-1">Minimum 8 characters</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-blue-200 mb-1">Store Name</label>
+              <label htmlFor="storeName" className="block text-xs sm:text-sm font-medium text-blue-200 mb-2">Store Name</label>
               <input
+                id="storeName"
                 type="text"
                 required
-                className="input bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70"
+                disabled={isLoading}
+                className="input bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base"
                 placeholder="My Awesome Store"
                 value={formData.storeName}
                 onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
@@ -122,11 +163,13 @@ export default function SignUpPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-blue-200 mb-1">Store Domain</label>
+              <label htmlFor="storeDomain" className="block text-xs sm:text-sm font-medium text-blue-200 mb-2">Store Domain</label>
               <input
+                id="storeDomain"
                 type="text"
                 required
-                className="input bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70"
+                disabled={isLoading}
+                className="input bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base"
                 placeholder="mystore.com"
                 value={formData.storeDomain}
                 onChange={(e) => setFormData({ ...formData, storeDomain: e.target.value })}
@@ -136,10 +179,10 @@ export default function SignUpPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full btn-primary flex items-center justify-center"
+              className="w-full py-3 sm:py-3.5 bg-primary-600 text-white text-sm sm:text-base font-semibold rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 transition active:scale-95 flex items-center justify-center gap-2 min-h-12"
             >
               {isLoading ? 'Creating Account...' : 'Create Account'}
-              {!isLoading && <ArrowRight className="ml-2 w-5 h-5" />}
+              {!isLoading && <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />}
             </button>
           </form>
 
@@ -147,16 +190,17 @@ export default function SignUpPage() {
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-blue-700/30"></div>
             </div>
-            <div className="relative flex justify-center text-sm">
+            <div className="relative flex justify-center text-xs sm:text-sm">
               <span className="px-2 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-blue-300">Or continue with</span>
             </div>
           </div>
 
           <button
             onClick={handleGoogleSignIn}
-            className="w-full btn-secondary flex items-center justify-center bg-slate-800/40 border border-blue-700/50 text-white hover:border-blue-500/70"
+            disabled={isLoading}
+            className="w-full py-3 sm:py-3.5 bg-slate-800/40 border border-blue-700/50 text-white text-sm sm:text-base font-semibold rounded-lg hover:border-blue-500/70 hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 transition active:scale-95 flex items-center justify-center gap-2 min-h-12"
           >
-            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" viewBox="0 0 24 24">
               <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
               <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
               <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
@@ -165,25 +209,25 @@ export default function SignUpPage() {
             Sign up with Google
           </button>
 
-          <p className="text-center text-sm text-blue-300 mt-6">
+          <p className="text-center text-xs sm:text-sm text-blue-300 mt-6">
             Already have an account?{' '}
-            <Link href="/login" className="text-blue-400 hover:text-blue-300 font-medium">
+            <Link href="/login" className="text-blue-400 hover:text-blue-300 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 rounded transition">
               Sign in
             </Link>
           </p>
         </div>
       </div>
 
-      {/* Right Side - Benefits */}
-      <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-blue-900/40 to-blue-950/20 items-center justify-center p-12">
+      {/* Right Side - Benefits - hidden on mobile, shown on tablet and up */}
+      <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-blue-900/40 to-blue-950/20 items-center justify-center p-8 lg:p-12">
         <div className="max-w-md text-white">
-          <h2 className="text-4xl font-bold mb-8">Everything You Need to Recover Carts</h2>
+          <h2 className="text-3xl lg:text-4xl font-bold mb-8">Everything You Need</h2>
           <div className="space-y-6">
-            <BenefitItem text="Multi-channel recovery (SMS, WhatsApp, Email, Push)" />
-            <BenefitItem text="AI-optimized send times for maximum conversions" />
-            <BenefitItem text="Real-time analytics and revenue tracking" />
-            <BenefitItem text="One-click integrations with Shopify & WooCommerce" />
-            <BenefitItem text="Pay only for what you use - no monthly minimums" />
+            <BenefitItem text="Multi-channel recovery (SMS, WhatsApp, Email)" />
+            <BenefitItem text="AI-optimized send times" />
+            <BenefitItem text="Real-time analytics" />
+            <BenefitItem text="One-click integrations" />
+            <BenefitItem text="Pay per recovery model" />
           </div>
         </div>
       </div>
@@ -194,8 +238,8 @@ export default function SignUpPage() {
 function BenefitItem({ text }: { text: string }) {
   return (
     <div className="flex items-start space-x-3">
-      <CheckCircle className="w-6 h-6 flex-shrink-0 text-blue-300" />
-      <span className="text-lg text-blue-100">{text}</span>
+      <CheckCircle className="w-5 h-5 lg:w-6 lg:h-6 flex-shrink-0 text-blue-300" />
+      <span className="text-sm lg:text-lg text-blue-100">{text}</span>
     </div>
   )
 }

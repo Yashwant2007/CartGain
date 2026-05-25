@@ -1,11 +1,60 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import Script from 'next/script'
 import './globals.css'
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  minimumScale: 1,
+  userScalable: true,
+}
+
 export const metadata: Metadata = {
-  title: 'RecoverFlow - Multi-Channel Cart Recovery That Actually Works',
-  description: 'Recover abandoned carts with SMS, WhatsApp, Email & Push notifications. AI-optimized sequences that recover 3x more revenue than email alone.',
-  keywords: ['cart recovery', 'abandoned cart', 'SMS marketing', 'WhatsApp marketing', 'e-commerce'],
+  title: 'CartGain | Abandoned Cart Recovery for D2C Brands',
+  description: 'Recover abandoned carts with WhatsApp, SMS, and Email. Get 18-25% recovery rate for D2C beauty brands. Free setup. No credit card required.',
+  keywords: [
+    'abandoned cart recovery',
+    'cart recovery software',
+    'WhatsApp marketing platform',
+    'SMS marketing tools',
+    'e-commerce recovery',
+    'D2C tools',
+    'conversion rate optimization',
+    'revenue recovery',
+    'beauty brand tools',
+    'Shopify apps',
+    'cart abandonment recovery',
+    'multichannel messaging',
+  ],
+  openGraph: {
+    title: 'CartGain | Recover Lost Revenue from Abandoned Carts',
+    description: 'Turn 18-25% of abandoned carts into confirmed sales with AI-powered WhatsApp, SMS, and Email recovery.',
+    url: 'https://cart-gain.vercel.app',
+    type: 'website',
+    images: [
+      {
+        url: 'https://images.unsplash.com/photo-1556740738-b6a63e27c4df?w=1200&h=630&fit=crop',
+        width: 1200,
+        height: 630,
+        alt: 'CartGain - Abandoned Cart Recovery Platform',
+      },
+    ],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-snippet': -1,
+      'max-image-preview': 'large',
+      'max-video-preview': -1,
+    },
+  },
+  alternates: {
+    canonical: 'https://cart-gain.vercel.app',
+  },
 }
 
 export default function RootLayout({
@@ -15,8 +64,97 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="font-sans">
-        <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="beforeInteractive" />
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="theme-color" content="#1e293b" />
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <meta name="apple-mobile-web-app-capable" content="true" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="CartGain" />
+        
+        {/* Schema.org Structured Data for SEO */}
+        <Script
+          id="schema-organization"
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              name: 'CartGain',
+              description: 'Abandoned cart recovery platform for D2C beauty brands using WhatsApp, SMS, and Email',
+              url: 'https://cart-gain.vercel.app',
+              logo: 'https://cart-gain.vercel.app/logo.png',
+              sameAs: [
+                'https://twitter.com/cartgain',
+                'https://linkedin.com/company/cartgain',
+              ],
+              contactPoint: {
+                '@type': 'ContactPoint',
+                contactType: 'Customer Support',
+                email: 'hello@cartgain.io',
+              },
+            }),
+          }}
+        />
+        
+        <Script
+          id="schema-service"
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Service',
+              name: 'Cart Recovery Software',
+              description: 'AI-powered abandoned cart recovery using WhatsApp, SMS, and Email for e-commerce businesses',
+              provider: {
+                '@type': 'Organization',
+                name: 'CartGain',
+                url: 'https://cart-gain.vercel.app',
+              },
+              areaServed: 'IN',
+              availableChannel: [
+                { '@type': 'ServiceChannel', serviceName: 'WhatsApp Recovery', 'availabilityRestriction': '24/7' },
+                { '@type': 'ServiceChannel', serviceName: 'SMS Recovery', 'availabilityRestriction': '24/7' },
+                { '@type': 'ServiceChannel', serviceName: 'Email Recovery', 'availabilityRestriction': '24/7' },
+              ],
+            }),
+          }}
+        />
+
+        <Script
+          id="schema-faq"
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'FAQPage',
+              mainEntity: [
+                {
+                  '@type': 'Question',
+                  name: 'Why not just use email for cart recovery?',
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: 'Email alone only recovers 3-5% of abandoned carts. WhatsApp (85% open rate) + SMS (45% CTR) + Email creates multiple touchpoints. Our clients see 18-25% recovery with multi-channel vs 3-5% with email alone.',
+                  },
+                },
+                {
+                  '@type': 'Question',
+                  name: 'How do you handle customer data and privacy?',
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: 'We are GDPR and data-privacy compliant. All customer data is encrypted. We only process cart abandonment data needed for recovery. No data is shared with third parties.',
+                  },
+                },
+              ],
+            }),
+          }}
+        />
+      </head>
+      <body className="font-sans bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
+        <Script 
+          src="https://checkout.razorpay.com/v1/checkout.js" 
+          strategy="beforeInteractive"
+        />
         {children}
       </body>
     </html>
