@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { CheckCircle2, XCircle, Settings, RefreshCw } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { CheckCircle2, XCircle, Settings, RefreshCw, ExternalLink, Copy, Key, Globe, Webhook, Eye, EyeOff } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 
 type IntegrationItem = {
@@ -24,63 +24,151 @@ type IntegrationStatus = {
     platform: string
     connected: boolean
     lastSync: string
+    apiKey?: string | null
+    apiSecret?: string | null
   }
   integrations: IntegrationItem[]
   messagingServices: IntegrationItem[]
 }
+
+type CredentialModal = {
+  type: 'woocommerce' | 'magento' | 'bigcommerce' | 'custom' | 'twilio' | 'whatsapp' | 'sendgrid' | 'onesignal'
+  name: string
+  icon: string
+} | null
 
 export default function IntegrationsPage() {
   const { storeId, loading: resolvingStore, error: storeError } = useResolvedStoreId()
   const [status, setStatus] = useState<IntegrationStatus | null>(null)
   const [loadingData, setLoadingData] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [credentialModal, setCredentialModal] = useState<CredentialModal>(null)
+  const [apiKeyVisible, setApiKeyVisible] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-
-    const loadStatus = async () => {
-      if (!storeId) {
-        return
-      }
-
-      try {
-        setLoadingData(true)
-        setLoadError(null)
-
-        const response = await fetch('/api/integrations/status')
-        if (!response.ok) {
-          throw new Error('Failed to load integrations')
-        }
-
-        const data = await response.json()
-        if (!cancelled) {
-          setStatus(data)
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setLoadError(error instanceof Error ? error.message : 'Failed to load integrations')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingData(false)
-        }
-      }
-    }
-
-    loadStatus()
-
-    return () => {
-      cancelled = true
+  const loadStatus = useCallback(async () => {
+    if (!storeId) return
+    try {
+      setLoadingData(true)
+      setLoadError(null)
+      const res = await fetch('/api/integrations/status')
+      if (!res.ok) throw new Error('Failed to load integrations')
+      const data = await res.json()
+      setStatus(data)
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Failed to load integrations')
+    } finally {
+      setLoadingData(false)
     }
   }, [storeId])
+
+  useEffect(() => { loadStatus() }, [loadStatus])
+
+  const updatePlatform = async (platform: string, data: Record<string, string>) => {
+    const res = await fetch('/api/stores/current', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ platform, ...data }),
+    })
+    if (!res.ok) throw new Error('Failed to update store')
+    await loadStatus()
+  }
+
+  const handleShopifyConnect = async () => {
+    if (!status?.store) return
+    try {
+      const shop = `${status.store.domain}.myshopify.com`
+      const res = await fetch('/api/shopify/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shop, storeId: status.store.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to initiate connection')
+      window.location.href = data.authUrl
+    } catch (error) {
+      setActionMsg({ type: 'error', text: error instanceof Error ? error.message : 'Connection failed' })
+    }
+  }
+
+  const handleDisconnect = async (integration: IntegrationItem) => {
+    try {
+      if (integration.id === 'shopify') {
+        await updatePlatform('custom', { apiKey: '', apiSecret: '' })
+      } else {
+        await updatePlatform('custom', { apiKey: '', apiSecret: '' })
+      }
+      setActionMsg({ type: 'success', text: `${integration.name} disconnected successfully` })
+    } catch (error) {
+      setActionMsg({ type: 'error', text: `Failed to disconnect ${integration.name}` })
+    }
+  }
+
+  const handleCredentialConnect = async (platform: string, credentials: Record<string, string>) => {
+    try {
+      await updatePlatform(platform, credentials)
+      setCredentialModal(null)
+      setActionMsg({ type: 'success', text: `${platform.charAt(0).toUpperCase() + platform.slice(1)} connected successfully` })
+    } catch (error) {
+      setActionMsg({ type: 'error', text: `Failed to connect ${platform}` })
+    }
+  }
+
+  const handleCopy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setActionMsg({ type: 'success', text: 'Copied to clipboard' })
+    } catch {
+      setActionMsg({ type: 'error', text: 'Failed to copy' })
+    }
+  }
 
   const integrations = status?.integrations ?? []
   const messagingServices = status?.messagingServices ?? []
   const isLoading = resolvingStore || loadingData
   const error = storeError || loadError
 
+  const platformActions: Record<string, { onConnect: () => void; onDisconnect: () => void }> = {
+    shopify: {
+      onConnect: handleShopifyConnect,
+      onDisconnect: () => handleDisconnect(integrations.find(i => i.id === 'shopify')!),
+    },
+    woocommerce: {
+      onConnect: () => setCredentialModal({ type: 'woocommerce', name: 'WooCommerce', icon: '📦' }),
+      onDisconnect: () => handleDisconnect(integrations.find(i => i.id === 'woocommerce')!),
+    },
+    magento: {
+      onConnect: () => setCredentialModal({ type: 'magento', name: 'Magento', icon: '🔷' }),
+      onDisconnect: () => handleDisconnect(integrations.find(i => i.id === 'magento')!),
+    },
+    bigcommerce: {
+      onConnect: () => setCredentialModal({ type: 'bigcommerce', name: 'BigCommerce', icon: '🏪' }),
+      onDisconnect: () => handleDisconnect(integrations.find(i => i.id === 'bigcommerce')!),
+    },
+    custom: {
+      onConnect: () => setCredentialModal({ type: 'custom', name: 'Custom API', icon: '⚡' }),
+      onDisconnect: () => handleDisconnect(integrations.find(i => i.id === 'custom')!),
+    },
+  }
+
+  const messagingActions: Record<string, { onConnect: () => void }> = {
+    twilio: { onConnect: () => setCredentialModal({ type: 'twilio', name: 'Twilio SMS', icon: '💬' }) },
+    whatsapp: { onConnect: () => setCredentialModal({ type: 'whatsapp', name: 'WhatsApp Business', icon: '📱' }) },
+    sendgrid: { onConnect: () => setCredentialModal({ type: 'sendgrid', name: 'SendGrid', icon: '📧' }) },
+    onesignal: { onConnect: () => setCredentialModal({ type: 'onesignal', name: 'OneSignal', icon: '🔔' }) },
+  }
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {actionMsg && (
+        <div className={`px-4 py-3 rounded-lg text-sm font-medium ${
+          actionMsg.type === 'success' ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/40' : 'bg-red-600/20 text-red-300 border border-red-500/40'
+        }`}>
+          {actionMsg.text}
+          <button onClick={() => setActionMsg(null)} className="float-right ml-4 opacity-60 hover:opacity-100">&times;</button>
+        </div>
+      )}
+
       <div>
         <h1 className="text-2xl font-bold text-white">Integrations</h1>
         <p className="text-blue-300/80 mt-1">
@@ -96,29 +184,35 @@ export default function IntegrationsPage() {
       <section>
         <h2 className="text-lg font-semibold text-white mb-4">E-commerce Platforms</h2>
         <div className="grid gap-4">
-          {integrations.map((integration) => (
-            <IntegrationCard
-              key={integration.id}
-              integration={integration}
-              onConnect={() => undefined}
-              onDisconnect={() => undefined}
-            />
-          ))}
+          {integrations.map((integration) => {
+            const actions = platformActions[integration.id]
+            return (
+              <IntegrationCard
+                key={integration.id}
+                integration={integration}
+                onConnect={actions?.onConnect ?? (() => {})}
+                onDisconnect={actions?.onDisconnect ?? (() => {})}
+              />
+            )
+          })}
         </div>
       </section>
 
       <section>
         <h2 className="text-lg font-semibold text-white mb-4">Messaging Services</h2>
         <div className="grid gap-4">
-          {messagingServices.map((service) => (
-            <IntegrationCard
-              key={service.id}
-              integration={service}
-              onConnect={() => undefined}
-              onDisconnect={() => undefined}
-              isMessaging
-            />
-          ))}
+          {messagingServices.map((service) => {
+            const actions = messagingActions[service.id]
+            return (
+              <IntegrationCard
+                key={service.id}
+                integration={service}
+                onConnect={actions?.onConnect ?? (() => {})}
+                onDisconnect={() => {}}
+                isMessaging
+              />
+            )
+          })}
         </div>
       </section>
 
@@ -126,21 +220,55 @@ export default function IntegrationsPage() {
         <h2 className="text-lg font-semibold text-white mb-4">API Access</h2>
         <div className="space-y-4">
           <div className="flex items-center justify-between p-4 bg-slate-700/40 border border-blue-700/30 rounded-lg hover:border-blue-700/60 transition-all">
-            <div>
-              <h3 className="font-medium text-white">REST API</h3>
-              <p className="text-sm text-blue-300/60">Programmatic access to CartGain</p>
+            <div className="flex items-start space-x-3">
+              <Key className="w-5 h-5 text-cyan-400 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-white">REST API Key</h3>
+                <p className="text-sm text-blue-300/60">Programmatic access to CartGain data</p>
+                {status?.store.apiKey ? (
+                  <div className="mt-2 flex items-center space-x-2">
+                    <code className="px-2 py-1 bg-slate-900/60 rounded text-xs font-mono text-cyan-300">
+                      {apiKeyVisible ? status.store.apiKey : `${status.store.apiKey.slice(0, 8)}...${status.store.apiKey.slice(-4)}`}
+                    </code>
+                    <button onClick={() => setApiKeyVisible(!apiKeyVisible)} className="p-1 hover:bg-slate-600/40 rounded text-blue-300/60 hover:text-blue-200">
+                      {apiKeyVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                    <button onClick={() => handleCopy(status.store.apiKey!)} className="p-1 hover:bg-slate-600/40 rounded text-blue-300/60 hover:text-blue-200">
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-blue-300/40 mt-1">Connect an e-commerce platform to generate an API key</p>
+                )}
+              </div>
             </div>
-            <button className="px-4 py-2 text-sm bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 transition-all">View Documentation</button>
           </div>
           <div className="flex items-center justify-between p-4 bg-slate-700/40 border border-blue-700/30 rounded-lg hover:border-blue-700/60 transition-all">
-            <div>
-              <h3 className="font-medium text-white">Webhook Endpoints</h3>
-              <p className="text-sm text-blue-300/60">Receive real-time events</p>
+            <div className="flex items-start space-x-3">
+              <Webhook className="w-5 h-5 text-cyan-400 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-white">Webhook Endpoint</h3>
+                <p className="text-sm text-blue-300/60">Receive real-time cart events</p>
+                <p className="text-xs text-blue-300/40 mt-1">POST to this URL to receive cart recovery events</p>
+              </div>
             </div>
-            <button className="px-4 py-2 text-sm bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 transition-all">Manage Webhooks</button>
+            <button onClick={() => {
+              const webhookUrl = `${window.location.origin}/api/webhooks/shopify`
+              handleCopy(webhookUrl)
+            }} className="px-4 py-2 text-sm bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 transition-all">
+              Copy Webhook URL
+            </button>
           </div>
         </div>
       </section>
+
+      {credentialModal && (
+        <CredentialModalComponent
+          modal={credentialModal}
+          onConnect={handleCredentialConnect}
+          onClose={() => setCredentialModal(null)}
+        />
+      )}
     </div>
   )
 }
@@ -156,61 +284,238 @@ function IntegrationCard({
   onDisconnect: () => void
   isMessaging?: boolean
 }) {
-  const [isLoading, setIsLoading] = useState(false)
+  const [busy, setBusy] = useState(false)
 
   const handleConnect = async () => {
-    setIsLoading(true)
+    setBusy(true)
     await onConnect()
-    setIsLoading(false)
+    setBusy(false)
   }
 
   return (
-    <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+    <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-5 backdrop-blur-sm">
       <div className="flex items-start justify-between">
-        <div className="flex items-start space-x-4">
-          <div className="text-4xl">{integration.icon}</div>
+        <div className="flex items-start space-x-3">
+          <div className="text-2xl leading-none mt-0.5">{integration.icon}</div>
           <div>
             <div className="flex items-center space-x-2">
-              <h3 className="font-semibold text-white">{integration.name}</h3>
+              <h3 className="font-semibold text-white text-sm">{integration.name}</h3>
               {integration.connected ? (
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
+                <span className="flex items-center text-xs text-emerald-400"><CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Connected</span>
               ) : (
-                <XCircle className="w-5 h-5 text-blue-300/40" />
+                <span className="flex items-center text-xs text-blue-300/40"><XCircle className="w-3.5 h-3.5 mr-1" /> Disconnected</span>
               )}
             </div>
-            <p className="text-sm text-blue-300/80 mt-1">{integration.description}</p>
+            <p className="text-sm text-blue-300/70 mt-1">{integration.description}</p>
             {integration.connected && integration.storeName && (
-              <p className="text-sm text-green-400 mt-2">Connected to: {integration.storeName}</p>
+              <p className="text-xs text-emerald-400/80 mt-1.5">Store: {integration.storeName}</p>
             )}
             {integration.connected && integration.lastSync && (
-              <p className="text-xs text-blue-300/60 mt-1">Last sync: {integration.lastSync}</p>
+              <p className="text-xs text-blue-300/50 mt-0.5">Last sync: {new Date(integration.lastSync).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
             )}
             {isMessaging && integration.credits !== undefined && (
-              <p className="text-sm text-cyan-400 mt-2">
-                Available credits: {integration.credits.toLocaleString()}
+              <p className="text-xs text-cyan-400/80 mt-1.5">
+                {integration.connected ? `${integration.credits.toLocaleString('en-IN')} credits available` : 'Configure to start using'}
               </p>
             )}
           </div>
         </div>
-        <div className="flex flex-col items-end space-y-2">
+        <div className="flex flex-col items-end space-y-2 shrink-0 ml-4">
           {integration.connected ? (
             <>
-              <button
-                onClick={onDisconnect}
-                className="px-4 py-2 text-sm text-red-400 hover:bg-red-600/20 rounded-lg transition-colors"
-              >
+              <button onClick={onDisconnect} className="px-3 py-1.5 text-xs text-red-400 hover:bg-red-600/20 rounded-lg transition-colors border border-red-500/30 hover:border-red-500/50">
                 Disconnect
               </button>
-              <button className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors">
-                <Settings className="w-4 h-4 text-blue-300/80" />
+              <button className="p-1.5 hover:bg-slate-700/50 rounded-lg transition-colors">
+                <Settings className="w-4 h-4 text-blue-300/60" />
               </button>
             </>
           ) : (
-            <button onClick={handleConnect} disabled={isLoading} className="px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all">
-              {isLoading ? 'Connecting...' : 'Connect'}
+            <button onClick={handleConnect} disabled={busy} className="px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all">
+              {busy ? 'Connecting...' : 'Connect'}
             </button>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+const CREDENTIAL_FORMS: Record<string, {
+  title: string
+  fields: Array<{ key: string; label: string; placeholder: string; type?: string }>
+  docUrl: string
+  description: string
+}> = {
+  woocommerce: {
+    title: 'Connect WooCommerce',
+    description: 'Enter your WooCommerce API credentials from WordPress admin > WooCommerce > Settings > Advanced > REST API.',
+    fields: [
+      { key: 'domain', label: 'Store URL', placeholder: 'https://yourstore.com', type: 'url' },
+      { key: 'apiKey', label: 'Consumer Key', placeholder: 'ck_...' },
+      { key: 'apiSecret', label: 'Consumer Secret', placeholder: 'cs_...' },
+    ],
+    docUrl: 'https://woocommerce.com/document/rest-api/',
+  },
+  magento: {
+    title: 'Connect Magento',
+    description: 'Enter your Magento integration credentials from System > Extensions > Integrations.',
+    fields: [
+      { key: 'domain', label: 'Store URL', placeholder: 'https://yourstore.com', type: 'url' },
+      { key: 'apiKey', label: 'Integration Access Token', placeholder: 'Enter access token' },
+      { key: 'apiSecret', label: 'Integration Secret', placeholder: 'Enter secret key' },
+    ],
+    docUrl: 'https://devdocs.magento.com/guides/v2.4/get-started/authentication/gs-authentication-token.html',
+  },
+  bigcommerce: {
+    title: 'Connect BigCommerce',
+    description: 'Enter your BigCommerce API credentials from Advanced Settings > API Accounts.',
+    fields: [
+      { key: 'domain', label: 'Store URL', placeholder: 'https://yourstore.com', type: 'url' },
+      { key: 'apiKey', label: 'Client ID', placeholder: 'Enter client ID' },
+      { key: 'apiSecret', label: 'Client Secret', placeholder: 'Enter client secret' },
+    ],
+    docUrl: 'https://developer.bigcommerce.com/api-docs/getting-started/authentication',
+  },
+  custom: {
+    title: 'Custom API Integration',
+    description: 'Connect via our REST API. Enter your store details and we will generate API credentials.',
+    fields: [
+      { key: 'domain', label: 'Store URL', placeholder: 'https://yourstore.com', type: 'url' },
+      { key: 'apiKey', label: 'API Key', placeholder: 'Create a unique API key' },
+      { key: 'apiSecret', label: 'API Secret', placeholder: 'Create a secret key' },
+    ],
+    docUrl: '/docs/api',
+  },
+  twilio: {
+    title: 'Twilio SMS Configuration',
+    description: 'Twilio is configured via environment variables. Add these to your Vercel project dashboard.',
+    fields: [
+      { key: 'TWILIO_ACCOUNT_SID', label: 'TWILIO_ACCOUNT_SID', placeholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
+      { key: 'TWILIO_AUTH_TOKEN', label: 'TWILIO_AUTH_TOKEN', placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
+      { key: 'TWILIO_PHONE_NUMBER', label: 'TWILIO_PHONE_NUMBER', placeholder: '+1234567890' },
+    ],
+    docUrl: 'https://www.twilio.com/docs/sms/quickstart/node',
+  },
+  whatsapp: {
+    title: 'WhatsApp Business Configuration',
+    description: 'WhatsApp Business API is configured via environment variables. Add these to your Vercel project dashboard.',
+    fields: [
+      { key: 'WHATSAPP_BUSINESS_TOKEN', label: 'WHATSAPP_BUSINESS_TOKEN', placeholder: 'EAxxxxxxxxxxxxxxxx' },
+      { key: 'WHATSAPP_PHONE_NUMBER_ID', label: 'WHATSAPP_PHONE_NUMBER_ID', placeholder: '123456789' },
+    ],
+    docUrl: 'https://developers.facebook.com/docs/whatsapp/cloud-api',
+  },
+  sendgrid: {
+    title: 'SendGrid Configuration',
+    description: 'SendGrid is configured via environment variable. Add this to your Vercel project dashboard.',
+    fields: [
+      { key: 'SENDGRID_API_KEY', label: 'SENDGRID_API_KEY', placeholder: 'SG.xxxxx.xxxxx' },
+    ],
+    docUrl: 'https://docs.sendgrid.com/for-developers/sending-email/api-getting-started',
+  },
+  onesignal: {
+    title: 'OneSignal Configuration',
+    description: 'OneSignal is configured via environment variables. Add these to your Vercel project dashboard.',
+    fields: [
+      { key: 'ONESIGNAL_APP_ID', label: 'ONESIGNAL_APP_ID', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
+      { key: 'ONESIGNAL_API_KEY', label: 'ONESIGNAL_API_KEY', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
+    ],
+    docUrl: 'https://documentation.onesignal.com/docs',
+  },
+}
+
+function CredentialModalComponent({
+  modal,
+  onConnect,
+  onClose,
+}: {
+  modal: CredentialModal
+  onConnect: (platform: string, credentials: Record<string, string>) => Promise<void>
+  onClose: () => void
+}) {
+  const [values, setValues] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (!modal) return null
+  const form = CREDENTIAL_FORMS[modal.type]
+  const isMessaging = ['twilio', 'whatsapp', 'sendgrid', 'onesignal'].includes(modal.type)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (isMessaging) {
+      const envList = form.fields.map((f) => f.key).join(', ')
+      setError(`Set these environment variables in your Vercel dashboard: ${envList}. After deployment, refresh this page.`)
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      await onConnect(modal.type, values)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Connection failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-slate-800 border border-blue-700/50 rounded-xl p-6 w-full max-w-md shadow-2xl shadow-cyan-500/10" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center space-x-3 mb-4">
+          <span className="text-2xl">{modal.icon}</span>
+          <h3 className="text-lg font-semibold text-white">{form.title}</h3>
+        </div>
+
+        <p className="text-sm text-blue-300/70 mb-5">{form.description}</p>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-600/20 border border-red-500/40 rounded-lg text-sm text-red-300">{error}</div>
+        )}
+
+        {isMessaging ? (
+          <div className="space-y-3 mb-5">
+            {form.fields.map((field) => (
+              <div key={field.key} className="p-3 bg-slate-700/40 border border-blue-700/30 rounded-lg">
+                <p className="text-xs text-blue-300/60 font-mono mb-1">{field.key}</p>
+                <p className="text-xs text-blue-300/40 font-mono break-all">{field.placeholder}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4 mb-5">
+            {form.fields.map((field) => (
+              <div key={field.key}>
+                <label className="block text-sm font-medium text-blue-200 mb-1">{field.label}</label>
+                <input
+                  type={field.type || 'text'}
+                  value={values[field.key] || ''}
+                  onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
+                  placeholder={field.placeholder}
+                  className="w-full px-3 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg text-sm focus:outline-none focus:border-cyan-400/70 focus:ring-1 focus:ring-cyan-400/30"
+                  required
+                />
+              </div>
+            ))}
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all"
+            >
+              {saving ? 'Connecting...' : 'Save & Connect'}
+            </button>
+          </form>
+        )}
+
+        <a href={form.docUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center text-sm text-cyan-400 hover:text-cyan-300 transition-colors mb-4">
+          <ExternalLink className="w-4 h-4 mr-1.5" />
+          View Documentation
+        </a>
+
+        <button onClick={onClose} className="w-full py-2 text-sm text-blue-300/60 hover:text-white transition-colors">
+          Cancel
+        </button>
       </div>
     </div>
   )

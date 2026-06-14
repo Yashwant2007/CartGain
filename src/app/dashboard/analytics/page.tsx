@@ -43,6 +43,9 @@ export default function AnalyticsPage() {
   const [previous, setPrevious] = useState<PeriodData | null>(null)
   const [loadingData, setLoadingData] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exportSuccess, setExportSuccess] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const days = dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90
 
@@ -100,6 +103,78 @@ export default function AnalyticsPage() {
 
   const dateRangeLabel = dateRange === '7d' ? 'Last 7 days' : dateRange === '30d' ? 'Last 30 days' : 'Last 90 days'
 
+  const handleExport = async () => {
+    if (!current || !storeId) return
+
+    try {
+      setExporting(true)
+      setExportError(null)
+      setExportSuccess(false)
+
+      // Generate CSV content
+      const csvRows: string[] = []
+      
+      // Header
+      csvRows.push('CartGain Analytics Report')
+      csvRows.push(`Period: ${dateRangeLabel}`)
+      csvRows.push(`Generated: ${new Date().toLocaleString('en-IN')}`)
+      csvRows.push('')
+
+      // Overview Section
+      csvRows.push('=== OVERVIEW ===')
+      csvRows.push('Metric,Value')
+      csvRows.push(`Revenue Recovered,₹${current.overview.revenueRecovered.toLocaleString('en-IN')}`)
+      csvRows.push(`Recovery Rate,${current.overview.recoveryRate}%`)
+      csvRows.push(`Carts Recovered,${current.overview.cartsRecovered}`)
+      csvRows.push(`Carts Abandoned,${current.overview.cartsAbandoned}`)
+      csvRows.push(`Messages Sent,${current.overview.messagesSent}`)
+      csvRows.push(`Messages Delivered,${current.overview.messagesDelivered}`)
+      csvRows.push(`Messages Clicked,${current.overview.messagesClicked}`)
+      csvRows.push(`Total Costs,₹${current.overview.totalCosts.toFixed(2)}`)
+      csvRows.push(`Net Revenue,₹${current.overview.netRevenue.toLocaleString('en-IN')}`)
+      csvRows.push(`ROI,${current.overview.roi}%`)
+      csvRows.push(`Avg Order Value,₹${current.overview.avgOrderValue.toFixed(2)}`)
+      csvRows.push('')
+
+      // Channel Performance Section
+      csvRows.push('=== CHANNEL PERFORMANCE ===')
+      csvRows.push('Channel,Sent,Delivered,Clicked,Converted,Revenue,Conversion Rate')
+      current.channelStats.forEach((channel) => {
+        const convRate = channel.sent > 0 ? ((channel.converted / channel.sent) * 100).toFixed(1) : '0.0'
+        csvRows.push(`${channel.channel},${channel.sent},${channel.delivered},${channel.clicked},${channel.converted},₹${channel.revenue.toLocaleString('en-IN')},${convRate}%`)
+      })
+      csvRows.push('')
+
+      // Daily Data Section
+      csvRows.push('=== DAILY DATA ===')
+      csvRows.push('Date,Revenue,Recovered Carts,Abandoned Carts')
+      current.chartData.forEach((day) => {
+        csvRows.push(`${day.date},₹${day.revenue.toLocaleString('en-IN')},${day.recoveredCarts},${day.abandonedCarts}`)
+      })
+
+      // Create blob and download
+      const csvContent = csvRows.join('\n')
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `cartgain-analytics-${dateRange}-${new Date().toISOString().split('T')[0]}.csv`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      setExportSuccess(true)
+      setTimeout(() => setExportSuccess(false), 3000)
+    } catch (error) {
+      setExportError('Failed to export data. Please try again.')
+      console.error('Export error:', error)
+      setTimeout(() => setExportError(null), 3000)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -123,9 +198,32 @@ export default function AnalyticsPage() {
               </button>
             ))}
           </div>
-          <button className="px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg text-sm font-medium hover:border-blue-700/80 transition-all flex items-center">
-            <Download className="w-4 h-4 mr-2" />
-            Export
+          <button 
+            onClick={handleExport}
+            disabled={exporting || !current}
+            className="px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg text-sm font-medium hover:border-blue-700/80 transition-all flex items-center disabled:opacity-50 disabled:cursor-not-allowed relative"
+          >
+            {exporting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Exporting...
+              </>
+            ) : exportSuccess ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 mr-2 text-green-400" />
+                Exported!
+              </>
+            ) : exportError ? (
+              <>
+                <AlertCircle className="w-4 h-4 mr-2 text-red-400" />
+                Failed
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </>
+            )}
           </button>
         </div>
       </div>

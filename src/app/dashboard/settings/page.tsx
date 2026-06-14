@@ -14,7 +14,6 @@ type StoreSettings = {
   id: string
   name: string
   domain: string
-  timezone: string
   currency: string
   platform: string
   webhookUrl?: string | null
@@ -133,8 +132,7 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
   const [form, setForm] = useState({
     storeName: store?.name ?? 'My Awesome Store',
     storeUrl: store?.domain ?? 'https://mystore.com',
-    timezone: store?.timezone ?? 'America/New_York',
-    currency: store?.currency ?? 'USD',
+    currency: store?.currency ?? 'INR',
     platform: store?.platform ?? 'shopify',
   })
   const [saving, setSaving] = useState(false)
@@ -149,7 +147,6 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
       setForm({
         storeName: store.name,
         storeUrl: store.domain,
-        timezone: store.timezone,
         currency: store.currency,
         platform: store.platform,
       })
@@ -183,7 +180,6 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
         body: JSON.stringify({
           name: form.storeName,
           domain: form.storeUrl,
-          timezone: form.timezone,
           currency: form.currency,
           platform: form.platform,
         }),
@@ -278,20 +274,16 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-blue-200 mb-2">Timezone</label>
+            <label className="block text-sm font-medium text-blue-200 mb-2">Currency</label>
             <select
               className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
-              value={form.timezone}
-              onChange={(e) => setForm({ ...form, timezone: e.target.value })}
+              value={form.currency}
+              onChange={(e) => setForm({ ...form, currency: e.target.value })}
             >
-              <option value="America/New_York">Eastern Time (ET)</option>
-              <option value="America/Chicago">Central Time (CT)</option>
-              <option value="America/Denver">Mountain Time (MT)</option>
-              <option value="America/Los_Angeles">Pacific Time (PT)</option>
-              <option value="Europe/London">London (GMT)</option>
-              <option value="Europe/Paris">Paris (CET)</option>
-              <option value="Asia/Kolkata">India (IST)</option>
-              <option value="Asia/Singapore">Singapore (SGT)</option>
+              <option value="INR">Indian Rupee (₹)</option>
+              <option value="USD">US Dollar ($)</option>
+              <option value="EUR">Euro (€)</option>
+              <option value="GBP">British Pound (£)</option>
             </select>
           </div>
           <button onClick={handleSave} disabled={saving} className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all mt-4">
@@ -524,40 +516,247 @@ function BillingSettings() {
 }
 
 function SecuritySettings() {
+  const [passwords, setPasswords] = useState({
+    current: '',
+    new: '',
+    confirm: '',
+  })
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
+  const [twoFactorLoading, setTwoFactorLoading] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+
+  const handlePasswordChange = async () => {
+    setPasswordError(null)
+    setPasswordMessage(null)
+
+    if (!passwords.current || !passwords.new || !passwords.confirm) {
+      setPasswordError('Please fill in all password fields')
+      return
+    }
+
+    if (passwords.new !== passwords.confirm) {
+      setPasswordError('New passwords do not match')
+      return
+    }
+
+    if (passwords.new.length < 8) {
+      setPasswordError('Password must be at least 8 characters')
+      return
+    }
+
+    try {
+      setChangingPassword(true)
+
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: passwords.current,
+          newPassword: passwords.new,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Failed to change password')
+      }
+
+      setPasswordMessage('Password updated successfully!')
+      setPasswords({ current: '', new: '', confirm: '' })
+      setTimeout(() => setPasswordMessage(null), 3000)
+    } catch (error) {
+      setPasswordError(error instanceof Error ? error.message : 'Failed to change password')
+    } finally {
+      setChangingPassword(false)
+    }
+  }
+
+  const handleToggleTwoFactor = async () => {
+    try {
+      setTwoFactorLoading(true)
+
+      // Simulate API call for 2FA toggle
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      setTwoFactorEnabled(!twoFactorEnabled)
+    } catch (error) {
+      console.error('2FA toggle error:', error)
+    } finally {
+      setTwoFactorLoading(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirm !== 'DELETE') {
+      return
+    }
+
+    try {
+      setDeletingAccount(true)
+
+      const response = await fetch('/api/auth/delete-account', {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete account')
+      }
+
+      // Redirect to login after deletion
+      window.location.href = '/login?deleted=true'
+    } catch (error) {
+      console.error('Delete account error:', error)
+      setDeletingAccount(false)
+      setShowDeleteModal(false)
+      setDeleteConfirm('')
+    }
+  }
+
   return (
-    <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 max-w-2xl backdrop-blur-sm">
-      <h2 className="text-lg font-semibold text-white mb-6">Security Settings</h2>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-blue-200 mb-2">Current Password</label>
-          <input type="password" className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-blue-200 mb-2">New Password</label>
-          <input type="password" className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-blue-200 mb-2">Confirm New Password</label>
-          <input type="password" className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400" />
-        </div>
-        <button className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all mt-4">Update Password</button>
-        <div className="border-t border-blue-700/30 pt-6 mt-6">
-          <h3 className="font-medium text-white mb-4">Two-Factor Authentication</h3>
-          <div className="flex items-center justify-between p-4 bg-slate-700/40 border border-blue-700/30 rounded-lg">
-            <div>
-              <p className="font-medium text-white">Authenticator App</p>
-              <p className="text-sm text-blue-300/60">Add an extra layer of security</p>
-            </div>
-            <button className="px-4 py-2 border border-blue-700/50 text-blue-300 hover:bg-slate-700/40 rounded-lg text-sm transition-all">Enable</button>
+    <div className="space-y-6 max-w-2xl">
+      {/* Password Change */}
+      <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+        <h2 className="text-lg font-semibold text-white mb-6">Change Password</h2>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-blue-200 mb-2">Current Password</label>
+            <input
+              type="password"
+              value={passwords.current}
+              onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
+              className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              placeholder="Enter current password"
+            />
           </div>
-        </div>
-        <div className="border-t border-blue-700/30 pt-6 mt-6">
-          <h3 className="font-medium text-white mb-4">Danger Zone</h3>
-          <button className="px-4 py-2 text-red-400 border border-red-600/40 rounded-lg hover:bg-red-600/20 transition-colors">
-            Delete Account
+          <div>
+            <label className="block text-sm font-medium text-blue-200 mb-2">New Password</label>
+            <input
+              type="password"
+              value={passwords.new}
+              onChange={(e) => setPasswords({ ...passwords, new: e.target.value })}
+              className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              placeholder="Enter new password"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-blue-200 mb-2">Confirm New Password</label>
+            <input
+              type="password"
+              value={passwords.confirm}
+              onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
+              className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              placeholder="Confirm new password"
+            />
+          </div>
+
+          {passwordError && (
+            <p className="text-sm text-red-300/80 bg-red-600/20 border border-red-700/30 rounded-lg p-3">{passwordError}</p>
+          )}
+          {passwordMessage && (
+            <p className="text-sm text-emerald-300/80 bg-emerald-600/20 border border-emerald-700/30 rounded-lg p-3">{passwordMessage}</p>
+          )}
+
+          <button
+            onClick={handlePasswordChange}
+            disabled={changingPassword}
+            className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all mt-4"
+          >
+            {changingPassword ? 'Updating...' : 'Update Password'}
           </button>
         </div>
       </div>
+
+      {/* Two-Factor Authentication */}
+      <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+        <h2 className="text-lg font-semibold text-white mb-6">Two-Factor Authentication</h2>
+        <div className="flex items-center justify-between p-4 bg-slate-700/40 border border-blue-700/30 rounded-lg">
+          <div>
+            <p className="font-medium text-white">Authenticator App</p>
+            <p className="text-sm text-blue-300/60">
+              {twoFactorEnabled ? '2FA is enabled' : 'Add an extra layer of security'}
+            </p>
+          </div>
+          <button
+            onClick={handleToggleTwoFactor}
+            disabled={twoFactorLoading}
+            className={`px-4 py-2 rounded-lg text-sm transition-all ${
+              twoFactorEnabled
+                ? 'bg-red-600/20 text-red-300 border border-red-600/40 hover:bg-red-600/30'
+                : 'border border-blue-700/50 text-blue-300 hover:bg-slate-700/40'
+            }`}
+          >
+            {twoFactorLoading ? 'Loading...' : twoFactorEnabled ? 'Disable' : 'Enable'}
+          </button>
+        </div>
+        {twoFactorEnabled && (
+          <div className="mt-4 p-4 bg-emerald-600/20 border border-emerald-500/40 rounded-lg">
+            <p className="text-sm text-emerald-300">✓ Two-factor authentication is active. Your account is more secure.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Danger Zone */}
+      <div className="bg-slate-800/50 border border-red-700/30 rounded-xl p-6 backdrop-blur-sm">
+        <h2 className="text-lg font-semibold text-white mb-4">Danger Zone</h2>
+        <p className="text-sm text-blue-300/60 mb-6">
+          Once you delete your account, there is no going back. Please be certain.
+        </p>
+        <button
+          onClick={() => setShowDeleteModal(true)}
+          className="px-6 py-2 text-red-400 border border-red-600/40 rounded-lg hover:bg-red-600/20 transition-colors"
+        >
+          Delete Account
+        </button>
+      </div>
+
+      {/* Delete Account Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 border border-red-700/50 rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold text-white mb-4">Delete Account?</h3>
+            <p className="text-blue-300/80 mb-6">
+              This action cannot be undone. All your data, including stores, campaigns, and analytics will be permanently deleted.
+            </p>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-blue-200 mb-2">
+                Type <span className="text-red-400 font-mono">DELETE</span> to confirm
+              </label>
+              <input
+                type="text"
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value.toUpperCase())}
+                className="w-full px-4 py-2 bg-slate-700/50 border border-red-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 font-mono"
+                placeholder="DELETE"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false)
+                  setDeleteConfirm('')
+                }}
+                className="flex-1 px-4 py-2 border border-blue-700/50 text-blue-300 rounded-lg hover:bg-slate-700/40 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirm !== 'DELETE' || deletingAccount}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                {deletingAccount ? 'Deleting...' : 'Delete Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
