@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyWebhookSignature } from "@/lib/payment";
+import { verifyWebhookSignature, PLANS } from "@/lib/payment";
 import prisma from "@/lib/db";
 
 export const dynamic = 'force-dynamic'
@@ -70,37 +70,51 @@ async function handlePaymentCaptured(payment: any) {
 
   if (!userId || !plan) return;
 
-  // Find existing subscription or create new
+  const planConfig = Object.values(PLANS).find(
+    (p) => p.id === plan || (plan === "credits")
+  );
+  const planSmsCredits = planConfig && "smsCredits" in planConfig ? (planConfig as any).smsCredits : 0;
+
+  const isMonthlyPlan = plan !== "credits";
+  const smsToAdd = isMonthlyPlan ? planSmsCredits : Math.round((payment.amount || 0) / 100);
+
   const existingSubscription = await prisma.subscription.findFirst({
     where: { userId },
   });
 
   if (existingSubscription) {
-    // Update existing subscription
+    const updateData: any = {
+      status: "active",
+    };
+
+    if (isMonthlyPlan) {
+      updateData.plan = plan;
+      updateData.smsCredits = smsToAdd;
+      updateData.smsCreditsUsed = 0;
+      updateData.currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    } else {
+      updateData.smsCredits = { increment: smsToAdd };
+    }
+
     await prisma.subscription.update({
       where: { id: existingSubscription.id },
-      data: {
-        smsCredits: { increment: plan === "pro" ? 5000 : 0 },
-        status: "active",
-        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      },
+      data: updateData,
     });
   } else {
-    // Create new subscription
     await prisma.subscription.create({
       data: {
         userId,
         customerId: payment.id || `customer_${userId}_${Date.now()}`,
-        plan,
+        plan: isMonthlyPlan ? plan : "free",
         status: "active",
-        smsCredits: plan === "pro" ? 5000 : 100,
+        smsCredits: smsToAdd,
         currentPeriodStart: new Date(),
         currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
     });
   }
 
-  console.log(`✅ Payment captured for user ${userId}, plan: ${plan}`);
+  console.log(`✅ Payment captured for user ${userId}, plan: ${plan}, credits: ${smsToAdd}`);
 }
 
 async function handlePaymentFailed(payment: any) {
@@ -114,7 +128,10 @@ async function handleOrderPaid(payment: any, order: any) {
 
 async function handleSubscriptionActivated(subscription: any) {
   const userId = subscription.notes?.userId;
-  const plan = subscription.notes?.plan;
+  const plan = subscription.notes?.plan || "starter";
+
+  const planConfig = Object.values(PLANS).find((p) => p.id === plan);
+  const smsCredits = planConfig && "smsCredits" in planConfig ? (planConfig as any).smsCredits : 2000;
 
   const existingSubscription = await prisma.subscription.findFirst({
     where: { userId },
@@ -125,7 +142,10 @@ async function handleSubscriptionActivated(subscription: any) {
       where: { id: existingSubscription.id },
       data: {
         status: "active",
+        plan,
         subscriptionId: subscription.id,
+        smsCredits,
+        smsCreditsUsed: 0,
         currentPeriodEnd: new Date(subscription.current_period_end * 1000),
       },
     });
@@ -135,16 +155,16 @@ async function handleSubscriptionActivated(subscription: any) {
         userId,
         customerId: subscription.customer_id,
         subscriptionId: subscription.id,
-        plan: plan || "pro",
+        plan,
         status: "active",
-        smsCredits: 5000,
+        smsCredits,
         currentPeriodStart: new Date(subscription.current_period_start * 1000),
         currentPeriodEnd: new Date(subscription.current_period_end * 1000),
       },
     });
   }
 
-  console.log(`✅ Subscription activated for user ${userId}`);
+  console.log(`✅ Subscription activated for user ${userId}, plan: ${plan}`);
 }
 
 async function handleSubscriptionPaused(subscription: any) {

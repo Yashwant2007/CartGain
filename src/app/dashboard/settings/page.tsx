@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Bell, CreditCard, Shield, User, Key } from 'lucide-react'
+import Link from 'next/link'
+import { Bell, CreditCard, Shield, User, Key, ExternalLink } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
-import RazorpayCheckout from '@/components/payment/RazorpayCheckout'
 
 type SessionUser = {
   name?: string | null
@@ -362,155 +362,20 @@ function NotificationSettings() {
 }
 
 function BillingSettings() {
-  const [subscription, setSubscription] = useState<any>(null)
-  const [plans, setPlans] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [creditAmount, setCreditAmount] = useState(1000)
-  const [razorpayLoaded, setRazorpayLoaded] = useState(false)
-
-  useEffect(() => {
-    const fetchSubscription = async () => {
-      try {
-        const res = await fetch('/api/subscription')
-        const data = await res.json()
-        if (res.ok) {
-          setSubscription(data.subscription)
-          setPlans(data.plans)
-        }
-      } catch (err) {
-        console.error('Failed to fetch subscription', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchSubscription()
-  }, [])
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !(window as any).Razorpay) {
-      const script = document.createElement('script')
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
-      script.async = true
-      script.onload = () => setRazorpayLoaded(true)
-      document.body.appendChild(script)
-    } else {
-      setRazorpayLoaded(true)
-    }
-  }, [])
-
-  if (loading) {
-    return <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 max-w-2xl backdrop-blur-sm text-sm text-blue-300/80">Loading billing info...</div>
-  }
-
-  const plan = subscription?.plan || 'free'
-  const planName = plans?.[plan?.toUpperCase() === 'PRO' ? 'PRO' : plan?.toUpperCase() === 'FREE' ? 'FREE' : 'PAY_AS_YOU_GO']?.name || 'Free Forever'
-  const smsCredits = subscription?.smsCredits ?? 100
-  const smsUsed = subscription?.smsCreditsUsed ?? 0
-  const smsRemaining = smsCredits - smsUsed
-  const smsRate = 0.02
-  const whatsappRate = 0.005
-
   return (
-    <div className="space-y-6 max-w-2xl">
-      {/* Current Plan */}
-      <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Billing &amp; Subscription</h2>
-            <p className="text-sm text-blue-300/80 mt-1">Manage your plan and credits</p>
-          </div>
-          <span className="px-3 py-1 bg-emerald-600/40 text-emerald-300 rounded-full text-sm font-medium border border-emerald-500/40">
-            {subscription?.status === 'active' ? 'Active' : 'Free'}
-          </span>
-        </div>
-
-        <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-semibold text-white">{planName}</h3>
-              <p className="text-sm text-blue-300/80">Current plan</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <p className="text-sm text-blue-300/80">SMS Credits Remaining</p>
-              <p className="text-2xl font-bold text-cyan-300">{smsRemaining.toLocaleString()}</p>
-              <div className="w-full bg-slate-600/50 rounded-full h-2 mt-2">
-                <div className="bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full h-2 transition-all" style={{ width: `${Math.min((smsUsed / Math.max(smsCredits, 1)) * 100, 100)}%` }} />
-              </div>
-            </div>
-            <div>
-              <p className="text-sm text-blue-300/80">Rate per SMS</p>
-              <p className="text-2xl font-bold text-cyan-300">₹{smsRate.toFixed(3)}</p>
-              <p className="text-xs text-blue-300/60 mt-1">WhatsApp: ₹{whatsappRate.toFixed(3)}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Buy Credits */}
-      <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
-        <h3 className="font-semibold text-white mb-4">Buy Credits</h3>
-        <div className="flex items-center space-x-4 mb-4">
-          {[500, 1000, 2500, 5000].map((amount) => (
-            <button
-              key={amount}
-              onClick={() => setCreditAmount(amount)}
-              className={`px-4 py-2 rounded-lg border font-medium transition-all ${creditAmount === amount ? 'bg-cyan-600/30 border-cyan-400 text-cyan-300' : 'bg-slate-700/40 border-blue-700/50 text-blue-300 hover:border-blue-600'}`}
-            >
-              ₹{amount}
-            </button>
-          ))}
-        </div>
-        <p className="text-sm text-blue-300/60 mb-4">{creditAmount} credits = ~{(creditAmount / smsRate).toLocaleString()} SMS messages or ~{(creditAmount / whatsappRate).toLocaleString()} WhatsApp messages</p>
-        {razorpayLoaded ? (
-          <RazorpayCheckout
-            plan="payg"
-            amount={creditAmount}
-            onSuccess={(paymentId) => {
-              alert(`Payment successful! ID: ${paymentId}`)
-              window.location.reload()
-            }}
-            onFailure={(err) => {
-              console.error('Payment failed', err)
-              alert('Payment failed. Please try again.')
-            }}
-          />
-        ) : (
-          <button disabled className="px-6 py-3 bg-slate-600 text-white rounded-lg cursor-not-allowed">Loading payment...</button>
-        )}
-      </div>
-
-      {/* Available Plans */}
-      <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
-        <h3 className="font-semibold text-white mb-6">Available Plans</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-6">
-            <h4 className="font-semibold text-cyan-300 mb-2">Pay As You Go</h4>
-            <p className="text-3xl font-bold text-white mb-4">₹0<span className="text-base font-normal text-blue-300/60">/mo</span></p>
-            <ul className="space-y-2 text-sm text-blue-300/80 mb-6">
-              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> All channels (SMS, WhatsApp, Email)</li>
-              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> No monthly minimum</li>
-              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> AI optimization</li>
-              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> Pay only for what you use</li>
-            </ul>
-            <span className="text-xs text-blue-300/60">Currently active</span>
-          </div>
-          <div className="bg-gradient-to-b from-slate-700/60 to-slate-800/60 border border-amber-500/40 rounded-lg p-6 relative">
-            <span className="absolute -top-3 right-4 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold rounded-full">Popular</span>
-            <h4 className="font-semibold text-amber-300 mb-2">Pro</h4>
-            <p className="text-3xl font-bold text-white mb-4">₹99<span className="text-base font-normal text-blue-300/60">/mo</span></p>
-            <ul className="space-y-2 text-sm text-blue-300/80 mb-6">
-              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> 5,000 SMS credits included</li>
-              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> 1,000 WhatsApp credits included</li>
-              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> Unlimited email</li>
-              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> Priority support</li>
-              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> White-label reports</li>
-            </ul>
-            <button className="w-full px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium hover:shadow-lg hover:shadow-amber-500/50 transition-all">Upgrade to Pro</button>
-          </div>
-        </div>
-      </div>
+    <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 max-w-2xl backdrop-blur-sm text-center">
+      <CreditCard className="w-12 h-12 text-cyan-400 mx-auto mb-4" />
+      <h2 className="text-lg font-semibold text-white mb-2">Billing &amp; Subscription</h2>
+      <p className="text-sm text-blue-300/80 mb-6">
+        Manage your subscription plan, SMS credits, and payment history on the dedicated subscription page.
+      </p>
+      <Link
+        href="/dashboard/subscription"
+        className="inline-flex items-center px-6 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all"
+      >
+        Manage Subscription
+        <ExternalLink className="w-4 h-4 ml-2" />
+      </Link>
     </div>
   )
 }
@@ -778,7 +643,7 @@ function APISettings({ store }: { store: StoreSettings | null }) {
         <div>
           <label className="block text-sm font-medium text-blue-200 mb-1">Live API Key</label>
           <div className="flex space-x-2">
-            <input type="password" value={apiKey} readOnly className="flex-1 px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg font-mono text-sm focus:outline-none" />
+            <input type="password" value={apiKey} readOnly className="flex-1 px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg text-sm focus:outline-none" />
             <button onClick={handleCopy} className="px-4 py-2 rounded-lg border border-blue-700/50 text-blue-300 hover:bg-slate-700/40 transition-all whitespace-nowrap">{copied ? 'Copied!' : 'Copy'}</button>
           </div>
         </div>
@@ -787,7 +652,7 @@ function APISettings({ store }: { store: StoreSettings | null }) {
           <p className="text-sm text-blue-300/80 mb-4">
             Learn how to use our API to integrate CartGain with your custom systems.
           </p>
-          <a href="#" className="text-sm text-cyan-400 hover:text-cyan-300 font-medium">
+          <a href="/docs/api" className="text-sm text-cyan-400 hover:text-cyan-300 font-medium">
             View Documentation →
           </a>
         </div>

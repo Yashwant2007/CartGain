@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, CheckCircle2, Zap, Globe, MessageSquare, Mail, BarChart3, TrendingUp, Sparkles, PhoneCall, ArrowUpRight } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Zap, Globe, MessageSquare, Mail, BarChart3, TrendingUp, Sparkles, PhoneCall, ArrowUpRight, X } from 'lucide-react'
 import ROICalculator from '@/components/ROICalculator'
 import CartGainAnimatic from '@/components/CartGainAnimatic'
 import { Button } from '@/components/Button'
@@ -10,12 +10,72 @@ import Badge from '@/components/Badge'
 import FeatureCard from '@/components/FeatureCard'
 import { useState, useEffect } from 'react'
 
+// Integration modal data
+const INTEGRATION_DETAILS = {
+  shopify: {
+    title: 'Shopify Integration',
+    description: 'Connect your Shopify store in minutes with our one-click integration.',
+    features: [
+      'One-click Shopify connection',
+      'Automatic cart tracking via webhooks',
+      'Real-time sync with your store',
+      'Works with all Shopify plans',
+      'No coding required',
+      '24/7 monitoring and alerts'
+    ],
+    setup: 'Just enter your Shopify store domain and authorize CartGain to access your store data.'
+  },
+  woocommerce: {
+    title: 'WooCommerce Integration',
+    description: 'Seamlessly integrate with your WordPress WooCommerce store.',
+    features: [
+      'Free WordPress plugin available',
+      'Works with any WooCommerce theme',
+      'Automatic webhook configuration',
+      'No coding skills needed',
+      'Compatible with all hosting providers',
+      'Regular plugin updates'
+    ],
+    setup: 'Install our free WordPress plugin and connect with your API keys.'
+  },
+  magento: {
+    title: 'Magento Integration',
+    description: 'Enterprise-grade integration for Magento stores.',
+    features: [
+      'Full REST API integration',
+      'Custom configuration support',
+      'Dedicated technical assistance',
+      'Enterprise security standards',
+      'Scalable for high-volume stores',
+      'Multi-store support'
+    ],
+    setup: 'Our team will help you configure the integration for your specific Magento setup.'
+  },
+  custom: {
+    title: 'Custom Platform Integration',
+    description: 'Connect any e-commerce platform using our flexible API.',
+    features: [
+      'Comprehensive REST API',
+      'Webhook support for real-time updates',
+      'Detailed API documentation',
+      'SDK for popular languages',
+      'Developer support team',
+      'Sandbox environment for testing'
+    ],
+    setup: 'Use our API documentation and SDKs to build a custom integration.'
+  }
+}
+
 const CURRENCIES = {
   INR: { symbol: '₹', name: 'Indian Rupee', code: 'INR' },
 }
 
 export default function HomePage() {
   const currency = 'INR'
+  const [activeModal, setActiveModal] = useState<string | null>(null)
+
+  const openModal = (platform: string) => setActiveModal(platform)
+  const closeModal = () => setActiveModal(null)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
@@ -104,14 +164,14 @@ export default function HomePage() {
             </Button>
             <Button 
               isLink 
-              href="https://cal.com/cartgain"
+              href="https://wa.me/919876543210"
               external
               variant="accent"
               className="w-full sm:w-auto border-2 border-cyan-400"
-              aria-label="Book a call with CartGain team"
+              aria-label="Contact CartGain team on WhatsApp"
             >
-              <PhoneCall className="w-4 h-4 sm:w-5 sm:h-5" />
-              Book a Call
+              <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
+              Contact Us
             </Button>
           </div>
 
@@ -567,7 +627,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-lg sm:text-xl font-bold text-white mb-2">Shopify</h3>
               <p className="text-blue-200 text-xs sm:text-sm mb-4">Direct integration. Automatic cart sync. Simple setup.</p>
-              <a href="#" className="text-cyan-400 text-xs sm:text-sm font-semibold hover:text-cyan-300 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 rounded inline-block">Learn more →</a>
+              <button onClick={() => openModal('shopify')} className="text-cyan-400 text-xs sm:text-sm font-semibold hover:text-cyan-300 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 rounded inline-block">Learn more →</button>
             </div>
 
             {/* WooCommerce */}
@@ -577,7 +637,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-lg sm:text-xl font-bold text-white mb-2">WooCommerce</h3>
               <p className="text-blue-200 text-xs sm:text-sm mb-4">Plugin-based. WordPress-native. No coding needed.</p>
-              <a href="#" className="text-cyan-400 text-xs sm:text-sm font-semibold hover:text-cyan-300 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 rounded inline-block">Learn more →</a>
+              <button onClick={() => openModal('woocommerce')} className="text-cyan-400 text-xs sm:text-sm font-semibold hover:text-cyan-300 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 rounded inline-block">Learn more →</button>
             </div>
 
             {/* Magento */}
@@ -587,7 +647,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-lg sm:text-xl font-bold text-white mb-2">Magento</h3>
               <p className="text-blue-200 text-xs sm:text-sm mb-4">Full API access. Custom configurations. Expert support.</p>
-              <a href="#" className="text-cyan-400 text-xs sm:text-sm font-semibold hover:text-cyan-300 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 rounded inline-block">Learn more →</a>
+              <button onClick={() => openModal('magento')} className="text-cyan-400 text-xs sm:text-sm font-semibold hover:text-cyan-300 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 rounded inline-block">Learn more →</button>
             </div>
 
             {/* Custom */}
@@ -597,7 +657,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-lg sm:text-xl font-bold text-white mb-2">Custom Platform</h3>
               <p className="text-blue-200 text-xs sm:text-sm mb-4">REST API. Webhook support. Technical docs included.</p>
-              <a href="#" className="text-cyan-400 text-xs sm:text-sm font-semibold hover:text-cyan-300 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 rounded inline-block">Learn more →</a>
+              <button onClick={() => openModal('custom')} className="text-cyan-400 text-xs sm:text-sm font-semibold hover:text-cyan-300 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 rounded inline-block">Learn more →</button>
             </div>
           </div>
 
@@ -754,9 +814,9 @@ export default function HomePage() {
             <Link href="/signup" className="px-6 sm:px-8 py-3 sm:py-4 bg-white text-blue-900 font-semibold rounded-lg hover:bg-blue-100 transition shadow-lg min-h-12 inline-flex items-center justify-center">
               Start Free Trial
             </Link>
-            <a href="https://cal.com/cartgain" target="_blank" rel="noopener noreferrer" className="px-6 sm:px-8 py-3 sm:py-4 border-2 border-blue-300 text-white font-semibold rounded-lg hover:bg-white/10 transition flex items-center justify-center gap-2 min-h-12">
-              <PhoneCall className="w-4 h-4 sm:w-5 sm:h-5" />
-              Schedule a Call
+            <a href="https://wa.me/918708718426" target="_blank" rel="noopener noreferrer" className="px-6 sm:px-8 py-3 sm:py-4 border-2 border-blue-300 text-white font-semibold rounded-lg hover:bg-white/10 transition flex items-center justify-center gap-2 min-h-12">
+              <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
+              Contact Us
             </a>
           </div>
         </div>
@@ -805,6 +865,67 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* Integration Modal */}
+      {activeModal && INTEGRATION_DETAILS[activeModal as keyof typeof INTEGRATION_DETAILS] && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeModal}>
+          <div className="bg-slate-800 border border-blue-700/50 rounded-2xl p-6 sm:p-8 max-w-lg w-full relative" onClick={(e) => e.stopPropagation()}>
+            <button 
+              onClick={closeModal}
+              className="absolute top-4 right-4 text-blue-300 hover:text-white transition p-1"
+              aria-label="Close modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="mb-6">
+              <h3 className="text-2xl font-bold text-white mb-2">
+                {INTEGRATION_DETAILS[activeModal as keyof typeof INTEGRATION_DETAILS].title}
+              </h3>
+              <p className="text-blue-200">
+                {INTEGRATION_DETAILS[activeModal as keyof typeof INTEGRATION_DETAILS].description}
+              </p>
+            </div>
+
+            <div className="mb-6">
+              <h4 className="font-semibold text-white mb-3">Key Features:</h4>
+              <ul className="space-y-2">
+                {INTEGRATION_DETAILS[activeModal as keyof typeof INTEGRATION_DETAILS].features.map((feature, index) => (
+                  <li key={index} className="flex items-start gap-2 text-blue-100 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-4 mb-6">
+              <p className="text-sm text-blue-200">
+                <span className="font-semibold text-cyan-300">Setup:</span> {INTEGRATION_DETAILS[activeModal as keyof typeof INTEGRATION_DETAILS].setup}
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Link 
+                href="/signup" 
+                className="flex-1 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 transition text-center"
+                onClick={closeModal}
+              >
+                Get Started Free
+              </Link>
+              <a 
+                href="https://cal.com/cartgain" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex-1 py-3 border border-blue-600 text-blue-300 font-semibold rounded-lg hover:bg-blue-600/20 transition text-center"
+                onClick={closeModal}
+              >
+                Schedule Demo
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

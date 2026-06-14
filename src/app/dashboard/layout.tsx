@@ -10,6 +10,7 @@ import {
   BarChart3,
   Settings,
   Plug,
+  CreditCard,
   LogOut,
   Zap,
   Menu,
@@ -30,6 +31,7 @@ export default function DashboardLayout({
     { name: 'Campaigns', href: '/dashboard/campaigns', icon: Megaphone },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
     { name: 'Integrations', href: '/dashboard/integrations', icon: Plug },
+    { name: 'Subscription', href: '/dashboard/subscription', icon: CreditCard },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },
   ]
 
