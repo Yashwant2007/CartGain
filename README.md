@@ -25,7 +25,7 @@
 | Database | PostgreSQL |
 | Cache/Queue | Redis (Upstash) |
 | Auth | NextAuth.js |
-| Payments | Stripe |
+| Payments | Razorpay |
 | SMS | Twilio |
 | WhatsApp | Meta Business API |
 | Email | SendGrid/Resend |
@@ -38,7 +38,7 @@
 - Node.js 18+ 
 - npm or yarn
 - PostgreSQL database
-- Accounts for: Twilio, SendGrid, Stripe
+- Accounts for: Twilio, SendGrid, Razorpay
 
 ### Installation
 
@@ -54,7 +54,7 @@ npm install
 cp .env.example .env.local
 
 # Edit .env.local with your credentials
-# Required: DATABASE_URL, NEXTAUTH_SECRET, STRIPE keys, Twilio credentials
+# Required: DATABASE_URL, NEXTAUTH_SECRET, RAZORPAY keys, Twilio credentials
 
 # Generate Prisma client
 npx prisma generate
@@ -78,7 +78,7 @@ recoverflow/
 │   ├── app/
 │   │   ├── api/               # API routes
 │   │   │   ├── auth/          # Authentication
-│   │   │   ├── webhooks/      # Shopify, Stripe webhooks
+│   │   │   ├── webhooks/      # Shopify, Razorpay webhooks
 │   │   │   ├── carts/         # Cart operations
 │   │   │   ├── campaigns/     # Campaign management
 │   │   │   └── analytics/     # Analytics data
@@ -116,10 +116,10 @@ DATABASE_URL="postgresql://user:password@localhost:5432/recoverflow"
 NEXTAUTH_SECRET="your-secret-key"
 NEXTAUTH_URL="http://localhost:3000"
 
-# Stripe
-STRIPE_SECRET_KEY="sk_test_..."
-STRIPE_WEBHOOK_SECRET="whsec_..."
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_test_..."
+# Razorpay (Payments)
+RAZORPAY_KEY_ID="rzp_test_..."
+RAZORPAY_KEY_SECRET="..."
+RAZORPAY_WEBHOOK_SECRET="..."
 
 # Twilio (SMS)
 TWILIO_ACCOUNT_SID="AC..."
@@ -163,7 +163,7 @@ REDIS_URL="redis://localhost:6379"
 
 ### Webhooks
 - `POST /api/webhooks/shopify` - Shopify cart/order webhooks
-- `POST /api/webhooks/stripe` - Stripe payment webhooks
+- `POST /api/payment/webhook` - Razorpay payment webhook
 
 ## Database Schema
 
@@ -251,14 +251,15 @@ vercel
 2. Run migrations: `npx prisma migrate deploy`
 3. Update DATABASE_URL in environment
 
-### Stripe Webhooks
+### Razorpay Webhooks
 
-Configure these webhook events:
-- `payment_intent.succeeded`
-- `customer.subscription.created`
-- `customer.subscription.deleted`
+Configure these webhook events in Razorpay Dashboard:
+- `payment.captured`
+- `order.paid`
+- `subscription.activated`
 
-Endpoint: `https://yourdomain.com/api/webhooks/stripe`
+Endpoint: `https://yourdomain.com/api/payment/webhook`
+Secret: Your `RAZORPAY_WEBHOOK_SECRET` from .env.local
 
 ## Testing
 

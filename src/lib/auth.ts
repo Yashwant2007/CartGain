@@ -4,6 +4,7 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import EmailProvider from 'next-auth/providers/email'
 import type { NextAuthOptions } from 'next-auth'
 import prisma from '@/lib/db'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 // Server-side only - load bcrypt when needed
 let bcrypt: any = null;
@@ -16,89 +17,9 @@ if (typeof window === 'undefined') {
   }
 }
 
-// Shopify OAuth Provider (disabled - can be re-enabled with proper types)
-/*
-interface ShopifyProfile {
-  id: string
-  email: string
-  first_name: string
-  last_name: string
-  account_owner: boolean
-  collaborator: boolean
-  email_verified: boolean
-}
-
-const ShopifyProvider = (options: any): any => ({
-  id: 'shopify',
-  name: 'Shopify',
-  type: 'oauth',
-  authorization: {
-    url: 'https://admin.shopify.com/oauth/authorize',
-    params: {
-      client_id: options.clientId,
-      redirect_uri: options.redirectProxyUrl || options.callbackUrl,
-      response_type: 'code',
-      scope: [
-        'read_checkouts',
-        'write_checkouts',
-        'read_orders',
-        'write_orders',
-        'read_customers',
-        'write_customers',
-        'read_products',
-        'write_products',
-        'read_merchant_managed_fulfillment_orders',
-      ].join(','),
-    },
-  },
-  token: {
-    url: ({ params }: any) => {
-      return `https://admin.shopify.com/oauth/access_token`
-    },
-    async request(context: any) {
-      const response = await fetch(context.provider.token.url({ params: context.params }), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          client_id: context.provider.clientId,
-          client_secret: context.provider.clientSecret,
-          code: context.params.code,
-          redirect_uri: context.redirectProxyUrl || context.options.callbackUrl,
-        }),
-      })
-
-      const data = await response.json()
-      return { tokens: data }
-    },
-  },
-  userinfo: {
-    url: ({ tokens }: any) => {
-      const shop = new URL(tokens.access_token || '').searchParams.get('shop')
-      return `https://${shop}/admin/api/2024-04/oauth/current_user.json`
-    },
-    async request(context: any) {
-      const response = await fetch(context.provider.userinfo.url({ tokens: context.tokens }), {
-        headers: {
-          'X-Shopify-Access-Token': context.tokens.access_token,
-        },
-      })
-
-      return await response.json()
-    },
-  },
-  profile(profile: any, tokens: any) {
-    return {
-      id: profile.id,
-      name: `${profile.first_name} ${profile.last_name}`,
-      email: profile.email,
-      image: null,
-    }
-  },
-  ...options,
-})
-*/
+// Shopify sign-in OAuth is handled via API routes at /api/shopify/connect and /api/shopify/callback
+// These allow merchants to connect their Shopify stores to CartGain.
+// The flow is: settings page → /api/shopify/connect → Shopify auth → /api/shopify/callback → store linked
 
 const providers: any[] = [
   CredentialsProvider({
@@ -110,6 +31,15 @@ const providers: any[] = [
     async authorize(credentials) {
       if (!credentials?.email || !credentials?.password) {
         throw new Error('Invalid credentials')
+      }
+
+      const rateLimitResult = await checkRateLimit(`auth/login:${credentials.email}`, {
+        maxAttempts: 10,
+        windowMs: 15 * 60 * 1000,
+      })
+
+      if (!rateLimitResult.success) {
+        throw new Error('Too many login attempts. Please try again later.')
       }
 
       const user = await prisma.user.findUnique({
@@ -148,18 +78,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   )
 }
 
-// Shopify provider disabled (can be re-enabled with proper types)
-/*
-if (process.env.SHOPIFY_API_KEY && process.env.SHOPIFY_API_SECRET) {
-  providers.push(
-    ShopifyProvider({
-      clientId: process.env.SHOPIFY_API_KEY,
-      clientSecret: process.env.SHOPIFY_API_SECRET,
-      callbackUrl: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/callback/shopify`,
-    })
-  )
-}
-*/
+
 
 if (process.env.EMAIL_SERVER && process.env.EMAIL_FROM) {
   providers.push(
@@ -179,13 +98,36 @@ export const authOptions: NextAuthOptions = {
     error: '/login',
   },
   session: {
-    strategy: 'database',
+    strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
+    updateAge: 24 * 60 * 60, // Update token every 24 hours
   },
   callbacks: {
-    async session({ session, user }) {
+    async jwt({ token, user, account }) {
+      // Add user info to token when signing in
+      if (user) {
+        token.id = user.id
+        token.email = user.email
+        
+        // Get user's primary store
+        try {
+          const store = await prisma.store.findFirst({
+            where: { userId: user.id },
+            orderBy: { createdAt: 'asc' },
+          })
+          if (store) {
+            token.storeId = store.id
+          }
+        } catch (error) {
+          console.error('Failed to fetch user store:', error)
+        }
+      }
+      return token
+    },
+    async session({ session, token }) {
       if (session.user) {
-        session.user.id = user.id
+        session.user.id = token.id as string
+        session.user.storeId = token.storeId as string
       }
       return session
     },

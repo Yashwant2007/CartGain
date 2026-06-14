@@ -202,8 +202,8 @@ model ABTest {
 model Subscription {
   id              String    @id @default(cuid())
   userId          String
-  stripeCustomerId String
-  stripeSubscriptionId String?
+  customerId      String    // Razorpay/Stripe customer ID
+  subscriptionId  String?   // Razorpay/Stripe subscription ID
   plan            String    // free, starter, pro, enterprise
   status          String    @default("active")
   currentPeriodStart DateTime

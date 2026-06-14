@@ -131,22 +131,6 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Trust Indicators - responsive layout */}
-          <div className="flex flex-col sm:flex-row justify-center gap-6 sm:gap-8 text-xs sm:text-sm text-blue-100 flex-wrap">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 flex-shrink-0" />
-              <span><strong>3-7 days</strong> setup</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 flex-shrink-0" />
-              <span><strong>18-25%</strong> recovery rate</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 flex-shrink-0" />
-              <span><strong>5-6x better</strong> than email</span>
-            </div>
-          </div>
-
           {/* Hero Video/Demo Section */}
           <div id="demo" className="mt-12 sm:mt-16 relative group">
             <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-500"></div>
@@ -222,7 +206,7 @@ export default function HomePage() {
                   <p className="text-blue-100 text-sm mb-4">Instant notification with product images</p>
                   <div className="bg-green-900/20 border border-green-700/40 rounded-lg p-3 mb-4">
                     <p className="text-xs text-green-300 font-mono">
-                      "OMG! Got it?! Is it amazing? 😍 ✅"
+                      &ldquo;OMG! Got it?! Is it amazing? 😍 ✅&rdquo;
                     </p>
                   </div>
                 </div>
@@ -245,7 +229,7 @@ export default function HomePage() {
                   <p className="text-blue-100 text-sm mb-4">Quick nudge with exclusive discount</p>
                   <div className="bg-blue-900/20 border border-blue-700/40 rounded-lg p-3 mb-4">
                     <p className="text-xs text-blue-300 font-mono">
-                      "Your Lumina order ships today! Use SAVE20 at checkout 🎁"
+                      &ldquo;Your Lumina order ships today! Use SAVE20 at checkout 🎁&rdquo;
                     </p>
                   </div>
                 </div>
@@ -268,7 +252,7 @@ export default function HomePage() {
                   <p className="text-blue-100 text-sm mb-4">Brand story that builds trust</p>
                   <div className="bg-purple-900/20 border border-purple-700/40 rounded-lg p-3 mb-4">
                     <p className="text-xs text-purple-300 font-mono">
-                      "Why our founder created Lumina..."
+                      &ldquo;Why our founder created Lumina...&rdquo;
                     </p>
                   </div>
                 </div>
@@ -322,7 +306,7 @@ export default function HomePage() {
             {/* Left - Problem */}
             <div>
               <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6">
-                You're Leaving <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-orange-600">₹50L+</span> on the Table
+                You&apos;re Leaving <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-orange-600">₹50L+</span> on the Table
               </h2>
               <p className="text-lg sm:text-xl text-blue-100 mb-8">
                 Every week, your customers add products to their cart, then leave without buying. That&apos;s not a problem with your product—it&apos;s a <strong>recovery problem</strong>.
@@ -650,13 +634,13 @@ export default function HomePage() {
                 <h3 className="text-lg font-semibold text-white group-hover:text-cyan-300 transition">How do you handle customer data & privacy?</h3>
                 <span className="text-cyan-400">+</span>
               </div>
-              <p className="text-blue-100 mt-3 text-sm">We're GDPR and data-privacy compliant. All customer data is encrypted. We only process cart abandonment data needed for recovery. No data is shared with third parties. Your customer data stays within our secure infrastructure.</p>
+              <p className="text-blue-100 mt-3 text-sm">We&apos;re GDPR and data-privacy compliant. All customer data is encrypted. We only process cart abandonment data needed for recovery. No data is shared with third parties. Your customer data stays within our secure infrastructure.</p>
             </div>
 
             {/* FAQ 3 */}
             <div className="bg-slate-800/40 border border-blue-700/30 rounded-xl p-6 hover:border-blue-600/60 transition cursor-pointer group">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-white group-hover:text-cyan-300 transition">What if my platform isn't Shopify?</h3>
+                <h3 className="text-lg font-semibold text-white group-hover:text-cyan-300 transition">What if my platform isn&apos;t Shopify?</h3>
                 <span className="text-cyan-400">+</span>
               </div>
               <p className="text-blue-100 mt-3 text-sm">We support Shopify, WooCommerce, Magento, BigCommerce, and custom platforms. If you have webhook support or an API, we can integrate. Contact us for platform-specific setup.</p>
@@ -691,9 +675,9 @@ export default function HomePage() {
           </div>
 
           <div className="mt-12 bg-gradient-to-r from-blue-900/40 to-cyan-900/40 border border-blue-700/40 rounded-xl p-8 text-center">
-            <p className="text-white font-semibold mb-4">Didn't find your answer?</p>
+            <p className="text-white font-semibold mb-4">Didn&apos;t find your answer?</p>
             <a href="https://cal.com/cartgain" target="_blank" className="inline-block px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 transition font-medium">
-              Schedule a Call - We'll Explain Everything
+              Schedule a Call - We&apos;ll Explain Everything
             </a>
           </div>
         </div>
@@ -753,7 +737,7 @@ export default function HomePage() {
           <div className="mt-8 sm:mt-12 bg-blue-900/30 border border-blue-700/40 rounded-xl p-6 sm:p-8 text-center">
             <p className="text-white font-semibold mb-2 text-sm sm:text-base">Why Revenue Share?</p>
             <p className="text-blue-100 text-xs sm:text-sm sm:text-base leading-relaxed">
-              If you recover ₹5L/month in additional revenue, we take 2-3% (₹10-15K). This means <strong>we're obsessed with maximizing your recovery rate</strong>. We're not just selling software—we're your growth partner.
+              If you recover ₹5L/month in additional revenue, we take 2-3% (₹10-15K). This means <strong>we&apos;re obsessed with maximizing your recovery rate</strong>. We&apos;re not just selling software—we&apos;re your growth partner.
             </p>
           </div>
         </div>

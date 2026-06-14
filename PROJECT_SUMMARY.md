@@ -254,7 +254,7 @@ PRO ($99/month)
 | Twilio | SMS | ✅ $15 credit | To Create |
 | Meta Business | WhatsApp API | ✅ Pay-per-use | To Create |
 | SendGrid | Email | ✅ 100/day | To Create |
-| Stripe | Payments | ✅ Test mode | To Create |
+| Razorpay | Payments | ✅ Test mode | To Create |
 | Google Cloud | OAuth | ✅ Free | To Create |
 
 ---
@@ -320,7 +320,7 @@ C:\Users\Deepanshu Kaushik\OneDrive\Desktop\yashwant\recoverflow\
 2. Run `npm install` in recoverflow folder
 3. Create Supabase account
 4. Create Twilio account
-5. Create Stripe account
+5. Create Razorpay account
 
 ### This Week
 1. Complete all environment variables

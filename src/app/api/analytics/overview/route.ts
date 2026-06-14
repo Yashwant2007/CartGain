@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest) {
   try {
     const storeId = request.nextUrl.searchParams.get('storeId')
+    const days = parseInt(request.nextUrl.searchParams.get('days') || '30')
     const session = await getServerSession(authOptions)
 
     if (!session?.user?.id) {
@@ -36,7 +37,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404 })
     }
 
-    const [cartsAbandoned, cartsRecovered, revenueRecovered, messagesSent, analyticsRows] = await Promise.all([
+    // Get recent carts for this period
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+    const [
+      cartsAbandoned,
+      cartsRecovered,
+      revenueRecovered,
+      messagesSent,
+      analyticsRows,
+      recentCarts,
+      recentMessages,
+    ] = await Promise.all([
       prisma.cart.count({ where: { storeId: resolvedStoreId! } }),
       prisma.cart.count({ where: { storeId: resolvedStoreId!, isRecovered: true } }),
       prisma.recoveredCart.aggregate({
@@ -54,6 +66,22 @@ export async function GET(request: NextRequest) {
         where: {
           userId: session.user.id,
         },
+      }),
+      prisma.cart.findMany({
+        where: {
+          storeId: resolvedStoreId!,
+          abandonedAt: { gte: startDate },
+        },
+        orderBy: { abandonedAt: 'desc' },
+      }),
+      prisma.message.findMany({
+        where: {
+          campaign: {
+            storeId: resolvedStoreId!,
+          },
+          createdAt: { gte: startDate },
+        },
+        distinct: ['channel'],
       }),
     ])
 
@@ -79,6 +107,48 @@ export async function GET(request: NextRequest) {
 
     const recoveryRate = cartsAbandoned > 0 ? (cartsRecovered / cartsAbandoned) * 100 : 0
 
+    // Build revenue chart data
+    const chartData = Array.from({ length: days }, (_, i) => {
+      const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000)
+      const dateStr = date.toISOString().split('T')[0]
+
+      const dayRecovered = recentCarts.filter(
+        (c) =>
+          c.isRecovered &&
+          c.recoveredAt &&
+          c.recoveredAt.toISOString().split('T')[0] === dateStr
+      )
+
+      const dayAbandoned = recentCarts.filter(
+        (c) =>
+          c.abandonedAt.toISOString().split('T')[0] === dateStr
+      )
+
+      const revenue = dayRecovered.reduce((sum, cart) => sum + cart.totalValue, 0)
+
+      return {
+        date: date.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        }),
+        revenue: Math.round(revenue),
+        recoveredCarts: dayRecovered.length,
+        abandonedCarts: dayAbandoned.length,
+      }
+    })
+
+    // Channel performance from recent messages
+    const channelStats = ['sms', 'whatsapp', 'email', 'push'].map((channel) => {
+      const channelMessages = recentMessages.filter((m) => m.channel === channel)
+      return {
+        channel: channel.charAt(0).toUpperCase() + channel.slice(1),
+        sent: channelMessages.length,
+        delivered: channelMessages.filter((m) => m.status === 'delivered').length,
+        clicked: channelMessages.filter((m) => m.clickedAt).length,
+        converted: channelMessages.filter((m) => m.convertedAt).length,
+      }
+    })
+
     return NextResponse.json({
       overview: {
         cartsAbandoned,
@@ -95,6 +165,8 @@ export async function GET(request: NextRequest) {
           push: totals.pushCount,
         },
       },
+      chartData,
+      channelStats,
     })
   } catch (error) {
     console.error('Analytics overview error:', error)

@@ -24,7 +24,6 @@ export default function SignUpPage() {
     setIsLoading(true)
 
     try {
-      // Basic validation
       if (formData.password.length < 8) {
         setError('Password must be at least 8 characters')
         setIsLoading(false)
@@ -46,8 +45,18 @@ export default function SignUpPage() {
       const data = await response.json()
 
       if (response.ok) {
-        router.push('/dashboard')
-        router.refresh()
+        const signInResult = await signIn('credentials', {
+          email: formData.email,
+          password: formData.password,
+          redirect: false,
+        })
+
+        if (signInResult?.ok) {
+          router.push('/dashboard')
+          router.refresh()
+        } else {
+          router.push('/login')
+        }
       } else {
         setError(data.message || 'Registration failed. Please try again.')
       }

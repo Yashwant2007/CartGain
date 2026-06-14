@@ -77,7 +77,7 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
         <Lock className="w-12 h-12 text-cyan-400 mx-auto mb-4" />
         <h3 className="text-2xl font-bold text-white mb-3 text-center">Continue Calculating Your ROI</h3>
         <p className="text-blue-300/80 mb-6 max-w-md mx-auto text-center">
-          You've used your free calculation! Sign up to unlock unlimited calculations, save your data, and get a personalized dashboard.
+          You&apos;ve used your free calculation! Sign up to unlock unlimited calculations, save your data, and get a personalized dashboard.
         </p>
         <div className="flex justify-center">
           <Link

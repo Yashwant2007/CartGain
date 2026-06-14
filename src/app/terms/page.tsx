@@ -1,7 +1,5 @@
 'use client'
 
-import { useState } from 'react'
-
 export default function TermsPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-white py-20 px-4 sm:px-6 lg:px-8">
@@ -27,7 +25,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-xl font-semibold text-white mb-2">4. Limitation of Liability</h2>
-            <p>CartGain is provided "as-is". We are not liable for any loss of revenue or business interruption resulting from the use of our software.</p>
+            <p>CartGain is provided &ldquo;as-is&rdquo;. We are not liable for any loss of revenue or business interruption resulting from the use of our software.</p>
           </section>
         </div>
       </div>

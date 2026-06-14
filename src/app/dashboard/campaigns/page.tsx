@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Copy, Edit2, Trash2, Play, Pause, BarChart3 } from 'lucide-react'
+import { Plus, Copy, Edit2, Trash2, Play, Pause, BarChart3, Split, Trophy } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 
 type Campaign = {
@@ -27,6 +27,7 @@ type CreateCampaignConfig = {
 export default function CampaignsPage() {
   const router = useRouter()
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [abTestCampaign, setAbTestCampaign] = useState<Campaign | null>(null)
   const { storeId, loading: resolvingStore, error: storeError } = useResolvedStoreId()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loadingData, setLoadingData] = useState(false)
@@ -148,15 +149,23 @@ export default function CampaignsPage() {
       {/* Campaigns Grid */}
       <div className="grid gap-6">
         {campaigns.map((campaign) => (
-          <CampaignCard key={campaign.id} campaign={campaign} />
+          <CampaignCard key={campaign.id} campaign={campaign} onOpenABTest={() => setAbTestCampaign(campaign)} />
         ))}
-        {campaigns.length === 0 && !isLoading && (
-          <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 text-sm text-blue-300/60">No campaigns yet. Create one to get started.</div>
+        {campaigns.length === 0 && !isLoading && !showCreateModal && (
+          <OnboardingWizard onStart={() => setShowCreateModal(true)} />
         )}
       </div>
 
       {isLoading && <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 text-sm text-blue-300/80">Loading campaigns...</div>}
       {error && <div className="bg-slate-800/50 border border-red-700/30 rounded-xl p-6 text-sm text-red-300/80">{error}</div>}
+
+      {/* A/B Test Modal */}
+      {abTestCampaign && (
+        <ABTestModal
+          campaign={abTestCampaign}
+          onClose={() => setAbTestCampaign(null)}
+        />
+      )}
 
       {/* Create Campaign Modal */}
       {showCreateModal && (
@@ -169,7 +178,7 @@ export default function CampaignsPage() {
   )
 }
 
-function CampaignCard({ campaign }: { campaign: Campaign }) {
+function CampaignCard({ campaign, onOpenABTest }: { campaign: Campaign; onOpenABTest: () => void }) {
   const [isActive, setIsActive] = useState(campaign.isActive)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -238,6 +247,7 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
             {isActive ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
           </button>
           <div className="flex items-center space-x-1">
+            <ActionButton icon={<Split className="w-4 h-4" />} label="A/B Test" onClick={onOpenABTest} />
             <ActionButton icon={<BarChart3 className="w-4 h-4" />} label="Analytics" onClick={() => {
               window.location.href = `/dashboard/campaigns/${campaign.id}/analytics`
             }} />
@@ -283,16 +293,16 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function ChannelIcon({ channel }: { channel: string }) {
   const config: Record<string, { bg: string; color: string; label: string }> = {
-    sms: { bg: 'bg-blue-100', color: 'text-blue-600', label: 'SMS' },
-    whatsapp: { bg: 'bg-green-100', color: 'text-green-600', label: 'WhatsApp' },
-    email: { bg: 'bg-purple-100', color: 'text-purple-600', label: 'Email' },
-    push: { bg: 'bg-orange-100', color: 'text-orange-600', label: 'Push' },
+    sms: { bg: 'bg-blue-600/20', color: 'text-blue-300', label: 'SMS' },
+    whatsapp: { bg: 'bg-emerald-600/20', color: 'text-emerald-300', label: 'WhatsApp' },
+    email: { bg: 'bg-purple-600/20', color: 'text-purple-300', label: 'Email' },
+    push: { bg: 'bg-orange-600/20', color: 'text-orange-300', label: 'Push' },
   }
 
-  const { bg, color, label } = config[channel] || { bg: 'bg-gray-100', color: 'text-gray-600', label: channel }
+  const { bg, color, label } = config[channel] || { bg: 'bg-slate-700/40', color: 'text-blue-300/70', label: channel }
 
   return (
-    <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${bg} ${color}`}>
+    <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border border-current/20 ${bg} ${color}`}>
       {label}
     </span>
   )
@@ -308,6 +318,308 @@ function ActionButton({ icon, label, danger = false, onClick, disabled = false }
     >
       {icon}
     </button>
+  )
+}
+
+function OnboardingWizard({ onStart }: { onStart: () => void }) {
+  const [step, setStep] = useState(1)
+  const [fade, setFade] = useState('opacity-100 translate-y-0')
+
+  const goToStep = (next: number) => {
+    setFade('opacity-0 translate-y-4')
+    setTimeout(() => {
+      setStep(next)
+      setFade('opacity-100 translate-y-0')
+    }, 150)
+  }
+
+  return (
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-blue-700/30 rounded-2xl p-8 max-w-2xl mx-auto shadow-2xl">
+      <div className={`transition-all duration-200 ease-out ${fade}`}>
+        {step === 1 && (
+          <div className="text-center space-y-6">
+            <div className="w-20 h-20 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-cyan-500/30">
+              <span className="text-4xl">🛒</span>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-2">Welcome to CartGain!</h2>
+              <p className="text-blue-300/80 max-w-md mx-auto">
+                Recover lost sales with automated cart recovery campaigns. Let&apos;s set up your first one.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-lg mx-auto">
+              <div className="bg-slate-700/40 border border-blue-700/30 rounded-xl p-4 text-center hover:border-cyan-500/40 transition-all">
+                <div className="text-2xl mb-2">📧</div>
+                <h3 className="text-sm font-semibold text-white mb-1">Multi-Channel</h3>
+                <p className="text-xs text-blue-300/60">Email, SMS, WhatsApp, Push</p>
+              </div>
+              <div className="bg-slate-700/40 border border-blue-700/30 rounded-xl p-4 text-center hover:border-cyan-500/40 transition-all">
+                <div className="text-2xl mb-2">🤖</div>
+                <h3 className="text-sm font-semibold text-white mb-1">AI Optimized</h3>
+                <p className="text-xs text-blue-300/60">Smart send time optimization</p>
+              </div>
+              <div className="bg-slate-700/40 border border-blue-700/30 rounded-xl p-4 text-center hover:border-cyan-500/40 transition-all">
+                <div className="text-2xl mb-2">📊</div>
+                <h3 className="text-sm font-semibold text-white mb-1">Analytics</h3>
+                <p className="text-xs text-blue-300/60">Track revenue recovered</p>
+              </div>
+            </div>
+            <button
+              onClick={() => goToStep(2)}
+              className="px-8 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all"
+            >
+              Get Started
+            </button>
+            <div>
+              <button onClick={onStart} className="text-sm text-blue-300/50 hover:text-blue-300/80 transition-colors">Skip to create campaign</button>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-6">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-white mb-2">How It Works</h2>
+              <p className="text-blue-300/80">Cart recovery in 3 simple steps</p>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-start space-x-4 p-4 bg-slate-700/40 border border-blue-700/30 rounded-xl hover:border-cyan-500/30 transition-all">
+                <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold shrink-0 shadow-lg shadow-cyan-500/20">1</div>
+                <div>
+                  <h3 className="font-semibold text-white mb-1">Connect Your Store</h3>
+                  <p className="text-sm text-blue-300/60">Link your Shopify store to automatically track abandoned carts.</p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-4 p-4 bg-slate-700/40 border border-blue-700/30 rounded-xl hover:border-cyan-500/30 transition-all">
+                <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold shrink-0 shadow-lg shadow-cyan-500/20">2</div>
+                <div>
+                  <h3 className="font-semibold text-white mb-1">Create a Campaign</h3>
+                  <p className="text-sm text-blue-300/60">Set up recovery sequences with tailored messages and timing.</p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-4 p-4 bg-slate-700/40 border border-blue-700/30 rounded-xl hover:border-cyan-500/30 transition-all">
+                <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold shrink-0 shadow-lg shadow-cyan-500/20">3</div>
+                <div>
+                  <h3 className="font-semibold text-white mb-1">Recover Revenue</h3>
+                  <p className="text-sm text-blue-300/60">Your campaign runs automatically and you track results in real-time.</p>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={onStart}
+              className="w-full px-8 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all"
+            >
+              Create Your First Campaign
+            </button>
+            <div className="text-center">
+              <button onClick={() => goToStep(1)} className="text-sm text-blue-300/50 hover:text-blue-300/80 transition-colors">Back</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+type ABTest = {
+  id: string
+  name: string
+  variantA: any
+  variantB: any
+  winner: string | null
+  isCompleted: boolean
+  createdAt: string
+}
+
+function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () => void }) {
+  const [abTests, setAbTests] = useState<ABTest[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showCreate, setShowCreate] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [formErrors, setFormErrors] = useState<string | null>(null)
+  const [fadeIn, setFadeIn] = useState(false)
+  const [form, setForm] = useState({
+    name: '',
+    subjectA: '',
+    subjectB: '',
+    discountA: 0,
+    discountB: 0,
+  })
+
+  useEffect(() => {
+    requestAnimationFrame(() => setFadeIn(true))
+  }, [])
+
+  useEffect(() => {
+    const fetchABTests = async () => {
+      try {
+        const res = await fetch(`/api/campaigns/${campaign.id}/ab-tests`)
+        const data = await res.json()
+        if (res.ok) setAbTests(data.abTests || [])
+      } catch (err) {
+        console.error('Failed to fetch AB tests', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchABTests()
+  }, [campaign.id])
+
+  const handleCreate = async () => {
+    setFormErrors(null)
+    if (!form.name.trim()) { setFormErrors('Test name is required'); return }
+    if (!form.subjectA.trim() || !form.subjectB.trim()) { setFormErrors('Both subject lines are required'); return }
+
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}/ab-tests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          variantA: { subject: form.subjectA, discountPercent: form.discountA },
+          variantB: { subject: form.subjectB, discountPercent: form.discountB },
+        }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setAbTests((prev) => [data.abTest, ...prev])
+        setShowCreate(false)
+        setForm({ name: '', subjectA: '', subjectB: '', discountA: 0, discountB: 0 })
+      } else {
+        const err = await res.json()
+        setFormErrors(err.error || 'Failed to create test')
+      }
+    } catch (err) {
+      setFormErrors('Network error. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className={`fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 transition-opacity duration-200 ${fadeIn ? 'opacity-100' : 'opacity-0'}`} onClick={onClose}>
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-blue-700/30 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b border-blue-700/30">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-white">A/B Tests</h2>
+              <p className="text-sm text-blue-300/80 mt-1">{campaign.name}</p>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-blue-300/60 hover:text-white hover:bg-slate-700/50 transition-all text-xl">&times;</button>
+          </div>
+        </div>
+
+        <div className="p-6">
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2].map((i) => (
+                <div key={i} className="bg-slate-700/40 border border-blue-700/30 rounded-xl p-4 animate-pulse">
+                  <div className="h-4 bg-slate-600/50 rounded w-1/3 mb-3" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="h-16 bg-slate-600/50 rounded-lg" />
+                    <div className="h-16 bg-slate-600/50 rounded-lg" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : abTests.length === 0 && !showCreate ? (
+            <div className="text-center py-8">
+              <Split className="w-12 h-12 text-blue-300/40 mx-auto mb-4" />
+              <p className="text-blue-300/80 mb-2">No A/B tests yet</p>
+              <p className="text-sm text-blue-300/60 mb-6 max-w-xs mx-auto">Split-test subject lines, discounts, or send timing to find what converts best.</p>
+              <button onClick={() => setShowCreate(true)} className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all">
+                Create A/B Test
+              </button>
+            </div>
+          ) : showCreate ? (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">Test Name</label>
+                <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Subject Line Test" className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white placeholder-blue-300/40 rounded-lg focus:outline-none focus:border-cyan-400/70 focus:ring-1 focus:ring-cyan-400/30 transition-all" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-slate-700/40 border border-cyan-500/40 rounded-lg">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-cyan-400" />
+                    <h3 className="font-semibold text-cyan-300">Variant A</h3>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-blue-200 mb-1.5">Subject Line</label>
+                      <input type="text" value={form.subjectA} onChange={(e) => setForm({ ...form, subjectA: e.target.value })} placeholder="e.g. Don't miss out!" className="w-full px-3 py-2 bg-slate-700/50 border border-blue-700/50 text-white placeholder-blue-300/40 rounded-lg text-sm focus:outline-none focus:border-cyan-400/70 transition-all" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-blue-200 mb-1.5">Discount % <span className="text-blue-300/40 font-normal">(optional)</span></label>
+                      <input type="number" min={0} max={100} value={form.discountA} onChange={(e) => setForm({ ...form, discountA: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg text-sm focus:outline-none focus:border-cyan-400/70 transition-all" />
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 bg-slate-700/40 border border-purple-500/40 rounded-lg">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-purple-400" />
+                    <h3 className="font-semibold text-purple-300">Variant B</h3>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-blue-200 mb-1.5">Subject Line</label>
+                      <input type="text" value={form.subjectB} onChange={(e) => setForm({ ...form, subjectB: e.target.value })} placeholder="e.g. Your cart is waiting" className="w-full px-3 py-2 bg-slate-700/50 border border-blue-700/50 text-white placeholder-blue-300/40 rounded-lg text-sm focus:outline-none focus:border-cyan-400/70 transition-all" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-blue-200 mb-1.5">Discount % <span className="text-blue-300/40 font-normal">(optional)</span></label>
+                      <input type="number" min={0} max={100} value={form.discountB} onChange={(e) => setForm({ ...form, discountB: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg text-sm focus:outline-none focus:border-cyan-400/70 transition-all" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {formErrors && <p className="text-sm text-red-300/80 bg-red-600/10 border border-red-500/30 rounded-lg px-4 py-2">{formErrors}</p>}
+              <div className="flex space-x-3">
+                <button onClick={() => { setShowCreate(false); setFormErrors(null) }} className="flex-1 px-4 py-2 rounded-lg border border-blue-700/50 text-blue-300 hover:bg-slate-700/40 transition-all">Cancel</button>
+                <button onClick={handleCreate} disabled={submitting} className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-60 disabled:cursor-not-allowed transition-all">
+                  {submitting ? 'Creating...' : 'Create Test'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <button onClick={() => setShowCreate(true)} className="w-full px-4 py-2.5 rounded-lg border-2 border-dashed border-blue-700/40 text-blue-300 hover:bg-slate-700/40 hover:border-cyan-500/40 transition-all text-sm font-medium flex items-center justify-center space-x-2">
+                <Plus className="w-4 h-4" />
+                <span>New A/B Test</span>
+              </button>
+              {abTests.map((test) => (
+                <div key={test.id} className="bg-slate-700/40 border border-blue-700/30 rounded-xl p-4 hover:border-blue-700/50 transition-all">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-white">{test.name}</h3>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${test.isCompleted ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
+                      {test.isCompleted ? `Winner: ${test.winner}` : 'Running'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className={`p-3 rounded-lg border ${test.winner === 'A' ? 'border-cyan-400/60 bg-cyan-600/20 ring-1 ring-cyan-400/30' : 'border-blue-700/30 bg-slate-700/30'}`}>
+                      <p className="text-cyan-300 font-medium mb-1">Variant A</p>
+                      <p className="text-blue-300/80 truncate">{test.variantA?.subject || 'N/A'}</p>
+                      {test.variantA?.discountPercent ? <p className="text-blue-300/60 text-xs mt-1">{test.variantA.discountPercent}% discount</p> : <p className="text-blue-300/40 text-xs mt-1">No discount</p>}
+                    </div>
+                    <div className={`p-3 rounded-lg border ${test.winner === 'B' ? 'border-purple-400/60 bg-purple-600/20 ring-1 ring-purple-400/30' : 'border-blue-700/30 bg-slate-700/30'}`}>
+                      <p className="text-purple-300 font-medium mb-1">Variant B</p>
+                      <p className="text-blue-300/80 truncate">{test.variantB?.subject || 'N/A'}</p>
+                      {test.variantB?.discountPercent ? <p className="text-blue-300/60 text-xs mt-1">{test.variantB.discountPercent}% discount</p> : <p className="text-blue-300/40 text-xs mt-1">No discount</p>}
+                    </div>
+                  </div>
+                  {test.isCompleted && (
+                    <div className="mt-3 pt-3 border-t border-blue-700/20 flex items-center justify-center space-x-1 text-xs">
+                      <Trophy className="w-3 h-3 text-amber-400" />
+                      <span className="text-amber-300/80 font-medium">Winner: Variant {test.winner}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 

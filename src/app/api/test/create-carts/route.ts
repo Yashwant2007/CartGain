@@ -8,6 +8,10 @@ export const dynamic = 'force-dynamic'
  * GET http://localhost:3000/api/test/create-carts
  */
 export async function GET(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not available in production' }, { status: 403 })
+  }
+
   try {
     console.log('Creating test data...')
 

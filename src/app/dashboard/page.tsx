@@ -7,12 +7,15 @@ import {
   DollarSign,
   MessageSquare,
   TrendingUp,
-  BarChart3,
   Plus,
   MoreVertical,
   Mail,
   Bell,
+  Sparkles,
+  Zap,
+  Trophy,
 } from 'lucide-react'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import ROICalculator from '@/components/ROICalculator'
@@ -42,16 +45,32 @@ type Overview = {
   messagesSent: number
 }
 
+type ChartDataPoint = {
+  date: string
+  revenue: number
+  recoveredCarts: number
+  abandonedCarts: number
+}
+
+type ChannelStat = {
+  channel: string
+  sent: number
+  delivered: number
+  clicked: number
+  converted: number
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const { storeId, loading: resolvingStore, error: storeError } = useResolvedStoreId()
   const [overview, setOverview] = useState<Overview | null>(null)
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([])
+  const [channelStats, setChannelStats] = useState<ChannelStat[]>([])
   const [carts, setCarts] = useState<Cart[]>([])
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loadingData, setLoadingData] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  // Check for auth errors from useResolvedStoreId
   useEffect(() => {
     if (storeError && storeError.includes('Sign in')) {
       router.push('/login')
@@ -62,9 +81,7 @@ export default function DashboardPage() {
     let cancelled = false
 
     const loadData = async () => {
-      if (!storeId) {
-        return
-      }
+      if (!storeId) return
 
       try {
         setLoadingData(true)
@@ -88,6 +105,8 @@ export default function DashboardPage() {
 
         if (!cancelled) {
           setOverview(overviewData.overview)
+          setChartData(overviewData.chartData || [])
+          setChannelStats(overviewData.channelStats || [])
           setCarts(cartsData.carts || [])
           setCampaigns(campaignsData.campaigns || [])
         }
@@ -96,17 +115,13 @@ export default function DashboardPage() {
           setLoadError(error instanceof Error ? error.message : 'Failed to load dashboard data')
         }
       } finally {
-        if (!cancelled) {
-          setLoadingData(false)
-        }
+        if (!cancelled) setLoadingData(false)
       }
     }
 
     loadData()
 
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [storeId])
 
   const recentCarts = useMemo(
@@ -142,12 +157,12 @@ export default function DashboardPage() {
     messagesSent: overview?.messagesSent ?? 0,
   }
 
+  const totalRevenue = chartData.reduce((sum, d) => sum + d.revenue, 0)
   const isLoading = resolvingStore || loadingData
   const error = storeError || loadError
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      {/* Header */}
       <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-3 xs:gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-white">Dashboard</h1>
@@ -161,161 +176,132 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-        <MetricCard
-          title="Carts Abandoned"
-          value={stats.cartsAbandoned.toLocaleString()}
-          change="+12%"
-          trend="up"
-          icon={<ShoppingCart className="w-6 h-6" />}
-          color="primary"
-          changeSuffix="from last month"
-        />
-        <MetricCard
-          title="Carts Recovered"
-          value={stats.cartsRecovered.toLocaleString()}
-          change="+24%"
-          trend="up"
-          icon={<DollarSign className="w-6 h-6" />}
-          color="green"
-          changeSuffix="from last month"
-        />
-        <MetricCard
-          title="Revenue Recovered"
-          value={`₹${stats.revenueRecovered.toLocaleString()}`}
-          change="+18%"
-          trend="up"
-          icon={<TrendingUp className="w-6 h-6" />}
-          color="accent"
-          changeSuffix="from last month"
-        />
-        <MetricCard
-          title="Recovery Rate"
-          value={`${stats.recoveryRate}%`}
-          change="+2.1%"
-          trend="up"
-          icon={<MessageSquare className="w-6 h-6" />}
-          color="blue"
-          changeSuffix="from last month"
-        />
+        <MetricCard title="Carts Abandoned" value={stats.cartsAbandoned.toLocaleString()} change="+12%" trend="up" icon={<ShoppingCart className="w-6 h-6" />} color="primary" changeSuffix="from last month" loading={isLoading} />
+        <MetricCard title="Carts Recovered" value={stats.cartsRecovered.toLocaleString()} change="+24%" trend="up" icon={<DollarSign className="w-6 h-6" />} color="green" changeSuffix="from last month" loading={isLoading} />
+        <MetricCard title="Revenue Recovered" value={`₹${stats.revenueRecovered.toLocaleString()}`} change="+18%" trend="up" icon={<TrendingUp className="w-6 h-6" />} color="accent" changeSuffix="from last month" loading={isLoading} />
+        <MetricCard title="Recovery Rate" value={`${stats.recoveryRate}%`} change="+2.1%" trend="up" icon={<MessageSquare className="w-6 h-6" />} color="blue" changeSuffix="from last month" loading={isLoading} />
       </div>
-
-      {isLoading && (
-        <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 text-sm text-blue-300/80">Loading live dashboard data...</div>
-      )}
 
       {error && (
         <div className="bg-slate-800/50 border border-red-700/30 rounded-xl p-6 text-sm text-red-300/80">{error}</div>
       )}
 
-      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Revenue Chart Placeholder */}
         <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
           <h3 className="text-lg font-semibold text-white mb-4">Revenue Recovered (Last 30 Days)</h3>
-          <div className="h-64 bg-gradient-to-br from-blue-900/40 to-slate-900/40 rounded-lg flex items-center justify-center border border-blue-700/20">
-            <div className="text-center text-blue-300/50">
-              <BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>Interactive chart will render here</p>
-              <p className="text-sm">Using Recharts library</p>
+          {isLoading ? (
+            <div className="h-64 flex items-center justify-center">
+              <div className="animate-pulse w-full h-full bg-slate-700/30 rounded-lg" />
             </div>
+          ) : chartData.length > 0 ? (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f" />
+                  <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={{ stroke: '#1e3a5f' }} interval="preserveStartEnd" />
+                  <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${v}`} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e3a5f', borderRadius: '8px', color: '#e2e8f0', fontSize: '12px' }}
+                    formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Revenue']}
+                  />
+                  <Area type="monotone" dataKey="revenue" stroke="#06b6d4" strokeWidth={2} fill="url(#revenueGradient)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-64 bg-gradient-to-br from-blue-900/40 to-slate-900/40 rounded-lg flex items-center justify-center border border-blue-700/20">
+              <div className="text-center text-blue-300/50">
+                <p>No revenue data yet</p>
+                <p className="text-sm">Data will appear once carts are recovered</p>
+              </div>
+            </div>
+          )}
+          <div className="mt-3 text-xs text-blue-300/50 text-right">
+            Total: ₹{totalRevenue.toLocaleString()}
           </div>
         </div>
 
-        {/* Channel Performance */}
         <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
           <h3 className="text-lg font-semibold text-white mb-4">Channel Performance</h3>
-          <div className="space-y-4">
-            <ChannelBar name="SMS" recovered={89} total={456} rate={19.5} color="bg-blue-500" />
-            <ChannelBar name="WhatsApp" recovered={52} total={234} rate={22.2} color="bg-green-500" />
-            <ChannelBar name="Email" recovered={38} total={412} rate={9.2} color="bg-purple-500" />
-            <ChannelBar name="Push" recovered={Math.min(stats.messagesSent, 10)} total={Math.max(stats.messagesSent, 1)} rate={stats.messagesSent > 0 ? 10 : 0} color="bg-orange-500" />
-          </div>
+          {isLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i}>
+                  <div className="h-4 bg-slate-700/50 rounded animate-pulse mb-1 w-20" />
+                  <div className="h-2 bg-slate-700/50 rounded-full animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ) : channelStats.length > 0 ? (
+            <div className="space-y-4">
+              {channelStats.map((stat) => (
+                <ChannelBar key={stat.channel} name={stat.channel} sent={stat.sent} delivered={stat.delivered} converted={stat.converted} />
+              ))}
+            </div>
+          ) : (
+            <div className="p-4 bg-slate-700/40 rounded-lg text-sm text-blue-300/60">
+              No channel data yet. Connect your store and create a campaign to see performance.
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Recent Activity & Active Campaigns */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Carts */}
         <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-white">Recent Carts</h3>
             <LinkButton href="/dashboard/campaigns">View All</LinkButton>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left text-sm text-blue-300/70 border-b border-blue-700/30">
-                  <th className="pb-3 font-medium">Customer</th>
-                  <th className="pb-3 font-medium">Total</th>
-                  <th className="pb-3 font-medium">Channel</th>
-                  <th className="pb-3 font-medium">Status</th>
-                  <th className="pb-3 font-medium">Time</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm">
-                {recentCarts.map((cart) => (
-                  <tr key={cart.id} className="border-b border-blue-700/20 last:border-0">
-                    <td className="py-3">
-                      <div>
-                        <div className="font-medium text-white">{cart.customer}</div>
-                        <div className="text-blue-300/60 text-xs">{cart.email}</div>
-                      </div>
-                    </td>
-                    <td className="py-3 font-medium text-cyan-300">₹{cart.total.toFixed(2)}</td>
-                    <td className="py-3">
-                      <ChannelBadge channel={cart.channel} />
-                    </td>
-                    <td className="py-3">
-                      <StatusBadge status={cart.status} />
-                    </td>
-                    <td className="py-3 text-blue-300/70">{cart.time}</td>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => <div key={i} className="h-12 bg-slate-700/40 rounded animate-pulse" />)}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left text-sm text-blue-300/70 border-b border-blue-700/30">
+                    <th className="pb-3 font-medium">Customer</th>
+                    <th className="pb-3 font-medium">Total</th>
+                    <th className="pb-3 font-medium">Channel</th>
+                    <th className="pb-3 font-medium">Status</th>
+                    <th className="pb-3 font-medium">Time</th>
                   </tr>
-                ))}
-                {recentCarts.length === 0 && (
-                  <tr>
-                    <td className="py-4 text-blue-300/50" colSpan={5}>No carts yet for this store.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="text-sm">
+                  {recentCarts.map((cart) => (
+                    <tr key={cart.id} className="border-b border-blue-700/20 last:border-0">
+                      <td className="py-3">
+                        <div>
+                          <div className="font-medium text-white">{cart.customer}</div>
+                          <div className="text-blue-300/60 text-xs">{cart.email}</div>
+                        </div>
+                      </td>
+                      <td className="py-3 font-medium text-cyan-300">₹{cart.total.toFixed(2)}</td>
+                      <td className="py-3"><ChannelBadge channel={cart.channel} /></td>
+                      <td className="py-3"><StatusBadge status={cart.status} /></td>
+                      <td className="py-3 text-blue-300/70">{cart.time}</td>
+                    </tr>
+                  ))}
+                  {recentCarts.length === 0 && (
+                    <tr><td className="py-4 text-blue-300/50" colSpan={5}>No carts yet for this store.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
-        {/* Active Campaigns */}
-        <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Active Campaigns</h3>
-            <LinkButton href="/dashboard/campaigns">Manage</LinkButton>
-          </div>
-          <div className="space-y-4">
-            {activeCampaigns.map((campaign) => (
-              <div key={campaign.id} className="flex items-center justify-between p-4 bg-slate-700/40 border border-blue-700/30 rounded-lg hover:border-blue-700/60 transition-all">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2">
-                    <span className="font-medium text-white">{campaign.name}</span>
-                    {campaign.active && (
-                      <span className="flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                    )}
-                  </div>
-                  <div className="text-sm text-blue-300/60 mt-1">
-                    Channels: {campaign.channels.join(', ') || 'none configured'}
-                  </div>
-                </div>
-                <button className="p-2 hover:bg-slate-600/50 rounded-lg transition-colors">
-                  <MoreVertical className="w-5 h-5 text-blue-300/70" />
-                </button>
-              </div>
-            ))}
-            {activeCampaigns.length === 0 && (
-              <div className="p-4 bg-slate-700/40 border border-blue-700/30 rounded-lg text-sm text-blue-300/60">No campaigns yet. Create your first campaign to start automation.</div>
-            )}
-          </div>
-        </div>
+        <NotificationFeed isLoading={isLoading} storeId={storeId} campaigns={activeCampaigns} />
       </div>
 
-      {/* ROI Calculator Widget */}
       <div className="mt-12">
         <h2 className="text-2xl font-bold text-white mb-6">📊 ROI Calculator</h2>
         <ROICalculator isLoggedIn={true} />
@@ -324,24 +310,26 @@ export default function DashboardPage() {
   )
 }
 
-function ChannelBar({ name, recovered, total, rate, color }: {
-  name: string
-  recovered: number
-  total: number
-  rate: number
-  color: string
-}) {
+function ChannelBar({ name, sent, delivered, converted }: { name: string; sent: number; delivered: number; converted: number }) {
+  const colorMap: Record<string, string> = {
+    Sms: 'bg-blue-500',
+    Whatsapp: 'bg-green-500',
+    Email: 'bg-purple-500',
+    Push: 'bg-orange-500',
+  }
+
+  const channelKey = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
+  const barColor = colorMap[channelKey] || 'bg-blue-500'
+  const conversionRate = sent > 0 ? ((converted / sent) * 100).toFixed(1) : '0.0'
+
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-sm font-medium text-white">{name}</span>
-        <span className="text-sm text-blue-300/70">{recovered}/{total} ({rate}%)</span>
+        <span className="text-sm font-medium text-white">{channelKey}</span>
+        <span className="text-sm text-blue-300/70">{converted}/{sent} converted ({conversionRate}%)</span>
       </div>
       <div className="h-2 bg-slate-700/50 rounded-full overflow-hidden border border-blue-700/20">
-        <div
-          className={`h-full ${color} rounded-full transition-all duration-500`}
-          style={{ width: `${(recovered / total) * 100}%` }}
-        />
+        <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${sent > 0 ? (converted / sent) * 100 : 0}%` }} />
       </div>
     </div>
   )
@@ -392,5 +380,97 @@ function LinkButton({ href, children }: { href: string; children: React.ReactNod
     <a href={href} className="text-sm text-cyan-400 hover:text-cyan-300 font-medium">
       {children}
     </a>
+  )
+}
+
+type Notification = {
+  id: string
+  type: 'recovery' | 'cart' | 'campaign' | 'milestone'
+  title: string
+  description: string
+  timestamp: string
+  icon: string
+}
+
+function NotificationFeed({ isLoading, storeId, campaigns }: { isLoading: boolean; storeId: string | null; campaigns: Array<{ id: string; name: string; channels: string[]; active: boolean }> }) {
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [feedLoading, setFeedLoading] = useState(true)
+
+  useEffect(() => {
+    if (!storeId) return
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch('/api/notifications')
+        const data = await res.json()
+        if (res.ok) setNotifications(data.notifications || [])
+      } catch {
+        // silent
+      } finally {
+        setFeedLoading(false)
+      }
+    }
+    fetchNotifications()
+    const interval = setInterval(fetchNotifications, 30000)
+    return () => clearInterval(interval)
+  }, [storeId])
+
+  const iconMap: Record<string, React.ReactNode> = {
+    recovery: <DollarSign className="w-4 h-4 text-emerald-400" />,
+    cart: <ShoppingCart className="w-4 h-4 text-orange-400" />,
+    campaign: <Zap className="w-4 h-4 text-cyan-400" />,
+    milestone: <Trophy className="w-4 h-4 text-amber-400" />,
+  }
+
+  const isBusy = isLoading || feedLoading
+
+  return (
+    <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-white">Activity Feed</h3>
+        <LinkButton href="/dashboard/campaigns">View All</LinkButton>
+      </div>
+
+      {/* Active Campaigns Pills */}
+      {campaigns.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b border-blue-700/20">
+          <span className="text-xs text-blue-300/60 self-center mr-1">Campaigns:</span>
+          {campaigns.map((c) => (
+            <a key={c.id} href="/dashboard/campaigns" className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-cyan-600/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-600/30 transition-all">
+              <span className={`w-1.5 h-1.5 rounded-full ${c.active ? 'bg-emerald-400' : 'bg-slate-500'} mr-1.5`} />
+              {c.name}
+            </a>
+          ))}
+        </div>
+      )}
+
+      {/* Notifications */}
+      <div className="space-y-1 min-h-[120px]">
+        {isBusy ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => <div key={i} className="h-14 bg-slate-700/30 rounded-lg animate-pulse" />)}
+          </div>
+        ) : notifications.length > 0 ? (
+          notifications.slice(0, 6).map((n) => (
+            <div key={n.id} className="flex items-start space-x-3 p-3 rounded-lg hover:bg-slate-700/30 transition-all group">
+              <div className="w-8 h-8 bg-slate-700/60 rounded-lg flex items-center justify-center shrink-0 border border-blue-700/20">
+                {iconMap[n.type] || <Bell className="w-4 h-4 text-blue-400" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">{n.title}</p>
+                <p className="text-xs text-blue-300/70 line-clamp-1">{n.description}</p>
+                <p className="text-[10px] text-blue-300/40 mt-0.5">{new Date(n.timestamp).toLocaleString()}</p>
+              </div>
+              <span className="text-lg shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">{n.icon}</span>
+            </div>
+          ))
+        ) : (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <Sparkles className="w-8 h-8 text-blue-300/30 mb-3" />
+            <p className="text-sm text-blue-300/60">No activity yet</p>
+            <p className="text-xs text-blue-300/40 mt-1">Activity will appear here once carts start coming in</p>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }

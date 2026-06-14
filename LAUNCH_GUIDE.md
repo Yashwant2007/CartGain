@@ -43,7 +43,7 @@ npm run dev
 | **Twilio** | SMS delivery | Pay-per-use |
 | **Meta Business** | WhatsApp API | Pay-per-use |
 | **SendGrid/Resend** | Email delivery | Free 100/day |
-| **Stripe** | Payments | 2.9% + 30¢ |
+| **Razorpay** | Payments | 2% domestic, 3% intl |
 | **Google Cloud** | OAuth authentication | Free |
 
 #### 3. Domain & Branding
@@ -237,7 +237,7 @@ Best,
 ### Week 1-2: Foundation
 - [ ] Complete MVP (this codebase)
 - [ ] Set up all service accounts
-- [ ] Configure Twilio, SendGrid, Stripe
+- [ ] Configure Twilio, SendGrid, Razorpay
 - [ ] Deploy to Vercel
 - [ ] Set up analytics (PostHog or Mixpanel)
 
@@ -346,7 +346,7 @@ Backend:      Next.js API Routes + Prisma
 Database:     PostgreSQL (Supabase/PlanetScale)
 Cache/Queue:  Redis (Upstash)
 Auth:         NextAuth.js
-Payments:     Stripe
+Payments:     Razorpay
 SMS:          Twilio
 WhatsApp:     Meta Business API
 Email:        SendGrid or Resend

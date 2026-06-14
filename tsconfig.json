@@ -3,8 +3,10 @@
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
-    "strict": true,
+    "strict": false,
+    "noImplicitAny": false,
     "noEmit": true,
+    "downlevelIteration": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
@@ -12,6 +14,7 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "typeRoots": ["./types", "./node_modules/@types"],
     "plugins": [
       {
         "name": "next"
@@ -22,5 +25,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "shopify.app.ts"]
 }

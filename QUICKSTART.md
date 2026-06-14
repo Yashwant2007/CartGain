@@ -29,9 +29,10 @@ NEXTAUTH_URL="http://localhost:3000"
 # Use a free Supabase database
 DATABASE_URL="postgresql://..."
 
-# Stripe (test mode)
-STRIPE_SECRET_KEY="sk_test_..."
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_test_..."
+# Razorpay (test mode)
+RAZORPAY_KEY_ID="rzp_test_..."
+RAZORPAY_KEY_SECRET="..."
+RAZORPAY_WEBHOOK_SECRET="..."
 
 # Twilio (free trial)
 TWILIO_ACCOUNT_SID="AC..."
@@ -45,7 +46,7 @@ FROM_EMAIL="test@example.com"
 **Quick setup for free services**:
 - **Database**: [Supabase](https://supabase.com) → New project → Connection string
 - **Twilio**: [Twilio](https://twilio.com) → Free trial → Get credentials
-- **Stripe**: [Stripe](https://stripe.com) → Developers → Test mode keys
+- **Razorpay**: [Razorpay](https://razorpay.com) → Settings → API Keys (test mode)
 
 ---
 
@@ -158,7 +159,7 @@ PORT=3001 npm run dev
 ### Immediate (Today)
 - [ ] Complete all environment variables
 - [ ] Set up Twilio for SMS testing
-- [ ] Configure Stripe for payments
+- [ ] Configure Razorpay for payments
 - [ ] Read LAUNCH_GUIDE.md
 
 ### This Week
@@ -186,7 +187,7 @@ All these services have free tiers perfect for development:
 | **Upstash** | 10k commands/day | upstash.com |
 | **Twilio** | $15 free credit | twilio.com |
 | **SendGrid** | 100 emails/day | sendgrid.com |
-| **Stripe** | Test mode (free) | stripe.com |
+| **Razorpay** | Test mode (free) | razorpay.com |
 
 ---
 
@@ -229,7 +230,7 @@ openssl rand -base64 32  # Generate secret key
 ✅ Campaign builder with 5-step wizard  
 ✅ Multi-channel messaging (SMS, WhatsApp, Email, Push)  
 ✅ Shopify webhook integration  
-✅ Stripe payment integration  
+✅ Razorpay payment integration  
 ✅ Settings pages  
 ✅ Responsive design (mobile + desktop)  
 

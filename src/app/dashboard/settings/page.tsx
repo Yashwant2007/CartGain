@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Bell, CreditCard, Shield, User, Key } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
+import RazorpayCheckout from '@/components/payment/RazorpayCheckout'
 
 type SessionUser = {
   name?: string | null
@@ -138,6 +139,10 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
   })
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [shopifyShop, setShopifyShop] = useState('')
+  const [connecting, setConnecting] = useState(false)
+  const [shopifyError, setShopifyError] = useState<string | null>(null)
+  const [connectMessage, setConnectMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (store) {
@@ -148,8 +153,24 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
         currency: store.currency,
         platform: store.platform,
       })
+      if (store.apiSecret && store.apiSecret.endsWith('.myshopify.com')) {
+        setShopifyShop(store.apiSecret)
+      }
     }
   }, [store])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('shopify_connected') === 'true') {
+      setConnectMessage('Shopify store connected successfully!')
+      window.history.replaceState({}, '', window.location.pathname)
+      window.location.reload()
+    }
+    if (params.get('shopify_error')) {
+      setShopifyError(decodeURIComponent(params.get('shopify_error')!))
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [])
 
   const handleSave = async () => {
     try {
@@ -182,63 +203,144 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
     }
   }
 
+  const handleConnectShopify = async () => {
+    if (!shopifyShop.trim()) {
+      setShopifyError('Please enter your Shopify store domain')
+      return
+    }
+
+    try {
+      setConnecting(true)
+      setShopifyError(null)
+      setConnectMessage(null)
+
+      const storeId = store?.id
+      if (!storeId) {
+        throw new Error('Store not found')
+      }
+
+      const res = await fetch('/api/shopify/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shop: shopifyShop, storeId }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to initiate connection')
+      }
+
+      window.location.href = data.authUrl
+    } catch (error) {
+      setShopifyError(error instanceof Error ? error.message : 'Connection failed')
+      setConnecting(false)
+    }
+  }
+
+  const isConnected = !!(store?.apiKey && store?.apiSecret)
+
   return (
-    <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 max-w-2xl backdrop-blur-sm">
-      <h2 className="text-lg font-semibold text-white mb-6">General Settings</h2>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-blue-200 mb-1">Store Name</label>
-          <input
-            type="text"
-            className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
-            value={form.storeName}
-            onChange={(e) => setForm({ ...form, storeName: e.target.value })}
-          />
+    <div className="space-y-6 max-w-2xl">
+      <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+        <h2 className="text-lg font-semibold text-white mb-6">General Settings</h2>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-blue-200 mb-1">Store Name</label>
+            <input
+              type="text"
+              className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              value={form.storeName}
+              onChange={(e) => setForm({ ...form, storeName: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-blue-200 mb-1">Store URL / Domain</label>
+            <input
+              type="text"
+              className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              value={form.storeUrl}
+              onChange={(e) => setForm({ ...form, storeUrl: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-blue-200 mb-2">Platform</label>
+            <select
+              className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              value={form.platform}
+              onChange={(e) => setForm({ ...form, platform: e.target.value })}
+            >
+              <option value="shopify">Shopify</option>
+              <option value="woocommerce">WooCommerce</option>
+              <option value="magento">Magento</option>
+              <option value="bigcommerce">BigCommerce</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-blue-200 mb-2">Timezone</label>
+            <select
+              className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              value={form.timezone}
+              onChange={(e) => setForm({ ...form, timezone: e.target.value })}
+            >
+              <option value="America/New_York">Eastern Time (ET)</option>
+              <option value="America/Chicago">Central Time (CT)</option>
+              <option value="America/Denver">Mountain Time (MT)</option>
+              <option value="America/Los_Angeles">Pacific Time (PT)</option>
+              <option value="Europe/London">London (GMT)</option>
+              <option value="Europe/Paris">Paris (CET)</option>
+              <option value="Asia/Kolkata">India (IST)</option>
+              <option value="Asia/Singapore">Singapore (SGT)</option>
+            </select>
+          </div>
+          <button onClick={handleSave} disabled={saving} className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all mt-4">
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+          {message && <p className="text-sm text-blue-300/80">{message}</p>}
         </div>
-        <div>
-          <label className="block text-sm font-medium text-blue-200 mb-1">Store URL / Domain</label>
-          <input
-            type="text"
-            className="input"
-            value={form.storeUrl}
-            onChange={(e) => setForm({ ...form, storeUrl: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-blue-200 mb-2">Platform</label>
-          <select
-            className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
-            value={form.platform}
-            onChange={(e) => setForm({ ...form, platform: e.target.value })}
-          >
-            <option value="shopify">Shopify</option>
-            <option value="woocommerce">WooCommerce</option>
-            <option value="magento">Magento</option>
-            <option value="bigcommerce">BigCommerce</option>
-            <option value="custom">Custom</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-blue-200 mb-2">Timezone</label>
-          <select
-            className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
-            value={form.timezone}
-            onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-          >
-            <option value="America/New_York">Eastern Time (ET)</option>
-            <option value="America/Chicago">Central Time (CT)</option>
-            <option value="America/Denver">Mountain Time (MT)</option>
-            <option value="America/Los_Angeles">Pacific Time (PT)</option>
-            <option value="Europe/London">London (GMT)</option>
-            <option value="Europe/Paris">Paris (CET)</option>
-            <option value="Asia/Kolkata">India (IST)</option>
-            <option value="Asia/Singapore">Singapore (SGT)</option>
-          </select>
-        </div>
-        <button onClick={handleSave} disabled={saving} className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all mt-4">
-          {saving ? 'Saving...' : 'Save Changes'}
-        </button>
-        {message && <p className="text-sm text-blue-300/80">{message}</p>}
+      </div>
+
+      {/* Shopify Connection */}
+      <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+        <h2 className="text-lg font-semibold text-white mb-6">Shopify Connection</h2>
+        {isConnected ? (
+          <div className="space-y-4">
+            <div className="flex items-center space-x-3 p-4 bg-emerald-600/20 border border-emerald-500/40 rounded-lg">
+              <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse" />
+              <div>
+                <p className="font-medium text-emerald-300">Connected to Shopify</p>
+                <p className="text-sm text-blue-300/60">{store?.apiSecret || shopifyShop}</p>
+              </div>
+            </div>
+            <p className="text-sm text-blue-300/80">Your store is connected and webhooks are active. Abandoned carts will be automatically tracked.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-sm text-blue-300/80">Connect your Shopify store to start tracking abandoned carts automatically.</p>
+            <div>
+              <label className="block text-sm font-medium text-blue-200 mb-2">Shopify Store Domain</label>
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  placeholder="mystore.myshopify.com"
+                  value={shopifyShop}
+                  onChange={(e) => setShopifyShop(e.target.value)}
+                  className="flex-1 px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white placeholder-blue-300/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                />
+                <button
+                  onClick={handleConnectShopify}
+                  disabled={connecting}
+                  className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all whitespace-nowrap"
+                >
+                  {connecting ? 'Connecting...' : 'Connect'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {shopifyError && <p className="mt-4 text-sm text-red-300/80">{shopifyError}</p>}
+        {connectMessage && <p className="mt-4 text-sm text-emerald-300/80">{connectMessage}</p>}
       </div>
     </div>
   )
@@ -268,42 +370,153 @@ function NotificationSettings() {
 }
 
 function BillingSettings() {
+  const [subscription, setSubscription] = useState<any>(null)
+  const [plans, setPlans] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [creditAmount, setCreditAmount] = useState(1000)
+  const [razorpayLoaded, setRazorpayLoaded] = useState(false)
+
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      try {
+        const res = await fetch('/api/subscription')
+        const data = await res.json()
+        if (res.ok) {
+          setSubscription(data.subscription)
+          setPlans(data.plans)
+        }
+      } catch (err) {
+        console.error('Failed to fetch subscription', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchSubscription()
+  }, [])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !(window as any).Razorpay) {
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.async = true
+      script.onload = () => setRazorpayLoaded(true)
+      document.body.appendChild(script)
+    } else {
+      setRazorpayLoaded(true)
+    }
+  }, [])
+
+  if (loading) {
+    return <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 max-w-2xl backdrop-blur-sm text-sm text-blue-300/80">Loading billing info...</div>
+  }
+
+  const plan = subscription?.plan || 'free'
+  const planName = plans?.[plan?.toUpperCase() === 'PRO' ? 'PRO' : plan?.toUpperCase() === 'FREE' ? 'FREE' : 'PAY_AS_YOU_GO']?.name || 'Free Forever'
+  const smsCredits = subscription?.smsCredits ?? 100
+  const smsUsed = subscription?.smsCreditsUsed ?? 0
+  const smsRemaining = smsCredits - smsUsed
+  const smsRate = 0.02
+  const whatsappRate = 0.005
+
   return (
-    <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 max-w-2xl backdrop-blur-sm">
-      <h2 className="text-lg font-semibold text-white mb-6">Billing & Subscription</h2>
-      <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-6 mb-6">
+    <div className="space-y-6 max-w-2xl">
+      {/* Current Plan */}
+      <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-semibold text-white">Pay-As-You-Go Plan</h3>
-            <p className="text-sm text-blue-300/80">Your current plan</p>
+            <h2 className="text-lg font-semibold text-white">Billing &amp; Subscription</h2>
+            <p className="text-sm text-blue-300/80 mt-1">Manage your plan and credits</p>
           </div>
-          <span className="px-3 py-1 bg-green-600/40 text-green-300 rounded-full text-sm font-medium">
-            Active
+          <span className="px-3 py-1 bg-emerald-600/40 text-emerald-300 rounded-full text-sm font-medium border border-emerald-500/40">
+            {subscription?.status === 'active' ? 'Active' : 'Free'}
           </span>
         </div>
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <p className="text-sm text-blue-300/80">SMS Credits</p>
-            <p className="text-2xl font-bold text-cyan-300">847</p>
-          </div>
-          <div>
-            <p className="text-sm text-blue-300/80">This Month&apos;s Spend</p>
-            <p className="text-2xl font-bold text-cyan-300">$47.32</p>
-          </div>
-        </div>
-        <button className="w-full px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all">Add Credits</button>
-      </div>
-      <div className="space-y-4">
-        <h3 className="font-medium text-white">Payment Method</h3>
-        <div className="flex items-center justify-between p-4 bg-slate-700/40 border border-blue-700/30 rounded-lg">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-6 bg-blue-600 rounded"></div>
+
+        <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="font-medium text-white">Visa ending in 4242</p>
-              <p className="text-sm text-blue-300/60">Expires 12/2027</p>
+              <h3 className="font-semibold text-white">{planName}</h3>
+              <p className="text-sm text-blue-300/80">Current plan</p>
             </div>
           </div>
-          <button className="text-sm text-primary-600 hover:text-primary-700">Edit</button>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <p className="text-sm text-blue-300/80">SMS Credits Remaining</p>
+              <p className="text-2xl font-bold text-cyan-300">{smsRemaining.toLocaleString()}</p>
+              <div className="w-full bg-slate-600/50 rounded-full h-2 mt-2">
+                <div className="bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full h-2 transition-all" style={{ width: `${Math.min((smsUsed / Math.max(smsCredits, 1)) * 100, 100)}%` }} />
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-blue-300/80">Rate per SMS</p>
+              <p className="text-2xl font-bold text-cyan-300">${smsRate.toFixed(3)}</p>
+              <p className="text-xs text-blue-300/60 mt-1">WhatsApp: ${whatsappRate.toFixed(3)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Buy Credits */}
+      <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+        <h3 className="font-semibold text-white mb-4">Buy Credits</h3>
+        <div className="flex items-center space-x-4 mb-4">
+          {[500, 1000, 2500, 5000].map((amount) => (
+            <button
+              key={amount}
+              onClick={() => setCreditAmount(amount)}
+              className={`px-4 py-2 rounded-lg border font-medium transition-all ${creditAmount === amount ? 'bg-cyan-600/30 border-cyan-400 text-cyan-300' : 'bg-slate-700/40 border-blue-700/50 text-blue-300 hover:border-blue-600'}`}
+            >
+              ${amount}
+            </button>
+          ))}
+        </div>
+        <p className="text-sm text-blue-300/60 mb-4">{creditAmount} credits = ~{(creditAmount / smsRate).toLocaleString()} SMS messages or ~{(creditAmount / whatsappRate).toLocaleString()} WhatsApp messages</p>
+        {razorpayLoaded ? (
+          <RazorpayCheckout
+            plan="payg"
+            amount={creditAmount}
+            onSuccess={(paymentId) => {
+              alert(`Payment successful! ID: ${paymentId}`)
+              window.location.reload()
+            }}
+            onFailure={(err) => {
+              console.error('Payment failed', err)
+              alert('Payment failed. Please try again.')
+            }}
+          />
+        ) : (
+          <button disabled className="px-6 py-3 bg-slate-600 text-white rounded-lg cursor-not-allowed">Loading payment...</button>
+        )}
+      </div>
+
+      {/* Available Plans */}
+      <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+        <h3 className="font-semibold text-white mb-6">Available Plans</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-6">
+            <h4 className="font-semibold text-cyan-300 mb-2">Pay As You Go</h4>
+            <p className="text-3xl font-bold text-white mb-4">$0<span className="text-base font-normal text-blue-300/60">/mo</span></p>
+            <ul className="space-y-2 text-sm text-blue-300/80 mb-6">
+              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> All channels (SMS, WhatsApp, Email)</li>
+              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> No monthly minimum</li>
+              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> AI optimization</li>
+              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> Pay only for what you use</li>
+            </ul>
+            <span className="text-xs text-blue-300/60">Currently active</span>
+          </div>
+          <div className="bg-gradient-to-b from-slate-700/60 to-slate-800/60 border border-amber-500/40 rounded-lg p-6 relative">
+            <span className="absolute -top-3 right-4 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold rounded-full">Popular</span>
+            <h4 className="font-semibold text-amber-300 mb-2">Pro</h4>
+            <p className="text-3xl font-bold text-white mb-4">$99<span className="text-base font-normal text-blue-300/60">/mo</span></p>
+            <ul className="space-y-2 text-sm text-blue-300/80 mb-6">
+              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> 5,000 SMS credits included</li>
+              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> 1,000 WhatsApp credits included</li>
+              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> Unlimited email</li>
+              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> Priority support</li>
+              <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> White-label reports</li>
+            </ul>
+            <button className="w-full px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium hover:shadow-lg hover:shadow-amber-500/50 transition-all">Upgrade to Pro</button>
+          </div>
         </div>
       </div>
     </div>
@@ -351,24 +564,31 @@ function SecuritySettings() {
 
 function APISettings({ store }: { store: StoreSettings | null }) {
   const apiKey = store?.apiKey || 'rf_live_xxxxxxxxxxxxxxxxxxxx'
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(apiKey)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   return (
-    <div className="card max-w-2xl">
-      <h2 className="text-lg font-semibold text-gray-900 mb-6">API Keys</h2>
+    <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 max-w-2xl backdrop-blur-sm">
+      <h2 className="text-lg font-semibold text-white mb-6">API Keys</h2>
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Live API Key</label>
+          <label className="block text-sm font-medium text-blue-200 mb-1">Live API Key</label>
           <div className="flex space-x-2">
-            <input type="password" value={apiKey} readOnly className="input flex-1 font-mono text-sm" />
-            <button className="btn-secondary">Copy</button>
+            <input type="password" value={apiKey} readOnly className="flex-1 px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg font-mono text-sm focus:outline-none" />
+            <button onClick={handleCopy} className="px-4 py-2 rounded-lg border border-blue-700/50 text-blue-300 hover:bg-slate-700/40 transition-all whitespace-nowrap">{copied ? 'Copied!' : 'Copy'}</button>
           </div>
         </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="font-medium text-blue-900 mb-2">API Documentation</h3>
-          <p className="text-sm text-blue-700 mb-4">
-            Learn how to use our API to integrate RecoverFlow with your custom systems.
+        <div className="bg-slate-700/40 border border-cyan-500/30 rounded-lg p-4">
+          <h3 className="font-medium text-cyan-300 mb-2">API Documentation</h3>
+          <p className="text-sm text-blue-300/80 mb-4">
+            Learn how to use our API to integrate CartGain with your custom systems.
           </p>
-          <a href="#" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+          <a href="#" className="text-sm text-cyan-400 hover:text-cyan-300 font-medium">
             View Documentation →
           </a>
         </div>
@@ -391,13 +611,13 @@ function ToggleSetting({
   return (
     <div className="flex items-center justify-between py-3">
       <div>
-        <p className="font-medium text-gray-900">{label}</p>
-        <p className="text-sm text-gray-500">{description}</p>
+        <p className="font-medium text-white">{label}</p>
+        <p className="text-sm text-blue-300/60">{description}</p>
       </div>
       <button
         onClick={() => onChange(!checked)}
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-          checked ? 'bg-primary-600' : 'bg-gray-200'
+          checked ? 'bg-cyan-500' : 'bg-slate-600'
         }`}
       >
         <span

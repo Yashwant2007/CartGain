@@ -1,7 +1,5 @@
 'use client'
 
-import { useState } from 'react'
-
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-white py-20 px-4 sm:px-6 lg:px-8">

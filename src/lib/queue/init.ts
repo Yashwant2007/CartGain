@@ -1,30 +1,29 @@
-import { setupQueueListeners } from './index'
-import './processor'
+import { setupQueueListeners, hasRedis, startFallbackProcessor } from './index'
 import { scheduleCartProcessing } from './processor'
+import { processAbandonedCarts } from '@/lib/jobs/processAbandonedCarts'
 
 let initialized = false
 
 export async function initializeQueues() {
   if (initialized) {
-    console.log('ℹ️ Queues already initialized')
+    console.log('Queues already initialized')
     return
   }
 
-  try {
-    console.log('Initializing Bull queues...')
+  initialized = true
 
-    // Setup event listeners
-    setupQueueListeners()
-
-    // Schedule recurring cart processing job
-    await scheduleCartProcessing()
-
-    initialized = true
-    console.log('✅ Bull queues initialized successfully')
-  } catch (error: any) {
-    console.error('⚠️  Warning: Failed to initialize queues:', error.message)
-    console.log('ℹ️  The app will continue running. Make sure Redis is running.')
-    // Don't throw - app should still work
-    initialized = true // Mark as attempted to avoid retries
+  if (hasRedis()) {
+    try {
+      console.log('Initializing Bull queues with Redis...')
+      setupQueueListeners()
+      await scheduleCartProcessing()
+      console.log('Bull queues initialized successfully')
+      return
+    } catch (error: any) {
+      console.warn('Redis init failed:', error.message)
+    }
   }
+
+  console.log('Starting fallback processor (no Redis)')
+  startFallbackProcessor(processAbandonedCarts)
 }

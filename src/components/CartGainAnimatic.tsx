@@ -266,7 +266,7 @@ export default function CartGainAnimatic() {
                 CartGain<span className={styles.brandTm}>™</span>
               </div>
               <div className={styles.glowLine}></div>
-              <div className={styles.tagline}>Recover what you're losing</div>
+              <div className={styles.tagline}>Recover what you&apos;re losing</div>
               <a href="/signup" className={styles.ctaBtn}>
                 Start Free Trial ↗
               </a>

@@ -1,0 +1,340 @@
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.wrap{width:100%;background:#0A1628;border-radius:12px;overflow:hidden;font-family:var(--font-sans,'system-ui')}
+.screen{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#0A1628}
+.scene{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.5s}
+.scene.active{opacity:1}
+
+.progress-bar{width:100%;height:3px;background:#1a2d4a;position:relative}
+.progress-fill{height:100%;background:#10B981;transition:width 0.1s linear;width:0%}
+
+.controls{display:flex;align-items:center;justify-content:between;padding:10px 16px;background:#0d1f38;gap:12px}
+.ctrl-btn{background:none;border:1px solid #1e3a5f;color:#7ea8c9;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:12px;transition:all 0.2s}
+.ctrl-btn:hover{background:#1e3a5f;color:#fff}
+.ctrl-btn.active{background:#10B981;border-color:#10B981;color:#fff}
+.scene-dots{display:flex;gap:6px;flex:1;justify-content:center}
+.dot{width:8px;height:8px;border-radius:50%;background:#1e3a5f;cursor:pointer;transition:all 0.2s}
+.dot.active{background:#10B981;transform:scale(1.3)}
+.timer-lbl{font-size:11px;color:#4a7090;min-width:40px;text-align:right}
+
+.s1-bg{position:absolute;inset:0;background:linear-gradient(135deg,#060e1c 0%,#0d1f38 100%)}
+.phone-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:20px;width:100%;height:100%;place-items:center}
+.phone{width:55px;height:90px;background:#111e35;border-radius:10px;border:1px solid #1e3a5f;position:relative;overflow:hidden;animation:phoneLight 0.8s ease infinite}
+.phone::after{content:'';position:absolute;inset:0;background:#10B981;opacity:0;animation:notif 0.8s ease infinite}
+.phone:nth-child(1){animation-delay:0s}
+.phone:nth-child(2){animation-delay:0.25s}
+.phone:nth-child(3){animation-delay:0.5s}
+.phone:nth-child(4){animation-delay:0.15s}
+.phone:nth-child(5){animation-delay:0.4s}
+.phone:nth-child(6){animation-delay:0.65s}
+.notif-dot{position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:#10B981}
+.phone-screen{position:absolute;inset:4px;background:#0a1628;border-radius:7px;top:12px}
+.notif-bar{position:absolute;top:14px;left:4px;right:4px;background:#1a3050;border-radius:4px;padding:3px 4px}
+.nb-title{font-size:5px;color:#10B981;font-weight:600}
+.nb-msg{font-size:4px;color:#7ea8c9;margin-top:1px}
+.s1-headline{position:absolute;bottom:18%;left:50%;transform:translateX(-50%);text-align:center;animation:fadeUp 1s 0.5s both}
+.s1-headline h1{font-size:clamp(14px,3vw,22px);color:#fff;font-weight:500;letter-spacing:.5px}
+.s1-headline p{font-size:clamp(9px,1.8vw,13px);color:#10B981;margin-top:4px}
+@keyframes phoneLight{0%,80%,100%{border-color:#1e3a5f}40%{border-color:#10B981;box-shadow:0 0 12px #10B98140}}
+@keyframes notif{0%,70%,100%{opacity:0}40%{opacity:.15}}
+@keyframes fadeUp{from{opacity:0;transform:translate(-50%,16px)}to{opacity:1;transform:translate(-50%,0)}}
+
+.s2-bg{position:absolute;inset:0;background:#060e1c}
+.sms-card{width:clamp(180px,55%,280px);background:#0d1f38;border-radius:12px;border:1px solid #1e3a5f;padding:14px;animation:slideIn 0.6s both}
+.sms-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.sms-icon{width:28px;height:28px;background:#10B981;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:700;flex-shrink:0}
+.sms-from{font-size:11px;color:#10B981;font-weight:600}
+.sms-time{font-size:10px;color:#4a7090;margin-left:auto}
+.sms-bubble{background:#1a3050;border-radius:10px;padding:8px 10px;font-size:clamp(9px,2vw,13px);color:#c8dff0;line-height:1.5}
+.sms-bubble strong{color:#fff}
+.sms-cta{margin-top:8px;background:#10B981;border-radius:8px;padding:6px;text-align:center;font-size:11px;color:#fff;font-weight:600;animation:tapEffect 1s 1.2s both}
+.recovery-card{position:absolute;top:50%;right:8%;transform:translateY(-50%);background:#0d1f38;border-radius:10px;border:1px solid #10B981;padding:12px 16px;text-align:center;animation:popIn 0.5s 1.8s both;min-width:80px}
+.rc-amount{font-size:clamp(18px,4vw,28px);color:#10B981;font-weight:600}
+.rc-label{font-size:10px;color:#7ea8c9;margin-top:2px}
+@keyframes slideIn{from{opacity:0;transform:translateX(-40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes tapEffect{0%,100%{transform:scale(1)}50%{transform:scale(.94)}}
+@keyframes popIn{from{opacity:0;transform:translateY(-50%) scale(0.6)}to{opacity:1;transform:translateY(-50%) scale(1)}}
+
+.s3-bg{position:absolute;inset:0;background:#060e1c}
+.notif-toast{position:absolute;top:12%;left:50%;transform:translateX(-50%);background:#1a3050;border-radius:10px;border-left:3px solid #F59E0B;padding:8px 12px;width:clamp(200px,65%,320px);animation:dropIn 0.5s both}
+.nt-title{font-size:11px;color:#F59E0B;font-weight:600}
+.nt-msg{font-size:clamp(9px,2vw,13px);color:#c8dff0;margin-top:2px}
+.checkout-page{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:clamp(160px,55%,260px);background:#0d1f38;border-radius:10px;border:1px solid #1e3a5f;padding:14px;animation:slideIn 0.5s 0.8s both}
+.checkout-header{font-size:11px;color:#7ea8c9;margin-bottom:8px}
+.checkout-row{display:flex;justify-content:space-between;font-size:11px;color:#c8dff0;padding:3px 0;border-bottom:1px solid #1e3a5f20}
+.checkout-total{display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:#fff;padding:6px 0}
+.checkout-btn{width:100%;background:#10B981;border-radius:6px;padding:7px;text-align:center;font-size:11px;color:#fff;font-weight:600;margin-top:8px;animation:tapEffect 1s 1.6s both}
+.thankyou{position:absolute;bottom:14%;left:50%;transform:translateX(-50%);text-align:center;animation:fadeUp 0.6s 2s both}
+.ty-check{width:32px;height:32px;background:#10B98120;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;border:2px solid #10B981}
+.ty-text{font-size:clamp(10px,2vw,14px);color:#10B981;font-weight:600}
+.recovery-card2{position:absolute;top:50%;right:6%;transform:translateY(-50%);background:#0d1f38;border-radius:10px;border:1px solid #10B981;padding:12px 16px;text-align:center;animation:popIn 0.5s 2.2s both;min-width:80px}
+@keyframes dropIn{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+
+.s4-bg{position:absolute;inset:0;background:linear-gradient(135deg,#0d1f38 0%,#0A1628 100%)}
+.narrator-frame{width:clamp(220px,70%,380px);height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.avatar-circle{width:clamp(80px,18%,120px);height:clamp(80px,18%,120px);border-radius:50%;background:linear-gradient(135deg,#10B981,#059669);display:flex;align-items:center;justify-content:center;font-size:clamp(28px,7%,48px);animation:breathe 3s ease infinite;border:3px solid #10B98150;position:relative}
+.avatar-ring{position:absolute;inset:-6px;border-radius:50%;border:1px solid #10B98130;animation:pulse-ring 2s ease infinite}
+.quote-box{background:#0d1f38;border-radius:12px;border-left:3px solid #10B981;padding:16px 18px;animation:fadeUp 0.8s 0.5s both;max-width:320px}
+.quote-text{font-size:clamp(12px,2.5vw,16px);color:#c8dff0;line-height:1.6;font-style:italic}
+.quote-attr{font-size:11px;color:#10B981;margin-top:8px;font-weight:600}
+.talking-dots{display:flex;gap:4px;justify-content:center;margin-top:6px}
+.td{width:6px;height:6px;border-radius:50%;background:#10B981;animation:talk 0.6s ease infinite}
+.td:nth-child(2){animation-delay:.2s}
+.td:nth-child(3){animation-delay:.4s}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+@keyframes pulse-ring{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:.2;transform:scale(1.1)}}
+@keyframes talk{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.8)}}
+
+.s5-bg{position:absolute;inset:0;background:#060e1c}
+.dashboard{width:clamp(260px,85%,500px);background:#0d1f38;border-radius:14px;border:1px solid #1e3a5f;padding:18px;animation:slideIn 0.6s both}
+.dash-header{font-size:11px;color:#7ea8c9;margin-bottom:14px;display:flex;justify-content:space-between}
+.dash-badge{background:#10B98120;color:#10B981;font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600}
+.metric-big{text-align:center;padding:12px 0}
+.metric-label{font-size:12px;color:#7ea8c9;margin-bottom:6px}
+.metric-value{font-size:clamp(28px,7vw,52px);color:#10B981;font-weight:600;letter-spacing:-1px}
+.metric-sub{font-size:11px;color:#4a7090;margin-top:4px}
+.mini-bars{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;height:40px;align-items:end;margin-top:12px;padding-top:12px;border-top:1px solid #1e3a5f}
+.bar{background:#10B981;border-radius:2px 2px 0 0;animation:barGrow 0.6s ease both}
+.bar:nth-child(1){height:40%;animation-delay:.1s}
+.bar:nth-child(2){height:55%;animation-delay:.15s}
+.bar:nth-child(3){height:45%;animation-delay:.2s}
+.bar:nth-child(4){height:65%;animation-delay:.25s}
+.bar:nth-child(5){height:80%;animation-delay:.3s}
+.bar:nth-child(6){height:70%;animation-delay:.35s}
+.bar:nth-child(7){height:100%;animation-delay:.4s}
+.bar-labels{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:3px}
+.bar-lbl{font-size:8px;color:#4a7090;text-align:center}
+@keyframes barGrow{from{transform:scaleY(0);transform-origin:bottom}to{transform:scaleY(1);transform-origin:bottom}}
+
+.s6-bg{position:absolute;inset:0;background:#0A1628;display:flex;align-items:center;justify-content:center}
+.end-frame{text-align:center;animation:fadeUp 0.8s both}
+.logo-mark{width:clamp(50px,14%,80px);height:clamp(50px,14%,80px);background:#10B981;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:clamp(24px,6%,40px);font-weight:700;color:#fff;margin:0 auto 16px;animation:logoSpin 0.8s both}
+.brand-name{font-size:clamp(20px,5vw,38px);color:#fff;font-weight:600;letter-spacing:1px}
+.brand-tm{font-size:clamp(8px,1.5vw,12px);vertical-align:super;color:#10B981}
+.tagline{font-size:clamp(10px,2.5vw,16px);color:#10B981;margin-top:8px;letter-spacing:2px;text-transform:uppercase}
+.cta-btn{margin-top:20px;display:inline-block;background:#10B981;color:#fff;padding:10px 28px;border-radius:8px;font-size:clamp(11px,2vw,14px);font-weight:600;animation:fadeUp 0.6s 0.8s both;cursor:pointer;border:none}
+.glow-line{width:clamp(120px,40%,200px);height:2px;background:linear-gradient(90deg,transparent,#10B981,transparent);margin:12px auto 0;animation:glowPulse 2s ease infinite}
+@keyframes logoSpin{from{opacity:0;transform:rotateY(-90deg)}to{opacity:1;transform:rotateY(0)}}
+@keyframes glowPulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+/* Video player styles */
+.video-container{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;width:100%;height:100%}
+.video-player{width:100%;height:100%;border-radius:12px;background:#000}
+</style>
+
+<h2 class="sr-only">CartGain video animatic — 6 scenes showing abandoned cart SMS recovery for Shopify, 23 seconds total</h2>
+
+<div class="wrap">
+  <div class="screen" id="screen">
+
+    <!-- Video Scene (Scene 0) -->
+    <div class="scene active" id="s0">
+      <div class="video-container">
+        <video class="video-player" id="introVideo" controls autoplay style="width:100%;height:100%;object-fit:cover;">
+          <source src="/CartGain_Recovery_Intro.mp4" type="video/mp4">
+          Your browser does not support the video tag.
+        </video>
+      </div>
+    </div>
+
+    <div class="scene" id="s1">
+      <div class="s1-bg"></div>
+      <div class="phone-grid">
+        <div class="phone"><div class="notif-dot"></div><div class="phone-screen"><div class="notif-bar"><div class="nb-title">CartGain</div><div class="nb-msg">Your cart is waiting...</div></div></div></div>
+        <div class="phone"><div class="notif-dot"></div><div class="phone-screen"><div class="notif-bar"><div class="nb-title">Store</div><div class="nb-msg">Complete your order</div></div></div></div>
+        <div class="phone"><div class="notif-dot"></div><div class="phone-screen"><div class="notif-bar"><div class="nb-title">CartGain</div><div class="nb-msg">Don't miss out!</div></div></div></div>
+        <div class="phone"><div class="notif-dot"></div><div class="phone-screen"><div class="notif-bar"><div class="nb-title">SMS</div><div class="nb-msg">Your cart expires soon</div></div></div></div>
+        <div class="phone"><div class="notif-dot"></div><div class="phone-screen"><div class="notif-bar"><div class="nb-title">CartGain</div><div class="nb-msg">Still interested?</div></div></div></div>
+        <div class="phone"><div class="notif-dot"></div><div class="phone-screen"><div class="notif-bar"><div class="nb-title">Store</div><div class="nb-msg">$89 order waiting</div></div></div></div>
+      </div>
+      <div class="s1-headline">
+        <h1>Your customers want to buy.</h1>
+        <p>They just forgot.</p>
+      </div>
+    </div>
+
+    <div class="scene" id="s2">
+      <div class="s2-bg"></div>
+      <div class="sms-card">
+        <div class="sms-header">
+          <div class="sms-icon">CG</div>
+          <div><div class="sms-from">CartGain Recovery</div><div style="font-size:9px;color:#4a7090">Today 2:34 PM</div></div>
+          <div class="sms-time"></div>
+        </div>
+        <div class="sms-bubble">Hey! You left something behind 👋<br><strong>Complete your $89.00 order</strong> and get it shipped today.<br><br>→ <span style="color:#10B981;text-decoration:underline">shop.example.com/cart/abc</span></div>
+        <div class="sms-cta">TAP TO COMPLETE ORDER</div>
+      </div>
+      <div class="recovery-card">
+        <div class="rc-amount">+$89</div>
+        <div class="rc-label">recovered</div>
+        <div style="width:100%;height:2px;background:#10B98130;border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;background:#10B981;animation:fillBar 0.8s 2s both;width:0%" id="rc1fill"></div></div>
+      </div>
+    </div>
+
+    <div class="scene" id="s3">
+      <div class="s3-bg"></div>
+      <div class="notif-toast">
+        <div class="nt-title">⏰  CartGain — Urgent</div>
+        <div class="nt-msg">Your cart expires in 1 hour. Complete your order before it's gone.</div>
+      </div>
+      <div class="checkout-page">
+        <div class="checkout-header">ORDER SUMMARY</div>
+        <div class="checkout-row"><span>Premium Sneakers</span><span>$156.00</span></div>
+        <div class="checkout-row"><span>Shipping</span><span>Free</span></div>
+        <div class="checkout-total"><span>Total</span><span style="color:#10B981">$156.00</span></div>
+        <div class="checkout-btn">COMPLETE PURCHASE</div>
+      </div>
+      <div class="thankyou">
+        <div class="ty-check"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 5" stroke="#10B981" stroke-width="2" stroke-linecap="round"/></svg></div>
+        <div class="ty-text">Thank You!</div>
+      </div>
+      <div class="recovery-card2">
+        <div class="rc-amount">+$156</div>
+        <div class="rc-label">recovered</div>
+      </div>
+    </div>
+
+    <div class="scene" id="s4">
+      <div class="s4-bg"></div>
+      <div class="narrator-frame">
+        <div class="avatar-circle">
+          <div class="avatar-ring"></div>
+          <svg width="50%" height="50%" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="14" r="7" fill="rgba(255,255,255,0.9)"/><path d="M4 36c0-8.8 7.2-16 16-16s16 7.2 16 16" fill="rgba(255,255,255,0.9)"/></svg>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:-4px">
+          <div class="td"></div><div class="td"></div><div class="td"></div>
+        </div>
+        <div class="quote-box">
+          <div class="quote-text">"Stop leaving money on the table. Automate your recovery and watch your sales grow."</div>
+          <div class="quote-attr">— Rachel, CartGain</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scene" id="s5">
+      <div class="s5-bg"></div>
+      <div class="dashboard">
+        <div class="dash-header">
+          <span>CartGain Dashboard · This Week</span>
+          <span class="dash-badge">LIVE</span>
+        </div>
+        <div class="metric-big">
+          <div class="metric-label">Total Recovered</div>
+          <div class="metric-value" id="counter">$0</div>
+          <div class="metric-sub">+18.4% vs last week</div>
+        </div>
+        <div class="mini-bars">
+          <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+          <div class="bar"></div><div class="bar"></div><div class="bar"></div>
+          <div class="bar"></div>
+        </div>
+        <div class="bar-labels">
+          <div class="bar-lbl">M</div><div class="bar-lbl">T</div><div class="bar-lbl">W</div>
+          <div class="bar-lbl">T</div><div class="bar-lbl">F</div><div class="bar-lbl">S</div>
+          <div class="bar-lbl">S</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scene" id="s6">
+      <div class="s6-bg"></div>
+      <div class="end-frame">
+        <div class="logo-mark">C</div>
+        <div class="brand-name">CartGain<span class="brand-tm">™</span></div>
+        <div class="glow-line"></div>
+        <div class="tagline">Gain what you're losing</div>
+        <button class="cta-btn" onclick="sendPrompt('How do I set up CartGain for my Shopify store?')">Start Free Trial ↗</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+  <div class="controls">
+    <button class="ctrl-btn" id="playBtn" onclick="togglePlay()">▶ Play</button>
+    <div class="scene-dots" id="dots"></div>
+    <div class="timer-lbl" id="timerLbl">0s</div>
+  </div>
+</div>
+
+<script>
+const scenes=[
+  {id:'s0',label:'Video',start:0,end:4},
+  {id:'s1',label:'Intro',start:4,end:8},
+  {id:'s2',label:'$89',start:8,end:11},
+  {id:'s3',label:'$156',start:11,end:14},
+  {id:'s4',label:'Rachel',start:14,end:20},
+  {id:'s5',label:'Stats',start:20,end:24},
+  {id:'s6',label:'CTA',start:24,end:27}
+];
+const TOTAL=27;
+let current=0,playing=false,elapsed=0,raf=null,lastTs=null;
+
+const dots=document.getElementById('dots');
+scenes.forEach((s,i)=>{
+  const d=document.createElement('div');
+  d.className='dot'+(i===0?' active':'');
+  d.title=s.label;
+  d.onclick=()=>goTo(i,true);
+  dots.appendChild(d);
+});
+
+function goTo(idx,resetElapsed){
+  if(resetElapsed){elapsed=scenes[idx].start*1000;}
+  document.querySelectorAll('.scene').forEach(s=>s.classList.remove('active'));
+  document.getElementById(scenes[idx].id).classList.add('active');
+  document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('active',i===idx));
+  current=idx;
+  document.getElementById('timerLbl').textContent=scenes[idx].start+'s';
+  document.getElementById('progressFill').style.width=(scenes[idx].start/TOTAL*100)+'%';
+  if(idx===5) startCounter();
+}
+
+function togglePlay(){
+  playing=!playing;
+  document.getElementById('playBtn').textContent=playing?'⏸ Pause':'▶ Play';
+  if(playing){
+    lastTs=null;
+    if(elapsed>=TOTAL*1000){elapsed=0;goTo(0,false);}
+    raf=requestAnimationFrame(tick);
+  } else {
+    cancelAnimationFrame(raf);
+  }
+}
+
+function tick(ts){
+  if(!lastTs) lastTs=ts;
+  const dt=ts-lastTs; lastTs=ts;
+  elapsed+=dt;
+  const sec=elapsed/1000;
+  if(sec>=TOTAL){
+    elapsed=TOTAL*1000;
+    playing=false;
+    document.getElementById('playBtn').textContent='▶ Play';
+    document.getElementById('progressFill').style.width='100%';
+    return;
+  }
+  document.getElementById('progressFill').style.width=(sec/TOTAL*100)+'%';
+  document.getElementById('timerLbl').textContent=Math.floor(sec)+'s';
+  const ni=scenes.findIndex((s,i)=>sec>=s.start&&(i===scenes.length-1||sec<scenes[i+1].start));
+  if(ni!==current&&ni>=0) goTo(ni,false);
+  raf=requestAnimationFrame(tick);
+}
+
+let counterDone=false;
+function startCounter(){
+  if(counterDone) return;
+  counterDone=true;
+  const el=document.getElementById('counter');
+  const target=23450; let v=0;
+  const step=()=>{
+    v=Math.min(v+Math.ceil(target/60),target);
+    el.textContent='$'+v.toLocaleString();
+    if(v<target) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+setTimeout(()=>{togglePlay();},400);
+</script>

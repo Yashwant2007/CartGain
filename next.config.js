@@ -5,36 +5,61 @@ const nextConfig = {
   },
   env: {
     NEXT_PUBLIC_APP_NAME: 'CartGain',
-    NEXT_PUBLIC_APP_URL: 'https://cartgain.com',
   },
-  webpack: (config, { isServer }) => {
-    // Mark server-only packages as external for client builds to prevent bundling errors
-    if (!isServer) {
-      const serverOnlyPackages = [
-        'razorpay',
-        'bull',
-        'nodemailer',
-        'bcryptjs',
-        '@auth/prisma-adapter',
-        'next-auth',
-        'ioredis',
-        'redis'
-      ]
-      
-      // Initialize externals if not already an array
-      if (!Array.isArray(config.externals)) {
-        config.externals = []
-      }
-      
-      // Add server-only packages to externals
-      config.externals.push(...serverOnlyPackages)
-    }
-    return config
-  },
-  // Suppress build warnings for optional dependencies
   onDemandEntries: {
     maxInactiveAge: 60 * 1000,
     pagesBufferLength: 5,
+  },
+  async redirects() {
+    return [
+      {
+        source: '/pricing',
+        destination: '/#pricing',
+        permanent: true,
+      },
+      {
+        source: '/auth/reset-password',
+        destination: '/reset-password',
+        permanent: true,
+      },
+    ]
+  },
+  headers: async () => {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-DNS-Prefetch-Control',
+            value: 'on',
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'geolocation=(), microphone=(), camera=()',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://checkout.razorpay.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.cartgain.com https://checkout.razorpay.com https://api.razorpay.com; frame-ancestors 'self' https://checkout.razorpay.com;",
+          },
+        ],
+      },
+    ]
   },
 }
 

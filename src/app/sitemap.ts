@@ -1,39 +1,71 @@
 import { MetadataRoute } from 'next'
 
+const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.vercel.app'
+
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
-      url: 'https://cart-gain.vercel.app',
+      url: baseUrl,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 1,
     },
     {
-      url: 'https://cart-gain.vercel.app/login',
+      url: `${baseUrl}/login`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.8,
     },
     {
-      url: 'https://cart-gain.vercel.app/signup',
+      url: `${baseUrl}/signup`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.9,
     },
     {
-      url: 'https://cart-gain.vercel.app/dashboard',
+      url: `${baseUrl}/forgot-password`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.3,
+    },
+    {
+      url: `${baseUrl}/dashboard`,
       lastModified: new Date(),
       changeFrequency: 'daily',
       priority: 0.8,
     },
     {
-      url: 'https://cart-gain.vercel.app/privacy',
+      url: `${baseUrl}/dashboard/analytics`,
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/dashboard/campaigns`,
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 0.6,
+    },
+    {
+      url: `${baseUrl}/dashboard/integrations`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/dashboard/settings`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.3,
+    },
+    {
+      url: `${baseUrl}/privacy`,
       lastModified: new Date(),
       changeFrequency: 'yearly',
       priority: 0.5,
     },
     {
-      url: 'https://cart-gain.vercel.app/terms',
+      url: `${baseUrl}/terms`,
       lastModified: new Date(),
       changeFrequency: 'yearly',
       priority: 0.5,

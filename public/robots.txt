@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api
+Disallow: /dashboard
+Sitemap: https://cart-gain.vercel.app/sitemap.xml
+
+# Google-specific
+User-agent: Googlebot
+Allow: /
+
+# Bing-specific
+User-agent: Bingbot
+Allow: /
+
+# Rate limiting
+Request-rate: 30/1m
