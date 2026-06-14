@@ -164,11 +164,11 @@ export default function HomePage() {
             </Button>
             <Button 
               isLink 
-              href="https://wa.me/919876543210"
+              href="https://wa.me/918708718426"
               external
               variant="accent"
               className="w-full sm:w-auto border-2 border-cyan-400"
-              aria-label="Contact CartGain team on WhatsApp"
+              aria-label="Contact Yashwant on WhatsApp"
             >
               <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
               Contact Us
