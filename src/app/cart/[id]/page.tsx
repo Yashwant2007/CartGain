@@ -9,7 +9,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 }
 
 function getSymbol(currency: string): string {
-  return CURRENCY_SYMBOLS[currency?.toUpperCase()] || currency || '$'
+  return CURRENCY_SYMBOLS[currency?.toUpperCase()] || currency || '₹'
 }
 
 export default async function CartRecoveryPage({ params }: { params: { id: string } }) {

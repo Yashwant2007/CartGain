@@ -66,7 +66,7 @@ export async function sendEmail({
 }
 
 export const EmailTemplates = {
-  abandoned: (customerName: string, items: any[], cartTotal: number, cartUrl: string, storeName: string, currencySymbol = '$') => `
+  abandoned: (customerName: string, items: any[], cartTotal: number, cartUrl: string, storeName: string, currencySymbol = '₹') => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -128,7 +128,7 @@ export const EmailTemplates = {
 </html>
   `,
 
-  withDiscount: (customerName: string, items: any[], cartTotal: number, discountCode: string, discountPercent: number, cartUrl: string, storeName: string, currencySymbol = '$') => `
+  withDiscount: (customerName: string, items: any[], cartTotal: number, discountCode: string, discountPercent: number, cartUrl: string, storeName: string, currencySymbol = '₹') => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -201,7 +201,7 @@ export async function sendAbandonedCartEmail(
   cartTotal: number,
   cartUrl: string,
   storeName: string,
-  currencySymbol = '$'
+  currencySymbol = '₹'
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const html = EmailTemplates.abandoned(customerName, items, cartTotal, cartUrl, storeName, currencySymbol)
   const text = `Hi ${customerName || 'there'}, you left items in your cart. Total: ${currencySymbol}${cartTotal.toFixed(2)}. Complete your order: ${cartUrl}`
@@ -223,7 +223,7 @@ export async function sendDiscountEmail(
   discountPercent: number,
   cartUrl: string,
   storeName: string,
-  currencySymbol = '$'
+  currencySymbol = '₹'
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const html = EmailTemplates.withDiscount(customerName, items, cartTotal, discountCode, discountPercent, cartUrl, storeName, currencySymbol)
   const text = `Hi ${customerName || 'there'}, here's ${discountPercent}% off your cart! Use code ${discountCode} at checkout: ${cartUrl}`

@@ -19,7 +19,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 }
 
 function getCurrencySymbol(currency: string): string {
-  return CURRENCY_SYMBOLS[currency?.toUpperCase()] || currency || '$'
+  return CURRENCY_SYMBOLS[currency?.toUpperCase()] || currency || '₹'
 }
 
 type ProcessResult = {

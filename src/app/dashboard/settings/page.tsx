@@ -363,7 +363,7 @@ function NotificationSettings() {
         <ToggleSetting label="Recovery Alerts" description="Get notified when a cart is recovered" checked={settings.recoveryAlerts} onChange={(v) => setSettings({ ...settings, recoveryAlerts: v })} />
         <ToggleSetting label="Daily Reports" description="Receive daily recovery summary" checked={settings.dailyReports} onChange={(v) => setSettings({ ...settings, dailyReports: v })} />
         <ToggleSetting label="Weekly Digest" description="Weekly performance summary" checked={settings.weeklyDigest} onChange={(v) => setSettings({ ...settings, weeklyDigest: v })} />
-        <ToggleSetting label="Milestone Alerts" description="Celebrate recovery milestones ($1k, $10k, etc.)" checked={settings.milestoneAlerts} onChange={(v) => setSettings({ ...settings, milestoneAlerts: v })} />
+        <ToggleSetting label="Milestone Alerts" description="Celebrate recovery milestones (₹1k, ₹10k, etc.)" checked={settings.milestoneAlerts} onChange={(v) => setSettings({ ...settings, milestoneAlerts: v })} />
       </div>
     </div>
   )
@@ -449,8 +449,8 @@ function BillingSettings() {
             </div>
             <div>
               <p className="text-sm text-blue-300/80">Rate per SMS</p>
-              <p className="text-2xl font-bold text-cyan-300">${smsRate.toFixed(3)}</p>
-              <p className="text-xs text-blue-300/60 mt-1">WhatsApp: ${whatsappRate.toFixed(3)}</p>
+              <p className="text-2xl font-bold text-cyan-300">₹{smsRate.toFixed(3)}</p>
+              <p className="text-xs text-blue-300/60 mt-1">WhatsApp: ₹{whatsappRate.toFixed(3)}</p>
             </div>
           </div>
         </div>
@@ -466,7 +466,7 @@ function BillingSettings() {
               onClick={() => setCreditAmount(amount)}
               className={`px-4 py-2 rounded-lg border font-medium transition-all ${creditAmount === amount ? 'bg-cyan-600/30 border-cyan-400 text-cyan-300' : 'bg-slate-700/40 border-blue-700/50 text-blue-300 hover:border-blue-600'}`}
             >
-              ${amount}
+              ₹{amount}
             </button>
           ))}
         </div>
@@ -495,7 +495,7 @@ function BillingSettings() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-6">
             <h4 className="font-semibold text-cyan-300 mb-2">Pay As You Go</h4>
-            <p className="text-3xl font-bold text-white mb-4">$0<span className="text-base font-normal text-blue-300/60">/mo</span></p>
+            <p className="text-3xl font-bold text-white mb-4">₹0<span className="text-base font-normal text-blue-300/60">/mo</span></p>
             <ul className="space-y-2 text-sm text-blue-300/80 mb-6">
               <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> All channels (SMS, WhatsApp, Email)</li>
               <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> No monthly minimum</li>
@@ -507,7 +507,7 @@ function BillingSettings() {
           <div className="bg-gradient-to-b from-slate-700/60 to-slate-800/60 border border-amber-500/40 rounded-lg p-6 relative">
             <span className="absolute -top-3 right-4 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold rounded-full">Popular</span>
             <h4 className="font-semibold text-amber-300 mb-2">Pro</h4>
-            <p className="text-3xl font-bold text-white mb-4">$99<span className="text-base font-normal text-blue-300/60">/mo</span></p>
+            <p className="text-3xl font-bold text-white mb-4">₹99<span className="text-base font-normal text-blue-300/60">/mo</span></p>
             <ul className="space-y-2 text-sm text-blue-300/80 mb-6">
               <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> 5,000 SMS credits included</li>
               <li className="flex items-center"><span className="text-emerald-400 mr-2">✓</span> 1,000 WhatsApp credits included</li>

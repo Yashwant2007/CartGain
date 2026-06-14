@@ -22,8 +22,8 @@ export default function CartGainAnimatic() {
 
   const scenes = [
     { id: 's1', label: 'Intro', start: 0, end: 4 },
-    { id: 's2', label: '$89', start: 4, end: 7 },
-    { id: 's3', label: '$156', start: 7, end: 10 },
+    { id: 's2', label: '₹89', start: 4, end: 7 },
+    { id: 's3', label: '₹156', start: 7, end: 10 },
     { id: 's4', label: 'Rachel', start: 10, end: 16 },
     { id: 's5', label: 'Stats', start: 16, end: 20 },
     { id: 's6', label: 'CTA', start: 20, end: 23 },
@@ -156,7 +156,7 @@ export default function CartGainAnimatic() {
               </div>
               <div className={styles.smsBubble}>
                 Hey! You left something behind 👋<br />
-                <strong>Complete your $89.00 order</strong> and get it shipped today.<br />
+                <strong>Complete your ₹89.00 order</strong> and get it shipped today.<br />
                 <br />→{' '}
                 <span style={{ color: '#10B981', textDecoration: 'underline' }}>
                   shop.example.com/cart
@@ -165,7 +165,7 @@ export default function CartGainAnimatic() {
               <div className={styles.smsCta}>TAP TO COMPLETE ORDER</div>
             </div>
             <div className={styles.recoveryCard}>
-              <div className={styles.rcAmount}>+$89</div>
+              <div className={styles.rcAmount}>+₹89</div>
               <div className={styles.rcLabel}>recovered</div>
             </div>
           </div>
@@ -183,7 +183,7 @@ export default function CartGainAnimatic() {
               <div className={styles.checkoutHeader}>ORDER SUMMARY</div>
               <div className={styles.checkoutRow}>
                 <span>Premium Sneakers</span>
-                <span>$156.00</span>
+                <span>₹156.00</span>
               </div>
               <div className={styles.checkoutRow}>
                 <span>Shipping</span>
@@ -191,7 +191,7 @@ export default function CartGainAnimatic() {
               </div>
               <div className={styles.checkoutTotal}>
                 <span>Total</span>
-                <span style={{ color: '#10B981' }}>$156.00</span>
+                <span style={{ color: '#10B981' }}>₹156.00</span>
               </div>
               <div className={styles.checkoutBtn}>COMPLETE PURCHASE</div>
             </div>
@@ -200,7 +200,7 @@ export default function CartGainAnimatic() {
               <div className={styles.tyText}>Thank You!</div>
             </div>
             <div className={styles.recoveryCard2}>
-              <div className={styles.rcAmount}>+$156</div>
+              <div className={styles.rcAmount}>+₹156</div>
               <div className={styles.rcLabel}>recovered</div>
             </div>
           </div>
@@ -238,7 +238,7 @@ export default function CartGainAnimatic() {
               <div className={styles.metricBig}>
                 <div className={styles.metricLabel}>Total Recovered</div>
                 <div className={styles.metricValue} ref={counterRef}>
-                  ${counterValue.toLocaleString()}
+                  ₹{counterValue.toLocaleString()}
                 </div>
                 <div className={styles.metricSub}>+18.4% vs last week</div>
               </div>

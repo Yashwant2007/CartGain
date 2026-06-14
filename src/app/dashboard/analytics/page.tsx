@@ -143,7 +143,7 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
           title="Total Revenue Recovered"
-          value={`$${metrics.totalRevenue.toLocaleString()}`}
+          value={`₹${metrics.totalRevenue.toLocaleString()}`}
           change="+24.5%"
           trend="up"
           icon={<DollarSign className="w-6 h-6" />}
@@ -230,7 +230,7 @@ export default function AnalyticsPage() {
                   <td className="text-right py-3 px-4 text-blue-200">{row.delivered.toLocaleString()}</td>
                   <td className="text-right py-3 px-4 text-blue-200">{row.clicked.toLocaleString()}</td>
                   <td className="text-right py-3 px-4 text-blue-200">{row.converted.toLocaleString()}</td>
-                  <td className="text-right py-3 px-4 font-medium text-emerald-300">${row.revenue.toLocaleString()}</td>
+                  <td className="text-right py-3 px-4 font-medium text-emerald-300">₹{row.revenue.toLocaleString()}</td>
                   <td className="text-right py-3 px-4">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       row.rate >= 15 ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/50' :
@@ -254,19 +254,19 @@ export default function AnalyticsPage() {
           <div className="space-y-4">
             <div className="flex justify-between items-center py-3 border-b border-blue-700/30">
               <span className="text-blue-300/80">Revenue Recovered</span>
-              <span className="font-semibold text-emerald-400">+${metrics.totalRevenue.toLocaleString()}</span>
+              <span className="font-semibold text-emerald-400">+₹{metrics.totalRevenue.toLocaleString()}</span>
             </div>
             <div className="flex justify-between items-center py-3 border-b border-blue-700/30">
               <span className="text-blue-300/80">SMS Costs</span>
-              <span className="font-semibold text-red-400">-$1,245</span>
+              <span className="font-semibold text-red-400">-₹1,245</span>
             </div>
             <div className="flex justify-between items-center py-3 border-b border-blue-700/30">
               <span className="text-blue-300/80">WhatsApp Costs</span>
-              <span className="font-semibold text-red-400">-$892</span>
+              <span className="font-semibold text-red-400">-₹892</span>
             </div>
             <div className="flex justify-between items-center py-3 border-b border-blue-700/30">
               <span className="text-blue-300/80">Email Costs</span>
-              <span className="font-semibold text-red-400">-$156</span>
+              <span className="font-semibold text-red-400">-₹156</span>
             </div>
             <div className="flex justify-between items-center py-4 bg-slate-700/40 border border-blue-700/30 -mx-4 px-4 rounded">
               <span className="font-semibold text-cyan-300">Net ROI</span>

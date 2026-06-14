@@ -798,7 +798,7 @@ function CreateCampaignModal({ onClose, onCreate }: { onClose: () => void; onCre
                       className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:border-cyan-400/70 focus:ring-1 focus:ring-cyan-400/30 transition-all"
                     >
                       <option value="percentage">Percentage (%)</option>
-                      <option value="fixed">Fixed Amount ($)</option>
+                      <option value="fixed">Fixed Amount (₹)</option>
                     </select>
                   </div>
                   <div>
@@ -843,7 +843,7 @@ function CreateCampaignModal({ onClose, onCreate }: { onClose: () => void; onCre
                   <div className="flex justify-between">
                     <span className="text-blue-300/80">Discount:</span>
                     <span className="font-medium text-cyan-300">
-                      {config.discountType === 'percentage' ? config.discountValue + '%' : '$' + config.discountValue}
+                      {config.discountType === 'percentage' ? config.discountValue + '%' : '₹' + config.discountValue}
                     </span>
                   </div>
                 )}
