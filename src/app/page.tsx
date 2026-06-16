@@ -993,16 +993,6 @@ export default function HomePage() {
               >
                 Get Started Free
               </Link>
-              <a 
-                href="https://wa.me/918708718426" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex-1 py-3 border border-emerald-500 text-emerald-400 font-semibold rounded-lg hover:bg-emerald-600/20 transition text-center flex items-center justify-center gap-1.5"
-                onClick={closeModal}
-              >
-                <MessageSquare className="w-4 h-4" />
-                Contact Us
-              </a>
             </div>
           </div>
         </div>
