@@ -673,8 +673,9 @@ export default function HomePage() {
 
           <div className="text-center py-6 sm:py-8 border-t border-blue-700/30">
             <p className="text-blue-200 mb-4 text-xs sm:text-sm">Not seeing your platform? We support any e-commerce system with webhook support.</p>
-            <a href="https://cal.com/cartgain" target="_blank" rel="noopener noreferrer" className="inline-block px-6 py-2 sm:py-3 border border-cyan-400 text-cyan-400 rounded-lg hover:bg-cyan-600/10 transition font-medium text-xs sm:text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400">
-              Request Your Platform
+            <a href="https://wa.me/918708718426" target="_blank" rel="noopener noreferrer" className="inline-block px-6 py-2 sm:py-3 border border-emerald-500 text-emerald-400 rounded-lg hover:bg-emerald-600/10 transition font-medium text-xs sm:text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400">
+              <MessageSquare className="w-4 h-4 inline-block mr-1.5" />
+              WhatsApp Us
             </a>
           </div>
         </div>
@@ -746,8 +747,9 @@ export default function HomePage() {
 
           <div className="mt-12 bg-gradient-to-r from-blue-900/40 to-cyan-900/40 border border-blue-700/40 rounded-xl p-8 text-center">
             <p className="text-white font-semibold mb-4">Didn&apos;t find your answer?</p>
-            <a href="https://cal.com/cartgain" target="_blank" className="inline-block px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 transition font-medium">
-              Schedule a Call - We&apos;ll Explain Everything
+            <a href="https://wa.me/918708718426" target="_blank" className="inline-block px-6 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/50 transition font-medium">
+              <MessageSquare className="w-4 h-4 inline-block mr-1.5" />
+              WhatsApp Us - We&apos;ll Explain Everything
             </a>
           </div>
         </div>
@@ -991,13 +993,14 @@ export default function HomePage() {
                 Get Started Free
               </Link>
               <a 
-                href="https://cal.com/cartgain" 
+                href="https://wa.me/918708718426" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="flex-1 py-3 border border-blue-600 text-blue-300 font-semibold rounded-lg hover:bg-blue-600/20 transition text-center"
+                className="flex-1 py-3 border border-emerald-500 text-emerald-400 font-semibold rounded-lg hover:bg-emerald-600/20 transition text-center flex items-center justify-center gap-1.5"
                 onClick={closeModal}
               >
-                Schedule Demo
+                <MessageSquare className="w-4 h-4" />
+                WhatsApp Us
               </a>
             </div>
           </div>
