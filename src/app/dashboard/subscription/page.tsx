@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Check, Shield, Percent, Zap } from 'lucide-react'
-import { PLANS, FREE_CARTS_THRESHOLD, REVENUE_SHARE_PERCENT } from '@/lib/payment'
+import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/payment'
 
 type SubscriptionData = {
   id: string
@@ -25,6 +25,7 @@ export default function SubscriptionPage() {
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
   const [store, setStore] = useState<StoreData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly')
   const [razorpayLoaded, setRazorpayLoaded] = useState(false)
   const [processing, setProcessing] = useState<string | null>(null)
   const [totalRecoveredCarts, setTotalRecoveredCarts] = useState(0)
@@ -82,7 +83,7 @@ export default function SubscriptionPage() {
   const freeCartsRemaining = Math.max(0, FREE_CARTS_THRESHOLD - cartsUsed)
   const revShareCarts = Math.max(0, cartsUsed - FREE_CARTS_THRESHOLD)
   const avgCartValue = monthlyRecoveredRevenue > 0 && cartsUsed > 0 ? Math.round(monthlyRecoveredRevenue / cartsUsed) : 1000
-  const estimatedRevShare = revShareCarts * avgCartValue * (REVENUE_SHARE_PERCENT / 100)
+  const estimatedRevShare = revShareCarts * avgCartValue * (currentPlan.revSharePercent / 100)
 
   const handlePurchase = async (planKey: PlanKey) => {
     if (!razorpayLoaded) return
@@ -183,8 +184,8 @@ export default function SubscriptionPage() {
           </div>
           <p className="text-xs text-blue-300/60 mt-2">
             {freeCartsRemaining > 0
-              ? `${freeCartsRemaining} more carts recovered at 0% revenue share — then ${REVENUE_SHARE_PERCENT}% applies`
-              : `50 free carts used. ${REVENUE_SHARE_PERCENT}% revenue share is now active on recovered revenue.`}
+              ? `${freeCartsRemaining} more carts recovered at 0% revenue share — then ${currentPlan.revSharePercent}% applies`
+              : `50 free carts used. ${currentPlan.revSharePercent}% revenue share is now active on recovered revenue.`}
           </p>
         </div>
 
@@ -228,7 +229,7 @@ export default function SubscriptionPage() {
               </p>
               <p className="flex items-start space-x-2">
                 <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                <span>After that, just <strong className="text-white">{REVENUE_SHARE_PERCENT}%</strong> of revenue recovered. We only make more when you do.</span>
+                <span>Revenue share: <strong className="text-white">3% Starter</strong> / <strong className="text-white">2.5% Growth</strong> / <strong className="text-white">2% Pro</strong>. Lower rates on higher plans.</span>
               </p>
               <p className="flex items-start space-x-2">
                 <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
@@ -241,11 +242,38 @@ export default function SubscriptionPage() {
 
       {/* Plan Comparison */}
       <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
-        <h2 className="text-lg font-semibold text-white mb-6">Choose your plan</h2>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+          <h2 className="text-lg font-semibold text-white">Choose your plan</h2>
+          <div className="inline-flex items-center gap-2 bg-slate-700/50 border border-blue-700/30 p-0.5 rounded-full">
+            <button
+              onClick={() => setBilling('monthly')}
+              className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${
+                billing === 'monthly'
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
+                  : 'text-blue-300/60 hover:text-blue-300'
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setBilling('yearly')}
+              className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${
+                billing === 'yearly'
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
+                  : 'text-blue-300/60 hover:text-blue-300'
+              }`}
+            >
+              Yearly
+              <span className="ml-1.5 text-xs bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-full">Save 17%</span>
+            </button>
+          </div>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Object.values(PLANS).filter(p => p.id !== 'enterprise').map((plan) => {
             const isCurrent = currentPlan.id === plan.id
             const isGrowth = plan.recommended
+            const displayPrice = billing === 'yearly' ? Math.round(plan.yearlyPrice / 12) : plan.price
+            const period = billing === 'yearly' ? '/mo billed yearly' : '/mo'
 
             return (
               <div
@@ -274,10 +302,13 @@ export default function SubscriptionPage() {
                   Up to {plan.maxCarts === Infinity ? 'unlimited' : plan.maxCarts.toLocaleString('en-IN')} carts/mo
                 </p>
 
-                <div className="mb-4">
-                  <span className="text-3xl font-bold text-white">₹{plan.price.toLocaleString('en-IN')}</span>
-                  <span className="text-base text-blue-300/60 ml-1">/mo</span>
+                <div className="mb-1">
+                  <span className="text-3xl font-bold text-white">₹{displayPrice.toLocaleString('en-IN')}</span>
+                  <span className="text-base text-blue-300/60 ml-1">{period}</span>
                 </div>
+                <p className="text-xs text-blue-300/40 mb-4">
+                  + {plan.revSharePercent}% rev share after first {FREE_CARTS_THRESHOLD}
+                </p>
 
                 <div className="flex-1 space-y-3 mb-6">
                   {plan.features.map((feature, i) => (

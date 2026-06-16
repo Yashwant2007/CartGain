@@ -35,8 +35,10 @@ export interface Plan {
   id: string;
   name: string;
   price: number;
+  yearlyPrice: number;
   maxCarts: number;
   features: string[];
+  revSharePercent: number;
   recommended?: boolean;
 }
 
@@ -45,20 +47,24 @@ export const PLANS: Record<string, Plan> = {
     id: "starter",
     name: "Starter",
     price: 999,
+    yearlyPrice: 9990,
     maxCarts: 500,
+    revSharePercent: 3,
     features: [
       "All channels: SMS, WhatsApp, Email",
       "AI-powered recovery optimization",
       "Real-time analytics dashboard",
       "First 50 carts recovered at 0% revenue share",
-      "2.5% revenue share on recovered carts after first 50",
+      "3% revenue share on recovered carts after first 50",
     ],
   },
   GROWTH: {
     id: "growth",
     name: "Growth",
     price: 2999,
+    yearlyPrice: 29990,
     maxCarts: 3000,
+    revSharePercent: 2.5,
     features: [
       "Everything in Starter, plus:",
       "A/B testing for optimal messaging",
@@ -73,8 +79,10 @@ export const PLANS: Record<string, Plan> = {
   PRO: {
     id: "pro",
     name: "Pro",
-    price: 5999,
+    price: 8999,
+    yearlyPrice: 89990,
     maxCarts: 15000,
+    revSharePercent: 2,
     features: [
       "Everything in Growth, plus:",
       "White-label reports (your brand)",
@@ -82,14 +90,16 @@ export const PLANS: Record<string, Plan> = {
       "Custom integrations & webhooks",
       "SLA guarantee with priority support",
       "First 50 carts recovered at 0% revenue share",
-      "2.5% revenue share on recovered carts after first 50",
+      "2% revenue share on recovered carts after first 50",
     ],
   },
   ENTERPRISE: {
     id: "enterprise",
     name: "Enterprise",
     price: 0,
+    yearlyPrice: 0,
     maxCarts: Infinity,
+    revSharePercent: 0,
     features: [
       "Unlimited carts & recovery campaigns",
       "Everything in Pro",

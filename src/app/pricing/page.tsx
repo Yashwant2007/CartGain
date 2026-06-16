@@ -1,8 +1,13 @@
+'use client'
+
+import { useState } from 'react'
 import Link from 'next/link'
 import { CheckCircle2 } from 'lucide-react'
-import { PLANS, FREE_CARTS_THRESHOLD, REVENUE_SHARE_PERCENT } from '@/lib/payment'
+import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/payment'
 
 export default function PricingPage() {
+  const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly')
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
       {/* Nav */}
@@ -31,14 +36,43 @@ export default function PricingPage() {
           <div className="text-center mb-12">
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">Simple, Transparent Pricing</h1>
             <p className="text-lg text-blue-300/80 max-w-2xl mx-auto">
-              Pay a fixed monthly subscription based on your cart volume. First {FREE_CARTS_THRESHOLD} recovered carts free — then just {REVENUE_SHARE_PERCENT}% revenue share.
+              Pay a fixed monthly subscription based on your cart volume. First {FREE_CARTS_THRESHOLD} recovered carts free — then revenue share applies.
             </p>
+          </div>
+
+          {/* Billing Toggle */}
+          <div className="flex justify-center mb-12">
+            <div className="inline-flex items-center gap-3 bg-slate-800/50 border border-blue-700/30 p-1 rounded-full">
+              <button
+                onClick={() => setBilling('monthly')}
+                className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
+                  billing === 'monthly'
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
+                    : 'text-blue-300/60 hover:text-blue-300'
+                }`}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setBilling('yearly')}
+                className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
+                  billing === 'yearly'
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
+                    : 'text-blue-300/60 hover:text-blue-300'
+                }`}
+              >
+                Yearly
+                <span className="ml-2 text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">Save 17%</span>
+              </button>
+            </div>
           </div>
 
           {/* Plan Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-12">
             {Object.values(PLANS).filter(p => p.id !== 'enterprise').map((plan) => {
               const isGrowth = plan.recommended
+              const displayPrice = billing === 'yearly' ? Math.round(plan.yearlyPrice / 12) : plan.price
+              const period = billing === 'yearly' ? '/mo billed yearly' : '/mo'
 
               return (
                 <div
@@ -60,10 +94,13 @@ export default function PricingPage() {
                     Up to {plan.maxCarts === Infinity ? 'unlimited' : plan.maxCarts.toLocaleString('en-IN')} carts/mo
                   </p>
 
-                  <div className="mb-6">
-                    <span className="text-4xl font-bold text-white">₹{plan.price.toLocaleString('en-IN')}</span>
-                    <span className="text-base text-blue-300/60 ml-1">/mo</span>
+                  <div className="mb-2">
+                    <span className="text-4xl font-bold text-white">₹{displayPrice.toLocaleString('en-IN')}</span>
+                    <span className="text-base text-blue-300/60 ml-1">{period}</span>
                   </div>
+                  <p className="text-xs text-blue-300/40 mb-6">
+                    + {plan.revSharePercent}% revenue share on carts after first {FREE_CARTS_THRESHOLD}
+                  </p>
 
                   <ul className="space-y-3 mb-8 flex-grow">
                     {plan.features.map((feature, i) => (
@@ -108,7 +145,7 @@ export default function PricingPage() {
                   </p>
                   <p className="flex items-start space-x-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                    <span>After that, just <strong className="text-white">{REVENUE_SHARE_PERCENT}%</strong> of revenue recovered. We only make more when you do.</span>
+                    <span>Revenue share: <strong className="text-white">3% Starter</strong> / <strong className="text-white">2.5% Growth</strong> / <strong className="text-white">2% Pro</strong>. Lower rates on higher plans.</span>
                   </p>
                   <p className="flex items-start space-x-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
