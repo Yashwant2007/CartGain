@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
 async function handlePaymentCaptured(payment: any) {
   const userId = payment.notes?.userId;
   const plan = payment.notes?.plan;
+  const period = payment.notes?.period || 'monthly';
 
   if (!userId || !plan) return;
 
@@ -77,6 +78,7 @@ async function handlePaymentCaptured(payment: any) {
 
   const isMonthlyPlan = plan !== "credits";
   const smsToAdd = isMonthlyPlan ? planSmsCredits : Math.round((payment.amount || 0) / 100);
+  const periodDays = period === 'yearly' ? 365 : 30;
 
   const existingSubscription = await prisma.subscription.findFirst({
     where: { userId },
@@ -91,7 +93,7 @@ async function handlePaymentCaptured(payment: any) {
       updateData.plan = plan;
       updateData.smsCredits = smsToAdd;
       updateData.smsCreditsUsed = 0;
-      updateData.currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      updateData.currentPeriodEnd = new Date(Date.now() + periodDays * 24 * 60 * 60 * 1000);
     } else {
       updateData.smsCredits = { increment: smsToAdd };
     }
@@ -109,12 +111,12 @@ async function handlePaymentCaptured(payment: any) {
         status: "active",
         smsCredits: smsToAdd,
         currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        currentPeriodEnd: new Date(Date.now() + periodDays * 24 * 60 * 60 * 1000),
       },
     });
   }
 
-  console.log(`✅ Payment captured for user ${userId}, plan: ${plan}, credits: ${smsToAdd}`);
+  console.log(`✅ Payment captured for user ${userId}, plan: ${plan}, period: ${period}, credits: ${smsToAdd}`);
 }
 
 async function handlePaymentFailed(payment: any) {

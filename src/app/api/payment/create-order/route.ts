@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { plan, amount } = await req.json();
+    const { plan, amount, period } = await req.json();
 
     if (!plan || !amount || amount <= 0) {
       return NextResponse.json(
@@ -21,6 +21,8 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const billingPeriod = period || 'monthly';
 
     // Create Razorpay order
     const options = {
@@ -30,6 +32,7 @@ export async function POST(req: NextRequest) {
       notes: {
         userId: session.user.id,
         plan,
+        period: billingPeriod,
         email: session.user.email,
       },
     };

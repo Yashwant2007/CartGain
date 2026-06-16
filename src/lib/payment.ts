@@ -31,6 +31,11 @@ export function verifyWebhookSignature(body: string, signature: string): boolean
 export const FREE_CARTS_THRESHOLD = 50;
 export const REVENUE_SHARE_PERCENT = 2.5;
 
+export interface EstimatedRecovery {
+  min: number;
+  max: number;
+}
+
 export interface Plan {
   id: string;
   name: string;
@@ -39,6 +44,7 @@ export interface Plan {
   maxCarts: number;
   features: string[];
   revSharePercent: number;
+  estimatedRecovery: EstimatedRecovery;
   recommended?: boolean;
 }
 
@@ -50,6 +56,7 @@ export const PLANS: Record<string, Plan> = {
     yearlyPrice: 9990,
     maxCarts: 500,
     revSharePercent: 3,
+    estimatedRecovery: { min: 25000, max: 100000 },
     features: [
       "All channels: SMS, WhatsApp, Email",
       "AI-powered recovery optimization",
@@ -65,6 +72,7 @@ export const PLANS: Record<string, Plan> = {
     yearlyPrice: 29990,
     maxCarts: 3000,
     revSharePercent: 2.5,
+    estimatedRecovery: { min: 100000, max: 500000 },
     features: [
       "Everything in Starter, plus:",
       "A/B testing for optimal messaging",
@@ -83,6 +91,7 @@ export const PLANS: Record<string, Plan> = {
     yearlyPrice: 89990,
     maxCarts: 15000,
     revSharePercent: 2,
+    estimatedRecovery: { min: 500000, max: 2500000 },
     features: [
       "Everything in Growth, plus:",
       "White-label reports (your brand)",
@@ -100,6 +109,7 @@ export const PLANS: Record<string, Plan> = {
     yearlyPrice: 0,
     maxCarts: Infinity,
     revSharePercent: 0,
+    estimatedRecovery: { min: 2500000, max: 10000000 },
     features: [
       "Unlimited carts & recovery campaigns",
       "Everything in Pro",

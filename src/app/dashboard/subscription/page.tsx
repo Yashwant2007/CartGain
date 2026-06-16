@@ -93,10 +93,13 @@ export default function SubscriptionPage() {
       const plan = PLANS[planKey]
       if (!plan || plan.price === 0) return
 
+      const isYearly = billing === 'yearly'
+      const amount = isYearly ? plan.yearlyPrice : plan.price
+
       const res = await fetch('/api/payment/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: plan.id, amount: plan.price }),
+        body: JSON.stringify({ plan: plan.id, amount, period: billing }),
       })
 
       const data = await res.json()
@@ -210,6 +213,54 @@ export default function SubscriptionPage() {
         </div>
       </div>
 
+      {/* Usage Warning */}
+      {currentPlan.maxCarts < Infinity && totalRecoveredCarts > 0 && (
+        (() => {
+          const estimatedProcessed = Math.round(totalRecoveredCarts / 0.20)
+          const usagePercent = Math.min(100, (estimatedProcessed / currentPlan.maxCarts) * 100)
+          if (usagePercent < 60) return null
+
+          const nextPlan = Object.values(PLANS).find(p => p.price > currentPlan.price && p.id !== 'enterprise')
+          const isUrgent = usagePercent >= 90
+
+          return (
+            <div className={`rounded-xl p-5 border backdrop-blur-sm ${
+              isUrgent
+                ? 'bg-red-900/20 border-red-500/40'
+                : 'bg-amber-900/20 border-amber-500/40'
+            }`}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-white mb-1">
+                    {isUrgent ? 'Plan limit nearly reached' : 'Approaching plan limit'}
+                  </h3>
+                  <p className="text-xs text-blue-300/70">
+                    Estimated cart processing: {estimatedProcessed.toLocaleString('en-IN')} of {currentPlan.maxCarts.toLocaleString('en-IN')} ({Math.round(usagePercent)}%).
+                    {nextPlan ? ` Upgrade to ${nextPlan.name} to keep recovering without interruption.` : ''}
+                  </p>
+                </div>
+                {nextPlan && (
+                  <button
+                    onClick={() => {
+                      const nextKey = Object.keys(PLANS).find(k => PLANS[k].id === nextPlan.id) as PlanKey
+                      handlePurchase(nextKey)
+                    }}
+                    disabled={processing !== null}
+                    className={`px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                      isUrgent
+                        ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white hover:shadow-lg hover:shadow-red-500/50'
+                        : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg hover:shadow-amber-500/50'
+                    } ${processing ? 'opacity-50 cursor-wait' : ''}`}
+                  >
+                    Upgrade to {nextPlan.name}
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })()
+      )}
+
       {/* How Pricing Works */}
       <div className="bg-gradient-to-r from-slate-800/50 to-blue-900/30 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
         <div className="flex items-start space-x-4">
@@ -306,6 +357,9 @@ export default function SubscriptionPage() {
                   <span className="text-3xl font-bold text-white">₹{displayPrice.toLocaleString('en-IN')}</span>
                   <span className="text-base text-blue-300/60 ml-1">{period}</span>
                 </div>
+                <p className="text-xs text-emerald-400/80 mb-1">
+                  Recover <strong>₹{plan.estimatedRecovery.min.toLocaleString('en-IN')}-{plan.estimatedRecovery.max.toLocaleString('en-IN')}</strong>/mo typically
+                </p>
                 <p className="text-xs text-blue-300/40 mb-4">
                   + {plan.revSharePercent}% rev share after first {FREE_CARTS_THRESHOLD}
                 </p>

@@ -94,10 +94,13 @@ export default function PricingPage() {
                     Up to {plan.maxCarts === Infinity ? 'unlimited' : plan.maxCarts.toLocaleString('en-IN')} carts/mo
                   </p>
 
-                  <div className="mb-2">
+                  <div className="mb-1">
                     <span className="text-4xl font-bold text-white">₹{displayPrice.toLocaleString('en-IN')}</span>
                     <span className="text-base text-blue-300/60 ml-1">{period}</span>
                   </div>
+                  <p className="text-xs text-emerald-400/80 mb-1">
+                    Recover <strong>₹{plan.estimatedRecovery.min.toLocaleString('en-IN')}-{plan.estimatedRecovery.max.toLocaleString('en-IN')}</strong>/mo typically
+                  </p>
                   <p className="text-xs text-blue-300/40 mb-6">
                     + {plan.revSharePercent}% revenue share on carts after first {FREE_CARTS_THRESHOLD}
                   </p>
