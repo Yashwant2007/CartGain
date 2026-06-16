@@ -812,26 +812,6 @@ export default function HomePage() {
             })}
           </div>
 
-          {/* Enterprise */}
-          <div className="max-w-5xl mx-auto mb-12 bg-gradient-to-r from-slate-800/50 to-purple-900/20 border border-purple-700/30 rounded-xl p-6 sm:p-8 backdrop-blur-sm">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-lg sm:text-xl font-semibold text-white">Enterprise Plan</h3>
-                <p className="text-sm text-blue-300/80 mt-1">
-                  Processing more than 15,000 carts per month? We have a custom plan for you.
-                </p>
-                <ul className="flex flex-wrap gap-x-6 gap-y-1 mt-3 text-sm text-blue-300/60">
-                  <li className="flex items-center"><CheckCircle2 className="w-3 h-3 text-emerald-400 mr-1.5 flex-shrink-0" /> Unlimited carts</li>
-                  <li className="flex items-center"><CheckCircle2 className="w-3 h-3 text-emerald-400 mr-1.5 flex-shrink-0" /> On-premise option</li>
-                  <li className="flex items-center"><CheckCircle2 className="w-3 h-3 text-emerald-400 mr-1.5 flex-shrink-0" /> Volume discount</li>
-                </ul>
-              </div>
-              <a href="mailto:sales@cartgain.com" className="px-6 py-3 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:shadow-lg hover:shadow-purple-500/50 transition-all whitespace-nowrap text-sm">
-                Contact Sales
-              </a>
-            </div>
-          </div>
-
           {/* How Pricing Works */}
           <div className="max-w-5xl mx-auto bg-gradient-to-r from-slate-800/50 to-blue-900/30 border border-blue-700/30 rounded-xl p-6 sm:p-8 backdrop-blur-sm">
             <div className="flex items-start space-x-4">
