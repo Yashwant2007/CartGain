@@ -675,7 +675,7 @@ export default function HomePage() {
             <p className="text-blue-200 mb-4 text-xs sm:text-sm">Not seeing your platform? We support any e-commerce system with webhook support.</p>
             <a href="https://wa.me/918708718426" target="_blank" rel="noopener noreferrer" className="inline-block px-6 py-2 sm:py-3 border border-emerald-500 text-emerald-400 rounded-lg hover:bg-emerald-600/10 transition font-medium text-xs sm:text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400">
               <MessageSquare className="w-4 h-4 inline-block mr-1.5" />
-              WhatsApp Us
+              Contact Us
             </a>
           </div>
         </div>
@@ -749,8 +749,9 @@ export default function HomePage() {
             <p className="text-white font-semibold mb-4">Didn&apos;t find your answer?</p>
             <a href="https://wa.me/918708718426" target="_blank" className="inline-block px-6 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/50 transition font-medium">
               <MessageSquare className="w-4 h-4 inline-block mr-1.5" />
-              WhatsApp Us - We&apos;ll Explain Everything
+              Contact Us - We&apos;ll Explain Everything
             </a>
+            <p className="text-blue-300/60 text-xs mt-4">Or email us at <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a></p>
           </div>
         </div>
       </section>
@@ -1000,7 +1001,7 @@ export default function HomePage() {
                 onClick={closeModal}
               >
                 <MessageSquare className="w-4 h-4" />
-                WhatsApp Us
+                Contact Us
               </a>
             </div>
           </div>
