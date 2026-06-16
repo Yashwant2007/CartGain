@@ -2,6 +2,9 @@ import prisma from '@/lib/db'
 import { sendEmail, EmailTemplates } from '@/lib/services/email'
 import { sendSMS, sanitizePhoneNumber } from '@/lib/services/sms'
 import { sendWhatsAppMessage } from '@/lib/services/whatsapp'
+import { FREE_CARTS_THRESHOLD, PLANS } from '@/lib/payment'
+
+const PAID_PLANS = Object.values(PLANS).filter(p => p.price > 0).map(p => p.id)
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$',
@@ -40,6 +43,25 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
 
   for (const campaign of campaigns) {
     const { store } = campaign
+
+    // Check subscription & free cart limit
+    const subscription = await prisma.subscription.findFirst({
+      where: { userId: campaign.userId },
+    })
+
+    const isPaidUser = subscription && PAID_PLANS.includes(subscription.plan) && subscription.status === 'active'
+
+    if (!isPaidUser) {
+      const recoveredCount = await prisma.recoveredCart.count({
+        where: { storeId: store.id },
+      })
+
+      if (recoveredCount >= FREE_CARTS_THRESHOLD) {
+        console.log(`⏸️ Store ${store.id}: ${recoveredCount} carts recovered (limit ${FREE_CARTS_THRESHOLD}). Free trial exhausted, skipping.`)
+        continue
+      }
+    }
+
     const channels = campaign.channels.length > 0 ? campaign.channels : ['email']
     const sendDelayMs = campaign.sendDelay * 60 * 1000
     const followUpDelayMs = campaign.followUpDelay * 60 * 1000
