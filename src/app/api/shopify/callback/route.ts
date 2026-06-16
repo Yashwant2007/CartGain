@@ -72,6 +72,36 @@ export async function GET(req: NextRequest) {
       console.error('Failed to set up Shopify webhooks:', webhookError)
     }
 
+    // Auto-create default campaign
+    try {
+      const targetStore = storeId
+        ? await prisma.store.findUnique({ where: { id: storeId } })
+        : await prisma.store.findFirst({ where: { domain: shop } })
+
+      if (targetStore) {
+        const existingCampaigns = await prisma.campaign.count({ where: { storeId: targetStore.id } })
+
+        if (existingCampaigns === 0) {
+          await prisma.campaign.create({
+            data: {
+              storeId: targetStore.id,
+              userId: targetStore.userId,
+              name: 'Default Recovery Campaign',
+              channels: ['email', 'sms', 'whatsapp'],
+              aiOptimized: true,
+              sendDelay: 15,
+              followUpDelay: 180,
+              maxFollowUps: 2,
+              isActive: true,
+            },
+          })
+          console.log(`✅ Auto-created default campaign for store ${targetStore.id}`)
+        }
+      }
+    } catch (campaignError) {
+      console.error('Failed to auto-create campaign:', campaignError)
+    }
+
     return NextResponse.redirect(new URL('/dashboard/settings?shopify_connected=true', req.url))
   } catch (error) {
     console.error('Shopify callback error:', error)
