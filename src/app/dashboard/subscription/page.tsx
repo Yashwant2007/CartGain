@@ -28,6 +28,7 @@ export default function SubscriptionPage() {
   const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly')
   const [razorpayLoaded, setRazorpayLoaded] = useState(false)
   const [processing, setProcessing] = useState<string | null>(null)
+  const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null)
   const [totalRecoveredCarts, setTotalRecoveredCarts] = useState(0)
   const [monthlyRecoveredRevenue, setMonthlyRecoveredRevenue] = useState(0)
 
@@ -75,15 +76,28 @@ export default function SubscriptionPage() {
     }
   }, [])
 
-  const currentPlanKey = (subscription?.plan || 'starter').toLowerCase() as PlanKey
-  const normalizedKey = Object.keys(PLANS).find(k => PLANS[k].id === currentPlanKey) as PlanKey || 'STARTER'
-  const currentPlan = PLANS[normalizedKey] || PLANS.STARTER
-  const isEnterprise = currentPlanKey === 'enterprise'
+  const PAID_PLANS = Object.values(PLANS).filter(p => p.price > 0).map(p => p.id)
+  const isPaidUser = !!(subscription && PAID_PLANS.includes(subscription.plan) && subscription.status === 'active')
+  const isFreeUser = !subscription || subscription.plan === 'free' || !PAID_PLANS.includes(subscription.plan)
+
+  const currentPlanKey = isPaidUser
+    ? (subscription!.plan.toLowerCase() as PlanKey)
+    : null
+  const normalizedKey = currentPlanKey
+    ? (Object.keys(PLANS).find(k => PLANS[k].id === currentPlanKey) as PlanKey)
+    : null
+  const currentPlan = normalizedKey ? PLANS[normalizedKey] : null
+
+  const isYearly = subscription?.currentPeriodEnd
+    ? (new Date(subscription.currentPeriodEnd).getTime() - Date.now()) > 45 * 24 * 60 * 60 * 1000
+    : false
+
   const cartsUsed = totalRecoveredCarts
   const freeCartsRemaining = Math.max(0, FREE_CARTS_THRESHOLD - cartsUsed)
   const revShareCarts = Math.max(0, cartsUsed - FREE_CARTS_THRESHOLD)
   const avgCartValue = monthlyRecoveredRevenue > 0 && cartsUsed > 0 ? Math.round(monthlyRecoveredRevenue / cartsUsed) : 1000
-  const estimatedRevShare = revShareCarts * avgCartValue * (currentPlan.revSharePercent / 100)
+  const revSharePercent = currentPlan ? currentPlan.revSharePercent : 0
+  const estimatedRevShare = revShareCarts * avgCartValue * (revSharePercent / 100)
 
   const handlePurchase = async (planKey: PlanKey) => {
     if (!razorpayLoaded) return
@@ -112,9 +126,23 @@ export default function SubscriptionPage() {
         name: 'CartGain',
         description: `${plan.name} Plan`,
         order_id: data.orderId,
-        handler: () => { window.location.reload() },
-        prefill: { name: '', email: '', contact: '' },
+        handler: (response: any) => {
+          console.log('Payment successful:', response);
+          setPurchaseSuccess(plan.name)
+          setTimeout(() => window.location.reload(), 2000)
+        },
+        prefill: { 
+          name: '', 
+          email: '', 
+          contact: '' 
+        },
         theme: { color: '#22D3EE' },
+        modal: {
+          ondismiss: function() {
+            console.log('Payment dismissed');
+            setProcessing(null);
+          }
+        }
       }
 
       const razorpay = new (window as any).Razorpay(options)
@@ -137,6 +165,17 @@ export default function SubscriptionPage() {
 
   return (
     <div className="space-y-6">
+      {/* Success Overlay */}
+      {purchaseSuccess && (
+        <div className="bg-emerald-900/30 border border-emerald-500/40 rounded-xl p-6 backdrop-blur-sm text-center">
+          <div className="text-4xl mb-3">🎉</div>
+          <h2 className="text-xl font-bold text-white mb-2">Welcome to {purchaseSuccess}!</h2>
+          <p className="text-sm text-emerald-300/80 mb-3">Your payment was successful. Recovery will continue without interruption.</p>
+          <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-xs text-blue-300/60 mt-3">Refreshing your plan details...</p>
+        </div>
+      )}
+
       <div>
         <h1 className="text-2xl font-bold text-white">Subscription</h1>
         <p className="text-blue-300/80 mt-1 text-sm">Choose a plan that fits your store size</p>
@@ -150,47 +189,90 @@ export default function SubscriptionPage() {
               <Shield className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">{currentPlan.name}</h2>
-              <p className="text-sm text-blue-300/60">
-                {`₹${currentPlan.price.toLocaleString('en-IN')}/mo`}
-                {subscription?.currentPeriodEnd && (
-                  <> &middot; Renews {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-IN')}</>
-                )}
-              </p>
+              {isPaidUser && currentPlan ? (
+                <>
+                  <h2 className="text-lg font-semibold text-white">{currentPlan.name}</h2>
+                  <p className="text-sm text-blue-300/60">
+                    {isYearly ? `₹${currentPlan.yearlyPrice.toLocaleString('en-IN')}/yr` : `₹${currentPlan.price.toLocaleString('en-IN')}/mo`}
+                    {subscription?.currentPeriodEnd && (
+                      <> &middot; Renews {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-IN')}</>
+                    )}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-lg font-semibold text-white">Free Trial</h2>
+                  <p className="text-sm text-blue-300/60">
+                    {freeCartsRemaining > 0
+                      ? `${freeCartsRemaining} of ${FREE_CARTS_THRESHOLD} free carts remaining`
+                      : 'Free carts exhausted — pick a plan to continue'}
+                  </p>
+                </>
+              )}
             </div>
           </div>
           <span className={`px-3 py-1 rounded-full text-sm font-medium border ${
-            subscription?.status === 'active'
+            isPaidUser
               ? 'bg-emerald-600/40 text-emerald-300 border-emerald-500/40'
-              : 'bg-slate-600/40 text-blue-300 border-blue-700/30'
+              : 'bg-amber-600/40 text-amber-300 border-amber-500/40'
           }`}>
-            {subscription?.status === 'active' ? 'Active' : 'Pending'}
+            {isPaidUser ? 'Active' : freeCartsRemaining > 0 ? 'Trial' : 'Trial Exhausted'}
           </span>
         </div>
 
-        {/* Free Carts Progress */}
-        <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-5 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2">
-              <Zap className="w-4 h-4 text-amber-400" />
-              <p className="text-sm text-blue-300/80 font-medium">Free Recovery Trial</p>
+        {/* Free Carts Progress (free users only) */}
+        {!isPaidUser && (
+          <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-5 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-2">
+                <Zap className="w-4 h-4 text-amber-400" />
+                <p className="text-sm text-blue-300/80 font-medium">Free Recovery Trial</p>
+              </div>
+              <p className="text-sm text-blue-300/60">
+                {Math.min(cartsUsed, FREE_CARTS_THRESHOLD)} / {FREE_CARTS_THRESHOLD} carts
+              </p>
             </div>
-            <p className="text-sm text-blue-300/60">
-              {Math.min(cartsUsed, FREE_CARTS_THRESHOLD)} / {FREE_CARTS_THRESHOLD} carts
+            <div className="w-full bg-slate-600/50 rounded-full h-3 mb-1">
+              <div
+                className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-full h-3 transition-all duration-500"
+                style={{ width: `${Math.min((cartsUsed / FREE_CARTS_THRESHOLD) * 100, 100)}%` }}
+              />
+            </div>
+            <p className="text-xs text-blue-300/60 mt-2">
+              {freeCartsRemaining > 0
+                ? `${freeCartsRemaining} more carts recovered at 0% revenue share`
+                : `50 free carts used. Revenue share is now active on recovered revenue.`}
             </p>
           </div>
-          <div className="w-full bg-slate-600/50 rounded-full h-3 mb-1">
-            <div
-              className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-full h-3 transition-all duration-500"
-              style={{ width: `${Math.min((cartsUsed / FREE_CARTS_THRESHOLD) * 100, 100)}%` }}
-            />
+        )}
+
+        {/* Plan Usage (paid users only) */}
+        {isPaidUser && currentPlan && (
+          <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-5 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-2">
+                <Zap className="w-4 h-4 text-cyan-400" />
+                <p className="text-sm text-blue-300/80 font-medium">Monthly Cart Usage</p>
+              </div>
+              <p className="text-sm text-blue-300/60">
+                {cartsUsed.toLocaleString('en-IN')} / {currentPlan.maxCarts === Infinity ? 'Unlimited' : currentPlan.maxCarts.toLocaleString('en-IN')} carts
+              </p>
+            </div>
+            {currentPlan.maxCarts < Infinity && (
+              <>
+                <div className="w-full bg-slate-600/50 rounded-full h-3 mb-1">
+                  <div
+                    className="bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full h-3 transition-all duration-500"
+                    style={{ width: `${Math.min((cartsUsed / currentPlan.maxCarts) * 100, 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-blue-300/60 mt-2">
+                  {currentPlan.revSharePercent}% revenue share on recovered revenue
+                </p>
+              </>
+            )}
           </div>
-          <p className="text-xs text-blue-300/60 mt-2">
-            {freeCartsRemaining > 0
-              ? `${freeCartsRemaining} more carts recovered at 0% revenue share — then ${currentPlan.revSharePercent}% applies`
-              : `50 free carts used. ${currentPlan.revSharePercent}% revenue share is now active on recovered revenue.`}
-          </p>
-        </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -213,8 +295,8 @@ export default function SubscriptionPage() {
         </div>
       </div>
 
-      {/* Usage Warning */}
-      {currentPlan.maxCarts < Infinity && totalRecoveredCarts > 0 && (
+      {/* Usage Warning (paid users only) */}
+      {isPaidUser && currentPlan && currentPlan.maxCarts < Infinity && totalRecoveredCarts > 0 && (
         (() => {
           const estimatedProcessed = Math.round(totalRecoveredCarts / 0.20)
           const usagePercent = Math.min(100, (estimatedProcessed / currentPlan.maxCarts) * 100)
@@ -321,7 +403,7 @@ export default function SubscriptionPage() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Object.values(PLANS).filter(p => p.id !== 'enterprise').map((plan) => {
-            const isCurrent = currentPlan.id === plan.id
+            const isCurrent = isPaidUser && currentPlan?.id === plan.id
             const isGrowth = plan.recommended
             const displayPrice = billing === 'yearly' ? Math.round(plan.yearlyPrice / 12) : plan.price
             const period = billing === 'yearly' ? '/mo billed yearly' : '/mo'

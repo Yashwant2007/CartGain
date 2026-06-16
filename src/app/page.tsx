@@ -931,8 +931,9 @@ export default function HomePage() {
             <div>
               <h4 className="font-semibold mb-4 text-sm sm:text-base">Legal</h4>
               <ul className="space-y-2 text-gray-400 text-xs sm:text-sm">
-                <li><Link href="/privacy" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Privacy</Link></li>
-                <li><Link href="/terms" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Terms</Link></li>
+                <li><Link href="/privacy" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Privacy Policy</Link></li>
+                <li><Link href="/terms" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Terms of Service</Link></li>
+                <li><Link href="/dpa" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">DPA</Link></li>
                 <li><Link href="/contact" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Contact</Link></li>
               </ul>
             </div>

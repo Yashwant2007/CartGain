@@ -26,10 +26,11 @@ export async function sendWhatsAppMessage({
   }
 
   try {
+    const formattedTo = formatWhatsAppPhone(to)
     const body: any = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
-      to,
+      to: formattedTo,
     }
 
     if (templateName) {
@@ -128,16 +129,11 @@ export const WhatsAppTemplates = {
 }
 
 export function formatWhatsAppPhone(phone: string): string {
-  // Remove all non-numeric characters except +
   const sanitized = phone.replace(/[^\d+]/g, '')
 
-  // Add country code if missing (default to US +1)
   if (!sanitized.startsWith('+')) {
     if (sanitized.length === 10) {
-      return `+1${sanitized}`
-    }
-    if (sanitized.length === 11 && sanitized.startsWith('1')) {
-      return `+${sanitized}`
+      return `+91${sanitized}`
     }
     return `+${sanitized}`
   }
