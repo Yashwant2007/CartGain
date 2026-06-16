@@ -29,7 +29,7 @@ export default function ContactPage() {
             </div>
             <h2 className="text-lg font-semibold text-white mb-2">General Inquiries</h2>
             <p className="text-sm text-blue-300/70 mb-3">For support, sales, or general questions</p>
-            <a href="mailto:hello@cartgain.io" className="text-cyan-400 hover:underline font-medium">hello@cartgain.io</a>
+            <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline font-medium">CartGain192007@gmail.com</a>
           </div>
 
           <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
@@ -38,7 +38,7 @@ export default function ContactPage() {
             </div>
             <h2 className="text-lg font-semibold text-white mb-2">Legal &amp; Privacy</h2>
             <p className="text-sm text-blue-300/70 mb-3">For privacy, DPA, or legal matters</p>
-            <a href="mailto:legal@cartgain.io" className="text-cyan-400 hover:underline font-medium">legal@cartgain.io</a>
+            <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline font-medium">CartGain192007@gmail.com</a>
           </div>
 
           <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
@@ -47,7 +47,7 @@ export default function ContactPage() {
             </div>
             <h2 className="text-lg font-semibold text-white mb-2">Grievance Officer</h2>
             <p className="text-sm text-blue-300/70 mb-3">For complaints or grievance redressal</p>
-            <a href="mailto:grievance@cartgain.io" className="text-cyan-400 hover:underline font-medium">grievance@cartgain.io</a>
+            <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline font-medium">CartGain192007@gmail.com</a>
           </div>
 
           <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
