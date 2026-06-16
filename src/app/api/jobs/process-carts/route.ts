@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
   try {
     // Verify authorization
-    const configuredSecret = process.env.JOB_SECRET
+    const configuredSecret = (process.env.JOB_SECRET || '').replace(/^["']|["']$/g, '').trim()
     if (configuredSecret) {
       const incomingSecret = request.headers.get('x-job-secret')
       if (incomingSecret !== configuredSecret) {
