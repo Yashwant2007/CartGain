@@ -923,7 +923,6 @@ export default function HomePage() {
             <div>
               <h4 className="font-semibold mb-4 text-sm sm:text-base">Company</h4>
               <ul className="space-y-2 text-gray-400 text-xs sm:text-sm">
-                <li><a href="https://cal.com/cartgain" target="_blank" rel="noopener noreferrer" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Book a Call</a></li>
                 <li><a href="mailto:hello@cartgain.io" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Email Us</a></li>
                 <li><Link href="/community" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Community</Link></li>
               </ul>
