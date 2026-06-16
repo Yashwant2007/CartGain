@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import Badge from '@/components/Badge'
 import FeatureCard from '@/components/FeatureCard'
 import { useState, useEffect } from 'react'
+import { PLANS, FREE_CARTS_THRESHOLD, REVENUE_SHARE_PERCENT } from '@/lib/payment'
 
 // Integration modal data
 const INTEGRATION_DETAILS = {
@@ -202,17 +203,18 @@ export default function HomePage() {
                   muted
                   loop
                   playsInline
+                  poster="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=1200&h=600&fit=crop"
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     console.error('Video loading error:', e);
                   }}
-                />
-                {/* Fallback for video loading */}
-                <noscript>
-                  <div className="w-full h-full bg-slate-700 flex items-center justify-center">
-                    <span className="text-white text-sm">Video not supported</span>
-                  </div>
-                </noscript>
+                >
+                  <img
+                    src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=1200&h=600&fit=crop"
+                    alt="Cart recovery preview"
+                    className="w-full h-full object-cover"
+                  />
+                </video>
               </div>
 
             </div>
@@ -232,11 +234,18 @@ export default function HomePage() {
                     src="/videos/demo.mp4"
                     controls
                     controlsList="nodownload"
+                    poster="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=600&fit=crop"
                     className="rounded-lg w-full h-auto border border-blue-700/30"
                     onError={(e) => {
                       console.error('Demo video loading error:', e);
                     }}
-                  />
+                  >
+                    <img
+                      src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=600&fit=crop"
+                      alt="Dashboard demo preview"
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  </video>
                 </div>
               </div>
             </div>
@@ -745,60 +754,112 @@ export default function HomePage() {
       <section id="pricing" className="py-12 sm:py-16 md:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-950 to-blue-950/40" aria-labelledby="pricing-heading">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12 sm:mb-16">
-            <h2 id="pricing-heading" className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">Aligned for Success</h2>
-            <p className="text-lg sm:text-xl text-blue-100 max-w-2xl mx-auto">We only win when you win. That&apos;s why we align our pricing with your revenue.</p>
+            <h2 id="pricing-heading" className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">Simple, Transparent Pricing</h2>
+            <p className="text-lg sm:text-xl text-blue-100 max-w-2xl mx-auto">Pay a fixed monthly subscription based on your cart volume. First {FREE_CARTS_THRESHOLD} recovered carts free — then just {REVENUE_SHARE_PERCENT}% revenue share.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 max-w-3xl mx-auto mb-12">
-            {/* Free Trial */}
-            <div className="bg-slate-800/40 rounded-2xl p-6 sm:p-8 border-2 border-blue-700/50 hover:border-blue-500/70 transition flex flex-col h-full">
-              <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">Free Trial</h3>
-              <p className="text-blue-100 mb-6 sm:mb-8 text-sm sm:text-base">Perfect for testing</p>
-              <div className="mb-6 sm:mb-8">
-                <p className="text-3xl sm:text-4xl font-bold text-white">₹0</p>
-                <p className="text-blue-200 text-xs sm:text-sm">First month included</p>
-              </div>
-              <ul className="space-y-3 sm:space-y-4 mb-6 sm:mb-8 flex-grow">
-                {['Full feature access', 'Multi-channel recovery', 'Basic analytics', '50+ free recovered carts'].map((item, i) => (
-                  <li key={i} className="flex items-center gap-3 text-blue-100 text-sm sm:text-base">
-                    <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 flex-shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <Link href="/signup" className="w-full py-3 border-2 border-primary-600 text-primary-600 font-semibold rounded-lg hover:bg-primary-50 transition text-center text-sm sm:text-base min-h-12 inline-flex items-center justify-center">
-                Start Free
-              </Link>
-            </div>
+          {/* Plan Comparison */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto mb-12">
+            {Object.values(PLANS).filter(p => p.id !== 'enterprise').map((plan) => {
+              const isGrowth = plan.recommended
 
-            {/* Pro Plan */}
-            <div className="bg-gradient-to-br from-blue-900/40 to-blue-800/20 rounded-2xl p-6 sm:p-8 border-2 border-blue-500/60 relative flex flex-col h-full">
-              <div className="absolute top-0 right-0 bg-blue-500 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-bl-lg rounded-tr-2xl text-xs sm:text-sm font-bold">RECOMMENDED</div>
-              <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">Pro Plan</h3>
-              <p className="text-blue-100 mb-6 sm:mb-8 text-sm sm:text-base">For serious skincare brands</p>
-              <div className="mb-6 sm:mb-8">
-                <p className="text-3xl sm:text-4xl font-bold text-white">₹25,000<span className="text-base sm:text-lg text-blue-200">/mo</span></p>
-                <p className="text-blue-200 text-xs sm:text-sm">+ 2-3% of your recovered revenue</p>
+              return (
+                <div
+                  key={plan.id}
+                  className={`relative rounded-2xl p-6 sm:p-8 flex flex-col ${
+                    isGrowth
+                      ? 'bg-gradient-to-br from-blue-900/40 to-blue-800/20 border-2 border-amber-500/60'
+                      : 'bg-slate-800/40 border-2 border-blue-700/50 hover:border-blue-500/70'
+                  } transition h-full`}
+                >
+                  {isGrowth && (
+                    <span className="absolute -top-3 right-4 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold rounded-full">
+                      Recommended
+                    </span>
+                  )}
+
+                  <h3 className="text-xl sm:text-2xl font-bold text-white mb-1">{plan.name}</h3>
+                  <p className="text-sm text-blue-300/80 mb-4">
+                    Up to {plan.maxCarts === Infinity ? 'unlimited' : plan.maxCarts.toLocaleString('en-IN')} carts/mo
+                  </p>
+
+                  <div className="mb-6">
+                    <span className="text-3xl sm:text-4xl font-bold text-white">₹{plan.price.toLocaleString('en-IN')}</span>
+                    <span className="text-base text-blue-300/60 ml-1">/mo</span>
+                  </div>
+
+                  <ul className="space-y-3 mb-8 flex-grow">
+                    {plan.features.map((feature, i) => (
+                      <li key={i} className="flex items-start gap-3 text-blue-100 text-sm sm:text-base">
+                        <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 mt-0.5 flex-shrink-0" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Link
+                    href="/signup"
+                    className={`w-full py-3 rounded-lg font-semibold text-center text-sm sm:text-base min-h-12 inline-flex items-center justify-center transition-all ${
+                      isGrowth
+                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg hover:shadow-amber-500/50'
+                        : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:shadow-lg hover:shadow-cyan-500/50'
+                    }`}
+                  >
+                    Get Started Free
+                  </Link>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Enterprise */}
+          <div className="max-w-5xl mx-auto mb-12 bg-gradient-to-r from-slate-800/50 to-purple-900/20 border border-purple-700/30 rounded-xl p-6 sm:p-8 backdrop-blur-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg sm:text-xl font-semibold text-white">Enterprise Plan</h3>
+                <p className="text-sm text-blue-300/80 mt-1">
+                  Processing more than 15,000 carts per month? We have a custom plan for you.
+                </p>
+                <ul className="flex flex-wrap gap-x-6 gap-y-1 mt-3 text-sm text-blue-300/60">
+                  <li className="flex items-center"><CheckCircle2 className="w-3 h-3 text-emerald-400 mr-1.5 flex-shrink-0" /> Unlimited carts</li>
+                  <li className="flex items-center"><CheckCircle2 className="w-3 h-3 text-emerald-400 mr-1.5 flex-shrink-0" /> On-premise option</li>
+                  <li className="flex items-center"><CheckCircle2 className="w-3 h-3 text-emerald-400 mr-1.5 flex-shrink-0" /> Volume discount</li>
+                </ul>
               </div>
-              <ul className="space-y-3 sm:space-y-4 mb-6 sm:mb-8 flex-grow">
-                {['Unlimited abandoned carts', 'All recovery channels', 'A/B testing', 'Advanced analytics', 'Founder community access', 'Priority support'].map((item, i) => (
-                  <li key={i} className="flex items-center gap-3 text-white font-medium text-sm sm:text-base">
-                    <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <a href="https://cal.com/cartgain" target="_blank" rel="noopener noreferrer" className="w-full py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 transition text-center block text-sm sm:text-base min-h-12 inline-flex items-center justify-center">
-                Schedule Demo
+              <a href="mailto:sales@cartgain.com" className="px-6 py-3 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:shadow-lg hover:shadow-purple-500/50 transition-all whitespace-nowrap text-sm">
+                Contact Sales
               </a>
             </div>
           </div>
 
-          <div className="mt-8 sm:mt-12 bg-blue-900/30 border border-blue-700/40 rounded-xl p-6 sm:p-8 text-center">
-            <p className="text-white font-semibold mb-2 text-sm sm:text-base">Why Revenue Share?</p>
-            <p className="text-blue-100 text-xs sm:text-sm sm:text-base leading-relaxed">
-              If you recover ₹5L/month in additional revenue, we take 2-3% (₹10-15K). This means <strong>we&apos;re obsessed with maximizing your recovery rate</strong>. We&apos;re not just selling software—we&apos;re your growth partner.
-            </p>
+          {/* How Pricing Works */}
+          <div className="max-w-5xl mx-auto bg-gradient-to-r from-slate-800/50 to-blue-900/30 border border-blue-700/30 rounded-xl p-6 sm:p-8 backdrop-blur-sm">
+            <div className="flex items-start space-x-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-bold text-lg">%</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-2">Simple, transparent pricing</h3>
+                <div className="space-y-2 text-sm text-blue-300/80">
+                  <p className="flex items-start space-x-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    <span>Pay a fixed monthly subscription based on your cart volume</span>
+                  </p>
+                  <p className="flex items-start space-x-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    <span>First <strong className="text-white">{FREE_CARTS_THRESHOLD} recovered carts</strong> — zero revenue share. We prove our value first.</span>
+                  </p>
+                  <p className="flex items-start space-x-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    <span>After that, just <strong className="text-white">{REVENUE_SHARE_PERCENT}%</strong> of revenue recovered. We only make more when you do.</span>
+                  </p>
+                  <p className="flex items-start space-x-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    <span>No hidden fees, no per-message charges, no setup costs</span>
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>

@@ -13,11 +13,6 @@ const nextConfig = {
   async redirects() {
     return [
       {
-        source: '/pricing',
-        destination: '/#pricing',
-        permanent: true,
-      },
-      {
         source: '/auth/reset-password',
         destination: '/reset-password',
         permanent: true,
