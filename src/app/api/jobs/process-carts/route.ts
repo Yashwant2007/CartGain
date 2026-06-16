@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { addCartProcessingJob } from '@/lib/queue/processor'
+import { processAbandonedCarts } from '@/lib/jobs/processAbandonedCarts'
 
 export const dynamic = 'force-dynamic'
 
@@ -7,7 +8,6 @@ export async function POST(request: NextRequest) {
   try {
     // Verify authorization
     const configuredSecret = process.env.JOB_SECRET
-
     if (configuredSecret) {
       const incomingSecret = request.headers.get('x-job-secret')
       if (incomingSecret !== configuredSecret) {
@@ -15,14 +15,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Add job to Bull queue manually
-    const job = await addCartProcessingJob()
-
-    return NextResponse.json({
-      message: 'Cart processing job queued',
-      jobId: job.id,
-      status: 'queued',
-    })
+    // Try Redis queue first, fall back to direct processing
+    try {
+      const job = await addCartProcessingJob()
+      return NextResponse.json({
+        message: 'Cart processing job queued',
+        jobId: job.id,
+        status: 'queued',
+      })
+    } catch {
+      console.log('Redis not available — processing carts directly')
+      const result = await processAbandonedCarts(25)
+      return NextResponse.json({
+        message: 'Carts processed directly',
+        status: 'processed',
+        result,
+      })
+    }
   } catch (error) {
     console.error('Process carts job error:', error)
     return NextResponse.json(
@@ -32,16 +41,20 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET endpoint to check job status
+// GET endpoint — used by Vercel Cron Jobs to process carts
 export async function GET(request: NextRequest) {
   try {
     const jobId = request.nextUrl.searchParams.get('jobId')
 
     if (!jobId) {
-      return NextResponse.json(
-        { message: 'jobId parameter required' },
-        { status: 400 }
-      )
+      // No jobId — cron trigger, process carts directly
+      console.log('Cron trigger: processing abandoned carts')
+      const result = await processAbandonedCarts(25)
+      return NextResponse.json({
+        message: 'Carts processed',
+        status: 'processed',
+        result,
+      })
     }
 
     const { getQueue } = await import('@/lib/queue')
