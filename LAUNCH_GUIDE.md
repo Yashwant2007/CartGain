@@ -35,13 +35,13 @@ npm run dev
 ```
 
 #### 2. Service Accounts to Create
-| Service | Purpose | Cost |
-|---------|---------|------|
+| Service | Purpose | Cost (India 2026) |
+|---------|---------|-------------------|
 | **Vercel** | Hosting | Free tier |
-| **PlanetScale/Supabase** | PostgreSQL Database | Free tier |
+| **Supabase** | PostgreSQL Database | Free tier |
 | **Upstash** | Redis (caching/queues) | Free tier |
-| **Twilio** | SMS delivery | Pay-per-use |
-| **Meta Business** | WhatsApp API | Pay-per-use |
+| **Twilio** | SMS delivery | ~₹0.70–1.00/SMS; needs ₹1,000 initial credit |
+| **Meta Business (WhatsApp API)** | WhatsApp messages | **₹0.86/marketing msg** (cart recovery); ₹0.115/utility; 1,000 service convos/mo free. Pay-as-you-go via Meta billing |
 | **SendGrid/Resend** | Email delivery | Free 100/day |
 | **Razorpay** | Payments | 2% domestic, 3% intl |
 | **Google Cloud** | OAuth authentication | Free |
@@ -51,6 +51,27 @@ npm run dev
 - [ ] Set up email (hi@recoverflow.com via Google Workspace or Zoho)
 - [ ] Create social media handles (@recoverflow on Twitter, LinkedIn)
 - [ ] Design logo (use Canva or Figma)
+
+---
+
+## 💰 Upfront & Monthly Costs (India, INR)
+
+| Item | Upfront | Monthly Burn (0 revenue) |
+|------|---------|--------------------------|
+| Domain (GoDaddy/Namecheap) | **₹800/yr** | ₹67 |
+| Twilio SMS credit | **₹1,000** (lasts ~1,000–1,400 SMS) | — |
+| WhatsApp API (Meta) | **₹0** (pay-as-you-go) | ₹0 until you send messages |
+| OpenAI (optional) | **₹500** (if using AI messages) | varies by usage |
+| **Total minimum** | **₹1,800** | **₹67/mo** |
+
+**Per-message costs you'll pay (recoverflow pays Meta/Twilio):**
+- SMS (Twilio India): ~₹0.70–1.00 each
+- WhatsApp marketing: ~₹0.86 each (Meta Cloud API)
+- Email: Free (SendGrid 100/day free tier)
+
+**Default 3-message sequence (WhatsApp → SMS → Email) costs you ~₹1.56–1.86/cart.** If a Starter store processes its 500 cart limit, your cost = ~₹780–930. Their plan is ₹999/mo. That's why plan caps matter.
+
+**Breakeven:** 1 paying Starter customer (₹999/mo) covers domain + ~1,100 WhatsApp messages.
 
 ---
 

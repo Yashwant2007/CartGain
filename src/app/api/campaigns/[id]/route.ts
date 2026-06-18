@@ -60,28 +60,24 @@ export async function DELETE(
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
-    // Delete associated messages first (due to foreign key constraint)
-    await prisma.message.deleteMany({
-      where: { campaignId: params.id },
-    })
-
-    // Delete associated AB tests
-    await prisma.aBTest.deleteMany({
-      where: { campaignId: params.id },
-    })
-
-    // Delete the campaign
-    await prisma.campaign.delete({
-      where: { id: params.id },
-    })
+    // Delete in correct order to avoid FK constraints
+    await prisma.$transaction([
+      prisma.message.deleteMany({ where: { campaignId: params.id } }),
+      prisma.aBTest.deleteMany({ where: { campaignId: params.id } }),
+      prisma.campaign.delete({ where: { id: params.id } }),
+    ])
 
     return NextResponse.json(
       { message: 'Campaign deleted successfully' },
       { status: 200 }
     )
-  } catch (error) {
+  } catch (error: any) {
     console.error('Delete campaign error:', error)
-    return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })
+    const isNotFound = error?.code === 'P2025'
+    return NextResponse.json(
+      { message: isNotFound ? 'Campaign not found' : 'Something went wrong' },
+      { status: isNotFound ? 404 : 500 }
+    )
   }
 }
 

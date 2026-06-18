@@ -6,10 +6,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
   try {
     const { email } = await request.json()
-
-    if (!email) {
-      return NextResponse.json({ error: 'Email is required' }, { status: 400 })
-    }
+    if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
 
     const html = EmailTemplates.abandoned(
       'Test User',
@@ -30,14 +27,10 @@ export async function POST(request: NextRequest) {
       text: 'This is a test email from CartGain to verify email delivery.',
     })
 
-    return NextResponse.json({
-      message: result.success ? 'Email sent successfully' : 'Email logged (no credentials)',
-      ...result,
-    })
-  } catch (error) {
-    console.error('Test email error:', error)
+    return NextResponse.json({ ...result })
+  } catch (error: any) {
     return NextResponse.json(
-      { error: 'Failed to send test email' },
+      { success: false, error: error.message },
       { status: 500 }
     )
   }

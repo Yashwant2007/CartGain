@@ -4,9 +4,10 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider     = "postgresql"
+  url          = env("DATABASE_URL")
+  directUrl    = env("DIRECT_URL")
+  relationMode = "prisma"
 }
 
 model User {
@@ -83,6 +84,7 @@ model Store {
   recoveredCarts  RecoveredCart[]
 
   @@unique([userId, domain])
+  @@index([userId])
 }
 
 model Campaign {
@@ -107,6 +109,9 @@ model Campaign {
   userId          String
   messages        Message[]
   abTests         ABTest[]
+
+  @@index([storeId])
+  @@index([storeId, isActive])
 }
 
 model Cart {
@@ -132,6 +137,8 @@ model Cart {
   recoveredCart   RecoveredCart?
 
   @@unique([storeId, cartId])
+  @@index([storeId])
+  @@index([storeId, isRecovered, abandonedAt])
 }
 
 model Message {
@@ -149,6 +156,9 @@ model Message {
 
   cart            Cart      @relation(fields: [cartId], references: [id], onDelete: Cascade)
   campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([cartId])
+  @@index([campaignId])
 }
 
 model RecoveredCart {
@@ -164,6 +174,8 @@ model RecoveredCart {
 
   store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
   cart            Cart      @relation(fields: [cartId], references: [id], onDelete: Cascade, map: "fk_cart")
+
+  @@index([storeId])
 }
 
 model Analytics {
@@ -184,6 +196,7 @@ model Analytics {
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
+  @@index([userId])
 }
 
 model ABTest {
@@ -197,6 +210,8 @@ model ABTest {
   createdAt       DateTime  @default(now())
 
   campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
 }
 
 model Subscription {
@@ -217,6 +232,8 @@ model Subscription {
 
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   invoices        Invoice[]
+
+  @@index([userId])
 }
 
 model Invoice {
@@ -235,6 +252,9 @@ model Invoice {
   updatedAt       DateTime  @updatedAt
 
   subscription    Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([userId])
 }
 
 model ApiKey {

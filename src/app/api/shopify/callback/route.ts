@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
               storeId: targetStore.id,
               userId: targetStore.userId,
               name: 'Default Recovery Campaign',
-              channels: ['email', 'sms', 'whatsapp'],
+              channels: ['whatsapp', 'sms', 'email'],
               aiOptimized: true,
               sendDelay: 15,
               followUpDelay: 180,

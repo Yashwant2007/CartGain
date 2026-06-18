@@ -107,7 +107,7 @@ export async function fetchShopifyCarts(
 ): Promise<any[]> {
   try {
     const response = await fetch(
-      `https://${shopDomain}/admin/api/2024-04/carts.json?limit=${limit}`,
+      `https://${shopDomain}/admin/api/2026-01/carts.json?limit=${limit}`,
       {
         headers: {
           'X-Shopify-Access-Token': accessToken,

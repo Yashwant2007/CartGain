@@ -190,7 +190,8 @@ function CampaignCard({ campaign, onOpenABTest }: { campaign: Campaign; onOpenAB
           method: 'DELETE',
         })
         if (!response.ok) {
-          throw new Error('Failed to delete campaign')
+          const errData = await response.json().catch(() => ({}))
+          throw new Error(errData.message || `Server error (${response.status})`)
         }
         window.location.reload()
       } catch (error) {
@@ -341,9 +342,9 @@ function OnboardingWizard({ onStart }: { onStart: () => void }) {
               <span className="text-4xl">🛒</span>
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white mb-2">Welcome to CartGain!</h2>
-              <p className="text-blue-300/80 max-w-md mx-auto">
-                Recover lost sales with automated cart recovery campaigns. Let&apos;s set up your first one.
+              <h2 className="text-xl font-semibold text-white mb-1">Welcome to CartGain!</h2>
+              <p className="text-sm text-blue-300/60 max-w-md mx-auto">
+                Set up your first cart recovery campaign in minutes.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-lg mx-auto">
@@ -365,7 +366,7 @@ function OnboardingWizard({ onStart }: { onStart: () => void }) {
             </div>
             <button
               onClick={() => goToStep(2)}
-              className="px-8 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all"
+              className="w-full px-6 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all"
             >
               Get Started
             </button>
@@ -376,42 +377,42 @@ function OnboardingWizard({ onStart }: { onStart: () => void }) {
         )}
 
         {step === 2 && (
-          <div className="space-y-6">
+          <div className="space-y-5">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-white mb-2">How It Works</h2>
-              <p className="text-blue-300/80">Cart recovery in 3 simple steps</p>
+              <h2 className="text-lg font-semibold text-white">How It Works</h2>
+              <p className="text-xs text-blue-300/50 mt-0.5">Cart recovery in 3 simple steps</p>
             </div>
-            <div className="space-y-4">
-              <div className="flex items-start space-x-4 p-4 bg-slate-700/40 border border-blue-700/30 rounded-xl hover:border-cyan-500/30 transition-all">
-                <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold shrink-0 shadow-lg shadow-cyan-500/20">1</div>
+            <div className="space-y-3">
+              <div className="flex items-start space-x-3 p-3 bg-slate-700/40 border border-blue-700/30 rounded-xl">
+                <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm shrink-0 shadow-md shadow-cyan-500/20">1</div>
                 <div>
-                  <h3 className="font-semibold text-white mb-1">Connect Your Store</h3>
-                  <p className="text-sm text-blue-300/60">Link your Shopify store to automatically track abandoned carts.</p>
+                  <h3 className="text-sm font-medium text-white">Connect Your Store</h3>
+                  <p className="text-xs text-blue-300/50 mt-0.5 leading-relaxed">Link your Shopify store to automatically track abandoned carts.</p>
                 </div>
               </div>
-              <div className="flex items-start space-x-4 p-4 bg-slate-700/40 border border-blue-700/30 rounded-xl hover:border-cyan-500/30 transition-all">
-                <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold shrink-0 shadow-lg shadow-cyan-500/20">2</div>
+              <div className="flex items-start space-x-3 p-3 bg-slate-700/40 border border-blue-700/30 rounded-xl">
+                <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm shrink-0 shadow-md shadow-cyan-500/20">2</div>
                 <div>
-                  <h3 className="font-semibold text-white mb-1">Create a Campaign</h3>
-                  <p className="text-sm text-blue-300/60">Set up recovery sequences with tailored messages and timing.</p>
+                  <h3 className="text-sm font-medium text-white">Create a Campaign</h3>
+                  <p className="text-xs text-blue-300/50 mt-0.5 leading-relaxed">Set up recovery sequences with tailored messages and timing.</p>
                 </div>
               </div>
-              <div className="flex items-start space-x-4 p-4 bg-slate-700/40 border border-blue-700/30 rounded-xl hover:border-cyan-500/30 transition-all">
-                <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold shrink-0 shadow-lg shadow-cyan-500/20">3</div>
+              <div className="flex items-start space-x-3 p-3 bg-slate-700/40 border border-blue-700/30 rounded-xl">
+                <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm shrink-0 shadow-md shadow-cyan-500/20">3</div>
                 <div>
-                  <h3 className="font-semibold text-white mb-1">Recover Revenue</h3>
-                  <p className="text-sm text-blue-300/60">Your campaign runs automatically and you track results in real-time.</p>
+                  <h3 className="text-sm font-medium text-white">Recover Revenue</h3>
+                  <p className="text-xs text-blue-300/50 mt-0.5 leading-relaxed">Your campaign runs automatically. Track results in real-time.</p>
                 </div>
               </div>
             </div>
             <button
               onClick={onStart}
-              className="w-full px-8 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all"
+              className="w-full px-6 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all"
             >
               Create Your First Campaign
             </button>
             <div className="text-center">
-              <button onClick={() => goToStep(1)} className="text-sm text-blue-300/50 hover:text-blue-300/80 transition-colors">Back</button>
+              <button onClick={() => goToStep(1)} className="text-xs text-blue-300/40 hover:text-blue-300/70 transition-colors">Back</button>
             </div>
           </div>
         )}
@@ -443,6 +444,12 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
     subjectB: '',
     discountA: 0,
     discountB: 0,
+    channelsA: [] as string[],
+    channelsB: [] as string[],
+    sendDelayA: 15,
+    sendDelayB: 15,
+    followUpsA: 2,
+    followUpsB: 2,
   })
 
   useEffect(() => {
@@ -476,8 +483,20 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: form.name,
-          variantA: { subject: form.subjectA, discountPercent: form.discountA },
-          variantB: { subject: form.subjectB, discountPercent: form.discountB },
+          variantA: {
+            subject: form.subjectA,
+            discountPercent: form.discountA,
+            channels: form.channelsA,
+            sendDelay: form.sendDelayA,
+            maxFollowUps: form.followUpsA,
+          },
+          variantB: {
+            subject: form.subjectB,
+            discountPercent: form.discountB,
+            channels: form.channelsB,
+            sendDelay: form.sendDelayB,
+            maxFollowUps: form.followUpsB,
+          },
         }),
       })
 
@@ -485,7 +504,7 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
         const data = await res.json()
         setAbTests((prev) => [data.abTest, ...prev])
         setShowCreate(false)
-        setForm({ name: '', subjectA: '', subjectB: '', discountA: 0, discountB: 0 })
+        setForm({ name: '', subjectA: '', subjectB: '', discountA: 0, discountB: 0, channelsA: [], channelsB: [], sendDelayA: 15, sendDelayB: 15, followUpsA: 2, followUpsB: 2 })
       } else {
         const err = await res.json()
         setFormErrors(err.error || 'Failed to create test')
@@ -550,6 +569,24 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
                       <input type="text" value={form.subjectA} onChange={(e) => setForm({ ...form, subjectA: e.target.value })} placeholder="e.g. Don't miss out!" className="w-full px-3 py-2 bg-slate-700/50 border border-blue-700/50 text-white placeholder-blue-300/40 rounded-lg text-sm focus:outline-none focus:border-cyan-400/70 transition-all" />
                     </div>
                     <div>
+                      <label className="block text-xs font-medium text-blue-200 mb-1.5">Channels</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {['email', 'sms', 'whatsapp'].map((ch) => (
+                          <button key={ch} onClick={() => setForm({ ...form, channelsA: form.channelsA.includes(ch) ? form.channelsA.filter(c => c !== ch) : [...form.channelsA, ch] })} className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${form.channelsA.includes(ch) ? 'bg-cyan-600/40 border-cyan-400/60 text-cyan-200' : 'bg-slate-700/50 border-blue-700/50 text-blue-300/60 hover:text-blue-200'}`}>{ch}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-blue-200 mb-1.5">Delay (min)</label>
+                        <input type="number" min={1} value={form.sendDelayA} onChange={(e) => setForm({ ...form, sendDelayA: parseInt(e.target.value) || 15 })} className="w-full px-3 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg text-sm focus:outline-none focus:border-cyan-400/70 transition-all" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-blue-200 mb-1.5">Follow-ups</label>
+                        <input type="number" min={0} max={5} value={form.followUpsA} onChange={(e) => setForm({ ...form, followUpsA: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg text-sm focus:outline-none focus:border-cyan-400/70 transition-all" />
+                      </div>
+                    </div>
+                    <div>
                       <label className="block text-xs font-medium text-blue-200 mb-1.5">Discount % <span className="text-blue-300/40 font-normal">(optional)</span></label>
                       <input type="number" min={0} max={100} value={form.discountA} onChange={(e) => setForm({ ...form, discountA: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg text-sm focus:outline-none focus:border-cyan-400/70 transition-all" />
                     </div>
@@ -564,6 +601,24 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
                     <div>
                       <label className="block text-xs font-medium text-blue-200 mb-1.5">Subject Line</label>
                       <input type="text" value={form.subjectB} onChange={(e) => setForm({ ...form, subjectB: e.target.value })} placeholder="e.g. Your cart is waiting" className="w-full px-3 py-2 bg-slate-700/50 border border-blue-700/50 text-white placeholder-blue-300/40 rounded-lg text-sm focus:outline-none focus:border-cyan-400/70 transition-all" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-blue-200 mb-1.5">Channels</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {['email', 'sms', 'whatsapp'].map((ch) => (
+                          <button key={ch} onClick={() => setForm({ ...form, channelsB: form.channelsB.includes(ch) ? form.channelsB.filter(c => c !== ch) : [...form.channelsB, ch] })} className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${form.channelsB.includes(ch) ? 'bg-purple-600/40 border-purple-400/60 text-purple-200' : 'bg-slate-700/50 border-blue-700/50 text-blue-300/60 hover:text-blue-200'}`}>{ch}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-blue-200 mb-1.5">Delay (min)</label>
+                        <input type="number" min={1} value={form.sendDelayB} onChange={(e) => setForm({ ...form, sendDelayB: parseInt(e.target.value) || 15 })} className="w-full px-3 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg text-sm focus:outline-none focus:border-cyan-400/70 transition-all" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-blue-200 mb-1.5">Follow-ups</label>
+                        <input type="number" min={0} max={5} value={form.followUpsB} onChange={(e) => setForm({ ...form, followUpsB: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg text-sm focus:outline-none focus:border-cyan-400/70 transition-all" />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-blue-200 mb-1.5">Discount % <span className="text-blue-300/40 font-normal">(optional)</span></label>
@@ -597,13 +652,27 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className={`p-3 rounded-lg border ${test.winner === 'A' ? 'border-cyan-400/60 bg-cyan-600/20 ring-1 ring-cyan-400/30' : 'border-blue-700/30 bg-slate-700/30'}`}>
                       <p className="text-cyan-300 font-medium mb-1">Variant A</p>
-                      <p className="text-blue-300/80 truncate">{test.variantA?.subject || 'N/A'}</p>
-                      {test.variantA?.discountPercent ? <p className="text-blue-300/60 text-xs mt-1">{test.variantA.discountPercent}% discount</p> : <p className="text-blue-300/40 text-xs mt-1">No discount</p>}
+                      <p className="text-blue-300/80 truncate text-xs">{test.variantA?.subject || 'N/A'}</p>
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {test.variantA?.channels?.map((ch: string) => <span key={ch} className="px-1.5 py-0.5 rounded bg-slate-600/40 text-xs text-blue-300/70">{ch}</span>)}
+                      </div>
+                      <div className="text-xs text-blue-300/50 mt-1">
+                        {test.variantA?.sendDelay ? `${test.variantA.sendDelay}min delay` : ''}
+                        {test.variantA?.maxFollowUps ? ` · ${test.variantA.maxFollowUps} follow-ups` : ''}
+                      </div>
+                      {test.variantA?.discountPercent ? <p className="text-blue-300/60 text-xs mt-0.5">{test.variantA.discountPercent}% discount</p> : null}
                     </div>
                     <div className={`p-3 rounded-lg border ${test.winner === 'B' ? 'border-purple-400/60 bg-purple-600/20 ring-1 ring-purple-400/30' : 'border-blue-700/30 bg-slate-700/30'}`}>
                       <p className="text-purple-300 font-medium mb-1">Variant B</p>
-                      <p className="text-blue-300/80 truncate">{test.variantB?.subject || 'N/A'}</p>
-                      {test.variantB?.discountPercent ? <p className="text-blue-300/60 text-xs mt-1">{test.variantB.discountPercent}% discount</p> : <p className="text-blue-300/40 text-xs mt-1">No discount</p>}
+                      <p className="text-blue-300/80 truncate text-xs">{test.variantB?.subject || 'N/A'}</p>
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {test.variantB?.channels?.map((ch: string) => <span key={ch} className="px-1.5 py-0.5 rounded bg-slate-600/40 text-xs text-blue-300/70">{ch}</span>)}
+                      </div>
+                      <div className="text-xs text-blue-300/50 mt-1">
+                        {test.variantB?.sendDelay ? `${test.variantB.sendDelay}min delay` : ''}
+                        {test.variantB?.maxFollowUps ? ` · ${test.variantB.maxFollowUps} follow-ups` : ''}
+                      </div>
+                      {test.variantB?.discountPercent ? <p className="text-blue-300/60 text-xs mt-0.5">{test.variantB.discountPercent}% discount</p> : null}
                     </div>
                   </div>
                   {test.isCompleted && (

@@ -6,9 +6,9 @@ import { Analytics } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
-const SMS_RATE = 0.02
-const WHATSAPP_RATE = 0.005
-const EMAIL_RATE = 0.001
+const SMS_RATE = 0.85
+const WHATSAPP_RATE = 0.86
+const EMAIL_RATE = 0
 
 async function computePeriodData(storeId: string, userId: string, startDate: Date, endDate: Date) {
   const [
@@ -80,13 +80,52 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
   })
 
   const costs = {
-    sms: channelBreakdown.find((c) => c.channel === 'Sms')?.sent ?? 0 * SMS_RATE,
-    whatsapp: channelBreakdown.find((c) => c.channel === 'Whatsapp')?.sent ?? 0 * WHATSAPP_RATE,
-    email: channelBreakdown.find((c) => c.channel === 'Email')?.sent ?? 0 * EMAIL_RATE,
+    sms: (channelBreakdown.find((c) => c.channel === 'Sms')?.sent ?? 0) * SMS_RATE,
+    whatsapp: (channelBreakdown.find((c) => c.channel === 'Whatsapp')?.sent ?? 0) * WHATSAPP_RATE,
+    email: (channelBreakdown.find((c) => c.channel === 'Email')?.sent ?? 0) * EMAIL_RATE,
   }
   const totalCosts = costs.sms + costs.whatsapp + costs.email
   const netRevenue = (revenueRecovered._sum.netRevenue ?? 0)
   const roi = totalCosts > 0 ? ((netRevenue - totalCosts) / totalCosts) * 100 : 0
+
+  // Best channel detection
+  const bestChannel = channelBreakdown
+    .filter((c) => c.sent > 0)
+    .sort((a, b) => b.revenue - a.revenue)[0] || null
+
+  // Average conversion time (hours from first message to recovery)
+  const conversionTimes = channelRevenue
+    .filter((r) => r.recoveredAt)
+    .map((r) => {
+      const msg = channelMessages.find(
+        (m) => m.cartId === r.cartId && m.status === 'sent'
+      )
+      if (!msg?.sentAt) return null
+      const hours = (r.recoveredAt!.getTime() - msg.sentAt.getTime()) / (1000 * 60 * 60)
+      return hours
+    })
+    .filter((h): h is number => h !== null && h >= 0)
+  const avgConversionTime =
+    conversionTimes.length > 0
+      ? conversionTimes.reduce((a, b) => a + b, 0) / conversionTimes.length
+      : null
+
+  // Generate smart tips
+  const tips: string[] = []
+  if (bestChannel && bestChannel.revenue > 0) {
+    tips.push(`${bestChannel.channel} is your top-performing channel with ₹${bestChannel.revenue.toLocaleString('en-IN')} in recovered revenue.`)
+  }
+  if (recoveryRate < 5) {
+    tips.push('Your recovery rate is below 5%. Try shortening the send delay or adding more follow-up messages.')
+  } else if (recoveryRate > 20) {
+    tips.push('Great recovery rate! Consider increasing send limits to capture even more revenue.')
+  }
+  if (channelBreakdown.filter((c) => c.sent > 0).length === 1) {
+    tips.push('You\'re only using one channel. Adding SMS or WhatsApp can increase recovery by up to 40%.')
+  }
+  if (avgConversionTime !== null && avgConversionTime > 48) {
+    tips.push(`Average conversion takes ${avgConversionTime.toFixed(1)} hours. Consider reducing follow-up delays for faster recovery.`)
+  }
 
   const chartData = Array.from({ length: Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) }, (_, i) => {
     const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000)
@@ -124,6 +163,15 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
     },
     chartData,
     channelStats: channelBreakdown,
+    insights: {
+      bestChannel: bestChannel ? {
+        channel: bestChannel.channel,
+        revenue: bestChannel.revenue,
+        conversionRate: bestChannel.sent > 0 ? Number(((bestChannel.converted / bestChannel.sent) * 100).toFixed(1)) : 0,
+      } : null,
+      avgConversionTime: avgConversionTime !== null ? Number(avgConversionTime.toFixed(1)) : null,
+      tips,
+    },
   }
 }
 

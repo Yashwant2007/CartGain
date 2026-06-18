@@ -10,6 +10,7 @@ import {
   Plus,
   MoreVertical,
   Mail,
+  Bell,
   Sparkles,
   Zap,
   Trophy,
@@ -63,6 +64,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const { storeId, loading: resolvingStore, error: storeError } = useResolvedStoreId()
   const [overview, setOverview] = useState<Overview | null>(null)
+  const [prevOverview, setPrevOverview] = useState<Overview | null>(null)
   const [chartData, setChartData] = useState<ChartDataPoint[]>([])
   const [channelStats, setChannelStats] = useState<ChannelStat[]>([])
   const [carts, setCarts] = useState<Cart[]>([])
@@ -103,9 +105,10 @@ export default function DashboardPage() {
         ])
 
         if (!cancelled) {
-          setOverview(overviewData.overview)
-          setChartData(overviewData.chartData || [])
-          setChannelStats(overviewData.channelStats || [])
+          setOverview(overviewData.current?.overview || null)
+          setPrevOverview(overviewData.previous?.overview || null)
+          setChartData(overviewData.current?.chartData || [])
+          setChannelStats(overviewData.current?.channelStats || [])
           setCarts(cartsData.carts || [])
           setCampaigns(campaignsData.campaigns || [])
         }
@@ -156,6 +159,19 @@ export default function DashboardPage() {
     messagesSent: overview?.messagesSent ?? 0,
   }
 
+  const calcChange = (current: number | undefined, previous: number | undefined): string => {
+    if (!current || !previous || previous === 0) return current && current > 0 ? '+100%' : '0%'
+    const pct = ((current - previous) / previous) * 100
+    return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
+  }
+
+  const changes = {
+    cartsAbandoned: calcChange(overview?.cartsAbandoned, prevOverview?.cartsAbandoned),
+    cartsRecovered: calcChange(overview?.cartsRecovered, prevOverview?.cartsRecovered),
+    revenueRecovered: calcChange(overview?.revenueRecovered, prevOverview?.revenueRecovered),
+    recoveryRate: calcChange(overview?.recoveryRate, prevOverview?.recoveryRate),
+  }
+
   const totalRevenue = chartData.reduce((sum, d) => sum + d.revenue, 0)
   const isLoading = resolvingStore || loadingData
   const error = storeError || loadError
@@ -176,10 +192,10 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-        <MetricCard title="Carts Abandoned" value={stats.cartsAbandoned.toLocaleString()} change="+12%" trend="up" icon={<ShoppingCart className="w-6 h-6" />} color="primary" changeSuffix="from last month" loading={isLoading} />
-        <MetricCard title="Carts Recovered" value={stats.cartsRecovered.toLocaleString()} change="+24%" trend="up" icon={<DollarSign className="w-6 h-6" />} color="green" changeSuffix="from last month" loading={isLoading} />
-        <MetricCard title="Revenue Recovered" value={`₹${stats.revenueRecovered.toLocaleString()}`} change="+18%" trend="up" icon={<TrendingUp className="w-6 h-6" />} color="accent" changeSuffix="from last month" loading={isLoading} />
-        <MetricCard title="Recovery Rate" value={`${stats.recoveryRate}%`} change="+2.1%" trend="up" icon={<MessageSquare className="w-6 h-6" />} color="blue" changeSuffix="from last month" loading={isLoading} />
+        <MetricCard title="Carts Abandoned" value={stats.cartsAbandoned.toLocaleString()} change={changes.cartsAbandoned} trend={changes.cartsAbandoned.startsWith('+') ? 'up' : 'down'} icon={<ShoppingCart className="w-6 h-6" />} color="primary" changeSuffix="from last month" loading={isLoading} />
+        <MetricCard title="Carts Recovered" value={stats.cartsRecovered.toLocaleString()} change={changes.cartsRecovered} trend={changes.cartsRecovered.startsWith('+') ? 'up' : 'down'} icon={<DollarSign className="w-6 h-6" />} color="green" changeSuffix="from last month" loading={isLoading} />
+        <MetricCard title="Revenue Recovered" value={`₹${stats.revenueRecovered.toLocaleString()}`} change={changes.revenueRecovered} trend={changes.revenueRecovered.startsWith('+') ? 'up' : 'down'} icon={<TrendingUp className="w-6 h-6" />} color="accent" changeSuffix="from last month" loading={isLoading} />
+        <MetricCard title="Recovery Rate" value={`${stats.recoveryRate}%`} change={changes.recoveryRate} trend={changes.recoveryRate.startsWith('+') ? 'up' : 'down'} icon={<MessageSquare className="w-6 h-6" />} color="blue" changeSuffix="from last month" loading={isLoading} />
       </div>
 
       {error && (

@@ -34,6 +34,11 @@ type PeriodData = {
     converted: number
     revenue: number
   }>
+  insights?: {
+    bestChannel: { channel: string; revenue: number; conversionRate: number } | null
+    avgConversionTime: number | null
+    tips: string[]
+  }
 }
 
 export default function AnalyticsPage() {
@@ -417,6 +422,38 @@ export default function AnalyticsPage() {
           )}
         </div>
       </div>
+
+      {current?.insights && current.insights.tips.length > 0 && (
+        <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+          <h3 className="text-lg font-semibold text-cyan-300 mb-4">💡 Insights & Recommendations</h3>
+          <div className="space-y-3">
+            {current.insights.bestChannel && (
+              <div className="flex items-start space-x-3 p-3 bg-slate-700/40 rounded-lg border border-blue-700/20">
+                <span className="text-lg">🏆</span>
+                <div>
+                  <p className="text-sm text-white font-medium">Best Channel: {current.insights.bestChannel.channel}</p>
+                  <p className="text-xs text-blue-300/60">₹{current.insights.bestChannel.revenue.toLocaleString('en-IN')} recovered · {current.insights.bestChannel.conversionRate}% conversion rate</p>
+                </div>
+              </div>
+            )}
+            {current.insights.avgConversionTime !== null && (
+              <div className="flex items-start space-x-3 p-3 bg-slate-700/40 rounded-lg border border-blue-700/20">
+                <span className="text-lg">⏱️</span>
+                <div>
+                  <p className="text-sm text-white font-medium">Avg. Conversion Time: {current.insights.avgConversionTime} hours</p>
+                  <p className="text-xs text-blue-300/60">Time from first message to completed order</p>
+                </div>
+              </div>
+            )}
+            {current.insights.tips.map((tip, i) => (
+              <div key={i} className="flex items-start space-x-3 p-3 bg-slate-700/40 rounded-lg border border-blue-700/20">
+                <span className="text-lg">💡</span>
+                <p className="text-sm text-blue-200">{tip}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

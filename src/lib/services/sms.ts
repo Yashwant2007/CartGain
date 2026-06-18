@@ -86,8 +86,8 @@ export async function getSMSDeliveryStatus(messageId: string): Promise<string> {
 // SMS templates for cart recovery
 export const SMSTemplates = {
   abandoned: (customerName: string, cartTotal: number, cartUrl: string, currencySymbol = '₹') => `
-Hi ${customerName || 'there'}! You left some great items in your cart.
-Complete your order now: ${cartUrl}
+🛍️ ${customerName || 'there'}! Your cart is still warm!
+Complete your order: ${cartUrl}
 Total: ${currencySymbol}${cartTotal.toFixed(2)}
   `.trim(),
 
