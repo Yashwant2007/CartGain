@@ -169,7 +169,7 @@ export default function EditCampaignPage() {
     )
   }
 
-  const channels = ['sms', 'whatsapp', 'email', 'push']
+  const channels = ['sms', 'whatsapp', 'email']
 
   return (
     <div className="space-y-6">

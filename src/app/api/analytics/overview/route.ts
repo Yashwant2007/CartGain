@@ -64,7 +64,7 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
 
   const recoveryRate = cartsAbandoned > 0 ? (cartsRecovered / cartsAbandoned) * 100 : 0
 
-  const channelBreakdown = ['sms', 'whatsapp', 'email', 'push'].map((channel) => {
+  const channelBreakdown = ['sms', 'whatsapp', 'email'].map((channel) => {
     const msgs = channelMessages.filter((m) => m.channel === channel)
     const rev = channelRevenue
       .filter((r) => r.channel === channel)

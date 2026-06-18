@@ -296,7 +296,6 @@ function ChannelIcon({ channel }: { channel: string }) {
     sms: { bg: 'bg-blue-600/20', color: 'text-blue-300', label: 'SMS' },
     whatsapp: { bg: 'bg-emerald-600/20', color: 'text-emerald-300', label: 'WhatsApp' },
     email: { bg: 'bg-purple-600/20', color: 'text-purple-300', label: 'Email' },
-    push: { bg: 'bg-orange-600/20', color: 'text-orange-300', label: 'Push' },
   }
 
   const { bg, color, label } = config[channel] || { bg: 'bg-slate-700/40', color: 'text-blue-300/70', label: channel }
@@ -351,7 +350,7 @@ function OnboardingWizard({ onStart }: { onStart: () => void }) {
               <div className="bg-slate-700/40 border border-blue-700/30 rounded-xl p-4 text-center hover:border-cyan-500/40 transition-all">
                 <div className="text-2xl mb-2">📧</div>
                 <h3 className="text-sm font-semibold text-white mb-1">Multi-Channel</h3>
-                <p className="text-xs text-blue-300/60">Email, SMS, WhatsApp, Push</p>
+                <p className="text-xs text-blue-300/60">Email, SMS, WhatsApp</p>
               </div>
               <div className="bg-slate-700/40 border border-blue-700/30 rounded-xl p-4 text-center hover:border-cyan-500/40 transition-all">
                 <div className="text-2xl mb-2">🤖</div>
@@ -707,7 +706,7 @@ function CreateCampaignModal({ onClose, onCreate }: { onClose: () => void; onCre
             <div className="space-y-4">
               <p className="text-sm text-blue-300/80 mb-4">Select channels for your recovery sequence</p>
               <div className="grid grid-cols-2 gap-4">
-                {['sms', 'whatsapp', 'email', 'push'].map((channel) => (
+                {['sms', 'whatsapp', 'email'].map((channel) => (
                   <label
                     key={channel}
                     className={`flex items-center p-4 border rounded-lg cursor-pointer transition-all ${

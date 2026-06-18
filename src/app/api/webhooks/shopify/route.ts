@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { verifyShopifyWebhook } from '@/lib/shopify'
+import { FREE_CARTS_THRESHOLD, PLANS } from '@/lib/payment'
 
 export const dynamic = 'force-dynamic'
 
@@ -160,5 +161,36 @@ async function handleOrderCreate(data: any) {
         revenueRecovered: orderTotal,
       },
     })
+
+    // Track revenue share
+    await accrueRevenueShare(store.userId, orderTotal)
   }
+}
+
+async function accrueRevenueShare(userId: string, orderTotal: number) {
+  const subscription = await prisma.subscription.findFirst({
+    where: { userId, status: 'active' },
+  })
+  if (!subscription) return
+
+  const planConfig = Object.values(PLANS).find(p => p.id === subscription.plan)
+  if (!planConfig || planConfig.revSharePercent <= 0) return
+
+  const totalRecovered = await prisma.recoveredCart.count({
+    where: {
+      store: { userId },
+    },
+  })
+
+  // Only apply revenue share after FREE_CARTS_THRESHOLD
+  if (totalRecovered <= FREE_CARTS_THRESHOLD) return
+
+  const revShareAmount = orderTotal * (planConfig.revSharePercent / 100)
+
+  await prisma.subscription.update({
+    where: { id: subscription.id },
+    data: {
+      revenueShareAccrued: { increment: revShareAmount },
+    },
+  })
 }

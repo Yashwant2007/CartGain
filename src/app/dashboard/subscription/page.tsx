@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Shield, Percent, Zap } from 'lucide-react'
+import { Check, Shield, Percent, Zap, FileText, Download } from 'lucide-react'
 import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/payment'
 
 type SubscriptionData = {
@@ -10,6 +10,8 @@ type SubscriptionData = {
   status: string
   smsCredits: number
   smsCreditsUsed: number
+  revenueShareAccrued: number
+  revenueSharePaid: number
   currentPeriodEnd: string
 }
 
@@ -19,11 +21,23 @@ type StoreData = {
   currency: string
 }
 
+type InvoiceData = {
+  id: string
+  amount: number
+  status: string
+  periodStart: string
+  periodEnd: string
+  dueDate: string
+  paidAt: string | null
+  createdAt: string
+}
+
 type PlanKey = keyof typeof PLANS
 
 export default function SubscriptionPage() {
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
   const [store, setStore] = useState<StoreData | null>(null)
+  const [invoices, setInvoices] = useState<InvoiceData[]>([])
   const [loading, setLoading] = useState(true)
   const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly')
   const [razorpayLoaded, setRazorpayLoaded] = useState(false)
@@ -31,6 +45,8 @@ export default function SubscriptionPage() {
   const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null)
   const [totalRecoveredCarts, setTotalRecoveredCarts] = useState(0)
   const [monthlyRecoveredRevenue, setMonthlyRecoveredRevenue] = useState(0)
+  const [generatingInvoice, setGeneratingInvoice] = useState(false)
+  const [invoiceMsg, setInvoiceMsg] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -44,6 +60,7 @@ export default function SubscriptionPage() {
           const subData = await subRes.json()
           setSubscription(subData.subscription)
           setStore(subData.store)
+          setInvoices(subData.invoices || [])
         }
 
         if (overviewRes.ok) {
@@ -289,8 +306,8 @@ export default function SubscriptionPage() {
             <p className="text-xl font-bold text-white mt-1">{revShareCarts.toLocaleString('en-IN')}</p>
           </div>
           <div className="bg-slate-700/30 rounded-lg p-4">
-            <p className="text-xs text-blue-300/60">Est. Revenue Share</p>
-            <p className="text-xl font-bold text-cyan-400 mt-1">₹{Math.round(estimatedRevShare).toLocaleString('en-IN')}</p>
+            <p className="text-xs text-blue-300/60">Rev Share Accrued</p>
+            <p className="text-xl font-bold text-cyan-400 mt-1">₹{Math.round((subscription?.revenueShareAccrued ?? estimatedRevShare)).toLocaleString('en-IN')}</p>
           </div>
         </div>
       </div>
@@ -372,6 +389,104 @@ export default function SubscriptionPage() {
           </div>
         </div>
       </div>
+
+      {/* Invoices Section */}
+      {isPaidUser && (
+        <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center">
+                <FileText className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">Revenue Share & Invoices</h2>
+                <p className="text-sm text-blue-300/60">
+                  {subscription?.revenueShareAccrued && subscription.revenueShareAccrued > 0
+                    ? `₹${Math.round(subscription.revenueShareAccrued).toLocaleString('en-IN')} accrued, ₹${Math.round(subscription.revenueSharePaid).toLocaleString('en-IN')} paid`
+                    : 'No revenue share accrued yet'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                setGeneratingInvoice(true)
+                setInvoiceMsg(null)
+                try {
+                  const res = await fetch('/api/invoices', { method: 'POST' })
+                  const data = await res.json()
+                  if (res.ok) {
+                    setInvoiceMsg('Invoice generated successfully')
+                    setInvoices(prev => [data.invoice, ...prev])
+                  } else {
+                    setInvoiceMsg(data.error || 'Failed to generate invoice')
+                  }
+                } catch {
+                  setInvoiceMsg('Failed to generate invoice')
+                } finally {
+                  setGeneratingInvoice(false)
+                }
+              }}
+              disabled={generatingInvoice || !subscription?.revenueShareAccrued || subscription.revenueShareAccrued < 100}
+              className={`px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                subscription?.revenueShareAccrued && subscription.revenueShareAccrued >= 100
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:shadow-lg hover:shadow-cyan-500/50'
+                  : 'bg-slate-600/50 text-blue-300/40 cursor-not-allowed'
+              } ${generatingInvoice ? 'opacity-50 cursor-wait' : ''}`}
+            >
+              {generatingInvoice ? 'Generating...' : 'Generate Invoice'}
+            </button>
+          </div>
+
+          {invoiceMsg && (
+            <div className={`mb-4 px-4 py-2 rounded-lg text-sm ${
+              invoiceMsg.includes('successfully')
+                ? 'bg-emerald-900/30 text-emerald-300 border border-emerald-500/30'
+                : 'bg-amber-900/30 text-amber-300 border border-amber-500/30'
+            }`}>
+              {invoiceMsg}
+            </div>
+          )}
+
+          {invoices.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-blue-300/60 border-b border-blue-700/20">
+                    <th className="pb-3 font-medium">Period</th>
+                    <th className="pb-3 font-medium">Amount</th>
+                    <th className="pb-3 font-medium">Status</th>
+                    <th className="pb-3 font-medium">Due Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map(inv => (
+                    <tr key={inv.id} className="border-b border-blue-700/10">
+                      <td className="py-3 text-white">
+                        {new Date(inv.periodStart).toLocaleDateString('en-IN')} - {new Date(inv.periodEnd).toLocaleDateString('en-IN')}
+                      </td>
+                      <td className="py-3 text-white font-medium">₹{inv.amount.toLocaleString('en-IN')}</td>
+                      <td className="py-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          inv.status === 'paid'
+                            ? 'bg-emerald-600/30 text-emerald-300'
+                            : inv.status === 'pending'
+                            ? 'bg-amber-600/30 text-amber-300'
+                            : 'bg-red-600/30 text-red-300'
+                        }`}>
+                          {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
+                        </span>
+                      </td>
+                      <td className="py-3 text-blue-300/80">{new Date(inv.dueDate).toLocaleDateString('en-IN')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-blue-300/50 text-center py-6">No invoices yet. Revenue share invoices will appear here once accrued.</p>
+          )}
+        </div>
+      )}
 
       {/* Plan Comparison */}
       <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">

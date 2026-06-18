@@ -10,7 +10,6 @@ import {
   Plus,
   MoreVertical,
   Mail,
-  Bell,
   Sparkles,
   Zap,
   Trophy,
@@ -315,7 +314,6 @@ function ChannelBar({ name, sent, delivered, converted }: { name: string; sent: 
     Sms: 'bg-blue-500',
     Whatsapp: 'bg-green-500',
     Email: 'bg-purple-500',
-    Push: 'bg-orange-500',
   }
 
   const channelKey = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
@@ -340,14 +338,12 @@ function ChannelBadge({ channel }: { channel: string }) {
     sms: 'bg-blue-600/30 text-blue-300 border border-blue-500/50',
     whatsapp: 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/50',
     email: 'bg-purple-600/30 text-purple-300 border border-purple-500/50',
-    push: 'bg-orange-600/30 text-orange-300 border border-orange-500/50',
   }
 
   const icons: Record<string, React.ReactNode> = {
     sms: <MessageSquare className="w-3 h-3 mr-1" />,
     whatsapp: <MessageSquare className="w-3 h-3 mr-1" />,
     email: <Mail className="w-3 h-3 mr-1" />,
-    push: <Bell className="w-3 h-3 mr-1" />,
   }
 
   if (channel === '-') return <span className="text-blue-300/50">-</span>

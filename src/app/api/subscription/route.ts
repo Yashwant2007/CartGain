@@ -19,6 +19,13 @@ export async function GET() {
       where: { userId: session.user.id },
     })
 
+    const invoices = subscription
+      ? await prisma.invoice.findMany({
+          where: { subscriptionId: subscription.id },
+          orderBy: { createdAt: 'desc' },
+        })
+      : []
+
     return NextResponse.json({
       subscription: subscription
         ? {
@@ -27,12 +34,15 @@ export async function GET() {
             status: subscription.status,
             smsCredits: subscription.smsCredits,
             smsCreditsUsed: subscription.smsCreditsUsed,
+            revenueShareAccrued: subscription.revenueShareAccrued,
+            revenueSharePaid: subscription.revenueSharePaid,
             currentPeriodEnd: subscription.currentPeriodEnd,
           }
         : null,
       store: store
         ? { id: store.id, name: store.name, currency: store.currency }
         : null,
+      invoices,
       plans: PLANS,
     })
   } catch (error) {

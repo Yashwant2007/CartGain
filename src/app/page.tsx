@@ -496,8 +496,8 @@ export default function HomePage() {
       <section id="results" className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-950 to-blue-950/40" aria-labelledby="results-heading">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 id="results-heading" className="text-4xl md:text-5xl font-bold text-white mb-4">Real Results from Real Founders</h2>
-            <p className="text-xl text-blue-100 max-w-2xl mx-auto">Actual data from 50+ D2C skincare brands we work with</p>
+            <h2 id="results-heading" className="text-4xl md:text-5xl font-bold text-white mb-4">What We&apos;ll Change for Your Brand</h2>
+            <p className="text-xl text-blue-100 max-w-2xl mx-auto">Here&apos;s the revenue impact you can expect with CartGain</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">

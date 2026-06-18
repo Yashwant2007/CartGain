@@ -151,9 +151,6 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
             break
           }
 
-          case 'push':
-            sendSuccess = true
-            break
         }
       } catch (err: any) {
         console.error(`Error sending ${channel} for cart ${cart.id}:`, err)
@@ -178,7 +175,6 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
           smsCount: channel === 'sms' ? 1 : 0,
           whatsappCount: channel === 'whatsapp' ? 1 : 0,
           emailCount: channel === 'email' ? 1 : 0,
-          pushCount: channel === 'push' ? 1 : 0,
         }
         await prisma.analytics.upsert({
           where: { userId_date: { userId: campaign.userId, date: today } },
