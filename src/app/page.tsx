@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowRight, CheckCircle2, Zap, Globe, MessageSquare, Mail, BarChart3, TrendingUp, Sparkles, PhoneCall, ArrowUpRight, X } from 'lucide-react'
 import ROICalculator from '@/components/ROICalculator'
@@ -210,6 +211,7 @@ export default function HomePage() {
                     console.error('Video loading error:', e);
                   }}
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=1200&h=600&fit=crop"
                     alt="Cart recovery preview"
@@ -241,6 +243,7 @@ export default function HomePage() {
                       console.error('Demo video loading error:', e);
                     }}
                   >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=600&fit=crop"
                       alt="Dashboard demo preview"
@@ -410,12 +413,12 @@ export default function HomePage() {
             <div className="relative">
               <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/20 rounded-2xl overflow-hidden border border-blue-700/40 shadow-2xl aspect-video">
                 {/* Hero Image: Multi-channel recovery with product */}
-                <img 
+                <Image
                   src="https://images.unsplash.com/photo-1556740738-b6a63e27c4df?w=600&h=500&fit=crop" 
                   alt="Professional multichannel cart recovery communication through WhatsApp, SMS, and email for e-commerce businesses"
-                  className="w-full h-full object-cover animate-fade-in"
-                  loading="lazy"
-                  decoding="async"
+                  fill
+                  className="object-cover animate-fade-in"
+                  sizes="(max-width: 768px) 100vw, 600px"
                 />
               </div>
             </div>
@@ -474,12 +477,12 @@ export default function HomePage() {
 
           {/* Visual: Conversion Flow */}
           <div className="relative rounded-2xl overflow-hidden border border-blue-700/40 shadow-2xl bg-gradient-to-b from-slate-800 to-slate-900 aspect-video">
-            <img 
+            <Image
               src="https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=1200&h=600&fit=crop" 
               alt="Real abandoned shopping cart recovery success visualization showing process from abandonment to completed purchase"
-              className="w-full h-full object-cover animate-fade-in"
-              loading="lazy"
-              decoding="async"
+              fill
+              className="object-cover animate-fade-in"
+              sizes="(max-width: 768px) 100vw, 1200px"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-slate-950/60 via-transparent to-slate-950/60"></div>
             <div className="absolute inset-0 flex items-center justify-center">
@@ -576,12 +579,13 @@ export default function HomePage() {
           </div>
 
           <div className="relative rounded-2xl overflow-hidden border border-blue-700/40 shadow-2xl bg-black">
-            <img 
+            <Image
               src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1400&h=700&fit=crop" 
               alt="CartGain Analytics Dashboard showing real-time metrics, recovery rates, channel performance, and revenue tracking for abandoned cart recovery"
+              width={1400}
+              height={700}
               className="w-full h-auto object-cover animate-fade-in"
-              loading="lazy"
-              decoding="async"
+              sizes="100vw"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 to-transparent"></div>
           </div>

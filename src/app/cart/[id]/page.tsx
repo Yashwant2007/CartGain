@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 import prisma from '@/lib/db'
 import { notFound } from 'next/navigation'
@@ -57,9 +58,11 @@ export default async function CartRecoveryPage({ params }: { params: { id: strin
             ) : (
               items.map((item: any, i: number) => (
                 <div key={i} className="flex items-center gap-4 p-4 bg-slate-700/40 rounded-xl border border-blue-700/20">
-                  <img
+                  <Image
                     src={item.image || 'https://via.placeholder.com/64'}
                     alt={item.name}
+                    width={64}
+                    height={64}
                     className="w-16 h-16 object-cover rounded-lg"
                   />
                   <div className="flex-1 min-w-0">

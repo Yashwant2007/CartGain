@@ -1,7 +1,7 @@
 'use client'
 
 import styles from './CartGainAnimatic.module.css'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 export default function CartGainAnimatic() {
   const [currentScene, setCurrentScene] = useState(0)
@@ -20,14 +20,14 @@ export default function CartGainAnimatic() {
   const dotsContainerRef = useRef<HTMLDivElement>(null)
   const timerLblRef = useRef<HTMLDivElement>(null)
 
-  const scenes = [
+  const scenes = useMemo(() => [
     { id: 's1', label: 'Intro', start: 0, end: 4 },
     { id: 's2', label: '₹89', start: 4, end: 7 },
     { id: 's3', label: '₹156', start: 7, end: 10 },
     { id: 's4', label: 'Rachel', start: 10, end: 16 },
     { id: 's5', label: 'Stats', start: 16, end: 20 },
     { id: 's6', label: 'CTA', start: 20, end: 23 },
-  ]
+  ], [])
   const TOTAL = 23
 
   useEffect(() => {

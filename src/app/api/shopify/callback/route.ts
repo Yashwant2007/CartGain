@@ -3,6 +3,8 @@ import prisma from '@/lib/db'
 import { encrypt } from '@/lib/encryption'
 import { setupShopifyWebhooks } from '@/lib/shopify'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
