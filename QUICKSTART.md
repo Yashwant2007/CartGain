@@ -34,18 +34,20 @@ RAZORPAY_KEY_ID="rzp_test_..."
 RAZORPAY_KEY_SECRET="..."
 RAZORPAY_WEBHOOK_SECRET="..."
 
-# Twilio (free trial)
-TWILIO_ACCOUNT_SID="AC..."
-TWILIO_AUTH_TOKEN="..."
-TWILIO_PHONE_NUMBER="+1..."
+# MSG91 (free SMS for testing)
+MSG91_AUTH_KEY="your_msg91_auth_key"
+MSG91_SENDER_ID="CARTGN"
 
-# Email (optional for local dev)
-FROM_EMAIL="test@example.com"
+# Resend (Email - free 100k/mo)
+RESEND_API_KEY="re_..."
+FROM_EMAIL="noreply@cartgain.com"
+FROM_NAME="CartGain"
 ```
 
 **Quick setup for free services**:
 - **Database**: [Supabase](https://supabase.com) → New project → Connection string
-- **Twilio**: [Twilio](https://twilio.com) → Free trial → Get credentials
+- **MSG91**: [MSG91](https://msg91.com) → Sign up → API Keys
+- **Resend**: [Resend](https://resend.com) → Sign up → API Keys
 - **Razorpay**: [Razorpay](https://razorpay.com) → Settings → API Keys (test mode)
 
 ---
@@ -158,7 +160,7 @@ PORT=3001 npm run dev
 
 ### Immediate (Today)
 - [ ] Complete all environment variables
-- [ ] Set up Twilio for SMS testing
+- [ ] Set up MSG91 for SMS testing
 - [ ] Configure Razorpay for payments
 - [ ] Read LAUNCH_GUIDE.md
 
@@ -185,8 +187,8 @@ All these services have free tiers perfect for development:
 | **Vercel** | Unlimited deployments | vercel.com |
 | **Supabase** | 500MB database | supabase.com |
 | **Upstash** | 10k commands/day | upstash.com |
-| **Twilio** | $15 free credit | twilio.com |
-| **SendGrid** | 100 emails/day | sendgrid.com |
+| **MSG91** | Free credits for testing | msg91.com |
+| **Resend** | 100k emails/month free | resend.com |
 | **Razorpay** | Test mode (free) | razorpay.com |
 
 ---

@@ -142,12 +142,12 @@ export default function DPAPage() {
                       <td className="py-3">Global (multi-region)</td>
                     </tr>
                     <tr>
-                      <td className="py-3">Twilio</td>
+                      <td className="py-3">MSG91</td>
                       <td className="py-3">SMS delivery</td>
-                      <td className="py-3">US / Singapore</td>
+                      <td className="py-3">India</td>
                     </tr>
                     <tr>
-                      <td className="py-3">SendGrid (Twilio)</td>
+                      <td className="py-3">Resend</td>
                       <td className="py-3">Email delivery</td>
                       <td className="py-3">US / EU</td>
                     </tr>

@@ -48,9 +48,9 @@ src/app/dashboard/settings/page.tsx # Settings pages
 src/app/api/auth/[...nextauth]/route.ts  # Authentication
 src/app/api/auth/register/route.ts       # User registration
 src/app/api/webhooks/shopify/route.ts    # Shopify webhooks
-src/lib/services/sms.ts                  # Twilio SMS service
+src/lib/services/sms.ts                  # MSG91 SMS service
 src/lib/services/whatsapp.ts             # WhatsApp Business API
-src/lib/services/email.ts                # SendGrid email service
+src/lib/services/email.ts                # Resend email service
 src/lib/shopify.ts                       # Shopify integration helpers
 ```
 
@@ -104,7 +104,7 @@ src/lib/utils.ts                    # Helper functions
               ▼               ▼               ▼
 ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
 │   PostgreSQL    │ │     Redis       │ │  External APIs  │
-│   (Prisma)      │ │   (Upstash)     │ │ (Twilio, etc.)  │
+│   (Prisma)      │ │   (Upstash)     │ │ (MSG91, etc.)  │
 └─────────────────┘ └─────────────────┘ └─────────────────┘
 ```
 
@@ -184,7 +184,7 @@ PRO ($99/month)
 
 ### Phase 1: Technical Setup (Week 1-2)
 - [ ] Install dependencies
-- [ ] Set up service accounts (Supabase, Twilio, Stripe, SendGrid)
+- [ ] Set up service accounts (Supabase, MSG91, Stripe, Resend)
 - [ ] Configure environment variables
 - [ ] Deploy to Vercel
 - [ ] Set up analytics (PostHog)
@@ -251,9 +251,9 @@ PRO ($99/month)
 | Vercel | Hosting | ✅ Unlimited | To Create |
 | Supabase | PostgreSQL | ✅ 500MB | To Create |
 | Upstash | Redis | ✅ 10k/day | To Create |
-| Twilio | SMS | ✅ $15 credit | To Create |
+| MSG91 | SMS | ✅ $15 credit | To Create |
 | Meta Business | WhatsApp API | ✅ Pay-per-use | To Create |
-| SendGrid | Email | ✅ 100/day | To Create |
+| Resend | Email | ✅ 100/day | To Create |
 | Razorpay | Payments | ✅ Test mode | To Create |
 | Google Cloud | OAuth | ✅ Free | To Create |
 
@@ -319,7 +319,7 @@ C:\Users\Deepanshu Kaushik\OneDrive\Desktop\yashwant\recoverflow\
 1. Verify Node.js and npm installed
 2. Run `npm install` in recoverflow folder
 3. Create Supabase account
-4. Create Twilio account
+4. Create MSG91 account
 5. Create Razorpay account
 
 ### This Week

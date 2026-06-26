@@ -26,9 +26,9 @@
 | Cache/Queue | Redis (Upstash) |
 | Auth | NextAuth.js |
 | Payments | Razorpay |
-| SMS | Twilio |
+| SMS | MSG91 |
 | WhatsApp | Meta Business API |
-| Email | SendGrid/Resend |
+| Email | Resend |
 | Hosting | Vercel |
 
 ## Quick Start
@@ -38,7 +38,7 @@
 - Node.js 18+ 
 - npm or yarn
 - PostgreSQL database
-- Accounts for: Twilio, SendGrid, Razorpay
+- Accounts for: MSG91, Resend, Razorpay
 
 ### Installation
 
@@ -54,7 +54,7 @@ npm install
 cp .env.example .env.local
 
 # Edit .env.local with your credentials
-# Required: DATABASE_URL, NEXTAUTH_SECRET, RAZORPAY keys, Twilio credentials
+# Required: DATABASE_URL, NEXTAUTH_SECRET, RAZORPAY keys, MSG91 credentials
 
 # Generate Prisma client
 npx prisma generate
@@ -121,17 +121,18 @@ RAZORPAY_KEY_ID="rzp_test_..."
 RAZORPAY_KEY_SECRET="..."
 RAZORPAY_WEBHOOK_SECRET="..."
 
-# Twilio (SMS)
-TWILIO_ACCOUNT_SID="AC..."
-TWILIO_AUTH_TOKEN="..."
-TWILIO_PHONE_NUMBER="+1..."
+# MSG91 (SMS)
+MSG91_AUTH_KEY="your_auth_key"
+MSG91_SENDER_ID="CARTGN"
 
 # WhatsApp Business API
 WHATSAPP_BUSINESS_TOKEN="..."
 WHATSAPP_PHONE_NUMBER_ID="..."
 
-# Email (SendGrid)
-SENDGRID_API_KEY="SG...."
+# Email (Resend)
+RESEND_API_KEY="re_xxx"
+FROM_EMAIL="noreply@cartgain.com"
+FROM_NAME="CartGain"
 FROM_EMAIL="noreply@recoverflow.com"
 
 # Redis

@@ -40,9 +40,9 @@ npm run dev
 | **Vercel** | Hosting | Free tier |
 | **Supabase** | PostgreSQL Database | Free tier |
 | **Upstash** | Redis (caching/queues) | Free tier |
-| **Twilio** | SMS delivery | ~₹0.70–1.00/SMS; needs ₹1,000 initial credit |
+| **MSG91** | SMS delivery | ~₹0.18–0.30/SMS; free trial credits |
 | **Meta Business (WhatsApp API)** | WhatsApp messages | **₹0.86/marketing msg** (cart recovery); ₹0.115/utility; 1,000 service convos/mo free. Pay-as-you-go via Meta billing |
-| **SendGrid/Resend** | Email delivery | Free 100/day |
+| **Resend** | Email delivery | Free 100k/month |
 | **Razorpay** | Payments | 2% domestic, 3% intl |
 | **Google Cloud** | OAuth authentication | Free |
 
@@ -59,15 +59,15 @@ npm run dev
 | Item | Upfront | Monthly Burn (0 revenue) |
 |------|---------|--------------------------|
 | Domain (GoDaddy/Namecheap) | **₹800/yr** | ₹67 |
-| Twilio SMS credit | **₹1,000** (lasts ~1,000–1,400 SMS) | — |
+| MSG91 SMS credit | **Free trial ~₹500** | — |
 | WhatsApp API (Meta) | **₹0** (pay-as-you-go) | ₹0 until you send messages |
 | OpenAI (optional) | **₹500** (if using AI messages) | varies by usage |
 | **Total minimum** | **₹1,800** | **₹67/mo** |
 
-**Per-message costs you'll pay (recoverflow pays Meta/Twilio):**
-- SMS (Twilio India): ~₹0.70–1.00 each
-- WhatsApp marketing: ~₹0.86 each (Meta Cloud API)
-- Email: Free (SendGrid 100/day free tier)
+**Per-message costs you'll pay:**
+- SMS (MSG91 India): ~₹0.18–0.30 each
+- WhatsApp: ~₹0.45–0.85 per conversation
+- Email: Free (Resend 100k/month free tier)
 
 **Default 3-message sequence (WhatsApp → SMS → Email) costs you ~₹1.56–1.86/cart.** If a Starter store processes its 500 cart limit, your cost = ~₹780–930. Their plan is ₹999/mo. That's why plan caps matter.
 
@@ -258,7 +258,7 @@ Best,
 ### Week 1-2: Foundation
 - [ ] Complete MVP (this codebase)
 - [ ] Set up all service accounts
-- [ ] Configure Twilio, SendGrid, Razorpay
+- [ ] Configure MSG91, Resend, Razorpay
 - [ ] Deploy to Vercel
 - [ ] Set up analytics (PostHog or Mixpanel)
 
@@ -368,9 +368,9 @@ Database:     PostgreSQL (Supabase/PlanetScale)
 Cache/Queue:  Redis (Upstash)
 Auth:         NextAuth.js
 Payments:     Razorpay
-SMS:          Twilio
+SMS:          MSG91
 WhatsApp:     Meta Business API
-Email:        SendGrid or Resend
+Email:        Resend
 Hosting:      Vercel
 Analytics:    PostHog (self-hosted)
 Support:      Crisp or Intercom

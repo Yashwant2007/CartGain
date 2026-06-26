@@ -98,7 +98,7 @@ export default function PrivacyPolicyPage() {
                 <p className="mb-4">We share data with the following categories of third parties:</p>
                 <ul className="list-disc pl-5 space-y-2">
                   <li><strong>E-commerce Platforms:</strong> Shopify, WooCommerce, etc., to sync cart data.</li>
-                  <li><strong>Communication Providers:</strong> WhatsApp Business API, Twilio (SMS), SendGrid (Email).</li>
+                  <li><strong>Communication Providers:</strong> WhatsApp Business API, MSG91 (SMS), Resend (Email).</li>
                   <li><strong>AI Services:</strong> OpenAI (GPT-4o-mini) for AI-powered message generation — customer names and cart product details are processed to generate personalized recovery messages. OpenAI does not use API data for training.</li>
                   <li><strong>Payment Processors:</strong> Razorpay for secure payment processing.</li>
                   <li><strong>Cloud Infrastructure:</strong> Vercel and Supabase for hosting and database.</li>
