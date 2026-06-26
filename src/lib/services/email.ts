@@ -1,25 +1,15 @@
-let transporter: any = null;
+import { Resend } from 'resend'
 
-if (typeof window === 'undefined') {
+const apiKey = process.env.RESEND_API_KEY
+const fromEmail = process.env.FROM_EMAIL || 'noreply@cartgain.com'
+const fromName = process.env.FROM_NAME || 'CartGain'
+
+let resend: Resend | null = null
+if (apiKey) {
   try {
-    const nodemailer = require('nodemailer');
-    const hasCredentials = process.env.EMAIL_SERVER_USER && process.env.EMAIL_SERVER_PASSWORD;
-    if (hasCredentials) {
-      transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_SERVER_HOST || 'smtp.sendgrid.net',
-        port: parseInt(process.env.EMAIL_SERVER_PORT || '587'),
-        secure: false,
-        auth: {
-          user: process.env.EMAIL_SERVER_USER,
-          pass: process.env.EMAIL_SERVER_PASSWORD,
-        },
-        tls: { rejectUnauthorized: false },
-      });
-    } else {
-      console.log('Email: no credentials configured, emails will be logged to console');
-    }
+    resend = new Resend(apiKey)
   } catch (e) {
-    console.error('Failed to load email transporter:', e);
+    console.error('Failed to init Resend:', e)
   }
 }
 
@@ -36,31 +26,29 @@ export async function sendEmail({
   subject,
   html,
   text,
-  from = process.env.FROM_EMAIL || 'noreply@recoverflow.com',
+  from = `${fromName} <${fromEmail}>`,
 }: EmailOptions): Promise<{
   success: boolean
   messageId?: string
   error?: string
 }> {
-  if (!transporter) {
-    const fallbackMsg = `[EMAIL LOG] To: ${to} | Subject: ${subject} | Text: ${(text || html).substring(0, 200)}...`
-    console.log(fallbackMsg)
+  if (!resend) {
+    console.log(`[EMAIL LOG] To: ${to} | Subject: ${subject}`)
     return { success: true, messageId: `logged-${Date.now()}` }
   }
 
   try {
-    const info = await transporter.sendMail({
+    const { data, error } = await resend.emails.send({
       from,
-      to,
+      to: [to],
       subject,
       html,
-      text,
+      ...(text ? { text } : {}),
     })
-    return { success: true, messageId: info.messageId }
+    if (error) throw error
+    return { success: true, messageId: data?.id }
   } catch (error: any) {
     console.error('Email send error:', error)
-    const fallbackMsg = `[EMAIL FALLBACK] To: ${to} | Subject: ${subject} | Error: ${error.message}`
-    console.log(fallbackMsg)
     return { success: true, messageId: `fallback-${Date.now()}` }
   }
 }

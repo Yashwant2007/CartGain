@@ -32,7 +32,7 @@ type IntegrationStatus = {
 }
 
 type CredentialModal = {
-  type: 'woocommerce' | 'magento' | 'bigcommerce' | 'custom' | 'twilio' | 'whatsapp' | 'sendgrid' | 'onesignal'
+  type: 'woocommerce' | 'magento' | 'bigcommerce' | 'custom' | 'msg91' | 'whatsapp' | 'resend' | 'onesignal'
   name: string
   icon: string
 } | null
@@ -152,9 +152,9 @@ export default function IntegrationsPage() {
   }
 
   const messagingActions: Record<string, { onConnect: () => void }> = {
-    twilio: { onConnect: () => setCredentialModal({ type: 'twilio', name: 'Twilio SMS', icon: '💬' }) },
+    msg91: { onConnect: () => setCredentialModal({ type: 'msg91', name: 'MSG91 SMS', icon: '💬' }) },
     whatsapp: { onConnect: () => setCredentialModal({ type: 'whatsapp', name: 'WhatsApp Business', icon: '📱' }) },
-    sendgrid: { onConnect: () => setCredentialModal({ type: 'sendgrid', name: 'SendGrid', icon: '📧' }) },
+    resend: { onConnect: () => setCredentialModal({ type: 'resend', name: 'Resend', icon: '📧' }) },
     onesignal: { onConnect: () => setCredentialModal({ type: 'onesignal', name: 'OneSignal', icon: '🔔' }) },
   }
 
@@ -387,15 +387,14 @@ const CREDENTIAL_FORMS: Record<string, {
     ],
     docUrl: '/docs/api',
   },
-  twilio: {
-    title: 'Twilio SMS Configuration',
-    description: 'Twilio is configured via environment variables. Add these to your Vercel project dashboard.',
+  msg91: {
+    title: 'MSG91 SMS Configuration',
+    description: 'MSG91 is configured via environment variables. Add these to your Vercel project dashboard.',
     fields: [
-      { key: 'TWILIO_ACCOUNT_SID', label: 'TWILIO_ACCOUNT_SID', placeholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
-      { key: 'TWILIO_AUTH_TOKEN', label: 'TWILIO_AUTH_TOKEN', placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
-      { key: 'TWILIO_PHONE_NUMBER', label: 'TWILIO_PHONE_NUMBER', placeholder: '+1234567890' },
+      { key: 'MSG91_AUTH_KEY', label: 'MSG91_AUTH_KEY', placeholder: 'your_msg91_auth_key' },
+      { key: 'MSG91_SENDER_ID', label: 'MSG91_SENDER_ID', placeholder: 'CARTGN' },
     ],
-    docUrl: 'https://www.twilio.com/docs/sms/quickstart/node',
+    docUrl: 'https://docs.msg91.com/',
   },
   whatsapp: {
     title: 'WhatsApp Business Configuration',
@@ -406,13 +405,13 @@ const CREDENTIAL_FORMS: Record<string, {
     ],
     docUrl: 'https://developers.facebook.com/docs/whatsapp/cloud-api',
   },
-  sendgrid: {
-    title: 'SendGrid Configuration',
-    description: 'SendGrid is configured via environment variable. Add this to your Vercel project dashboard.',
+  resend: {
+    title: 'Resend Configuration',
+    description: 'Resend is configured via environment variable. Add this to your Vercel project dashboard.',
     fields: [
-      { key: 'SENDGRID_API_KEY', label: 'SENDGRID_API_KEY', placeholder: 'SG.xxxxx.xxxxx' },
+      { key: 'RESEND_API_KEY', label: 'RESEND_API_KEY', placeholder: 're_xxxxx' },
     ],
-    docUrl: 'https://docs.sendgrid.com/for-developers/sending-email/api-getting-started',
+    docUrl: 'https://resend.com/docs/api-reference/introduction',
   },
   onesignal: {
     title: 'OneSignal Configuration',
@@ -440,7 +439,7 @@ function CredentialModalComponent({
 
   if (!modal) return null
   const form = CREDENTIAL_FORMS[modal.type]
-  const isMessaging = ['twilio', 'whatsapp', 'sendgrid', 'onesignal'].includes(modal.type)
+  const isMessaging = ['msg91', 'whatsapp', 'resend', 'onesignal'].includes(modal.type)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

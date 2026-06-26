@@ -77,13 +77,12 @@ export async function GET() {
       ],
       messagingServices: [
         {
-          id: 'twilio',
-          name: 'Twilio SMS',
-          description: 'Send SMS messages via Twilio',
+          id: 'msg91',
+          name: 'MSG91 SMS',
+          description: 'Send transactional SMS via MSG91',
           icon: '💬',
-          connected: Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER),
-          status: process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER ? 'active' : 'disconnected',
-          credits: process.env.TWILIO_ACCOUNT_SID ? 847 : 0,
+          connected: Boolean(process.env.MSG91_AUTH_KEY),
+          status: process.env.MSG91_AUTH_KEY ? 'active' : 'disconnected',
         },
         {
           id: 'whatsapp',
@@ -94,13 +93,12 @@ export async function GET() {
           status: process.env.WHATSAPP_BUSINESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID ? 'active' : 'disconnected',
         },
         {
-          id: 'sendgrid',
-          name: 'SendGrid',
-          description: 'Email delivery via SendGrid',
+          id: 'resend',
+          name: 'Resend',
+          description: 'Email delivery via Resend',
           icon: '📧',
-          connected: Boolean(process.env.SENDGRID_API_KEY),
-          status: process.env.SENDGRID_API_KEY ? 'active' : 'disconnected',
-          credits: process.env.SENDGRID_API_KEY ? 9500 : 0,
+          connected: Boolean(process.env.RESEND_API_KEY),
+          status: process.env.RESEND_API_KEY ? 'active' : 'disconnected',
         },
         {
           id: 'onesignal',

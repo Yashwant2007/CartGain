@@ -1,99 +1,79 @@
-import twilio from 'twilio'
-
-const accountSid = process.env.TWILIO_ACCOUNT_SID
-const authToken = process.env.TWILIO_AUTH_TOKEN
-const fromNumber = process.env.TWILIO_PHONE_NUMBER
-
-const client = accountSid && authToken ? twilio(accountSid, authToken) : null
+const authKey = process.env.MSG91_AUTH_KEY
+const senderId = process.env.MSG91_SENDER_ID || 'CARTGN'
 
 export interface SendSMSOptions {
   to: string
   body: string
-  mediaUrl?: string
 }
 
-export async function sendSMS({ to, body, mediaUrl }: SendSMSOptions): Promise<{
+export async function sendSMS({ to, body }: SendSMSOptions): Promise<{
   success: boolean
   messageId?: string
   error?: string
 }> {
-  if (!client) {
-    console.warn('Twilio client not initialized')
-    return { success: false, error: 'Twilio not configured' }
+  if (!authKey) {
+    console.warn('MSG91 auth key not configured')
+    return { success: false, error: 'MSG91 not configured' }
   }
 
   try {
-    const message = await client.messages.create({
-      body,
-      from: fromNumber,
-      to,
-      ...(mediaUrl ? { mediaUrl: [mediaUrl] } : {}),
+    const mobiles = sanitizePhoneNumber(to).replace(/^\+/, '')
+    const params = new URLSearchParams({
+      authkey: authKey,
+      mobiles,
+      message: body,
+      sender: senderId,
+      route: '4',
+      country: '91',
     })
-
+    const res = await fetch(`https://api.msg91.com/api/sendhttp.php?${params}`)
+    const text = await res.text()
     return {
-      success: true,
-      messageId: message.sid,
+      success: res.ok,
+      messageId: text.trim(),
     }
   } catch (error: any) {
     console.error('SMS send error:', error)
-    return {
-      success: false,
-      error: error.message,
-    }
+    return { success: false, error: error.message }
   }
 }
 
 export function sanitizePhoneNumber(phone: string): string {
-  // Remove all non-numeric characters except +
   return phone.replace(/[^\d+]/g, '')
 }
 
 export function isValidPhoneNumber(phone: string): boolean {
   const sanitized = sanitizePhoneNumber(phone)
-  // Basic validation: 10-15 digits
   return /^\+?\d{10,15}$/.test(sanitized)
 }
 
 export function formatPhoneNumber(phone: string): string {
   const sanitized = sanitizePhoneNumber(phone)
-
-  // Handle US numbers
-  if (sanitized.length === 10) {
-    return `+1${sanitized}`
-  }
-  if (sanitized.length === 11 && sanitized.startsWith('1')) {
-    return `+${sanitized}`
-  }
-  if (!sanitized.startsWith('+')) {
-    return `+${sanitized}`
-  }
-
-  return sanitized
+  if (sanitized.length === 10) return `91${sanitized}`
+  if (sanitized.length === 12 && sanitized.startsWith('91')) return sanitized
+  if (!sanitized.startsWith('+')) return `91${sanitized}`
+  return sanitized.replace(/^\+/, '')
 }
 
 export async function getSMSDeliveryStatus(messageId: string): Promise<string> {
-  if (!client) return 'unknown'
-
+  if (!authKey) return 'unknown'
   try {
-    const message = await client.messages(messageId).fetch()
-    return message.status
-  } catch (error) {
-    console.error('Failed to get SMS status:', error)
-    return 'unknown'
-  }
+    const res = await fetch(`https://api.msg91.com/api/dlr.php?authkey=${authKey}&message_id=${messageId}`)
+    const data = await res.json()
+    return data.status || 'unknown'
+  } catch { return 'unknown' }
 }
 
-// SMS templates for cart recovery
 export const SMSTemplates = {
   abandoned: (customerName: string, cartTotal: number, cartUrl: string, currencySymbol = '₹') => `
-🛍️ ${customerName || 'there'}! Your cart is still warm!
+${customerName || 'there'}! Your cart is still warm!
 Complete your order: ${cartUrl}
 Total: ${currencySymbol}${cartTotal.toFixed(2)}
 Reply STOP to unsubscribe
   `.trim(),
 
   withDiscount: (customerName: string, cartTotal: number, discountCode: string, discountPercent: number, cartUrl: string, currencySymbol = '₹') => `
-${customerName || 'Hey'}! Your cart is waiting 🎁
+${customerName || 'Hey'}! Your cart is waiting.
 Use code ${discountCode} for ${discountPercent}% off!
 Shop now: ${cartUrl}
 Reply STOP to unsubscribe
