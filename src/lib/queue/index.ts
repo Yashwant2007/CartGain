@@ -13,14 +13,18 @@ if (typeof window === 'undefined') {
 function getCartQueue(): any {
   if (!queueInstance && Bull) {
     try {
+      const redisUrl = process.env.REDIS_URL
+      const redisConfig = redisUrl
+        ? { url: redisUrl, maxRetriesPerRequest: null, enableReadyCheck: false, tls: redisUrl.startsWith('rediss://') ? {} : undefined }
+        : {
+            host: process.env.REDIS_HOST || 'localhost',
+            port: parseInt(process.env.REDIS_PORT || '6379'),
+            password: process.env.REDIS_PASSWORD,
+            maxRetriesPerRequest: null,
+            enableReadyCheck: false,
+          }
       queueInstance = new Bull('process-carts', {
-        redis: {
-          host: process.env.REDIS_HOST || 'localhost',
-          port: parseInt(process.env.REDIS_PORT || '6379'),
-          password: process.env.REDIS_PASSWORD,
-          maxRetriesPerRequest: null,
-          enableReadyCheck: false,
-        },
+        redis: redisConfig,
         settings: {
           lockDuration: 30000,
           lockRenewTime: 15000,

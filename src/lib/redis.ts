@@ -5,17 +5,21 @@ let client: Redis | null = null
 function getRedis(): Redis | null {
   if (client) return client
 
-  const host = process.env.REDIS_HOST
-  if (host) {
-    const port = parseInt(process.env.REDIS_PORT || '6379')
-    const password = process.env.REDIS_PASSWORD
-    try {
+  const url = process.env.REDIS_URL
+  try {
+    if (url) {
+      client = new Redis(url, { maxRetriesPerRequest: null, enableOfflineQueue: true, lazyConnect: true, tls: url.startsWith('rediss://') ? {} : undefined })
+    } else {
+      const host = process.env.REDIS_HOST
+      if (!host) return null
+      const port = parseInt(process.env.REDIS_PORT || '6379')
+      const password = process.env.REDIS_PASSWORD
       client = new Redis({ host, port, password, maxRetriesPerRequest: null, enableOfflineQueue: true, lazyConnect: true })
-      client.on('error', (err) => console.error('Redis error:', err.message))
-    } catch (e: any) {
-      console.log('Redis unavailable:', e.message)
-      client = null
     }
+    client.on('error', (err) => console.error('Redis error:', err.message))
+  } catch (e: any) {
+    console.log('Redis unavailable:', e.message)
+    client = null
   }
   return client
 }
