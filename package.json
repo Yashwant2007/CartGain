@@ -43,6 +43,9 @@
     "typescript": "^5.4.5",
     "zod": "^3.23.8"
   },
+  "overrides": {
+    "uuid": "^11.0.0"
+  },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
