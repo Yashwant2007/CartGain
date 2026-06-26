@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth/next'
 import { NextResponse } from 'next/server'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { encrypt, decrypt } from '@/lib/encryption'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,18 +19,28 @@ export async function GET() {
         userId: session.user.id,
       },
       orderBy: { createdAt: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        domain: true,
-      },
     })
 
     if (!store) {
       return NextResponse.json({ message: 'No store found for this account' }, { status: 404 })
     }
 
-    return NextResponse.json({ store })
+    const decryptedApiKey = store.apiKey ? decrypt(store.apiKey) : null
+    const decryptedApiSecret = store.apiSecret ? decrypt(store.apiSecret) : null
+
+    return NextResponse.json({
+      store: {
+        id: store.id,
+        name: store.name,
+        domain: store.domain,
+        timezone: store.timezone,
+        currency: store.currency,
+        platform: store.platform,
+        webhookUrl: store.webhookUrl,
+        apiKey: decryptedApiKey,
+        apiSecret: decryptedApiSecret,
+      },
+    })
   } catch (error) {
     console.error('Current store lookup error:', error)
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })
@@ -56,18 +67,19 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ message: 'No store found for this account' }, { status: 404 })
     }
 
+    const data: Record<string, any> = {}
+    if (typeof name === 'string') data.name = name
+    if (typeof domain === 'string') data.domain = domain
+    if (typeof timezone === 'string') data.timezone = timezone
+    if (typeof currency === 'string') data.currency = currency
+    if (typeof platform === 'string') data.platform = platform
+    if (typeof webhookUrl === 'string') data.webhookUrl = webhookUrl
+    if (typeof apiKey === 'string') data.apiKey = apiKey ? encrypt(apiKey) : ''
+    if (typeof apiSecret === 'string') data.apiSecret = apiSecret ? encrypt(apiSecret) : ''
+
     const updatedStore = await prisma.store.update({
       where: { id: store.id },
-      data: {
-        ...(typeof name === 'string' ? { name } : {}),
-        ...(typeof domain === 'string' ? { domain } : {}),
-        ...(typeof timezone === 'string' ? { timezone } : {}),
-        ...(typeof currency === 'string' ? { currency } : {}),
-        ...(typeof platform === 'string' ? { platform } : {}),
-        ...(typeof webhookUrl === 'string' ? { webhookUrl } : {}),
-        ...(typeof apiKey === 'string' ? { apiKey } : {}),
-        ...(typeof apiSecret === 'string' ? { apiSecret } : {}),
-      },
+      data,
       select: {
         id: true,
         name: true,
@@ -76,8 +88,6 @@ export async function PATCH(request: Request) {
         currency: true,
         platform: true,
         webhookUrl: true,
-        apiKey: true,
-        apiSecret: true,
       },
     })
 

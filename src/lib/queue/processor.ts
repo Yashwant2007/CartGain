@@ -12,7 +12,7 @@ function registerProcessor() {
   try {
     const queue = getQueue()
 
-    queue.process(async (job) => {
+    queue.process(async (job: any) => {
       console.log(`Processing job ${job.id} at ${new Date().toISOString()}`)
 
       try {

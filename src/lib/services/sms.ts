@@ -89,21 +89,25 @@ export const SMSTemplates = {
 🛍️ ${customerName || 'there'}! Your cart is still warm!
 Complete your order: ${cartUrl}
 Total: ${currencySymbol}${cartTotal.toFixed(2)}
+Reply STOP to unsubscribe
   `.trim(),
 
   withDiscount: (customerName: string, cartTotal: number, discountCode: string, discountPercent: number, cartUrl: string, currencySymbol = '₹') => `
 ${customerName || 'Hey'}! Your cart is waiting 🎁
 Use code ${discountCode} for ${discountPercent}% off!
 Shop now: ${cartUrl}
+Reply STOP to unsubscribe
   `.trim(),
 
   urgent: (customerName: string, cartTotal: number, cartUrl: string) => `
 Last chance! Your cart items are selling out fast.
 Complete checkout before they're gone: ${cartUrl}
+Reply STOP to unsubscribe
   `.trim(),
 
   backInStock: (customerName: string, productName: string, cartUrl: string) => `
 Good news! ${productName} is back in stock.
 Complete your order: ${cartUrl}
+Reply STOP to unsubscribe
   `.trim(),
 }

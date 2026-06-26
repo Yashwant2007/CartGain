@@ -157,6 +157,29 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
             if (channel === 'email' && !cart.customerEmail) continue
             if ((channel === 'sms' || channel === 'whatsapp') && !cart.customerPhone) continue
 
+            const customerEmail = cart.customerEmail?.toLowerCase().trim()
+            const customerPhone = cart.customerPhone?.replace(/\D/g, '')
+
+            if (customerEmail) {
+              const optedOut = await prisma.optOut.findUnique({
+                where: { storeId_email: { storeId: store.id, email: customerEmail } },
+              })
+              if (optedOut) {
+                console.log(`⏭️ Skipping cart ${cart.id}: customer ${customerEmail} has opted out`)
+                continue
+              }
+            }
+
+            if (customerPhone && !customerEmail) {
+              const optedOut = await prisma.optOut.findUnique({
+                where: { storeId_phone: { storeId: store.id, phone: customerPhone } },
+              })
+              if (optedOut) {
+                console.log(`⏭️ Skipping cart ${cart.id}: customer ${customerPhone} has opted out`)
+                continue
+              }
+            }
+
             processedCartIds.add(cart.id)
             cartsProcessedForStore++
 
@@ -322,6 +345,7 @@ function fallbackSMSText(customerName: string, storeName: string, productList: s
     `${productList} — ${formattedTotal}`,
     ``,
     `Complete checkout: ${cartUrl}`,
+    `Reply STOP to unsubscribe`,
   ].join('\n')
 }
 
@@ -337,5 +361,6 @@ function fallbackWhatsAppText(customerName: string, storeName: string, itemsBloc
     ``,
     `⏳ The best finds always go fast. Complete your purchase:`,
     `${cartUrl}`,
+    `Reply STOP to unsubscribe from all messages`,
   ].join('\n')
 }

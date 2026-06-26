@@ -162,6 +162,11 @@ export default function DPAPage() {
                       <td className="py-3">India</td>
                     </tr>
                     <tr>
+                      <td className="py-3">OpenAI</td>
+                      <td className="py-3">AI-powered message generation (GPT-4o-mini)</td>
+                      <td className="py-3">US / Global</td>
+                    </tr>
+                    <tr>
                       <td className="py-3">Redis (Upstash)</td>
                       <td className="py-3">Job queue &amp; caching</td>
                       <td className="py-3">AWS Mumbai, India</td>

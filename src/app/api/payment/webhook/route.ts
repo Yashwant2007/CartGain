@@ -129,96 +129,58 @@ async function handleOrderPaid(payment: any, order: any) {
 }
 
 async function handleSubscriptionActivated(subscription: any) {
-  const userId = subscription.notes?.userId;
-  const plan = subscription.notes?.plan || "starter";
+  const subId = subscription.id
 
-  const planConfig = Object.values(PLANS).find((p) => p.id === plan);
-  const smsCredits = planConfig && "smsCredits" in planConfig ? (planConfig as any).smsCredits : 2000;
+  const existing = await prisma.subscription.findFirst({
+    where: { subscriptionId: subId },
+  })
 
-  const existingSubscription = await prisma.subscription.findFirst({
-    where: { userId },
-  });
-
-  if (existingSubscription) {
-    await prisma.subscription.update({
-      where: { id: existingSubscription.id },
-      data: {
-        status: "active",
-        plan,
-        subscriptionId: subscription.id,
-        smsCredits,
-        smsCreditsUsed: 0,
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-      },
-    });
-  } else {
-    await prisma.subscription.create({
-      data: {
-        userId,
-        customerId: subscription.customer_id,
-        subscriptionId: subscription.id,
-        plan,
-        status: "active",
-        smsCredits,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-      },
-    });
+  if (!existing) {
+    console.log(`⚠️ No pending subscription found for Razorpay sub ${subId}, skipping`)
+    return
   }
 
-  console.log(`✅ Subscription activated for user ${userId}, plan: ${plan}`);
+  const planConfig = Object.values(PLANS).find((p) => p.id === existing.plan)
+
+  await prisma.subscription.update({
+    where: { id: existing.id },
+    data: {
+      status: "active",
+      customerId: subscription.customer_id,
+      currentPeriodStart: new Date(subscription.current_period_start * 1000),
+      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+    },
+  })
+
+  console.log(`✅ Subscription ${subId} activated for user ${existing.userId}, plan: ${existing.plan}`)
 }
 
 async function handleSubscriptionPaused(subscription: any) {
-  const userId = subscription.notes?.userId;
-
-  const existingSubscription = await prisma.subscription.findFirst({
-    where: { userId },
-  });
-
-  if (existingSubscription) {
-    await prisma.subscription.update({
-      where: { id: existingSubscription.id },
-      data: { status: "paused" },
-    });
+  const subId = subscription.id
+  const existing = await prisma.subscription.findFirst({ where: { subscriptionId: subId } })
+  if (existing) {
+    await prisma.subscription.update({ where: { id: existing.id }, data: { status: "paused" } })
+    console.log(`⏸️ Subscription ${subId} paused for user ${existing.userId}`)
   }
-
-  console.log(`⏸️ Subscription paused for user ${userId}`);
 }
 
 async function handleSubscriptionResumed(subscription: any) {
-  const userId = subscription.notes?.userId;
-
-  const existingSubscription = await prisma.subscription.findFirst({
-    where: { userId },
-  });
-
-  if (existingSubscription) {
+  const subId = subscription.id
+  const existing = await prisma.subscription.findFirst({ where: { subscriptionId: subId } })
+  if (existing) {
     await prisma.subscription.update({
-      where: { id: existingSubscription.id },
-      data: { 
-        status: "active",
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-      },
-    });
+      where: { id: existing.id },
+      data: { status: "active", currentPeriodEnd: new Date(subscription.current_period_end * 1000) },
+    })
+    console.log(`▶️ Subscription ${subId} resumed for user ${existing.userId}`)
   }
-
-  console.log(`▶️ Subscription resumed for user ${userId}`);
 }
 
 async function handleSubscriptionCancelled(subscription: any) {
-  const userId = subscription.notes?.userId;
-
-  const existingSubscription = await prisma.subscription.findFirst({
-    where: { userId },
-  });
-
-  if (existingSubscription) {
-    await prisma.subscription.update({
-      where: { id: existingSubscription.id },
-      data: { status: "cancelled" },
-    });
+  const subId = subscription.id
+  const existing = await prisma.subscription.findFirst({ where: { subscriptionId: subId } })
+  if (existing) {
+    await prisma.subscription.update({ where: { id: existing.id }, data: { status: "cancelled" } })
+    console.log(`❌ Subscription ${subId} cancelled for user ${existing.userId}`)
   }
-
-  console.log(`❌ Subscription cancelled for user ${userId}`);
 }

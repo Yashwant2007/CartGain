@@ -17,6 +17,7 @@ import {
   X,
   Home
 } from 'lucide-react'
+import StatusBadge from '@/components/dashboard/StatusBadge'
 
 export default function DashboardLayout({
   children,
@@ -129,13 +130,7 @@ export default function DashboardLayout({
           <div className="hidden lg:block flex-1" />
           
           {/* Status indicator */}
-          <div className="flex items-center space-x-2 bg-emerald-100/10 text-emerald-300 px-2.5 sm:px-3 py-1 rounded-full text-xs sm:text-sm border border-emerald-500/20">
-            <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2">
-              <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-full w-full bg-emerald-500"></span>
-            </span>
-            <span className="font-medium">Live</span>
-          </div>
+          <StatusBadge />
         </header>
 
         {/* Page content - with responsive padding */}

@@ -151,10 +151,6 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
-        <Script 
-          src="https://checkout.razorpay.com/v1/checkout.js" 
-          strategy="beforeInteractive"
-        />
         {children}
       </body>
     </html>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { encrypt } from '@/lib/encryption'
 import { setupShopifyWebhooks } from '@/lib/shopify'
 
 export async function GET(req: NextRequest) {
@@ -57,8 +58,8 @@ export async function GET(req: NextRequest) {
       await prisma.store.update({
         where: { id: storeId },
         data: {
-          apiKey: accessToken,
-          apiSecret: shop,
+          apiKey: encrypt(accessToken),
+          apiSecret: encrypt(shop),
           platform: 'shopify',
           domain: shop,
         },

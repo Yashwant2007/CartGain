@@ -82,6 +82,7 @@ model Store {
   carts           Cart[]
   campaigns       Campaign[]
   recoveredCarts  RecoveredCart[]
+  optOuts         OptOut[]
 
   @@unique([userId, domain])
   @@index([userId])
@@ -266,4 +267,19 @@ model ApiKey {
   lastUsedAt  DateTime?
   expiresAt   DateTime?
   createdAt   DateTime @default(now())
+}
+
+model OptOut {
+  id          String   @id @default(cuid())
+  storeId     String
+  email       String?
+  phone       String?
+  reason      String?
+  optedOutAt  DateTime @default(now())
+
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, email])
+  @@unique([storeId, phone])
+  @@index([storeId])
 }

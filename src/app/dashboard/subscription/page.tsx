@@ -124,27 +124,21 @@ export default function SubscriptionPage() {
       const plan = PLANS[planKey]
       if (!plan || plan.price === 0) return
 
-      const isYearly = billing === 'yearly'
-      const amount = isYearly ? plan.yearlyPrice : plan.price
-
-      const res = await fetch('/api/payment/create-order', {
+      const res = await fetch('/api/payment/create-subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: plan.id, amount, period: billing }),
+        body: JSON.stringify({ plan: plan.id, period: billing }),
       })
 
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to create order')
+      if (!res.ok) throw new Error(data.error || 'Failed to create subscription')
 
       const options = {
         key: data.keyId,
-        amount: data.amount,
-        currency: data.currency,
+        subscription_id: data.subscriptionId,
         name: 'CartGain',
-        description: `${plan.name} Plan`,
-        order_id: data.orderId,
+        description: `${plan.name} Plan - ${billing === 'yearly' ? 'Yearly' : 'Monthly'}`,
         handler: (response: any) => {
-          console.log('Payment successful:', response);
           setPurchaseSuccess(plan.name)
           setTimeout(() => window.location.reload(), 2000)
         },
@@ -156,8 +150,7 @@ export default function SubscriptionPage() {
         theme: { color: '#22D3EE' },
         modal: {
           ondismiss: function() {
-            console.log('Payment dismissed');
-            setProcessing(null);
+            setProcessing(null)
           }
         }
       }

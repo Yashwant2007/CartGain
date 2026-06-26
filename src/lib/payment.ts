@@ -48,6 +48,83 @@ export interface Plan {
   recommended?: boolean;
 }
 
+const planIdCache = new Map<string, string>()
+
+export async function getOrCreateRazorpayPlan(planId: string, name: string, amount: number, period: 'monthly' | 'yearly'): Promise<string> {
+  if (!razorpay) throw new Error('Razorpay not configured')
+
+  const cacheKey = `${planId}_${period}`
+  if (planIdCache.has(cacheKey)) return planIdCache.get(cacheKey)!
+
+  const periodInterval = period === 'monthly' ? 'monthly' : 'yearly'
+  const periodCount = 1
+
+  try {
+    const plans = await razorpay.plans.all({ count: 50 })
+    const existing = (plans.items || []).find(
+      (p: any) =>
+        p.item?.name === `CartGain ${name}` &&
+        p.period === periodInterval &&
+        p.item?.amount === Math.round(amount * 100)
+    )
+    if (existing) {
+      planIdCache.set(cacheKey, existing.id)
+      return existing.id
+    }
+  } catch {
+    // continue to create
+  }
+
+  const plan = await razorpay.plans.create({
+    period: periodInterval,
+    interval: periodCount,
+    item: {
+      name: `CartGain ${name}`,
+      amount: Math.round(amount * 100),
+      currency: 'INR',
+      description: `CartGain ${name} - ${period} subscription`,
+    },
+    notes: {
+      plan_id: planId,
+      period,
+    },
+  })
+
+  planIdCache.set(cacheKey, plan.id)
+  return plan.id
+}
+
+export async function createRazorpaySubscription(planId: string, customerEmail: string, period: 'monthly' | 'yearly'): Promise<{
+  subscriptionId: string
+  shortUrl?: string
+}> {
+  if (!razorpay) throw new Error('Razorpay not configured')
+
+  const plan = Object.values(PLANS).find(p => p.id === planId)
+  if (!plan || plan.price === 0) throw new Error('Invalid plan')
+
+  const amount = period === 'yearly' ? plan.yearlyPrice : plan.price
+  const rzpPlanId = await getOrCreateRazorpayPlan(planId, plan.name, amount, period)
+
+  const subscription = await razorpay.subscriptions.create({
+    plan_id: rzpPlanId,
+    customer_notify: true,
+    quantity: 1,
+    total_count: 100,
+    expire_by: Math.round((Date.now() + 86400000) / 1000),
+    notes: {
+      plan_id: planId,
+      period,
+      plan_name: plan.name,
+    },
+  })
+
+  return {
+    subscriptionId: subscription.id,
+    shortUrl: subscription.short_url,
+  }
+}
+
 export const PLANS: Record<string, Plan> = {
   STARTER: {
     id: "starter",
