@@ -186,11 +186,11 @@ export default function HomePage() {
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 flex-shrink-0" />
-              <span><strong>18-25%</strong> recovery rate</span>
+              <span><strong>Industry: 18-25%</strong> recovery rate</span>
             </div>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 flex-shrink-0" />
-              <span><strong>5-6x better</strong> than email</span>
+              <span><strong>5-6x better</strong> than email alone</span>
             </div>
           </div>
 
@@ -285,7 +285,7 @@ export default function HomePage() {
                 </div>
                 <div className="flex items-center gap-2 text-green-400">
                   <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                  <span className="text-sm font-semibold">85% Open Rate</span>
+                  <span className="text-sm font-semibold">85% Industry Avg Open Rate</span>
                 </div>
               </div>
             </div>
@@ -351,7 +351,7 @@ export default function HomePage() {
             <div className="text-center">
               <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-300 mb-2">18-25%</div>
               <div className="text-xs sm:text-sm md:text-base text-blue-200 font-medium">Recovery Rate</div>
-              <p className="text-xs text-blue-400/70 mt-1">vs 3-5% email only</p>
+              <p className="text-xs text-blue-400/70 mt-1">Industry benchmark vs 3-5% email only</p>
             </div>
             <div className="text-center">
               <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-300 mb-2">₹3-5K</div>
@@ -361,7 +361,7 @@ export default function HomePage() {
             <div className="text-center">
               <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-300 mb-2">85%</div>
               <div className="text-xs sm:text-sm md:text-base text-blue-200 font-medium">WhatsApp Open Rate</div>
-              <p className="text-xs text-blue-400/70 mt-1">Instant engagement</p>
+              <p className="text-xs text-blue-400/70 mt-1">Industry average</p>
             </div>
             <div className="text-center">
               <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-300 mb-2">Week 3</div>
@@ -431,7 +431,7 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12 sm:mb-16">
             <h2 id="features-heading" className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">All-in-One Recovery</h2>
-            <p className="text-lg sm:text-xl text-blue-100 max-w-2xl mx-auto">One platform. Three powerful channels. Proven to recover 5-6x more carts than email alone.</p>
+            <p className="text-lg sm:text-xl text-blue-100 max-w-2xl mx-auto">One platform. Three powerful channels. Industry benchmarks show 5-6x more recovered carts than email alone.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 mb-12 sm:mb-20" role="list">
@@ -440,7 +440,7 @@ export default function HomePage() {
               role="listitem"
               icon={<MessageSquare className="w-6 h-6 sm:w-8 sm:h-8 text-primary-600" />}
               title="WhatsApp Recovery"
-              description="Reach customers directly with beautiful product images. 85% open rate. Real-time engagement. Perfect for visual products like skincare."
+              description="Reach customers directly with beautiful product images. Industry avg 85% open rate. Real-time engagement. Perfect for visual products like skincare."
               features={[
                 'Rich media with product images',
                 'Instant delivery (no inbox delays)',
@@ -701,7 +701,7 @@ export default function HomePage() {
                 <h3 className="text-lg font-semibold text-white group-hover:text-cyan-300 transition">Why not just use email?</h3>
                 <span className="text-cyan-400">+</span>
               </div>
-              <p className="text-blue-100 mt-3 text-sm">Email alone only recovers 3-5% of abandoned carts. WhatsApp (85% open rate) + SMS (45% CTR) + Email creates multiple touchpoints. Our clients see 18-25% recovery with multi-channel vs 3-5% with email alone.</p>
+              <p className="text-blue-100 mt-3 text-sm">Email alone only recovers 3-5% of abandoned carts. WhatsApp (industry avg 85% open rate) + SMS (45% CTR) + Email creates multiple touchpoints. Industry benchmarks show 18-25% recovery with multi-channel vs 3-5% with email alone.</p>
             </div>
 
             {/* FAQ 2 */}
@@ -710,7 +710,7 @@ export default function HomePage() {
                 <h3 className="text-lg font-semibold text-white group-hover:text-cyan-300 transition">How do you handle customer data & privacy?</h3>
                 <span className="text-cyan-400">+</span>
               </div>
-              <p className="text-blue-100 mt-3 text-sm">We&apos;re GDPR and data-privacy compliant. All customer data is encrypted. We only process cart abandonment data needed for recovery. No data is shared with third parties. Your customer data stays within our secure infrastructure.</p>
+              <p className="text-blue-100 mt-3 text-sm">All customer data is encrypted at rest and in transit. We only process cart abandonment data needed for recovery. No data is shared with third parties. Your customer data stays within our secure infrastructure. Our data practices follow India&apos;s DPDP Act 2023.</p>
             </div>
 
             {/* FAQ 3 */}
@@ -756,7 +756,7 @@ export default function HomePage() {
               <MessageSquare className="w-4 h-4 inline-block mr-1.5" />
               Contact Us - We&apos;ll Explain Everything
             </a>
-            <p className="text-blue-300/60 text-xs mt-4">Or email us at <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a></p>
+            <p className="text-blue-300/60 text-xs mt-4">Or email us at <a href="mailto:hello@cartgain.com" className="text-cyan-400 hover:underline">hello@cartgain.com</a></p>
           </div>
         </div>
       </section>
@@ -885,6 +885,34 @@ export default function HomePage() {
               </div>
             </div>
           </div>
+
+          {/* Worked Example */}
+          <div className="max-w-5xl mx-auto mt-6 bg-gradient-to-r from-blue-900/30 to-cyan-900/30 border border-blue-700/30 rounded-xl p-6 sm:p-8">
+            <div className="flex items-start space-x-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-bold text-lg">₹</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-2">Example: What do I actually pay?</h3>
+                <p className="text-sm text-blue-300/80 mb-3">On <strong className="text-white">Growth plan</strong> (₹2,999/mo) recovering <strong className="text-white">₹5,00,000/mo</strong> in abandoned cart revenue:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                  <div className="bg-slate-800/50 rounded-lg p-3">
+                    <p className="text-blue-400/60 text-xs mb-1">Subscription</p>
+                    <p className="text-white font-semibold">₹2,999/mo</p>
+                  </div>
+                  <div className="bg-slate-800/50 rounded-lg p-3">
+                    <p className="text-blue-400/60 text-xs mb-1">Revenue share (2.5% of ₹5L)</p>
+                    <p className="text-white font-semibold">₹12,500/mo</p>
+                  </div>
+                  <div className="bg-slate-800/50 rounded-lg p-3">
+                    <p className="text-blue-400/60 text-xs mb-1">Total monthly cost</p>
+                    <p className="text-white font-bold text-base">₹15,499/mo</p>
+                  </div>
+                </div>
+                <p className="text-xs text-blue-400/60 mt-3">First {FREE_CARTS_THRESHOLD} recovered carts are free — no revenue share until we prove our value.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -931,7 +959,7 @@ export default function HomePage() {
             <div>
               <h4 className="font-semibold mb-4 text-sm sm:text-base">Company</h4>
               <ul className="space-y-2 text-gray-400 text-xs sm:text-sm">
-                <li><a href="mailto:CartGain192007@gmail.com" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Email Us</a></li>
+                <li><a href="mailto:hello@cartgain.com" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Email Us</a></li>
                 <li><Link href="/community" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Community</Link></li>
               </ul>
             </div>

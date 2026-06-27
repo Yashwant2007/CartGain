@@ -146,7 +146,7 @@ export default function PrivacyPolicyPage() {
                   <li><strong>Withdraw Consent:</strong> Withdraw consent at any time (where processing is consent-based).</li>
                 </ul>
                 <p className="mt-4">
-                  To exercise these rights, contact us at <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a>.
+                  To exercise these rights, contact us at <a href="mailto:hello@cartgain.com" className="text-cyan-400 hover:underline">hello@cartgain.com</a>.
                 </p>
               </section>
 
@@ -204,9 +204,9 @@ export default function PrivacyPolicyPage() {
                 </h2>
                 <p className="mb-4">If you have questions about this Privacy Policy or our data practices:</p>
                 <div className="space-y-2">
-                  <p><strong>Email:</strong> <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a></p>
-                  <p><strong>Legal:</strong> <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a></p>
-                  <p><strong>Grievance Officer:</strong> <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a></p>
+                  <p><strong>Email:</strong> <a href="mailto:hello@cartgain.com" className="text-cyan-400 hover:underline">hello@cartgain.com</a></p>
+                  <p><strong>Legal:</strong> <a href="mailto:hello@cartgain.com" className="text-cyan-400 hover:underline">hello@cartgain.com</a></p>
+                  <p><strong>Grievance Officer:</strong> <a href="mailto:hello@cartgain.com" className="text-cyan-400 hover:underline">hello@cartgain.com</a></p>
                   <p><strong>Address:</strong> Street No. 3, Line Par, Shanker Garden, Bahadurgarh, Haryana - 124507</p>
                   <p className="mt-3"><Link href="/dpa" className="text-cyan-400 hover:underline">View our Data Processing Agreement (DPA) &rarr;</Link></p>
                 </div>

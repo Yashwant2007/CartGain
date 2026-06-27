@@ -12,7 +12,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: 'CartGain | Abandoned Cart Recovery for D2C Brands',
-  description: 'Recover abandoned carts with WhatsApp, SMS, and Email. Get 18-25% recovery rate for D2C beauty brands. Free setup. No credit card required.',
+  description: 'Recover abandoned carts with WhatsApp, SMS, and Email. Industry benchmarks show 18-25% recovery rates for multi-channel recovery. Free setup. No credit card required.',
   keywords: [
     'abandoned cart recovery',
     'cart recovery software',
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: 'CartGain | Recover Lost Revenue from Abandoned Carts',
-    description: 'Turn 18-25% of abandoned carts into confirmed sales with AI-powered WhatsApp, SMS, and Email recovery.',
+    description: 'Recover more abandoned carts with AI-powered WhatsApp, SMS, and Email recovery — industry benchmarks show 18-25% recovery rates.',
     url: 'https://cart-gain.vercel.app',
     type: 'website',
     images: [
@@ -91,7 +91,7 @@ export default function RootLayout({
               contactPoint: {
                 '@type': 'ContactPoint',
                 contactType: 'Customer Support',
-                email: 'CartGain192007@gmail.com',
+                email: 'hello@cartgain.com',
               },
             }),
           }}
@@ -134,7 +134,7 @@ export default function RootLayout({
                   name: 'Why not just use email for cart recovery?',
                   acceptedAnswer: {
                     '@type': 'Answer',
-                    text: 'Email alone only recovers 3-5% of abandoned carts. WhatsApp (85% open rate) + SMS (45% CTR) + Email creates multiple touchpoints. Our clients see 18-25% recovery with multi-channel vs 3-5% with email alone.',
+                    text: 'Email alone only recovers 3-5% of abandoned carts. WhatsApp (85% open rate) + SMS (45% CTR) + Email creates multiple touchpoints. Industry benchmarks show 18-25% recovery with multi-channel vs 3-5% with email alone.',
                   },
                 },
                 {
@@ -142,7 +142,7 @@ export default function RootLayout({
                   name: 'How do you handle customer data and privacy?',
                   acceptedAnswer: {
                     '@type': 'Answer',
-                    text: 'We are GDPR and data-privacy compliant. All customer data is encrypted. We only process cart abandonment data needed for recovery. No data is shared with third parties.',
+                    text: 'All customer data is encrypted at rest and in transit. We only process cart abandonment data needed for recovery. No data is shared with third parties. Our data practices follow India\'s DPDP Act 2023 guidelines.',
                   },
                 },
               ],

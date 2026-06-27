@@ -24,7 +24,7 @@ export default function CartGainAnimatic() {
     { id: 's1', label: 'Intro', start: 0, end: 4 },
     { id: 's2', label: '₹89', start: 4, end: 7 },
     { id: 's3', label: '₹156', start: 7, end: 10 },
-    { id: 's4', label: 'Rachel', start: 10, end: 16 },
+    { id: 's4', label: 'Quote', start: 10, end: 16 },
     { id: 's5', label: 'Stats', start: 16, end: 20 },
     { id: 's6', label: 'CTA', start: 20, end: 23 },
   ], [])
@@ -222,7 +222,7 @@ export default function CartGainAnimatic() {
                   &quot;Stop leaving money on the table. Automate your recovery and watch your sales
                   grow.&quot;
                 </div>
-                <div className={styles.quoteAttr}>— Rachel, CartGain</div>
+                <div className={styles.quoteAttr}>— CartGain</div>
               </div>
             </div>
           </div>
