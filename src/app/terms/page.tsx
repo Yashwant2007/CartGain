@@ -200,7 +200,7 @@ export default function TermsPage() {
               </h2>
               <ul className="list-disc pl-5 space-y-2">
                 <li><strong>Governing Law:</strong> These Terms are governed by the laws of India.</li>
-                <li><strong>Informal Resolution:</strong> Before filing any claim, you agree to attempt to resolve the dispute informally by contacting us at <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a>.</li>
+                <li><strong>Informal Resolution:</strong> Before filing any claim, you agree to attempt to resolve the dispute informally by contacting us at <a href="mailto:support@cart-gain.com" className="text-cyan-400 hover:underline">support@cart-gain.com</a>.</li>
                 <li><strong>Arbitration:</strong> If informal resolution fails, disputes shall be settled by binding arbitration in accordance with the Arbitration and Conciliation Act, 1996.</li>
                 <li><strong>Class Action Waiver:</strong> All disputes shall be resolved on an individual basis. You waive any right to participate in a class action or representative proceeding.</li>
               </ul>
@@ -223,8 +223,8 @@ export default function TermsPage() {
               </h2>
               <p className="mb-4">For questions about these Terms or any legal matters:</p>
               <div className="space-y-2">
-                <p><strong>Email:</strong> <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a></p>
-                <p><strong>Grievance Officer:</strong> <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a></p>
+                <p><strong>Email:</strong> <a href="mailto:support@cart-gain.com" className="text-cyan-400 hover:underline">support@cart-gain.com</a></p>
+                <p><strong>Grievance Officer:</strong> <a href="mailto:support@cart-gain.com" className="text-cyan-400 hover:underline">support@cart-gain.com</a></p>
                 <p><strong>Address:</strong> Street No. 3, Line Par, Shanker Garden, Bahadurgarh, Haryana - 124507</p>
               </div>
             </section>

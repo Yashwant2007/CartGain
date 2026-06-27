@@ -245,7 +245,7 @@ export default function DPAPage() {
                 <li><strong>Right to Object:</strong> Objecting to certain types of processing, including direct marketing.</li>
               </ul>
               <p className="mt-4">
-                Controllers can exercise these rights by contacting <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a>. We will respond within 30 days.
+                Controllers can exercise these rights by contacting <a href="mailto:support@cart-gain.com" className="text-cyan-400 hover:underline">support@cart-gain.com</a>. We will respond within 30 days.
               </p>
             </section>
 
@@ -292,9 +292,9 @@ export default function DPAPage() {
                 13. Contact Information
               </h2>
               <div className="space-y-2">
-                <p><strong>Data Protection / Privacy:</strong> <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a></p>
-                <p><strong>Legal / DPA Inquiries:</strong> <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a></p>
-                <p><strong>Grievance Officer:</strong> <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a></p>
+                <p><strong>Data Protection / Privacy:</strong> <a href="mailto:support@cart-gain.com" className="text-cyan-400 hover:underline">support@cart-gain.com</a></p>
+                <p><strong>Legal / DPA Inquiries:</strong> <a href="mailto:support@cart-gain.com" className="text-cyan-400 hover:underline">support@cart-gain.com</a></p>
+                <p><strong>Grievance Officer:</strong> <a href="mailto:support@cart-gain.com" className="text-cyan-400 hover:underline">support@cart-gain.com</a></p>
                 <p><strong>Address:</strong> Street No. 3, Line Par, Shanker Garden, Bahadurgarh, Haryana - 124507</p>
               </div>
             </section>

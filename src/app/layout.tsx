@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'CartGain | Recover Lost Revenue from Abandoned Carts',
     description: 'Recover more abandoned carts with AI-powered WhatsApp, SMS, and Email recovery — industry benchmarks show 18-25% recovery rates.',
-    url: 'https://cart-gain.vercel.app',
+    url: 'https://cart-gain.com',
     type: 'website',
     images: [
       {
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
     },
   },
   alternates: {
-    canonical: 'https://cart-gain.vercel.app',
+    canonical: 'https://cart-gain.com',
   },
 }
 
@@ -82,8 +82,8 @@ export default function RootLayout({
               '@type': 'Organization',
               name: 'CartGain',
               description: 'Abandoned cart recovery platform for D2C beauty brands using WhatsApp, SMS, and Email',
-              url: 'https://cart-gain.vercel.app',
-              logo: 'https://cart-gain.vercel.app/logo.png',
+              url: 'https://cart-gain.com',
+              logo: 'https://cart-gain.com/logo.png',
               sameAs: [
                 'https://twitter.com/cartgain',
                 'https://linkedin.com/company/cartgain',
@@ -91,7 +91,7 @@ export default function RootLayout({
               contactPoint: {
                 '@type': 'ContactPoint',
                 contactType: 'Customer Support',
-                email: 'CartGain192007@gmail.com',
+                email: 'support@cart-gain.com',
               },
             }),
           }}
@@ -109,7 +109,7 @@ export default function RootLayout({
               provider: {
                 '@type': 'Organization',
                 name: 'CartGain',
-                url: 'https://cart-gain.vercel.app',
+                url: 'https://cart-gain.com',
               },
               areaServed: 'IN',
               availableChannel: [

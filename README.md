@@ -131,7 +131,7 @@ WHATSAPP_PHONE_NUMBER_ID="..."
 
 # Email (Resend)
 RESEND_API_KEY="re_xxx"
-FROM_EMAIL="noreply@cartgain.com"
+FROM_EMAIL="noreply@cart-gain.com"
 FROM_NAME="CartGain"
 FROM_EMAIL="noreply@recoverflow.com"
 

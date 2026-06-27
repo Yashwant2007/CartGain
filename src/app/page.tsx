@@ -756,7 +756,7 @@ export default function HomePage() {
               <MessageSquare className="w-4 h-4 inline-block mr-1.5" />
               Contact Us - We&apos;ll Explain Everything
             </a>
-            <p className="text-blue-300/60 text-xs mt-4">Or email us at <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a></p>
+            <p className="text-blue-300/60 text-xs mt-4">Or email us at <a href="mailto:support@cart-gain.com" className="text-cyan-400 hover:underline">support@cart-gain.com</a></p>
           </div>
         </div>
       </section>
@@ -959,7 +959,7 @@ export default function HomePage() {
             <div>
               <h4 className="font-semibold mb-4 text-sm sm:text-base">Company</h4>
               <ul className="space-y-2 text-gray-400 text-xs sm:text-sm">
-                <li><a href="mailto:CartGain192007@gmail.com" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Email Us</a></li>
+                <li><a href="mailto:support@cart-gain.com" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Email Us</a></li>
                 <li><Link href="/community" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Community</Link></li>
               </ul>
             </div>

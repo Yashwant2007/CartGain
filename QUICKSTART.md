@@ -40,7 +40,7 @@ MSG91_SENDER_ID="CARTGN"
 
 # Resend (Email - free 100k/mo)
 RESEND_API_KEY="re_..."
-FROM_EMAIL="noreply@cartgain.com"
+FROM_EMAIL="noreply@cart-gain.com"
 FROM_NAME="CartGain"
 ```
 

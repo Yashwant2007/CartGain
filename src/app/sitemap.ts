@@ -1,6 +1,6 @@
 import { MetadataRoute } from 'next'
 
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.vercel.app'
+const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
