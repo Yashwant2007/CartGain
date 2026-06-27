@@ -202,7 +202,10 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
             const rawItems = Array.isArray(cart.items) ? cart.items : []
             const cartItems = rawItems as { name: string; description?: string; price: number; quantity: number; image?: string }[]
             const formattedTotal = `${currencySymbol}${cart.totalValue.toFixed(2)}`
-            const cartUrl = `${process.env.NEXT_PUBLIC_APP_URL}/cart/${cart.id}`
+            // Click-tracking redirect: stamps clickedAt for this channel, then forwards
+            // to the cart page. Powers provable per-channel attribution.
+            const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
+            const cartUrl = `${appUrl}/r/${cart.id}?c=${channel}`
 
             let sendSuccess = false
             let error = ''
