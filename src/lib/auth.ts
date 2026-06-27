@@ -5,6 +5,7 @@ import EmailProvider from 'next-auth/providers/email'
 import type { NextAuthOptions } from 'next-auth'
 import prisma from '@/lib/db'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { loginSchema } from '@/lib/auth-utils'
 
 // Server-side only - load bcrypt when needed
 let bcrypt: any = null;
@@ -29,11 +30,14 @@ const providers: any[] = [
       password: { label: 'Password', type: 'password' },
     },
     async authorize(credentials) {
-      if (!credentials?.email || !credentials?.password) {
-        throw new Error('Invalid credentials')
+      const parsed = loginSchema.safeParse(credentials)
+      if (!parsed.success) {
+        throw new Error(parsed.error.errors[0]?.message || 'Invalid credentials')
       }
 
-      const rateLimitResult = await checkRateLimit(`auth/login:${credentials.email}`, {
+      const { email, password } = parsed.data
+
+      const rateLimitResult = await checkRateLimit(`auth/login:${email}`, {
         maxAttempts: 10,
         windowMs: 15 * 60 * 1000,
       })
@@ -43,7 +47,7 @@ const providers: any[] = [
       }
 
       const user = await prisma.user.findUnique({
-        where: { email: credentials.email },
+        where: { email },
       })
 
       if (!user || !user.password) {
@@ -51,7 +55,7 @@ const providers: any[] = [
       }
 
       const isCorrectPassword = await bcrypt.compare(
-        credentials.password,
+        password,
         user.password
       )
 

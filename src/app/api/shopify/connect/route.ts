@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { shopifyConnectSchema, validateOrThrow, handleValidationError } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,16 +12,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { shop, storeId } = await req.json()
-
-    if (!shop || !storeId) {
-      return NextResponse.json({ error: 'Shop and storeId are required' }, { status: 400 })
-    }
-
-    const cleanShop = shop.replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase()
-    if (!cleanShop.endsWith('.myshopify.com') && !cleanShop.includes('.')) {
-      return NextResponse.json({ error: 'Invalid Shopify store domain' }, { status: 400 })
-    }
+    const body = await req.json()
+    const { shop, storeId } = validateOrThrow(shopifyConnectSchema, body)
 
     const apiKey = process.env.SHOPIFY_API_KEY
     if (!apiKey) {
@@ -44,7 +37,7 @@ export async function POST(req: NextRequest) {
 
     const state = Buffer.from(JSON.stringify({ storeId, userId: session.user.id })).toString('base64')
 
-    const authUrl = new URL(`https://${cleanShop}/admin/oauth/authorize`)
+    const authUrl = new URL(`https://${shop}/admin/oauth/authorize`)
     authUrl.searchParams.set('client_id', apiKey)
     authUrl.searchParams.set('scope', scopes)
     authUrl.searchParams.set('redirect_uri', redirectUri)
@@ -52,6 +45,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ authUrl: authUrl.toString(), state })
   } catch (error) {
+    const validationResponse = handleValidationError(error)
+    if (validationResponse) return validationResponse
     console.error('Shopify connect error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

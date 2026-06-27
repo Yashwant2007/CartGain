@@ -31,6 +31,10 @@ export function verifyWebhookSignature(body: string, signature: string): boolean
 export const FREE_CARTS_THRESHOLD = 50;
 export const REVENUE_SHARE_PERCENT = 2.5;
 
+// A recovery only counts (and is billed) if WE sent a recovery message that was
+// followed by an order within this window. Industry-standard conversion window.
+export const ATTRIBUTION_WINDOW_HOURS = 72;
+
 export interface EstimatedRecovery {
   min: number;
   max: number;

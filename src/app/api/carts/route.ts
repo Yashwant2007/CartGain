@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { cartCreateSchema, validateOrThrow, handleValidationError } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,17 +47,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const {
-      storeId,
-      cartId,
-      customerId,
-      customerEmail,
-      customerPhone,
-      customerName,
-      items,
-      totalValue,
-      currency = 'USD',
-    } = body
+    const data = validateOrThrow(cartCreateSchema, body)
 
     const session = await getServerSession(authOptions)
 
@@ -64,14 +55,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!storeId || !cartId || !Array.isArray(items) || items.length === 0 || typeof totalValue !== 'number') {
-      return NextResponse.json(
-        { message: 'storeId, cartId, items, and numeric totalValue are required' },
-        { status: 400 }
-      )
-    }
-
-    const store = await prisma.store.findUnique({ where: { id: storeId } })
+    const store = await prisma.store.findUnique({ where: { id: data.storeId } })
 
     if (!store || store.userId !== session.user.id) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404 })
@@ -80,8 +64,8 @@ export async function POST(request: NextRequest) {
     const existingCart = await prisma.cart.findUnique({
       where: {
         storeId_cartId: {
-          storeId,
-          cartId,
+          storeId: data.storeId,
+          cartId: data.cartId,
         },
       },
     })
@@ -89,29 +73,29 @@ export async function POST(request: NextRequest) {
     const cart = await prisma.cart.upsert({
       where: {
         storeId_cartId: {
-          storeId,
-          cartId,
+          storeId: data.storeId,
+          cartId: data.cartId,
         },
       },
       update: {
-        customerId,
-        customerEmail,
-        customerPhone,
-        customerName,
-        items,
-        totalValue,
-        currency,
+        customerId: data.customerId,
+        customerEmail: data.customerEmail,
+        customerPhone: data.customerPhone,
+        customerName: data.customerName,
+        items: data.items,
+        totalValue: data.totalValue,
+        currency: data.currency,
       },
       create: {
-        storeId,
-        cartId,
-        customerId,
-        customerEmail,
-        customerPhone,
-        customerName,
-        items,
-        totalValue,
-        currency,
+        storeId: data.storeId,
+        cartId: data.cartId,
+        customerId: data.customerId,
+        customerEmail: data.customerEmail,
+        customerPhone: data.customerPhone,
+        customerName: data.customerName,
+        items: data.items,
+        totalValue: data.totalValue,
+        currency: data.currency,
       },
     })
 
@@ -145,6 +129,8 @@ export async function POST(request: NextRequest) {
       { status: existingCart ? 200 : 201 }
     )
   } catch (error) {
+    const validationResponse = handleValidationError(error)
+    if (validationResponse) return validationResponse
     console.error('Create or update cart error:', error)
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })
   }

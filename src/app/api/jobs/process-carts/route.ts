@@ -4,15 +4,32 @@ import { processAbandonedCarts } from '@/lib/jobs/processAbandonedCarts'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Validate the request against JOB_SECRET. Accepts the secret via:
+ *  - `x-job-secret` header
+ *  - `Authorization: Bearer <secret>` header (Vercel Cron / QStash style)
+ *  - `?secret=<secret>` query param (for schedulers that only configure a URL)
+ * Returns true when authorized (or when no secret is configured, e.g. local dev).
+ */
+function isAuthorized(request: NextRequest): boolean {
+  const configuredSecret = (process.env.JOB_SECRET || '').replace(/^["']|["']$/g, '').trim()
+  if (!configuredSecret) return true // no secret set — allow (local/dev)
+
+  const headerSecret = request.headers.get('x-job-secret')
+  const bearer = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
+  const querySecret = request.nextUrl.searchParams.get('secret')
+
+  return (
+    headerSecret === configuredSecret ||
+    bearer === configuredSecret ||
+    querySecret === configuredSecret
+  )
+}
+
 export async function POST(request: NextRequest) {
   try {
-    // Verify authorization
-    const configuredSecret = (process.env.JOB_SECRET || '').replace(/^["']|["']$/g, '').trim()
-    if (configuredSecret) {
-      const incomingSecret = request.headers.get('x-job-secret')
-      if (incomingSecret !== configuredSecret) {
-        return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
-      }
+    if (!isAuthorized(request)) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
     // Try Redis queue first, fall back to direct processing
@@ -41,9 +58,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET endpoint — used by Vercel Cron Jobs to process carts
+// GET endpoint — used by external schedulers (QStash / cron-job.org / Vercel Cron)
 export async function GET(request: NextRequest) {
   try {
+    if (!isAuthorized(request)) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    }
+
     const jobId = request.nextUrl.searchParams.get('jobId')
 
     if (!jobId) {

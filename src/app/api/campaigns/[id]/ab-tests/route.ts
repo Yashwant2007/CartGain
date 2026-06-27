@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { abTestCreateSchema, validateOrThrow, handleValidationError } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,23 +49,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const body = await req.json()
-    const { name, variantA, variantB } = body
-
-    if (!name || !variantA || !variantB) {
-      return NextResponse.json({ error: 'Name, variantA, and variantB are required' }, { status: 400 })
-    }
+    const data = validateOrThrow(abTestCreateSchema, body)
 
     const abTest = await prisma.aBTest.create({
       data: {
         campaignId: params.id,
-        name,
-        variantA,
-        variantB,
+        name: data.name,
+        variantA: data.variantA,
+        variantB: data.variantB,
       },
     })
 
     return NextResponse.json({ abTest }, { status: 201 })
   } catch (error) {
+    const validationResponse = handleValidationError(error)
+    if (validationResponse) return validationResponse
     console.error('AB test creation error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

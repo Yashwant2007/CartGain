@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { verifyShopifyWebhook } from '@/lib/shopify'
 import { checkRateLimit } from '@/lib/rate-limiter'
-import { FREE_CARTS_THRESHOLD, PLANS } from '@/lib/payment'
+import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS } from '@/lib/payment'
 
 export const dynamic = 'force-dynamic'
 
@@ -174,58 +174,89 @@ async function handleOrderCreate(data: any, headers: Headers) {
     },
   })
 
-  if (cart) {
-    // Update cart as recovered
+  if (!cart) return
+
+  const orderTotal = parseFloat(data.total_price || '0')
+  const orderCreatedAt = data.created_at ? new Date(data.created_at) : new Date()
+
+  // 1) ALWAYS mark the cart as converted so the processor stops messaging it.
+  //    This applies to every order (ours or organic) — we never message a buyer.
+  if (!cart.convertedAt) {
     await prisma.cart.update({
       where: { id: cart.id },
-      data: {
-        isRecovered: true,
-        recoveredAt: new Date(),
-        recoveredVia: 'shopify_order',
-      },
+      data: { convertedAt: new Date() },
     })
+  }
 
-    // Create recovered cart record
-    const orderTotal = parseFloat(data.total_price || '0')
-    await prisma.recoveredCart.upsert({
-      where: {
-        cartId: cart.id,
-      },
-      update: {
-        recoveredValue: orderTotal,
-        recoveredAt: new Date(),
-      },
-      create: {
+  // 2) ATTRIBUTION: only count/bill this as a recovery if WE sent a recovery
+  //    message that was followed by this order within the attribution window.
+  const windowStart = new Date(orderCreatedAt.getTime() - ATTRIBUTION_WINDOW_HOURS * 60 * 60 * 1000)
+  const attributingMessage = await prisma.message.findFirst({
+    where: {
+      cartId: cart.id,
+      status: 'sent',
+      sentAt: { lte: orderCreatedAt, gte: windowStart },
+    },
+    orderBy: { sentAt: 'desc' },
+  })
+
+  if (!attributingMessage) {
+    // Organic sale — customer bought without any influence from us. Not credited, not billed.
+    console.log(`Order for cart ${cart.id}: no recovery message in ${ATTRIBUTION_WINDOW_HOURS}h window — converted but NOT credited`)
+    return
+  }
+
+  const channel = attributingMessage.channel
+
+  // 3) Record the recovery EXACTLY ONCE. The unique cartId on RecoveredCart makes
+  //    this idempotent against Shopify's webhook retries (up to 19x) and races.
+  try {
+    await prisma.recoveredCart.create({
+      data: {
         storeId: store.id,
         cartId: cart.id,
         recoveredValue: orderTotal,
-        channel: 'shopify_order',
+        channel,
         netRevenue: orderTotal,
       },
     })
-
-    // Update analytics
-    await prisma.analytics.upsert({
-      where: {
-        userId_date: {
-          userId: store.userId,
-          date: new Date(new Date().toDateString()),
-        },
-      },
-      update: {
-        cartsRecovered: { increment: 1 },
-        revenueRecovered: { increment: orderTotal },
-      },
-      create: {
-        userId: store.userId,
-        cartsRecovered: 1,
-        revenueRecovered: orderTotal,
-      },
-    })
-
-    // Track revenue share
-    await accrueRevenueShare(store.userId, orderTotal)
+  } catch (e: any) {
+    if (e?.code === 'P2002') {
+      // Already credited (duplicate webhook) — do NOT double-count revenue or rev-share.
+      console.log(`Order for cart ${cart.id}: already credited — skipping duplicate`)
+      return
+    }
+    throw e
   }
+
+  // 4) First-time credit only: flip recovered flag, attribute the channel, count it.
+  await prisma.cart.update({
+    where: { id: cart.id },
+    data: { isRecovered: true, recoveredAt: new Date(), recoveredVia: channel },
+  })
+
+  // Mark the attributing message as converted (powers per-channel conversion stats)
+  await prisma.message
+    .update({ where: { id: attributingMessage.id }, data: { convertedAt: new Date() } })
+    .catch(() => {})
+
+  const today = new Date(new Date().toDateString())
+  await prisma.analytics.upsert({
+    where: { userId_date: { userId: store.userId, date: today } },
+    update: {
+      cartsRecovered: { increment: 1 },
+      revenueRecovered: { increment: orderTotal },
+    },
+    create: {
+      userId: store.userId,
+      date: today,
+      cartsRecovered: 1,
+      revenueRecovered: orderTotal,
+    },
+  })
+
+  // Track revenue share (only on attributed recoveries, past the free threshold)
+  await accrueRevenueShare(store.userId, orderTotal)
 }
 
 async function accrueRevenueShare(userId: string, orderTotal: number) {

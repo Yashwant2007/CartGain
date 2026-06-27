@@ -127,6 +127,7 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
           where: {
             storeId: store.id,
             isRecovered: false,
+            convertedAt: null, // skip carts that already became orders — never message a customer who already bought
             abandonedAt: { lte: new Date(Date.now() - sendDelayMs) },
             ...(cursor ? { id: { gt: cursor } } : {}),
           },

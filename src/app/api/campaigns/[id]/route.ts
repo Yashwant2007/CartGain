@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { campaignUpdateSchema, validateOrThrow, handleValidationError } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
 
@@ -93,19 +94,7 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const {
-      isActive,
-      name,
-      channels,
-      aiOptimized,
-      sendDelay,
-      followUpDelay,
-      maxFollowUps,
-      discountEnabled,
-      discountType,
-      discountValue,
-      discountCode,
-    } = body
+    const data = validateOrThrow(campaignUpdateSchema, body)
 
     const campaign = await prisma.campaign.findUnique({
       where: { id: params.id },
@@ -115,7 +104,6 @@ export async function PATCH(
       return NextResponse.json({ message: 'Campaign not found' }, { status: 404 })
     }
 
-    // Verify user owns this campaign
     if (campaign.userId !== session.user.id) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
@@ -123,17 +111,17 @@ export async function PATCH(
     const updatedCampaign = await prisma.campaign.update({
       where: { id: params.id },
       data: {
-        ...(isActive !== undefined && { isActive }),
-        ...(name && { name }),
-        ...(channels && { channels }),
-        ...(aiOptimized !== undefined && { aiOptimized }),
-        ...(sendDelay !== undefined && { sendDelay }),
-        ...(followUpDelay !== undefined && { followUpDelay }),
-        ...(maxFollowUps !== undefined && { maxFollowUps }),
-        ...(discountEnabled !== undefined && { discountEnabled }),
-        ...(discountType && { discountType }),
-        ...(discountValue !== undefined && { discountValue }),
-        ...(discountCode && { discountCode }),
+        ...(data.isActive !== undefined && { isActive: data.isActive }),
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.channels !== undefined && { channels: data.channels }),
+        ...(data.aiOptimized !== undefined && { aiOptimized: data.aiOptimized }),
+        ...(data.sendDelay !== undefined && { sendDelay: data.sendDelay }),
+        ...(data.followUpDelay !== undefined && { followUpDelay: data.followUpDelay }),
+        ...(data.maxFollowUps !== undefined && { maxFollowUps: data.maxFollowUps }),
+        ...(data.discountEnabled !== undefined && { discountEnabled: data.discountEnabled }),
+        ...(data.discountType !== undefined && { discountType: data.discountType }),
+        ...(data.discountValue !== undefined && { discountValue: data.discountValue }),
+        ...(data.discountCode !== undefined && { discountCode: data.discountCode }),
       },
     })
 
@@ -145,6 +133,8 @@ export async function PATCH(
       { status: 200 }
     )
   } catch (error) {
+    const validationResponse = handleValidationError(error)
+    if (validationResponse) return validationResponse
     console.error('Update campaign error:', error)
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })
   }

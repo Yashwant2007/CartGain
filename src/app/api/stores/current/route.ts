@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { encrypt, decrypt } from '@/lib/encryption'
+import { storeUpdateSchema, validateOrThrow, handleValidationError } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,7 +57,7 @@ export async function PATCH(request: Request) {
     }
 
     const body = await request.json()
-    const { name, domain, timezone, currency, platform, webhookUrl, apiKey, apiSecret } = body
+    const data = validateOrThrow(storeUpdateSchema, body)
 
     const store = await prisma.store.findFirst({
       where: { userId: session.user.id },
@@ -67,19 +68,19 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ message: 'No store found for this account' }, { status: 404 })
     }
 
-    const data: Record<string, any> = {}
-    if (typeof name === 'string') data.name = name
-    if (typeof domain === 'string') data.domain = domain
-    if (typeof timezone === 'string') data.timezone = timezone
-    if (typeof currency === 'string') data.currency = currency
-    if (typeof platform === 'string') data.platform = platform
-    if (typeof webhookUrl === 'string') data.webhookUrl = webhookUrl
-    if (typeof apiKey === 'string') data.apiKey = apiKey ? encrypt(apiKey) : ''
-    if (typeof apiSecret === 'string') data.apiSecret = apiSecret ? encrypt(apiSecret) : ''
+    const updateData: Record<string, any> = {}
+    if (data.name !== undefined) updateData.name = data.name
+    if (data.domain !== undefined) updateData.domain = data.domain
+    if (data.timezone !== undefined) updateData.timezone = data.timezone
+    if (data.currency !== undefined) updateData.currency = data.currency
+    if (data.platform !== undefined) updateData.platform = data.platform
+    if (data.webhookUrl !== undefined) updateData.webhookUrl = data.webhookUrl
+    if (data.apiKey !== undefined) updateData.apiKey = data.apiKey ? encrypt(data.apiKey) : ''
+    if (data.apiSecret !== undefined) updateData.apiSecret = data.apiSecret ? encrypt(data.apiSecret) : ''
 
     const updatedStore = await prisma.store.update({
       where: { id: store.id },
-      data,
+      data: updateData,
       select: {
         id: true,
         name: true,
@@ -93,6 +94,8 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ store: updatedStore })
   } catch (error) {
+    const validationResponse = handleValidationError(error)
+    if (validationResponse) return validationResponse
     console.error('Current store update error:', error)
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })
   }
