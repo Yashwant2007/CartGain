@@ -27,10 +27,19 @@ export async function sendSMS({ to, body }: SendSMSOptions): Promise<{
       country: '91',
     })
     const res = await fetch(`https://api.msg91.com/api/sendhttp.php?${params}`)
-    const text = await res.text()
+    const text = (await res.text()).trim()
+
+    // MSG91's legacy sendhttp.php returns HTTP 200 even on failure, with the
+    // error described in the body (e.g. {"type":"error",...} or text containing
+    // "error"). On success it returns a request id. Treat error bodies as failures.
+    const looksLikeError = !text || /error|invalid|fail/i.test(text)
+    if (!res.ok || looksLikeError) {
+      return { success: false, error: text || `HTTP ${res.status}` }
+    }
+
     return {
-      success: res.ok,
-      messageId: text.trim(),
+      success: true,
+      messageId: text,
     }
   } catch (error: any) {
     console.error('SMS send error:', error)

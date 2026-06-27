@@ -111,7 +111,7 @@ export default function HomePage() {
             </div>
 
             {/* Right Side */}
-            <div className="flex items-center space-x-2 sm:space-x-3 min-h-10">
+            <div className="flex items-center space-x-2 sm:space-x-3">
               <Link href="/login" className="hidden sm:inline px-3 py-2 text-xs sm:text-sm font-medium text-blue-200 hover:text-blue-100 rounded-md transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600">
                 Sign In
               </Link>
@@ -314,7 +314,7 @@ export default function HomePage() {
             </div>
 
             {/* Day 1: Email */}
-            <div className="relative group col-span-1">
+            <div className="relative group sm:col-span-2 lg:col-span-1">
               <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-purple-400 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-300"></div>
               <div className="relative bg-slate-800/50 border border-purple-600/30 rounded-2xl p-4 sm:p-6 md:p-8 h-full flex flex-col justify-between">
                 <div>
@@ -345,7 +345,7 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-      <section className="py-12 sm:py-16 md:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-900/20 to-slate-950">
+      <section className="py-12 sm:py-16 md:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-900/20 to-slate-950" aria-labelledby="stats-heading">
         <div className="w-full max-w-7xl mx-auto">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 md:gap-8">
             <div className="text-center">
@@ -592,7 +592,7 @@ export default function HomePage() {
           </div>
 
           {/* Key Metrics Highlights */}
-          <div className="grid md:grid-cols-4 gap-6 mt-12">
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-6 mt-12">
             <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 text-center">
               <div className="text-3xl font-bold text-cyan-400 mb-2">Live Analytics</div>
               <p className="text-blue-300/80 text-sm">Track every recovery in real-time</p>
@@ -756,7 +756,7 @@ export default function HomePage() {
               <MessageSquare className="w-4 h-4 inline-block mr-1.5" />
               Contact Us - We&apos;ll Explain Everything
             </a>
-            <p className="text-blue-300/60 text-xs mt-4">Or email us at <a href="mailto:hello@cartgain.com" className="text-cyan-400 hover:underline">hello@cartgain.com</a></p>
+            <p className="text-blue-300/60 text-xs mt-4">Or email us at <a href="mailto:CartGain192007@gmail.com" className="text-cyan-400 hover:underline">CartGain192007@gmail.com</a></p>
           </div>
         </div>
       </section>
@@ -923,12 +923,12 @@ export default function HomePage() {
           <p className="text-base sm:text-lg md:text-xl text-blue-200 mb-8 sm:mb-12">
             First month is free. No commitment. See the impact yourself.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center flex-wrap px-2">
-            <Link href="/signup" className="px-6 sm:px-8 py-3 sm:py-4 bg-white text-blue-900 font-semibold rounded-lg hover:bg-blue-100 transition shadow-lg min-h-12 inline-flex items-center justify-center">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center px-2">
+            <Link href="/signup" className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-white text-blue-900 font-semibold rounded-lg hover:bg-blue-100 transition shadow-lg min-h-12 inline-flex items-center justify-center text-center">
               Start Free Trial
             </Link>
-            <a href="https://wa.me/918708718426" target="_blank" rel="noopener noreferrer" className="px-6 sm:px-8 py-3 sm:py-4 border-2 border-blue-300 text-white font-semibold rounded-lg hover:bg-white/10 transition flex items-center justify-center gap-2 min-h-12">
-              <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
+            <a href="https://wa.me/918708718426" target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 border-2 border-blue-300 text-white font-semibold rounded-lg hover:bg-white/10 transition min-h-12 inline-flex items-center justify-center gap-2 text-center">
+              <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
               Contact Us
             </a>
           </div>
@@ -959,7 +959,7 @@ export default function HomePage() {
             <div>
               <h4 className="font-semibold mb-4 text-sm sm:text-base">Company</h4>
               <ul className="space-y-2 text-gray-400 text-xs sm:text-sm">
-                <li><a href="mailto:hello@cartgain.com" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Email Us</a></li>
+                <li><a href="mailto:CartGain192007@gmail.com" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Email Us</a></li>
                 <li><Link href="/community" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Community</Link></li>
               </ul>
             </div>

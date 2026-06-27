@@ -77,16 +77,18 @@ export async function sendWhatsAppMessage({
 
     const data = await response.json()
 
-    if (data.message_id) {
+    // Meta WhatsApp Cloud API returns { messages: [{ id: "wamid..." }] } on success
+    const messageId = data?.messages?.[0]?.id
+    if (response.ok && messageId) {
       return {
         success: true,
-        messageId: data.message_id,
+        messageId,
       }
     }
 
     return {
       success: false,
-      error: data.error?.message || 'Failed to send WhatsApp message',
+      error: data?.error?.message || 'Failed to send WhatsApp message',
     }
   } catch (error: any) {
     console.error('WhatsApp send error:', error)

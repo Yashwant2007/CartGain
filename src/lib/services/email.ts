@@ -33,8 +33,10 @@ export async function sendEmail({
   error?: string
 }> {
   if (!resend) {
-    console.log(`[EMAIL LOG] To: ${to} | Subject: ${subject}`)
-    return { success: true, messageId: `logged-${Date.now()}` }
+    // Not configured — log for local dev, but report failure so analytics
+    // never count an email that was never actually sent.
+    console.warn(`[EMAIL NOT SENT — Resend not configured] To: ${to} | Subject: ${subject}`)
+    return { success: false, error: 'Email service (Resend) not configured' }
   }
 
   try {
@@ -49,7 +51,7 @@ export async function sendEmail({
     return { success: true, messageId: data?.id }
   } catch (error: any) {
     console.error('Email send error:', error)
-    return { success: true, messageId: `fallback-${Date.now()}` }
+    return { success: false, error: error?.message || 'Failed to send email' }
   }
 }
 

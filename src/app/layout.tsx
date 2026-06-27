@@ -91,7 +91,7 @@ export default function RootLayout({
               contactPoint: {
                 '@type': 'ContactPoint',
                 contactType: 'Customer Support',
-                email: 'hello@cartgain.com',
+                email: 'CartGain192007@gmail.com',
               },
             }),
           }}

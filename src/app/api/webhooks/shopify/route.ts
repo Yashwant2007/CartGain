@@ -113,7 +113,9 @@ async function handleCartUpdate(data: any, headers: Headers) {
       },
     },
     update: {
-      items: JSON.stringify(cart.items || []),
+      // Store as a JSON array (the `items` column is a Prisma Json field).
+      // Do NOT JSON.stringify — the processor reads Array.isArray(cart.items).
+      items: normalizeShopifyItems(cart),
       totalValue: cart.total_price ? parseFloat(cart.total_price) / 100 : 0,
       customerEmail: cart.email,
       customerPhone: cart.phone,
@@ -123,7 +125,7 @@ async function handleCartUpdate(data: any, headers: Headers) {
     create: {
       storeId: store.id,
       cartId: cart.token,
-      items: JSON.stringify(cart.items || []),
+      items: normalizeShopifyItems(cart),
       totalValue: cart.total_price ? parseFloat(cart.total_price) / 100 : 0,
       customerEmail: cart.email,
       customerPhone: cart.phone,
@@ -131,6 +133,21 @@ async function handleCartUpdate(data: any, headers: Headers) {
       currency: cart.currency || 'USD',
     },
   })
+}
+
+// Map Shopify line items to the shape the recovery processor / email templates
+// expect: { name, description?, price, quantity, image? }. Shopify uses
+// `line_items` with `title`/`price`; prices are major units (not cents) here.
+function normalizeShopifyItems(cart: any): any[] {
+  const raw = cart.line_items || cart.items || []
+  if (!Array.isArray(raw)) return []
+  return raw.map((item: any) => ({
+    name: item.title || item.name || 'Item',
+    description: item.variant_title || undefined,
+    price: item.price != null ? parseFloat(item.price) : 0,
+    quantity: item.quantity || 1,
+    image: item.image?.src || item.image || undefined,
+  }))
 }
 
 async function handleCheckout(data: any, headers: Headers) {
