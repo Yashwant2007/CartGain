@@ -150,7 +150,7 @@ export default function HomePage() {
 
           {/* Subheadline */}
           <p className="text-base sm:text-lg md:text-xl text-blue-100 text-center mb-8 sm:mb-12 max-w-3xl mx-auto leading-relaxed px-2">
-            Turn abandoned carts into confirmed sales with AI-powered WhatsApp, SMS, and Email recovery. Built specifically for beauty founders.
+            Turn abandoned carts into confirmed sales with AI-powered WhatsApp, Email, and SMS recovery (coming soon). Built specifically for beauty founders.
           </p>
 
           {/* CTA Buttons - improved touch targets and responsiveness */}
@@ -298,7 +298,7 @@ export default function HomePage() {
                   <div className="inline-block bg-blue-600/20 border border-blue-600/40 rounded-lg px-3 py-1 mb-4 text-xs">
                     <span className="font-semibold text-blue-300">Hour 3</span>
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-bold text-white mb-3">SMS Urgency</h3>
+                  <h3 className="text-xl sm:text-2xl font-bold text-white mb-3">SMS <span className="text-xs font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">Coming Soon</span></h3>
                   <p className="text-blue-100 text-sm mb-4">Quick nudge with exclusive discount</p>
                   <div className="bg-blue-900/20 border border-blue-700/40 rounded-lg p-3 mb-4">
                     <p className="text-xs text-blue-300 font-mono">
@@ -453,6 +453,7 @@ export default function HomePage() {
               role="listitem"
               icon={<Mail className="w-6 h-6 sm:w-8 sm:h-8 text-primary-600" />}
               title="SMS Urgency"
+              badge="Coming Soon"
               description="Quick reminder with discount code. Fills the middle gap. High click-through rate for impulse recoveries in the first few hours."
               features={[
                 '45% click-through rate',

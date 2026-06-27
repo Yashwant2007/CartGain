@@ -7,6 +7,7 @@ interface FeatureCardProps {
   features?: string[]
   className?: string
   role?: string
+  badge?: string
 }
 
 export const FeatureCard: React.FC<FeatureCardProps> = ({
@@ -16,6 +17,7 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
   features,
   className = '',
   role,
+  badge,
 }) => {
   return (
     <div 
@@ -28,7 +30,10 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
         </div>
       )}
       
-      <h3 className="text-xl sm:text-2xl font-bold text-white mb-3">{title}</h3>
+      <h3 className="text-xl sm:text-2xl font-bold text-white mb-3">
+        {title}
+        {badge && <span className="ml-2 text-xs font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">{badge}</span>}
+      </h3>
       <p className="text-blue-100 mb-6 flex-grow">{description}</p>
       
       {features && features.length > 0 && (

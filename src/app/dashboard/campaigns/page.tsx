@@ -351,7 +351,7 @@ function OnboardingWizard({ onStart }: { onStart: () => void }) {
               <div className="bg-slate-700/40 border border-blue-700/30 rounded-xl p-4 text-center hover:border-cyan-500/40 transition-all">
                 <div className="text-2xl mb-2">📧</div>
                 <h3 className="text-sm font-semibold text-white mb-1">Multi-Channel</h3>
-                <p className="text-xs text-blue-300/60">Email, SMS, WhatsApp</p>
+                <p className="text-xs text-blue-300/60">Email, WhatsApp, SMS <span className="text-amber-400/80">(coming soon)</span></p>
               </div>
               <div className="bg-slate-700/40 border border-blue-700/30 rounded-xl p-4 text-center hover:border-cyan-500/40 transition-all">
                 <div className="text-2xl mb-2">🤖</div>
@@ -571,8 +571,8 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
                     <div>
                       <label className="block text-xs font-medium text-blue-200 mb-1.5">Channels</label>
                       <div className="flex flex-wrap gap-1.5">
-                        {['email', 'sms', 'whatsapp'].map((ch) => (
-                          <button key={ch} onClick={() => setForm({ ...form, channelsA: form.channelsA.includes(ch) ? form.channelsA.filter(c => c !== ch) : [...form.channelsA, ch] })} className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${form.channelsA.includes(ch) ? 'bg-cyan-600/40 border-cyan-400/60 text-cyan-200' : 'bg-slate-700/50 border-blue-700/50 text-blue-300/60 hover:text-blue-200'}`}>{ch}</button>
+                        {['email', 'whatsapp', 'sms'].map((ch) => (
+                          <button key={ch} onClick={() => { if (ch === 'sms') return; setForm({ ...form, channelsA: form.channelsA.includes(ch) ? form.channelsA.filter(c => c !== ch) : [...form.channelsA, ch] }); }} className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${form.channelsA.includes(ch) ? 'bg-cyan-600/40 border-cyan-400/60 text-cyan-200' : 'bg-slate-700/50 border-blue-700/50 text-blue-300/60 hover:text-blue-200'} ${ch === 'sms' ? 'opacity-60 cursor-not-allowed' : ''}`}>{ch}{ch === 'sms' ? <span className="ml-1.5 text-[10px] text-amber-400/80">(coming soon)</span> : ''}</button>
                         ))}
                       </div>
                     </div>
@@ -605,8 +605,8 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
                     <div>
                       <label className="block text-xs font-medium text-blue-200 mb-1.5">Channels</label>
                       <div className="flex flex-wrap gap-1.5">
-                        {['email', 'sms', 'whatsapp'].map((ch) => (
-                          <button key={ch} onClick={() => setForm({ ...form, channelsB: form.channelsB.includes(ch) ? form.channelsB.filter(c => c !== ch) : [...form.channelsB, ch] })} className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${form.channelsB.includes(ch) ? 'bg-purple-600/40 border-purple-400/60 text-purple-200' : 'bg-slate-700/50 border-blue-700/50 text-blue-300/60 hover:text-blue-200'}`}>{ch}</button>
+                        {['email', 'whatsapp', 'sms'].map((ch) => (
+                          <button key={ch} onClick={() => { if (ch === 'sms') return; setForm({ ...form, channelsB: form.channelsB.includes(ch) ? form.channelsB.filter(c => c !== ch) : [...form.channelsB, ch] }); }} className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${form.channelsB.includes(ch) ? 'bg-purple-600/40 border-purple-400/60 text-purple-200' : 'bg-slate-700/50 border-blue-700/50 text-blue-300/60 hover:text-blue-200'} ${ch === 'sms' ? 'opacity-60 cursor-not-allowed' : ''}`}>{ch}{ch === 'sms' ? <span className="ml-1.5 text-[10px] text-amber-400/80">(coming soon)</span> : ''}</button>
                         ))}
                       </div>
                     </div>
@@ -775,10 +775,12 @@ function CreateCampaignModal({ onClose, onCreate }: { onClose: () => void; onCre
             <div className="space-y-4">
               <p className="text-sm text-blue-300/80 mb-4">Select channels for your recovery sequence</p>
               <div className="grid grid-cols-2 gap-4">
-                {['sms', 'whatsapp', 'email'].map((channel) => (
+                {['whatsapp', 'email', 'sms'].map((channel) => (
                   <label
                     key={channel}
                     className={`flex items-center p-4 border rounded-lg cursor-pointer transition-all ${
+                      channel === 'sms' ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                    } ${
                       config.channels.includes(channel)
                         ? 'border-cyan-400/60 bg-cyan-600/20 hover:bg-cyan-600/30'
                         : 'border-blue-700/40 bg-slate-700/20 hover:bg-slate-700/40'
@@ -788,6 +790,7 @@ function CreateCampaignModal({ onClose, onCreate }: { onClose: () => void; onCre
                       type="checkbox"
                       checked={config.channels.includes(channel)}
                       onChange={(e) => {
+                        if (channel === 'sms') return;
                         if (e.target.checked) {
                           setConfig({ ...config, channels: [...config.channels, channel] })
                         } else {
@@ -798,7 +801,7 @@ function CreateCampaignModal({ onClose, onCreate }: { onClose: () => void; onCre
                     />
                     <span className={`ml-3 capitalize font-medium transition-colors ${
                       config.channels.includes(channel) ? 'text-cyan-300' : 'text-blue-300'
-                    }`}>{channel}</span>
+                    }`}>{channel}{channel === 'sms' ? <span className="ml-1.5 text-[10px] text-amber-400/80">(coming soon)</span> : ''}</span>
                   </label>
                 ))}
               </div>
