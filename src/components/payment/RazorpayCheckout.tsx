@@ -45,7 +45,7 @@ export default function RazorpayCheckout({
         key: data.keyId,
         amount: data.amount,
         currency: data.currency,
-        name: "RecoverFlow",
+        name: "CartGain",
         description: `${plan} Plan`,
         order_id: data.orderId,
         handler: function (response: any) {
