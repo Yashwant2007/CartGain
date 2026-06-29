@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { verifyShopifyWebhook } from '@/lib/shopify'
 import { checkRateLimit } from '@/lib/rate-limiter'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS } from '@/lib/payment'
+import { sendAlertOnError } from '@/lib/alerter'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const elapsed = Date.now() - startTime
     console.error(`Webhook [${topic}] from ${shopDomain} — failed after ${elapsed}ms:`, error)
+    sendAlertOnError('Shopify webhook', error, { topic, shopDomain, elapsed }).catch(() => {})
     return NextResponse.json({ message: 'Webhook processed', elapsed })
   }
 }

@@ -135,16 +135,71 @@ export const authOptions: NextAuthOptions = {
       }
       return session
     },
-    async signIn({ user, account }) {
-      // If signing in with Google/OAuth, ensure user has a store
-      if (account?.provider !== 'credentials' && user.id) {
-        const existingStore = await prisma.store.findFirst({
-          where: { userId: user.id },
-        })
+    async signIn({ user, account, profile }) {
+      try {
+        // Allow linking Google OAuth to existing credentials-based accounts
+        if (account?.provider === 'google') {
+          const email = user.email || profile?.email
+          if (email) {
+            const existingUser = await prisma.user.findUnique({
+              where: { email },
+              include: { accounts: true },
+            })
+            if (existingUser) {
+              const isLinked = existingUser.accounts.some(
+                a => a.provider === 'google'
+              )
+              if (!isLinked) {
+                await prisma.account.upsert({
+                  where: {
+                    provider_providerAccountId: {
+                      provider: 'google',
+                      providerAccountId: account.providerAccountId,
+                    },
+                  },
+                  update: {},
+                  create: {
+                    userId: existingUser.id,
+                    type: account.type,
+                    provider: 'google',
+                    providerAccountId: account.providerAccountId,
+                    access_token: account.access_token,
+                    refresh_token: account.refresh_token,
+                    expires_at: account.expires_at,
+                    token_type: account.token_type,
+                    scope: account.scope,
+                    id_token: account.id_token,
+                    session_state: account.session_state,
+                  },
+                })
+              }
+              // Ensure store exists for the existing user
+              const existingStore = await prisma.store.findFirst({
+                where: { userId: existingUser.id },
+              })
+              if (!existingStore) {
+                await prisma.store.create({
+                  data: {
+                    userId: existingUser.id,
+                    name: existingUser.name || 'My Store',
+                    domain: (email || '').split('@')[0] || 'store',
+                    platform: 'shopify',
+                    currency: 'USD',
+                    timezone: 'UTC',
+                  },
+                })
+              }
+              return true
+            }
+          }
+        }
 
-        if (!existingStore) {
-          // Create default store for OAuth users
-          try {
+        // For all other OAuth providers, ensure a store exists
+        if (account?.provider !== 'credentials' && user.id) {
+          const existingStore = await prisma.store.findFirst({
+            where: { userId: user.id },
+          })
+          if (!existingStore) {
             await prisma.store.create({
               data: {
                 userId: user.id,
@@ -155,10 +210,10 @@ export const authOptions: NextAuthOptions = {
                 timezone: 'UTC',
               },
             })
-          } catch (error) {
-            console.error('Failed to create store for OAuth user:', error)
           }
         }
+      } catch (error) {
+        console.error('signIn callback error:', error)
       }
       return true
     },

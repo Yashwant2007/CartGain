@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { addCartProcessingJob } from '@/lib/queue/processor'
 import { processAbandonedCarts } from '@/lib/jobs/processAbandonedCarts'
+import { sendAlertOnError } from '@/lib/alerter'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('Process carts job error:', error)
+    sendAlertOnError('Cart processing cron', error).catch(() => {})
     return NextResponse.json(
       { message: 'Something went wrong', error: (error as any).message },
       { status: 500 }
@@ -103,6 +105,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Get job status error:', error)
+    sendAlertOnError('Cart processing job status', error).catch(() => {})
     return NextResponse.json(
       { message: 'Failed to get job status' },
       { status: 500 }
