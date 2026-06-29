@@ -59,7 +59,7 @@ export async function createShopifyWebhook(
   webhookUrl: string
 ): Promise<boolean> {
   try {
-    const response = await fetch(`https://${shopDomain}/admin/api/2026-01/webhooks.json`, {
+    const response = await fetch(`https://${shopDomain}/admin/api/2026-04/webhooks.json`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -107,7 +107,7 @@ export async function fetchShopifyCarts(
 ): Promise<any[]> {
   try {
     const response = await fetch(
-      `https://${shopDomain}/admin/api/2026-01/carts.json?limit=${limit}`,
+      `https://${shopDomain}/admin/api/2026-04/carts.json?limit=${limit}`,
       {
         headers: {
           'X-Shopify-Access-Token': accessToken,

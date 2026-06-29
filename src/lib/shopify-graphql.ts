@@ -13,7 +13,7 @@ export async function queryShopifyGraphQL<T>(
 ): Promise<T> {
   try {
     const response = await axios.post<ShopifyGraphQLResponse<T>>(
-      `https://${shop}/admin/api/2026-01/graphql.json`,
+      `https://${shop}/admin/api/2026-04/graphql.json`,
       { query, variables },
       {
         headers: {
