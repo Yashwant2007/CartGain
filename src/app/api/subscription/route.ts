@@ -21,6 +21,13 @@ export async function GET() {
       where: { userId: session.user.id },
     })
 
+    let cartsRecovered = 0
+    if (store) {
+      cartsRecovered = await prisma.recoveredCart.count({
+        where: { storeId: store.id },
+      })
+    }
+
     const invoices = subscription
       ? await prisma.invoice.findMany({
           where: { subscriptionId: subscription.id },
@@ -42,7 +49,7 @@ export async function GET() {
           }
         : null,
       store: store
-        ? { id: store.id, name: store.name, currency: store.currency }
+        ? { id: store.id, name: store.name, currency: store.currency, cartsRecovered }
         : null,
       invoices,
       plans: PLANS,

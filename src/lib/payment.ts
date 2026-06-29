@@ -129,7 +129,33 @@ export async function createRazorpaySubscription(planId: string, customerEmail: 
   }
 }
 
+export const PLAN_IDS = {
+  FREE: 'free',
+  STARTER: 'starter',
+  GROWTH: 'growth',
+  PRO: 'pro',
+  ENTERPRISE: 'enterprise',
+} as const
+
+export const PAID_PLAN_IDS = [PLAN_IDS.STARTER, PLAN_IDS.GROWTH, PLAN_IDS.PRO]
+
 export const PLANS: Record<string, Plan> = {
+  FREE: {
+    id: PLAN_IDS.FREE,
+    name: 'Free',
+    price: 0,
+    yearlyPrice: 0,
+    maxCarts: FREE_CARTS_THRESHOLD,
+    revSharePercent: 0,
+    estimatedRecovery: { min: 0, max: 25000 },
+    features: [
+      "All channels: SMS, WhatsApp, Email",
+      "AI-powered recovery optimization",
+      "Up to 50 recovered carts per month",
+      "Real-time analytics dashboard",
+      "Basic email support",
+    ],
+  },
   STARTER: {
     id: "starter",
     name: "Starter",

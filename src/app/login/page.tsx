@@ -1,19 +1,42 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn } from 'next-auth/react'
-import { Zap, Mail, Lock, ArrowRight } from 'lucide-react'
+import { Zap, Mail, Lock, ArrowRight, CheckCircle2 } from 'lucide-react'
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center">
+        <div className="text-blue-300/60 text-sm">Loading...</div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
+  )
+}
+
+function LoginContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [verified, setVerified] = useState(false)
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   })
+
+  useEffect(() => {
+    if (searchParams.get('verified') === 'true') {
+      setVerified(true)
+    }
+    if (searchParams.get('error')) {
+      setError(searchParams.get('error')!)
+    }
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -64,6 +87,13 @@ export default function LoginPage() {
           <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Welcome back</h1>
           <p className="text-sm sm:text-base text-blue-200">Sign in to your account to continue</p>
         </div>
+
+        {verified && (
+          <div className="mb-6 p-3 sm:p-4 bg-emerald-900/20 border border-emerald-500/40 rounded-lg flex items-center space-x-2">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+            <p className="text-sm text-emerald-300">Email verified successfully! Sign in to continue.</p>
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 p-3 sm:p-4 bg-red-900/20 border border-red-700/40 rounded-lg">

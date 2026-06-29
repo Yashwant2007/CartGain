@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { sendEmail } from '@/lib/services/email'
+import { createFreeSubscription } from '@/lib/subscription'
 import {
   signupSchema,
   createErrorResponse,
@@ -118,6 +119,9 @@ export async function POST(request: NextRequest) {
         expires: verificationTokenExpires,
       },
     })
+
+    // Create free subscription for the user
+    await createFreeSubscription(user.id)
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
     const verifyLink = `${appUrl}/verify-email?token=${verificationToken}&email=${encodeURIComponent(email)}`

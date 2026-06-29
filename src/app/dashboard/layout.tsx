@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
@@ -15,7 +15,9 @@ import {
   Zap,
   Menu,
   X,
-  Home
+  Home,
+  AlertTriangle,
+  XCircle,
 } from 'lucide-react'
 import StatusBadge from '@/components/dashboard/StatusBadge'
 
@@ -35,6 +37,29 @@ export default function DashboardLayout({
     { name: 'Subscription', href: '/dashboard/subscription', icon: CreditCard },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },
   ]
+
+  const [subStatus, setSubStatus] = useState<{ isFree: boolean; isExhausted: boolean; cartsUsed: number; cartsRemaining: number } | null>(null)
+  const [subLoading, setSubLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/subscription')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.subscription) {
+          const sub = data.subscription
+          const recovered = data.store?.cartsRecovered ?? 0
+          const freeThreshold = 50
+          setSubStatus({
+            isFree: sub.plan === 'free' || !['starter', 'growth', 'pro'].includes(sub.plan),
+            isExhausted: (sub.plan === 'free' || !['starter', 'growth', 'pro'].includes(sub.plan)) && recovered >= freeThreshold,
+            cartsUsed: recovered,
+            cartsRemaining: Math.max(0, freeThreshold - recovered),
+          })
+        }
+        setSubLoading(false)
+      })
+      .catch(() => setSubLoading(false))
+  }, [])
 
   const closeSidebar = () => setSidebarOpen(false)
 
@@ -132,6 +157,47 @@ export default function DashboardLayout({
           {/* Status indicator */}
           <StatusBadge />
         </header>
+
+        {/* Subscription banner */}
+        {!subLoading && subStatus?.isExhausted && (
+          <div className="mx-3 sm:mx-4 md:mx-6 lg:mx-8 mt-3 sm:mt-4 md:mt-6 lg:mt-8">
+            <div className="bg-red-900/30 border border-red-500/40 rounded-xl p-4 backdrop-blur-sm flex items-center justify-between gap-4">
+              <div className="flex items-start space-x-3">
+                <XCircle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-red-200">Free trial exhausted</p>
+                  <p className="text-xs text-blue-300/70 mt-0.5">Cart recovery has been paused. Choose a plan to continue recovering abandoned carts.</p>
+                </div>
+              </div>
+              <Link
+                href="/dashboard/subscription"
+                className="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap bg-gradient-to-r from-red-500 to-orange-500 text-white hover:shadow-lg hover:shadow-red-500/50 transition-all flex-shrink-0"
+              >
+                Upgrade Now
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {!subLoading && subStatus && !subStatus.isExhausted && subStatus.isFree && subStatus.cartsUsed > 0 && (
+          <div className="mx-3 sm:mx-4 md:mx-6 lg:mx-8 mt-3 sm:mt-4 md:mt-6 lg:mt-8">
+            <div className="bg-amber-900/20 border border-amber-500/30 rounded-xl p-4 backdrop-blur-sm flex items-center justify-between gap-4">
+              <div className="flex items-start space-x-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-200">Free trial — {subStatus.cartsRemaining} of 50 carts remaining</p>
+                  <p className="text-xs text-blue-300/70 mt-0.5">Upgrade to a paid plan to unlock unlimited cart recovery.</p>
+                </div>
+              </div>
+              <Link
+                href="/dashboard/subscription"
+                className="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg hover:shadow-amber-500/50 transition-all flex-shrink-0"
+              >
+                View Plans
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Page content - with responsive padding */}
         <main className="p-3 sm:p-4 md:p-6 lg:p-8 min-h-[calc(100vh-3.5rem)] sm:min-h-[calc(100vh-4rem)]">
