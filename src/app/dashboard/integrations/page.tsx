@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { CheckCircle2, XCircle, Settings, RefreshCw, ExternalLink, Copy, Key, Globe, Webhook, Eye, EyeOff } from 'lucide-react'
+import { CheckCircle2, XCircle, Settings, RefreshCw, ExternalLink, Copy, Key, Webhook, Eye, EyeOff } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 
 type IntegrationItem = {
@@ -64,6 +64,19 @@ export default function IntegrationsPage() {
 
   useEffect(() => { loadStatus() }, [loadStatus])
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('shopify_connected') === 'true') {
+      setActionMsg({ type: 'success', text: 'Shopify store connected successfully!' })
+      window.history.replaceState({}, '', window.location.pathname)
+      loadStatus()
+    }
+    if (params.get('shopify_error')) {
+      setActionMsg({ type: 'error', text: decodeURIComponent(params.get('shopify_error')!) })
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [loadStatus])
+
   const updatePlatform = async (platform: string, data: Record<string, string>) => {
     const res = await fetch('/api/stores/current', {
       method: 'PATCH',
@@ -77,7 +90,20 @@ export default function IntegrationsPage() {
   const handleShopifyConnect = async () => {
     if (!status?.store) return
     try {
-      const shop = `${status.store.domain}.myshopify.com`
+      let domain = status.store.domain
+      if (domain.startsWith('http://') || domain.startsWith('https://')) {
+        domain = new URL(domain).hostname
+      }
+      if (domain.includes('.')) {
+        const parts = domain.split('.')
+        if (parts.length >= 2 && parts[parts.length - 2] !== 'myshopify') {
+          domain = parts[0]
+        }
+      }
+      if (!domain.endsWith('.myshopify.com')) {
+        domain = `${domain.replace(/\.myshopify\.com$/, '')}.myshopify.com`
+      }
+      const shop = domain
       const res = await fetch('/api/shopify/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -385,7 +411,7 @@ const CREDENTIAL_FORMS: Record<string, {
       { key: 'apiKey', label: 'API Key', placeholder: 'Create a unique API key' },
       { key: 'apiSecret', label: 'API Secret', placeholder: 'Create a secret key' },
     ],
-    docUrl: '/docs/api',
+    docUrl: '/dashboard/integrations',
   },
   msg91: {
     title: 'MSG91 SMS Configuration',
@@ -435,6 +461,7 @@ function CredentialModalComponent({
 }) {
   const [values, setValues] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
+  const [verifying, setVerifying] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   if (!modal) return null
@@ -448,14 +475,28 @@ function CredentialModalComponent({
       setError(`Set these environment variables in your Vercel dashboard: ${envList}. After deployment, refresh this page.`)
       return
     }
-    setSaving(true)
+
+    setVerifying(true)
     setError(null)
+
     try {
+      const verifyRes = await fetch('/api/integrations/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: modal.type, ...values }),
+      })
+      const verifyData = await verifyRes.json()
+      if (!verifyRes.ok || !verifyData.verified) {
+        throw new Error(verifyData.error || 'Verification failed. Check your credentials.')
+      }
+
+      setVerifying(false)
+      setSaving(true)
       await onConnect(modal.type, values)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Connection failed')
-    } finally {
+      setVerifying(false)
       setSaving(false)
+      setError(err instanceof Error ? err.message : 'Connection failed')
     }
   }
 
@@ -499,10 +540,10 @@ function CredentialModalComponent({
             ))}
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || verifying}
               className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all"
             >
-              {saving ? 'Connecting...' : 'Save & Connect'}
+              {verifying ? 'Verifying...' : saving ? 'Connecting...' : 'Save & Connect'}
             </button>
           </form>
         )}

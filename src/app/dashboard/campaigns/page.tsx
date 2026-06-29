@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Copy, Edit2, Trash2, Play, Pause, BarChart3, Split, Trophy } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
+import { campaignCreateSchema, abTestCreateSchema } from '@/lib/validation'
 
 type Campaign = {
   id: string
@@ -85,8 +86,21 @@ export default function CampaignsPage() {
       return
     }
 
-    if (!config.name.trim()) {
-      setLoadError('Campaign name is required')
+    const result = campaignCreateSchema.safeParse({
+      storeId,
+      name: config.name,
+      channels: config.channels,
+      aiOptimized: config.aiOptimized,
+      sendDelay: config.sendDelay,
+      maxFollowUps: config.followUps,
+      discountEnabled: config.discountEnabled,
+      discountType: config.discountEnabled ? config.discountType : null,
+      discountValue: config.discountEnabled ? config.discountValue : null,
+      isActive: true,
+    })
+
+    if (!result.success) {
+      setLoadError(result.error.errors[0]?.message || 'Validation failed')
       return
     }
 
@@ -98,18 +112,7 @@ export default function CampaignsPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          storeId,
-          name: config.name,
-          channels: config.channels,
-          aiOptimized: config.aiOptimized,
-          sendDelay: config.sendDelay,
-          maxFollowUps: config.followUps,
-          discountEnabled: config.discountEnabled,
-          discountType: config.discountEnabled ? config.discountType : null,
-          discountValue: config.discountEnabled ? config.discountValue : null,
-          isActive: true,
-        }),
+        body: JSON.stringify(result.data),
       })
 
       if (!response.ok) {
@@ -473,31 +476,37 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
 
   const handleCreate = async () => {
     setFormErrors(null)
-    if (!form.name.trim()) { setFormErrors('Test name is required'); return }
-    if (!form.subjectA.trim() || !form.subjectB.trim()) { setFormErrors('Both subject lines are required'); return }
+
+    const payload = {
+      name: form.name,
+      variantA: {
+        subjectLine: form.subjectA,
+        channels: form.channelsA,
+        sendDelay: form.sendDelayA,
+        followUps: form.followUpsA,
+        discount: form.discountA > 0 ? form.discountA : undefined,
+      },
+      variantB: {
+        subjectLine: form.subjectB,
+        channels: form.channelsB,
+        sendDelay: form.sendDelayB,
+        followUps: form.followUpsB,
+        discount: form.discountB > 0 ? form.discountB : undefined,
+      },
+    }
+
+    const result = abTestCreateSchema.safeParse(payload)
+    if (!result.success) {
+      setFormErrors(result.error.errors[0]?.message || 'Validation failed')
+      return
+    }
 
     setSubmitting(true)
     try {
       const res = await fetch(`/api/campaigns/${campaign.id}/ab-tests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name,
-          variantA: {
-            subject: form.subjectA,
-            discountPercent: form.discountA,
-            channels: form.channelsA,
-            sendDelay: form.sendDelayA,
-            maxFollowUps: form.followUpsA,
-          },
-          variantB: {
-            subject: form.subjectB,
-            discountPercent: form.discountB,
-            channels: form.channelsB,
-            sendDelay: form.sendDelayB,
-            maxFollowUps: form.followUpsB,
-          },
-        }),
+        body: JSON.stringify(result.data),
       })
 
       if (res.ok) {

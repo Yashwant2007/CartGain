@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { ArrowLeft, Save } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
+import { campaignUpdateSchema } from '@/lib/validation'
 
 type Campaign = {
   id: string
@@ -94,13 +95,21 @@ export default function EditCampaignPage() {
   }
 
   const handleSave = async () => {
-    if (!formData.name.trim()) {
-      setError('Campaign name is required')
-      return
-    }
+    const result = campaignUpdateSchema.safeParse({
+      name: formData.name,
+      channels: formData.channels,
+      aiOptimized: formData.aiOptimized,
+      sendDelay: formData.sendDelay,
+      followUpDelay: formData.followUpDelay,
+      maxFollowUps: formData.maxFollowUps,
+      discountEnabled: formData.discountEnabled,
+      discountType: formData.discountEnabled ? formData.discountType : null,
+      discountValue: formData.discountEnabled ? formData.discountValue : null,
+      discountCode: formData.discountEnabled ? formData.discountCode : null,
+    })
 
-    if (formData.channels.length === 0) {
-      setError('At least one channel must be selected')
+    if (!result.success) {
+      setError(result.error.errors[0]?.message || 'Validation failed')
       return
     }
 
@@ -111,18 +120,7 @@ export default function EditCampaignPage() {
       const response = await fetch(`/api/campaigns/${campaignId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          channels: formData.channels,
-          aiOptimized: formData.aiOptimized,
-          sendDelay: formData.sendDelay,
-          followUpDelay: formData.followUpDelay,
-          maxFollowUps: formData.maxFollowUps,
-          discountEnabled: formData.discountEnabled,
-          discountType: formData.discountEnabled ? formData.discountType : null,
-          discountValue: formData.discountEnabled ? formData.discountValue : null,
-          discountCode: formData.discountEnabled ? formData.discountCode : null,
-        }),
+        body: JSON.stringify(result.data),
       })
 
       if (!response.ok) {

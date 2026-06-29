@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const state = searchParams.get('state')
 
     if (!shop || !code) {
-      return NextResponse.redirect(new URL('/dashboard/settings?shopify_error=Missing+parameters', req.url))
+      return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=Missing+parameters', req.url))
     }
 
     let storeId: string | null = null
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     const apiSecret = process.env.SHOPIFY_API_SECRET
 
     if (!apiKey || !apiSecret) {
-      return NextResponse.redirect(new URL('/dashboard/settings?shopify_error=Shopify+not+configured', req.url))
+      return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=Shopify+not+configured', req.url))
     }
 
     const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
@@ -46,14 +46,14 @@ export async function GET(req: NextRequest) {
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
       console.error('Shopify token exchange failed:', errorText)
-      return NextResponse.redirect(new URL('/dashboard/settings?shopify_error=Token+exchange+failed', req.url))
+      return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=Token+exchange+failed', req.url))
     }
 
     const tokenData = await tokenResponse.json()
     const accessToken = tokenData.access_token
 
     if (!accessToken) {
-      return NextResponse.redirect(new URL('/dashboard/settings?shopify_error=No+access+token+received', req.url))
+      return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=No+access+token+received', req.url))
     }
 
     if (storeId) {
@@ -105,9 +105,9 @@ export async function GET(req: NextRequest) {
       console.error('Failed to auto-create campaign:', campaignError)
     }
 
-    return NextResponse.redirect(new URL('/dashboard/settings?shopify_connected=true', req.url))
+    return NextResponse.redirect(new URL('/dashboard/integrations?shopify_connected=true', req.url))
   } catch (error) {
     console.error('Shopify callback error:', error)
-    return NextResponse.redirect(new URL('/dashboard/settings?shopify_error=Callback+processing+failed', req.url))
+    return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=Callback+processing+failed', req.url))
   }
 }

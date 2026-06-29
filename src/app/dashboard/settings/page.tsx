@@ -652,9 +652,9 @@ function APISettings({ store }: { store: StoreSettings | null }) {
           <p className="text-sm text-blue-300/80 mb-4">
             Learn how to use our API to integrate CartGain with your custom systems.
           </p>
-          <a href="/docs/api" className="text-sm text-cyan-400 hover:text-cyan-300 font-medium">
+          <Link href="/docs/api" className="text-sm text-cyan-400 hover:text-cyan-300 font-medium">
             View Documentation →
-          </a>
+          </Link>
         </div>
       </div>
     </div>
