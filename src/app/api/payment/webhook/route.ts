@@ -24,6 +24,10 @@ export async function POST(req: NextRequest) {
         await handlePaymentCaptured(event.payload.payment.entity);
         break;
 
+      case "payment_link.paid":
+        await handlePaymentLinkPaid(event.payload.payment_link.entity, event.payload.payment.entity);
+        break;
+
       case "payment.failed":
         await handlePaymentFailed(event.payload.payment.entity);
         break;
@@ -183,4 +187,49 @@ async function handleSubscriptionCancelled(subscription: any) {
     await prisma.subscription.update({ where: { id: existing.id }, data: { status: "cancelled" } })
     console.log(`❌ Subscription ${subId} cancelled for user ${existing.userId}`)
   }
+}
+
+// Handles revenue-share invoice payments made via Razorpay Payment Link.
+// Idempotent: a second call for the same invoice is a no-op.
+async function handlePaymentLinkPaid(paymentLink: any, payment: any) {
+  const paymentLinkId = paymentLink?.id
+  const invoiceId = paymentLink?.notes?.invoiceId
+  const paymentId = payment?.id
+
+  if (!paymentLinkId || !invoiceId) {
+    console.log('payment_link.paid: missing paymentLinkId or invoiceId in notes — skipping')
+    return
+  }
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, razorpayPaymentLinkId: paymentLinkId },
+  })
+
+  if (!invoice) {
+    console.log(`payment_link.paid: no invoice found for id=${invoiceId} linkId=${paymentLinkId}`)
+    return
+  }
+
+  if (invoice.status === 'paid') {
+    console.log(`payment_link.paid: invoice ${invoiceId} already paid — idempotent skip`)
+    return
+  }
+
+  await prisma.$transaction([
+    prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        status: 'paid',
+        paidAt: new Date(),
+        paidVia: 'razorpay',
+        paymentRef: paymentId,
+      },
+    }),
+    prisma.subscription.update({
+      where: { id: invoice.subscriptionId },
+      data: { revenueSharePaid: { increment: invoice.amount } },
+    }),
+  ])
+
+  console.log(`✅ RevShare invoice ${invoice.id} paid: ₹${invoice.amount} via payment link ${paymentLinkId}`)
 }

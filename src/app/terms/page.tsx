@@ -113,11 +113,13 @@ export default function TermsPage() {
                 7. Customer Data &amp; Privacy
               </h2>
               <ul className="list-disc pl-5 space-y-2">
+                <li>CartGain processes only the minimum personal data necessary to detect abandoned carts and recover revenue for merchants.</li>
                 <li>You retain full ownership of your customer data. CartGain acts as a data processor on your behalf.</li>
                 <li>We process customer data only for the purpose of providing cart recovery services.</li>
-                <li>We implement industry-standard security measures to protect all data.</li>
+                <li>We implement industry-standard security measures to protect all data, including encryption, access controls, and logging of sensitive administrative access.</li>
                 <li>We do not sell your customer data to third parties.</li>
                 <li>Upon termination, you may request deletion of your data within 90 days.</li>
+                <li>Before using the Platform, you must accept our Terms of Service, Privacy Policy, and Data Processing Agreement.</li>
                 <li>Our data processing practices are detailed in our <Link href="/dpa" className="text-cyan-400 hover:underline">Data Processing Agreement (DPA)</Link> and <Link href="/privacy" className="text-cyan-400 hover:underline">Privacy Policy</Link>.</li>
               </ul>
             </section>

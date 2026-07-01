@@ -1,4 +1,5 @@
 import prisma from '@/lib/db'
+import { logDataAccess } from '@/lib/data-protection'
 import { sendEmail, EmailTemplates } from '@/lib/services/email'
 import { sendSMS, sanitizePhoneNumber } from '@/lib/services/sms'
 import { sendWhatsAppMessage } from '@/lib/services/whatsapp'
@@ -166,7 +167,7 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
                 where: { storeId_email: { storeId: store.id, email: customerEmail } },
               })
               if (optedOut) {
-                console.log(`⏭️ Skipping cart ${cart.id}: customer ${customerEmail} has opted out`)
+                console.log(`⏭️ Skipping cart ${cart.id}: customer email opted out`)
                 continue
               }
             }
@@ -176,7 +177,7 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
                 where: { storeId_phone: { storeId: store.id, phone: customerPhone } },
               })
               if (optedOut) {
-                console.log(`⏭️ Skipping cart ${cart.id}: customer ${customerPhone} has opted out`)
+                console.log(`⏭️ Skipping cart ${cart.id}: customer phone opted out`)
                 continue
               }
             }
@@ -202,6 +203,22 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
             const rawItems = Array.isArray(cart.items) ? cart.items : []
             const cartItems = rawItems as { name: string; description?: string; price: number; quantity: number; image?: string }[]
             const formattedTotal = `${currencySymbol}${cart.totalValue.toFixed(2)}`
+
+            await logDataAccess({
+              actorType: 'system',
+              action: 'read',
+              resourceType: 'cart',
+              resourceId: cart.id,
+              purpose: 'abandoned cart recovery message processing',
+              actorId: campaign.userId,
+              metadata: {
+                storeId: store.id,
+                channel,
+                cartHasEmail: Boolean(cart.customerEmail),
+                cartHasPhone: Boolean(cart.customerPhone),
+              },
+            })
+
             // Click-tracking redirect: stamps clickedAt for this channel, then forwards
             // to the cart page. Powers provable per-channel attribution.
             const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
@@ -282,7 +299,7 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
                 }
               }
             } catch (err: any) {
-              console.error(`Error sending ${channel} for cart ${cart.id}:`, err)
+              console.error(`Error sending ${channel} for cart ${cart.id}:`, err?.message || err)
               error = err.message
             }
 
@@ -317,7 +334,7 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
             }
           } catch (err: any) {
             messagesFailed++
-            console.error(`Unexpected error processing cart ${cart.id}:`, err)
+            console.error(`Unexpected error processing cart ${cart.id}:`, err?.message || err)
           }
         }
 

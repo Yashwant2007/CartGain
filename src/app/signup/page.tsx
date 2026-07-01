@@ -17,6 +17,7 @@ export default function SignUpPage() {
     storeName: '',
     storeDomain: '',
   })
+  const [acceptedPolicies, setAcceptedPolicies] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -24,6 +25,12 @@ export default function SignUpPage() {
     setIsLoading(true)
 
     try {
+      if (!acceptedPolicies) {
+        setError('Please accept the Terms, Privacy Policy, and Data Processing Agreement')
+        setIsLoading(false)
+        return
+      }
+
       if (formData.password.length < 8) {
         setError('Password must be at least 8 characters')
         setIsLoading(false)
@@ -185,6 +192,25 @@ export default function SignUpPage() {
               />
             </div>
 
+            <label className="flex items-start gap-3 text-xs sm:text-sm text-blue-300/80 leading-relaxed cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-blue-500/50 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
+                checked={acceptedPolicies}
+                onChange={(e) => setAcceptedPolicies(e.target.checked)}
+                disabled={isLoading}
+              />
+              <span>
+                I agree to CartGain&apos;s{' '}
+                <Link href="/terms" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">Terms of Service</Link>
+                ,{' '}
+                <Link href="/privacy" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">Privacy Policy</Link>
+                , and{' '}
+                <Link href="/dpa" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">Data Processing Agreement</Link>
+                .
+              </span>
+            </label>
+
             <button
               type="submit"
               disabled={isLoading}
@@ -193,6 +219,10 @@ export default function SignUpPage() {
               {isLoading ? 'Creating Account...' : 'Create Account'}
               {!isLoading && <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />}
             </button>
+
+            <p className="text-xs text-blue-300/70 leading-relaxed text-center px-1">
+              CartGain processes only the minimum merchant and customer data needed to recover abandoned carts and deliver notifications.
+            </p>
           </form>
 
           <div className="relative my-6">

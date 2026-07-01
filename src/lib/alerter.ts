@@ -1,4 +1,5 @@
 import { sendEmail } from '@/lib/services/email'
+import { redactSensitive } from '@/lib/data-protection'
 
 const ALERT_EMAIL = process.env.ALERT_EMAIL || ''
 
@@ -13,7 +14,7 @@ export async function sendAlert(
   }
 
   const contextHtml = context
-    ? `<pre style="background:#f1f5f9;padding:12px;border-radius:8px;overflow-x:auto;font-size:13px;">${JSON.stringify(context, null, 2)}</pre>`
+    ? `<pre style="background:#f1f5f9;padding:12px;border-radius:8px;overflow-x:auto;font-size:13px;">${JSON.stringify(redactSensitive(context), null, 2)}</pre>`
     : ''
 
   await sendEmail({
@@ -48,7 +49,7 @@ export async function sendAlertOnError(
   const errStack = error instanceof Error ? error.stack : undefined
   await sendAlert(
     `Error in ${label}`,
-    errStack ? `${errMsg}\n\n${errStack}` : errMsg,
-    context
+    errStack ? `${errMsg}\n\n${redactSensitive(errStack)}` : errMsg,
+    context ? redactSensitive(context) : undefined
   )
 }

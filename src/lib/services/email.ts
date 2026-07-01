@@ -1,4 +1,5 @@
 import { Resend } from 'resend'
+import { redactSensitive } from '@/lib/data-protection'
 
 const apiKey = process.env.RESEND_API_KEY
 const fromEmail = process.env.FROM_EMAIL || 'noreply@cart-gain.com'
@@ -35,7 +36,7 @@ export async function sendEmail({
   if (!resend) {
     // Not configured — log for local dev, but report failure so analytics
     // never count an email that was never actually sent.
-    console.warn(`[EMAIL NOT SENT — Resend not configured] To: ${to} | Subject: ${subject}`)
+    console.warn(`[EMAIL NOT SENT — Resend not configured] ${JSON.stringify(redactSensitive({ to, subject }))}`)
     return { success: false, error: 'Email service (Resend) not configured' }
   }
 
@@ -50,7 +51,7 @@ export async function sendEmail({
     if (error) throw error
     return { success: true, messageId: data?.id }
   } catch (error: any) {
-    console.error('Email send error:', error)
+    console.error('Email send error:', redactSensitive(error))
     return { success: false, error: error?.message || 'Failed to send email' }
   }
 }

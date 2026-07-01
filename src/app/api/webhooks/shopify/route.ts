@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { logDataAccess } from '@/lib/data-protection'
 import { verifyShopifyWebhook } from '@/lib/shopify'
 import { checkRateLimit } from '@/lib/rate-limiter'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS } from '@/lib/payment'
@@ -106,6 +107,20 @@ async function handleCartUpdate(data: any, headers: Headers) {
 
   if (!store) return
 
+  await logDataAccess({
+    actorType: 'system',
+    action: 'read',
+    resourceType: 'cart',
+    resourceId: String(cart.id || cart.token),
+    purpose: 'shopify webhook cart sync',
+    actorId: store.userId,
+    metadata: {
+      shopDomain: domain,
+      hasCustomerEmail: Boolean(cart.email),
+      hasCustomerPhone: Boolean(cart.phone),
+    },
+  })
+
   // Upsert cart
   await prisma.cart.upsert({
     where: {
@@ -166,6 +181,20 @@ async function handleOrderCreate(data: any, headers: Headers) {
 
   if (!store) return
 
+  await logDataAccess({
+    actorType: 'system',
+    action: 'read',
+    resourceType: 'order',
+    resourceId: String(data.id || cartToken),
+    purpose: 'shopify webhook order attribution',
+    actorId: store.userId,
+    metadata: {
+      shopDomain: domain,
+      cartToken: Boolean(cartToken),
+      totalPrice: data.total_price,
+    },
+  })
+
   // Find the cart
   const cart = await prisma.cart.findUnique({
     where: {
@@ -178,8 +207,14 @@ async function handleOrderCreate(data: any, headers: Headers) {
 
   if (!cart) return
 
-  const orderTotal = parseFloat(data.total_price || '0')
+  const grossAmount = parseFloat(data.total_price || '0')
   const orderCreatedAt = data.created_at ? new Date(data.created_at) : new Date()
+  const shopifyOrderId = data.id ? String(data.id) : undefined
+
+  // Discount applied by CartGain (e.g. from a campaign discount code)
+  const discountAmount = parseFloat(data.total_discounts || '0')
+  const netAmount = Math.max(0, grossAmount - discountAmount)
+  const discountUsed = discountAmount > 0
 
   // 1) ALWAYS mark the cart as converted so the processor stops messaging it.
   //    This applies to every order (ours or organic) — we never message a buyer.
@@ -217,9 +252,12 @@ async function handleOrderCreate(data: any, headers: Headers) {
       data: {
         storeId: store.id,
         cartId: cart.id,
-        recoveredValue: orderTotal,
+        recoveredValue: grossAmount,
         channel,
-        netRevenue: orderTotal,
+        discountUsed,
+        discountAmount,
+        netRevenue: netAmount,
+        shopifyOrderId,
       },
     })
   } catch (e: any) {
@@ -247,21 +285,47 @@ async function handleOrderCreate(data: any, headers: Headers) {
     where: { userId_date: { userId: store.userId, date: today } },
     update: {
       cartsRecovered: { increment: 1 },
-      revenueRecovered: { increment: orderTotal },
+      revenueRecovered: { increment: grossAmount },
     },
     create: {
       userId: store.userId,
       date: today,
       cartsRecovered: 1,
-      revenueRecovered: orderTotal,
+      revenueRecovered: grossAmount,
     },
   })
 
-  // Track revenue share (only on attributed recoveries, past the free threshold)
-  await accrueRevenueShare(store.userId, orderTotal)
+  // Track revenue share as an immutable ledger event (attributed recoveries only, past the free threshold)
+  await accrueRevenueShare({
+    userId: store.userId,
+    cartId: cart.id,
+    storeId: store.id,
+    shopifyOrderId,
+    grossAmount,
+    discountAmount,
+    netAmount,
+    channel,
+    attributedMessageId: attributingMessage.id,
+    recoveredAt: orderCreatedAt,
+  })
 }
 
-async function accrueRevenueShare(userId: string, orderTotal: number) {
+interface AccrueParams {
+  userId: string
+  cartId: string
+  storeId: string
+  shopifyOrderId: string | undefined
+  grossAmount: number
+  discountAmount: number
+  netAmount: number
+  channel: string
+  attributedMessageId: string
+  recoveredAt: Date
+}
+
+async function accrueRevenueShare(params: AccrueParams) {
+  const { userId, cartId, storeId, shopifyOrderId, grossAmount, discountAmount, netAmount, channel, attributedMessageId, recoveredAt } = params
+
   const subscription = await prisma.subscription.findFirst({
     where: { userId, status: 'active' },
   })
@@ -270,21 +334,49 @@ async function accrueRevenueShare(userId: string, orderTotal: number) {
   const planConfig = Object.values(PLANS).find(p => p.id === subscription.plan)
   if (!planConfig || planConfig.revSharePercent <= 0) return
 
+  // Count ALL recovered carts for this user across all stores (all-time)
   const totalRecovered = await prisma.recoveredCart.count({
-    where: {
-      store: { userId },
-    },
+    where: { store: { userId } },
   })
 
-  // Only apply revenue share after FREE_CARTS_THRESHOLD
+  // First FREE_CARTS_THRESHOLD recoveries are always at 0% — proving period
   if (totalRecovered <= FREE_CARTS_THRESHOLD) return
 
-  const revShareAmount = orderTotal * (planConfig.revSharePercent / 100)
+  const revSharePercent = planConfig.revSharePercent
+  const revShareAmount = netAmount * (revSharePercent / 100)
 
-  await prisma.subscription.update({
-    where: { id: subscription.id },
-    data: {
-      revenueShareAccrued: { increment: revShareAmount },
-    },
-  })
+  // Create immutable audit ledger entry. cartId is unique so duplicate webhooks
+  // are silently caught by P2002 and never double-accrue.
+  try {
+    await prisma.$transaction([
+      prisma.revenueShareEvent.create({
+        data: {
+          subscriptionId: subscription.id,
+          cartId,
+          storeId,
+          shopifyOrderId,
+          grossAmount,
+          discountAmount,
+          netAmount,
+          revSharePercent,
+          revShareAmount,
+          channel,
+          attributedMessageId,
+          recoveredAt,
+        },
+      }),
+      prisma.subscription.update({
+        where: { id: subscription.id },
+        data: { revenueShareAccrued: { increment: revShareAmount } },
+      }),
+    ])
+  } catch (e: any) {
+    if (e?.code === 'P2002') {
+      console.log(`Revenue share event for cart ${cartId} already exists — skipping duplicate`)
+      return
+    }
+    throw e
+  }
+
+  console.log(`RevShare accrued: cart ${cartId}, net ₹${netAmount}, ${revSharePercent}% = ₹${revShareAmount.toFixed(2)}`)
 }

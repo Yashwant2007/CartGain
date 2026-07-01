@@ -63,6 +63,22 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+model DataAccessLog {
+  id           String   @id @default(cuid())
+  actorType    String
+  actorId      String?
+  action       String
+  resourceType String
+  resourceId   String?
+  purpose      String
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([actorType, createdAt])
+  @@index([resourceType, createdAt])
+  @@index([purpose, createdAt])
+}
+
 model Store {
   id              String    @id @default(cuid())
   userId          String
@@ -78,11 +94,12 @@ model Store {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  carts           Cart[]
-  campaigns       Campaign[]
-  recoveredCarts  RecoveredCart[]
-  optOuts         OptOut[]
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  carts               Cart[]
+  campaigns           Campaign[]
+  recoveredCarts      RecoveredCart[]
+  optOuts             OptOut[]
+  revenueShareEvents  RevenueShareEvent[]
 
   @@unique([userId, domain])
   @@index([userId])
@@ -174,9 +191,11 @@ model RecoveredCart {
   discountUsed    Boolean   @default(false)
   discountAmount  Float     @default(0)
   netRevenue      Float
+  shopifyOrderId  String?
 
-  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  cart            Cart      @relation(fields: [cartId], references: [id], onDelete: Cascade, map: "fk_cart")
+  store             Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  cart              Cart               @relation(fields: [cartId], references: [id], onDelete: Cascade, map: "fk_cart")
+  revenueShareEvent RevenueShareEvent?
 
   @@index([storeId])
 }
@@ -233,31 +252,66 @@ model Subscription {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  invoices        Invoice[]
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoices            Invoice[]
+  revenueShareEvents  RevenueShareEvent[]
 
   @@index([userId])
 }
 
 model Invoice {
-  id              String    @id @default(cuid())
-  userId          String
-  subscriptionId  String
-  amount          Float
-  status          String    @default("pending") // pending, paid, overdue, cancelled
-  periodStart     DateTime
-  periodEnd       DateTime
-  dueDate         DateTime
-  paidAt          DateTime?
-  paidVia         String?   // razorpay, manual
-  paymentRef      String?   // Razorpay payment ID
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  userId              String
+  subscriptionId      String
+  amount              Float
+  status              String    @default("pending") // pending, paid, overdue, cancelled
+  periodStart         DateTime
+  periodEnd           DateTime
+  dueDate             DateTime
+  paidAt              DateTime?
+  paidVia             String?   // razorpay, manual
+  paymentRef          String?   // Razorpay payment ID
+  razorpayOrderId     String?   // Razorpay order ID for rev-share payment
+  razorpayPaymentLinkId String? // Razorpay payment link ID
+  paymentLinkUrl      String?   // Short URL sent to merchant
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  subscription    Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  subscription        Subscription        @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  revenueShareEvents  RevenueShareEvent[]
 
   @@index([subscriptionId])
   @@index([userId])
+  @@index([razorpayOrderId])
+  @@index([razorpayPaymentLinkId])
+}
+
+model RevenueShareEvent {
+  id                  String    @id @default(cuid())
+  subscriptionId      String
+  cartId              String    @unique // one event per recovered cart — idempotency guard
+  storeId             String
+  shopifyOrderId      String?
+  grossAmount         Float     // recoveredValue (order total before CartGain discount)
+  discountAmount      Float     @default(0)
+  netAmount           Float     // grossAmount - discountAmount (rev share base)
+  revSharePercent     Float     // rate locked at event time
+  revShareAmount      Float     // netAmount × revSharePercent / 100
+  channel             String
+  attributedMessageId String?
+  recoveredAt         DateTime
+  invoiceId           String?   // null = pending billing; set when invoiced
+  createdAt           DateTime  @default(now())
+
+  subscription  Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  recoveredCart RecoveredCart @relation(fields: [cartId], references: [cartId])
+  store         Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  invoice       Invoice?      @relation(fields: [invoiceId], references: [id])
+
+  @@index([subscriptionId])
+  @@index([subscriptionId, invoiceId])
+  @@index([storeId])
+  @@index([invoiceId])
 }
 
 model ApiKey {

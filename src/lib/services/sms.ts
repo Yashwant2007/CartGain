@@ -1,3 +1,5 @@
+import { redactSensitive } from '@/lib/data-protection'
+
 const authKey = process.env.MSG91_AUTH_KEY
 const senderId = process.env.MSG91_SENDER_ID || 'CARTGN'
 
@@ -42,7 +44,7 @@ export async function sendSMS({ to, body }: SendSMSOptions): Promise<{
       messageId: text,
     }
   } catch (error: any) {
-    console.error('SMS send error:', error)
+    console.error('SMS send error:', redactSensitive(error))
     return { success: false, error: error.message }
   }
 }

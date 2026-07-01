@@ -7,6 +7,10 @@
     {
       "path": "/api/jobs/process-carts",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/jobs/process-billing",
+      "schedule": "0 2 * * *"
     }
   ]
 }

@@ -81,12 +81,26 @@ export default function PrivacyPolicyPage() {
                 </h2>
                 <p className="mb-4">We process your data for the following purposes:</p>
                 <ul className="list-disc pl-5 space-y-2">
+                  <li><strong>Data Minimization:</strong> We collect and process only the minimum personal data required to provide cart recovery value to merchants.</li>
                   <li><strong>Service Delivery:</strong> To provide, maintain, and improve our cart recovery services.</li>
                   <li><strong>Communication:</strong> To send recovery notifications via WhatsApp, SMS, and email on your behalf.</li>
                   <li><strong>Analytics:</strong> To track recovery performance and provide insights.</li>
                   <li><strong>Security:</strong> To detect and prevent fraud, unauthorized access, and security incidents.</li>
                   <li><strong>Legal Compliance:</strong> To comply with applicable laws and regulations.</li>
                   <li><strong>Marketing:</strong> With your consent, to send promotional communications about new features or offers.</li>
+                </ul>
+              </section>
+
+              <section>
+                <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+                  <Lock className="w-6 h-6 text-cyan-400" />
+                  Merchant Data Controls
+                </h2>
+                <ul className="list-disc pl-5 space-y-2">
+                  <li>We disclose to merchants which data we process and the purpose for each processing activity.</li>
+                  <li>We limit the use of merchant and customer data to cart recovery, account administration, support, security, and legal compliance.</li>
+                  <li>We maintain retention periods so personal data is not kept longer than needed.</li>
+                  <li>We require merchants to accept our Terms of Service, Privacy Policy, and Data Processing Agreement before using the service.</li>
                 </ul>
               </section>
 
@@ -173,7 +187,7 @@ export default function PrivacyPolicyPage() {
                   Data Security
                 </h2>
                 <p className="leading-relaxed">
-                  We implement industry-standard security measures including encryption in transit (TLS/SSL), encryption at rest, access controls, regular security audits, and employee training. However, no system is 100% secure, and we cannot guarantee absolute security.
+                  We implement industry-standard security measures including encryption in transit (TLS/SSL), encryption at rest, encrypted backups, access controls, regular security reviews, employee training, and access logging for sensitive administrative actions. However, no system is 100% secure, and we cannot guarantee absolute security.
                 </p>
               </section>
 

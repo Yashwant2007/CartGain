@@ -192,15 +192,15 @@ export default function DPAPage() {
                 </div>
                 <div className="bg-slate-700/30 rounded-lg p-4">
                   <p className="font-semibold text-white mb-2">Access Control</p>
-                  <p className="text-sm">Role-based access, least-privilege principle, and multi-factor authentication for admin access.</p>
+                  <p className="text-sm">Role-based access, least-privilege principle, strong staff password requirements, and multi-factor authentication for admin access.</p>
                 </div>
                 <div className="bg-slate-700/30 rounded-lg p-4">
                   <p className="font-semibold text-white mb-2">Monitoring</p>
-                  <p className="text-sm">24/7 system monitoring, intrusion detection, and automated threat response.</p>
+                  <p className="text-sm">24/7 system monitoring, intrusion detection, automated threat response, and audit logging for access to sensitive personal data.</p>
                 </div>
                 <div className="bg-slate-700/30 rounded-lg p-4">
                   <p className="font-semibold text-white mb-2">Backups</p>
-                  <p className="text-sm">Automated daily backups with 90-day retention. Point-in-time recovery capability.</p>
+                  <p className="text-sm">Automated daily encrypted backups with 90-day retention. Point-in-time recovery capability.</p>
                 </div>
                 <div className="bg-slate-700/30 rounded-lg p-4">
                   <p className="font-semibold text-white mb-2">Employee Training</p>
@@ -208,7 +208,7 @@ export default function DPAPage() {
                 </div>
                 <div className="bg-slate-700/30 rounded-lg p-4">
                   <p className="font-semibold text-white mb-2">Incident Response</p>
-                  <p className="text-sm">Documented incident response plan with 24-hour breach notification commitment.</p>
+                  <p className="text-sm">Documented incident response plan with 24-hour breach notification commitment and clear escalation procedures.</p>
                 </div>
               </div>
             </section>
