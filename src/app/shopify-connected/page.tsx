@@ -1,27 +1,23 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { CheckCircle2 } from 'lucide-react'
 
 export default function ShopifyConnectedPage() {
-  const [closing, setClosing] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
-    // Notify the opener tab (CartGain in Shopify admin) if possible
     if (window.opener) {
-      try {
-        window.opener.postMessage('shopify_connected', '*')
-      } catch {}
+      try { window.opener.postMessage('shopify_connected', '*') } catch {}
     }
 
-    // Auto-close after 2 seconds
     const t = setTimeout(() => {
-      setClosing(true)
-      window.close()
+      router.replace('/dashboard/integrations?shopify_connected=true')
     }, 2000)
 
     return () => clearTimeout(t)
-  }, [])
+  }, [router])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center p-6">
@@ -35,15 +31,12 @@ export default function ShopifyConnectedPage() {
         <p className="text-blue-300/70 mb-4">
           Your store has been connected to CartGain successfully.
         </p>
-        <p className="text-sm text-blue-300/50">
-          {closing ? 'Closing tab…' : 'This tab will close automatically in a moment.'}
+        <p className="text-sm text-blue-300/50 mb-6">
+          Redirecting to dashboard…
         </p>
-        <button
-          onClick={() => window.close()}
-          className="mt-6 px-6 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-medium rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 transition-all"
-        >
-          Close Tab
-        </button>
+        <p className="text-xs text-blue-300/30 mt-4">
+          You can close this tab and return to CartGain.
+        </p>
       </div>
     </div>
   )

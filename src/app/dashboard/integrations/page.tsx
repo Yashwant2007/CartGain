@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { CheckCircle2, XCircle, Settings, ExternalLink, Copy, Key, Webhook, Eye, EyeOff } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 
@@ -49,6 +49,7 @@ export default function IntegrationsPage() {
   const [shopifyDomain, setShopifyDomain] = useState('')
   const [shopifyConnecting, setShopifyConnecting] = useState(false)
   const [shopifyInputError, setShopifyInputError] = useState<string | null>(null)
+  const popupRef = useRef<Window | null>(null)
 
   const loadStatus = useCallback(async () => {
     if (!storeId) return
@@ -74,6 +75,10 @@ export default function IntegrationsPage() {
       if (e.data === 'shopify_connected') {
         setActionMsg({ type: 'success', text: 'Shopify store connected successfully!' })
         loadStatus()
+        if (popupRef.current) {
+          popupRef.current.close()
+          popupRef.current = null
+        }
       }
     }
     window.addEventListener('message', handler)
@@ -154,11 +159,12 @@ export default function IntegrationsPage() {
       // Open OAuth in a new tab — redirecting window.top loses the Shopify admin
       // session on the cross-domain hop (admin.shopify.com → store.myshopify.com)
       // which sends the merchant to the password-protected storefront instead.
-      const popup = window.open(data.authUrl, '_blank', 'noopener,noreferrer')
+      const popup = window.open(data.authUrl, '_blank')
       if (!popup) {
         // Popup blocked — fall back to same-window redirect
         window.location.href = data.authUrl
       } else {
+        popupRef.current = popup
         setActionMsg({ type: 'success', text: 'A new tab has opened for Shopify authorization — complete the steps there, then come back here.' })
       }
     } catch (error) {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { Bell, CreditCard, Shield, User, Key, ExternalLink } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
@@ -141,6 +141,7 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
   const [connecting, setConnecting] = useState(false)
   const [shopifyError, setShopifyError] = useState<string | null>(null)
   const [connectMessage, setConnectMessage] = useState<string | null>(null)
+  const popupRef = useRef<Window | null>(null)
 
   useEffect(() => {
     if (store) {
@@ -167,6 +168,19 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
       setShopifyError(decodeURIComponent(params.get('shopify_error')!))
       window.history.replaceState({}, '', window.location.pathname)
     }
+
+    const handler = (e: MessageEvent) => {
+      if (e.data === 'shopify_connected') {
+        setConnectMessage('Shopify store connected successfully!')
+        if (popupRef.current) {
+          popupRef.current.close()
+          popupRef.current = null
+        }
+        window.location.reload()
+      }
+    }
+    window.addEventListener('message', handler)
+    return () => window.removeEventListener('message', handler)
   }, [])
 
   const handleSave = async () => {
@@ -229,8 +243,12 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
 
       // Open OAuth in a new tab — redirecting window.top loses the Shopify admin
       // session on the cross-domain hop (admin.shopify.com → store.myshopify.com)
-      const popup = window.open(data.authUrl, '_blank', 'noopener,noreferrer')
-      if (!popup) window.location.href = data.authUrl
+      const popup = window.open(data.authUrl, '_blank')
+      if (!popup) {
+        window.location.href = data.authUrl
+      } else {
+        popupRef.current = popup
+      }
     } catch (error) {
       setShopifyError(error instanceof Error ? error.message : 'Connection failed')
       setConnecting(false)
