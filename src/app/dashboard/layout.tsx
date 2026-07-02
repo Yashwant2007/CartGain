@@ -128,7 +128,17 @@ export default function DashboardLayout({
               <span className="truncate">Back to Home</span>
             </Link>
             <button
-              onClick={() => signOut({ callbackUrl: '/' })}
+              onClick={async () => {
+                // In Shopify iframe, redirect window.top after sign-out so Shopify
+                // doesn't intercept the navigation and show its own popup.
+                const isInIframe = typeof window !== 'undefined' && window !== window.top
+                if (isInIframe && window.top) {
+                  await signOut({ redirect: false })
+                  window.top.location.href = `${window.location.origin}/`
+                } else {
+                  signOut({ callbackUrl: '/' })
+                }
+              }}
               className="w-full flex items-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium text-blue-200 rounded-lg hover:bg-red-900/20 hover:text-red-300 transition-all min-h-10 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
             >
               <LogOut className="w-4 h-4 sm:w-5 sm:h-5 mr-3 flex-shrink-0" />

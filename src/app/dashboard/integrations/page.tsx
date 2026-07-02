@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { CheckCircle2, XCircle, Settings, RefreshCw, ExternalLink, Copy, Key, Webhook, Eye, EyeOff } from 'lucide-react'
+import { CheckCircle2, XCircle, Settings, ExternalLink, Copy, Key, Webhook, Eye, EyeOff } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 
 type IntegrationItem = {
@@ -45,6 +45,10 @@ export default function IntegrationsPage() {
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [credentialModal, setCredentialModal] = useState<CredentialModal>(null)
   const [apiKeyVisible, setApiKeyVisible] = useState(false)
+  const [shopifyModal, setShopifyModal] = useState(false)
+  const [shopifyDomain, setShopifyDomain] = useState('')
+  const [shopifyConnecting, setShopifyConnecting] = useState(false)
+  const [shopifyInputError, setShopifyInputError] = useState<string | null>(null)
 
   const loadStatus = useCallback(async () => {
     if (!storeId) return
@@ -111,37 +115,39 @@ export default function IntegrationsPage() {
     await loadStatus()
   }
 
-  const handleShopifyConnect = async () => {
+  const handleShopifyConnect = async (rawDomain: string) => {
     if (!status?.store) return
+    setShopifyConnecting(true)
+    setShopifyInputError(null)
     try {
-      let domain = status.store.domain
+      // Normalise: strip protocol/path, enforce .myshopify.com suffix
+      let domain = rawDomain.trim().toLowerCase()
       if (domain.startsWith('http://') || domain.startsWith('https://')) {
         domain = new URL(domain).hostname
       }
-      if (domain.includes('.')) {
-        const parts = domain.split('.')
-        if (parts.length >= 2 && parts[parts.length - 2] !== 'myshopify') {
-          domain = parts[0]
-        }
-      }
-      if (!domain.endsWith('.myshopify.com')) {
-        domain = `${domain.replace(/\.myshopify\.com$/, '')}.myshopify.com`
-      }
-      const shop = domain
+      domain = domain.split('/')[0]
+      domain = domain.replace(/\.myshopify\.com$/, '')
+      if (!domain) throw new Error('Please enter your Shopify store name.')
+      domain = `${domain}.myshopify.com`
+
       const res = await fetch('/api/shopify/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shop, storeId: status.store.id }),
+        body: JSON.stringify({ shop: domain, storeId: status.store.id }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to initiate connection')
+
+      setShopifyModal(false)
       // Break out of Shopify admin iframe before redirecting to Shopify OAuth
       const target = (typeof window !== 'undefined' && window !== window.top && window.top)
         ? window.top
         : window
       target.location.href = data.authUrl
     } catch (error) {
-      setActionMsg({ type: 'error', text: error instanceof Error ? error.message : 'Connection failed' })
+      setShopifyInputError(error instanceof Error ? error.message : 'Connection failed')
+    } finally {
+      setShopifyConnecting(false)
     }
   }
 
@@ -184,7 +190,7 @@ export default function IntegrationsPage() {
 
   const platformActions: Record<string, { onConnect: () => void; onDisconnect: () => void }> = {
     shopify: {
-      onConnect: handleShopifyConnect,
+      onConnect: () => { setShopifyDomain(''); setShopifyInputError(null); setShopifyModal(true) },
       onDisconnect: () => handleDisconnect(integrations.find(i => i.id === 'shopify')!),
     },
     woocommerce: {
@@ -322,6 +328,51 @@ export default function IntegrationsPage() {
           onConnect={handleCredentialConnect}
           onClose={() => setCredentialModal(null)}
         />
+      )}
+
+      {shopifyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShopifyModal(false)}>
+          <div className="bg-slate-800 border border-blue-700/50 rounded-xl p-6 w-full max-w-md shadow-2xl shadow-cyan-500/10" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center space-x-3 mb-4">
+              <span className="text-2xl">🛍️</span>
+              <h3 className="text-lg font-semibold text-white">Connect Shopify Store</h3>
+            </div>
+            <p className="text-sm text-blue-300/70 mb-5">
+              Enter your Shopify store name. You can find it in your Shopify admin URL:<br />
+              <span className="font-mono text-cyan-400">your-store-name.myshopify.com</span>
+            </p>
+            {shopifyInputError && (
+              <div className="mb-4 p-3 bg-red-600/20 border border-red-500/40 rounded-lg text-sm text-red-300">{shopifyInputError}</div>
+            )}
+            <form onSubmit={e => { e.preventDefault(); handleShopifyConnect(shopifyDomain) }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-blue-200 mb-1">Store name</label>
+                <div className="flex items-center bg-slate-700/50 border border-blue-700/50 rounded-lg overflow-hidden focus-within:border-cyan-400/70 focus-within:ring-1 focus-within:ring-cyan-400/30">
+                  <input
+                    type="text"
+                    value={shopifyDomain}
+                    onChange={e => setShopifyDomain(e.target.value)}
+                    placeholder="your-store-name"
+                    className="flex-1 px-3 py-2 bg-transparent text-white text-sm focus:outline-none placeholder-blue-400/40"
+                    autoFocus
+                    required
+                  />
+                  <span className="pr-3 text-sm text-blue-400/60 select-none">.myshopify.com</span>
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={shopifyConnecting || !shopifyDomain.trim()}
+                className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all"
+              >
+                {shopifyConnecting ? 'Connecting...' : 'Connect Store'}
+              </button>
+            </form>
+            <button onClick={() => setShopifyModal(false)} className="w-full mt-3 py-2 text-sm text-blue-300/60 hover:text-white transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )
