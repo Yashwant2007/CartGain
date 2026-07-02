@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
       console.error('Failed to auto-create campaign:', campaignError)
     }
 
-    return NextResponse.redirect(new URL('/dashboard/integrations?shopify_connected=true', req.url))
+    return NextResponse.redirect(new URL('/shopify-connected', req.url))
   } catch (error) {
     console.error('Shopify callback error:', error)
     return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=Callback+processing+failed', req.url))

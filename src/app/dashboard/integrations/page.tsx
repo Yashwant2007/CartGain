@@ -68,6 +68,18 @@ export default function IntegrationsPage() {
 
   useEffect(() => { loadStatus() }, [loadStatus])
 
+  // Listen for the shopify-connected page to signal back when OAuth completes
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data === 'shopify_connected') {
+        setActionMsg({ type: 'success', text: 'Shopify store connected successfully!' })
+        loadStatus()
+      }
+    }
+    window.addEventListener('message', handler)
+    return () => window.removeEventListener('message', handler)
+  }, [loadStatus])
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('shopify_connected') === 'true') {
@@ -97,8 +109,8 @@ export default function IntegrationsPage() {
           .then(r => r.json())
           .then(data => {
             if (!data.authUrl) return
-            const target = (window !== window.top && window.top) ? window.top : window
-            target.location.href = data.authUrl
+            // Auto-install: merchant came from Shopify install flow, not inside admin iframe
+            window.location.href = data.authUrl
           })
           .catch(() => {})
       })
@@ -139,11 +151,16 @@ export default function IntegrationsPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to initiate connection')
 
       setShopifyModal(false)
-      // Break out of Shopify admin iframe before redirecting to Shopify OAuth
-      const target = (typeof window !== 'undefined' && window !== window.top && window.top)
-        ? window.top
-        : window
-      target.location.href = data.authUrl
+      // Open OAuth in a new tab — redirecting window.top loses the Shopify admin
+      // session on the cross-domain hop (admin.shopify.com → store.myshopify.com)
+      // which sends the merchant to the password-protected storefront instead.
+      const popup = window.open(data.authUrl, '_blank', 'noopener,noreferrer')
+      if (!popup) {
+        // Popup blocked — fall back to same-window redirect
+        window.location.href = data.authUrl
+      } else {
+        setActionMsg({ type: 'success', text: 'A new tab has opened for Shopify authorization — complete the steps there, then come back here.' })
+      }
     } catch (error) {
       setShopifyInputError(error instanceof Error ? error.message : 'Connection failed')
     } finally {
