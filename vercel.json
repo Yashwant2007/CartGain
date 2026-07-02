@@ -6,7 +6,7 @@
   "crons": [
     {
       "path": "/api/jobs/process-carts",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/jobs/process-billing",
