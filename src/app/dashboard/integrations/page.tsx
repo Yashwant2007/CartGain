@@ -91,7 +91,11 @@ export default function IntegrationsPage() {
           body: JSON.stringify({ shop, storeId: status.store.id }),
         })
           .then(r => r.json())
-          .then(data => { if (data.authUrl) window.location.href = data.authUrl })
+          .then(data => {
+            if (!data.authUrl) return
+            const target = (window !== window.top && window.top) ? window.top : window
+            target.location.href = data.authUrl
+          })
           .catch(() => {})
       })
       .catch(() => {})
@@ -131,7 +135,11 @@ export default function IntegrationsPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to initiate connection')
-      window.location.href = data.authUrl
+      // Break out of Shopify admin iframe before redirecting to Shopify OAuth
+      const target = (typeof window !== 'undefined' && window !== window.top && window.top)
+        ? window.top
+        : window
+      target.location.href = data.authUrl
     } catch (error) {
       setActionMsg({ type: 'error', text: error instanceof Error ? error.message : 'Connection failed' })
     }

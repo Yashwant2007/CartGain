@@ -227,7 +227,13 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
         throw new Error(data.error || 'Failed to initiate connection')
       }
 
-      window.location.href = data.authUrl
+      // If running inside a Shopify admin iframe, break out to the top window
+      // before redirecting — Shopify blocks navigation to external OAuth URLs
+      // from within embedded iframes.
+      const target = (typeof window !== 'undefined' && window !== window.top && window.top)
+        ? window.top
+        : window
+      target.location.href = data.authUrl
     } catch (error) {
       setShopifyError(error instanceof Error ? error.message : 'Connection failed')
       setConnecting(false)

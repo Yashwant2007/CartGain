@@ -48,38 +48,36 @@ export default function SubscriptionPage() {
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
   const [invoiceMsg, setInvoiceMsg] = useState<string | null>(null)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [subRes, overviewRes] = await Promise.all([
-          fetch('/api/subscription'),
-          fetch('/api/analytics/overview'),
-        ])
+  const fetchData = async () => {
+    try {
+      const [subRes, overviewRes] = await Promise.all([
+        fetch('/api/subscription'),
+        fetch('/api/analytics/overview'),
+      ])
 
-        if (subRes.ok) {
-          const subData = await subRes.json()
-          setSubscription(subData.subscription)
-          setStore(subData.store)
-          setInvoices(subData.invoices || [])
-        }
-
-        if (overviewRes.ok) {
-          const overviewData = await overviewRes.json()
-          const current = overviewData?.current?.overview
-          if (current) {
-            setTotalRecoveredCarts(current.cartsRecovered ?? 0)
-            setMonthlyRecoveredRevenue(current.netRevenue ?? current.revenueRecovered ?? 0)
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load subscription data', err)
-      } finally {
-        setLoading(false)
+      if (subRes.ok) {
+        const subData = await subRes.json()
+        setSubscription(subData.subscription)
+        setStore(subData.store)
+        setInvoices(subData.invoices || [])
       }
-    }
 
-    fetchData()
-  }, [])
+      if (overviewRes.ok) {
+        const overviewData = await overviewRes.json()
+        const current = overviewData?.current?.overview
+        if (current) {
+          setTotalRecoveredCarts(current.cartsRecovered ?? 0)
+          setMonthlyRecoveredRevenue(current.netRevenue ?? current.revenueRecovered ?? 0)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load subscription data', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchData() }, [])
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !(window as any).Razorpay) {
@@ -140,7 +138,9 @@ export default function SubscriptionPage() {
         description: `${plan.name} Plan - ${billing === 'yearly' ? 'Yearly' : 'Monthly'}`,
         handler: (response: any) => {
           setPurchaseSuccess(plan.name)
-          setTimeout(() => window.location.reload(), 2000)
+          // Refetch data instead of reloading the page — reload breaks inside
+          // a Shopify admin iframe and is jarring UX regardless.
+          setTimeout(() => { fetchData() }, 2000)
         },
         prefill: { 
           name: '', 

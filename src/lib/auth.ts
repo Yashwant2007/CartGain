@@ -97,6 +97,15 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
   providers,
   secret: process.env.NEXTAUTH_SECRET,
+  // SameSite=none is required so the session cookie is sent when CartGain
+  // runs inside a third-party iframe (e.g. Shopify admin). Without this,
+  // Safari blocks the cookie entirely and the user appears logged out.
+  cookies: process.env.NEXTAUTH_URL?.startsWith('https://') ? {
+    sessionToken: {
+      name: '__Secure-next-auth.session-token',
+      options: { httpOnly: true, sameSite: 'none', path: '/', secure: true },
+    },
+  } : undefined,
   pages: {
     signIn: '/login',
     error: '/login',
