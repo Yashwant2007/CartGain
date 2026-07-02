@@ -151,7 +151,7 @@ export const PLANS: Record<string, Plan> = {
     features: [
       "All channels: SMS, WhatsApp, Email",
       "AI-powered recovery optimization",
-      "Up to 50 recovered carts per month",
+      "Up to 50 recovered carts — completely free",
       "Real-time analytics dashboard",
       "Basic email support",
     ],
@@ -168,8 +168,7 @@ export const PLANS: Record<string, Plan> = {
       "All channels: SMS, WhatsApp, Email",
       "AI-powered recovery optimization",
       "Real-time analytics dashboard",
-      "First 50 carts recovered at 0% revenue share",
-      "3% revenue share on recovered carts after first 50",
+      "3% revenue share on recovered revenue",
     ],
   },
   GROWTH: {
@@ -186,8 +185,7 @@ export const PLANS: Record<string, Plan> = {
       "Priority email & chat support",
       "Custom discount rules & timing",
       "Advanced ROI & channel analytics",
-      "First 50 carts recovered at 0% revenue share",
-      "2.5% revenue share on recovered carts after first 50",
+      "2.5% revenue share on recovered revenue",
     ],
     recommended: true,
   },
@@ -205,8 +203,7 @@ export const PLANS: Record<string, Plan> = {
       "Dedicated account manager",
       "Custom integrations & webhooks",
       "SLA guarantee with priority support",
-      "First 50 carts recovered at 0% revenue share",
-      "2% revenue share on recovered carts after first 50",
+      "2% revenue share on recovered revenue",
     ],
   },
   ENTERPRISE: {

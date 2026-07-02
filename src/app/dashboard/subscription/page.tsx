@@ -47,6 +47,7 @@ export default function SubscriptionPage() {
   const [monthlyRecoveredRevenue, setMonthlyRecoveredRevenue] = useState(0)
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
   const [invoiceMsg, setInvoiceMsg] = useState<string | null>(null)
+  const [cancelling, setCancelling] = useState(false)
 
   const fetchData = async () => {
     try {
@@ -113,6 +114,23 @@ export default function SubscriptionPage() {
   const avgCartValue = monthlyRecoveredRevenue > 0 && cartsUsed > 0 ? Math.round(monthlyRecoveredRevenue / cartsUsed) : 1000
   const revSharePercent = currentPlan ? currentPlan.revSharePercent : 0
   const estimatedRevShare = revShareCarts * avgCartValue * (revSharePercent / 100)
+
+  const handleCancelSubscription = async () => {
+    if (!confirm('Are you sure you want to cancel your subscription and downgrade to the free plan?')) return
+    setCancelling(true)
+    try {
+      const res = await fetch('/api/subscription/cancel', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to cancel')
+      setPurchaseSuccess('Free')
+      setTimeout(() => { fetchData() }, 2000)
+    } catch (error) {
+      console.error('Cancel error:', error)
+      alert('Failed to cancel subscription. Please try again.')
+    } finally {
+      setCancelling(false)
+    }
+  }
 
   const handlePurchase = async (planKey: PlanKey) => {
     if (!razorpayLoaded) return
@@ -509,10 +527,12 @@ export default function SubscriptionPage() {
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Object.values(PLANS).filter(p => p.price > 0).map((plan) => {
-            const isCurrent = isPaidUser && currentPlan?.id === plan.id
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Object.values(PLANS).filter(p => p.id !== 'enterprise' && (billing === 'monthly' || p.price > 0)).map((plan) => {
+            const isFree = plan.price === 0
+            const isCurrentPlan = isFree ? isFreeUser : isPaidUser && currentPlan?.id === plan.id
             const isGrowth = plan.recommended
+            const isPaidPlanPurchasable = plan.price > 0 && isFreeUser
             const displayPrice = billing === 'yearly' ? Math.round(plan.yearlyPrice / 12) : plan.price
             const period = billing === 'yearly' ? '/mo billed yearly' : '/mo'
 
@@ -522,7 +542,7 @@ export default function SubscriptionPage() {
                 className={`relative rounded-xl p-6 flex flex-col ${
                   isGrowth
                     ? 'bg-gradient-to-b from-slate-700/60 to-slate-800/60 border-2 border-amber-500/50'
-                    : isCurrent
+                    : isCurrentPlan
                     ? 'bg-slate-700/40 border border-cyan-500/40'
                     : 'bg-slate-700/40 border border-blue-700/30'
                 }`}
@@ -532,27 +552,38 @@ export default function SubscriptionPage() {
                     Recommended
                   </span>
                 )}
-                {isCurrent && (
+                {isCurrentPlan && (
                   <span className="absolute -top-3 left-4 px-3 py-1 bg-cyan-600 text-white text-xs font-bold rounded-full">
-                    Current
+                    {isFree ? 'Active Trial' : 'Current'}
                   </span>
                 )}
 
                 <h3 className="text-lg font-semibold text-white mb-1">{plan.name}</h3>
                 <p className="text-xs text-blue-300/60 mb-3">
-                  Up to {plan.maxCarts === Infinity ? 'unlimited' : plan.maxCarts.toLocaleString('en-IN')} carts/mo
+                  {isFree ? 'First 50 carts free' : `Up to ${plan.maxCarts.toLocaleString('en-IN')} carts/mo`}
                 </p>
 
                 <div className="mb-1">
-                  <span className="text-3xl font-bold text-white">₹{displayPrice.toLocaleString('en-IN')}</span>
-                  <span className="text-base text-blue-300/60 ml-1">{period}</span>
+                  {isFree ? (
+                    <span className="text-3xl font-bold text-emerald-400">Free</span>
+                  ) : (
+                    <>
+                      <span className="text-3xl font-bold text-white">₹{displayPrice.toLocaleString('en-IN')}</span>
+                      <span className="text-base text-blue-300/60 ml-1">{period}</span>
+                    </>
+                  )}
                 </div>
                 <p className="text-xs text-emerald-400/80 mb-1">
-                  Recover <strong>₹{plan.estimatedRecovery.min.toLocaleString('en-IN')}-{plan.estimatedRecovery.max.toLocaleString('en-IN')}</strong>/mo typically
+                  {isFree
+                    ? 'Recover up to ₹25,000/mo typically'
+                    : `Recover ₹${plan.estimatedRecovery.min.toLocaleString('en-IN')}-${plan.estimatedRecovery.max.toLocaleString('en-IN')}/mo typically`
+                  }
                 </p>
-                <p className="text-xs text-blue-300/40 mb-4">
-                  + {plan.revSharePercent}% rev share after first {FREE_CARTS_THRESHOLD}
-                </p>
+                {!isFree && (
+                  <p className="text-xs text-blue-300/40 mb-4">
+                    {plan.revSharePercent}% revenue share on recovered revenue
+                  </p>
+                )}
 
                 <div className="flex-1 space-y-3 mb-6">
                   {plan.features.map((feature, i) => (
@@ -564,20 +595,34 @@ export default function SubscriptionPage() {
                 </div>
 
                 <button
-                  onClick={() => handlePurchase(plan.id.toUpperCase() as PlanKey)}
-                  disabled={isCurrent || processing === plan.id.toUpperCase()}
+                  onClick={() => {
+                    if (isFree && isPaidUser) {
+                      handleCancelSubscription()
+                    } else {
+                      handlePurchase(plan.id.toUpperCase() as PlanKey)
+                    }
+                  }}
+                  disabled={isCurrentPlan || processing === plan.id.toUpperCase() || cancelling}
                   className={`w-full py-2.5 rounded-lg font-medium text-sm transition-all ${
-                    isCurrent
+                    isCurrentPlan
                       ? 'bg-slate-600/50 text-blue-300/60 cursor-not-allowed'
-                      : isGrowth
+                      : isPaidPlanPurchasable && isGrowth
                       ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg hover:shadow-amber-500/50'
-                      : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:shadow-lg hover:shadow-cyan-500/50'
-                  } ${processing === plan.id.toUpperCase() ? 'opacity-50 cursor-wait' : ''}`}
+                      : isPaidPlanPurchasable
+                      ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:shadow-lg hover:shadow-cyan-500/50'
+                      : isFree && isPaidUser
+                      ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white hover:shadow-lg hover:shadow-red-500/50'
+                      : 'bg-slate-600/50 text-blue-300/60 cursor-not-allowed'
+                  } ${processing === plan.id.toUpperCase() || cancelling ? 'opacity-50 cursor-wait' : ''}`}
                 >
-                  {processing === plan.id.toUpperCase()
+                  {cancelling
+                    ? 'Cancelling...'
+                    : processing === plan.id.toUpperCase()
                     ? 'Processing...'
-                    : isCurrent
-                    ? 'Current Plan'
+                    : isCurrentPlan
+                    ? isFree ? 'Your Free Trial' : 'Current Plan'
+                    : isFree
+                    ? isPaidUser ? 'Cancel Subscription' : 'Your Free Trial'
                     : `Upgrade to ${plan.name}`}
                 </button>
               </div>
