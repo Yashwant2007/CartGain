@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
 import prisma from '@/lib/db'
 import { encrypt } from '@/lib/encryption'
 import { setupShopifyWebhooks } from '@/lib/shopify'
@@ -16,13 +17,28 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=Missing+parameters', req.url))
     }
 
+    // Verify state HMAC to prevent CSRF
     let storeId: string | null = null
     if (state) {
       try {
-        const decoded = JSON.parse(Buffer.from(state, 'base64').toString())
+        const secret = process.env.NEXTAUTH_SECRET
+        const dotIndex = state.lastIndexOf('.')
+        if (!secret || dotIndex === -1) throw new Error('Invalid state format')
+
+        const payload = state.slice(0, dotIndex)
+        const receivedSig = state.slice(dotIndex + 1)
+        const expectedSig = crypto.createHmac('sha256', secret).update(payload).digest('hex')
+
+        const sigValid = crypto.timingSafeEqual(
+          Buffer.from(receivedSig.padEnd(64, '0').slice(0, 64), 'hex'),
+          Buffer.from(expectedSig, 'hex'),
+        )
+        if (!sigValid) throw new Error('Signature mismatch')
+
+        const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString())
         storeId = decoded.storeId
       } catch {
-        // state decode failed - continue without
+        return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=Invalid+state', req.url))
       }
     }
 

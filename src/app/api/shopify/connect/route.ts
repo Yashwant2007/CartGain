@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { shopifyConnectSchema, validateOrThrow, handleValidationError } from '@/lib/validation'
@@ -35,7 +36,14 @@ export async function POST(req: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
     const redirectUri = `${baseUrl}/api/shopify/callback`
 
-    const state = Buffer.from(JSON.stringify({ storeId, userId: session.user.id })).toString('base64')
+    const secret = process.env.NEXTAUTH_SECRET
+    if (!secret) {
+      return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 })
+    }
+
+    const payload = Buffer.from(JSON.stringify({ storeId, userId: session.user.id })).toString('base64url')
+    const sig = crypto.createHmac('sha256', secret).update(payload).digest('hex')
+    const state = `${payload}.${sig}`
 
     const authUrl = new URL(`https://${shop}/admin/oauth/authorize`)
     authUrl.searchParams.set('client_id', apiKey)

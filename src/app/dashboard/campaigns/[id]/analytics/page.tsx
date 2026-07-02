@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { ArrowLeft, Download, TrendingUp } from 'lucide-react'
+import { ArrowLeft, TrendingUp } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 
 type CampaignAnalytics = {
@@ -63,44 +63,6 @@ export default function CampaignAnalyticsPage() {
     loadAnalytics()
   }, [storeId, campaignId])
 
-  const handleExport = () => {
-    if (!analytics) return
-
-    const csv = [
-      ['Campaign Analytics Report'],
-      ['Campaign Name', analytics.name],
-      ['Created', new Date(analytics.createdAt).toLocaleDateString()],
-      [''],
-      ['Metric', 'Value'],
-      ['Total Messages Sent', analytics.totalMessagesSent],
-      ['Total Messages Delivered', analytics.totalMessagesDelivered],
-      ['Delivery Rate', `${analytics.deliveryRate.toFixed(1)}%`],
-      ['Total Clicks', analytics.totalMessagesClicked],
-      ['Click Rate', `${analytics.clickRate.toFixed(1)}%`],
-      ['Total Conversions', analytics.totalMessagesConverted],
-      ['Conversion Rate', `${analytics.conversionRate.toFixed(1)}%`],
-      [''],
-      ['Carts Data', ''],
-      ['Total Abandoned Carts', analytics.totalCarts],
-      ['Recovered Carts', analytics.recoveredCarts],
-      ['Recovery Rate', `${analytics.recoveryRate.toFixed(1)}%`],
-      ['Total Revenue', `₹${analytics.totalRevenue.toFixed(2)}`],
-      ['Revenue per Cart', `₹${analytics.revenuePerCart.toFixed(2)}`],
-    ]
-      .map((row) => row.join(','))
-      .join('\n')
-
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `campaign-analytics-${campaignId}.csv`
-    document.body.appendChild(a)
-    a.click()
-    window.URL.revokeObjectURL(url)
-    document.body.removeChild(a)
-  }
-
   if (loading || resolvingStore) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -142,13 +104,9 @@ export default function CampaignAnalyticsPage() {
             Campaign analytics • Created {new Date(analytics.createdAt).toLocaleDateString()}
           </p>
         </div>
-        <button
-          onClick={handleExport}
-          className="flex items-center px-4 py-2 bg-blue-600/20 border border-blue-500/50 text-blue-300 rounded-lg hover:bg-blue-600/30 transition-colors"
-        >
-          <Download className="w-4 h-4 mr-2" />
-          Export CSV
-        </button>
+        <div className="px-4 py-2 bg-blue-600/20 border border-blue-500/50 text-blue-300 rounded-lg text-sm">
+          Exports by request only
+        </div>
       </div>
 
       {error && (

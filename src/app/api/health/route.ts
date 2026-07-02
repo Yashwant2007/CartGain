@@ -34,8 +34,7 @@ export async function GET() {
     'WHATSAPP_BUSINESS_TOKEN',
     'WHATSAPP_PHONE_NUMBER_ID',
     'MSG91_AUTH_KEY',
-    'TWILIO_ACCOUNT_SID',
-    'TWILIO_AUTH_TOKEN',
+    'MSG91_SENDER_ID',
     'JOB_SECRET',
     'ALERT_EMAIL',
   ]
