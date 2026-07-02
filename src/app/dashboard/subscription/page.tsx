@@ -48,6 +48,8 @@ export default function SubscriptionPage() {
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
   const [invoiceMsg, setInvoiceMsg] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState(false)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
 
   const fetchData = async () => {
     try {
@@ -116,17 +118,17 @@ export default function SubscriptionPage() {
   const estimatedRevShare = revShareCarts * avgCartValue * (revSharePercent / 100)
 
   const handleCancelSubscription = async () => {
-    if (!confirm('Are you sure you want to cancel your subscription and downgrade to the free plan?')) return
     setCancelling(true)
+    setCancelError(null)
     try {
       const res = await fetch('/api/subscription/cancel', { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to cancel')
+      setShowCancelConfirm(false)
       setPurchaseSuccess('Free')
       setTimeout(() => { fetchData() }, 2000)
     } catch (error) {
-      console.error('Cancel error:', error)
-      alert('Failed to cancel subscription. Please try again.')
+      setCancelError(error instanceof Error ? error.message : 'Failed to cancel')
     } finally {
       setCancelling(false)
     }
@@ -499,6 +501,37 @@ export default function SubscriptionPage() {
         </div>
       )}
 
+      {/* Cancel Subscription Confirmation */}
+      {showCancelConfirm && (
+        <div className="bg-slate-800/90 border border-red-500/40 rounded-xl p-6 backdrop-blur-sm">
+          <h3 className="text-lg font-semibold text-white mb-2">Cancel Subscription?</h3>
+          <p className="text-sm text-blue-300/80 mb-4">
+            You will be downgraded to the Free plan (first {FREE_CARTS_THRESHOLD} recovered carts free, then revenue share applies). Cart recovery will continue uninterrupted.
+          </p>
+          {cancelError && (
+            <div className="mb-4 px-4 py-2 rounded-lg text-sm bg-red-900/30 text-red-300 border border-red-500/30">
+              {cancelError}
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleCancelSubscription}
+              disabled={cancelling}
+              className="px-5 py-2 bg-gradient-to-r from-red-500 to-orange-500 text-white font-medium rounded-lg hover:shadow-lg hover:shadow-red-500/50 transition-all disabled:opacity-50 disabled:cursor-wait"
+            >
+              {cancelling ? 'Cancelling...' : 'Yes, Cancel Subscription'}
+            </button>
+            <button
+              onClick={() => { setShowCancelConfirm(false); setCancelError(null) }}
+              disabled={cancelling}
+              className="px-5 py-2 bg-slate-700 text-blue-300 font-medium rounded-lg hover:bg-slate-600 transition-all disabled:opacity-50"
+            >
+              Keep My Plan
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Plan Comparison */}
       <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
@@ -528,7 +561,7 @@ export default function SubscriptionPage() {
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Object.values(PLANS).filter(p => p.id !== 'enterprise' && (billing === 'monthly' || p.price > 0)).map((plan) => {
+          {Object.values(PLANS).filter(p => p.id !== 'enterprise').map((plan) => {
             const isFree = plan.price === 0
             const isCurrentPlan = isFree ? isFreeUser : isPaidUser && currentPlan?.id === plan.id
             const isGrowth = plan.recommended
@@ -554,7 +587,7 @@ export default function SubscriptionPage() {
                 )}
                 {isCurrentPlan && (
                   <span className="absolute -top-3 left-4 px-3 py-1 bg-cyan-600 text-white text-xs font-bold rounded-full">
-                    {isFree ? 'Active Trial' : 'Current'}
+                    {isFree ? (billing === 'yearly' ? 'Free' : 'Active Trial') : 'Current'}
                   </span>
                 )}
 
@@ -597,7 +630,7 @@ export default function SubscriptionPage() {
                 <button
                   onClick={() => {
                     if (isFree && isPaidUser) {
-                      handleCancelSubscription()
+                      setShowCancelConfirm(true)
                     } else {
                       handlePurchase(plan.id.toUpperCase() as PlanKey)
                     }
@@ -620,9 +653,9 @@ export default function SubscriptionPage() {
                     : processing === plan.id.toUpperCase()
                     ? 'Processing...'
                     : isCurrentPlan
-                    ? isFree ? 'Your Free Trial' : 'Current Plan'
+                    ? isFree ? (billing === 'yearly' ? 'Free Plan' : 'Your Free Trial') : 'Current Plan'
                     : isFree
-                    ? isPaidUser ? 'Cancel Subscription' : 'Your Free Trial'
+                    ? isPaidUser ? 'Cancel Subscription' : (billing === 'yearly' ? 'Free Plan' : 'Your Free Trial')
                     : `Upgrade to ${plan.name}`}
                 </button>
               </div>
