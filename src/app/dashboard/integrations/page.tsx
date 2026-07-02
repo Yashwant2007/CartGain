@@ -77,6 +77,26 @@ export default function IntegrationsPage() {
     }
   }, [loadStatus])
 
+  // Auto-trigger Shopify OAuth if the merchant arrived from a Shopify install flow
+  useEffect(() => {
+    if (!status?.store || status.integrations.find(i => i.id === 'shopify')?.connected) return
+
+    fetch('/api/shopify/pending-install')
+      .then(r => r.json())
+      .then(({ shop }: { shop: string | null }) => {
+        if (!shop) return
+        fetch('/api/shopify/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shop, storeId: status.store.id }),
+        })
+          .then(r => r.json())
+          .then(data => { if (data.authUrl) window.location.href = data.authUrl })
+          .catch(() => {})
+      })
+      .catch(() => {})
+  }, [status])
+
   const updatePlatform = async (platform: string, data: Record<string, string>) => {
     const res = await fetch('/api/stores/current', {
       method: 'PATCH',
