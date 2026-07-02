@@ -67,6 +67,14 @@ function LoginContent() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true)
     try {
+      // Google refuses to load its OAuth page inside an iframe (e.g. Shopify admin).
+      // Break out to the top window first so the redirect works.
+      const isInIframe = typeof window !== 'undefined' && window !== window.top
+      if (isInIframe && window.top) {
+        const googleAuthUrl = `/api/auth/signin/google?callbackUrl=${encodeURIComponent('/dashboard')}`
+        window.top.location.href = `${window.location.origin}${googleAuthUrl}`
+        return
+      }
       await signIn('google', { callbackUrl: '/dashboard' })
     } finally {
       setIsLoading(false)
