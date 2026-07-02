@@ -360,16 +360,15 @@ export default function IntegrationsPage() {
               <span className="text-2xl">🛍️</span>
               <h3 className="text-lg font-semibold text-white">Connect Shopify Store</h3>
             </div>
-            <p className="text-sm text-blue-300/70 mb-5">
-              Enter your Shopify store name. You can find it in your Shopify admin URL:<br />
-              <span className="font-mono text-cyan-400">your-store-name.myshopify.com</span>
-            </p>
+
             {shopifyInputError && (
               <div className="mb-4 p-3 bg-red-600/20 border border-red-500/40 rounded-lg text-sm text-red-300">{shopifyInputError}</div>
             )}
-            <form onSubmit={e => { e.preventDefault(); handleShopifyConnect(shopifyDomain) }} className="space-y-4">
+
+            <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-blue-200 mb-1">Store name</label>
+                <p className="text-xs text-blue-300/60 mb-2">Found in your Shopify admin URL:</p>
                 <div className="flex items-center bg-slate-700/50 border border-blue-700/50 rounded-lg overflow-hidden focus-within:border-cyan-400/70 focus-within:ring-1 focus-within:ring-cyan-400/30">
                   <input
                     type="text"
@@ -383,17 +382,55 @@ export default function IntegrationsPage() {
                   <span className="pr-3 text-sm text-blue-400/60 select-none">.myshopify.com</span>
                 </div>
               </div>
-              <button
-                type="submit"
-                disabled={shopifyConnecting || !shopifyDomain.trim()}
-                className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all"
-              >
-                {shopifyConnecting ? 'Connecting...' : 'Connect Store'}
-              </button>
-            </form>
-            <button onClick={() => setShopifyModal(false)} className="w-full mt-3 py-2 text-sm text-blue-300/60 hover:text-white transition-colors">
-              Cancel
-            </button>
+
+              <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-4 space-y-3">
+                <p className="text-sm font-medium text-cyan-300">Permissions requested</p>
+                <div className="space-y-1.5 text-sm text-blue-300/70">
+                  <div className="flex items-start space-x-2">
+                    <span className="text-emerald-400 mt-0.5">✓</span>
+                    <span><strong className="text-blue-200">Orders</strong> — read &amp; write</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="text-emerald-400 mt-0.5">✓</span>
+                    <span><strong className="text-blue-200">Customers</strong> — read</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="text-emerald-400 mt-0.5">✓</span>
+                    <span><strong className="text-blue-200">Products</strong> — read</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="text-emerald-400 mt-0.5">✓</span>
+                    <span><strong className="text-blue-200">Checkouts</strong> — read &amp; write</span>
+                  </div>
+                </div>
+                <p className="text-xs text-blue-300/40 mt-2">
+                  CartGain uses these permissions to track abandoned carts, send recovery messages, and attribute revenue. We never share your data.
+                </p>
+              </div>
+
+              <p className="text-xs text-blue-300/50 text-center">
+                By connecting, you agree to CartGain&apos;s{' '}
+                <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 underline">Terms of Service</a>
+                {' '}and{' '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 underline">Privacy Policy</a>.
+              </p>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShopifyModal(false)}
+                  className="flex-1 py-2.5 text-sm text-blue-300/60 hover:text-white border border-blue-700/40 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleShopifyConnect(shopifyDomain)}
+                  disabled={shopifyConnecting || !shopifyDomain.trim()}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all"
+                >
+                  {shopifyConnecting ? 'Connecting...' : 'Continue to Shopify →'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
