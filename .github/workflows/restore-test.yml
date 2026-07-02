@@ -1,0 +1,56 @@
+name: Backup Restore Test
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '30 3 * * 0' # weekly on Sunday at 03:30 UTC
+
+jobs:
+  restore-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: restore
+          POSTGRES_PASSWORD: restore
+          POSTGRES_DB: restore_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U restore -d restore_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client gpg awscli
+
+      - name: Download latest backup artifact
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+        run: |
+          mkdir -p /tmp/recoveryflow-backup
+          aws s3 cp "s3://${S3_BUCKET}/" /tmp/recoveryflow-backup/ --recursive --exclude "*" --include "*.gpg"
+          ls -1 /tmp/recoveryflow-backup | tail -n 1 > /tmp/latest_backup_name
+
+      - name: Decrypt backup
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          BACKUP_FILE=$(cat /tmp/latest_backup_name)
+          gpg --batch --yes --passphrase "$BACKUP_PASSPHRASE" -o /tmp/restore.sql.gz -d "/tmp/recoveryflow-backup/$BACKUP_FILE"
+          gunzip -f /tmp/restore.sql.gz
+
+      - name: Restore into staging database
+        env:
+          PGPASSWORD: restore
+        run: |
+          psql -h 127.0.0.1 -U restore -d restore_test -f /tmp/restore.sql
+          psql -h 127.0.0.1 -U restore -d restore_test -c "SELECT COUNT(*) AS tables FROM information_schema.tables WHERE table_schema = 'public';"

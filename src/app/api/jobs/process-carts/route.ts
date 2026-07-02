@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { addCartProcessingJob } from '@/lib/queue/processor'
 import { processAbandonedCarts } from '@/lib/jobs/processAbandonedCarts'
+import { initializeQueues } from '@/lib/queue/init'
 import { sendAlertOnError } from '@/lib/alerter'
 
 export const dynamic = 'force-dynamic'
@@ -32,6 +33,9 @@ export async function POST(request: NextRequest) {
     if (!isAuthorized(request)) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
+
+    // Ensure queue processors are running (idempotent)
+    initializeQueues().catch(() => {})
 
     // Try Redis queue first, fall back to direct processing
     try {
@@ -66,6 +70,9 @@ export async function GET(request: NextRequest) {
     if (!isAuthorized(request)) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
+
+    // Ensure queue processors are running (idempotent)
+    initializeQueues().catch(() => {})
 
     const jobId = request.nextUrl.searchParams.get('jobId')
 
