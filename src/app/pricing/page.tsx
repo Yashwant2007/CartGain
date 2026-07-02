@@ -67,9 +67,32 @@ export default function PricingPage() {
             </div>
           </div>
 
-          {/* Plan Cards */}
+          {/* Free Trial Banner */}
+          <div className="max-w-3xl mx-auto mb-10 bg-gradient-to-r from-emerald-900/30 via-slate-800/50 to-blue-900/30 border border-emerald-500/30 rounded-xl p-8 backdrop-blur-sm text-center">
+            <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl">🎯</span>
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">Start Free — {FREE_CARTS_THRESHOLD} Recovered Carts, ₹0</h2>
+            <p className="text-blue-300/70 mb-6 max-w-xl mx-auto">
+              No credit card required. Recover your first {FREE_CARTS_THRESHOLD} abandoned carts completely free.
+              All channels included — SMS, WhatsApp, Email. Upgrade when you grow.
+            </p>
+            <div className="flex items-center justify-center gap-6 text-sm text-blue-300/60 mb-6">
+              <span>✓ SMS, WhatsApp &amp; Email</span>
+              <span>✓ AI-powered messaging</span>
+              <span>✓ Analytics dashboard</span>
+            </div>
+            <Link
+              href="/signup"
+              className="inline-block px-8 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-emerald-500/50 transition-all"
+            >
+              Start Free Trial →
+            </Link>
+          </div>
+
+          {/* Paid Plan Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-12">
-            {Object.values(PLANS).filter(p => p.id !== 'enterprise').map((plan) => {
+            {Object.values(PLANS).filter(p => p.price > 0).map((plan) => {
               const isGrowth = plan.recommended
               const displayPrice = billing === 'yearly' ? Math.round(plan.yearlyPrice / 12) : plan.price
               const period = billing === 'yearly' ? '/mo billed yearly' : '/mo'

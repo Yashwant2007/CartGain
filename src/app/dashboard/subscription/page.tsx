@@ -510,7 +510,7 @@ export default function SubscriptionPage() {
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Object.values(PLANS).filter(p => p.id !== 'enterprise').map((plan) => {
+          {Object.values(PLANS).filter(p => p.price > 0).map((plan) => {
             const isCurrent = isPaidUser && currentPlan?.id === plan.id
             const isGrowth = plan.recommended
             const displayPrice = billing === 'yearly' ? Math.round(plan.yearlyPrice / 12) : plan.price
