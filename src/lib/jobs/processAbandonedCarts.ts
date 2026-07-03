@@ -151,13 +151,25 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
             const requiredDelayMs = sendDelayMs + step * followUpDelayMs
             if (Date.now() - cart.abandonedAt.getTime() < requiredDelayMs) continue
 
-            const channel = activeChannels[step % activeChannels.length]
+            // Pick the best available channel for this cart — try the scheduled
+            // channel first, then fall back to any channel that has the required
+            // contact info and hasn't been used yet.  This prevents a cart from
+            // getting stuck forever because whatsapp is #1 but phone is missing.
+            const scheduledChannel = activeChannels[step % activeChannels.length]
+            const channelOrder = [
+              scheduledChannel,
+              ...activeChannels.filter(c => c !== scheduledChannel),
+            ]
 
-            const alreadySentOnChannel = cart.messages.some(m => m.channel === channel)
-            if (alreadySentOnChannel) continue
+            const channel = channelOrder.find(c => {
+              if (cart.messages.some(m => m.channel === c)) return false
+              if (c === 'email') return Boolean(cart.customerEmail)
+              if (c === 'sms' || c === 'whatsapp') return Boolean(cart.customerPhone)
+              return false
+            })
 
-            if (channel === 'email' && !cart.customerEmail) continue
-            if ((channel === 'sms' || channel === 'whatsapp') && !cart.customerPhone) continue
+            // No usable channel for this cart right now — skip without marking as processed
+            if (!channel) continue
 
             const customerEmail = cart.customerEmail?.toLowerCase().trim()
             const customerPhone = cart.customerPhone?.replace(/\D/g, '')

@@ -105,6 +105,38 @@ async function findStoreByDomain(domain: string | null) {
   return store
 }
 
+// Extract phone from all the places Shopify puts it across cart/checkout payloads:
+//   checkouts/create|update → billing_address.phone, shipping_address.phone, phone (top-level)
+//   carts/update            → phone (top-level, rarely set)
+function extractPhone(cart: any): string | null {
+  return (
+    cart.phone ||
+    cart.billing_address?.phone ||
+    cart.shipping_address?.phone ||
+    cart.customer?.phone ||
+    cart.customer?.default_address?.phone ||
+    null
+  ) || null
+}
+
+// Extract customer name from all the places Shopify puts it:
+//   checkouts → billing_address.first_name + last_name, customer.first_name + last_name
+//   carts     → customer.first_name + last_name
+function extractName(cart: any): string | null {
+  const firstName =
+    cart.billing_address?.first_name ||
+    cart.shipping_address?.first_name ||
+    cart.customer?.first_name ||
+    ''
+  const lastName =
+    cart.billing_address?.last_name ||
+    cart.shipping_address?.last_name ||
+    cart.customer?.last_name ||
+    ''
+  const full = `${firstName} ${lastName}`.trim()
+  return full || cart.customer?.name || null
+}
+
 async function handleCartUpdate(data: any, headers: Headers) {
   if (!data.id || !data.token) return
 
@@ -113,6 +145,11 @@ async function handleCartUpdate(data: any, headers: Headers) {
   const store = await findStoreByDomain(domain)
 
   if (!store) return
+
+  const customerPhone = extractPhone(cart)
+  const customerName = extractName(cart)
+  // email lives at top-level for both carts and checkouts
+  const customerEmail = cart.email || null
 
   await logDataAccess({
     actorType: 'system',
@@ -123,12 +160,13 @@ async function handleCartUpdate(data: any, headers: Headers) {
     actorId: store.userId,
     metadata: {
       shopDomain: domain,
-      hasCustomerEmail: Boolean(cart.email),
-      hasCustomerPhone: Boolean(cart.phone),
+      hasCustomerEmail: Boolean(customerEmail),
+      hasCustomerPhone: Boolean(customerPhone),
     },
   })
 
-  // Upsert cart
+  // Upsert cart — only overwrite non-null fields so a later webhook with less
+  // data doesn't wipe out phone/email we already captured from an earlier one.
   await prisma.cart.upsert({
     where: {
       storeId_cartId: {
@@ -137,13 +175,11 @@ async function handleCartUpdate(data: any, headers: Headers) {
       },
     },
     update: {
-      // Store as a JSON array (the `items` column is a Prisma Json field).
-      // Do NOT JSON.stringify — the processor reads Array.isArray(cart.items).
       items: normalizeShopifyItems(cart),
       totalValue: cart.total_price ? parseFloat(cart.total_price) / 100 : 0,
-      customerEmail: cart.email,
-      customerPhone: cart.phone,
-      customerName: cart.customer?.name,
+      ...(customerEmail ? { customerEmail } : {}),
+      ...(customerPhone ? { customerPhone } : {}),
+      ...(customerName ? { customerName } : {}),
       updatedAt: new Date(),
     },
     create: {
@@ -151,9 +187,9 @@ async function handleCartUpdate(data: any, headers: Headers) {
       cartId: cart.token,
       items: normalizeShopifyItems(cart),
       totalValue: cart.total_price ? parseFloat(cart.total_price) / 100 : 0,
-      customerEmail: cart.email,
-      customerPhone: cart.phone,
-      customerName: cart.customer?.name,
+      customerEmail,
+      customerPhone,
+      customerName,
       currency: cart.currency || 'USD',
     },
   })
