@@ -762,13 +762,13 @@ export default function HomePage() {
       </section>
       <section id="pricing" className="py-12 sm:py-16 md:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-950 to-blue-950/40" aria-labelledby="pricing-heading">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12 sm:mb-16">
+          <div className="text-center mb-8 sm:mb-12">
             <h2 id="pricing-heading" className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">Simple, Transparent Pricing</h2>
             <p className="text-lg sm:text-xl text-blue-100 max-w-2xl mx-auto">Pay a fixed monthly subscription based on your cart volume. First {FREE_CARTS_THRESHOLD} recovered carts free — then revenue share applies.</p>
           </div>
 
           {/* Billing Toggle */}
-          <div className="flex justify-center mb-12">
+          <div className="flex justify-center mb-8">
             <div className="inline-flex items-center gap-3 bg-slate-800/50 border border-blue-700/30 p-1 rounded-full">
               <button
                 onClick={() => setBilling('monthly')}
@@ -794,30 +794,55 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Plan Cards */}
+          {/* Free Plan Hero Banner */}
+          <div className="max-w-3xl mx-auto mb-12 bg-gradient-to-r from-emerald-900/30 via-slate-800/50 to-blue-900/30 border border-emerald-500/30 rounded-2xl p-8 backdrop-blur-sm text-center">
+            <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Zap className="w-7 h-7 text-white" />
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-2">Start Free — {FREE_CARTS_THRESHOLD} Recovered Carts, ₹0</h3>
+            <p className="text-blue-300/70 mb-6 max-w-xl mx-auto text-sm">
+              No credit card required. Recover your first {FREE_CARTS_THRESHOLD} abandoned carts completely free.
+              All channels included — SMS, WhatsApp, Email. Upgrade when you grow.
+            </p>
+            <div className="flex items-center justify-center gap-6 text-sm text-emerald-300/80 mb-6 flex-wrap">
+              <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> SMS, WhatsApp &amp; Email</span>
+              <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> AI-powered messaging</span>
+              <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Analytics dashboard</span>
+            </div>
+            <Link
+              href="/signup"
+              className="inline-block px-8 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-emerald-500/50 transition-all"
+            >
+              Start Free Trial →
+            </Link>
+          </div>
+
+          {/* Paid Plan Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto mb-12">
-            {Object.values(PLANS).filter(p => p.id !== 'enterprise').map((plan) => {
+            {Object.values(PLANS).filter(p => p.price > 0 && p.id !== 'enterprise').map((plan) => {
               const isGrowth = plan.recommended
               const displayPrice = billing === 'yearly' ? Math.round(plan.yearlyPrice / 12) : plan.price
               const period = billing === 'yearly' ? '/mo billed yearly' : '/mo'
 
+              const theme = isGrowth
+                ? { border: 'border-amber-500/50', glow: 'shadow-amber-500/20', gradient: 'from-amber-500 to-orange-500', bg: 'bg-gradient-to-br from-amber-900/20 to-amber-800/10', badge: 'from-amber-500 to-orange-500', accent: 'amber' }
+                : plan.id === 'starter'
+                ? { border: 'border-cyan-500/40', glow: 'shadow-cyan-500/20', gradient: 'from-cyan-500 to-blue-500', bg: 'bg-gradient-to-br from-blue-900/20 to-cyan-900/10', badge: 'from-cyan-500 to-blue-500', accent: 'cyan' }
+                : { border: 'border-violet-500/40', glow: 'shadow-violet-500/20', gradient: 'from-violet-500 to-purple-500', bg: 'bg-gradient-to-br from-violet-900/20 to-purple-900/10', badge: 'from-violet-500 to-purple-500', accent: 'violet' }
+
               return (
                 <div
                   key={plan.id}
-                  className={`relative rounded-2xl p-6 sm:p-8 flex flex-col ${
-                    isGrowth
-                      ? 'bg-gradient-to-br from-blue-900/40 to-blue-800/20 border-2 border-amber-500/60'
-                      : 'bg-slate-800/40 border-2 border-blue-700/50 hover:border-blue-500/70'
-                  } transition h-full`}
+                  className={`relative rounded-2xl p-6 sm:p-8 flex flex-col ${theme.bg} border-2 ${theme.border} hover:shadow-xl ${theme.glow} transition-all duration-300 h-full group`}
                 >
                   {isGrowth && (
-                    <span className="absolute -top-3 right-4 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold rounded-full">
+                    <span className="absolute -top-3 right-4 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold rounded-full shadow-lg shadow-amber-500/30">
                       Recommended
                     </span>
                   )}
 
                   <h3 className="text-xl sm:text-2xl font-bold text-white mb-1">{plan.name}</h3>
-                  <p className="text-sm text-blue-300/80 mb-4">
+                  <p className={`text-sm ${theme.accent === 'cyan' ? 'text-cyan-300/80' : theme.accent === 'violet' ? 'text-violet-300/80' : 'text-amber-300/80'} mb-4`}>
                     Up to {plan.maxCarts === Infinity ? 'unlimited' : plan.maxCarts.toLocaleString('en-IN')} carts/mo
                   </p>
 
@@ -835,7 +860,9 @@ export default function HomePage() {
                   <ul className="space-y-3 mb-8 flex-grow">
                     {plan.features.map((feature, i) => (
                       <li key={i} className="flex items-start gap-3 text-blue-100 text-sm sm:text-base">
-                        <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 mt-0.5 flex-shrink-0" />
+                        <CheckCircle2 className={`w-4 h-4 sm:w-5 sm:h-5 mt-0.5 flex-shrink-0 ${
+                          theme.accent === 'amber' ? 'text-amber-400' : theme.accent === 'violet' ? 'text-violet-400' : 'text-cyan-400'
+                        }`} />
                         <span>{feature}</span>
                       </li>
                     ))}
@@ -843,13 +870,9 @@ export default function HomePage() {
 
                   <Link
                     href="/signup"
-                    className={`w-full py-3 rounded-lg font-semibold text-center text-sm sm:text-base min-h-12 inline-flex items-center justify-center transition-all ${
-                      isGrowth
-                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg hover:shadow-amber-500/50'
-                        : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:shadow-lg hover:shadow-cyan-500/50'
-                    }`}
+                    className={`w-full py-3 rounded-lg font-semibold text-center text-sm sm:text-base min-h-12 inline-flex items-center justify-center transition-all bg-gradient-to-r ${theme.gradient} text-white hover:shadow-lg hover:shadow-${theme.accent}-500/50 group-hover:scale-[1.02]`}
                   >
-                    {billing === 'yearly' ? 'Choose Plan' : 'Get Started Free'}
+                    {billing === 'yearly' ? 'Choose Plan' : 'Subscribe Now'}
                   </Link>
                 </div>
               )

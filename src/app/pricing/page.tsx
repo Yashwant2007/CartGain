@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, Zap } from 'lucide-react'
 import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/payment'
 
 export default function PricingPage() {
@@ -67,55 +67,55 @@ export default function PricingPage() {
             </div>
           </div>
 
-          {/* Free Trial Banner — only shown for monthly billing */}
-          {billing === 'monthly' && (
-            <div className="max-w-3xl mx-auto mb-10 bg-gradient-to-r from-emerald-900/30 via-slate-800/50 to-blue-900/30 border border-emerald-500/30 rounded-xl p-8 backdrop-blur-sm text-center">
-              <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">🎯</span>
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Start Free — {FREE_CARTS_THRESHOLD} Recovered Carts, ₹0</h2>
-              <p className="text-blue-300/70 mb-6 max-w-xl mx-auto">
-                No credit card required. Recover your first {FREE_CARTS_THRESHOLD} abandoned carts completely free.
-                All channels included — SMS, WhatsApp, Email. Upgrade when you grow.
-              </p>
-              <div className="flex items-center justify-center gap-6 text-sm text-blue-300/60 mb-6">
-                <span>✓ SMS, WhatsApp &amp; Email</span>
-                <span>✓ AI-powered messaging</span>
-                <span>✓ Analytics dashboard</span>
-              </div>
-              <Link
-                href="/signup"
-                className="inline-block px-8 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-emerald-500/50 transition-all"
-              >
-                Start Free Trial →
-              </Link>
+          {/* Free Trial Banner */}
+          <div className="max-w-3xl mx-auto mb-10 bg-gradient-to-r from-emerald-900/30 via-slate-800/50 to-blue-900/30 border border-emerald-500/30 rounded-2xl p-8 backdrop-blur-sm text-center">
+            <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Zap className="w-7 h-7 text-white" />
             </div>
-          )}
+            <h2 className="text-2xl font-bold text-white mb-2">Start Free — {FREE_CARTS_THRESHOLD} Recovered Carts, ₹0</h2>
+            <p className="text-blue-300/70 mb-6 max-w-xl mx-auto text-sm">
+              No credit card required. Recover your first {FREE_CARTS_THRESHOLD} abandoned carts completely free.
+              All channels included — SMS, WhatsApp, Email. Upgrade when you grow.
+            </p>
+            <div className="flex items-center justify-center gap-6 text-sm text-emerald-300/80 mb-6 flex-wrap">
+              <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> SMS, WhatsApp &amp; Email</span>
+              <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> AI-powered messaging</span>
+              <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Analytics dashboard</span>
+            </div>
+            <Link
+              href="/signup"
+              className="inline-block px-8 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-emerald-500/50 transition-all"
+            >
+              Start Free Trial →
+            </Link>
+          </div>
 
           {/* Paid Plan Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-12">
-            {Object.values(PLANS).filter(p => p.price > 0).map((plan) => {
+            {Object.values(PLANS).filter(p => p.price > 0 && p.id !== 'enterprise').map((plan) => {
               const isGrowth = plan.recommended
               const displayPrice = billing === 'yearly' ? Math.round(plan.yearlyPrice / 12) : plan.price
               const period = billing === 'yearly' ? '/mo billed yearly' : '/mo'
 
+              const theme = isGrowth
+                ? { border: 'border-amber-500/50', glow: 'shadow-amber-500/20', gradient: 'from-amber-500 to-orange-500', bg: 'bg-gradient-to-br from-amber-900/20 to-amber-800/10', badge: 'from-amber-500 to-orange-500', accent: 'amber' }
+                : plan.id === 'starter'
+                ? { border: 'border-cyan-500/40', glow: 'shadow-cyan-500/20', gradient: 'from-cyan-500 to-blue-500', bg: 'bg-gradient-to-br from-blue-900/20 to-cyan-900/10', badge: 'from-cyan-500 to-blue-500', accent: 'cyan' }
+                : { border: 'border-violet-500/40', glow: 'shadow-violet-500/20', gradient: 'from-violet-500 to-purple-500', bg: 'bg-gradient-to-br from-violet-900/20 to-purple-900/10', badge: 'from-violet-500 to-purple-500', accent: 'violet' }
+
               return (
                 <div
                   key={plan.id}
-                  className={`relative rounded-2xl p-8 flex flex-col ${
-                    isGrowth
-                      ? 'bg-gradient-to-br from-blue-900/40 to-blue-800/20 border-2 border-amber-500/60 md:scale-105'
-                      : 'bg-slate-800/50 border border-blue-700/30 hover:border-blue-500/70'
-                  } transition-all h-full`}
+                  className={`relative rounded-2xl p-8 flex flex-col ${theme.bg} border-2 ${theme.border} hover:shadow-xl ${theme.glow} transition-all duration-300 h-full group ${isGrowth ? 'md:scale-105' : ''}`}
                 >
                   {isGrowth && (
-                    <span className="absolute -top-3 right-4 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold rounded-full">
+                    <span className="absolute -top-3 right-4 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold rounded-full shadow-lg shadow-amber-500/30">
                       Recommended
                     </span>
                   )}
 
                   <h2 className="text-2xl font-bold text-white mb-1">{plan.name}</h2>
-                  <p className="text-sm text-blue-300/60 mb-4">
+                  <p className={`text-sm ${theme.accent === 'cyan' ? 'text-cyan-300/80' : theme.accent === 'violet' ? 'text-violet-300/80' : 'text-amber-300/80'} mb-4`}>
                     Up to {plan.maxCarts === Infinity ? 'unlimited' : plan.maxCarts.toLocaleString('en-IN')} carts/mo
                   </p>
 
@@ -133,7 +133,9 @@ export default function PricingPage() {
                   <ul className="space-y-3 mb-8 flex-grow">
                     {plan.features.map((feature, i) => (
                       <li key={i} className="flex items-start gap-3 text-blue-100">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" />
+                        <CheckCircle2 className={`w-5 h-5 mt-0.5 flex-shrink-0 ${
+                          theme.accent === 'amber' ? 'text-amber-400' : theme.accent === 'violet' ? 'text-violet-400' : 'text-cyan-400'
+                        }`} />
                         <span className="text-sm">{feature}</span>
                       </li>
                     ))}
@@ -141,13 +143,9 @@ export default function PricingPage() {
 
                   <Link
                     href="/signup"
-                    className={`w-full py-3 rounded-lg font-semibold text-center transition-all ${
-                      isGrowth
-                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg hover:shadow-amber-500/50'
-                        : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:shadow-lg hover:shadow-cyan-500/50'
-                    }`}
+                    className={`w-full py-3 rounded-lg font-semibold text-center transition-all bg-gradient-to-r ${theme.gradient} text-white hover:shadow-lg group-hover:shadow-${theme.accent}-500/50 group-hover:scale-[1.02]`}
                   >
-                    {billing === 'yearly' ? 'Choose Plan' : 'Get Started Free'}
+                    {billing === 'yearly' ? 'Choose Plan' : 'Subscribe Now'}
                   </Link>
                 </div>
               )

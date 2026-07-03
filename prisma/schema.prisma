@@ -100,6 +100,11 @@ model Store {
   recoveredCarts      RecoveredCart[]
   optOuts             OptOut[]
   revenueShareEvents  RevenueShareEvent[]
+  merchantConfig      MerchantConfig?
+  rtoRiskScores       RtoRiskScore[]
+  pincodeStats        PincodeStats[]
+  codNudges           CodNudge[]
+  customers           Customer[]
 
   @@unique([userId, domain])
   @@index([userId])
@@ -338,4 +343,144 @@ model OptOut {
   @@unique([storeId, email])
   @@unique([storeId, phone])
   @@index([storeId])
+}
+
+// ── RTO / COD-Fraud Reduction Models ──
+
+model MerchantConfig {
+  id                          String   @id @default(cuid())
+  storeId                     String   @unique
+  rtoReductionEnabled         Boolean  @default(false)
+  paymentRecoveryEnabled      Boolean  @default(false)
+  rtoWeights                  Json     @default("{}")
+  rtoThresholds               Json     @default("{}")
+  rtoIncentive                Float    @default(0)
+  rtoEnabledCategories        String[] @default([])
+  paymentRetrySchedule        Json     @default("{}")
+  paymentChannelPriority      String[] @default([])
+  paymentIncentive            Float    @default(0)
+  paymentEnabledGateways      String[] @default([])
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  @@index([storeId])
+}
+
+model RtoRiskScore {
+  id          String   @id @default(cuid())
+  orderId     String
+  storeId     String
+  score       Int
+  band        String
+  reasons     Json
+  createdAt   DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  @@unique([storeId, orderId])
+  @@index([storeId])
+  @@index([storeId, score])
+  @@index([storeId, createdAt])
+}
+
+model PincodeStats {
+  id          String   @id @default(cuid())
+  storeId     String?
+  pincode     String
+  orders      Int      @default(0)
+  codOrders   Int      @default(0)
+  codRtos     Int      @default(0)
+  rtoRate     Float    @default(0)
+  codRtoRate  Float    @default(0)
+  updatedAt   DateTime @updatedAt
+
+  store       Store?   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  @@unique([storeId, pincode])
+  @@index([storeId])
+  @@index([pincode])
+}
+
+model CodNudge {
+  id            String    @id @default(cuid())
+  orderId       String
+  storeId       String
+  channel       String
+  status        String    @default("pending")
+  linkToken     String    @unique
+  incentive     Float     @default(0)
+  riskScore     Int?
+  convertedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  @@unique([storeId, orderId, channel])
+  @@index([storeId])
+  @@index([storeId, status])
+  @@index([linkToken])
+}
+
+model Customer {
+  id            String    @id @default(cuid())
+  storeId       String
+  customerId    String
+  email         String?
+  phone         String?
+  totalOrders   Int       @default(0)
+  codOrders     Int       @default(0)
+  codRtos       Int       @default(0)
+  cancellations Int       @default(0)
+  firstOrderAt  DateTime?
+  lastOrderAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  @@unique([storeId, customerId])
+  @@index([storeId])
+  @@index([storeId, email])
+  @@index([storeId, phone])
+}
+
+// ── Payment-Failure Recovery Models ──
+
+model PaymentAttempt {
+  id                String   @id @default(cuid())
+  merchantId        String
+  orderRef          String
+  gateway           String
+  gatewayEventId    String   @unique
+  amount            Float
+  currency          String   @default("INR")
+  status            String   @default("failed")
+  failureReasonRaw  String?
+  failureCategory   String?
+  retryable         Boolean  @default(true)
+  gatewayResponse   Json?
+  createdAt         DateTime @default(now())
+
+  paymentRecoveryCampaigns PaymentRecoveryCampaign[]
+  @@index([merchantId])
+  @@index([merchantId, orderRef])
+  @@index([merchantId, createdAt])
+  @@index([gatewayEventId])
+}
+
+model PaymentRecoveryCampaign {
+  id                String    @id @default(cuid())
+  attemptId         String
+  channel           String
+  status            String    @default("pending")
+  resumeLinkToken   String?   @unique
+  retryCount        Int       @default(0)
+  nextRetryAt       DateTime?
+  recoveredAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  attempt           PaymentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  @@index([attemptId])
+  @@index([status])
+  @@index([nextRetryAt])
+  @@index([resumeLinkToken])
 }

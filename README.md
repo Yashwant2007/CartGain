@@ -78,10 +78,14 @@ recoverflow/
 │   ├── app/
 │   │   ├── api/               # API routes
 │   │   │   ├── auth/          # Authentication
-│   │   │   ├── webhooks/      # Shopify, Razorpay webhooks
+│   │   │   ├── webhooks/      # Shopify, Razorpay, Cashfree webhooks
 │   │   │   ├── carts/         # Cart operations
 │   │   │   ├── campaigns/     # Campaign management
-│   │   │   └── analytics/     # Analytics data
+│   │   │   ├── analytics/     # Analytics data
+│   │   │   ├── rto/           # RTO risk scoring & config endpoints
+│   │   │   ├── payments/      # Payment recovery config & metrics
+│   │   │   └── jobs/          # Cron job endpoints
+│   │   ├── r/                 # Secure redirect links (click tracking, COD confirm, payment resume)
 │   │   ├── dashboard/         # User dashboard
 │   │   │   ├── campaigns/     # Campaign management UI
 │   │   │   ├── analytics/     # Analytics UI
@@ -93,10 +97,16 @@ recoverflow/
 │   │   └── page.tsx           # Landing page
 │   ├── components/            # React components
 │   ├── lib/
+│   │   ├── rto/               # RTO risk scoring engine (scorer, config, nudge)
+│   │   ├── payments/          # Payment-failure recovery (gateway adapters, classifier, recovery)
+│   │   ├── links/             # Secure token generation/verification
+│   │   ├── jobs/              # Background job processors
+│   │   ├── queue/             # Bull/Redis queue management
 │   │   ├── services/          # SMS, WhatsApp, Email services
+│   │   ├── alerter.ts         # Monitoring alert system
+│   │   ├── data-protection.ts # PII redaction & audit logging
 │   │   ├── db.ts              # Prisma client
-│   │   ├── utils.ts           # Utility functions
-│   │   └── shopify.ts         # Shopify integration
+│   │   └── utils.ts           # Utility functions
 │   └── types/                 # TypeScript types
 ├── .env.example               # Environment variables template
 ├── LAUNCH_GUIDE.md            # Comprehensive launch guide
@@ -121,6 +131,9 @@ RAZORPAY_KEY_ID="rzp_test_..."
 RAZORPAY_KEY_SECRET="..."
 RAZORPAY_WEBHOOK_SECRET="..."
 
+# Cashfree (Payment Gateway — optional, for payment-failure recovery)
+CASHFREE_WEBHOOK_SECRET=""
+
 # MSG91 (SMS)
 MSG91_AUTH_KEY="your_auth_key"
 MSG91_SENDER_ID="CARTGN"
@@ -133,10 +146,16 @@ WHATSAPP_PHONE_NUMBER_ID="..."
 RESEND_API_KEY="re_xxx"
 FROM_EMAIL="noreply@cart-gain.com"
 FROM_NAME="CartGain"
-FROM_EMAIL="noreply@recoverflow.com"
 
 # Redis
 REDIS_URL="redis://localhost:6379"
+
+# Secure link token secret (for single-use payment/confirmation links)
+# If not set, falls back to NEXTAUTH_SECRET
+LINK_SECRET=""
+
+# Monitoring alerts — email address for webhook/cron error notifications
+ALERT_EMAIL=""
 ```
 
 ## API Routes
@@ -164,7 +183,26 @@ REDIS_URL="redis://localhost:6379"
 
 ### Webhooks
 - `POST /api/webhooks/shopify` - Shopify cart/order webhooks
-- `POST /api/payment/webhook` - Razorpay payment webhook
+- `POST /api/payment/webhook` - Razorpay payment webhook (legacy)
+- `POST /api/webhooks/payment/razorpay` - Razorpay payment-failure webhook
+- `POST /api/webhooks/payment/cashfree` - Cashfree payment-failure webhook
+
+### RTO / COD-Fraud Reduction
+- `POST /api/rto/score` - Score a COD order for RTO risk and trigger nudge
+- `GET /api/rto/config` - Get RTO config for a merchant
+- `PUT /api/rto/config` - Update RTO config (weights, thresholds, incentive, categories)
+- `GET /api/rto/metrics` - RTO metrics dashboard (scores by band, nudge conversion rate)
+- `GET /api/rto/pincode-stats` - Pincode-level RTO statistics
+
+### Payment-Failure Recovery
+- `GET /api/payments/recovery/config` - Get payment recovery config
+- `PUT /api/payments/recovery/config` - Update payment recovery config
+- `GET /api/payments/recovery/metrics` - Payment recovery metrics dashboard
+
+### Jobs (Secured with JOB_SECRET)
+- `POST /api/jobs/process-carts` - Process abandoned carts (every 5 min)
+- `POST /api/jobs/retry-payments` - Process payment-failure retries
+- `POST /api/jobs/process-billing` - Process revenue share billing (daily)
 
 ## Database Schema
 
@@ -177,9 +215,17 @@ User
 │   │   └── Message
 │   ├── Campaign
 │   │   └── ABTest
-│   └── RecoveredCart
+│   ├── RecoveredCart
+│   ├── MerchantConfig           # Feature flags & tuning per merchant
+│   ├── RtoRiskScore             # Per-order RTO risk assessment
+│   ├── PincodeStats             # Historical RTO rates per pincode
+│   ├── CodNudge                 # COD→prepaid conversion nudges
+│   └── Customer                 # Per-merchant customer aggregates
+├── PaymentAttempt               # Normalized payment failures from any gateway
+├── PaymentRecoveryCampaign       # Per-attempt recovery message tracking
 ├── Analytics
-└── Subscription
+├── Subscription
+└── DataAccessLog                # Audit trail for GDPR/compliance
 ```
 
 ## Key Features Explained
@@ -258,9 +304,31 @@ Configure these webhook events in Razorpay Dashboard:
 - `payment.captured`
 - `order.paid`
 - `subscription.activated`
+- `payment.failed` (required for payment-failure recovery)
 
 Endpoint: `https://yourdomain.com/api/payment/webhook`
 Secret: Your `RAZORPAY_WEBHOOK_SECRET` from .env.local
+
+### Payment-Failure Recovery Webhooks
+
+#### Razorpay
+Configure `payment.failed` event in Razorpay Dashboard:
+- Endpoint: `https://yourdomain.com/api/webhooks/payment/razorpay`
+- Secret: Your `RAZORPAY_WEBHOOK_SECRET`
+
+#### Cashfree
+Configure `ORDER_PAYMENT_FAILED` event in Cashfree Dashboard:
+- Endpoint: `https://yourdomain.com/api/webhooks/payment/cashfree`
+- Secret: Your `CASHFREE_WEBHOOK_SECRET`
+
+### Cron Jobs
+
+For the retry-payments job, schedule a cron to call:
+```
+GET/POST https://yourdomain.com/api/jobs/retry-payments?secret=YOUR_JOB_SECRET
+```
+
+Recommended schedule: every 15 minutes for payment retries.
 
 ## Testing
 
