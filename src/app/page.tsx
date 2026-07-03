@@ -849,7 +849,7 @@ export default function HomePage() {
                         : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:shadow-lg hover:shadow-cyan-500/50'
                     }`}
                   >
-                    Get Started Free
+                    {billing === 'yearly' ? 'Choose Plan' : 'Get Started Free'}
                   </Link>
                 </div>
               )

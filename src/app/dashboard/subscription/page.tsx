@@ -577,7 +577,7 @@ export default function SubscriptionPage() {
                     ? 'bg-gradient-to-b from-slate-700/60 to-slate-800/60 border-2 border-amber-500/50'
                     : isCurrentPlan
                     ? 'bg-slate-700/40 border border-cyan-500/40'
-                    : 'bg-slate-700/40 border border-blue-700/30'
+                    : 'bg-gradient-to-b from-slate-700/60 to-slate-800/60 border border-cyan-500/30'
                 }`}
               >
                 {isGrowth && (
@@ -627,17 +627,24 @@ export default function SubscriptionPage() {
                   ))}
                 </div>
 
+                {isFree && billing === 'yearly' && !isPaidUser ? (
+                  <div className="w-full py-2.5 rounded-lg font-medium text-sm text-center bg-gradient-to-r from-cyan-500/30 to-blue-500/30 text-blue-300 border border-blue-500/30">
+                    Free
+                  </div>
+                ) : (
                 <button
                   onClick={() => {
                     if (isFree && isPaidUser) {
                       setShowCancelConfirm(true)
+                    } else if (isFree && billing === 'monthly') {
+                      window.location.href = '/signup'
                     } else {
                       handlePurchase(plan.id.toUpperCase() as PlanKey)
                     }
                   }}
-                  disabled={isCurrentPlan || processing === plan.id.toUpperCase() || cancelling}
+                  disabled={(isCurrentPlan && !(isFree && billing === 'monthly')) || processing === plan.id.toUpperCase() || cancelling}
                   className={`w-full py-2.5 rounded-lg font-medium text-sm transition-all ${
-                    isCurrentPlan
+                    isCurrentPlan && !(isFree && billing === 'monthly')
                       ? 'bg-slate-600/50 text-blue-300/60 cursor-not-allowed'
                       : isPaidPlanPurchasable && isGrowth
                       ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg hover:shadow-amber-500/50'
@@ -645,6 +652,8 @@ export default function SubscriptionPage() {
                       ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:shadow-lg hover:shadow-cyan-500/50'
                       : isFree && isPaidUser
                       ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white hover:shadow-lg hover:shadow-red-500/50'
+                      : isFree && billing === 'monthly'
+                      ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:shadow-lg hover:shadow-cyan-500/50'
                       : 'bg-slate-600/50 text-blue-300/60 cursor-not-allowed'
                   } ${processing === plan.id.toUpperCase() || cancelling ? 'opacity-50 cursor-wait' : ''}`}
                 >
@@ -652,12 +661,15 @@ export default function SubscriptionPage() {
                     ? 'Cancelling...'
                     : processing === plan.id.toUpperCase()
                     ? 'Processing...'
+                    : isCurrentPlan && isFree && billing === 'monthly'
+                    ? 'Start Free Trial →'
                     : isCurrentPlan
-                    ? isFree ? (billing === 'yearly' ? 'Free Plan' : 'Your Free Trial') : 'Current Plan'
+                    ? isFree ? '' : 'Current Plan'
                     : isFree
-                    ? isPaidUser ? 'Cancel Subscription' : (billing === 'yearly' ? 'Free Plan' : 'Your Free Trial')
+                    ? isPaidUser ? 'Cancel Subscription' : ''
                     : `Upgrade to ${plan.name}`}
                 </button>
+                )}
               </div>
             )
           })}
