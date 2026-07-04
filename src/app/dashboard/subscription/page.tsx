@@ -534,12 +534,12 @@ export default function SubscriptionPage() {
 
       {/* Plan Comparison */}
       <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
           <h2 className="text-lg font-semibold text-white">Choose your plan</h2>
-          <div className="inline-flex items-center gap-2 bg-slate-700/50 border border-blue-700/30 p-0.5 rounded-full">
+          <div className="inline-flex items-center gap-1 bg-slate-700/50 border border-blue-700/30 p-1 rounded-full">
             <button
               onClick={() => setBilling('monthly')}
-              className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${
+              className={`px-5 py-1.5 rounded-full text-xs font-semibold transition-all ${
                 billing === 'monthly'
                   ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
                   : 'text-blue-300/60 hover:text-blue-300'
@@ -549,127 +549,154 @@ export default function SubscriptionPage() {
             </button>
             <button
               onClick={() => setBilling('yearly')}
-              className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${
+              className={`px-5 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 ${
                 billing === 'yearly'
                   ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
                   : 'text-blue-300/60 hover:text-blue-300'
               }`}
             >
               Yearly
-              <span className="ml-1.5 text-xs bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-full">Save 17%</span>
+              <span className="text-xs bg-emerald-500/30 text-emerald-300 px-1.5 py-0.5 rounded-full font-medium">Save 17%</span>
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {Object.values(PLANS).filter(p => p.id !== 'enterprise').map((plan) => {
             const isFree = plan.price === 0
             const isCurrentPlan = isFree ? isFreeUser : isPaidUser && currentPlan?.id === plan.id
-            const isGrowth = plan.recommended
-            const isPaidPlanPurchasable = plan.price > 0 && isFreeUser
+            const isGrowth = plan.recommended === true
+
+            // Determine what the button should do and look like
+            // canUpgrade: user is free and this is a paid plan, OR user is paid and this plan costs more
+            const currentPlanPrice = currentPlan?.price ?? 0
+            const canUpgrade = !isCurrentPlan && plan.price > 0 && plan.price > currentPlanPrice
+            const canDowngrade = !isCurrentPlan && plan.price > 0 && isPaidUser && plan.price < currentPlanPrice
+            const isActionable = canUpgrade || canDowngrade || (!isFree && !isCurrentPlan)
+
             const displayPrice = billing === 'yearly' ? Math.round(plan.yearlyPrice / 12) : plan.price
             const period = billing === 'yearly' ? '/mo billed yearly' : '/mo'
+
+            // Card accent colours per plan
+            const cardStyle = isCurrentPlan
+              ? 'border-2 border-cyan-500/60 bg-gradient-to-b from-cyan-900/20 to-slate-800/60'
+              : isGrowth
+              ? 'border-2 border-amber-500/60 bg-gradient-to-b from-amber-900/10 to-slate-800/60'
+              : isFree
+              ? 'border border-emerald-500/30 bg-gradient-to-b from-emerald-900/10 to-slate-800/60'
+              : plan.id === 'starter'
+              ? 'border border-blue-500/30 bg-gradient-to-b from-blue-900/10 to-slate-800/60'
+              : 'border border-purple-500/30 bg-gradient-to-b from-purple-900/10 to-slate-800/60'
+
+            // Button style
+            const btnStyle = isCurrentPlan
+              ? 'bg-cyan-600/20 text-cyan-300 border border-cyan-500/40 cursor-default'
+              : isFree && isPaidUser
+              ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white hover:opacity-90 hover:shadow-lg hover:shadow-red-500/40 cursor-pointer'
+              : isGrowth && isActionable
+              ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:opacity-90 hover:shadow-lg hover:shadow-amber-500/40 cursor-pointer'
+              : plan.id === 'pro' && isActionable
+              ? 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:opacity-90 hover:shadow-lg hover:shadow-purple-500/40 cursor-pointer'
+              : isActionable
+              ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:opacity-90 hover:shadow-lg hover:shadow-cyan-500/40 cursor-pointer'
+              : 'bg-slate-600/40 text-blue-300/50 border border-slate-600/40 cursor-not-allowed'
+
+            const btnLabel = (() => {
+              if (processing === plan.id.toUpperCase()) return 'Processing...'
+              if (cancelling && isFree) return 'Cancelling...'
+              if (isCurrentPlan) return isFree ? '✓ Current Plan (Free)' : '✓ Current Plan'
+              if (isFree && isPaidUser) return 'Downgrade to Free'
+              if (canDowngrade) return `Switch to ${plan.name}`
+              if (canUpgrade || (!isCurrentPlan && plan.price > 0)) return `Upgrade to ${plan.name} →`
+              return `Get ${plan.name}`
+            })()
+
+            const handleClick = () => {
+              if (isCurrentPlan) return
+              if (isFree && isPaidUser) { setShowCancelConfirm(true); return }
+              if (plan.price > 0) { handlePurchase(plan.id.toUpperCase() as PlanKey) }
+            }
+
+            // Price highlight colour
+            const priceColor = isFree
+              ? 'text-emerald-400'
+              : isGrowth
+              ? 'text-amber-400'
+              : plan.id === 'pro'
+              ? 'text-purple-400'
+              : 'text-cyan-400'
 
             return (
               <div
                 key={plan.id}
-                className={`relative rounded-xl p-6 flex flex-col ${
-                  isGrowth
-                    ? 'bg-gradient-to-b from-slate-700/60 to-slate-800/60 border-2 border-amber-500/50'
-                    : isCurrentPlan
-                    ? 'bg-slate-700/40 border border-cyan-500/40'
-                    : 'bg-gradient-to-b from-slate-700/60 to-slate-800/60 border border-cyan-500/30'
+                className={`relative rounded-2xl p-6 flex flex-col transition-all duration-200 ${cardStyle} ${
+                  !isCurrentPlan && isActionable ? 'hover:scale-[1.02] hover:shadow-xl' : ''
                 }`}
               >
-                {isGrowth && (
-                  <span className="absolute -top-3 right-4 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold rounded-full">
-                    Recommended
+                {/* Top badges */}
+                {isGrowth && !isCurrentPlan && (
+                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold rounded-full shadow-lg shadow-amber-500/30 whitespace-nowrap">
+                    ⭐ Most Popular
                   </span>
                 )}
                 {isCurrentPlan && (
-                  <span className="absolute -top-3 left-4 px-3 py-1 bg-cyan-600 text-white text-xs font-bold rounded-full">
-                    {isFree ? (billing === 'yearly' ? 'Free' : 'Active Trial') : 'Current'}
+                  <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-xs font-bold rounded-full shadow-lg shadow-cyan-500/30 whitespace-nowrap">
+                    ✓ Your Plan
                   </span>
                 )}
 
-                <h3 className="text-lg font-semibold text-white mb-1">{plan.name}</h3>
-                <p className="text-xs text-blue-300/60 mb-3">
-                  {isFree ? 'First 50 carts free' : `Up to ${plan.maxCarts.toLocaleString('en-IN')} carts/mo`}
+                {/* Plan name & subtitle */}
+                <h3 className="text-lg font-bold text-white mb-0.5 mt-2">{plan.name}</h3>
+                <p className="text-xs text-blue-300/60 mb-4">
+                  {isFree ? 'First 50 carts free — no credit card' : `Up to ${plan.maxCarts.toLocaleString('en-IN')} carts/mo`}
                 </p>
 
-                <div className="mb-1">
+                {/* Price */}
+                <div className="mb-1 flex items-end gap-1">
                   {isFree ? (
-                    <span className="text-3xl font-bold text-emerald-400">Free</span>
+                    <span className={`text-4xl font-extrabold ${priceColor}`}>₹0</span>
                   ) : (
                     <>
-                      <span className="text-3xl font-bold text-white">₹{displayPrice.toLocaleString('en-IN')}</span>
-                      <span className="text-base text-blue-300/60 ml-1">{period}</span>
+                      <span className={`text-4xl font-extrabold ${priceColor}`}>
+                        ₹{displayPrice.toLocaleString('en-IN')}
+                      </span>
+                      <span className="text-sm text-blue-300/50 pb-1">{period}</span>
                     </>
                   )}
                 </div>
-                <p className="text-xs text-emerald-400/80 mb-1">
+
+                {/* Recovery estimate */}
+                <p className="text-xs text-emerald-400/80 mb-1 font-medium">
                   {isFree
                     ? 'Recover up to ₹25,000/mo typically'
-                    : `Recover ₹${plan.estimatedRecovery.min.toLocaleString('en-IN')}-${plan.estimatedRecovery.max.toLocaleString('en-IN')}/mo typically`
-                  }
+                    : `Recover ₹${plan.estimatedRecovery.min.toLocaleString('en-IN')}–₹${plan.estimatedRecovery.max.toLocaleString('en-IN')}/mo typically`}
                 </p>
-                {!isFree && (
-                  <p className="text-xs text-blue-300/40 mb-4">
-                    {plan.revSharePercent}% revenue share on recovered revenue
-                  </p>
-                )}
 
-                <div className="flex-1 space-y-3 mb-6">
+                {/* Rev share */}
+                <p className="text-xs text-blue-300/40 mb-5">
+                  {isFree ? 'No revenue share on first 50 recoveries' : `${plan.revSharePercent}% revenue share on recovered revenue`}
+                </p>
+
+                {/* Feature list */}
+                <div className="flex-1 space-y-2.5 mb-6">
                   {plan.features.map((feature, i) => (
-                    <div key={i} className="flex items-start space-x-2">
+                    <div key={i} className="flex items-start gap-2">
                       <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                      <span className="text-sm text-blue-200">{feature}</span>
+                      <span className="text-sm text-blue-200/90">{feature}</span>
                     </div>
                   ))}
                 </div>
 
-                {isFree && billing === 'yearly' && !isPaidUser ? (
-                  <div className="w-full py-2.5 rounded-lg font-medium text-sm text-center bg-gradient-to-r from-cyan-500/30 to-blue-500/30 text-blue-300 border border-blue-500/30">
-                    Free
-                  </div>
-                ) : (
+                {/* CTA Button */}
                 <button
-                  onClick={() => {
-                    if (isFree && isPaidUser) {
-                      setShowCancelConfirm(true)
-                    } else if (isFree && billing === 'monthly') {
-                      window.location.href = '/signup'
-                    } else {
-                      handlePurchase(plan.id.toUpperCase() as PlanKey)
-                    }
-                  }}
-                  disabled={(isCurrentPlan && !(isFree && billing === 'monthly')) || processing === plan.id.toUpperCase() || cancelling}
-                  className={`w-full py-2.5 rounded-lg font-medium text-sm transition-all ${
-                    isCurrentPlan && !(isFree && billing === 'monthly')
-                      ? 'bg-slate-600/50 text-blue-300/60 cursor-not-allowed'
-                      : isPaidPlanPurchasable && isGrowth
-                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg hover:shadow-amber-500/50'
-                      : isPaidPlanPurchasable
-                      ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:shadow-lg hover:shadow-cyan-500/50'
-                      : isFree && isPaidUser
-                      ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white hover:shadow-lg hover:shadow-red-500/50'
-                      : isFree && billing === 'monthly'
-                      ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:shadow-lg hover:shadow-cyan-500/50'
-                      : 'bg-slate-600/50 text-blue-300/60 cursor-not-allowed'
-                  } ${processing === plan.id.toUpperCase() || cancelling ? 'opacity-50 cursor-wait' : ''}`}
+                  onClick={handleClick}
+                  disabled={isCurrentPlan || processing === plan.id.toUpperCase() || (cancelling && isFree && isPaidUser)}
+                  className={`w-full py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${btnStyle} ${
+                    processing === plan.id.toUpperCase() || cancelling ? 'opacity-60 cursor-wait' : ''
+                  }`}
                 >
-                  {cancelling
-                    ? 'Cancelling...'
-                    : processing === plan.id.toUpperCase()
-                    ? 'Processing...'
-                    : isCurrentPlan && isFree && billing === 'monthly'
-                    ? 'Start Free Trial →'
-                    : isCurrentPlan
-                    ? isFree ? '' : 'Current Plan'
-                    : isFree
-                    ? isPaidUser ? 'Cancel Subscription' : ''
-                    : `Upgrade to ${plan.name}`}
+                  {btnLabel}
                 </button>
-                )}
               </div>
             )
           })}
