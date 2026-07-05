@@ -35,39 +35,38 @@ async function sendViaMeta(to: string, body: any): Promise<{ success: boolean; m
 }
 
 async function sendViaAisensy(to: string, content: string, templateName?: string, templateParams?: string[]): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const apiKey = process.env.AISENSY_API_KEY
-  const senderNumber = process.env.AISENSY_SENDER_NUMBER || process.env.WHATSAPP_PHONE_NUMBER_ID
+  const apiKey = process.env.AISENSEY_API_KEY || process.env.AISENSY_API_KEY
+  const campaignName = process.env.AISENSEY_CAMPAIGN_NAME || 'cart_recovery'
 
-  if (!apiKey || !senderNumber) {
-    return { success: false, error: 'Aisensy not configured' }
+  if (!apiKey) {
+    return { success: false, error: 'Aisensy API key not configured' }
   }
 
   try {
-    const payload: any = {
+    const payload: Record<string, any> = {
       apiKey,
-      campaignName: 'cart_recovery',
+      campaignName,
       destination: formatWhatsAppPhone(to),
-      source: senderNumber,
       userName: 'Customer',
     }
 
-    if (templateName) {
+    if (templateName || (templateParams && templateParams.length > 0)) {
       payload.templateParams = templateParams || []
     } else {
-      payload.messageContent = content
+      payload.templateParams = [content]
     }
 
-    const response = await fetch('https://backend.aisensy.com/api/v1/sendMessage', {
+    const response = await fetch('https://backend.aisensy.com/campaign/t1/api/v2', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
 
     const data = await response.json()
-    if (response.ok && data?.id) {
-      return { success: true, messageId: String(data.id) }
+    if (response.ok) {
+      return { success: true, messageId: String(data?.id || '') }
     }
-    return { success: false, error: data?.message || 'Failed to send via Aisensy' }
+    return { success: false, error: data?.message || data?.error || 'Failed to send via Aisensy' }
   } catch (error: any) {
     return { success: false, error: error.message }
   }
@@ -84,7 +83,7 @@ export async function sendWhatsAppMessage({
   messageId?: string
   error?: string
 }> {
-  const aisensyKey = process.env.AISENSY_API_KEY
+  const aisensyKey = process.env.AISENSEY_API_KEY || process.env.AISENSY_API_KEY
   const metaToken = process.env.WHATSAPP_BUSINESS_TOKEN
 
   if (!aisensyKey && !metaToken) {
