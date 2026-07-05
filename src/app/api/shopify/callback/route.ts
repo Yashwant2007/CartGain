@@ -72,6 +72,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=No+access+token+received', req.url))
     }
 
+    if (tokenData.expires_in) {
+      console.log(`Shopify token for ${shop} expires in ${tokenData.expires_in}s`)
+    }
+
     if (storeId) {
       await prisma.store.update({
         where: { id: storeId },
