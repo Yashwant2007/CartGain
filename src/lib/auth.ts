@@ -74,6 +74,7 @@ const providers: any[] = [
 ]
 
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'
   providers.push(
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
