@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
           POSTGRES_USER: restore
           POSTGRES_PASSWORD: restore
@@ -28,16 +28,18 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client gpg awscli
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client-17 gpg
 
       - name: Download latest backup artifact
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p /tmp/recoveryflow-backup
-          aws s3 cp "s3://${S3_BUCKET}/" /tmp/recoveryflow-backup/ --recursive --exclude "*" --include "*.gpg"
+          RUN_ID=$(gh run list --workflow="Scheduled Encrypted Backup" --branch master --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          if [ -z "$RUN_ID" ]; then
+            echo "No successful backup run found. Trigger a backup first."
+            exit 1
+          fi
+          gh run download "$RUN_ID" --name db-backup-encrypted --dir /tmp/recoveryflow-backup
           ls -1 /tmp/recoveryflow-backup | tail -n 1 > /tmp/latest_backup_name
 
       - name: Decrypt backup
@@ -45,7 +47,9 @@ jobs:
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           BACKUP_FILE=$(cat /tmp/latest_backup_name)
-          gpg --batch --yes --passphrase "$BACKUP_PASSPHRASE" -o /tmp/restore.sql.gz -d "/tmp/recoveryflow-backup/$BACKUP_FILE"
+          gpg --batch --no-tty --yes --pinentry-mode loopback \
+            --passphrase "$BACKUP_PASSPHRASE" \
+            -o /tmp/restore.sql.gz -d "/tmp/recoveryflow-backup/$BACKUP_FILE"
           gunzip -f /tmp/restore.sql.gz
 
       - name: Restore into staging database
