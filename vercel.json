@@ -2,15 +2,5 @@
   "buildCommand": "npm run build",
   "env": {
     "NODE_ENV": "production"
-  },
-  "crons": [
-    {
-      "path": "/api/jobs/process-carts",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/jobs/process-billing",
-      "schedule": "0 2 * * *"
-    }
-  ]
+  }
 }
