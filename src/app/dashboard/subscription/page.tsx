@@ -590,7 +590,7 @@ export default function SubscriptionPage() {
 
             // Button style
             const btnStyle = isCurrentPlan
-              ? 'bg-cyan-600/20 text-cyan-300 border border-cyan-500/40 cursor-default'
+              ? 'bg-slate-700/80 text-emerald-300 border-2 border-emerald-500/50 cursor-default font-semibold'
               : isFree && isPaidUser
               ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white hover:opacity-90 hover:shadow-lg hover:shadow-red-500/40 cursor-pointer'
               : isGrowth && isActionable

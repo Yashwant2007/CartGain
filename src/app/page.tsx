@@ -870,7 +870,9 @@ export default function HomePage() {
 
                   <Link
                     href="/signup"
-                    className={`w-full py-3 rounded-lg font-semibold text-center text-sm sm:text-base min-h-12 inline-flex items-center justify-center transition-all bg-gradient-to-r ${theme.gradient} text-white hover:shadow-lg hover:shadow-${theme.accent}-500/50 group-hover:scale-[1.02]`}
+                    className={`w-full py-3 rounded-lg font-semibold text-center text-sm sm:text-base min-h-12 inline-flex items-center justify-center transition-all bg-gradient-to-r ${theme.gradient} text-white hover:shadow-lg group-hover:scale-[1.02] ${
+                      isGrowth ? 'hover:shadow-amber-500/50' : plan.id === 'starter' ? 'hover:shadow-cyan-500/50' : 'hover:shadow-violet-500/50'
+                    }`}
                   >
                     {billing === 'yearly' ? 'Choose Plan' : 'Subscribe Now'}
                   </Link>

@@ -45,7 +45,7 @@ jest.mock('@/lib/services/email', () => ({
 
 jest.mock('@/lib/data-protection', () => ({
   logDataAccess: jest.fn(),
-  redactSensitive: (v) => v,
+  redactSensitive: (v: unknown) => v,
 }))
 
 jest.mock('@/lib/links', () => ({
@@ -59,7 +59,8 @@ import { sendEmail } from '@/lib/services/email'
 import { handlePaymentFailure, markPaymentRecovered, getPendingRetries } from '@/lib/payments/recovery'
 import type { GatewayPaymentEvent } from '@/lib/payments/types'
 
-const mockPrisma = prisma as jest.Mocked<typeof prisma>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockPrisma = prisma as any
 
 describe('Payment Recovery', () => {
   beforeEach(() => {

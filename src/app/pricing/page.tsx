@@ -143,7 +143,9 @@ export default function PricingPage() {
 
                   <Link
                     href="/signup"
-                    className={`w-full py-3 rounded-lg font-semibold text-center transition-all bg-gradient-to-r ${theme.gradient} text-white hover:shadow-lg group-hover:shadow-${theme.accent}-500/50 group-hover:scale-[1.02]`}
+                    className={`w-full py-3 rounded-lg font-semibold text-center transition-all bg-gradient-to-r ${theme.gradient} text-white hover:shadow-lg group-hover:scale-[1.02] ${
+                      isGrowth ? 'group-hover:shadow-amber-500/50' : plan.id === 'starter' ? 'group-hover:shadow-cyan-500/50' : 'group-hover:shadow-violet-500/50'
+                    }`}
                   >
                     {billing === 'yearly' ? 'Choose Plan' : 'Subscribe Now'}
                   </Link>

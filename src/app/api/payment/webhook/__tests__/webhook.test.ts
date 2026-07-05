@@ -234,7 +234,7 @@ describe('Payment Webhook - Razorpay Integration', () => {
         },
       };
 
-      const userId = event.payload.payment.entity.notes.userId;
+      const userId = (event.payload.payment.entity.notes as Record<string, string>).userId;
       const shouldProcess = !!userId;
 
       expect(shouldProcess).toBe(false);

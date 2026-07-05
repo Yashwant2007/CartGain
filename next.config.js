@@ -1,7 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['images.unsplash.com', 'avatar.vercel.sh'],
+    remotePatterns: [
+      { protocol: 'https', hostname: 'images.unsplash.com' },
+      { protocol: 'https', hostname: 'avatar.vercel.sh' },
+    ],
   },
   env: {
     NEXT_PUBLIC_APP_NAME: 'CartGain',

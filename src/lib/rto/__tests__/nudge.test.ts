@@ -42,7 +42,7 @@ jest.mock('@/lib/services/email', () => ({
 
 jest.mock('@/lib/data-protection', () => ({
   logDataAccess: jest.fn(),
-  redactSensitive: (v) => v,
+  redactSensitive: (v: unknown) => v,
 }))
 
 import prisma from '@/lib/db'
@@ -56,7 +56,8 @@ import {
   updateCustomerAggregates,
 } from '@/lib/rto/nudge'
 
-const mockPrisma = prisma as jest.Mocked<typeof prisma>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockPrisma = prisma as any
 
 describe('Nudge Flow', () => {
   beforeEach(() => {

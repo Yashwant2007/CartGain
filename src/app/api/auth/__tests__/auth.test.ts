@@ -309,9 +309,8 @@ describe('Auth - User Registration & Login', () => {
         email: 'user@example.com',
       };
 
-      const safeLog = {
+      const safeLog: Record<string, string | undefined> = {
         email: sensitiveData.email,
-        // password excluded
       };
 
       expect(safeLog.password).toBeUndefined();

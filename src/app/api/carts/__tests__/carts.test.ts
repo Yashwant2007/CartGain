@@ -27,7 +27,7 @@ describe('Cart Detection & Management API', () => {
   describe('GET /api/carts - Fetch Abandoned Carts', () => {
     it('should require authentication to list carts', async () => {
       // Simulating auth check
-      const session = null;
+      const session = null as { user?: { id?: string } } | null;
       const isAuthorized = !!session?.user?.id;
 
       expect(isAuthorized).toBe(false);
@@ -118,7 +118,7 @@ describe('Cart Detection & Management API', () => {
 
   describe('POST /api/carts - Create/Track Abandoned Cart', () => {
     it('should require authentication', () => {
-      const session = null;
+      const session = null as { user?: { id?: string } } | null;
       const isAuthorized = !!session?.user?.id;
 
       expect(isAuthorized).toBe(false);
