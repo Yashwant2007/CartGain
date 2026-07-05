@@ -130,15 +130,19 @@ export async function fetchShopifyCarts(
 export async function fetchAbandonedCheckouts(
   shopDomain: string,
   accessToken: string,
-  createdAtMin: string,
   limit: number = 50
 ): Promise<any[]> {
   try {
-    const url = `https://${shopDomain}/admin/api/2026-04/checkouts.json?created_at_min=${encodeURIComponent(createdAtMin)}&status=open&limit=${limit}`
+    const url = `https://${shopDomain}/admin/api/2026-04/checkouts.json?status=open&limit=${limit}`
     const response = await fetch(url, {
       headers: { 'X-Shopify-Access-Token': accessToken },
     })
 
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '(no body)')
+      console.error(`Shopify checkout fetch failed (${response.status}): ${errText}`)
+      return []
+    }
     const data = await response.json()
     return data.checkouts || []
   } catch (error) {
@@ -148,13 +152,27 @@ export async function fetchAbandonedCheckouts(
 }
 
 export async function syncAbandonedCheckouts(store: { id: string; domain: string; apiKey: string | null }): Promise<number> {
-  const accessToken = store.apiKey ? (await import('@/lib/encryption')).decrypt(store.apiKey) : null
-  if (!accessToken) return 0
+  if (!store.apiKey) {
+    console.log(`No API key for store ${store.domain} — skipping checkout sync`)
+    return 0
+  }
+  const { decrypt } = await import('@/lib/encryption')
+  let accessToken: string
+  try {
+    accessToken = decrypt(store.apiKey)
+  } catch {
+    console.error(`Failed to decrypt API key for store ${store.domain}`)
+    return 0
+  }
 
-  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
-  const checkouts = await fetchAbandonedCheckouts(store.domain, accessToken, fiveMinutesAgo)
+  const checkouts = await fetchAbandonedCheckouts(store.domain, accessToken)
 
-  if (checkouts.length === 0) return 0
+  if (checkouts.length === 0) {
+    console.log(`No abandoned checkouts found for ${store.domain} in last 24h`)
+    return 0
+  }
+
+  console.log(`Found ${checkouts.length} abandoned checkouts for ${store.domain}`)
 
   const prisma = (await import('@/lib/db')).default
   let synced = 0
