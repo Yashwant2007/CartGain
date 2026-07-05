@@ -12,23 +12,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Postgres client
-        run: |
-          sudo apt-get update && sudo apt-get install -y curl gnupg lsb-release
-          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-17
-          # Ensure pg_dump 17 is in PATH before any system-installed pg_dump
-          echo "/usr/lib/postgresql/17/bin" >> $GITHUB_PATH
-
-      - name: Run backup script
+      - name: Run backup via Docker (Postgres 17)
         env:
           DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
-          chmod +x scripts/backup/pg_backup_encrypt.sh
-          scripts/backup/pg_backup_encrypt.sh recoverflow-prod
+          TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
+          FILENAME="recoverflow-prod-${TIMESTAMP}.sql.gz"
+          ENC_FILENAME="${FILENAME}.gpg"
+
+          # Dump using official Postgres 17 Docker image (matches Supabase server version)
+          docker run --rm -e DIRECT_URL postgres:17 \
+            sh -c "pg_dump --dbname=\"$DIRECT_URL\" | gzip" > "/tmp/${FILENAME}"
+
+          # Encrypt
+          gpg --batch --no-tty --yes --pinentry-mode loopback \
+            --passphrase "$BACKUP_PASSPHRASE" \
+            -c "/tmp/${FILENAME}"
+          mv "/tmp/${FILENAME}.gpg" "/tmp/${ENC_FILENAME}"
+          shred -u "/tmp/${FILENAME}"
+
+          echo "Backup created: ${ENC_FILENAME}"
 
       - name: Upload encrypted backup as artifact
         uses: actions/upload-artifact@v4
