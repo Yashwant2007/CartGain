@@ -126,3 +126,87 @@ export async function fetchShopifyCarts(
     return []
   }
 }
+
+export async function fetchAbandonedCheckouts(
+  shopDomain: string,
+  accessToken: string,
+  createdAtMin: string,
+  limit: number = 50
+): Promise<any[]> {
+  try {
+    const url = `https://${shopDomain}/admin/api/2026-04/checkouts.json?created_at_min=${encodeURIComponent(createdAtMin)}&status=open&limit=${limit}`
+    const response = await fetch(url, {
+      headers: { 'X-Shopify-Access-Token': accessToken },
+    })
+
+    const data = await response.json()
+    return data.checkouts || []
+  } catch (error) {
+    console.error('Failed to fetch Shopify checkouts:', error)
+    return []
+  }
+}
+
+export async function syncAbandonedCheckouts(store: { id: string; domain: string; apiKey: string | null }): Promise<number> {
+  const accessToken = store.apiKey ? (await import('@/lib/encryption')).decrypt(store.apiKey) : null
+  if (!accessToken) return 0
+
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+  const checkouts = await fetchAbandonedCheckouts(store.domain, accessToken, fiveMinutesAgo)
+
+  if (checkouts.length === 0) return 0
+
+  const prisma = (await import('@/lib/db')).default
+  let synced = 0
+
+  for (const checkout of checkouts) {
+    const token = checkout.token || checkout.cart_token
+    if (!token || !checkout.id) continue
+
+    const lineItems = (checkout.line_items || []).map((item: any) => ({
+      name: item.title || item.name || 'Item',
+      description: item.variant_title || undefined,
+      price: item.price != null ? parseFloat(item.price) : 0,
+      quantity: item.quantity || 1,
+      image: item.image?.src || item.image || undefined,
+    }))
+
+    const phone = checkout.phone || checkout.billing_address?.phone || checkout.shipping_address?.phone || checkout.customer?.phone || null
+    const firstName = checkout.billing_address?.first_name || checkout.shipping_address?.first_name || checkout.customer?.first_name || ''
+    const lastName = checkout.billing_address?.last_name || checkout.shipping_address?.last_name || checkout.customer?.last_name || ''
+    const name = `${firstName} ${lastName}`.trim() || checkout.customer?.name || null
+    const email = checkout.email || checkout.customer?.email || null
+
+    try {
+      await prisma.cart.upsert({
+        where: { storeId_cartId: { storeId: store.id, cartId: token } },
+        update: {
+          items: lineItems,
+          totalValue: checkout.total_price ? parseFloat(checkout.total_price) : 0,
+          ...(email ? { customerEmail: email } : {}),
+          ...(phone ? { customerPhone: phone } : {}),
+          ...(name ? { customerName: name } : {}),
+          abandonedAt: checkout.created_at ? new Date(checkout.created_at) : new Date(),
+          currency: checkout.currency || 'USD',
+        },
+        create: {
+          storeId: store.id,
+          cartId: token,
+          customerId: checkout.customer?.id ? String(checkout.customer.id) : undefined,
+          items: lineItems,
+          totalValue: checkout.total_price ? parseFloat(checkout.total_price) : 0,
+          customerEmail: email,
+          customerPhone: phone,
+          customerName: name,
+          currency: checkout.currency || 'USD',
+          abandonedAt: checkout.created_at ? new Date(checkout.created_at) : new Date(),
+        },
+      })
+      synced++
+    } catch (err) {
+      console.error(`Failed to sync checkout ${token}:`, err)
+    }
+  }
+
+  return synced
+}

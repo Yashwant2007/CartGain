@@ -3,6 +3,8 @@ import { addCartProcessingJob } from '@/lib/queue/processor'
 import { processAbandonedCarts } from '@/lib/jobs/processAbandonedCarts'
 import { initializeQueues } from '@/lib/queue/init'
 import { sendAlertOnError } from '@/lib/alerter'
+import { syncAbandonedCheckouts } from '@/lib/shopify'
+import prisma from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,11 +80,29 @@ export async function GET(request: NextRequest) {
 
     if (!jobId) {
       // No jobId — cron trigger, process carts directly
-      console.log('Cron trigger: processing abandoned carts')
+      console.log('Cron trigger: syncing Shopify checkouts + processing abandoned carts')
+
+      // Poll Shopify for abandoned checkouts and upsert them as carts
+      let syncedCheckouts = 0
+      try {
+        const stores = await prisma.store.findMany({
+          where: { platform: 'shopify', isActive: true, apiKey: { not: null } },
+          select: { id: true, domain: true, apiKey: true },
+          take: 50,
+        })
+        for (const store of stores) {
+          const count = await syncAbandonedCheckouts(store).catch(() => 0)
+          syncedCheckouts += count
+        }
+      } catch (err) {
+        console.error('Shopify checkout sync error:', err)
+      }
+
       const result = await processAbandonedCarts(25)
       return NextResponse.json({
         message: 'Carts processed',
         status: 'processed',
+        syncedCheckouts,
         result,
       })
     }
