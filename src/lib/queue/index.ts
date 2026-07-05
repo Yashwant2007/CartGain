@@ -10,8 +10,14 @@ if (typeof window === 'undefined') {
   }
 }
 
+function hasValidRedisConfig(): boolean {
+  const url = process.env.REDIS_URL
+  if (url && url !== 'rediss://default:password@your-instance.upstash.io:6379') return true
+  return !!process.env.REDIS_HOST
+}
+
 function getCartQueue(): any {
-  if (!queueInstance && Bull) {
+  if (!queueInstance && Bull && hasValidRedisConfig()) {
     try {
       const redisUrl = process.env.REDIS_URL
       const redisConfig = redisUrl
