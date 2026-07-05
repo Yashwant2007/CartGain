@@ -4,6 +4,8 @@ import prisma from '@/lib/db'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, ShoppingBag, Zap } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$', INR: '₹', EUR: '€', GBP: '£', JPY: '¥',
   AUD: 'A$', CAD: 'C$', SGD: 'S$', AED: 'د.إ', CNY: '¥',

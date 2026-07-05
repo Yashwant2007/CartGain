@@ -56,7 +56,6 @@ import {
   updateCustomerAggregates,
 } from '@/lib/rto/nudge'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPrisma = prisma as any
 
 describe('Nudge Flow', () => {

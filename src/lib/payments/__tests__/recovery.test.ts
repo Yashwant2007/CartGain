@@ -59,7 +59,6 @@ import { sendEmail } from '@/lib/services/email'
 import { handlePaymentFailure, markPaymentRecovered, getPendingRetries } from '@/lib/payments/recovery'
 import type { GatewayPaymentEvent } from '@/lib/payments/types'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPrisma = prisma as any
 
 describe('Payment Recovery', () => {

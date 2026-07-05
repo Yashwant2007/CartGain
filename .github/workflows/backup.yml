@@ -13,21 +13,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Postgres client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client gpg awscli
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client gpg
 
       - name: Run backup script
         env:
-          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
-          S3_BUCKET: ${{ secrets.S3_BUCKET }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           chmod +x scripts/backup/pg_backup_encrypt.sh
           scripts/backup/pg_backup_encrypt.sh recoverflow-prod
 
-      - name: Upload workflow log artifact (for evidence)
+      - name: Upload encrypted backup as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: backup-log
-          path: ${{ github.workspace }}
+          name: db-backup-encrypted
+          path: /tmp/recoverflow-prod-*.sql.gz.gpg
+          retention-days: 30

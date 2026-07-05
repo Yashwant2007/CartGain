@@ -14,25 +14,29 @@ function resolveDatabaseUrl(): string | undefined {
   return process.env.TEST_DATABASE_URL || process.env.DATABASE_URL
 }
 
-const databaseUrl = resolveDatabaseUrl()
+function createPrismaClient(): PrismaClient {
+  const databaseUrl = resolveDatabaseUrl()
 
-if (!databaseUrl) {
-  throw new Error('A database URL is required')
-}
+  if (!databaseUrl) {
+    return new PrismaClient()
+  }
 
-if ((process.env.APP_DATA_ENV || process.env.NODE_ENV || 'development').toLowerCase() !== 'production' && !process.env.TEST_DATABASE_URL) {
-  console.warn('TEST_DATABASE_URL is not set. Test and production data are not fully separated yet.')
-}
+  if ((process.env.APP_DATA_ENV || process.env.NODE_ENV || 'development').toLowerCase() !== 'production' && !process.env.TEST_DATABASE_URL && process.env.NODE_ENV !== 'test') {
+    console.warn('TEST_DATABASE_URL is not set. Test and production data are not fully separated yet.')
+  }
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+  return new PrismaClient({
     datasources: {
       db: {
         url: databaseUrl,
       },
     },
   })
+}
+
+export const prisma =
+  globalForPrisma.prisma ??
+  createPrismaClient()
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 
