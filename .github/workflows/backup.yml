@@ -13,7 +13,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Postgres client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client gpg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gnupg
+          # Install pg_dump matching server version (Supabase 17.x)
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-17
 
       - name: Run backup script
         env:
