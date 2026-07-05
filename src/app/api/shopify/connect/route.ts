@@ -31,6 +31,8 @@ export async function POST(req: NextRequest) {
       'read_products',
       'write_products',
       'read_merchant_managed_fulfillment_orders',
+      'write_webhooks',
+      'read_webhooks',
     ].join(',')
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'

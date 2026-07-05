@@ -74,6 +74,10 @@ export async function createShopifyWebhook(
       }),
     })
 
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '(no body)')
+      console.error(`Shopify webhook ${topic} registration failed: ${response.status} ${errText}`)
+    }
     return response.ok
   } catch (error) {
     console.error('Failed to create Shopify webhook:', error)
