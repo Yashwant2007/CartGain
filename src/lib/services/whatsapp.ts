@@ -6,6 +6,73 @@ export interface WhatsAppMessageOptions {
   templateParams?: string[]
 }
 
+async function sendViaMeta(to: string, body: any): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+  const accessToken = process.env.WHATSAPP_BUSINESS_TOKEN
+
+  if (!phoneNumberId || !accessToken) {
+    return { success: false, error: 'Meta WhatsApp not configured' }
+  }
+
+  const response = await fetch(
+    `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
+    }
+  )
+
+  const data = await response.json()
+  const messageId = data?.messages?.[0]?.id
+  if (response.ok && messageId) {
+    return { success: true, messageId }
+  }
+  return { success: false, error: data?.error?.message || 'Failed to send via Meta' }
+}
+
+async function sendViaAisensy(to: string, content: string, templateName?: string, templateParams?: string[]): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const apiKey = process.env.AISENSY_API_KEY
+  const senderNumber = process.env.AISENSY_SENDER_NUMBER || process.env.WHATSAPP_PHONE_NUMBER_ID
+
+  if (!apiKey || !senderNumber) {
+    return { success: false, error: 'Aisensy not configured' }
+  }
+
+  try {
+    const payload: any = {
+      apiKey,
+      campaignName: 'cart_recovery',
+      destination: formatWhatsAppPhone(to),
+      source: senderNumber,
+      userName: 'Customer',
+    }
+
+    if (templateName) {
+      payload.templateParams = templateParams || []
+    } else {
+      payload.messageContent = content
+    }
+
+    const response = await fetch('https://backend.aisensy.com/api/v1/sendMessage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await response.json()
+    if (response.ok && data?.id) {
+      return { success: true, messageId: String(data.id) }
+    }
+    return { success: false, error: data?.message || 'Failed to send via Aisensy' }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
 export async function sendWhatsAppMessage({
   to,
   content,
@@ -17,11 +84,11 @@ export async function sendWhatsAppMessage({
   messageId?: string
   error?: string
 }> {
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
-  const accessToken = process.env.WHATSAPP_BUSINESS_TOKEN
+  const aisensyKey = process.env.AISENSY_API_KEY
+  const metaToken = process.env.WHATSAPP_BUSINESS_TOKEN
 
-  if (!phoneNumberId || !accessToken) {
-    console.warn('WhatsApp Business API not configured')
+  if (!aisensyKey && !metaToken) {
+    console.warn('WhatsApp not configured — set WHATSAPP_BUSINESS_TOKEN (Meta) or AISENSY_API_KEY')
     return { success: false, error: 'WhatsApp not configured' }
   }
 
@@ -34,7 +101,6 @@ export async function sendWhatsAppMessage({
     }
 
     if (templateName) {
-      // Use template message
       body.type = 'template'
       body.template = {
         name: templateName,
@@ -50,52 +116,22 @@ export async function sendWhatsAppMessage({
         ] : [],
       }
     } else {
-      // Use text message
       body.type = 'text'
       body.text = { body: content }
     }
 
     if (mediaUrl) {
       body.type = 'image'
-      body.image = {
-        link: mediaUrl,
-        caption: content,
-      }
+      body.image = { link: mediaUrl, caption: content }
     }
 
-    const response = await fetch(
-      `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(body),
-      }
-    )
-
-    const data = await response.json()
-
-    // Meta WhatsApp Cloud API returns { messages: [{ id: "wamid..." }] } on success
-    const messageId = data?.messages?.[0]?.id
-    if (response.ok && messageId) {
-      return {
-        success: true,
-        messageId,
-      }
+    if (aisensyKey) {
+      return await sendViaAisensy(to, content, templateName, templateParams)
     }
-
-    return {
-      success: false,
-      error: data?.error?.message || 'Failed to send WhatsApp message',
-    }
+    return await sendViaMeta(to, body)
   } catch (error: any) {
     console.error('WhatsApp send error:', error)
-    return {
-      success: false,
-      error: error.message,
-    }
+    return { success: false, error: error.message }
   }
 }
 
