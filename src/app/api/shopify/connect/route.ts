@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
     authUrl.searchParams.set('scope', scopes)
     authUrl.searchParams.set('redirect_uri', redirectUri)
     authUrl.searchParams.set('state', state)
+    authUrl.searchParams.set('grant_options[]', 'per-user')
 
     return NextResponse.json({ authUrl: authUrl.toString(), state })
   } catch (error) {
