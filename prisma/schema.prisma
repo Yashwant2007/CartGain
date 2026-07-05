@@ -421,25 +421,103 @@ model CodNudge {
 }
 
 model Customer {
-  id            String    @id @default(cuid())
-  storeId       String
-  customerId    String
-  email         String?
-  phone         String?
-  totalOrders   Int       @default(0)
-  codOrders     Int       @default(0)
-  codRtos       Int       @default(0)
-  cancellations Int       @default(0)
-  firstOrderAt  DateTime?
-  lastOrderAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  storeId         String
+  customerId      String
+  email           String?
+  phone           String?
+  totalOrders     Int       @default(0)
+  codOrders       Int       @default(0)
+  codRtos         Int       @default(0)
+  cancellations   Int       @default(0)
+  firstOrderAt    DateTime?
+  lastOrderAt     DateTime?
+  intentType      String?   // returning, new, loyal, price_sensitive, window_shopper, high_value
+  intentScore     Float?    // confidence score 0-1
+  intentUpdatedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerInsights CustomerInsight[]
   @@unique([storeId, customerId])
   @@index([storeId])
   @@index([storeId, email])
   @@index([storeId, phone])
+}
+
+model CustomerInsight {
+  id              String   @id @default(cuid())
+  storeId         String
+  customerId      String
+  intentType      String   // returning, new, loyal, price_sensitive, window_shopper, high_value
+  intentScore     Float    // confidence 0-1
+  lifetimeValue   Float?
+  avgOrderValue   Float?
+  totalAbandons   Int      @default(0)
+  totalRecoveries Int      @default(0)
+  preferences     Json?    // channel preferences, category preferences
+  detectedAt      DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  @@unique([storeId, customerId])
+  @@index([storeId])
+  @@index([storeId, intentType])
+}
+
+model AiSuggestion {
+  id          String   @id @default(cuid())
+  storeId     String
+  userId      String
+  type        String   // revenue_coach, weekly_report, campaign_tip
+  title       String
+  description String   @db.Text
+  impact      String?  // high, medium, low
+  metrics     Json?    // projected impact metrics
+  data        Json?    // additional structured data
+  isRead      Boolean  @default(false)
+  isActioned  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([storeId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model AiReport {
+  id          String   @id @default(cuid())
+  storeId     String
+  userId      String
+  type        String   // weekly, monthly
+  periodStart DateTime
+  periodEnd   DateTime
+  title       String
+  summary     String   @db.Text
+  metrics     Json     // key metrics snapshot
+  insights    Json     // array of insight objects
+  recommendations Json // array of recommendation objects
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([storeId, periodStart, periodEnd])
+  @@index([userId, createdAt])
+}
+
+model CartPrediction {
+  id              String   @id @default(cuid())
+  cartId          String   @unique
+  storeId         String
+  probabilityScore Float   // 0-100
+  predictedValue  Float?   // expected recovery value
+  intentType      String?  // predicted customer intent
+  discountSuggestion Json? // recommended discount
+  bestChannel     String?  // predicted best channel
+  features        Json?    // feature values used for prediction
+  modelVersion    String   @default("1.0")
+  createdAt       DateTime @default(now())
+
+  @@index([storeId])
+  @@index([storeId, probabilityScore])
 }
 
 // ── Payment-Failure Recovery Models ──
