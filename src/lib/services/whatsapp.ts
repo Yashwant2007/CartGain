@@ -6,72 +6,6 @@ export interface WhatsAppMessageOptions {
   templateParams?: string[]
 }
 
-async function sendViaMeta(to: string, body: any): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
-  const accessToken = process.env.WHATSAPP_BUSINESS_TOKEN
-
-  if (!phoneNumberId || !accessToken) {
-    return { success: false, error: 'Meta WhatsApp not configured' }
-  }
-
-  const response = await fetch(
-    `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(body),
-    }
-  )
-
-  const data = await response.json()
-  const messageId = data?.messages?.[0]?.id
-  if (response.ok && messageId) {
-    return { success: true, messageId }
-  }
-  return { success: false, error: data?.error?.message || 'Failed to send via Meta' }
-}
-
-async function sendViaAisensy(to: string, content: string, templateName?: string, templateParams?: string[]): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const apiKey = process.env.AISENSEY_API_KEY || process.env.AISENSY_API_KEY
-  const campaignName = process.env.AISENSEY_CAMPAIGN_NAME || 'cart_recovery'
-
-  if (!apiKey) {
-    return { success: false, error: 'Aisensy API key not configured' }
-  }
-
-  try {
-    const payload: Record<string, any> = {
-      apiKey,
-      campaignName,
-      destination: formatWhatsAppPhone(to),
-      userName: 'Customer',
-    }
-
-    if (templateName || (templateParams && templateParams.length > 0)) {
-      payload.templateParams = templateParams || []
-    } else {
-      payload.templateParams = [content]
-    }
-
-    const response = await fetch('https://backend.aisensy.com/campaign/t1/api/v2', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-
-    const data = await response.json()
-    if (response.ok) {
-      return { success: true, messageId: String(data?.id || '') }
-    }
-    return { success: false, error: data?.message || data?.error || 'Failed to send via Aisensy' }
-  } catch (error: any) {
-    return { success: false, error: error.message }
-  }
-}
-
 export async function sendWhatsAppMessage({
   to,
   content,
@@ -83,11 +17,11 @@ export async function sendWhatsAppMessage({
   messageId?: string
   error?: string
 }> {
-  const aisensyKey = process.env.AISENSEY_API_KEY || process.env.AISENSY_API_KEY
-  const metaToken = process.env.WHATSAPP_BUSINESS_TOKEN
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+  const accessToken = process.env.WHATSAPP_BUSINESS_TOKEN
 
-  if (!aisensyKey && !metaToken) {
-    console.warn('WhatsApp not configured — set WHATSAPP_BUSINESS_TOKEN (Meta) or AISENSY_API_KEY')
+  if (!phoneNumberId || !accessToken) {
+    console.warn('WhatsApp not configured — set WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_BUSINESS_TOKEN')
     return { success: false, error: 'WhatsApp not configured' }
   }
 
@@ -124,10 +58,27 @@ export async function sendWhatsAppMessage({
       body.image = { link: mediaUrl, caption: content }
     }
 
-    if (aisensyKey) {
-      return await sendViaAisensy(to, content, templateName, templateParams)
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(body),
+      }
+    )
+
+    const data = await response.json()
+    const messageId = data?.messages?.[0]?.id
+    if (response.ok && messageId) {
+      return { success: true, messageId }
     }
-    return await sendViaMeta(to, body)
+    return {
+      success: false,
+      error: data?.error?.message || 'Failed to send WhatsApp message',
+    }
   } catch (error: any) {
     console.error('WhatsApp send error:', error)
     return { success: false, error: error.message }
