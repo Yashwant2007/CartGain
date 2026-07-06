@@ -160,8 +160,10 @@ export default function DashboardPage() {
   }
 
   const calcChange = (current: number | undefined, previous: number | undefined): string => {
-    if (!current || !previous || previous === 0) return current && current > 0 ? '+100%' : '0%'
-    const pct = ((current - previous) / previous) * 100
+    const c = current ?? 0
+    const p = previous ?? 0
+    if (p === 0) return c > 0 ? '+100%' : '0%'
+    const pct = ((c - p) / p) * 100
     return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
   }
 

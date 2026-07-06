@@ -60,8 +60,8 @@ export async function GET() {
         id: `recovery-${recovery.id}`,
         type: 'recovery',
         title: 'Cart Recovered!',
-        description: `${recovery.cart?.customerName || 'A customer'}'s cart worth $${recovery.recoveredValue.toFixed(2)} was recovered via ${recovery.channel}.`,
-        timestamp: recovery.recoveredAt.toISOString(),
+        description: `${recovery.cart?.customerName || 'A customer'}'s cart worth $${(recovery.recoveredValue ?? 0).toFixed(2)} was recovered via ${recovery.channel}.`,
+        timestamp: recovery.recoveredAt?.toISOString?.() || new Date().toISOString(),
         icon: '💰',
       })
     }
@@ -75,8 +75,8 @@ export async function GET() {
         id: `cart-${cart.id}`,
         type: 'cart',
         title: 'Cart Abandoned',
-        description: `${cart.customerName || 'A guest'} abandoned a cart worth $${cart.totalValue.toFixed(2)}.`,
-        timestamp: cart.abandonedAt.toISOString(),
+        description: `${cart.customerName || 'A guest'} abandoned a cart worth $${(cart.totalValue ?? 0).toFixed(2)}.`,
+        timestamp: cart.abandonedAt?.toISOString?.() || new Date().toISOString(),
         icon: '🛒',
       })
     }
@@ -86,8 +86,8 @@ export async function GET() {
         id: `campaign-${campaign.id}`,
         type: 'campaign',
         title: 'Campaign Active',
-        description: `"${campaign.name}" is running with ${campaign.channels.length} channel(s).`,
-        timestamp: campaign.updatedAt.toISOString(),
+        description: `"${campaign.name}" is running with ${(campaign.channels?.length ?? 0)} channel(s).`,
+        timestamp: campaign.updatedAt?.toISOString?.() || new Date().toISOString(),
         icon: '📢',
       })
     }
