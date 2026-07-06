@@ -240,7 +240,10 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
               storeName: store.name,
               total: cart.totalValue,
               currencySymbol,
-              cartUrl: '', // set per-channel below
+              cartUrl: '',
+              discountCode: campaign.discountEnabled ? campaign.discountCode || undefined : undefined,
+              discountValue: campaign.discountEnabled ? campaign.discountValue || undefined : undefined,
+              discountType: campaign.discountEnabled ? campaign.discountType || undefined : undefined,
             }
 
             // Try each available channel in priority order; break on first success
@@ -282,9 +285,9 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
                     let smsBody: string
                     if (campaign.aiOptimized) {
                       const ai = await generateSMSContent(cartCtx)
-                      smsBody = ai ? `${ai.body}\n\n${cartUrl}` : fallbackSMSText(customerName, store.name, formatProductList(cartItems), formattedTotal, cartUrl)
+                      smsBody = ai ? `${ai.body}\n\n${cartUrl}` : fallbackSMSText(customerName, store.name, formatProductList(cartItems), formattedTotal, cartUrl, campaign.discountCode ?? undefined, campaign.discountValue ?? undefined, campaign.discountType ?? undefined)
                     } else {
-                      smsBody = fallbackSMSText(customerName, store.name, formatProductList(cartItems), formattedTotal, cartUrl)
+                      smsBody = fallbackSMSText(customerName, store.name, formatProductList(cartItems), formattedTotal, cartUrl, campaign.discountCode ?? undefined, campaign.discountValue ?? undefined, campaign.discountType ?? undefined)
                     }
                     const phoneNumber = sanitizePhoneNumber(cart.customerPhone!)
                     const smsResult = await sendSMS({ to: phoneNumber, body: smsBody })
@@ -318,9 +321,9 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
                       let whatsappMessage: string
                       if (campaign.aiOptimized) {
                         const ai = await generateWhatsAppContent(cartCtx)
-                        whatsappMessage = ai ? `${ai.body}\n\n${cartUrl}` : fallbackWhatsAppText(customerName, store.name, itemsBlock || '(cart is empty)', formattedTotal, cartUrl)
+                        whatsappMessage = ai ? `${ai.body}\n\n${cartUrl}` : fallbackWhatsAppText(customerName, store.name, itemsBlock || '(cart is empty)', formattedTotal, cartUrl, campaign.discountCode ?? undefined, campaign.discountValue ?? undefined, campaign.discountType ?? undefined)
                       } else {
-                        whatsappMessage = fallbackWhatsAppText(customerName, store.name, itemsBlock || '(cart is empty)', formattedTotal, cartUrl)
+                        whatsappMessage = fallbackWhatsAppText(customerName, store.name, itemsBlock || '(cart is empty)', formattedTotal, cartUrl, campaign.discountCode ?? undefined, campaign.discountValue ?? undefined, campaign.discountType ?? undefined)
                       }
                       const whatsappResult = await sendWhatsAppMessage({
                         to: sanitizePhoneNumber(cart.customerPhone!),
@@ -339,18 +342,24 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
               }
 
               const abTag = abTestVariant ? ` [AB:${abTestVariant}]` : ''
-              await prisma.message.create({
-                data: {
-                  cartId: cart.id,
-                  campaignId: campaign.id,
-                  channel: ch,
-                  content: `Cart recovery message (step ${step + 1}/${maxMessages}) for ${customerName}${abTag}`,
-                  status: sendSuccess ? 'sent' : 'failed',
-                  sentAt: sendSuccess ? new Date() : null,
-                },
-              })
+              let messageSaved = false
+              try {
+                await prisma.message.create({
+                  data: {
+                    cartId: cart.id,
+                    campaignId: campaign.id,
+                    channel: ch,
+                    content: `Cart recovery message (step ${step + 1}/${maxMessages}) for ${customerName}${abTag}`,
+                    status: sendSuccess ? 'sent' : 'failed',
+                    sentAt: sendSuccess ? new Date() : null,
+                  },
+                })
+                messageSaved = true
+              } catch (msgErr) {
+                console.error(`Failed to save message record for cart ${cart.id} (${ch}):`, msgErr)
+              }
 
-              if (sendSuccess) {
+              if (sendSuccess && messageSaved) {
                 globalSendSuccess = true
                 messagesSent++
                 const today = new Date(new Date().toDateString())
@@ -366,7 +375,7 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
                 })
                 break
               } else {
-                console.error(`Failed to send ${ch} message for cart ${cart.id}: ${error}`)
+                console.error(`Failed to send ${ch} message for cart ${cart.id}: ${error || 'message record not saved'}`)
               }
             }
 
@@ -399,20 +408,28 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
   }
 }
 
-function fallbackSMSText(customerName: string, storeName: string, productList: string, formattedTotal: string, cartUrl: string): string {
+function fallbackSMSText(customerName: string, storeName: string, productList: string, formattedTotal: string, cartUrl: string, discountCode?: string, discountValue?: number, discountType?: string): string {
+  const discountLine = discountCode
+    ? `Use code ${discountCode}${discountValue ? ` for ${discountValue}${discountType === 'percentage' ? '%' : ''} off` : ''}!`
+    : ''
   return [
     `✨ ${customerName}, you've got great taste!`,
     `Your picks from ${storeName} are absolutely beautiful — each one chosen with care. We've saved them all for you. 💫`,
     ``,
     `${productList} — ${formattedTotal}`,
+    discountLine ? `` : null,
+    discountLine ? discountLine : null,
     ``,
     `Complete checkout: ${cartUrl}`,
     `Reply STOP to unsubscribe`,
-  ].join('\n')
+  ].filter(Boolean).join('\n')
 }
 
-function fallbackWhatsAppText(customerName: string, storeName: string, itemsBlock: string, formattedTotal: string, cartUrl: string): string {
-  return [
+function fallbackWhatsAppText(customerName: string, storeName: string, itemsBlock: string, formattedTotal: string, cartUrl: string, discountCode?: string, discountValue?: number, discountType?: string): string {
+  const discountLine = discountCode
+    ? `Use code *${discountCode}*${discountValue ? ` for ${discountValue}${discountType === 'percentage' ? '%' : ''} off` : ''}! 🎉`
+    : ''
+  const lines = [
     `Hey ${customerName}! ✨`,
     ``,
     `You've got incredible taste! The pieces you picked from ${storeName} are absolutely beautiful — each one thoughtfully chosen. We've saved your cart so you don't miss out. 💫`,
@@ -420,9 +437,12 @@ function fallbackWhatsAppText(customerName: string, storeName: string, itemsBloc
     itemsBlock,
     ``,
     `*Total: ${formattedTotal}*`,
+    discountLine ? `` : null,
+    discountLine ? discountLine : null,
     ``,
     `⏳ The best finds always go fast. Complete your purchase:`,
     `${cartUrl}`,
     `Reply STOP to unsubscribe from all messages`,
-  ].join('\n')
+  ]
+  return lines.filter(Boolean).join('\n')
 }

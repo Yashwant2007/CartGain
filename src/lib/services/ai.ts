@@ -33,6 +33,9 @@ export type CartContext = {
   total: number
   currencySymbol: string
   cartUrl: string
+  discountCode?: string
+  discountValue?: number
+  discountType?: string
 }
 
 type GeneratedContent = {
@@ -60,7 +63,8 @@ export async function generateEmailContent(ctx: CartContext): Promise<GeneratedC
 
 Return valid JSON with these keys:
 - "subject": compelling subject line with emoji (max 60 chars)
-- "body": concise HTML inside a <div> with inline styles. Keep it tight — just 2-3 short sentences. Mention 1-2 products by name. Use 1-2 emojis. Warm tone, gentle urgency. End with a one-liner CTA. Do NOT include the cart URL — it will be added separately.`,
+- "body": concise HTML inside a <div> with inline styles. Keep it tight — just 2-3 short sentences. Mention 1-2 products by name. Use 1-2 emojis. Warm tone, gentle urgency. End with a one-liner CTA. Do NOT include the cart URL — it will be added separately.
+${ctx.discountCode ? `\nINCLUDE this discount offer prominently: code ${ctx.discountCode}${ctx.discountValue ? ` for ${ctx.discountValue}${ctx.discountType === 'percentage' ? '%' : ''} off` : ''}. Make it the main reason to return.` : ''}`,
         },
         {
           role: 'user',
@@ -96,7 +100,8 @@ export async function generateSMSContent(ctx: CartContext): Promise<GeneratedCon
       messages: [
         {
           role: 'system',
-          content: `Write a short SMS (max 140 chars) for abandoned cart recovery. Warm and urgent. 1-2 lines. Include one emoji. Do NOT include the URL — it will be appended. Return ONLY the message text, no JSON, no quotes.`,
+          content: `Write a short SMS (max 140 chars) for abandoned cart recovery. Warm and urgent. 1-2 lines. Include one emoji. Do NOT include the URL — it will be appended. Return ONLY the message text, no JSON, no quotes.
+${ctx.discountCode ? `\nINCLUDE this discount offer: code ${ctx.discountCode}${ctx.discountValue ? ` for ${ctx.discountValue}${ctx.discountType === 'percentage' ? '%' : ''} off` : ''}. Keep it short!` : ''}`,
         },
         {
           role: 'user',
@@ -130,7 +135,8 @@ export async function generateWhatsAppContent(ctx: CartContext): Promise<Generat
       messages: [
         {
           role: 'system',
-          content: `Write a warm WhatsApp message for abandoned cart recovery. Keep it tight — just 3-5 short lines. Mention 1-2 products by name. Use 1-2 emojis. Friendly, conversational tone. Do NOT include the URL — it will be appended separately. Return ONLY the message text, no JSON, no quotes.`,
+          content: `Write a warm WhatsApp message for abandoned cart recovery. Keep it tight — just 3-5 short lines. Mention 1-2 products by name. Use 1-2 emojis. Friendly, conversational tone. Do NOT include the URL — it will be appended separately. Return ONLY the message text, no JSON, no quotes.
+${ctx.discountCode ? `\nINCLUDE this discount offer in the message: code ${ctx.discountCode}${ctx.discountValue ? ` for ${ctx.discountValue}${ctx.discountType === 'percentage' ? '%' : ''} off` : ''}.` : ''}`,
         },
         {
           role: 'user',
@@ -634,6 +640,11 @@ export function simulateRecovery(
 } {
   let recRate = currentMetrics.currentRecoveryRate
   const factors: string[] = []
+
+  const hasImprovements = improvements.addChannel || improvements.enableAI || improvements.addDiscount || improvements.improveTiming || improvements.addFollowUp
+  if (hasImprovements && recRate < 5) {
+    recRate = 5
+  }
 
   if (improvements.addChannel) { recRate *= 1.3; factors.push('+30% for multi-channel') }
   if (improvements.enableAI) { recRate *= 1.25; factors.push('+25% for AI content') }

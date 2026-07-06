@@ -49,6 +49,7 @@ export default function IntegrationsPage() {
   const [shopifyDomain, setShopifyDomain] = useState('')
   const [shopifyConnecting, setShopifyConnecting] = useState(false)
   const [shopifyInputError, setShopifyInputError] = useState<string | null>(null)
+  const [shopifyHealth, setShopifyHealth] = useState<{ connected: boolean; error?: string; reauthRequired?: boolean; shopName?: string } | null>(null)
   const popupRef = useRef<Window | null>(null)
 
   const loadStatus = useCallback(async () => {
@@ -97,6 +98,17 @@ export default function IntegrationsPage() {
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [loadStatus])
+
+  // Check Shopify connection health when store is connected via Shopify
+  useEffect(() => {
+    const shopifyIntegration = status?.integrations.find(i => i.id === 'shopify')
+    if (!shopifyIntegration?.connected) return
+    setShopifyHealth(null)
+    fetch('/api/shopify/health')
+      .then(r => r.json())
+      .then(data => setShopifyHealth(data))
+      .catch(() => {})
+  }, [status])
 
   // Auto-trigger Shopify OAuth if the merchant arrived from a Shopify install flow
   useEffect(() => {
@@ -249,6 +261,21 @@ export default function IntegrationsPage() {
         }`}>
           {actionMsg.text}
           <button onClick={() => setActionMsg(null)} className="float-right ml-4 opacity-60 hover:opacity-100">&times;</button>
+        </div>
+      )}
+
+      {shopifyHealth && !shopifyHealth.connected && shopifyHealth.error && (
+        <div className="bg-amber-600/20 border border-amber-500/40 rounded-xl p-4 flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-300">Shopify connection issue</p>
+            <p className="text-xs text-amber-300/70 mt-1">{shopifyHealth.error}</p>
+          </div>
+          <button
+            onClick={() => { setShopifyDomain(''); setShopifyInputError(null); setShopifyModal(true) }}
+            className="shrink-0 px-4 py-1.5 text-xs font-medium bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 transition-all"
+          >
+            Reconnect
+          </button>
         </div>
       )}
 

@@ -103,7 +103,16 @@ function RevenueCoach({ storeId }: { storeId: string | null }) {
     try {
       const res = await fetch(`/api/ai/coach?storeId=${storeId}`)
       const data = await res.json()
-      setSuggestions(data.suggestions || [])
+      const fresh = data.suggestions || []
+      const saved = (data.existing || []).map((s: any) => ({
+        title: s.title,
+        description: s.description,
+        impact: s.impact || 'medium',
+        type: s.type || 'campaign',
+        metric: s.metrics || null,
+        _saved: true,
+      }))
+      setSuggestions([...saved, ...fresh])
     } catch {} finally { setLoading(false) }
   }, [storeId])
 
@@ -305,13 +314,13 @@ function Benchmarks({ storeId }: { storeId: string | null }) {
               <div className="flex-1">
                 <p className="text-sm font-medium text-white">{row.label}</p>
                 <div className="flex items-center gap-1 mt-1">
-                  <span className="text-xs text-blue-300/50">Avg: {avgVal}{row.suffix}</span>
+                  <span className="text-xs text-blue-300/50">Avg: {row.prefix || ''}{avgVal}{row.suffix}</span>
                   <span className="text-xs text-blue-300/30 mx-1">|</span>
-                  <span className="text-xs text-emerald-400/60">Top: {topVal}{row.suffix}</span>
+                  <span className="text-xs text-emerald-400/60">Top: {row.prefix || ''}{topVal}{row.suffix}</span>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-lg font-bold text-white">{yourVal}{row.suffix}</p>
+                  <p className="text-lg font-bold text-white">{row.prefix || ''}{yourVal}{row.suffix}</p>
                 <p className={`text-xs flex items-center gap-1 ${vsAvg === 'above' ? 'text-emerald-400' : vsAvg === 'below' ? 'text-red-400' : 'text-blue-300/50'}`}>
                   {vsAvg === 'above' ? <ArrowUp className="w-3 h-3" /> : vsAvg === 'below' ? <ArrowDown className="w-3 h-3" /> : null}
                   {vsAvg === 'above' ? 'Above average' : vsAvg === 'below' ? 'Below average' : 'At average'}

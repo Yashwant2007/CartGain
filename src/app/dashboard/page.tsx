@@ -71,6 +71,7 @@ export default function DashboardPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loadingData, setLoadingData] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [shopifyHealth, setShopifyHealth] = useState<{ connected: boolean; error?: string; reauthRequired?: boolean } | null>(null)
 
   useEffect(() => {
     if (storeError && storeError.includes('Sign in')) {
@@ -88,21 +89,21 @@ export default function DashboardPage() {
         setLoadingData(true)
         setLoadError(null)
 
-        const [overviewResponse, cartsResponse, campaignsResponse] = await Promise.all([
+        const [overviewResponse, cartsResponse, campaignsResponse, healthResponse] = await Promise.all([
           fetch(`/api/analytics/overview?storeId=${storeId}`),
           fetch(`/api/carts?storeId=${storeId}`),
           fetch(`/api/campaigns?storeId=${storeId}`),
+          fetch('/api/shopify/health'),
         ])
 
         if (!overviewResponse.ok || !cartsResponse.ok || !campaignsResponse.ok) {
           throw new Error('Failed to load dashboard data')
         }
 
-        const [overviewData, cartsData, campaignsData] = await Promise.all([
-          overviewResponse.json(),
-          cartsResponse.json(),
-          campaignsResponse.json(),
-        ])
+        const overviewData = await overviewResponse.json()
+        const cartsData = await cartsResponse.json()
+        const campaignsData = await campaignsResponse.json()
+        const healthData = healthResponse.ok ? await healthResponse.json() : null
 
         if (!cancelled) {
           setOverview(overviewData.current?.overview || null)
@@ -111,6 +112,7 @@ export default function DashboardPage() {
           setChannelStats(overviewData.current?.channelStats || [])
           setCarts(cartsData.carts || [])
           setCampaigns(campaignsData.campaigns || [])
+          setShopifyHealth(healthData)
         }
       } catch (error) {
         if (!cancelled) {
@@ -204,6 +206,18 @@ export default function DashboardPage() {
         <div className="bg-slate-800/50 border border-red-700/30 rounded-xl p-6 text-sm text-red-300/80">{error}</div>
       )}
 
+      {shopifyHealth && !shopifyHealth.connected && shopifyHealth.error && (
+        <div className="bg-amber-600/20 border border-amber-500/40 rounded-xl p-4 flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-300">Shopify connection issue</p>
+            <p className="text-xs text-amber-300/70 mt-1">{shopifyHealth.error}</p>
+          </div>
+          <a href="/dashboard/integrations" className="shrink-0 px-4 py-1.5 text-xs font-medium bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 transition-all no-underline">
+            Reconnect
+          </a>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
           <h3 className="text-lg font-semibold text-white mb-4">Revenue Recovered (Last 30 Days)</h3>
@@ -274,7 +288,7 @@ export default function DashboardPage() {
         <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-white">Recent Carts</h3>
-            <LinkButton href="/dashboard/campaigns">View All</LinkButton>
+            <LinkButton href="/dashboard/carts">View All</LinkButton>
           </div>
           {isLoading ? (
             <div className="space-y-3">

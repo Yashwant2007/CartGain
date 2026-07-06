@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     })
     const avgCartValue = allCarts.length > 0
       ? allCarts.reduce((s, c) => s + c.totalValue, 0) / allCarts.length
-      : 0
+      : 1500
 
     const result = simulateRecovery({
       monthlyAbandonedCarts: Math.max(abandonedCount, 100),
