@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
-import { generateRevenueCoachSuggestions } from '@/lib/services/ai'
+import { generateRevenueCoachSuggestions, generateCoachHeuristic } from '@/lib/services/ai'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,24 +27,32 @@ export async function GET(request: NextRequest) {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000)
     const now = new Date()
 
-    const abandoned30d = await prisma.cart.count({
-      where: { storeId, abandonedAt: { gte: thirtyDaysAgo } }
-    })
-    const recovered30d = await prisma.recoveredCart.count({
-      where: { storeId, recoveredAt: { gte: thirtyDaysAgo } }
-    })
-    const revenue30d = await prisma.recoveredCart.aggregate({
-      where: { storeId, recoveredAt: { gte: thirtyDaysAgo } },
-      _sum: { netRevenue: true }
-    })
-    const campaigns = await prisma.campaign.findMany({ where: { storeId } })
+    const [
+      abandoned30d,
+      recovered30d,
+      revenue30d,
+      campaigns,
+      firstMessage,
+    ] = await prisma.$transaction([
+      prisma.cart.count({
+        where: { storeId, abandonedAt: { gte: thirtyDaysAgo } }
+      }),
+      prisma.recoveredCart.count({
+        where: { storeId, recoveredAt: { gte: thirtyDaysAgo } }
+      }),
+      prisma.recoveredCart.aggregate({
+        where: { storeId, recoveredAt: { gte: thirtyDaysAgo } },
+        _sum: { netRevenue: true }
+      }),
+      prisma.campaign.findMany({ where: { storeId } }),
+      prisma.message.findFirst({
+        where: { cart: { storeId }, status: 'sent' },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ])
+
     const activeCampaigns = campaigns.filter(c => c.isActive)
     const channelsUsed = Array.from(new Set(campaigns.flatMap(c => c.channels)))
-
-    const firstMessage = await prisma.message.findFirst({
-      where: { cart: { storeId }, status: 'sent' },
-      orderBy: { createdAt: 'asc' },
-    })
 
     const avgTime = firstMessage?.createdAt
       ? (Date.now() - firstMessage.createdAt.getTime()) / 60000
@@ -65,7 +73,7 @@ export async function GET(request: NextRequest) {
     const existingSuggestions = await prisma.aiSuggestion.findMany({
       where: { storeId, type: 'revenue_coach', createdAt: { gte: thirtyDaysAgo } },
       orderBy: { createdAt: 'desc' },
-    })
+    }).catch(() => [])
 
     return NextResponse.json({
       suggestions: suggestions.suggestions,
@@ -73,7 +81,17 @@ export async function GET(request: NextRequest) {
     }, { status: 200 })
   } catch (error) {
     console.error('Revenue coach error:', error)
-    return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })
+    // Return heuristic suggestions on any failure so the dashboard doesn't break
+    const heuristic = generateCoachHeuristic({
+      recoveryRate: 0, cartsAbandoned30d: 0, cartsRecovered30d: 0,
+      revenueRecovered30d: 0, activeCampaigns: 0, channelsUsed: [],
+      aiOptimized: false, hasDiscountCampaigns: false, avgRecoveryTime: 0,
+    })
+    return NextResponse.json({
+      suggestions: heuristic.suggestions,
+      existing: [],
+      _fallback: true,
+    }, { status: 200 })
   }
 }
 

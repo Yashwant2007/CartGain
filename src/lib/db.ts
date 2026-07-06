@@ -25,8 +25,13 @@ function createPrismaClient(): PrismaClient {
     console.warn('TEST_DATABASE_URL is not set. Test and production data are not fully separated yet.')
   }
 
-  const separator = databaseUrl.includes('?') ? '&' : '?'
-  const dbUrl = `${databaseUrl}${separator}connection_limit=1${databaseUrl.includes('pgbouncer') ? '' : '&pgbouncer=true'}`
+  // Use pooled URL for serverless (PgBouncer) — do NOT force connection_limit=1
+  // as that starves concurrent queries. PgBouncer's default_pool_size governs the
+  // actual cap. If the URL already has ?pgbouncer=true from the env, keep it;
+  // otherwise append it for transaction-mode pooling.
+  const dbUrl = databaseUrl.includes('pgbouncer')
+    ? databaseUrl
+    : `${databaseUrl}${databaseUrl.includes('?') ? '&' : '?'}pgbouncer=true`
 
   return new PrismaClient({
     datasources: {

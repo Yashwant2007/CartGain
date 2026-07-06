@@ -430,7 +430,7 @@ Be specific and data-driven. Reference their actual numbers.`,
   }
 }
 
-function generateCoachHeuristic(storeMetrics: {
+export function generateCoachHeuristic(storeMetrics: {
   recoveryRate: number; cartsAbandoned30d: number; cartsRecovered30d: number;
   revenueRecovered30d: number; activeCampaigns: number; channelsUsed: string[];
   aiOptimized: boolean; hasDiscountCampaigns: boolean; avgRecoveryTime: number
@@ -519,7 +519,7 @@ Focus on actionable insights. Use emojis in titles.`,
   }
 }
 
-function generateReportHeuristic(storeMetrics: any): { title: string; summary: string; insights: any[]; recommendations: any[] } {
+export function generateReportHeuristic(storeMetrics: any): { title: string; summary: string; insights: any[]; recommendations: any[] } {
   const rateChange = storeMetrics.prevRecoveryRate ? ((storeMetrics.recoveryRate - storeMetrics.prevRecoveryRate) / storeMetrics.prevRecoveryRate * 100).toFixed(1) : null
   const revChange = storeMetrics.prevRevenueRecovered ? ((storeMetrics.revenueRecovered - storeMetrics.prevRevenueRecovered) / storeMetrics.prevRevenueRecovered * 100).toFixed(1) : null
 

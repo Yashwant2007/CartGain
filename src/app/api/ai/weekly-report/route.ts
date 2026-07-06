@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
-import { generateWeeklyReport } from '@/lib/services/ai'
+import { generateWeeklyReport, generateReportHeuristic } from '@/lib/services/ai'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,50 +44,54 @@ export async function GET(request: NextRequest) {
     const weekAgo = new Date(now.getTime() - 7 * 86400000)
     const twoWeeksAgo = new Date(now.getTime() - 14 * 86400000)
 
-    const cartsAbandoned = await prisma.cart.count({
-      where: { storeId, abandonedAt: { gte: weekAgo } }
-    })
-    const cartsRecovered = await prisma.recoveredCart.count({
-      where: { storeId, recoveredAt: { gte: weekAgo } }
-    })
-    const revenue = await prisma.recoveredCart.aggregate({
-      where: { storeId, recoveredAt: { gte: weekAgo } },
-      _sum: { netRevenue: true }
-    })
-    const messagesSent = await prisma.message.count({
-      where: { cart: { storeId }, sentAt: { gte: weekAgo } }
-    })
+    const [
+      cartsAbandoned,
+      cartsRecovered,
+      revenue,
+      messagesSent,
+      prevAbandoned,
+      prevRecovered,
+      prevRevenue,
+    ] = await prisma.$transaction([
+      prisma.cart.count({ where: { storeId, abandonedAt: { gte: weekAgo } } }),
+      prisma.recoveredCart.count({ where: { storeId, recoveredAt: { gte: weekAgo } } }),
+      prisma.recoveredCart.aggregate({
+        where: { storeId, recoveredAt: { gte: weekAgo } },
+        _sum: { netRevenue: true },
+      }),
+      prisma.message.count({ where: { cart: { storeId }, sentAt: { gte: weekAgo } } }),
+      prisma.cart.count({ where: { storeId, abandonedAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+      prisma.recoveredCart.count({ where: { storeId, recoveredAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+      prisma.recoveredCart.aggregate({
+        where: { storeId, recoveredAt: { gte: twoWeeksAgo, lt: weekAgo } },
+        _sum: { netRevenue: true },
+      }),
+    ])
 
-    const prevAbandoned = await prisma.cart.count({
-      where: { storeId, abandonedAt: { gte: twoWeeksAgo, lt: weekAgo } }
-    })
-    const prevRecovered = await prisma.recoveredCart.count({
-      where: { storeId, recoveredAt: { gte: twoWeeksAgo, lt: weekAgo } }
-    })
-    const prevRevenue = await prisma.recoveredCart.aggregate({
-      where: { storeId, recoveredAt: { gte: twoWeeksAgo, lt: weekAgo } },
-      _sum: { netRevenue: true }
-    })
+    let channelBreakdown: Array<{ channel: string; sent: number; recovered: number; revenue: number }> = []
+    try {
+      channelBreakdown = await Promise.all(
+        ['email', 'sms', 'whatsapp'].map(async (channel) => {
+          const [sent, recovered, chRevenue] = await prisma.$transaction([
+            prisma.message.count({ where: { cart: { storeId }, channel, sentAt: { gte: weekAgo } } }),
+            prisma.recoveredCart.count({ where: { storeId, channel, recoveredAt: { gte: weekAgo } } }),
+            prisma.recoveredCart.aggregate({
+              where: { storeId, channel, recoveredAt: { gte: weekAgo } },
+              _sum: { netRevenue: true },
+            }),
+          ])
+          return { channel, sent, recovered, revenue: chRevenue._sum.netRevenue || 0 }
+        })
+      )
+    } catch (e) {
+      console.warn('Weekly report channel breakdown query failed, using defaults:', e)
+    }
 
-    const channelBreakdown = await Promise.all(
-      ['email', 'sms', 'whatsapp'].map(async (channel) => {
-        const sent = await prisma.message.count({
-          where: { cart: { storeId }, channel, sentAt: { gte: weekAgo } }
-        })
-        const recovered = await prisma.recoveredCart.count({
-          where: { storeId, channel, recoveredAt: { gte: weekAgo } }
-        })
-        const chRevenue = await prisma.recoveredCart.aggregate({
-          where: { storeId, channel, recoveredAt: { gte: weekAgo } },
-          _sum: { netRevenue: true }
-        })
-        return { channel, sent, recovered, revenue: chRevenue._sum.netRevenue || 0 }
-      })
-    )
-
-    const bestChannel = channelBreakdown.reduce((best, curr) =>
-      curr.revenue > best.revenue ? curr : best, channelBreakdown[0] || { channel: 'email', revenue: 0 }
-    )
+    const bestChannel = channelBreakdown.length > 0
+      ? channelBreakdown.reduce((best, curr) =>
+          curr.revenue > best.revenue ? curr : best, channelBreakdown[0]
+        )
+      : { channel: 'email', revenue: 0 }
 
     const metrics = {
       storeName: store.name,
@@ -119,11 +123,17 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      report: report || { title: 'Weekly Report', summary: 'Unable to generate AI report. Using heuristic analysis.', insights: [], recommendations: [] },
+      report: report || generateReportHeuristic(metrics),
       cached: false,
     }, { status: 200 })
   } catch (error) {
     console.error('Weekly report error:', error)
-    return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })
+    // Return heuristic report so dashboard doesn't break
+    const fallback = generateReportHeuristic({
+      storeName: 'Store', periodStart: '', periodEnd: '',
+      cartsAbandoned: 0, cartsRecovered: 0, recoveryRate: 0,
+      revenueRecovered: 0, messagesSent: 0, channelBreakdown: [],
+    })
+    return NextResponse.json({ report: fallback, cached: false, _fallback: true }, { status: 200 })
   }
 }

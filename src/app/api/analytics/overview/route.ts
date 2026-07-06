@@ -11,16 +11,7 @@ const WHATSAPP_RATE = 0.86
 const EMAIL_RATE = 0
 
 async function computePeriodData(storeId: string, userId: string, startDate: Date, endDate: Date) {
-  const [
-    cartsAbandoned,
-    cartsRecovered,
-    revenueRecovered,
-    messagesSent,
-    analyticsRows,
-    periodCarts,
-    channelMessages,
-    channelRevenue,
-  ] = await Promise.all([
+  const results = await prisma.$transaction([
     prisma.cart.count({
       where: { storeId, abandonedAt: { gte: startDate, lt: endDate } },
     }),
@@ -52,6 +43,17 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
       where: { storeId, recoveredAt: { gte: startDate, lt: endDate } },
     }),
   ])
+
+  const [
+    cartsAbandoned,
+    cartsRecovered,
+    revenueRecovered,
+    messagesSent,
+    analyticsRows,
+    periodCarts,
+    channelMessages,
+    channelRevenue,
+  ] = results
 
   const totals = analyticsRows.reduce(
     (acc: { messagesDelivered: number; messagesClicked: number }, row: Analytics) => {
