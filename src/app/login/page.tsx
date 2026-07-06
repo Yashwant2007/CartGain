@@ -36,7 +36,7 @@ function LoginContent() {
     const err = searchParams.get('error')
     if (err) {
       const messages: Record<string, string> = {
-        google: 'Google sign-in failed. Make sure https://cart-gain.com/api/auth/callback/google is listed in your Google Cloud Console → Authorized redirect URIs.',
+        google: `Google sign-in failed. Make sure ${typeof window !== 'undefined' ? window.location.origin : 'https://cart-gain.com'}/api/auth/callback/google is listed in your Google Cloud Console → Authorized redirect URIs.`,
         OAuthSignin: 'Could not start Google sign-in. Please try again.',
         OAuthCallback: 'Google returned an error. Check that GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set in Vercel.',
         OAuthAccountNotLinked: 'This email is already registered with a password. Sign in with email & password instead.',

@@ -5,8 +5,6 @@ import { verifyShopifyWebhook } from '@/lib/shopify'
 import { checkSimpleRateLimit as checkRateLimit } from '@/lib/rate-limit'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS } from '@/lib/payment'
 import { sendAlertOnError } from '@/lib/alerter'
-import { processAbandonedCarts } from '@/lib/jobs/processAbandonedCarts'
-
 export const dynamic = 'force-dynamic'
 
 // Track processed order IDs to handle Shopify retries
@@ -66,12 +64,6 @@ export async function POST(request: NextRequest) {
 
     const elapsed = Date.now() - startTime
     console.log(`Webhook [${topic}] from ${shopDomain} — done in ${elapsed}ms`)
-
-    // Fire-and-forget: trigger abandoned cart processing in the background
-    // so carts don't sit until the next cron tick.
-    processAbandonedCarts(25).catch(err =>
-      console.error('Background cart processing failed:', err)
-    )
 
     return NextResponse.json({ received: true, elapsed })
   } catch (error) {

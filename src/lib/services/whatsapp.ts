@@ -1,9 +1,15 @@
+export interface WhatsAppTemplateParams {
+  header?: { type: 'image'; imageUrl: string } | { type: 'text'; text: string }
+  body?: string[]
+  buttons?: Array<{ type: 'url' | 'quick_reply'; text: string; url?: string }>
+}
+
 export interface WhatsAppMessageOptions {
   to: string
-  content: string
+  content?: string
   mediaUrl?: string
   templateName?: string
-  templateParams?: string[]
+  templateParams?: WhatsAppTemplateParams
 }
 
 export async function sendWhatsAppMessage({
@@ -35,27 +41,55 @@ export async function sendWhatsAppMessage({
 
     if (templateName) {
       body.type = 'template'
+      const components: any[] = []
+
+      if (templateParams?.header) {
+        const headerParam: any = { type: 'header' }
+        if (templateParams.header.type === 'image') {
+          headerParam.parameters = [
+            { type: 'image', image: { link: templateParams.header.imageUrl } },
+          ]
+        } else {
+          headerParam.parameters = [
+            { type: 'text', text: templateParams.header.text },
+          ]
+        }
+        components.push(headerParam)
+      }
+
+      if (templateParams?.body?.length) {
+        components.push({
+          type: 'body',
+          parameters: templateParams.body.map((param) => ({
+            type: 'text',
+            text: param,
+          })),
+        })
+      }
+
+      if (templateParams?.buttons?.length) {
+        components.push({
+          type: 'button',
+          sub_type: 'quick_reply',
+          index: 0,
+          parameters: templateParams.buttons.map((btn) => ({
+            type: btn.type === 'url' ? 'url' : 'payload',
+            text: btn.url || btn.text,
+          })),
+        })
+      }
+
       body.template = {
         name: templateName,
         language: { code: 'en' },
-        components: templateParams ? [
-          {
-            type: 'body',
-            parameters: templateParams.map((param) => ({
-              type: 'text',
-              text: param,
-            })),
-          },
-        ] : [],
+        components,
       }
+    } else if (mediaUrl) {
+      body.type = 'image'
+      body.image = { link: mediaUrl, caption: content || '' }
     } else {
       body.type = 'text'
-      body.text = { body: content }
-    }
-
-    if (mediaUrl) {
-      body.type = 'image'
-      body.image = { link: mediaUrl, caption: content }
+      body.text = { body: content || '' }
     }
 
     const response = await fetch(
@@ -85,34 +119,67 @@ export async function sendWhatsAppMessage({
   }
 }
 
-// WhatsApp templates for cart recovery
+// WhatsApp template configs — these must match templates created in Meta Business Manager
 export const WhatsAppTemplates = {
   abandoned_cart: {
     name: 'abandoned_cart_reminder',
-    generateParams: (customerName: string, productName: string, cartUrl: string) => [
-      customerName || 'there',
-      productName,
-      cartUrl,
-    ],
+    generateParams: (
+      customerName: string,
+      productName: string,
+      productImage: string | undefined,
+      cartUrl: string,
+    ): WhatsAppTemplateParams => ({
+      header: productImage
+        ? { type: 'image', imageUrl: productImage }
+        : { type: 'text', text: `Hey ${customerName || 'there'}!` },
+      body: [
+        customerName || 'there',
+        productName || 'your items',
+        cartUrl,
+      ],
+    }),
   },
 
   discount_offer: {
     name: 'cart_discount_offer',
-    generateParams: (customerName: string, discountCode: string, discountPercent: number, cartUrl: string) => [
-      customerName || 'there',
-      discountCode,
-      discountPercent.toString(),
-      cartUrl,
-    ],
+    generateParams: (
+      customerName: string,
+      productName: string,
+      discountCode: string,
+      discountPercent: number,
+      productImage: string | undefined,
+      cartUrl: string,
+    ): WhatsAppTemplateParams => ({
+      header: productImage
+        ? { type: 'image', imageUrl: productImage }
+        : { type: 'text', text: `🎉 ${discountPercent}% Off Just for You!` },
+      body: [
+        customerName || 'there',
+        productName || 'your items',
+        discountCode,
+        discountPercent.toString(),
+        cartUrl,
+      ],
+    }),
   },
 
   back_in_stock: {
     name: 'product_back_in_stock',
-    generateParams: (customerName: string, productName: string, cartUrl: string) => [
-      customerName,
-      productName,
-      cartUrl,
-    ],
+    generateParams: (
+      customerName: string,
+      productName: string,
+      productImage: string | undefined,
+      cartUrl: string,
+    ): WhatsAppTemplateParams => ({
+      header: productImage
+        ? { type: 'image', imageUrl: productImage }
+        : { type: 'text', text: `Back in Stock!` },
+      body: [
+        customerName || 'there',
+        productName || 'your item',
+        cartUrl,
+      ],
+    }),
   },
 }
 
@@ -131,7 +198,6 @@ export function formatWhatsAppPhone(phone: string): string {
 
 export function isValidWhatsAppPhone(phone: string): boolean {
   const sanitized = formatWhatsAppPhone(phone)
-  // WhatsApp supports numbers from 10-15 digits after country code
   const match = sanitized.match(/^\+(\d{1,3})(\d{7,15})$/)
   return match !== null
 }

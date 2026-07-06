@@ -2,7 +2,7 @@ import prisma from '@/lib/db'
 import { logDataAccess } from '@/lib/data-protection'
 import { sendEmail, EmailTemplates } from '@/lib/services/email'
 import { sendSMS, sanitizePhoneNumber } from '@/lib/services/sms'
-import { sendWhatsAppMessage } from '@/lib/services/whatsapp'
+import { sendWhatsAppMessage, WhatsAppTemplates } from '@/lib/services/whatsapp'
 import { generateEmailContent, generateSMSContent, generateWhatsAppContent } from '@/lib/services/ai'
 import type { CartContext } from '@/lib/services/ai'
 import { acquireLock, releaseLock } from '@/lib/job-lock'
@@ -151,25 +151,24 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
             const requiredDelayMs = sendDelayMs + step * followUpDelayMs
             if (Date.now() - cart.abandonedAt.getTime() < requiredDelayMs) continue
 
-            // Pick the best available channel for this cart — try the scheduled
-            // channel first, then fall back to any channel that has the required
-            // contact info and hasn't been used yet.  This prevents a cart from
-            // getting stuck forever because whatsapp is #1 but phone is missing.
+            // Compute eligible channels in priority order (try scheduled channel
+            // first, then remaining). Each cart tries channels in sequence until
+            // one succeeds — if WhatsApp fails (no approved template), we fall
+            // through to email or SMS instead of giving up.
             const scheduledChannel = activeChannels[step % activeChannels.length]
             const channelOrder = [
               scheduledChannel,
               ...activeChannels.filter(c => c !== scheduledChannel),
             ]
 
-            const channel = channelOrder.find(c => {
+            const availableChannels = channelOrder.filter(c => {
               if (cart.messages.some(m => m.channel === c)) return false
               if (c === 'email') return Boolean(cart.customerEmail)
               if (c === 'sms' || c === 'whatsapp') return Boolean(cart.customerPhone)
               return false
             })
 
-            // No usable channel for this cart right now — skip without marking as processed
-            if (!channel) continue
+            if (availableChannels.length === 0) continue
 
             const customerEmail = cart.customerEmail?.toLowerCase().trim()
             const customerPhone = cart.customerPhone?.replace(/\D/g, '')
@@ -225,7 +224,7 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
               actorId: campaign.userId,
               metadata: {
                 storeId: store.id,
-                channel,
+                channels: availableChannels,
                 cartHasEmail: Boolean(cart.customerEmail),
                 cartHasPhone: Boolean(cart.customerPhone),
               },
@@ -234,10 +233,6 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
             // Click-tracking redirect: stamps clickedAt for this channel, then forwards
             // to the cart page. Powers provable per-channel attribution.
             const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
-            const cartUrl = `${appUrl}/r/${cart.id}?c=${channel}`
-
-            let sendSuccess = false
-            let error = ''
 
             const cartCtx: CartContext = {
               customerName,
@@ -245,104 +240,138 @@ export async function processAbandonedCarts(limit = 25): Promise<ProcessResult> 
               storeName: store.name,
               total: cart.totalValue,
               currencySymbol,
-              cartUrl,
+              cartUrl: '', // set per-channel below
             }
 
-            try {
-              switch (channel) {
-                case 'email': {
-                  let aiSubject: string | undefined
-                  let aiBody: string | undefined
-                  if (campaign.aiOptimized) {
-                    const ai = await generateEmailContent(cartCtx)
-                    if (ai) {
-                      aiSubject = ai.subject
-                      aiBody = ai.body
+            // Try each available channel in priority order; break on first success
+            let globalSendSuccess = false
+            for (const ch of availableChannels) {
+              const cartUrl = `${appUrl}/r/${cart.id}?c=${ch}`
+              cartCtx.cartUrl = cartUrl
+
+              let sendSuccess = false
+              let error = ''
+
+              try {
+                switch (ch) {
+                  case 'email': {
+                    let aiSubject: string | undefined
+                    let aiBody: string | undefined
+                    if (campaign.aiOptimized) {
+                      const ai = await generateEmailContent(cartCtx)
+                      if (ai) {
+                        aiSubject = ai.subject
+                        aiBody = ai.body
+                      }
                     }
+                    const emailHtml = EmailTemplates.abandoned(customerName, cartItems, cart.totalValue, cartUrl, store.name, currencySymbol, aiBody)
+                    const emailResult = await sendEmail({
+                      to: cart.customerEmail!,
+                      subject: aiSubject || `🛍️ ${customerName}, your ${store.name} cart is waiting!`,
+                      html: emailHtml,
+                      text: aiBody
+                        ? `🛍️ ${customerName}, complete your order: ${cartUrl}`
+                        : `🛍️ ${customerName}, your cart from ${store.name} is still warm! ${formatProductList(cartItems)} — Total: ${formattedTotal}. Complete your order: ${cartUrl}`,
+                    })
+                    sendSuccess = emailResult.success
+                    if (!sendSuccess) error = emailResult.error || 'Unknown error'
+                    break
                   }
-                  const emailHtml = EmailTemplates.abandoned(customerName, cartItems, cart.totalValue, cartUrl, store.name, currencySymbol, aiBody)
-                  const emailResult = await sendEmail({
-                    to: cart.customerEmail!,
-                    subject: aiSubject || `🛍️ ${customerName}, your ${store.name} cart is waiting!`,
-                    html: emailHtml,
-                    text: aiBody
-                      ? `🛍️ ${customerName}, complete your order: ${cartUrl}`
-                      : `🛍️ ${customerName}, your cart from ${store.name} is still warm! ${formatProductList(cartItems)} — Total: ${formattedTotal}. Complete your order: ${cartUrl}`,
-                  })
-                  sendSuccess = emailResult.success
-                  if (!sendSuccess) error = emailResult.error || 'Unknown error'
-                  break
-                }
 
-                case 'sms': {
-                  let smsBody: string
-                  if (campaign.aiOptimized) {
-                    const ai = await generateSMSContent(cartCtx)
-                    smsBody = ai ? `${ai.body}\n\n${cartUrl}` : fallbackSMSText(customerName, store.name, formatProductList(cartItems), formattedTotal, cartUrl)
-                  } else {
-                    smsBody = fallbackSMSText(customerName, store.name, formatProductList(cartItems), formattedTotal, cartUrl)
+                  case 'sms': {
+                    let smsBody: string
+                    if (campaign.aiOptimized) {
+                      const ai = await generateSMSContent(cartCtx)
+                      smsBody = ai ? `${ai.body}\n\n${cartUrl}` : fallbackSMSText(customerName, store.name, formatProductList(cartItems), formattedTotal, cartUrl)
+                    } else {
+                      smsBody = fallbackSMSText(customerName, store.name, formatProductList(cartItems), formattedTotal, cartUrl)
+                    }
+                    const phoneNumber = sanitizePhoneNumber(cart.customerPhone!)
+                    const smsResult = await sendSMS({ to: phoneNumber, body: smsBody })
+                    sendSuccess = smsResult.success
+                    if (!sendSuccess) error = smsResult.error || 'Unknown error'
+                    break
                   }
-                  const phoneNumber = sanitizePhoneNumber(cart.customerPhone!)
-                  const smsResult = await sendSMS({ to: phoneNumber, body: smsBody })
-                  sendSuccess = smsResult.success
-                  if (!sendSuccess) error = smsResult.error || 'Unknown error'
-                  break
-                }
 
-                case 'whatsapp': {
-                  const itemLines = cartItems.slice(0, 4).map((i: any) =>
-                    `• ${i.name} × ${i.quantity || 1} — ${currencySymbol}${Number(i.price).toFixed(2)}`
-                  ).join('\n')
-                  const restCount = cartItems.length - 4
-                  const itemsBlock = restCount > 0 ? `${itemLines}\n• …and ${restCount} more item${restCount > 1 ? 's' : ''}` : itemLines
+                  case 'whatsapp': {
+                    const firstImage = getFirstProductImage(cartItems)
+                    const topProduct = cartItems[0]?.name || 'your items'
 
-                  let whatsappMessage: string
-                  if (campaign.aiOptimized) {
-                    const ai = await generateWhatsAppContent(cartCtx)
-                    whatsappMessage = ai ? `${ai.body}\n\n${cartUrl}` : fallbackWhatsAppText(customerName, store.name, itemsBlock || '(cart is empty)', formattedTotal, cartUrl)
-                  } else {
-                    whatsappMessage = fallbackWhatsAppText(customerName, store.name, itemsBlock || '(cart is empty)', formattedTotal, cartUrl)
+                    // Use template for initial outreach, free-form text for follow-ups (24h window may open by then)
+                    if (step === 0) {
+                      const template = WhatsAppTemplates.abandoned_cart
+                      const params = template.generateParams(customerName, topProduct, firstImage, cartUrl)
+                      const whatsappResult = await sendWhatsAppMessage({
+                        to: sanitizePhoneNumber(cart.customerPhone!),
+                        templateName: template.name,
+                        templateParams: params,
+                      })
+                      sendSuccess = whatsappResult.success
+                      if (!sendSuccess) error = whatsappResult.error || 'Unknown error'
+                    } else {
+                      const itemLines = cartItems.slice(0, 4).map((i: any) =>
+                        `• ${i.name} × ${i.quantity || 1} — ${currencySymbol}${Number(i.price).toFixed(2)}`
+                      ).join('\n')
+                      const restCount = cartItems.length - 4
+                      const itemsBlock = restCount > 0 ? `${itemLines}\n• …and ${restCount} more item${restCount > 1 ? 's' : ''}` : itemLines
+
+                      let whatsappMessage: string
+                      if (campaign.aiOptimized) {
+                        const ai = await generateWhatsAppContent(cartCtx)
+                        whatsappMessage = ai ? `${ai.body}\n\n${cartUrl}` : fallbackWhatsAppText(customerName, store.name, itemsBlock || '(cart is empty)', formattedTotal, cartUrl)
+                      } else {
+                        whatsappMessage = fallbackWhatsAppText(customerName, store.name, itemsBlock || '(cart is empty)', formattedTotal, cartUrl)
+                      }
+                      const whatsappResult = await sendWhatsAppMessage({
+                        to: sanitizePhoneNumber(cart.customerPhone!),
+                        content: whatsappMessage,
+                        mediaUrl: firstImage,
+                      })
+                      sendSuccess = whatsappResult.success
+                      if (!sendSuccess) error = whatsappResult.error || 'Unknown error'
+                    }
+                    break
                   }
-                  const firstImage = getFirstProductImage(cartItems)
-                  const whatsappResult = await sendWhatsAppMessage({ to: sanitizePhoneNumber(cart.customerPhone!), content: whatsappMessage, mediaUrl: firstImage })
-                  sendSuccess = whatsappResult.success
-                  if (!sendSuccess) error = whatsappResult.error || 'Unknown error'
-                  break
                 }
+              } catch (err: any) {
+                console.error(`Error sending ${ch} for cart ${cart.id}:`, err?.message || err)
+                error = err.message
               }
-            } catch (err: any) {
-              console.error(`Error sending ${channel} for cart ${cart.id}:`, err?.message || err)
-              error = err.message
+
+              const abTag = abTestVariant ? ` [AB:${abTestVariant}]` : ''
+              await prisma.message.create({
+                data: {
+                  cartId: cart.id,
+                  campaignId: campaign.id,
+                  channel: ch,
+                  content: `Cart recovery message (step ${step + 1}/${maxMessages}) for ${customerName}${abTag}`,
+                  status: sendSuccess ? 'sent' : 'failed',
+                  sentAt: sendSuccess ? new Date() : null,
+                },
+              })
+
+              if (sendSuccess) {
+                globalSendSuccess = true
+                messagesSent++
+                const today = new Date(new Date().toDateString())
+                const channelCounts = {
+                  smsCount: ch === 'sms' ? 1 : 0,
+                  whatsappCount: ch === 'whatsapp' ? 1 : 0,
+                  emailCount: ch === 'email' ? 1 : 0,
+                }
+                await prisma.analytics.upsert({
+                  where: { userId_date: { userId: campaign.userId, date: today } },
+                  update: { messagesSent: { increment: 1 }, ...channelCounts },
+                  create: { userId: campaign.userId, date: today, messagesSent: 1, ...channelCounts },
+                })
+                break
+              } else {
+                console.error(`Failed to send ${ch} message for cart ${cart.id}: ${error}`)
+              }
             }
 
-            const abTag = abTestVariant ? ` [AB:${abTestVariant}]` : ''
-            await prisma.message.create({
-              data: {
-                cartId: cart.id,
-                campaignId: campaign.id,
-                channel,
-                content: `Cart recovery message (step ${step + 1}/${maxMessages}) for ${customerName}${abTag}`,
-                status: sendSuccess ? 'sent' : 'failed',
-                sentAt: sendSuccess ? new Date() : null,
-              },
-            })
-
-            if (sendSuccess) {
-              messagesSent++
-              const today = new Date(new Date().toDateString())
-              const channelCounts = {
-                smsCount: channel === 'sms' ? 1 : 0,
-                whatsappCount: channel === 'whatsapp' ? 1 : 0,
-                emailCount: channel === 'email' ? 1 : 0,
-              }
-              await prisma.analytics.upsert({
-                where: { userId_date: { userId: campaign.userId, date: today } },
-                update: { messagesSent: { increment: 1 }, ...channelCounts },
-                create: { userId: campaign.userId, date: today, messagesSent: 1, ...channelCounts },
-              })
-            } else {
+            if (!globalSendSuccess) {
               messagesFailed++
-              console.error(`Failed to send ${channel} message for cart ${cart.id}: ${error}`)
             }
           } catch (err: any) {
             messagesFailed++

@@ -1,13 +1,29 @@
 import OpenAI from 'openai'
 
 let client: OpenAI | null = null
+let aiCooldownUntil: number = 0
+
+function isAiOnCooldown(): boolean {
+  return Date.now() < aiCooldownUntil
+}
+
+function setAiCooldown(durationMs = 300_000): void {
+  aiCooldownUntil = Date.now() + durationMs
+}
 
 function getClient(): OpenAI | null {
+  if (isAiOnCooldown()) return null
   if (client) return client
   const key = process.env.OPENAI_API_KEY
   if (!key) return null
-  client = new OpenAI({ apiKey: key, timeout: 15000 })
+  client = new OpenAI({ apiKey: key, timeout: 10000 })
   return client
+}
+
+function isQuotaError(err: any): boolean {
+  const status = err?.status || err?.statusCode
+  const code = err?.code || err?.error?.code
+  return status === 429 || status === 402 || code === 'insufficient_quota' || code === 'rate_limit_exceeded'
 }
 
 export type CartContext = {
@@ -65,6 +81,7 @@ Return valid JSON with these keys:
     return { subject: parsed.subject, body: parsed.body }
   } catch (err) {
     console.error('AI email generation error:', err)
+    if (isQuotaError(err)) setAiCooldown()
     return null
   }
 }
@@ -94,6 +111,7 @@ export async function generateSMSContent(ctx: CartContext): Promise<GeneratedCon
     return body ? { body } : null
   } catch (err) {
     console.error('AI SMS generation error:', err)
+    if (isQuotaError(err)) setAiCooldown()
     return null
   }
 }
@@ -127,6 +145,7 @@ export async function generateWhatsAppContent(ctx: CartContext): Promise<Generat
     return body ? { body } : null
   } catch (err) {
     console.error('AI WhatsApp generation error:', err)
+    if (isQuotaError(err)) setAiCooldown()
     return null
   }
 }

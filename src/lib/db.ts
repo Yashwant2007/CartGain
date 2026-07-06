@@ -25,10 +25,13 @@ function createPrismaClient(): PrismaClient {
     console.warn('TEST_DATABASE_URL is not set. Test and production data are not fully separated yet.')
   }
 
+  const separator = databaseUrl.includes('?') ? '&' : '?'
+  const dbUrl = `${databaseUrl}${separator}connection_limit=1${databaseUrl.includes('pgbouncer') ? '' : '&pgbouncer=true'}`
+
   return new PrismaClient({
     datasources: {
       db: {
-        url: databaseUrl,
+        url: dbUrl,
       },
     },
   })

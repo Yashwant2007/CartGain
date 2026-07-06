@@ -11,7 +11,7 @@ function getRedis(): Redis | null {
       client = new Redis(url, { maxRetriesPerRequest: null, enableOfflineQueue: true, lazyConnect: true, tls: url.startsWith('rediss://') ? {} : undefined })
     } else {
       const host = process.env.REDIS_HOST
-      if (!host) return null
+      if (!host || host === 'localhost' || host === '127.0.0.1') return null
       const port = parseInt(process.env.REDIS_PORT || '6379')
       const password = process.env.REDIS_PASSWORD
       client = new Redis({ host, port, password, maxRetriesPerRequest: null, enableOfflineQueue: true, lazyConnect: true })
