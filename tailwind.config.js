@@ -56,6 +56,7 @@ module.exports = {
         'scale-in': 'scaleIn 0.4s ease-out',
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'bounce-subtle': 'bounceSubtle 2s ease-in-out infinite',
+        'slide-in': 'slideIn 0.3s ease-out',
       },
       keyframes: {
         fadeIn: {
@@ -77,6 +78,10 @@ module.exports = {
         bounceSubtle: {
           '0%, 100%': { transform: 'translateY(0)', 'will-change': 'transform' },
           '50%': { transform: 'translateY(-4px)' },
+        },
+        slideIn: {
+          '0%': { transform: 'translateX(100%)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
         },
       },
     },

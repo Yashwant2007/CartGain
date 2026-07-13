@@ -4,9 +4,29 @@ import { processAbandonedCarts } from '@/lib/jobs/processAbandonedCarts'
 import { initializeQueues } from '@/lib/queue/init'
 import { sendAlertOnError } from '@/lib/alerter'
 import { syncAbandonedCheckouts } from '@/lib/shopify'
+import { getRedis, redisSet, redisGet } from '@/lib/redis'
 import prisma from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
+
+const CURSOR_KEY = 'store_cursor'
+
+async function getStoreCursor(): Promise<string | undefined> {
+  const redis = getRedis()
+  if (redis) {
+    const cursor = await redisGet(CURSOR_KEY)
+    if (cursor) return cursor
+  }
+  return undefined
+}
+
+async function saveStoreCursor(cursor: string | undefined): Promise<void> {
+  if (!cursor) return
+  const redis = getRedis()
+  if (redis) {
+    await redisSet(CURSOR_KEY, cursor, 30 * 60 * 1000)
+  }
+}
 
 /**
  * Validate the request against JOB_SECRET. Accepts the secret via:
@@ -49,7 +69,11 @@ export async function POST(request: NextRequest) {
       })
     } catch {
       console.log('Redis not available — processing carts directly')
-      const result = await processAbandonedCarts(25)
+      const cursor = await getStoreCursor()
+      const result = await processAbandonedCarts(25, cursor)
+      if (result.nextCursor) {
+        await saveStoreCursor(result.nextCursor)
+      }
       return NextResponse.json({
         message: 'Carts processed directly',
         status: 'processed',
@@ -82,23 +106,34 @@ export async function GET(request: NextRequest) {
       // No jobId — cron trigger, process carts directly
       console.log('Cron trigger: syncing Shopify checkouts + processing abandoned carts')
 
-      // Poll Shopify for abandoned checkouts and upsert them as carts
+      // Poll Shopify for abandoned checkouts and upsert them as carts — process 1 store per cycle
       let syncedCheckouts = 0
       try {
+        const cursor = await getStoreCursor()
         const stores = await prisma.store.findMany({
           where: { platform: 'shopify', isActive: true, apiKey: { not: null } },
           select: { id: true, domain: true, apiKey: true },
-          take: 50,
+          orderBy: { id: 'asc' },
         })
-        for (const store of stores) {
-          const count = await syncAbandonedCheckouts(store).catch(() => 0)
-          syncedCheckouts += count
+        let targetStores = stores
+        if (cursor) {
+          const cursorIdx = stores.findIndex(s => s.id === cursor)
+          if (cursorIdx >= 0) targetStores = stores.slice(cursorIdx + 1)
+        }
+        const batch = targetStores.slice(0, 1)
+        if (batch.length > 0) {
+          syncedCheckouts = await syncAbandonedCheckouts(batch[0]).catch(() => 0)
+          await saveStoreCursor(batch[0].id)
         }
       } catch (err) {
         console.error('Shopify checkout sync error:', err)
       }
 
-      const result = await processAbandonedCarts(25)
+      const cursor = await getStoreCursor()
+      const result = await processAbandonedCarts(25, cursor)
+      if (result.nextCursor) {
+        await saveStoreCursor(result.nextCursor)
+      }
       return NextResponse.json({
         message: 'Carts processed',
         status: 'processed',

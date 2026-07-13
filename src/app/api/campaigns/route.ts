@@ -31,12 +31,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404 })
     }
 
+    const cursor = request.nextUrl.searchParams.get('cursor')
+    const take = Math.min(parseInt(request.nextUrl.searchParams.get('take') || '50'), 200)
+
     const campaigns = await prisma.campaign.findMany({
       where: { storeId },
       orderBy: { createdAt: 'desc' },
+      take: take + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     })
 
-    return NextResponse.json({ campaigns })
+    const hasMore = campaigns.length > take
+    const items = hasMore ? campaigns.slice(0, take) : campaigns
+    const nextCursor = hasMore ? items[items.length - 1].id : null
+
+    return NextResponse.json({ campaigns: items, nextCursor, hasMore })
   } catch (error) {
     console.error('List campaigns error:', error)
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })

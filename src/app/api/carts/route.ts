@@ -31,13 +31,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404 })
     }
 
+    const cursor = request.nextUrl.searchParams.get('cursor')
+    const take = Math.min(parseInt(request.nextUrl.searchParams.get('take') || '50'), 200)
+
     const carts = await prisma.cart.findMany({
       where: { storeId },
       orderBy: { abandonedAt: 'desc' },
-      take: 100,
+      take: take + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     })
 
-    return NextResponse.json({ carts })
+    const hasMore = carts.length > take
+    const items = hasMore ? carts.slice(0, take) : carts
+    const nextCursor = hasMore ? items[items.length - 1].id : null
+
+    return NextResponse.json({ carts: items, nextCursor, hasMore })
   } catch (error) {
     console.error('List carts error:', error)
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })

@@ -5,11 +5,21 @@ import { verifyShopifyWebhook } from '@/lib/shopify'
 import { checkSimpleRateLimit as checkRateLimit } from '@/lib/rate-limit'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS } from '@/lib/payment'
 import { sendAlertOnError } from '@/lib/alerter'
+import { getRedis, redisSetNX } from '@/lib/redis'
+
 export const dynamic = 'force-dynamic'
 
-// Track processed order IDs to handle Shopify retries
-const processedOrders = new Set<string>()
-setInterval(() => processedOrders.clear(), 60 * 60 * 1000)
+const DEDUP_TTL_MS = 60 * 60 * 1000
+
+async function isDuplicateOrder(orderId: string): Promise<boolean> {
+  const redis = getRedis()
+  if (redis) {
+    const key = `dedup:order:${orderId}`
+    const stored = await redisSetNX(key, '1', DEDUP_TTL_MS)
+    return !stored
+  }
+  return false
+}
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -17,7 +27,6 @@ export async function POST(request: NextRequest) {
   const topic = request.headers.get('x-shopify-topic') || 'unknown'
 
   try {
-    // Rate limit per shop
     const { allowed, retryAfter } = await checkRateLimit(shopDomain)
     if (!allowed) {
       console.warn(`Rate limited webhook from ${shopDomain} (${topic})`)
@@ -27,7 +36,6 @@ export async function POST(request: NextRequest) {
     const body = await request.text()
     const headers = request.headers
 
-    // Verify webhook signature
     const verified = verifyShopifyWebhook(body, headers)
     if (!verified) {
       return NextResponse.json({ message: 'Invalid signature' }, { status: 401 })
@@ -37,26 +45,40 @@ export async function POST(request: NextRequest) {
 
     console.log(`Webhook [${topic}] from ${shopDomain} — processing`)
 
-    // Deduplicate order webhooks (Shopify retries up to 19 times)
+    const store = await findStoreByDomain(shopDomain)
+    if (!store) {
+      console.log(`No store found for domain ${shopDomain} — returning 200 to stop retries`)
+      return NextResponse.json({ received: true })
+    }
+
     if (topic === 'orders/create') {
       const orderId = data.id
-      if (orderId && processedOrders.has(String(orderId))) {
-        console.log(`Duplicate order ${orderId} from ${shopDomain} — skipping`)
-        return NextResponse.json({ received: true, deduplicated: true })
+      if (orderId) {
+        const dup = await isDuplicateOrder(String(orderId))
+        if (dup) {
+          console.log(`Duplicate order ${orderId} from ${shopDomain} — skipping`)
+          return NextResponse.json({ received: true, deduplicated: true })
+        }
       }
-      if (orderId) processedOrders.add(String(orderId))
     }
 
     switch (topic) {
       case 'carts/update':
-        await handleCartUpdate(data, headers)
+        handleCartUpdate(data, store, shopDomain).catch(err => {
+          console.error(`Async cart update error for ${shopDomain}:`, err)
+        })
         break
       case 'checkouts/create':
       case 'checkouts/update':
-        await handleCheckout(data, headers)
+        handleCheckout(data, store, shopDomain).catch(err => {
+          console.error(`Async checkout error for ${shopDomain}:`, err)
+        })
         break
       case 'orders/create':
-        await handleOrderCreate(data, headers)
+        processOrderCreate(data, store, shopDomain).catch(err => {
+          console.error(`Async order processing error for ${shopDomain}:`, err)
+          sendAlertOnError('Async order processing', err, { shopDomain, orderId: data.id }).catch(() => {})
+        })
         break
       default:
         console.log('Unhandled webhook topic:', topic)
@@ -74,32 +96,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function getStoreDomain(headers: Headers): string | null {
-  // Shopify sends x-shopify-shop-domain, e.g. "mystore.myshopify.com"
-  const domain = headers.get('x-shopify-shop-domain')
-  if (domain) return domain
-  // Fallback: try to parse from other headers
-  return null
-}
-
 async function findStoreByDomain(domain: string | null) {
-  if (domain) {
-    const store = await prisma.store.findFirst({
-      where: { domain },
-    })
-    if (store) return store
-  }
-
-  // Fallback: first Shopify store (legacy)
-  const store = await prisma.store.findFirst({
-    where: { platform: 'shopify' },
+  if (!domain) return null
+  return prisma.store.findFirst({
+    where: { domain },
   })
-  return store
 }
 
-// Extract phone from all the places Shopify puts it across cart/checkout payloads:
-//   checkouts/create|update → billing_address.phone, shipping_address.phone, phone (top-level)
-//   carts/update            → phone (top-level, rarely set)
 function extractPhone(cart: any): string | null {
   return (
     cart.phone ||
@@ -111,9 +114,6 @@ function extractPhone(cart: any): string | null {
   ) || null
 }
 
-// Extract customer name from all the places Shopify puts it:
-//   checkouts → billing_address.first_name + last_name, customer.first_name + last_name
-//   carts     → customer.first_name + last_name
 function extractName(cart: any): string | null {
   const firstName =
     cart.billing_address?.first_name ||
@@ -129,18 +129,12 @@ function extractName(cart: any): string | null {
   return full || cart.customer?.name || null
 }
 
-async function handleCartUpdate(data: any, headers: Headers) {
+async function handleCartUpdate(data: any, store: any, domain: string) {
   if (!data.id || !data.token) return
 
   const cart = data
-  const domain = getStoreDomain(headers)
-  const store = await findStoreByDomain(domain)
-
-  if (!store) return
-
   const customerPhone = extractPhone(cart)
   const customerName = extractName(cart)
-  // email lives at top-level for both carts and checkouts
   const customerEmail = cart.email || null
 
   await logDataAccess({
@@ -157,8 +151,6 @@ async function handleCartUpdate(data: any, headers: Headers) {
     },
   })
 
-  // Upsert cart — only overwrite non-null fields so a later webhook with less
-  // data doesn't wipe out phone/email we already captured from an earlier one.
   await prisma.cart.upsert({
     where: {
       storeId_cartId: {
@@ -187,9 +179,6 @@ async function handleCartUpdate(data: any, headers: Headers) {
   })
 }
 
-// Map Shopify line items to the shape the recovery processor / email templates
-// expect: { name, description?, price, quantity, image? }. Shopify uses
-// `line_items` with `title`/`price`; prices are major units (not cents) here.
 function normalizeShopifyItems(cart: any): any[] {
   const raw = cart.line_items || cart.items || []
   if (!Array.isArray(raw)) return []
@@ -202,19 +191,13 @@ function normalizeShopifyItems(cart: any): any[] {
   }))
 }
 
-async function handleCheckout(data: any, headers: Headers) {
-  await handleCartUpdate(data, headers)
+async function handleCheckout(data: any, store: any, domain: string) {
+  await handleCartUpdate(data, store, domain)
 }
 
-async function handleOrderCreate(data: any, headers: Headers) {
+async function processOrderCreate(data: any, store: any, domain: string) {
   const cartToken = data.token || data.cart_token
-
   if (!cartToken) return
-
-  const domain = getStoreDomain(headers)
-  const store = await findStoreByDomain(domain)
-
-  if (!store) return
 
   await logDataAccess({
     actorType: 'system',
@@ -230,7 +213,6 @@ async function handleOrderCreate(data: any, headers: Headers) {
     },
   })
 
-  // Find the cart
   const cart = await prisma.cart.findUnique({
     where: {
       storeId_cartId: {
@@ -246,13 +228,10 @@ async function handleOrderCreate(data: any, headers: Headers) {
   const orderCreatedAt = data.created_at ? new Date(data.created_at) : new Date()
   const shopifyOrderId = data.id ? String(data.id) : undefined
 
-  // Discount applied by CartGain (e.g. from a campaign discount code)
   const discountAmount = parseFloat(data.total_discounts || '0')
   const netAmount = Math.max(0, grossAmount - discountAmount)
   const discountUsed = discountAmount > 0
 
-  // 1) ALWAYS mark the cart as converted so the processor stops messaging it.
-  //    This applies to every order (ours or organic) — we never message a buyer.
   if (!cart.convertedAt) {
     await prisma.cart.update({
       where: { id: cart.id },
@@ -260,8 +239,6 @@ async function handleOrderCreate(data: any, headers: Headers) {
     })
   }
 
-  // 2) ATTRIBUTION: only count/bill this as a recovery if WE sent a recovery
-  //    message that was followed by this order within the attribution window.
   const windowStart = new Date(orderCreatedAt.getTime() - ATTRIBUTION_WINDOW_HOURS * 60 * 60 * 1000)
   const attributingMessage = await prisma.message.findFirst({
     where: {
@@ -273,15 +250,12 @@ async function handleOrderCreate(data: any, headers: Headers) {
   })
 
   if (!attributingMessage) {
-    // Organic sale — customer bought without any influence from us. Not credited, not billed.
     console.log(`Order for cart ${cart.id}: no recovery message in ${ATTRIBUTION_WINDOW_HOURS}h window — converted but NOT credited`)
     return
   }
 
   const channel = attributingMessage.channel
 
-  // 3) Record the recovery EXACTLY ONCE. The unique cartId on RecoveredCart makes
-  //    this idempotent against Shopify's webhook retries (up to 19x) and races.
   try {
     await prisma.recoveredCart.create({
       data: {
@@ -297,20 +271,17 @@ async function handleOrderCreate(data: any, headers: Headers) {
     })
   } catch (e: any) {
     if (e?.code === 'P2002') {
-      // Already credited (duplicate webhook) — do NOT double-count revenue or rev-share.
       console.log(`Order for cart ${cart.id}: already credited — skipping duplicate`)
       return
     }
     throw e
   }
 
-  // 4) First-time credit only: flip recovered flag, attribute the channel, count it.
   await prisma.cart.update({
     where: { id: cart.id },
     data: { isRecovered: true, recoveredAt: new Date(), recoveredVia: channel },
   })
 
-  // Mark the attributing message as converted (powers per-channel conversion stats)
   await prisma.message
     .update({ where: { id: attributingMessage.id }, data: { convertedAt: new Date() } })
     .catch(() => {})
@@ -330,7 +301,6 @@ async function handleOrderCreate(data: any, headers: Headers) {
     },
   })
 
-  // Track revenue share as an immutable ledger event (attributed recoveries only, past the free threshold)
   await accrueRevenueShare({
     userId: store.userId,
     cartId: cart.id,
@@ -369,19 +339,15 @@ async function accrueRevenueShare(params: AccrueParams) {
   const planConfig = Object.values(PLANS).find(p => p.id === subscription.plan)
   if (!planConfig || planConfig.revSharePercent <= 0) return
 
-  // Count ALL recovered carts for this user across all stores (all-time)
   const totalRecovered = await prisma.recoveredCart.count({
     where: { store: { userId } },
   })
 
-  // First FREE_CARTS_THRESHOLD recoveries are always at 0% — proving period
   if (totalRecovered <= FREE_CARTS_THRESHOLD) return
 
   const revSharePercent = planConfig.revSharePercent
   const revShareAmount = netAmount * (revSharePercent / 100)
 
-  // Create immutable audit ledger entry. cartId is unique so duplicate webhooks
-  // are silently caught by P2002 and never double-accrue.
   try {
     await prisma.$transaction([
       prisma.revenueShareEvent.create({

@@ -1,6 +1,7 @@
 // Prisma Schema for RecoverFlow
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -108,6 +109,7 @@ model Store {
 
   @@unique([userId, domain])
   @@index([userId])
+  @@index([domain])
 }
 
 model Campaign {
@@ -184,6 +186,7 @@ model Message {
 
   @@index([cartId])
   @@index([campaignId])
+  @@index([campaignId, sentAt])
 }
 
 model RecoveredCart {
@@ -252,6 +255,8 @@ model Subscription {
   currentPeriodEnd DateTime
   smsCredits      Int       @default(100)
   smsCreditsUsed  Int       @default(0)
+  cartsUsedInPeriod Int    @default(0)    // Materialized counter — avoids expensive groupBy every cycle
+  cartsLimit      Int       @default(0)   // Snapshot of plan.maxCarts at period start (0 = unlimited)
   revenueShareAccrued  Float @default(0)  // Rev share accrued in current period
   revenueSharePaid     Float @default(0)  // Total rev share paid over lifetime
   createdAt       DateTime  @default(now())

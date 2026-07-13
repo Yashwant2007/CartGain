@@ -1,15 +1,86 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
-import { Zap, Mail, Lock, User, ArrowRight, CheckCircle } from 'lucide-react'
+import { Zap, Mail, Lock, User, ArrowRight, CheckCircle, AlertTriangle, X } from 'lucide-react'
+
+function Toast({ message, type, onClose }: { message: string; type: 'error' | 'info'; onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 5000)
+    return () => clearTimeout(timer)
+  }, [onClose])
+
+  return (
+    <div className={`fixed top-6 right-6 z-50 flex items-start gap-3 p-4 rounded-xl shadow-2xl border transition-all animate-slide-in ${
+      type === 'error'
+        ? 'bg-red-900/90 border-red-500/50 backdrop-blur-md'
+        : 'bg-blue-900/90 border-blue-500/50 backdrop-blur-md'
+    }`}>
+      {type === 'error' ? (
+        <AlertTriangle className="w-5 h-5 text-red-300 mt-0.5 flex-shrink-0" />
+      ) : (
+        <CheckCircle className="w-5 h-5 text-blue-300 mt-0.5 flex-shrink-0" />
+      )}
+      <p className="text-sm text-white/90 max-w-sm">{message}</p>
+      <button onClick={onClose} className="p-0.5 hover:bg-white/10 rounded transition">
+        <X className="w-4 h-4 text-white/60" />
+      </button>
+    </div>
+  )
+}
+
+function TermsModal({ onClose, onAccept }: { onClose: () => void; onAccept: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-slate-900 border border-blue-800/50 rounded-2xl max-w-lg w-full p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 bg-blue-900/50 rounded-xl flex items-center justify-center flex-shrink-0">
+            <AlertTriangle className="w-5 h-5 text-blue-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-white">Agreement Required</h3>
+            <p className="text-sm text-blue-300/70 mt-1">
+              Please accept our terms to continue.
+            </p>
+          </div>
+        </div>
+
+        <p className="text-sm text-blue-200/80 leading-relaxed mb-6">
+          You need to agree to CartGain&apos;s{' '}
+          <Link href="/terms" className="text-blue-400 underline underline-offset-2 hover:text-blue-300">Terms of Service</Link>,{' '}
+          <Link href="/privacy" className="text-blue-400 underline underline-offset-2 hover:text-blue-300">Privacy Policy</Link>, and{' '}
+          <Link href="/dpa" className="text-blue-400 underline underline-offset-2 hover:text-blue-300">Data Processing Agreement</Link>{' '}
+          before creating an account.
+        </p>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 px-4 bg-slate-800 border border-slate-700 text-white/80 text-sm font-medium rounded-lg hover:bg-slate-700 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onAccept}
+            className="flex-1 py-2.5 px-4 bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-semibold rounded-lg hover:from-blue-500 hover:to-cyan-500 transition"
+          >
+            I Agree
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function SignUpPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'error' | 'info' } | null>(null)
+  const [showTermsModal, setShowTermsModal] = useState(false)
+  const [pendingGoogleSignIn, setPendingGoogleSignIn] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -22,15 +93,15 @@ export default function SignUpPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+
+    if (!acceptedPolicies) {
+      setShowTermsModal(true)
+      return
+    }
+
     setIsLoading(true)
 
     try {
-      if (!acceptedPolicies) {
-        setError('Please accept the Terms, Privacy Policy, and Data Processing Agreement')
-        setIsLoading(false)
-        return
-      }
-
       if (formData.password.length < 8) {
         setError('Password must be at least 8 characters')
         setIsLoading(false)
@@ -52,6 +123,7 @@ export default function SignUpPage() {
       const data = await response.json()
 
       if (response.ok) {
+        setToast({ message: 'Account created! Check your email to verify.', type: 'info' })
         const signInResult = await signIn('credentials', {
           email: formData.email,
           password: formData.password,
@@ -75,37 +147,45 @@ export default function SignUpPage() {
     }
   }
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignUp = () => {
+    if (!acceptedPolicies) {
+      setShowTermsModal(true)
+      setPendingGoogleSignIn(true)
+      return
+    }
+    initiateGoogleSignIn()
+  }
+
+  const initiateGoogleSignIn = async () => {
     setIsLoading(true)
     try {
-      const popup = window.open(
-        '/api/auth/signin/google?callbackUrl=/dashboard',
-        'google-oauth',
-        'width=500,height=600,menubar=no,toolbar=no,location=yes'
-      )
-      if (!popup) {
-        const isInIframe = window !== window.top
-        if (isInIframe && window.top) {
-          window.top.location.href = `${window.location.origin}/api/auth/signin/google?callbackUrl=${encodeURIComponent('/dashboard')}`
-        } else {
-          await signIn('google', { callbackUrl: '/dashboard' })
-        }
-        return
-      }
-      const timer = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(timer)
-          window.location.href = '/dashboard'
-          window.location.reload()
-        }
-      }, 500)
+      await signIn('google', { callbackUrl: '/dashboard' })
+    } catch (err) {
+      console.error('Google sign-in error:', err)
     } finally {
       setIsLoading(false)
     }
   }
 
+  const handleTermsAccept = () => {
+    setAcceptedPolicies(true)
+    setShowTermsModal(false)
+    if (pendingGoogleSignIn) {
+      setPendingGoogleSignIn(false)
+      initiateGoogleSignIn()
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex flex-col md:flex-row">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {showTermsModal && (
+        <TermsModal
+          onClose={() => { setShowTermsModal(false); setPendingGoogleSignIn(false) }}
+          onAccept={handleTermsAccept}
+        />
+      )}
+
       {/* Left Side - Form */}
       <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
         <div className="w-full max-w-md">
@@ -255,7 +335,7 @@ export default function SignUpPage() {
           </div>
 
           <button
-            onClick={handleGoogleSignIn}
+            onClick={handleGoogleSignUp}
             disabled={isLoading}
             className="w-full py-3 sm:py-3.5 bg-slate-800/40 border border-blue-700/50 text-white text-sm sm:text-base font-semibold rounded-lg hover:border-blue-500/70 hover:bg-slate-800/60 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 transition active:scale-95 flex items-center justify-center gap-2 min-h-12"
           >

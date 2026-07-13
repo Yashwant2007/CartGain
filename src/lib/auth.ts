@@ -73,8 +73,10 @@ const providers: any[] = [
   }),
 ]
 
+const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined
+const nextAuthUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || vercelUrl || 'https://cart-gain.com'
+
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'
   providers.push(
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
@@ -101,7 +103,7 @@ export const authOptions: NextAuthOptions = {
   // SameSite=none is required so the session cookie is sent when CartGain
   // runs inside a third-party iframe (e.g. Shopify admin). Without this,
   // Safari blocks the cookie entirely and the user appears logged out.
-  cookies: process.env.NEXTAUTH_URL?.startsWith('https://') ? {
+  cookies: nextAuthUrl.startsWith('https://') ? {
     sessionToken: {
       name: '__Secure-next-auth.session-token',
       options: { httpOnly: true, sameSite: 'none', path: '/', secure: true },

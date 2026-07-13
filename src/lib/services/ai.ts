@@ -1,18 +1,33 @@
 import OpenAI from 'openai'
 
 let client: OpenAI | null = null
-let aiCooldownUntil: number = 0
 
-function isAiOnCooldown(): boolean {
-  return Date.now() < aiCooldownUntil
+const userCooldowns = new Map<string, number>()
+const MAX_COOLDOWN_MS = 300_000
+const BASE_COOLDOWN_MS = 5_000
+
+function isUserOnCooldown(userKey: string): boolean {
+  const until = userCooldowns.get(userKey)
+  if (!until) return false
+  if (Date.now() < until) return true
+  userCooldowns.delete(userKey)
+  return false
 }
 
-function setAiCooldown(durationMs = 300_000): void {
-  aiCooldownUntil = Date.now() + durationMs
+function applyUserCooldown(userKey: string, durationMs = BASE_COOLDOWN_MS): void {
+  const existing = userCooldowns.get(userKey) || 0
+  const next = Date.now() + durationMs
+  userCooldowns.set(userKey, Math.max(existing, next))
+      if (userCooldowns.size > 10000) {
+        const now = Date.now()
+        const toDelete: string[] = []
+        userCooldowns.forEach((v, k) => { if (now >= v) toDelete.push(k) })
+        toDelete.forEach(k => userCooldowns.delete(k))
+      }
 }
 
-function getClient(): OpenAI | null {
-  if (isAiOnCooldown()) return null
+function getClient(userKey?: string): OpenAI | null {
+  if (userKey && isUserOnCooldown(userKey)) return null
   if (client) return client
   const key = process.env.OPENAI_API_KEY
   if (!key) return null
@@ -49,8 +64,9 @@ function buildItemList(ctx: CartContext): string {
   ).join('\n')
 }
 
-export async function generateEmailContent(ctx: CartContext): Promise<GeneratedContent | null> {
-  const ai = getClient()
+export async function generateEmailContent(ctx: CartContext, storeId?: string): Promise<GeneratedContent | null> {
+  const userKey = storeId || 'default'
+  const ai = getClient(userKey)
   if (!ai) return null
 
   try {
@@ -85,13 +101,14 @@ ${ctx.discountCode ? `\nINCLUDE this discount offer prominently: code ${ctx.disc
     return { subject: parsed.subject, body: parsed.body }
   } catch (err) {
     console.error('AI email generation error:', err)
-    if (isQuotaError(err)) setAiCooldown()
+    if (isQuotaError(err)) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
     return null
   }
 }
 
-export async function generateSMSContent(ctx: CartContext): Promise<GeneratedContent | null> {
-  const ai = getClient()
+export async function generateSMSContent(ctx: CartContext, storeId?: string): Promise<GeneratedContent | null> {
+  const userKey = storeId || 'default'
+  const ai = getClient(userKey)
   if (!ai) return null
 
   try {
@@ -116,13 +133,14 @@ ${ctx.discountCode ? `\nINCLUDE this discount offer: code ${ctx.discountCode}${c
     return body ? { body } : null
   } catch (err) {
     console.error('AI SMS generation error:', err)
-    if (isQuotaError(err)) setAiCooldown()
+    if (isQuotaError(err)) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
     return null
   }
 }
 
-export async function generateWhatsAppContent(ctx: CartContext): Promise<GeneratedContent | null> {
-  const ai = getClient()
+export async function generateWhatsAppContent(ctx: CartContext, storeId?: string): Promise<GeneratedContent | null> {
+  const userKey = storeId || 'default'
+  const ai = getClient(userKey)
   if (!ai) return null
 
   const itemsStr = ctx.items.map(i =>
@@ -151,13 +169,14 @@ ${ctx.discountCode ? `\nINCLUDE this discount offer in the message: code ${ctx.d
     return body ? { body } : null
   } catch (err) {
     console.error('AI WhatsApp generation error:', err)
-    if (isQuotaError(err)) setAiCooldown()
+    if (isQuotaError(err)) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
     return null
   }
 }
 
-export async function generateSubjectLines(ctx: CartContext, count = 3): Promise<string[]> {
-  const ai = getClient()
+export async function generateSubjectLines(ctx: CartContext, count = 3, storeId?: string): Promise<string[]> {
+  const userKey = storeId || 'default'
+  const ai = getClient(userKey)
   if (!ai) return generateFallbackSubjects(ctx, count)
 
   try {
@@ -201,9 +220,11 @@ function generateFallbackSubjects(ctx: CartContext, count: number): string[] {
 export async function predictRecoveryProbability(
   cartValue: number,
   customerHistory: { totalOrders: number; totalAbandons: number; totalRecoveries: number; avgOrderValue: number },
-  channel: string
+  channel: string,
+  storeId?: string
 ): Promise<{ probability: number; factors: string[] }> {
-  const ai = getClient()
+  const userKey = storeId || 'default'
+  const ai = getClient(userKey)
   if (!ai) return computeProbabilityHeuristic(cartValue, customerHistory, channel)
 
   try {
@@ -271,14 +292,16 @@ function computeProbabilityHeuristic(
 export async function optimizeDiscount(
   cartValue: number,
   customerHistory: { totalOrders: number; totalAbandons: number; lifetimeValue: number },
-  storeMargin: number
+  storeMargin: number,
+  storeId?: string
 ): Promise<{
   recommendedType: 'percentage' | 'fixed' | 'free_shipping'
   recommendedValue: number
   confidence: number
   reasoning: string
 }> {
-  const ai = getClient()
+  const userKey = storeId || 'default'
+  const ai = getClient(userKey)
   if (!ai) return computeDiscountHeuristic(cartValue, customerHistory, storeMargin)
 
   try {
@@ -330,9 +353,11 @@ function computeDiscountHeuristic(
 }
 
 export async function detectCustomerIntent(
-  customer: { totalOrders: number; totalAbandons: number; totalRecoveries: number; avgOrderValue: number; lifetimeValue: number; cartValue: number; daysSinceLastOrder: number | null }
+  customer: { totalOrders: number; totalAbandons: number; totalRecoveries: number; avgOrderValue: number; lifetimeValue: number; cartValue: number; daysSinceLastOrder: number | null },
+  storeId?: string
 ): Promise<{ intentType: string; confidence: number; description: string }> {
-  const ai = getClient()
+  const userKey = storeId || 'default'
+  const ai = getClient(userKey)
   if (!ai) return classifyIntentHeuristic(customer)
 
   try {
@@ -402,9 +427,11 @@ export async function generateRevenueCoachSuggestions(
     aiOptimized: boolean
     hasDiscountCampaigns: boolean
     avgRecoveryTime: number
-  }
+  },
+  storeId?: string
 ): Promise<{ suggestions: Array<{ title: string; description: string; impact: string; type: string; metric?: Record<string, any> }> }> {
-  const ai = getClient()
+  const userKey = storeId || 'default'
+  const ai = getClient(userKey)
   if (!ai) return generateCoachHeuristic(storeMetrics)
 
   try {
@@ -414,7 +441,6 @@ export async function generateRevenueCoachSuggestions(
         {
           role: 'system',
           content: `You are a revenue coach for an e-commerce store. Based on their metrics, suggest 3-5 actionable recommendations to improve cart recovery revenue. Each suggestion needs: title (short), description (1-2 sentences), impact ("high"/"medium"/"low"), type ("channel"/"timing"/"discount"/"content"/"campaign").
-
 Return JSON: {"suggestions": [{"title": string, "description": string, "impact": string, "type": string}]}
 Be specific and data-driven. Reference their actual numbers.`,
         },
@@ -483,9 +509,11 @@ export async function generateWeeklyReport(
     prevRevenueRecovered?: number
     topProduct?: string
     bestChannel?: string
-  }
+  },
+  storeId?: string
 ): Promise<{ title: string; summary: string; insights: any[]; recommendations: any[] } | null> {
-  const ai = getClient()
+  const userKey = storeId || 'default'
+  const ai = getClient(userKey)
   if (!ai) return generateReportHeuristic(storeMetrics)
 
   try {
@@ -545,7 +573,8 @@ export function generateReportHeuristic(storeMetrics: any): { title: string; sum
 }
 
 export async function generateCampaignSetup(
-  storeInfo: { name: string; domain: string; currency: string }
+  storeInfo: { name: string; domain: string; currency: string },
+  storeId?: string
 ): Promise<{
   campaignName: string
   channels: string[]
@@ -558,7 +587,8 @@ export async function generateCampaignSetup(
   discountValue: number
   discountCode: string
 } | null> {
-  const ai = getClient()
+  const userKey = storeId || 'default'
+  const ai = getClient(userKey)
   if (!ai) return defaultCampaignSetup(storeInfo)
 
   try {
