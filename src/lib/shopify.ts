@@ -198,7 +198,7 @@ export async function fetchAbandonedCheckouts(
   shopDomain: string,
   accessToken: string,
   limit: number = 50
-): Promise<any[]> {
+): Promise<any[] | null> {
   try {
     const url = `https://${shopDomain}/admin/api/2026-04/checkouts.json?status=open&limit=${limit}`
     const response = await fetch(url, {
@@ -208,6 +208,7 @@ export async function fetchAbandonedCheckouts(
     if (!response.ok) {
       const errText = await response.text().catch(() => '(no body)')
       console.error(`Shopify checkout fetch failed (${response.status}): ${errText}`)
+      if (response.status === 401) return null
       return []
     }
     const data = await response.json()
@@ -226,6 +227,11 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
   }
 
   const checkouts = await fetchAbandonedCheckouts(store.domain, accessToken)
+
+  if (checkouts === null) {
+    console.error(`🚫 Auth failed for ${store.domain} — token is deprecated or invalid. Store needs to reconnect from Integrations page.`)
+    return -1
+  }
 
   if (checkouts.length === 0) {
     console.log(`No abandoned checkouts found for ${store.domain} in last 24h`)

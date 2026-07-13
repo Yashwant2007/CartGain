@@ -122,7 +122,13 @@ export async function GET(request: NextRequest) {
         }
         const batch = targetStores.slice(0, 1)
         if (batch.length > 0) {
-          syncedCheckouts = await syncAbandonedCheckouts(batch[0]).catch(() => 0)
+          const result = await syncAbandonedCheckouts(batch[0]).catch(() => 0)
+          if (result === -1) {
+            // Auth failure — skip this store and move cursor past it so we don't retry every cycle
+            console.log(`Skipping store ${batch[0].domain} due to auth failure — will retry on next full rotation`)
+          } else {
+            syncedCheckouts = result
+          }
           await saveStoreCursor(batch[0].id)
         }
       } catch (err) {
