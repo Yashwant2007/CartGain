@@ -18,16 +18,16 @@ async function computeChartData(storeId: string, startDate: Date, endDate: Date)
     revenue: number
   }>>(
     `SELECT
-      DATE(abandoned_at) as date,
-      COUNT(*) FILTER (WHERE abandoned_at >= $2 AND abandoned_at < $3) as abandoned,
-      COUNT(*) FILTER (WHERE is_recovered = true AND recovered_at >= $2 AND recovered_at < $3) as recovered,
-      COALESCE(SUM(total_value) FILTER (WHERE is_recovered = true AND recovered_at >= $2 AND recovered_at < $3), 0) as revenue
+      DATE("abandonedAt") as date,
+      COUNT(*) FILTER (WHERE "abandonedAt" >= $2 AND "abandonedAt" < $3) as abandoned,
+      COUNT(*) FILTER (WHERE "isRecovered" = true AND "recoveredAt" >= $2 AND "recoveredAt" < $3) as recovered,
+      COALESCE(SUM("totalValue") FILTER (WHERE "isRecovered" = true AND "recoveredAt" >= $2 AND "recoveredAt" < $3), 0) as revenue
     FROM "Cart"
-    WHERE "store_id" = $1
-      AND abandoned_at >= $2
-      AND abandoned_at < $3
-    GROUP BY DATE(abandoned_at)
-    ORDER BY DATE(abandoned_at) ASC`,
+    WHERE "storeId" = $1
+      AND "abandonedAt" >= $2
+      AND "abandonedAt" < $3
+    GROUP BY DATE("abandonedAt")
+    ORDER BY DATE("abandonedAt") ASC`,
     storeId,
     startDate,
     endDate
@@ -53,12 +53,12 @@ async function computeChannelStats(storeId: string, startDate: Date, endDate: Da
       channel,
       COUNT(*) as sent,
       COUNT(*) FILTER (WHERE status IN ('delivered', 'sent')) as delivered,
-      COUNT(*) FILTER (WHERE clicked_at IS NOT NULL) as clicked,
-      COUNT(*) FILTER (WHERE converted_at IS NOT NULL) as converted
+      COUNT(*) FILTER (WHERE "clickedAt" IS NOT NULL) as clicked,
+      COUNT(*) FILTER (WHERE "convertedAt" IS NOT NULL) as converted
     FROM "Message"
-    WHERE "campaign_id" IN (SELECT id FROM "Campaign" WHERE "store_id" = $1)
-      AND created_at >= $2
-      AND created_at < $3
+    WHERE "campaignId" IN (SELECT id FROM "Campaign" WHERE "storeId" = $1)
+      AND "createdAt" >= $2
+      AND "createdAt" < $3
     GROUP BY channel
     ORDER BY channel ASC`,
     storeId,
@@ -72,11 +72,11 @@ async function computeChannelStats(storeId: string, startDate: Date, endDate: Da
   }>>(
     `SELECT
       rc.channel,
-      COALESCE(SUM(rc.net_revenue), 0) as revenue
+      COALESCE(SUM(rc."netRevenue"), 0) as revenue
     FROM "RecoveredCart" rc
-    WHERE rc.store_id = $1
-      AND rc.recovered_at >= $2
-      AND rc.recovered_at < $3
+    WHERE rc."storeId" = $1
+      AND rc."recoveredAt" >= $2
+      AND rc."recoveredAt" < $3
     GROUP BY rc.channel
     ORDER BY rc.channel ASC`,
     storeId,
@@ -155,14 +155,14 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
 
   const conversionTimes = await prisma.$queryRawUnsafe<Array<{ hours: number }>>(
     `SELECT
-      EXTRACT(EPOCH FROM (rc.recovered_at - m.sent_at)) / 3600 as hours
+      EXTRACT(EPOCH FROM (rc."recoveredAt" - m."sentAt")) / 3600 as hours
     FROM "RecoveredCart" rc
-    JOIN "Message" m ON m.cart_id = rc.cart_id AND m.status = 'sent'
-    WHERE rc.store_id = $1
-      AND rc.recovered_at >= $2
-      AND rc.recovered_at < $3
-      AND m.sent_at < rc.recovered_at
-    ORDER BY m.sent_at DESC
+    JOIN "Message" m ON m."cartId" = rc."cartId" AND m.status = 'sent'
+    WHERE rc."storeId" = $1
+      AND rc."recoveredAt" >= $2
+      AND rc."recoveredAt" < $3
+      AND m."sentAt" < rc."recoveredAt"
+    ORDER BY m."sentAt" DESC
     LIMIT 1`,
     storeId,
     startDate,
