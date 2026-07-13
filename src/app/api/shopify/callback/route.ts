@@ -73,8 +73,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=No+access+token+received', req.url))
     }
 
-    if (tokenData.expires_in) {
-      console.log(`Shopify token for ${shop} expires in ${tokenData.expires_in}s`)
+    const tokenExpiresAt = tokenData.expires_in
+      ? new Date(Date.now() + tokenData.expires_in * 1000)
+      : null
+
+    if (tokenData.refresh_token || tokenData.expires_in) {
+      console.log(`Shopify token for ${shop}${tokenData.expires_in ? ` expires in ${tokenData.expires_in}s` : ''}${tokenData.refresh_token ? ', refresh token provided' : ''}`)
     }
 
     if (storeId) {
@@ -85,6 +89,8 @@ export async function GET(req: NextRequest) {
           apiSecret: encrypt(shop),
           platform: 'shopify',
           domain: shop,
+          ...(tokenData.refresh_token ? { shopifyRefreshToken: encrypt(tokenData.refresh_token) } : {}),
+          ...(tokenExpiresAt ? { shopifyTokenExpiresAt: tokenExpiresAt } : {}),
         },
       })
     }

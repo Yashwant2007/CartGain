@@ -92,6 +92,8 @@ model Store {
   webhookUrl      String?
   apiKey          String?
   apiSecret       String?
+  shopifyRefreshToken String?
+  shopifyTokenExpiresAt DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

@@ -1,5 +1,72 @@
 import crypto from 'crypto'
 
+const REFRESH_MARGIN_MS = 5 * 60 * 1000 // refresh 5 min before expiry
+
+export async function getAccessToken(store: {
+  id: string
+  apiKey: string | null
+  shopifyRefreshToken: string | null
+  shopifyTokenExpiresAt: Date | null
+}): Promise<string | null> {
+  if (!store.apiKey) return null
+
+  const { decrypt, encrypt } = await import('@/lib/encryption')
+
+  // No refresh token → legacy permanent token, use as-is
+  if (!store.shopifyRefreshToken || !store.shopifyTokenExpiresAt) {
+    try { return decrypt(store.apiKey) } catch { return null }
+  }
+
+  // Token still valid
+  if (Date.now() < store.shopifyTokenExpiresAt.getTime() - REFRESH_MARGIN_MS) {
+    try { return decrypt(store.apiKey) } catch { return null }
+  }
+
+  // Token expired or near expiry — refresh it
+  const apiKey = process.env.SHOPIFY_API_KEY
+  const apiSecret = process.env.SHOPIFY_API_SECRET
+  if (!apiKey || !apiSecret) return null
+
+  let refreshToken: string
+  try { refreshToken = decrypt(store.shopifyRefreshToken) } catch { return null }
+
+  try {
+    const res = await fetch('https://admin.shopify.com/admin/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: apiKey,
+        client_secret: apiSecret,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      }),
+    })
+
+    if (!res.ok) return null
+
+    const data = await res.json()
+    const newToken: string | undefined = data.access_token
+    const newRefresh: string | undefined = data.refresh_token
+    const expiresIn: number | undefined = data.expires_in
+
+    if (!newToken) return null
+
+    const prisma = (await import('@/lib/db')).default
+    await prisma.store.update({
+      where: { id: store.id },
+      data: {
+        apiKey: encrypt(newToken),
+        ...(newRefresh ? { shopifyRefreshToken: encrypt(newRefresh) } : {}),
+        ...(expiresIn ? { shopifyTokenExpiresAt: new Date(Date.now() + expiresIn * 1000) } : {}),
+      },
+    })
+
+    return newToken
+  } catch {
+    return null
+  }
+}
+
 export function verifyShopifyWebhook(body: string, headers: Headers): boolean {
   const hmacHeader = headers.get('x-shopify-hmac-sha256')
   const shopifySecret = process.env.SHOPIFY_API_SECRET
@@ -151,17 +218,10 @@ export async function fetchAbandonedCheckouts(
   }
 }
 
-export async function syncAbandonedCheckouts(store: { id: string; domain: string; apiKey: string | null }): Promise<number> {
-  if (!store.apiKey) {
-    console.log(`No API key for store ${store.domain} — skipping checkout sync`)
-    return 0
-  }
-  const { decrypt } = await import('@/lib/encryption')
-  let accessToken: string
-  try {
-    accessToken = decrypt(store.apiKey)
-  } catch {
-    console.error(`Failed to decrypt API key for store ${store.domain}`)
+export async function syncAbandonedCheckouts(store: any): Promise<number> {
+  const accessToken = await getAccessToken(store)
+  if (!accessToken) {
+    console.log(`No valid token for store ${store.domain} — skipping checkout sync`)
     return 0
   }
 

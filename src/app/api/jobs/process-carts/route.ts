@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
         const cursor = await getStoreCursor()
         const stores = await prisma.store.findMany({
           where: { platform: 'shopify', isActive: true, apiKey: { not: null } },
-          select: { id: true, domain: true, apiKey: true },
+          select: { id: true, domain: true, apiKey: true, shopifyRefreshToken: true, shopifyTokenExpiresAt: true },
           orderBy: { id: 'asc' },
         })
         let targetStores = stores

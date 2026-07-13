@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
-import { decrypt } from '@/lib/encryption'
+import { getAccessToken } from '@/lib/shopify'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,11 +21,21 @@ export async function GET() {
       return NextResponse.json({ connected: false })
     }
 
-    let accessToken: string
-    try {
-      accessToken = decrypt(store.apiKey)
-    } catch {
-      return NextResponse.json({ connected: false, error: 'Failed to decrypt stored token' })
+    const accessToken = await getAccessToken(store)
+    if (!accessToken) {
+      const hasRefresh = store.shopifyRefreshToken && store.shopifyTokenExpiresAt
+      if (hasRefresh) {
+        return NextResponse.json({
+          connected: false,
+          error: 'Shopify token expired and refresh failed. Please reconnect your store.',
+          reauthRequired: true,
+        })
+      }
+      return NextResponse.json({
+        connected: false,
+        error: 'Deprecated offline token. Please reconnect your store to get a new expiring token.',
+        reauthRequired: true,
+      })
     }
 
     const shop = store.domain
@@ -35,10 +45,12 @@ export async function GET() {
 
     if (res.ok) {
       const data = await res.json()
+      const expiresAt = store.shopifyTokenExpiresAt
       return NextResponse.json({
         connected: true,
         shopName: data.shop?.name || shop,
         domain: shop,
+        ...(expiresAt ? { tokenExpiresAt: expiresAt.toISOString() } : { tokenType: 'permanent (legacy)' }),
       })
     }
 
