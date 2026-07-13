@@ -74,9 +74,9 @@ export default function DashboardPage() {
   const [shopifyHealth, setShopifyHealth] = useState<{ connected: boolean; error?: string; reauthRequired?: boolean } | null>(null)
 
   useEffect(() => {
-    if (storeError && storeError.includes('Sign in')) {
-      router.push('/login')
-    }
+    if (!storeError) return
+    if (storeError.includes('Sign in')) router.push('/login')
+    if (storeError.includes('store')) router.push('/dashboard/integrations')
   }, [storeError, router])
 
   useEffect(() => {
@@ -84,47 +84,54 @@ export default function DashboardPage() {
 
     const loadData = async () => {
       if (!storeId) return
+      setLoadingData(true)
+      setLoadError(null)
 
-      try {
-        setLoadingData(true)
-        setLoadError(null)
+      const errors: string[] = []
 
-        const [overviewResponse, cartsResponse, campaignsResponse, healthResponse] = await Promise.all([
-          fetch(`/api/analytics/overview?storeId=${storeId}`),
-          fetch(`/api/carts?storeId=${storeId}`),
-          fetch(`/api/campaigns?storeId=${storeId}`),
-          fetch('/api/shopify/health'),
-        ])
-
-        if (!overviewResponse.ok || !cartsResponse.ok || !campaignsResponse.ok) {
-          throw new Error('Failed to load dashboard data')
+      const safeFetch = async (url: string) => {
+        try {
+          const res = await fetch(url)
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            return { error: body.message || `Status ${res.status}` }
+          }
+          return await res.json()
+        } catch (e) {
+          return { error: e instanceof Error ? e.message : 'Network error' }
         }
+      }
 
-        const overviewData = await overviewResponse.json()
-        const cartsData = await cartsResponse.json()
-        const campaignsData = await campaignsResponse.json()
-        const healthData = healthResponse.ok ? await healthResponse.json() : null
+      const [overviewData, cartsData, campaignsData, healthData] = await Promise.all([
+        safeFetch(`/api/analytics/overview?storeId=${storeId}`),
+        safeFetch(`/api/carts?storeId=${storeId}`),
+        safeFetch(`/api/campaigns?storeId=${storeId}`),
+        safeFetch('/api/shopify/health'),
+      ])
 
-        if (!cancelled) {
+      if (!cancelled) {
+        if (overviewData.error) errors.push(`Analytics: ${overviewData.error}`)
+        else {
           setOverview(overviewData.current?.overview || null)
           setPrevOverview(overviewData.previous?.overview || null)
           setChartData(overviewData.current?.chartData || [])
           setChannelStats(overviewData.current?.channelStats || [])
-          setCarts(cartsData.carts || [])
-          setCampaigns(campaignsData.campaigns || [])
-          setShopifyHealth(healthData)
         }
-      } catch (error) {
-        if (!cancelled) {
-          setLoadError(error instanceof Error ? error.message : 'Failed to load dashboard data')
-        }
-      } finally {
-        if (!cancelled) setLoadingData(false)
+
+        if (cartsData.error) errors.push(`Carts: ${cartsData.error}`)
+        else setCarts(cartsData.carts || [])
+
+        if (campaignsData.error) errors.push(`Campaigns: ${campaignsData.error}`)
+        else setCampaigns(campaignsData.campaigns || [])
+
+        if (!healthData.error) setShopifyHealth(healthData)
+
+        setLoadError(errors.length > 0 ? errors.join(' | ') : null)
+        setLoadingData(false)
       }
     }
 
     loadData()
-
     return () => { cancelled = true }
   }, [storeId])
 
@@ -202,8 +209,14 @@ export default function DashboardPage() {
         <MetricCard title="Recovery Rate" value={`${stats.recoveryRate}%`} change={changes.recoveryRate} trend={changes.recoveryRate.startsWith('+') ? 'up' : 'down'} icon={<MessageSquare className="w-6 h-6" />} color="blue" changeSuffix="from last month" loading={isLoading} />
       </div>
 
-      {error && (
-        <div className="bg-slate-800/50 border border-red-700/30 rounded-xl p-6 text-sm text-red-300/80">{error}</div>
+      {storeError && (
+        <div className="bg-red-900/30 border border-red-700/40 rounded-xl p-4 text-sm text-red-300">{storeError}</div>
+      )}
+      {loadError && !storeError && (
+        <div className="bg-amber-600/20 border border-amber-500/30 rounded-xl px-4 py-2.5 text-xs text-amber-300/80 flex items-center gap-2">
+          <span>⚠️</span>
+          <span>{loadError}</span>
+        </div>
       )}
 
       {shopifyHealth && !shopifyHealth.connected && shopifyHealth.error && (
