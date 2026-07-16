@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { isTestEndpointAllowed } from '@/lib/job-auth'
 
 export const dynamic = 'force-dynamic'
 
-/**
- * Create test abandoned carts for testing cart recovery
- * GET http://localhost:3000/api/test/create-carts
- */
 export async function GET(request: NextRequest) {
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ error: 'Not available in production' }, { status: 403 })
+  if (!isTestEndpointAllowed()) {
+    return NextResponse.json({ error: 'Not available' }, { status: 403 })
   }
 
   try {
-    console.log('Creating test data...')
-
-    // Get or create a test user
     let user = await prisma.user.findUnique({
       where: { email: 'test@example.com' },
     })
@@ -28,10 +22,8 @@ export async function GET(request: NextRequest) {
           password: 'test123',
         },
       })
-      console.log('✅ Created test user')
     }
 
-    // Get or create a test store
     let store = await prisma.store.findFirst({
       where: { userId: user.id },
     })
@@ -46,10 +38,8 @@ export async function GET(request: NextRequest) {
           currency: 'USD',
         },
       })
-      console.log('✅ Created test store')
     }
 
-    // Create an active campaign
     let campaign = await prisma.campaign.findFirst({
       where: { storeId: store.id, isActive: true },
     })
@@ -65,10 +55,8 @@ export async function GET(request: NextRequest) {
           sendDelay: 15,
         },
       })
-      console.log('✅ Created test campaign')
     }
 
-    // Create test carts (abandoned at least 5 minutes ago)
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
 
     const carts = await Promise.all([
@@ -109,30 +97,22 @@ export async function GET(request: NextRequest) {
       }),
     ])
 
-    console.log(`✅ Created ${carts.length} test carts`)
-
     return NextResponse.json({
       success: true,
-      message: `✅ Created test data successfully`,
+      message: 'Test data created successfully',
       data: {
-        user: user.id,
         store: store.id,
         campaign: campaign.id,
         carts: carts.map((c) => ({
           id: c.id,
           customer: c.customerName,
-          email: c.customerEmail,
           total: c.totalValue,
         })),
       },
     })
-  } catch (error: any) {
-    console.error('Error creating test data:', error)
+  } catch {
     return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-      },
+      { success: false, error: 'Failed to create test data' },
       { status: 500 }
     )
   }

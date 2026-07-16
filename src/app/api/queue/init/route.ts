@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { initializeQueues } from '@/lib/queue/init'
+import { requireJobAuth } from '@/lib/job-auth'
 
 export const dynamic = 'force-dynamic'
 
-/**
- * Initialize Bull queues and schedule recurring jobs
- * Call this endpoint once when your app starts
- */
 export async function GET(request: NextRequest) {
+  const authError = await requireJobAuth(request)
+  if (authError) return authError
+
   try {
     await initializeQueues()
 
@@ -16,13 +16,11 @@ export async function GET(request: NextRequest) {
       status: 'ready',
       timestamp: new Date().toISOString(),
     })
-  } catch (error: any) {
-    console.error('Initialization error:', error)
+  } catch {
     return NextResponse.json(
       {
         message: 'Queue initialization attempted',
         status: 'warning',
-        error: error.message,
         note: 'Make sure Redis is running on localhost:6379',
         timestamp: new Date().toISOString(),
       },

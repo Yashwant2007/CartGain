@@ -42,12 +42,8 @@ export const VERIFICATION_EXPIRES_IN = 24 * 60 * 60 * 1000 // 24 hours
 export const PASSWORD_RESET_EXPIRES_IN = 60 * 60 * 1000 // 1 hour
 
 export function generateRandomToken(length = 32): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  let result = ''
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return result
+  const { randomBytes } = require('crypto') as typeof import('crypto')
+  return randomBytes(length).toString('hex')
 }
 
 // Error response builder with proper status codes

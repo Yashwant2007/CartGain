@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sendEmail, EmailTemplates } from '@/lib/services/email'
+import { isTestEndpointAllowed } from '@/lib/job-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
+  if (!isTestEndpointAllowed()) {
+    return NextResponse.json({ message: 'Not available' }, { status: 403 })
+  }
+
   try {
     const { email } = await request.json()
     if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
@@ -27,10 +32,10 @@ export async function POST(request: NextRequest) {
       text: 'This is a test email from CartGain to verify email delivery.',
     })
 
-    return NextResponse.json({ ...result })
-  } catch (error: any) {
+    return NextResponse.json({ success: result.success })
+  } catch {
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: 'Failed to send test email' },
       { status: 500 }
     )
   }

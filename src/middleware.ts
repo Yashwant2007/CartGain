@@ -10,12 +10,10 @@ export default withAuth(
       return NextResponse.redirect(new URL('/login', req.url))
     }
 
-    // Only guard dashboard routes
     if (!path.startsWith('/dashboard')) {
       return NextResponse.next()
     }
 
-    // Allow subscription page itself and API routes
     if (path === '/dashboard/subscription' || path.startsWith('/api/')) {
       return NextResponse.next()
     }

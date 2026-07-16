@@ -6,6 +6,7 @@ import { sendAlertOnError } from '@/lib/alerter'
 import { syncAbandonedCheckouts } from '@/lib/shopify'
 import { getRedis, redisSet, redisGet } from '@/lib/redis'
 import prisma from '@/lib/db'
+import { requireJobAuth } from '@/lib/job-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,38 +29,13 @@ async function saveStoreCursor(cursor: string | undefined): Promise<void> {
   }
 }
 
-/**
- * Validate the request against JOB_SECRET. Accepts the secret via:
- *  - `x-job-secret` header
- *  - `Authorization: Bearer <secret>` header (Vercel Cron / QStash style)
- *  - `?secret=<secret>` query param (for schedulers that only configure a URL)
- * Returns true when authorized (or when no secret is configured, e.g. local dev).
- */
-function isAuthorized(request: NextRequest): boolean {
-  const configuredSecret = (process.env.JOB_SECRET || '').replace(/^["']|["']$/g, '').trim()
-  if (!configuredSecret) return true // no secret set — allow (local/dev)
-
-  const headerSecret = request.headers.get('x-job-secret')
-  const bearer = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
-  const querySecret = request.nextUrl.searchParams.get('secret')
-
-  return (
-    headerSecret === configuredSecret ||
-    bearer === configuredSecret ||
-    querySecret === configuredSecret
-  )
-}
-
 export async function POST(request: NextRequest) {
-  try {
-    if (!isAuthorized(request)) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
-    }
+  const authError = await requireJobAuth(request)
+  if (authError) return authError
 
-    // Ensure queue processors are running (idempotent)
+  try {
     initializeQueues().catch(() => {})
 
-    // Try Redis queue first, fall back to direct processing
     try {
       const job = await addCartProcessingJob()
       return NextResponse.json({
@@ -68,7 +44,6 @@ export async function POST(request: NextRequest) {
         status: 'queued',
       })
     } catch {
-      console.log('Redis not available — processing carts directly')
       const cursor = await getStoreCursor()
       const result = await processAbandonedCarts(25, cursor)
       if (result.nextCursor) {
@@ -84,29 +59,22 @@ export async function POST(request: NextRequest) {
     console.error('Process carts job error:', error)
     sendAlertOnError('Cart processing cron', error).catch(() => {})
     return NextResponse.json(
-      { message: 'Something went wrong', error: (error as any).message },
+      { message: 'Something went wrong' },
       { status: 500 }
     )
   }
 }
 
-// GET endpoint — used by external schedulers (QStash / cron-job.org / Vercel Cron)
 export async function GET(request: NextRequest) {
-  try {
-    if (!isAuthorized(request)) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
-    }
+  const authError = await requireJobAuth(request)
+  if (authError) return authError
 
-    // Ensure queue processors are running (idempotent)
+  try {
     initializeQueues().catch(() => {})
 
     const jobId = request.nextUrl.searchParams.get('jobId')
 
     if (!jobId) {
-      // No jobId — cron trigger, process carts directly
-      console.log('Cron trigger: syncing Shopify checkouts + processing abandoned carts')
-
-      // Poll Shopify for abandoned checkouts and upsert them as carts — process 1 store per cycle
       let syncedCheckouts = 0
       try {
         const cursor = await getStoreCursor()
@@ -124,8 +92,7 @@ export async function GET(request: NextRequest) {
         if (batch.length > 0) {
           const result = await syncAbandonedCheckouts(batch[0]).catch(() => 0)
           if (result === -1) {
-            // Auth failure — skip this store and move cursor past it so we don't retry every cycle
-            console.log(`Skipping store ${batch[0].domain} due to auth failure — will retry on next full rotation`)
+            console.log(`Skipping store ${batch[0].domain} due to auth failure`)
           } else {
             syncedCheckouts = result
           }
@@ -161,15 +128,11 @@ export async function GET(request: NextRequest) {
 
     const state = await job.getState()
     const progress = job.progress()
-    const data = job.data
-    const returnValue = job.returnvalue
 
     return NextResponse.json({
       jobId: job.id,
       state,
       progress,
-      data,
-      returnValue,
     })
   } catch (error) {
     console.error('Get job status error:', error)

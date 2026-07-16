@@ -1,31 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { requireJobAuth } from '@/lib/job-auth'
 
 export const dynamic = 'force-dynamic'
 
-/**
- * Debug endpoint — shows the last 20 carts + their messages so you can
- * quickly see what's stored and whether messages were attempted.
- *
- * Protected by JOB_SECRET (same as the cron job).
- * Hit it at: GET /api/debug/carts?secret=YOUR_JOB_SECRET
- * Or without a secret in dev (when JOB_SECRET is unset).
- */
-function isAuthorized(request: NextRequest): boolean {
-  const configured = (process.env.JOB_SECRET || '').trim()
-  if (!configured) return true
-  const query = request.nextUrl.searchParams.get('secret')
-  const bearer = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
-  return query === configured || bearer === configured
-}
-
 export async function GET(request: NextRequest) {
-  if (!isAuthorized(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const authError = await requireJobAuth(request)
+  if (authError) return authError
 
   try {
-    // Last 20 carts across all stores, newest first
     const carts = await prisma.cart.findMany({
       orderBy: { createdAt: 'desc' },
       take: 20,
@@ -35,7 +18,6 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // Active campaigns
     const campaigns = await prisma.campaign.findMany({
       where: { isActive: true },
       select: {
@@ -78,7 +60,6 @@ export async function GET(request: NextRequest) {
         channel: m.channel,
         status: m.status,
         sentAt: m.sentAt,
-        content: m.content,
       })),
       minutesSinceAbandoned: Math.floor((Date.now() - c.abandonedAt.getTime()) / 60000),
     }))
@@ -90,7 +71,7 @@ export async function GET(request: NextRequest) {
       campaigns,
       carts: cartDetails,
     })
-  } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+  } catch {
+    return NextResponse.json({ ok: false, error: 'Failed to load debug data' }, { status: 500 })
   }
 }
