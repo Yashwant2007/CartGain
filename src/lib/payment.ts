@@ -46,6 +46,7 @@ export interface Plan {
   price: number;
   yearlyPrice: number;
   maxCarts: number;
+  maxCampaigns: number;
   features: string[];
   revSharePercent: number;
   estimatedRecovery: EstimatedRecovery;
@@ -146,12 +147,14 @@ export const PLANS: Record<string, Plan> = {
     price: 0,
     yearlyPrice: 0,
     maxCarts: FREE_CARTS_THRESHOLD,
+    maxCampaigns: 1,
     revSharePercent: 0,
     estimatedRecovery: { min: 0, max: 25000 },
     features: [
       "All channels: SMS, WhatsApp, Email",
       "AI-powered recovery optimization",
       "Up to 50 recovered carts — completely free",
+      "1 active campaign",
       "Real-time analytics dashboard",
       "Basic email support",
     ],
@@ -162,11 +165,14 @@ export const PLANS: Record<string, Plan> = {
     price: 999,
     yearlyPrice: 9990,
     maxCarts: 500,
+    maxCampaigns: 5,
     revSharePercent: 3,
     estimatedRecovery: { min: 25000, max: 100000 },
     features: [
       "All channels: SMS, WhatsApp, Email",
       "AI-powered recovery optimization",
+      "Up to 500 recovered carts",
+      "Up to 5 active campaigns",
       "Real-time analytics dashboard",
       "3% revenue share on recovered revenue",
     ],
@@ -177,6 +183,7 @@ export const PLANS: Record<string, Plan> = {
     price: 2999,
     yearlyPrice: 29990,
     maxCarts: 3000,
+    maxCampaigns: 20,
     revSharePercent: 2.5,
     estimatedRecovery: { min: 100000, max: 500000 },
     features: [
@@ -195,6 +202,7 @@ export const PLANS: Record<string, Plan> = {
     price: 8999,
     yearlyPrice: 89990,
     maxCarts: 15000,
+    maxCampaigns: 50,
     revSharePercent: 2,
     estimatedRecovery: { min: 500000, max: 2500000 },
     features: [
@@ -212,6 +220,7 @@ export const PLANS: Record<string, Plan> = {
     price: 0,
     yearlyPrice: 0,
     maxCarts: Infinity,
+    maxCampaigns: Infinity,
     revSharePercent: 0,
     estimatedRecovery: { min: 2500000, max: 10000000 },
     features: [

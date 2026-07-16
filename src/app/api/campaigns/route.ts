@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { campaignCreateSchema, validateOrThrow, ValidationError, handleValidationError } from '@/lib/validation'
+import { getSubscription } from '@/lib/subscription'
+import { PLANS } from '@/lib/payment'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,6 +69,25 @@ export async function POST(request: NextRequest) {
 
     if (!store || store.userId !== session.user.id) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404 })
+    }
+
+    const subscription = await getSubscription(session.user.id)
+    if (!subscription) {
+      return NextResponse.json({ message: 'No subscription found. Please choose a plan first.' }, { status: 402 })
+    }
+
+    const planConfig = Object.values(PLANS).find(p => p.id === subscription.plan)
+    const maxCampaigns = planConfig?.maxCampaigns ?? Infinity
+
+    if (maxCampaigns !== Infinity) {
+      const existingCount = await prisma.campaign.count({
+        where: { userId: session.user.id },
+      })
+      if (existingCount >= maxCampaigns) {
+        return NextResponse.json({
+          message: `Campaign limit reached. Your ${planConfig?.name || 'current'} plan allows up to ${maxCampaigns} campaigns. Upgrade to create more.`,
+        }, { status: 403 })
+      }
     }
 
     const campaign = await prisma.campaign.create({
