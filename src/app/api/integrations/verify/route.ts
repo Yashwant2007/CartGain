@@ -107,8 +107,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ verified: true, storeName: result.storeName })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Verification failed'
-    return NextResponse.json({ verified: false, error: message }, { status: 400 })
+  } catch {
+    return NextResponse.json({ verified: false, error: 'Verification failed' }, { status: 400 })
   }
 }
