@@ -13,20 +13,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { plan, amount, period } = await req.json();
+    const { plan, amount: clientAmount, period } = await req.json();
 
-    if (!plan || !amount || amount <= 0) {
+    if (!plan) {
       return NextResponse.json(
-        { error: "Invalid plan or amount" },
+        { error: "Plan is required" },
+        { status: 400 }
+      );
+    }
+
+    const planConfig = Object.values(PLANS).find(p => p.id === plan);
+    if (!planConfig || planConfig.price === 0) {
+      return NextResponse.json(
+        { error: "Invalid plan" },
         { status: 400 }
       );
     }
 
     const billingPeriod = period || 'monthly';
+    const expectedPrice = billingPeriod === 'yearly' ? planConfig.yearlyPrice : planConfig.price;
+    const serverAmount = Math.round(expectedPrice * 100);
+
+    // Validate client-provided amount against server-side plan pricing
+    if (!clientAmount || Math.round(clientAmount * 100) !== serverAmount) {
+      return NextResponse.json(
+        { error: "Invalid amount" },
+        { status: 400 }
+      );
+    }
 
     // Create Razorpay order
     const options = {
-      amount: Math.round(amount * 100), // Razorpay expects amount in paise
+      amount: serverAmount, // Razorpay expects amount in paise
       currency: "INR",
       receipt: `receipt_${Date.now()}`,
       notes: {

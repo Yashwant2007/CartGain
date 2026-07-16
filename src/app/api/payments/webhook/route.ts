@@ -72,16 +72,28 @@ async function handlePaymentCaptured(payment: any) {
   const userId = payment.notes?.userId;
   const plan = payment.notes?.plan;
   const period = payment.notes?.period || 'monthly';
+  const paidAmount = (payment.amount || 0) / 100;
 
   if (!userId || !plan) return;
 
   const planConfig = Object.values(PLANS).find(
     (p) => p.id === plan || (plan === "credits")
   );
-  const planSmsCredits = planConfig && "smsCredits" in planConfig ? (planConfig as any).smsCredits : 0;
+  if (!planConfig) {
+    console.error(`Webhook: unknown plan "${plan}" for user ${userId}`);
+    return;
+  }
+
+  const expectedPrice = period === 'yearly' ? planConfig.yearlyPrice : planConfig.price;
+  if (plan !== "credits" && Math.round(paidAmount) !== Math.round(expectedPrice)) {
+    console.error(`Webhook: amount mismatch for user ${userId} plan ${plan}: paid ${paidAmount} vs expected ${expectedPrice}`);
+    return;
+  }
+
+  const planSmsCredits = "smsCredits" in planConfig ? (planConfig as any).smsCredits : 0;
 
   const isMonthlyPlan = plan !== "credits";
-  const smsToAdd = isMonthlyPlan ? planSmsCredits : Math.round((payment.amount || 0) / 100);
+  const smsToAdd = isMonthlyPlan ? planSmsCredits : Math.round(paidAmount);
   const periodDays = period === 'yearly' ? 365 : 30;
 
   const existingSubscription = await prisma.subscription.findFirst({
