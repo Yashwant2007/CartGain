@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     authUrl.searchParams.set('scope', scopes)
     authUrl.searchParams.set('redirect_uri', redirectUri)
     authUrl.searchParams.set('state', state)
-    authUrl.searchParams.set('grant_options[]', 'per-user')
+    // No grant_options[] → offline token with refresh_token (Shopify defaults to offline)
 
     return NextResponse.json({ authUrl: authUrl.toString(), state })
   } catch (error) {
