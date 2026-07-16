@@ -154,6 +154,11 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
       }
     }
 
+    const planConfig = isPaidUser && subscription
+      ? Object.values(PLANS).find(p => p.id === subscription.plan) || PLANS.FREE
+      : PLANS.FREE
+    const customerLimits = planConfig.maxMessagesPerCustomer
+
     const channels = campaign.channels.length > 0 ? campaign.channels : ['whatsapp', 'sms', 'email']
     let sendDelayMs = campaign.sendDelay * 60 * 1000
     let followUpDelayMs = campaign.followUpDelay * 60 * 1000
@@ -187,11 +192,12 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
 
       if (carts.length === 0) break
 
+      const customerMsgCounts = await getCustomerMessageCounts(store.id, carts)
       const cartResults = await Promise.allSettled(
         carts.map(cart => processSingleCart(cart, {
           campaign, store, subscription,
           sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest,
-          optedOutEmails, optedOutPhones,
+          optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts,
         }))
       )
 
@@ -215,6 +221,8 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
   }
 }
 
+type CustomerMsgCounts = Map<string, { email: number; sms: number; whatsapp: number }>
+
 type CartConfig = {
   campaign: any
   store: any
@@ -227,10 +235,59 @@ type CartConfig = {
   abTest: any
   optedOutEmails: Set<string>
   optedOutPhones: Set<string>
+  customerLimits: { email: number; sms: number; whatsapp: number }
+  customerMsgCounts: CustomerMsgCounts
+}
+
+async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<CustomerMsgCounts> {
+  const customerKeys = new Set<string>()
+  for (const cart of carts) {
+    const key = (cart.customerEmail || cart.customerPhone || '').toLowerCase().trim()
+    if (key) customerKeys.add(key)
+  }
+  if (customerKeys.size === 0) return new Map()
+
+  const emails = new Set<string>()
+  const phones = new Set<string>()
+  for (const cart of carts) {
+    if (cart.customerEmail) emails.add(cart.customerEmail.toLowerCase().trim())
+    if (cart.customerPhone) phones.add(cart.customerPhone.replace(/\D/g, ''))
+  }
+
+  const messages = await prisma.message.findMany({
+    where: {
+      cart: {
+        storeId,
+        ...(emails.size > 0 && phones.size > 0
+          ? { OR: [ { customerEmail: { in: Array.from(emails) } }, { customerPhone: { in: Array.from(phones) } } ] }
+          : emails.size > 0
+            ? { customerEmail: { in: Array.from(emails) } }
+            : { customerPhone: { in: Array.from(phones) } }
+        ),
+      },
+      status: 'sent',
+    },
+    select: {
+      channel: true,
+      cart: { select: { customerEmail: true, customerPhone: true } },
+    },
+  })
+
+  const counts = new Map<string, { email: number; sms: number; whatsapp: number }>()
+  for (const msg of messages) {
+    const key = (msg.cart.customerEmail || msg.cart.customerPhone || '').toLowerCase().trim()
+    if (!key) continue
+    if (!counts.has(key)) counts.set(key, { email: 0, sms: 0, whatsapp: 0 })
+    const entry = counts.get(key)!
+    if (msg.channel === 'email') entry.email++
+    else if (msg.channel === 'sms') entry.sms++
+    else if (msg.channel === 'whatsapp') entry.whatsapp++
+  }
+  return counts
 }
 
   async function processSingleCart(cart: any, config: CartConfig): Promise<{ sent: number; failed: number }> {
-  const { campaign, store, subscription, sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest, optedOutEmails, optedOutPhones } = config
+  const { campaign, store, subscription, sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest, optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts } = config
 
   try {
     const step = cart.messages.length
@@ -259,6 +316,26 @@ type CartConfig = {
 
     if (customerEmail && optedOutEmails.has(customerEmail)) return { sent: 0, failed: 0 }
     if (customerPhone && !customerEmail && optedOutPhones.has(customerPhone)) return { sent: 0, failed: 0 }
+
+    const customerKey = (customerEmail || customerPhone || '').toLowerCase().trim()
+    const customerCounts = customerKey ? customerMsgCounts.get(customerKey) : undefined
+
+    const channelLimited = (ch: string): boolean => {
+      if (!customerCounts || !customerKey) return false
+      const limit = customerLimits[ch as keyof typeof customerLimits] ?? Infinity
+      if (limit === Infinity) return false
+      const used = customerCounts[ch as keyof typeof customerCounts] ?? 0
+      return used >= limit
+    }
+
+    const limitedChannels = availableChannels.filter(ch => channelLimited(ch))
+    const allowedChannels = availableChannels.filter(ch => !channelLimited(ch))
+
+    if (limitedChannels.length > 0) {
+      console.log(`📵 Customer ${customerKey}: reached limit for ${limitedChannels.join(', ')} (plan limit: ${JSON.stringify(customerLimits)})`)
+    }
+
+    if (allowedChannels.length === 0) return { sent: 0, failed: 0 }
 
     let abTestVariant: string | null = null
     let adjActiveChannels = [...activeChannels]
@@ -313,7 +390,7 @@ type CartConfig = {
     }
 
     let globalSendSuccess = false
-    for (const ch of availableChannels) {
+    for (const ch of allowedChannels) {
       const cartUrl = `${appUrl}/r/${cart.id}?c=${ch}`
       cartCtx.cartUrl = cartUrl
 

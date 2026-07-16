@@ -40,6 +40,12 @@ export interface EstimatedRecovery {
   max: number;
 }
 
+export interface PerChannelLimits {
+  email: number
+  sms: number
+  whatsapp: number
+}
+
 export interface Plan {
   id: string;
   name: string;
@@ -47,6 +53,7 @@ export interface Plan {
   yearlyPrice: number;
   maxCarts: number;
   maxCampaigns: number;
+  maxMessagesPerCustomer: PerChannelLimits;
   features: string[];
   revSharePercent: number;
   estimatedRecovery: EstimatedRecovery;
@@ -148,6 +155,7 @@ export const PLANS: Record<string, Plan> = {
     yearlyPrice: 0,
     maxCarts: FREE_CARTS_THRESHOLD,
     maxCampaigns: 1,
+    maxMessagesPerCustomer: { email: 3, sms: 3, whatsapp: 3 },
     revSharePercent: 0,
     estimatedRecovery: { min: 0, max: 25000 },
     features: [
@@ -166,6 +174,7 @@ export const PLANS: Record<string, Plan> = {
     yearlyPrice: 9990,
     maxCarts: 500,
     maxCampaigns: 5,
+    maxMessagesPerCustomer: { email: 5, sms: 5, whatsapp: 5 },
     revSharePercent: 3,
     estimatedRecovery: { min: 25000, max: 100000 },
     features: [
@@ -184,6 +193,7 @@ export const PLANS: Record<string, Plan> = {
     yearlyPrice: 29990,
     maxCarts: 3000,
     maxCampaigns: 20,
+    maxMessagesPerCustomer: { email: 10, sms: 10, whatsapp: 10 },
     revSharePercent: 2.5,
     estimatedRecovery: { min: 100000, max: 500000 },
     features: [
@@ -203,6 +213,7 @@ export const PLANS: Record<string, Plan> = {
     yearlyPrice: 89990,
     maxCarts: 15000,
     maxCampaigns: 50,
+    maxMessagesPerCustomer: { email: 20, sms: 20, whatsapp: 20 },
     revSharePercent: 2,
     estimatedRecovery: { min: 500000, max: 2500000 },
     features: [
@@ -221,6 +232,7 @@ export const PLANS: Record<string, Plan> = {
     yearlyPrice: 0,
     maxCarts: Infinity,
     maxCampaigns: Infinity,
+    maxMessagesPerCustomer: { email: Infinity, sms: Infinity, whatsapp: Infinity },
     revSharePercent: 0,
     estimatedRecovery: { min: 2500000, max: 10000000 },
     features: [
