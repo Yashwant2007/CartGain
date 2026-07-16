@@ -904,7 +904,11 @@ export default function HomePage() {
                   </p>
                   <p className="flex items-start space-x-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                    <span>No hidden fees, no per-message charges, no setup costs</span>
+                    <span>Campaign limits per plan — <strong className="text-white">5 Starter</strong> / <strong className="text-white">20 Growth</strong> / <strong className="text-white">50 Pro</strong> active campaigns</span>
+                  </p>
+                  <p className="flex items-start space-x-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    <span>Per-customer message caps: <strong className="text-white">5 Starter</strong> / <strong className="text-white">10 Growth</strong> / <strong className="text-white">20 Pro</strong> per channel. Optional overage billing if you need more.</span>
                   </p>
                 </div>
               </div>

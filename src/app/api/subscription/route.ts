@@ -22,9 +22,13 @@ export async function GET() {
     })
 
     let cartsRecovered = 0
+    let activeCampaigns = 0
     if (store) {
       cartsRecovered = await prisma.recoveredCart.count({
         where: { storeId: store.id },
+      })
+      activeCampaigns = await prisma.campaign.count({
+        where: { storeId: store.id, isActive: true },
       })
     }
 
@@ -46,6 +50,10 @@ export async function GET() {
             revenueShareAccrued: subscription.revenueShareAccrued,
             revenueSharePaid: subscription.revenueSharePaid,
             currentPeriodEnd: subscription.currentPeriodEnd,
+            cartsUsedInPeriod: subscription.cartsUsedInPeriod,
+            cartsLimit: subscription.cartsLimit,
+            overageEnabled: subscription.overageEnabled,
+            overageMessages: subscription.overageMessages,
           }
         : null,
       store: store
@@ -53,6 +61,9 @@ export async function GET() {
         : null,
       invoices,
       plans: PLANS,
+      meta: {
+        activeCampaigns,
+      },
     })
   } catch (error) {
     console.error('Subscription fetch error:', error)

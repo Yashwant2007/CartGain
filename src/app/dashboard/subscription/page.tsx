@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Shield, Percent, Zap, FileText, Download } from 'lucide-react'
+import { Check, Shield, Percent, Zap, FileText, Download, ToggleLeft, Mail, Smartphone, MessageSquare } from 'lucide-react'
 import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/payment'
 
 type SubscriptionData = {
@@ -13,6 +13,10 @@ type SubscriptionData = {
   revenueShareAccrued: number
   revenueSharePaid: number
   currentPeriodEnd: string
+  cartsUsedInPeriod: number
+  cartsLimit: number
+  overageEnabled: boolean
+  overageMessages: number
 }
 
 type StoreData = {
@@ -50,6 +54,8 @@ export default function SubscriptionPage() {
   const [cancelling, setCancelling] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
+  const [activeCampaigns, setActiveCampaigns] = useState(0)
+  const [overageToggling, setOverageToggling] = useState(false)
 
   const fetchData = async () => {
     try {
@@ -71,6 +77,13 @@ export default function SubscriptionPage() {
         if (current) {
           setTotalRecoveredCarts(current.cartsRecovered ?? 0)
           setMonthlyRecoveredRevenue(current.netRevenue ?? current.revenueRecovered ?? 0)
+        }
+      }
+
+      if (subRes.ok) {
+        const subData = await subRes.json()
+        if (subData.meta) {
+          setActiveCampaigns(subData.meta.activeCampaigns ?? 0)
         }
       }
     } catch (err) {
@@ -116,6 +129,25 @@ export default function SubscriptionPage() {
   const avgCartValue = monthlyRecoveredRevenue > 0 && cartsUsed > 0 ? Math.round(monthlyRecoveredRevenue / cartsUsed) : 1000
   const revSharePercent = currentPlan ? currentPlan.revSharePercent : 0
   const estimatedRevShare = revShareCarts * avgCartValue * (revSharePercent / 100)
+
+  const handleOverageToggle = async () => {
+    setOverageToggling(true)
+    try {
+      const target = !subscription?.overageEnabled
+      const res = await fetch('/api/subscription/overage', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: target }),
+      })
+      if (res.ok) {
+        setSubscription(prev => prev ? { ...prev, overageEnabled: target } : prev)
+      }
+    } catch {
+      console.error('Failed to toggle overage')
+    } finally {
+      setOverageToggling(false)
+    }
+  }
 
   const handleCancelSubscription = async () => {
     setCancelling(true)
@@ -278,29 +310,72 @@ export default function SubscriptionPage() {
 
         {/* Plan Usage (paid users only) */}
         {isPaidUser && currentPlan && (
-          <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-5 mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-2">
-                <Zap className="w-4 h-4 text-cyan-400" />
-                <p className="text-sm text-blue-300/80 font-medium">Monthly Cart Usage</p>
+          <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-5 mb-4 space-y-4">
+            {/* Carts */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-2">
+                  <Zap className="w-4 h-4 text-cyan-400" />
+                  <p className="text-sm text-blue-300/80 font-medium">Monthly Cart Usage</p>
+                </div>
+                <p className="text-sm text-blue-300/60">
+                  {cartsUsed.toLocaleString('en-IN')} / {currentPlan.maxCarts === Infinity ? 'Unlimited' : currentPlan.maxCarts.toLocaleString('en-IN')}
+                </p>
               </div>
-              <p className="text-sm text-blue-300/60">
-                {cartsUsed.toLocaleString('en-IN')} / {currentPlan.maxCarts === Infinity ? 'Unlimited' : currentPlan.maxCarts.toLocaleString('en-IN')} carts
-              </p>
-            </div>
-            {currentPlan.maxCarts < Infinity && (
-              <>
-                <div className="w-full bg-slate-600/50 rounded-full h-3 mb-1">
+              {currentPlan.maxCarts < Infinity && (
+                <div className="w-full bg-slate-600/50 rounded-full h-2">
                   <div
-                    className="bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full h-3 transition-all duration-500"
+                    className="bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full h-2 transition-all duration-500"
                     style={{ width: `${Math.min((cartsUsed / currentPlan.maxCarts) * 100, 100)}%` }}
                   />
                 </div>
-                <p className="text-xs text-blue-300/60 mt-2">
-                  {currentPlan.revSharePercent}% revenue share on recovered revenue
+              )}
+            </div>
+
+            {/* Campaigns */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-2">
+                  <MessageSquare className="w-4 h-4 text-violet-400" />
+                  <p className="text-sm text-blue-300/80 font-medium">Active Campaigns</p>
+                </div>
+                <p className="text-sm text-blue-300/60">
+                  {activeCampaigns} / {currentPlan.maxCampaigns === Infinity ? 'Unlimited' : currentPlan.maxCampaigns}
                 </p>
-              </>
-            )}
+              </div>
+              {currentPlan.maxCampaigns < Infinity && (
+                <div className="w-full bg-slate-600/50 rounded-full h-2">
+                  <div
+                    className="bg-gradient-to-r from-violet-500 to-purple-500 rounded-full h-2 transition-all duration-500"
+                    style={{ width: `${Math.min((activeCampaigns / currentPlan.maxCampaigns) * 100, 100)}%` }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Per-customer message limits */}
+            <div>
+              <p className="text-xs text-blue-300/80 font-medium mb-2">Per-customer message limits</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                  <Mail className="w-4 h-4 text-blue-400 mx-auto mb-1" />
+                  <p className="text-xs text-blue-300/60">Email</p>
+                  <p className="text-sm font-semibold text-white">{currentPlan.maxMessagesPerCustomer.email === Infinity ? '∞' : currentPlan.maxMessagesPerCustomer.email}</p>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                  <Smartphone className="w-4 h-4 text-green-400 mx-auto mb-1" />
+                  <p className="text-xs text-blue-300/60">SMS</p>
+                  <p className="text-sm font-semibold text-white">{currentPlan.maxMessagesPerCustomer.sms === Infinity ? '∞' : currentPlan.maxMessagesPerCustomer.sms}</p>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                  <MessageSquare className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
+                  <p className="text-xs text-blue-300/60">WhatsApp</p>
+                  <p className="text-sm font-semibold text-white">{currentPlan.maxMessagesPerCustomer.whatsapp === Infinity ? '∞' : currentPlan.maxMessagesPerCustomer.whatsapp}</p>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-blue-300/60 mt-2">{currentPlan.revSharePercent}% revenue share on recovered revenue</p>
           </div>
         )}
 
@@ -396,12 +471,60 @@ export default function SubscriptionPage() {
               </p>
               <p className="flex items-start space-x-2">
                 <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                <span>No hidden fees, no per-message charges, no setup costs</span>
+                <span>Campaign limits: <strong className="text-white">5 Starter</strong> / <strong className="text-white">20 Growth</strong> / <strong className="text-white">50 Pro</strong> active campaigns</span>
+              </p>
+              <p className="flex items-start space-x-2">
+                <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                <span>Per-customer message caps: <strong className="text-white">5 Starter</strong> / <strong className="text-white">10 Growth</strong> / <strong className="text-white">20 Pro</strong> per channel. Optional overage billing if you need more.</span>
               </p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Overage Billing Section */}
+      {isPaidUser && currentPlan && (
+        <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center">
+                <Percent className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">Overage Billing</h2>
+                <p className="text-sm text-blue-300/60">
+                  When a customer reaches their per-channel message limit, we can still send messages and bill you per overage message.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleOverageToggle}
+              disabled={overageToggling}
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all ${
+                subscription?.overageEnabled ? 'bg-cyan-500' : 'bg-slate-600'
+              } ${overageToggling ? 'opacity-60 cursor-wait' : 'cursor-pointer'}`}
+            >
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-all ${
+                subscription?.overageEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`} />
+            </button>
+          </div>
+
+          {subscription?.overageEnabled && subscription.overageMessages > 0 && (
+            <div className="bg-slate-700/40 border border-amber-500/30 rounded-lg p-4">
+              <p className="text-xs text-blue-300/80 font-medium mb-1">Overage Messages This Period</p>
+              <p className="text-xl font-bold text-amber-400">{subscription.overageMessages.toLocaleString('en-IN')}</p>
+              <p className="text-xs text-blue-300/60 mt-1">
+                These messages were sent beyond your plan&apos;s per-customer limits and will appear on your next invoice.
+              </p>
+            </div>
+          )}
+
+          {subscription?.overageEnabled && subscription.overageMessages === 0 && (
+            <p className="text-xs text-blue-300/50">No overage messages yet. Toggle on to allow sending beyond per-customer limits.</p>
+          )}
+        </div>
+      )}
 
       {/* Invoices Section */}
       {isPaidUser && (

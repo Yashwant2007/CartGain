@@ -163,6 +163,7 @@ export const PLANS: Record<string, Plan> = {
       "AI-powered recovery optimization",
       "Up to 50 recovered carts — completely free",
       "1 active campaign",
+      "Per-customer: up to 3 messages across email, SMS & WhatsApp",
       "Real-time analytics dashboard",
       "Basic email support",
     ],
@@ -182,6 +183,7 @@ export const PLANS: Record<string, Plan> = {
       "AI-powered recovery optimization",
       "Up to 500 recovered carts",
       "Up to 5 active campaigns",
+      "Per-customer: up to 5 messages across email, SMS & WhatsApp",
       "Real-time analytics dashboard",
       "3% revenue share on recovered revenue",
     ],
@@ -198,6 +200,8 @@ export const PLANS: Record<string, Plan> = {
     estimatedRecovery: { min: 100000, max: 500000 },
     features: [
       "Everything in Starter, plus:",
+      "Up to 20 active campaigns",
+      "Per-customer: up to 10 messages across email, SMS & WhatsApp",
       "A/B testing for optimal messaging",
       "Priority email & chat support",
       "Custom discount rules & timing",
@@ -218,6 +222,8 @@ export const PLANS: Record<string, Plan> = {
     estimatedRecovery: { min: 500000, max: 2500000 },
     features: [
       "Everything in Growth, plus:",
+      "Up to 50 active campaigns",
+      "Per-customer: up to 20 messages across email, SMS & WhatsApp",
       "White-label reports (your brand)",
       "Dedicated account manager",
       "Custom integrations & webhooks",

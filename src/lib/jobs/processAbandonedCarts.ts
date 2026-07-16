@@ -335,7 +335,11 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       console.log(`📵 Customer ${customerKey}: reached limit for ${limitedChannels.join(', ')} (plan limit: ${JSON.stringify(customerLimits)})`)
     }
 
-    if (allowedChannels.length === 0) return { sent: 0, failed: 0 }
+    const overageEligible = subscription?.overageEnabled
+    const channelsToProcess = overageEligible ? availableChannels : allowedChannels
+    const isOverageChannel = (ch: string): boolean => channelLimited(ch)
+
+    if (channelsToProcess.length === 0) return { sent: 0, failed: 0 }
 
     let abTestVariant: string | null = null
     let adjActiveChannels = [...activeChannels]
@@ -390,7 +394,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     }
 
     let globalSendSuccess = false
-    for (const ch of allowedChannels) {
+    for (const ch of channelsToProcess) {
       const cartUrl = `${appUrl}/r/${cart.id}?c=${ch}`
       cartCtx.cartUrl = cartUrl
 
@@ -504,6 +508,13 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         globalSendSuccess = true
         if (subscription) {
           await incrementCartsUsedCounter(campaign.userId, subscription.id)
+          if (isOverageChannel(ch)) {
+            await prisma.subscription.update({
+              where: { id: subscription.id },
+              data: { overageMessages: { increment: 1 } },
+            })
+            subscription.overageMessages++
+          }
         }
         const today = new Date(new Date().toDateString())
         const channelCounts = {

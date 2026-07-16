@@ -261,6 +261,8 @@ model Subscription {
   cartsLimit      Int       @default(0)   // Snapshot of plan.maxCarts at period start (0 = unlimited)
   revenueShareAccrued  Float @default(0)  // Rev share accrued in current period
   revenueSharePaid     Float @default(0)  // Total rev share paid over lifetime
+  overageEnabled  Boolean   @default(false) // Merchant opted into overage billing
+  overageMessages Int       @default(0)     // Messages sent beyond per-customer per-channel limits this period
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
