@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Copy, Edit2, Trash2, Play, Pause, BarChart3, Split, Trophy } from 'lucide-react'
+import { Plus, Copy, Edit2, Trash2, Play, Pause, BarChart3, Split, Trophy, Info } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import { campaignCreateSchema, abTestCreateSchema } from '@/lib/validation'
 
@@ -33,6 +33,7 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loadingData, setLoadingData] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [currentPlan, setCurrentPlan] = useState<{ name: string; maxMessagesPerCustomer: { email: number; sms: number; whatsapp: number } } | null>(null)
 
   // Check for auth errors from useResolvedStoreId
   useEffect(() => {
@@ -53,14 +54,25 @@ export default function CampaignsPage() {
         setLoadingData(true)
         setLoadError(null)
 
-        const response = await fetch(`/api/campaigns?storeId=${storeId}`)
-        if (!response.ok) {
+        const [campaignsRes, subRes] = await Promise.all([
+          fetch(`/api/campaigns?storeId=${storeId}`),
+          fetch('/api/subscription'),
+        ])
+        if (!campaignsRes.ok) {
           throw new Error('Failed to load campaigns')
         }
 
-        const data = await response.json()
+        const campaignsData = await campaignsRes.json()
         if (!cancelled) {
-          setCampaigns(data.campaigns || [])
+          setCampaigns(campaignsData.campaigns || [])
+        }
+
+        if (subRes.ok) {
+          const subData = await subRes.json()
+          const plan = subData.subscription?.resolvedPlan
+          if (plan && !cancelled) {
+            setCurrentPlan(plan)
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -94,8 +106,8 @@ export default function CampaignsPage() {
       sendDelay: config.sendDelay,
       maxFollowUps: config.followUps,
       discountEnabled: config.discountEnabled,
-      discountType: config.discountEnabled ? config.discountType : null,
-      discountValue: config.discountEnabled ? config.discountValue : null,
+      discountType: config.discountEnabled ? config.discountType : undefined,
+      discountValue: config.discountEnabled ? config.discountValue : undefined,
       isActive: true,
     })
 
@@ -175,6 +187,7 @@ export default function CampaignsPage() {
         <CreateCampaignModal
           onClose={() => setShowCreateModal(false)}
           onCreate={handleCreateCampaign}
+          plan={currentPlan}
         />
       )}
     </div>
@@ -700,7 +713,11 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
   )
 }
 
-function CreateCampaignModal({ onClose, onCreate }: { onClose: () => void; onCreate: (config: CreateCampaignConfig) => void }) {
+function CreateCampaignModal({ onClose, onCreate, plan }: {
+  onClose: () => void
+  onCreate: (config: CreateCampaignConfig) => void
+  plan: { name: string; maxMessagesPerCustomer: { email: number; sms: number; whatsapp: number } } | null
+}) {
   const [step, setStep] = useState(1)
   const [config, setConfig] = useState({
     name: '',
@@ -848,8 +865,23 @@ function CreateCampaignModal({ onClose, onCreate }: { onClose: () => void; onCre
                   className="w-full accent-cyan-400"
                 />
                 <div className="text-center text-lg font-semibold text-cyan-400 mt-2">
-                  {config.followUps} follow-up messages
+                  {config.followUps} follow-up messages (total: {config.followUps + 1} per customer)
                 </div>
+                {plan && (
+                  <div className="mt-3 bg-blue-900/20 border border-blue-700/30 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                      <div className="text-xs text-blue-300/80">
+                        <p className="font-medium text-blue-200 mb-1">{plan.name} plan limits per customer:</p>
+                        <div className="flex gap-4">
+                          <span>Email: <strong className="text-white">{plan.maxMessagesPerCustomer.email === Infinity ? '∞' : plan.maxMessagesPerCustomer.email}</strong></span>
+                          <span>SMS: <strong className="text-white">{plan.maxMessagesPerCustomer.sms === Infinity ? '∞' : plan.maxMessagesPerCustomer.sms}</strong></span>
+                          <span>WhatsApp: <strong className="text-white">{plan.maxMessagesPerCustomer.whatsapp === Infinity ? '∞' : plan.maxMessagesPerCustomer.whatsapp}</strong></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

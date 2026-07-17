@@ -39,6 +39,10 @@ export async function GET() {
         })
       : []
 
+    const resolvedPlan = subscription
+      ? Object.values(PLANS).find(p => p.id === subscription.plan) || PLANS.FREE
+      : PLANS.FREE
+
     return NextResponse.json({
       subscription: subscription
         ? {
@@ -54,6 +58,11 @@ export async function GET() {
             cartsLimit: subscription.cartsLimit,
             overageEnabled: subscription.overageEnabled,
             overageMessages: subscription.overageMessages,
+            resolvedPlan: {
+              name: resolvedPlan.name,
+              maxCampaigns: resolvedPlan.maxCampaigns,
+              maxMessagesPerCustomer: resolvedPlan.maxMessagesPerCustomer,
+            },
           }
         : null,
       store: store

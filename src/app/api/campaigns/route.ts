@@ -76,6 +76,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'No subscription found. Please choose a plan first.' }, { status: 402 })
     }
 
+    if (subscription.status !== 'active') {
+      return NextResponse.json({ message: 'Your subscription is not active. Please renew your plan.' }, { status: 402 })
+    }
+
     const planConfig = Object.values(PLANS).find(p => p.id === subscription.plan)
     const maxCampaigns = planConfig?.maxCampaigns ?? Infinity
 
