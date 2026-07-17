@@ -108,6 +108,9 @@ model Store {
   pincodeStats        PincodeStats[]
   codNudges           CodNudge[]
   customers           Customer[]
+  bargainConfig       BargainConfig?
+  bargainProducts     BargainProduct[]
+  bargainSessions     BargainSession[]
 
   @@unique([userId, domain])
   @@index([userId])
@@ -271,6 +274,89 @@ model Subscription {
   revenueShareEvents  RevenueShareEvent[]
 
   @@index([userId])
+}
+
+// ── Bargain System Models (AI Negotiation at Checkout) ──
+
+model BargainConfig {
+  id               String   @id @default(cuid())
+  storeId          String   @unique
+  enabled          Boolean  @default(false)
+  maxAttempts      Int      @default(3)
+  aiModel          String   @default("gpt-4o-mini")
+  aiPersona        String   @default("friendly_shopkeeper") // friendly_shopkeeper, strict_negotiator, playful_friend
+  minProfitPercent Float    @default(20)  // global fallback floor (% margin to protect)
+  sessionTimeout   Int      @default(300) // seconds
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  store    Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+}
+
+model BargainProduct {
+  id                String   @id @default(cuid())
+  storeId           String
+  shopifyProductId  String
+  variantId         String?
+  productTitle      String?
+  minPrice          Float?   // absolute floor price
+  minProfitPercent  Float?   // overrides global
+  maxDiscountPercent Int?    // e.g. 30 means never discount more than 30% off
+  isBargainable     Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  store   Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, shopifyProductId])
+  @@index([storeId])
+}
+
+model BargainSession {
+  id                String    @id @default(cuid())
+  storeId           String
+  cartToken         String?   // links to an abandoned cart if customer leaves
+  shopifyProductId  String
+  variantId         String?
+  customerEmail     String?
+  customerPhone     String?
+  originalPrice     Float
+  currentOffer      Float     // latest offer from customer
+  finalPrice        Float?    // agreed price (null = no deal)
+  discountCode      String?   // Shopify discount code if accepted
+  attemptsUsed      Int       @default(0)
+  status            String    @default("active") // active, accepted, rejected, expired, abandoned
+  startedAt         DateTime  @default(now())
+  expiredAt         DateTime
+  updatedAt         DateTime  @updatedAt
+  createdAt         DateTime  @default(now())
+
+  store    Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  messages BargainMessage[]
+
+  @@index([storeId])
+  @@index([storeId, status])
+  @@index([cartToken])
+  @@index([customerEmail])
+  @@index([status])
+  @@index([expiredAt])
+}
+
+model BargainMessage {
+  id            String   @id @default(cuid())
+  sessionId     String
+  role          String   // customer, ai, system
+  content       String
+  offeredPrice  Float?   // if customer made an offer
+  metadata      Json?    // ai reasoning, sentiment, tactic used, etc
+  createdAt     DateTime @default(now())
+
+  session BargainSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([createdAt])
 }
 
 model Invoice {

@@ -63,6 +63,7 @@ export async function GET() {
               maxCampaigns: resolvedPlan.maxCampaigns,
               maxMessagesPerCustomer: resolvedPlan.maxMessagesPerCustomer,
             },
+            activeCampaigns,
           }
         : null,
       store: store

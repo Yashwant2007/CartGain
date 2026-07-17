@@ -33,7 +33,8 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loadingData, setLoadingData] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [currentPlan, setCurrentPlan] = useState<{ name: string; maxMessagesPerCustomer: { email: number; sms: number; whatsapp: number } } | null>(null)
+  const [currentPlan, setCurrentPlan] = useState<{ name: string; maxCampaigns: number; maxMessagesPerCustomer: { email: number; sms: number; whatsapp: number } } | null>(null)
+  const [activeCampaignCount, setActiveCampaignCount] = useState(0)
 
   // Check for auth errors from useResolvedStoreId
   useEffect(() => {
@@ -70,8 +71,10 @@ export default function CampaignsPage() {
         if (subRes.ok) {
           const subData = await subRes.json()
           const plan = subData.subscription?.resolvedPlan
+          const totalActive = subData.meta?.activeCampaigns ?? 0
           if (plan && !cancelled) {
             setCurrentPlan(plan)
+            setActiveCampaignCount(totalActive)
           }
         }
       } catch (error) {
@@ -135,6 +138,12 @@ export default function CampaignsPage() {
   const isLoading = resolvingStore || loadingData
   const error = storeError || loadError
 
+  const campaignLimitReached = currentPlan && currentPlan.maxCampaigns !== Infinity && activeCampaignCount >= currentPlan.maxCampaigns
+
+  const nextPlanName = campaignLimitReached && currentPlan
+    ? currentPlan.name === 'Starter' ? 'Growth' : currentPlan.name === 'Growth' ? 'Pro' : null
+    : null
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -142,13 +151,46 @@ export default function CampaignsPage() {
           <h1 className="text-2xl font-bold text-white">Campaigns</h1>
           <p className="text-blue-300/80 mt-1">Create and manage cart recovery sequences</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="btn-primary flex items-center justify-center sm:justify-start bg-gradient-to-r from-cyan-500 to-blue-500 text-white border border-cyan-400/50 hover:shadow-lg hover:shadow-cyan-500/50 px-4 py-2 rounded-lg transition-all w-full sm:w-auto"
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          New Campaign
-        </button>
+        <div className="relative group">
+          <button
+            onClick={() => !campaignLimitReached && setShowCreateModal(true)}
+            disabled={!!campaignLimitReached}
+            className={`btn-primary flex items-center justify-center sm:justify-start px-4 py-2 rounded-lg transition-all w-full sm:w-auto ${
+              campaignLimitReached
+                ? 'bg-slate-600/50 text-blue-300/50 border border-slate-600/50 cursor-not-allowed'
+                : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white border border-cyan-400/50 hover:shadow-lg hover:shadow-cyan-500/50'
+            }`}
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            New Campaign
+          </button>
+          {campaignLimitReached && currentPlan && (
+            <div className="absolute right-0 top-full mt-2 w-72 bg-slate-800 border border-amber-500/40 rounded-xl p-4 shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+              <div className="flex items-start gap-3">
+                <div className="w-6 h-6 bg-amber-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-amber-400 font-bold text-xs">!</span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-amber-300">Campaign limit reached</p>
+                  <p className="text-xs text-blue-300/70 mt-1">
+                    Your {currentPlan.name} plan allows up to <strong className="text-white">{currentPlan.maxCampaigns}</strong> campaigns.
+                    {nextPlanName
+                      ? ` Upgrade to ${nextPlanName} to create more.`
+                      : ' Contact us for a custom plan.'}
+                  </p>
+                  {nextPlanName && (
+                    <a
+                      href="/dashboard/subscription"
+                      className="mt-3 inline-block px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-medium rounded-lg hover:shadow-lg hover:shadow-amber-500/40 transition-all"
+                    >
+                      Upgrade to {nextPlanName} →
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {isLoading && <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 text-sm text-blue-300/80">Loading campaigns...</div>}
@@ -709,7 +751,7 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
 function CreateCampaignModal({ onClose, onCreate, plan }: {
   onClose: () => void
   onCreate: (config: CreateCampaignConfig) => void
-  plan: { name: string; maxMessagesPerCustomer: { email: number; sms: number; whatsapp: number } } | null
+  plan: { name: string; maxCampaigns: number; maxMessagesPerCustomer: { email: number; sms: number; whatsapp: number } } | null
 }) {
   const [step, setStep] = useState(1)
   const [error, setError] = useState<string | null>(null)
@@ -865,56 +907,92 @@ function CreateCampaignModal({ onClose, onCreate, plan }: {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-white mb-1">
-                  Total Messages Per Customer
+                <label className="block text-sm font-medium text-white mb-2">
+                  Message Sequence
                 </label>
-                <p className="text-xs text-blue-300/60 mb-3">First message is sent immediately. Follow-ups continue if the cart is still abandoned.</p>
+                <p className="text-xs text-blue-300/60 mb-4">Choose how many messages each customer receives if they don&apos;t complete their purchase.</p>
+
+                {/* Preset cards */}
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  {[
+                    { label: 'Single', desc: '1 message only', value: 0 },
+                    { label: 'Standard', desc: '1 + 2 follow-ups', value: 2 },
+                    { label: 'Aggressive', desc: '1 + 4 follow-ups', value: 4 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.value}
+                      onClick={() => setConfig({ ...config, followUps: preset.value })}
+                      className={`p-3 rounded-xl border text-left transition-all ${
+                        config.followUps === preset.value
+                          ? 'border-cyan-400/60 bg-cyan-600/20 ring-1 ring-cyan-400/30'
+                          : 'border-blue-700/30 bg-slate-700/40 hover:border-blue-700/60'
+                      }`}
+                    >
+                      <p className="text-sm font-semibold text-white">{preset.label}</p>
+                      <p className="text-xs text-blue-300/60 mt-0.5">{preset.desc}</p>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Custom slider */}
                 <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-cyan-400" />
-                        <span className="text-sm text-blue-200">1 initial message</span>
-                      </div>
-                      <span className="text-blue-400/50">+</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-2 h-2 rounded-full ${config.followUps > 0 ? 'bg-amber-400' : 'bg-slate-600'}`} />
-                        <span className="text-sm text-blue-200">{config.followUps} follow-up{config.followUps !== 1 ? 's' : ''}</span>
-                      </div>
-                      <span className="text-blue-400/50">=</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded-full bg-emerald-400 flex items-center justify-center text-[10px] font-bold text-slate-900">{totalMessages}</span>
-                        <span className="text-sm font-semibold text-white">total</span>
-                      </div>
-                    </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs text-blue-300/80 font-medium">Custom</span>
+                    <span className="text-xs text-blue-300/60">{totalMessages} message{totalMessages !== 1 ? 's' : ''} total</span>
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="5"
-                    value={config.followUps}
-                    onChange={(e) => setConfig({ ...config, followUps: parseInt(e.target.value) })}
-                    className="w-full accent-cyan-400 mt-1"
-                  />
-                  <div className="flex justify-between text-xs text-blue-300/50 mt-1">
-                    <span>Just the first message</span>
-                    <span>1 + 5 follow-ups = 6 total</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-blue-300/50 w-16 text-right">Just 1</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="5"
+                      value={config.followUps}
+                      onChange={(e) => setConfig({ ...config, followUps: parseInt(e.target.value) })}
+                      className="flex-1 accent-cyan-400"
+                    />
+                    <span className="text-xs text-blue-300/50 w-16">6 max</span>
                   </div>
                 </div>
+
+                {/* Timeline visual */}
+                <div className="mt-4 bg-slate-700/40 border border-blue-700/30 rounded-lg p-4">
+                  <p className="text-xs text-blue-300/60 font-medium mb-3">How it looks:</p>
+                  <div className="flex items-start gap-1">
+                    {Array.from({ length: totalMessages }).map((_, i) => (
+                      <div key={i} className="flex-1 flex flex-col items-center">
+                        <div className={`w-full h-1.5 rounded-full mb-2 ${
+                          i === 0 ? 'bg-cyan-500' : 'bg-amber-500/70'
+                        }`} />
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          i === 0
+                            ? 'bg-cyan-500 text-white'
+                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        }`}>
+                          {i + 1}
+                        </div>
+                        <p className="text-[10px] text-blue-300/60 mt-1 text-center leading-tight">
+                          {i === 0 ? 'Initial' : `Follow-up ${i}`}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Plan limit info */}
                 {plan && (
-                  <div className="mt-3 bg-blue-900/20 border border-blue-700/30 rounded-lg p-3">
+                  <div className="mt-4 bg-blue-900/20 border border-blue-700/30 rounded-lg p-3">
                     <div className="flex items-start gap-2">
                       <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
                       <div className="text-xs text-blue-300/80">
-                        <p className="font-medium text-blue-200 mb-1">{plan.name} plan — max messages per customer:</p>
-                        <div className="flex gap-4">
+                        <p className="font-medium text-blue-200 mb-1">{plan.name} plan — per-customer limits:</p>
+                        <div className="flex gap-3">
                           <span>Email: <strong className="text-white">{plan.maxMessagesPerCustomer.email === Infinity ? '∞' : plan.maxMessagesPerCustomer.email}</strong></span>
                           <span>SMS: <strong className="text-white">{plan.maxMessagesPerCustomer.sms === Infinity ? '∞' : plan.maxMessagesPerCustomer.sms}</strong></span>
                           <span>WhatsApp: <strong className="text-white">{plan.maxMessagesPerCustomer.whatsapp === Infinity ? '∞' : plan.maxMessagesPerCustomer.whatsapp}</strong></span>
                         </div>
                         {totalMessages > Math.min(plan.maxMessagesPerCustomer.email, plan.maxMessagesPerCustomer.sms, plan.maxMessagesPerCustomer.whatsapp) && (
-                          <p className="text-amber-400 mt-2 font-medium">
-                            Total messages ({totalMessages}) exceeds your plan limit per customer. Some messages will not be sent unless overage billing is enabled.
+                          <p className="text-amber-400 mt-2">
+                            Your sequence ({totalMessages} messages) may exceed your plan&apos;s per-customer limit. Go to <a href="/dashboard/subscription" className="underline">Subscription</a> to enable overage billing so excess messages are still sent.
                           </p>
                         )}
                       </div>
