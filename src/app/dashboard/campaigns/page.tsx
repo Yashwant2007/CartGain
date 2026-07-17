@@ -94,8 +94,7 @@ export default function CampaignsPage() {
 
   const handleCreateCampaign = async (config: CreateCampaignConfig) => {
     if (!storeId) {
-      setLoadError('Store ID is not available yet')
-      return
+      throw new Error('Store ID is not available yet')
     }
 
     const result = campaignCreateSchema.safeParse({
@@ -112,31 +111,25 @@ export default function CampaignsPage() {
     })
 
     if (!result.success) {
-      setLoadError(result.error.errors[0]?.message || 'Validation failed')
-      return
+      throw new Error(result.error.errors[0]?.message || 'Validation failed')
     }
 
-    try {
-      setLoadError(null)
+    const response = await fetch('/api/campaigns', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(result.data),
+    })
 
-      const response = await fetch('/api/campaigns', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(result.data),
-      })
+    const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error('Failed to create campaign')
-      }
-
-      const data = await response.json()
-      setCampaigns((current) => [data.campaign, ...current])
-      setShowCreateModal(false)
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Failed to create campaign')
+    if (!response.ok) {
+      throw new Error(data.message || `Failed to create campaign (${response.status})`)
     }
+
+    setCampaigns((current) => [data.campaign, ...current])
+    setShowCreateModal(false)
   }
 
   const isLoading = resolvingStore || loadingData
@@ -719,6 +712,8 @@ function CreateCampaignModal({ onClose, onCreate, plan }: {
   plan: { name: string; maxMessagesPerCustomer: { email: number; sms: number; whatsapp: number } } | null
 }) {
   const [step, setStep] = useState(1)
+  const [error, setError] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
   const [config, setConfig] = useState({
     name: '',
     channels: [] as string[],
@@ -729,6 +724,8 @@ function CreateCampaignModal({ onClose, onCreate, plan }: {
     discountType: 'percentage',
     discountValue: 10,
   })
+
+  const totalMessages = config.followUps + 1
 
   const steps = [
     { id: 1, name: 'Basics' },
@@ -767,6 +764,21 @@ function CreateCampaignModal({ onClose, onCreate, plan }: {
             ))}
           </div>
         </div>
+
+        {/* Error alert inside modal */}
+        {error && (
+          <div className="mx-6 mt-4 bg-red-900/30 border border-red-500/40 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-red-400 font-bold text-sm">!</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-red-300">Campaign creation failed</p>
+                <p className="text-xs text-red-300/80 mt-1">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         <div className="p-6">
@@ -853,31 +865,58 @@ function CreateCampaignModal({ onClose, onCreate, plan }: {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-white mb-3">
-                  Number of Follow-ups
+                <label className="block text-sm font-medium text-white mb-1">
+                  Total Messages Per Customer
                 </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="5"
-                  value={config.followUps}
-                  onChange={(e) => setConfig({ ...config, followUps: parseInt(e.target.value) })}
-                  className="w-full accent-cyan-400"
-                />
-                <div className="text-center text-lg font-semibold text-cyan-400 mt-2">
-                  {config.followUps} follow-up messages (total: {config.followUps + 1} per customer)
+                <p className="text-xs text-blue-300/60 mb-3">First message is sent immediately. Follow-ups continue if the cart is still abandoned.</p>
+                <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                        <span className="text-sm text-blue-200">1 initial message</span>
+                      </div>
+                      <span className="text-blue-400/50">+</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${config.followUps > 0 ? 'bg-amber-400' : 'bg-slate-600'}`} />
+                        <span className="text-sm text-blue-200">{config.followUps} follow-up{config.followUps !== 1 ? 's' : ''}</span>
+                      </div>
+                      <span className="text-blue-400/50">=</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full bg-emerald-400 flex items-center justify-center text-[10px] font-bold text-slate-900">{totalMessages}</span>
+                        <span className="text-sm font-semibold text-white">total</span>
+                      </div>
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="5"
+                    value={config.followUps}
+                    onChange={(e) => setConfig({ ...config, followUps: parseInt(e.target.value) })}
+                    className="w-full accent-cyan-400 mt-1"
+                  />
+                  <div className="flex justify-between text-xs text-blue-300/50 mt-1">
+                    <span>Just the first message</span>
+                    <span>1 + 5 follow-ups = 6 total</span>
+                  </div>
                 </div>
                 {plan && (
                   <div className="mt-3 bg-blue-900/20 border border-blue-700/30 rounded-lg p-3">
                     <div className="flex items-start gap-2">
                       <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
                       <div className="text-xs text-blue-300/80">
-                        <p className="font-medium text-blue-200 mb-1">{plan.name} plan limits per customer:</p>
+                        <p className="font-medium text-blue-200 mb-1">{plan.name} plan — max messages per customer:</p>
                         <div className="flex gap-4">
                           <span>Email: <strong className="text-white">{plan.maxMessagesPerCustomer.email === Infinity ? '∞' : plan.maxMessagesPerCustomer.email}</strong></span>
                           <span>SMS: <strong className="text-white">{plan.maxMessagesPerCustomer.sms === Infinity ? '∞' : plan.maxMessagesPerCustomer.sms}</strong></span>
                           <span>WhatsApp: <strong className="text-white">{plan.maxMessagesPerCustomer.whatsapp === Infinity ? '∞' : plan.maxMessagesPerCustomer.whatsapp}</strong></span>
                         </div>
+                        {totalMessages > Math.min(plan.maxMessagesPerCustomer.email, plan.maxMessagesPerCustomer.sms, plan.maxMessagesPerCustomer.whatsapp) && (
+                          <p className="text-amber-400 mt-2 font-medium">
+                            Total messages ({totalMessages}) exceeds your plan limit per customer. Some messages will not be sent unless overage billing is enabled.
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -948,8 +987,8 @@ function CreateCampaignModal({ onClose, onCreate, plan }: {
                   <span className="font-medium text-white">{config.sendDelay} min after abandonment</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-blue-300/80">Follow-ups:</span>
-                  <span className="font-medium text-white">{config.followUps}</span>
+                  <span className="text-blue-300/80">Messages per customer:</span>
+                  <span className="font-medium text-white">{totalMessages} total (1 initial + {config.followUps} follow-up{config.followUps !== 1 ? 's' : ''})</span>
                 </div>
                 {config.discountEnabled && (
                   <div className="flex justify-between">
@@ -987,8 +1026,24 @@ function CreateCampaignModal({ onClose, onCreate, plan }: {
                 Next
               </button>
             ) : (
-              <button onClick={() => onCreate(config)} className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all">
-                Create Campaign
+              <button
+                onClick={async () => {
+                  setError(null)
+                  setCreating(true)
+                  try {
+                    await onCreate(config)
+                  } catch (e: any) {
+                    setError(e?.message || 'Something went wrong')
+                  } finally {
+                    setCreating(false)
+                  }
+                }}
+                disabled={creating}
+                className={`px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium transition-all ${
+                  creating ? 'opacity-60 cursor-wait' : 'hover:shadow-lg hover:shadow-cyan-500/50'
+                }`}
+              >
+                {creating ? 'Creating...' : 'Create Campaign'}
               </button>
             )}
           </div>
