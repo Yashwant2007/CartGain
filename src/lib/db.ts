@@ -39,6 +39,7 @@ function createPrismaClient(): PrismaClient {
         url: dbUrl,
       },
     },
+    log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   })
 }
 

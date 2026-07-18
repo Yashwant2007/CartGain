@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
+import { Prisma } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import {
@@ -54,6 +55,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ products: items, nextCursor, hasMore })
   } catch (error) {
     console.error('[BARGAIN_PRODUCTS_GET]', error)
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2021') {
+      return NextResponse.json({ message: 'Feature not ready. Run database migrations.' }, { status: 500 })
+    }
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })
   }
 }
@@ -100,6 +104,9 @@ export async function POST(request: NextRequest) {
     const validationResponse = handleValidationError(error)
     if (validationResponse) return validationResponse
     console.error('[BARGAIN_PRODUCT_POST]', error)
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2021') {
+      return NextResponse.json({ message: 'Feature not ready. Run database migrations.' }, { status: 500 })
+    }
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })
   }
 }
@@ -146,6 +153,9 @@ export async function PUT(request: NextRequest) {
     const validationResponse = handleValidationError(error)
     if (validationResponse) return validationResponse
     console.error('[BARGAIN_PRODUCTS_PUT]', error)
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2021') {
+      return NextResponse.json({ message: 'Feature not ready. Run database migrations.' }, { status: 500 })
+    }
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })
   }
 }
@@ -179,6 +189,9 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ message: 'Product override deleted' })
   } catch (error) {
     console.error('[BARGAIN_PRODUCT_DELETE]', error)
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2021') {
+      return NextResponse.json({ message: 'Feature not ready. Run database migrations.' }, { status: 500 })
+    }
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })
   }
 }

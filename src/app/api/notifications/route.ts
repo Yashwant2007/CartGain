@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { Prisma } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -108,6 +109,24 @@ export async function GET() {
     return NextResponse.json({ notifications: notifications.slice(0, 10) })
   } catch (error) {
     console.error('Notifications error:', error)
+    if (error instanceof Prisma.PrismaClientInitializationError) {
+      return NextResponse.json(
+        { error: 'Database connection failed', notifications: [] },
+        { status: 503 }
+      )
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2021') {
+        return NextResponse.json(
+          { error: 'Database tables missing. Run migrations.', notifications: [] },
+          { status: 500 }
+        )
+      }
+      return NextResponse.json(
+        { error: 'Database query failed', notifications: [] },
+        { status: 500 }
+      )
+    }
     return NextResponse.json({ notifications: [] })
   }
 }
