@@ -1,5 +1,13 @@
 import { z } from 'zod'
 
+// Re-export helpers from root validation module so bargain routes can import
+// everything they need from `@/lib/validation/bargain`.
+export {
+  validateOrThrow,
+  handleValidationError,
+  ValidationError,
+} from '@/lib/validation'
+
 // ── Bargain config (merchant) ──
 
 export const bargainConfigUpsertSchema = z.object({

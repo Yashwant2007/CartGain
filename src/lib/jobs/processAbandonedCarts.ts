@@ -293,6 +293,19 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     const step = cart.messages.length
     if (step >= maxMessages) return { sent: 0, failed: 0 }
 
+    // Bargain-system integration hook: if this abandoned cart was linked to an
+    // active bargain session, mark that session as `abandoned` so it shows up
+    // in the Bargain → Recovery funnel. Fire-and-forget — must never block
+    // the recovery pipeline.
+    if (cart.cartId) {
+      import('@/lib/bargain/hooks')
+        .then(({ markBargainSessionAbandonedByCartToken }) =>
+          markBargainSessionAbandonedByCartToken(cart.cartId)
+        )
+        .catch(() => {})
+    }
+
+
     const requiredDelayMs = sendDelayMs + step * followUpDelayMs
     if (Date.now() - cart.abandonedAt.getTime() < requiredDelayMs) return { sent: 0, failed: 0 }
 

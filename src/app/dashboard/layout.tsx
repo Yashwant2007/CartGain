@@ -20,6 +20,7 @@ import {
   XCircle,
   BrainCircuit,
   ShoppingCart,
+  Sparkles,
 } from 'lucide-react'
 import StatusBadge from '@/components/dashboard/StatusBadge'
 
@@ -34,6 +35,7 @@ export default function DashboardLayout({
   const navigation = [
     { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Campaigns', href: '/dashboard/campaigns', icon: Megaphone },
+    { name: 'Bargain', href: '/dashboard/bargain', icon: Sparkles },
     { name: 'Carts', href: '/dashboard/carts', icon: ShoppingCart },
     { name: 'AI Insights', href: '/dashboard/ai', icon: BrainCircuit },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
