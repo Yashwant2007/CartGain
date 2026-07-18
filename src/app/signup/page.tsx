@@ -163,7 +163,7 @@ export default function SignUpPage() {
   const initiateGoogleSignIn = async () => {
     setIsLoading(true)
     try {
-      await signIn('google', { callbackUrl: '/dashboard' })
+      await signIn('google', { callbackUrl: '/setup' })
     } catch (err) {
       console.error('Google sign-in error:', err)
     } finally {

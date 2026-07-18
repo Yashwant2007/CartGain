@@ -84,14 +84,14 @@ function LoginContent() {
 
       if (isInIframe && window.top) {
         // Shopify embed — top-level redirect since popups/cookies don't work in iframes
-        window.top.location.href = `${window.location.origin}/api/auth/signin/google?callbackUrl=${encodeURIComponent('/dashboard')}`
+        window.top.location.href = `${window.location.origin}/api/auth/signin/google?callbackUrl=${encodeURIComponent('/setup')}`
         return
       }
 
       // Normal browser — use POST-based signIn (NextAuth handles popup internally)
       // GET requests to /api/auth/signin/google are broken by NextAuth's internal
       // error: the URL path segment "google" is misinterpreted as an error code.
-      await signIn('google', { callbackUrl: '/dashboard' })
+      await signIn('google', { callbackUrl: '/setup' })
     } catch (err) {
       console.error('Google sign-in error:', err)
     } finally {

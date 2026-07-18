@@ -41,6 +41,10 @@ export async function GET() {
         apiKey: decryptedApiKey,
         apiSecret: decryptedApiSecret,
       },
+      hasPassword: !!(await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { password: true },
+      }))?.password,
     })
   } catch (error) {
     console.error('Current store lookup error:', error)
