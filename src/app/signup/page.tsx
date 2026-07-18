@@ -124,21 +124,15 @@ export default function SignUpPage() {
 
       if (response.ok) {
         setToast({ message: 'Account created! Redirecting...', type: 'info' })
-        // Auto-sign-in the user, retry once if it fails
-        let signInResult = await signIn('credentials', {
+        // Auto-sign-in with redirect=true so NextAuth handles session + redirect natively
+        await signIn('credentials', {
           email: formData.email,
           password: formData.password,
-          redirect: false,
+          callbackUrl: '/dashboard',
+          redirect: true,
         })
-        if (!signInResult?.ok) {
-          await new Promise(r => setTimeout(r, 500))
-          signInResult = await signIn('credentials', {
-            email: formData.email,
-            password: formData.password,
-            redirect: false,
-          })
-        }
-        router.push(signInResult?.ok ? '/dashboard' : '/login?registered=true')
+        // If we reach here, sign-in silently failed — fallback to login page
+        router.push('/login?registered=true')
         router.refresh()
       } else {
         setError(data.message || 'Registration failed. Please try again.')

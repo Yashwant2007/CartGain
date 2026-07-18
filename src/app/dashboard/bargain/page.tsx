@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useRouter as useRouterNext } from 'next/navigation'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import {
   Sparkles,
@@ -86,6 +85,7 @@ export default function BargainDashboardPage() {
     maxDiscountPercent: undefined,
     isBargainable: true,
   })
+  const [addingProduct, setAddingProduct] = useState(false)
 
   const [sessions, setSessions] = useState<BargainSession[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
@@ -164,6 +164,7 @@ export default function BargainDashboardPage() {
 
   async function addProduct() {
     if (!storeId || !newProduct.shopifyProductId) return
+    setAddingProduct(true)
     try {
       const res = await fetch('/api/bargain/products', {
         method: 'POST',
@@ -178,6 +179,8 @@ export default function BargainDashboardPage() {
       await fetchProducts()
     } catch (err: any) {
       alert(err.message ?? 'Failed to add product')
+    } finally {
+      setAddingProduct(false)
     }
   }
 
@@ -280,100 +283,113 @@ export default function BargainDashboardPage() {
       </div>
 
       {/* Config tab */}
-      {tab === 'config' && config && (
+      {tab === 'config' && (
         <div className="max-w-2xl space-y-5 bg-slate-900/60 border border-blue-800/30 rounded-xl p-6">
-          <label className="flex items-center justify-between">
-            <span className="text-blue-100">Enable Bargain for this store</span>
-            <input
-              type="checkbox"
-              checked={configForm.enabled ?? false}
-              onChange={e => setConfigForm({ ...configForm, enabled: e.target.checked })}
-              className="w-5 h-5 accent-blue-500"
-            />
-          </label>
+          {!config ? (
+            configMessage ? (
+              <div className="text-red-300 text-sm p-4 text-center">{configMessage.text}</div>
+            ) : (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-5 h-5 animate-spin text-blue-400 mr-2" />
+                <span className="text-blue-300/60 text-sm">Loading config…</span>
+              </div>
+            )
+          ) : (
+            <>
+              <label className="flex items-center justify-between">
+                <span className="text-blue-100">Enable Bargain for this store</span>
+                <input
+                  type="checkbox"
+                  checked={configForm.enabled ?? false}
+                  onChange={e => setConfigForm({ ...configForm, enabled: e.target.checked })}
+                  className="w-5 h-5 accent-blue-500"
+                />
+              </label>
 
-          <div>
-            <label className="block text-sm text-blue-200 mb-1">Max attempts per customer</label>
-            <input
-              type="number"
-              min={1}
-              max={10}
-              value={configForm.maxAttempts ?? 3}
-              onChange={e => setConfigForm({ ...configForm, maxAttempts: parseInt(e.target.value) })}
-              className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-            />
-          </div>
+              <div>
+                <label className="block text-sm text-blue-200 mb-1">Max attempts per customer</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={configForm.maxAttempts ?? 3}
+                  onChange={e => setConfigForm({ ...configForm, maxAttempts: parseInt(e.target.value) })}
+                  className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm text-blue-200 mb-1">AI Persona</label>
-            <select
-              value={configForm.aiPersona ?? 'friendly_shopkeeper'}
-              onChange={e => setConfigForm({ ...configForm, aiPersona: e.target.value })}
-              className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-            >
-              <option value="friendly_shopkeeper">Friendly Shopkeeper</option>
-              <option value="strict_negotiator">Strict Negotiator</option>
-              <option value="playful_friend">Playful Friend</option>
-            </select>
-          </div>
+              <div>
+                <label className="block text-sm text-blue-200 mb-1">AI Persona</label>
+                <select
+                  value={configForm.aiPersona ?? 'friendly_shopkeeper'}
+                  onChange={e => setConfigForm({ ...configForm, aiPersona: e.target.value })}
+                  className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                >
+                  <option value="friendly_shopkeeper">Friendly Shopkeeper</option>
+                  <option value="strict_negotiator">Strict Negotiator</option>
+                  <option value="playful_friend">Playful Friend</option>
+                </select>
+              </div>
 
-          <div>
-            <label className="block text-sm text-blue-200 mb-1">AI Model</label>
-            <select
-              value={configForm.aiModel ?? 'gpt-4o-mini'}
-              onChange={e => setConfigForm({ ...configForm, aiModel: e.target.value })}
-              className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-            >
-              <option value="gpt-4o-mini">gpt-4o-mini (cheap, fast)</option>
-              <option value="gpt-4o">gpt-4o (higher quality)</option>
-              <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-              <option value="gpt-4.1">gpt-4.1 (best)</option>
-            </select>
-          </div>
+              <div>
+                <label className="block text-sm text-blue-200 mb-1">AI Model</label>
+                <select
+                  value={configForm.aiModel ?? 'gpt-4o-mini'}
+                  onChange={e => setConfigForm({ ...configForm, aiModel: e.target.value })}
+                  className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                >
+                  <option value="gpt-4o-mini">gpt-4o-mini (cheap, fast)</option>
+                  <option value="gpt-4o">gpt-4o (higher quality)</option>
+                  <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                  <option value="gpt-4.1">gpt-4.1 (best)</option>
+                </select>
+              </div>
 
-          <div>
-            <label className="block text-sm text-blue-200 mb-1">Min Profit % (global fallback)</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={0.5}
-              value={configForm.minProfitPercent ?? 20}
-              onChange={e => setConfigForm({ ...configForm, minProfitPercent: parseFloat(e.target.value) })}
-              className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-            />
-            <p className="text-xs text-blue-300/60 mt-1">
-              The AI will never agree to a price below this margin of the original.
-            </p>
-          </div>
+              <div>
+                <label className="block text-sm text-blue-200 mb-1">Min Profit % (global fallback)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  value={configForm.minProfitPercent ?? 20}
+                  onChange={e => setConfigForm({ ...configForm, minProfitPercent: parseFloat(e.target.value) })}
+                  className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                />
+                <p className="text-xs text-blue-300/60 mt-1">
+                  The AI will never agree to a price below this margin of the original.
+                </p>
+              </div>
 
-          <div>
-            <label className="block text-sm text-blue-200 mb-1">Session timeout (seconds)</label>
-            <input
-              type="number"
-              min={30}
-              max={3600}
-              value={configForm.sessionTimeout ?? 300}
-              onChange={e => setConfigForm({ ...configForm, sessionTimeout: parseInt(e.target.value) })}
-              className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-            />
-          </div>
+              <div>
+                <label className="block text-sm text-blue-200 mb-1">Session timeout (seconds)</label>
+                <input
+                  type="number"
+                  min={30}
+                  max={3600}
+                  value={configForm.sessionTimeout ?? 300}
+                  onChange={e => setConfigForm({ ...configForm, sessionTimeout: parseInt(e.target.value) })}
+                  className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                />
+              </div>
 
-          <div className="flex items-center gap-3 pt-2">
-            <button
-              onClick={saveConfig}
-              disabled={savingConfig}
-              className="flex items-center px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50"
-            >
-              {savingConfig ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-              Save Config
-            </button>
-            {configMessage && (
-              <span className={configMessage.type === 'success' ? 'text-emerald-300 text-sm' : 'text-red-300 text-sm'}>
-                {configMessage.text}
-              </span>
-            )}
-          </div>
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={saveConfig}
+                  disabled={savingConfig}
+                  className="flex items-center px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50"
+                >
+                  {savingConfig ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  Save Config
+                </button>
+                {configMessage && (
+                  <span className={configMessage.type === 'success' ? 'text-emerald-300 text-sm' : 'text-red-300 text-sm'}>
+                    {configMessage.text}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -412,9 +428,11 @@ export default function BargainDashboardPage() {
             </div>
             <button
               onClick={addProduct}
-              className="flex items-center px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium"
+              disabled={addingProduct}
+              className="flex items-center px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium disabled:opacity-50"
             >
-              <Plus className="w-4 h-4 mr-2" /> Add Override
+              {addingProduct ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+              {addingProduct ? 'Adding…' : 'Add Override'}
             </button>
           </div>
 
