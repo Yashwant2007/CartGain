@@ -1,31 +1,23 @@
 import { withAuth } from 'next-auth/middleware'
-import { NextResponse } from 'next/server'
 
-export default withAuth(
-  function middleware(req) {
-    const token = req.nextauth.token
-    const path = req.nextUrl.pathname
+const isHttps =
+  process.env.NEXTAUTH_URL?.startsWith('https://') ||
+  process.env.VERCEL_URL !== undefined ||
+  process.env.NEXT_PUBLIC_APP_URL?.startsWith('https://')
 
-    if (!token) {
-      return NextResponse.redirect(new URL('/login', req.url))
-    }
-
-    if (!path.startsWith('/dashboard')) {
-      return NextResponse.next()
-    }
-
-    if (path === '/dashboard/subscription' || path.startsWith('/api/')) {
-      return NextResponse.next()
-    }
-
-    return NextResponse.next()
+export default withAuth({
+  callbacks: {
+    authorized: ({ token }) => !!token,
   },
-  {
-    callbacks: {
-      authorized: ({ token }) => !!token,
+  pages: {
+    signIn: '/login',
+  },
+  cookies: isHttps ? {
+    sessionToken: {
+      name: '__Secure-next-auth.session-token',
     },
-  }
-)
+  } : undefined,
+})
 
 export const config = {
   matcher: ['/dashboard/:path*'],
