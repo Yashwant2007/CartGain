@@ -126,8 +126,8 @@ export async function POST(request: NextRequest) {
 
     // Convert DB messages to negotiator history
     const history = bargainSession.messages
-      .filter(m => m.role === 'customer' || m.role === 'ai')
-      .map(m => ({
+      .filter((m: any) => m.role === 'customer' || m.role === 'ai')
+      .map((m: any) => ({
         role: (m.role === 'customer' ? 'customer' : 'ai') as 'customer' | 'ai',
         content: m.content,
         offeredPrice: m.offeredPrice ?? undefined,

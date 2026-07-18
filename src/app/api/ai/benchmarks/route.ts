@@ -44,8 +44,8 @@ export async function GET(request: NextRequest) {
     }
 
     const campaigns = await prisma.campaign.findMany({ where: { storeId } })
-    const channelsUsed = Array.from(new Set(campaigns.flatMap(c => c.channels))).length
-    const aiEnabled = campaigns.some(c => c.aiOptimized)
+    const channelsUsed: number = Array.from(new Set(campaigns.flatMap((c: any) => c.channels))).length
+    const aiEnabled = campaigns.some((c: any) => c.aiOptimized)
 
     const revenue = await prisma.recoveredCart.aggregate({
       where: { storeId, recoveredAt: { gte: thirtyDaysAgo } },

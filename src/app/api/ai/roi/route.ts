@@ -42,9 +42,9 @@ export async function GET(request: NextRequest) {
       select: { channel: true, status: true }
     })
 
-    const smsCount = messages.filter(m => m.channel === 'sms').length
-    const whatsappCount = messages.filter(m => m.channel === 'whatsapp').length
-    const emailCount = messages.filter(m => m.channel === 'email').length
+    const smsCount = messages.filter((m: any) => m.channel === 'sms').length
+    const whatsappCount = messages.filter((m: any) => m.channel === 'whatsapp').length
+    const emailCount = messages.filter((m: any) => m.channel === 'email').length
 
     const SMS_RATE = 0.85
     const WHATSAPP_RATE = 0.86

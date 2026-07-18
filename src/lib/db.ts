@@ -1,4 +1,9 @@
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
+
+// Suppress url.parse() deprecation from dependencies (ioredis, etc.)
+if (typeof process !== 'undefined' && process.noDeprecation === undefined) {
+  process.noDeprecation = true
+}
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -48,5 +53,33 @@ export const prisma =
   createPrismaClient()
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  options?: { maxRetries?: number; baseDelay?: number }
+): Promise<T> {
+  const maxRetries = options?.maxRetries ?? 3
+  const baseDelay = options?.baseDelay ?? 1000
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === 'P1001' || error.code === 'P1002' || error.code === 'P1017')
+      ) {
+        if (attempt < maxRetries) {
+          const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 500
+          console.warn(`Database ${error.code} (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${Math.round(delay)}ms`)
+          await new Promise(r => setTimeout(r, delay))
+          continue
+        }
+      }
+      throw error
+    }
+  }
+  throw new Error('Unreachable')
+}
 
 export default prisma

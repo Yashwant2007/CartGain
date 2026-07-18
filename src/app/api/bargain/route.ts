@@ -53,12 +53,12 @@ export async function GET(request: NextRequest) {
 
     // Build summary
     const summary = {
-      totalSessions: agg.reduce((s, a) => s + a._count._all, 0),
-      accepted: agg.find(a => a.status === 'accepted')?._count._all ?? 0,
-      rejected: agg.find(a => a.status === 'rejected')?._count._all ?? 0,
-      expired: agg.find(a => a.status === 'expired')?._count._all ?? 0,
-      abandoned: agg.find(a => a.status === 'abandoned')?._count._all ?? 0,
-      active: agg.find(a => a.status === 'active')?._count._all ?? 0,
+      totalSessions: agg.reduce((s: any, a: any) => s + a._count._all, 0),
+      accepted: agg.find((a: any) => a.status === 'accepted')?._count._all ?? 0,
+      rejected: agg.find((a: any) => a.status === 'rejected')?._count._all ?? 0,
+      expired: agg.find((a: any) => a.status === 'expired')?._count._all ?? 0,
+      abandoned: agg.find((a: any) => a.status === 'abandoned')?._count._all ?? 0,
+      active: agg.find((a: any) => a.status === 'active')?._count._all ?? 0,
       avgOriginalPrice: agg.find(a => a.status === 'accepted')?._avg.originalPrice ?? null,
       avgFinalPrice: agg.find(a => a.status === 'accepted')?._avg.finalPrice ?? null,
     }

@@ -33,7 +33,7 @@ async function computeChartData(storeId: string, startDate: Date, endDate: Date)
     endDate
   )
 
-  return rows.map(r => ({
+  return rows.map((r: any) => ({
     date: new Date(r.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
     revenue: Number(r.revenue),
     recoveredCarts: Number(r.recovered),
@@ -90,7 +90,7 @@ async function computeChannelStats(storeId: string, startDate: Date, endDate: Da
   }
 
   return ['sms', 'whatsapp', 'email'].map(channel => {
-    const sentRow = channelSent.find(r => r.channel === channel)
+    const sentRow = channelSent.find((r: any) => r.channel === channel)
     return {
       channel: channel.charAt(0).toUpperCase() + channel.slice(1),
       sent: Number(sentRow?.sent || 0),
@@ -130,7 +130,7 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
   const [cartsAbandoned, cartsRecovered] = cartCounts
 
   const totals = analyticsRows.reduce(
-    (acc, row) => {
+    (acc: any, row: any) => {
       acc.messagesDelivered += row.messagesDelivered
       acc.messagesClicked += row.messagesClicked
       return acc
@@ -141,17 +141,17 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
   const recoveryRate = cartsAbandoned > 0 ? (cartsRecovered / cartsAbandoned) * 100 : 0
 
   const costs = {
-    sms: (channelBreakdown.find(c => c.channel === 'Sms')?.sent ?? 0) * SMS_RATE,
-    whatsapp: (channelBreakdown.find(c => c.channel === 'Whatsapp')?.sent ?? 0) * WHATSAPP_RATE,
-    email: (channelBreakdown.find(c => c.channel === 'Email')?.sent ?? 0) * EMAIL_RATE,
+    sms: (channelBreakdown.find((c: any) => c.channel === 'Sms')?.sent ?? 0) * SMS_RATE,
+    whatsapp: (channelBreakdown.find((c: any) => c.channel === 'Whatsapp')?.sent ?? 0) * WHATSAPP_RATE,
+    email: (channelBreakdown.find((c: any) => c.channel === 'Email')?.sent ?? 0) * EMAIL_RATE,
   }
   const totalCosts = costs.sms + costs.whatsapp + costs.email
   const netRevenue = (revenue._sum.netRevenue ?? 0)
   const roi = totalCosts > 0 ? ((netRevenue - totalCosts) / totalCosts) * 100 : 0
 
   const bestChannel = channelBreakdown
-    .filter(c => c.sent > 0)
-    .sort((a, b) => b.revenue - a.revenue)[0] || null
+    .filter((c: any) => c.sent > 0)
+    .sort((a: any, b: any) => b.revenue - a.revenue)[0] || null
 
   const conversionTimes = await prisma.$queryRawUnsafe<Array<{ hours: number }>>(
     `SELECT
@@ -169,9 +169,9 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
     endDate
   )
 
-  const validTimes = conversionTimes.filter(t => t.hours >= 0).map(t => t.hours)
+  const validTimes = conversionTimes.filter((t: any) => t.hours >= 0).map((t: any) => t.hours)
   const avgConversionTime = validTimes.length > 0
-    ? validTimes.reduce((a, b) => a + b, 0) / validTimes.length
+    ? validTimes.reduce((a: any, b: any) => a + b, 0) / validTimes.length
     : null
 
   const tips: string[] = []
@@ -183,7 +183,7 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
   } else if (recoveryRate > 20) {
     tips.push('Great recovery rate! Consider increasing send limits to capture even more revenue.')
   }
-  if (channelBreakdown.filter(c => c.sent > 0).length === 1) {
+  if (channelBreakdown.filter((c: any) => c.sent > 0).length === 1) {
     tips.push('You\'re only using one channel. Adding SMS or WhatsApp can increase recovery by up to 40%.')
   }
   if (avgConversionTime !== null && avgConversionTime > 48) {

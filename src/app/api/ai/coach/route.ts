@@ -51,8 +51,8 @@ export async function GET(request: NextRequest) {
       }),
     ])
 
-    const activeCampaigns = campaigns.filter(c => c.isActive)
-    const channelsUsed = Array.from(new Set(campaigns.flatMap(c => c.channels)))
+    const activeCampaigns = campaigns.filter((c: any) => c.isActive)
+    const channelsUsed: string[] = Array.from(new Set(campaigns.flatMap((c: any) => c.channels)))
 
     const avgTime = firstMessage?.createdAt
       ? (Date.now() - firstMessage.createdAt.getTime()) / 60000
@@ -65,8 +65,8 @@ export async function GET(request: NextRequest) {
       revenueRecovered30d: revenue30d._sum.netRevenue || 0,
       activeCampaigns: activeCampaigns.length,
       channelsUsed,
-      aiOptimized: campaigns.some(c => c.aiOptimized),
-      hasDiscountCampaigns: campaigns.some(c => c.discountEnabled),
+      aiOptimized: campaigns.some((c: any) => c.aiOptimized),
+      hasDiscountCampaigns: campaigns.some((c: any) => c.discountEnabled),
       avgRecoveryTime: avgTime,
     })
 

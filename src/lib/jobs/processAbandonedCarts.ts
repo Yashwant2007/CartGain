@@ -1,4 +1,4 @@
-import prisma from '@/lib/db'
+import prisma, { withRetry } from '@/lib/db'
 import { logDataAccess } from '@/lib/data-protection'
 import { sendEmail, EmailTemplates } from '@/lib/services/email'
 import { sendSMS, sanitizePhoneNumber } from '@/lib/services/sms'
@@ -566,11 +566,13 @@ export async function processAbandonedCarts(
   try {
     const startTime = Date.now()
 
-    const campaigns = await prisma.campaign.findMany({
-      where: { isActive: true },
-      include: { store: true },
-      orderBy: { storeId: 'asc' },
-    })
+    const campaigns = await withRetry(() =>
+      prisma.campaign.findMany({
+        where: { isActive: true },
+        include: { store: true },
+        orderBy: { storeId: 'asc' },
+      })
+    )
 
     let targetCampaigns = campaigns
     if (storeCursor) {

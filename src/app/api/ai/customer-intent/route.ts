@@ -38,8 +38,8 @@ export async function POST(request: NextRequest) {
       where: { storeId, customerId: extCustomerId, isRecovered: true },
       select: { totalValue: true }
     })
-    const vals = goodCarts.map(c => c.totalValue)
-    const avgOrderValue = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0
+    const vals = goodCarts.map((c: any) => c.totalValue)
+    const avgOrderValue = vals.length > 0 ? vals.reduce((a: any, b: any) => a + b, 0) / vals.length : 0
 
     const insightData = {
       totalOrders: customer?.totalOrders || 0,

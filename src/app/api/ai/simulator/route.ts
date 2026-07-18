@@ -35,14 +35,14 @@ export async function POST(request: NextRequest) {
     })
 
     const recoveredCount = recoveredCarts.length
-    const recoveredRevenue = recoveredCarts.reduce((s, c) => s + c.netRevenue, 0)
+    const recoveredRevenue = recoveredCarts.reduce((s: any, c: any) => s + c.netRevenue, 0)
 
     const allCarts = await prisma.cart.findMany({
       where: { storeId, abandonedAt: { gte: thirtyDaysAgo } },
       select: { totalValue: true }
     })
     const avgCartValue = allCarts.length > 0
-      ? allCarts.reduce((s, c) => s + c.totalValue, 0) / allCarts.length
+      ? allCarts.reduce((s: any, c: any) => s + c.totalValue, 0) / allCarts.length
       : 1500
 
     const result = simulateRecovery({
