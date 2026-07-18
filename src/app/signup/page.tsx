@@ -123,19 +123,23 @@ export default function SignUpPage() {
       const data = await response.json()
 
       if (response.ok) {
-        setToast({ message: 'Account created! Check your email to verify.', type: 'info' })
-        const signInResult = await signIn('credentials', {
+        setToast({ message: 'Account created! Redirecting...', type: 'info' })
+        // Auto-sign-in the user, retry once if it fails
+        let signInResult = await signIn('credentials', {
           email: formData.email,
           password: formData.password,
           redirect: false,
         })
-
-        if (signInResult?.ok) {
-          router.push('/dashboard')
-          router.refresh()
-        } else {
-          router.push('/login')
+        if (!signInResult?.ok) {
+          await new Promise(r => setTimeout(r, 500))
+          signInResult = await signIn('credentials', {
+            email: formData.email,
+            password: formData.password,
+            redirect: false,
+          })
         }
+        router.push(signInResult?.ok ? '/dashboard' : '/login?registered=true')
+        router.refresh()
       } else {
         setError(data.message || 'Registration failed. Please try again.')
       }

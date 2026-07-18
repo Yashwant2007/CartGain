@@ -24,6 +24,7 @@ function LoginContent() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [verified, setVerified] = useState(false)
+  const [justRegistered, setJustRegistered] = useState(false)
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -32,6 +33,9 @@ function LoginContent() {
   useEffect(() => {
     if (searchParams.get('verified') === 'true') {
       setVerified(true)
+    }
+    if (searchParams.get('registered') === 'true') {
+      setJustRegistered(true)
     }
     const err = searchParams.get('error')
     if (err) {
@@ -110,10 +114,10 @@ function LoginContent() {
           <p className="text-sm sm:text-base text-blue-200">Sign in to your account to continue</p>
         </div>
 
-        {verified && (
+        {(verified || justRegistered) && (
           <div className="mb-6 p-3 sm:p-4 bg-emerald-900/20 border border-emerald-500/40 rounded-lg flex items-center space-x-2">
             <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-            <p className="text-sm text-emerald-300">Email verified successfully! Sign in to continue.</p>
+            <p className="text-sm text-emerald-300">{justRegistered ? 'Account created successfully! Sign in to continue.' : 'Email verified successfully! Sign in to continue.'}</p>
           </div>
         )}
 
