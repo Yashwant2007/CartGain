@@ -50,8 +50,12 @@ const providers: any[] = [
         where: { email },
       })
 
-      if (!user || !user.password) {
-        throw new Error('Invalid credentials')
+      if (!user) {
+        throw new Error('NoAccount')
+      }
+
+      if (!user.password) {
+        throw new Error('GoogleOnly')
       }
 
       const isCorrectPassword = await bcrypt.compare(
@@ -60,7 +64,7 @@ const providers: any[] = [
       )
 
       if (!isCorrectPassword) {
-        throw new Error('Invalid credentials')
+        throw new Error('WrongPassword')
       }
 
       return {

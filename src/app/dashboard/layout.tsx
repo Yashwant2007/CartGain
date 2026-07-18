@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import {
   LayoutDashboard,
@@ -24,13 +24,15 @@ import {
 } from 'lucide-react'
 import StatusBadge from '@/components/dashboard/StatusBadge'
 
-export default function DashboardLayout({
+function DashboardLayoutInner({
   children,
 }: {
   children: React.ReactNode
 }) {
   const pathname = usePathname()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const queryStoreId = searchParams.get('storeId')
   const { data: session, status } = useSession()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -76,6 +78,8 @@ export default function DashboardLayout({
     return null
   }
 
+  const withStoreId = (href: string) => queryStoreId ? `${href}?storeId=${queryStoreId}` : href
+
   const navigation = [
     { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Campaigns', href: '/dashboard/campaigns', icon: Megaphone },
@@ -106,7 +110,7 @@ export default function DashboardLayout({
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 border-b border-blue-800/30">
-            <Link href="/dashboard" className="flex items-center space-x-2 group min-h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded" onClick={closeSidebar}>
+            <Link href={withStoreId('/dashboard')} className="flex items-center space-x-2 group min-h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded" onClick={closeSidebar}>
               <div className="w-8 h-8 bg-gradient-to-br from-primary-600 to-primary-800 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:shadow-lg group-hover:shadow-primary-600/50 transition-all">
                 <Zap className="w-4 h-4 text-white" />
               </div>
@@ -124,11 +128,12 @@ export default function DashboardLayout({
           {/* Navigation */}
           <nav className="flex-1 px-3 sm:px-4 py-4 sm:py-6 space-y-1 overflow-y-auto">
             {navigation.map((item) => {
+              const itemHref = withStoreId(item.href)
               const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
               return (
                 <Link
                   key={item.name}
-                  href={item.href}
+                  href={itemHref}
                   onClick={closeSidebar}
                   className={`flex items-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 min-h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
                     isActive
@@ -207,7 +212,7 @@ export default function DashboardLayout({
                 </div>
               </div>
               <Link
-                href="/dashboard/subscription"
+                href={withStoreId('/dashboard/subscription')}
                 className="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap bg-gradient-to-r from-red-500 to-orange-500 text-white hover:shadow-lg hover:shadow-red-500/50 transition-all flex-shrink-0"
               >
                 Upgrade Now
@@ -227,7 +232,7 @@ export default function DashboardLayout({
                 </div>
               </div>
               <Link
-                href="/dashboard/subscription"
+                href={withStoreId('/dashboard/subscription')}
                 className="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg hover:shadow-amber-500/50 transition-all flex-shrink-0"
               >
                 View Plans
@@ -242,5 +247,21 @@ export default function DashboardLayout({
         </main>
       </div>
     </div>
+  )
+}
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center">
+        <div className="text-blue-300/60 text-sm">Loading...</div>
+      </div>
+    }>
+      <DashboardLayoutInner>{children}</DashboardLayoutInner>
+    </Suspense>
   )
 }

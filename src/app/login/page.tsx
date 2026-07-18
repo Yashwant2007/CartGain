@@ -45,6 +45,9 @@ function LoginContent() {
         OAuthCallback: 'Google returned an error. Check that GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set in Vercel.',
         OAuthAccountNotLinked: 'This email is already registered with a password. Sign in with email & password instead.',
         Verification: 'The sign-in link has expired. Please request a new one.',
+        NoAccount: 'No account found with this email. Please sign up first.',
+        GoogleOnly: 'This account uses Google sign-in. Sign in with Google or set a password in your account settings.',
+        WrongPassword: 'Incorrect password. Please try again.',
         Default: 'Sign-in failed. Please try again.',
       }
       setError(messages[err] ?? messages.Default)

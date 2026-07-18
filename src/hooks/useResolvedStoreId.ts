@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 type HookState = {
   storeId: string | null
@@ -9,6 +10,7 @@ type HookState = {
 }
 
 export function useResolvedStoreId(): HookState {
+  const router = useRouter()
   const [state, setState] = useState<HookState>({
     storeId: null,
     loading: true,
@@ -17,11 +19,13 @@ export function useResolvedStoreId(): HookState {
 
   useEffect(() => {
     let cancelled = false
+    let resolvedId: string | null = null
 
     const resolveStoreId = async () => {
       try {
         const fromQuery = new URLSearchParams(window.location.search).get('storeId')
         if (fromQuery) {
+          resolvedId = fromQuery
           if (!cancelled) {
             setState({ storeId: fromQuery, loading: false, error: null })
           }
@@ -37,7 +41,7 @@ export function useResolvedStoreId(): HookState {
         }
 
         const data = await response.json()
-        const resolvedId: string | undefined = data?.store?.id
+        resolvedId = data?.store?.id ?? null
 
         if (!resolvedId) {
           throw new Error('Store ID is missing from server response')
@@ -62,7 +66,16 @@ export function useResolvedStoreId(): HookState {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [router])
+
+  useEffect(() => {
+    if (state.storeId && !state.loading && typeof window !== 'undefined') {
+      const hasQueryStoreId = new URLSearchParams(window.location.search).has('storeId')
+      if (!hasQueryStoreId) {
+        router.replace(`${window.location.pathname}?storeId=${state.storeId}`, { scroll: false })
+      }
+    }
+  }, [state.storeId, state.loading, router])
 
   return state
 }
