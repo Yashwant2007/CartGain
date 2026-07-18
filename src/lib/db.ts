@@ -38,7 +38,7 @@ function createPrismaClient(): PrismaClient {
     ? databaseUrl
     : `${databaseUrl}${databaseUrl.includes('?') ? '&' : '?'}pgbouncer=true`
 
-  return new PrismaClient({
+  const client = new PrismaClient({
     datasources: {
       db: {
         url: dbUrl,
@@ -46,6 +46,39 @@ function createPrismaClient(): PrismaClient {
     },
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   })
+
+  // Global retry middleware: retries all queries on transient DB errors (P1001, P1002, P1017)
+  const extended = client.$extends({
+    query: {
+      $allModels: {
+        async $allOperations({ args, query }) {
+          const maxRetries = 2
+          const baseDelay = 500
+          for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+              return await query(args)
+            } catch (error) {
+              if (
+                error instanceof Prisma.PrismaClientKnownRequestError &&
+                (error.code === 'P1001' || error.code === 'P1002' || error.code === 'P1017')
+              ) {
+                if (attempt < maxRetries) {
+                  const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 200
+                  console.warn(`DB ${error.code} (attempt ${attempt + 1}/${maxRetries + 1}), retry in ${Math.round(delay)}ms`)
+                  await new Promise(r => setTimeout(r, delay))
+                  continue
+                }
+              }
+              throw error
+            }
+          }
+          throw new Error('Unreachable')
+        },
+      },
+    },
+  })
+
+  return extended as unknown as PrismaClient
 }
 
 export const prisma =
@@ -53,33 +86,5 @@ export const prisma =
   createPrismaClient()
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
-
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  options?: { maxRetries?: number; baseDelay?: number }
-): Promise<T> {
-  const maxRetries = options?.maxRetries ?? 3
-  const baseDelay = options?.baseDelay ?? 1000
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn()
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        (error.code === 'P1001' || error.code === 'P1002' || error.code === 'P1017')
-      ) {
-        if (attempt < maxRetries) {
-          const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 500
-          console.warn(`Database ${error.code} (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${Math.round(delay)}ms`)
-          await new Promise(r => setTimeout(r, delay))
-          continue
-        }
-      }
-      throw error
-    }
-  }
-  throw new Error('Unreachable')
-}
 
 export default prisma
