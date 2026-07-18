@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import Script from 'next/script'
 import './globals.css'
+import Providers from './providers'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -153,7 +154,7 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   )
