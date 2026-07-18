@@ -34,11 +34,35 @@ export default function DashboardLayout({
   const { data: session, status } = useSession()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  const [subStatus, setSubStatus] = useState<{ isFree: boolean; isExhausted: boolean; cartsUsed: number; cartsRemaining: number } | null>(null)
+  const [subLoading, setSubLoading] = useState(true)
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.replace('/login')
     }
   }, [status, router])
+
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    fetch('/api/subscription')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.subscription) {
+          const sub = data.subscription
+          const recovered = data.store?.cartsRecovered ?? 0
+          const freeThreshold = 50
+          setSubStatus({
+            isFree: sub.plan === 'free' || !['starter', 'growth', 'pro'].includes(sub.plan),
+            isExhausted: (sub.plan === 'free' || !['starter', 'growth', 'pro'].includes(sub.plan)) && recovered >= freeThreshold,
+            cartsUsed: recovered,
+            cartsRemaining: Math.max(0, freeThreshold - recovered),
+          })
+        }
+        setSubLoading(false)
+      })
+      .catch(() => setSubLoading(false))
+  }, [status])
 
   if (status === 'loading') {
     return (
@@ -63,29 +87,6 @@ export default function DashboardLayout({
     { name: 'Subscription', href: '/dashboard/subscription', icon: CreditCard },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },
   ]
-
-  const [subStatus, setSubStatus] = useState<{ isFree: boolean; isExhausted: boolean; cartsUsed: number; cartsRemaining: number } | null>(null)
-  const [subLoading, setSubLoading] = useState(true)
-
-  useEffect(() => {
-    fetch('/api/subscription')
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data?.subscription) {
-          const sub = data.subscription
-          const recovered = data.store?.cartsRecovered ?? 0
-          const freeThreshold = 50
-          setSubStatus({
-            isFree: sub.plan === 'free' || !['starter', 'growth', 'pro'].includes(sub.plan),
-            isExhausted: (sub.plan === 'free' || !['starter', 'growth', 'pro'].includes(sub.plan)) && recovered >= freeThreshold,
-            cartsUsed: recovered,
-            cartsRemaining: Math.max(0, freeThreshold - recovered),
-          })
-        }
-        setSubLoading(false)
-      })
-      .catch(() => setSubLoading(false))
-  }, [])
 
   const closeSidebar = () => setSidebarOpen(false)
 
