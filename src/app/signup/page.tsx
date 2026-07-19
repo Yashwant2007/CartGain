@@ -159,25 +159,7 @@ export default function SignUpPage() {
     setError(null)
     try {
       document.cookie = 'cg_oauth_intent=signup; path=/; max-age=600; SameSite=Lax; Secure'
-      const result = await signIn('google', { callbackUrl: '/setup', redirect: false })
-      if (result?.error) {
-        console.error('Google sign-in error:', result.error)
-        if (result.error === 'OAuthAccountNotLinked') {
-          setError('This email is already registered. Please sign in with your email and password.')
-        } else if (result.error === 'OAuthCallback') {
-          setError('Google sign-in failed. Make sure Google Cloud Console is configured correctly.')
-        } else {
-          setError(`Google sign-in failed: ${result.error}`)
-        }
-        setIsLoading(false)
-        return
-      }
-      if (result?.url) {
-        window.location.href = result.url
-      } else {
-        setError('Google sign-in returned no URL')
-        setIsLoading(false)
-      }
+      await signIn('google', { callbackUrl: '/setup' })
     } catch (err) {
       console.error('Google sign-in error:', err)
       setError('An unexpected error occurred. Please try again.')
