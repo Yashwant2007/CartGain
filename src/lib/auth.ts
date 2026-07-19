@@ -89,7 +89,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       allowDangerousEmailAccountLinking: true,
       authorization: {
         params: {
-          prompt: 'select_account',
+          prompt: 'select_account consent',
         },
       },
     })
