@@ -31,11 +31,15 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
   const isActive = subscription.status === 'active'
   const isFree = !isPaid
 
-  const recoveredCarts = store
-    ? await prisma.recoveredCart.count({ where: { storeId: store.id } })
-    : 0
-
-  const cartsUsed = recoveredCarts
+  // Count distinct carts that have been sent messages (carts processed, not recovered)
+  const sentCartsCount = await prisma.message.groupBy({
+    by: ['cartId'],
+    where: {
+      campaign: { userId },
+      status: 'sent',
+    },
+  })
+  const cartsUsed = sentCartsCount.length
   const maxCarts = isFree ? FREE_CARTS_THRESHOLD : planConfig.maxCarts
   const cartsRemaining = Math.max(0, maxCarts - cartsUsed)
   const isExhausted = isFree && cartsUsed >= FREE_CARTS_THRESHOLD

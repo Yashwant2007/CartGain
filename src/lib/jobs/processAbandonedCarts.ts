@@ -145,11 +145,16 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
         return { sent: 0, failed: 0 }
       }
     } else {
-      const recoveredCount = await prisma.recoveredCart.count({
-        where: { storeId: store.id },
+      const processedCarts = await prisma.message.groupBy({
+        by: ['cartId'],
+        where: {
+          campaign: { userId: campaign.userId },
+          status: 'sent',
+        },
       })
-      if (recoveredCount >= FREE_CARTS_THRESHOLD) {
-        console.log(`⏸️ Store ${store.id}: ${recoveredCount} carts recovered (limit ${FREE_CARTS_THRESHOLD}). Free trial exhausted.`)
+      const cartsUsed = processedCarts.length
+      if (cartsUsed >= FREE_CARTS_THRESHOLD) {
+        console.log(`⏸️ Store ${store.id}: ${cartsUsed} carts processed (limit ${FREE_CARTS_THRESHOLD}). Free trial exhausted.`)
         return { sent: 0, failed: 0 }
       }
     }
