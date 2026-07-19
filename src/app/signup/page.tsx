@@ -156,14 +156,31 @@ export default function SignUpPage() {
 
   const initiateGoogleSignIn = async () => {
     setIsLoading(true)
+    setError(null)
     try {
-      // Tell the NextAuth signIn callback this is a sign-up intent so it
-      // may create a new Google-linked account. Cleared after use.
       document.cookie = 'cg_oauth_intent=signup; path=/; max-age=600; SameSite=Lax; Secure'
-      await signIn('google', { callbackUrl: '/setup' })
+      const result = await signIn('google', { callbackUrl: '/setup', redirect: false })
+      if (result?.error) {
+        console.error('Google sign-in error:', result.error)
+        if (result.error === 'OAuthAccountNotLinked') {
+          setError('This email is already registered. Please sign in with your email and password.')
+        } else if (result.error === 'OAuthCallback') {
+          setError('Google sign-in failed. Make sure Google Cloud Console is configured correctly.')
+        } else {
+          setError(`Google sign-in failed: ${result.error}`)
+        }
+        setIsLoading(false)
+        return
+      }
+      if (result?.url) {
+        window.location.href = result.url
+      } else {
+        setError('Google sign-in returned no URL')
+        setIsLoading(false)
+      }
     } catch (err) {
       console.error('Google sign-in error:', err)
-    } finally {
+      setError('An unexpected error occurred. Please try again.')
       setIsLoading(false)
     }
   }

@@ -475,6 +475,7 @@ function SecuritySettings() {
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const handlePasswordChange = async () => {
     setPasswordError(null)
@@ -544,22 +545,27 @@ function SecuritySettings() {
 
     try {
       setDeletingAccount(true)
+      setDeleteError(null)
 
       const response = await fetch('/api/auth/delete-account', {
         method: 'DELETE',
       })
 
       if (!response.ok) {
-        throw new Error('Failed to delete account')
+        let errorMsg = 'Failed to delete account'
+        try {
+          const data = await response.json()
+          if (data?.message) errorMsg = data.message
+        } catch {}
+        throw new Error(errorMsg)
       }
 
       // Redirect to login after deletion
       window.location.href = '/login?deleted=true'
     } catch (error) {
       console.error('Delete account error:', error)
+      setDeleteError(error instanceof Error ? error.message : 'Something went wrong')
       setDeletingAccount(false)
-      setShowDeleteModal(false)
-      setDeleteConfirm('')
     }
   }
 
@@ -682,11 +688,18 @@ function SecuritySettings() {
               />
             </div>
 
+            {deleteError && (
+              <div className="mb-4 p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-sm text-red-300">
+                {deleteError}
+              </div>
+            )}
+
             <div className="flex gap-3">
               <button
                 onClick={() => {
                   setShowDeleteModal(false)
                   setDeleteConfirm('')
+                  setDeleteError(null)
                 }}
                 className="flex-1 px-4 py-2 border border-blue-700/50 text-blue-300 rounded-lg hover:bg-slate-700/40 transition-all"
               >

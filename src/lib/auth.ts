@@ -173,6 +173,8 @@ export const authOptions: NextAuthOptions = {
           const intent = cookies().get('cg_oauth_intent')?.value
           const isSignupIntent = intent === 'signup'
 
+          console.log('[signIn:google] email:', email, 'intent:', intent)
+
           // Always clear the cookie once consumed.
           cookies().set('cg_oauth_intent', '', {
             path: '/',
@@ -186,10 +188,13 @@ export const authOptions: NextAuthOptions = {
             include: { accounts: true },
           })
 
+          console.log('[signIn:google] existingUser:', !!existingUser, 'password:', !!existingUser?.password)
+
           // Sign-in flow: the account must already exist. Block silent
           // account creation and send the visitor back to sign up first.
           if (!existingUser) {
             if (isSignupIntent) {
+              console.log('[signIn:google] new user signup — falling through to store creation')
               // Allow the signup flow to create the account. NextAuth v4
               // PrismaAdapter creates the User + Account records before this
               // callback fires, so user.id is already available. We fall
@@ -197,6 +202,7 @@ export const authOptions: NextAuthOptions = {
               // sure the new user has a Store row before they hit /setup.
               // No early return — keep going.
             } else {
+              console.log('[signIn:google] no existing account and no signup intent — redirecting to login')
               // Login flow — account does not exist. Surface friendly error.
               return `/login?error=NoAccount`
             }
@@ -204,6 +210,7 @@ export const authOptions: NextAuthOptions = {
             const isLinked = existingUser.accounts.some(
               a => a.provider === 'google'
             )
+            console.log('[signIn:google] existing user, isLinked:', isLinked)
             if (!isLinked) {
               await prisma.account.upsert({
                 where: {
@@ -227,6 +234,7 @@ export const authOptions: NextAuthOptions = {
                   session_state: account.session_state,
                 },
               })
+              console.log('[signIn:google] linked google account to existing user')
             }
 
             // Ensure a store exists for the existing user
@@ -244,14 +252,17 @@ export const authOptions: NextAuthOptions = {
                   timezone: 'UTC',
                 },
               })
+              console.log('[signIn:google] created store for existing user')
             }
 
             // Force users without a password through the set-password flow
             // so they can later sign in with email + password too.
             if (!existingUser.password) {
+              console.log('[signIn:google] user has no password — redirecting to /setup?requirePassword=1')
               return `/setup?requirePassword=1`
             }
 
+            console.log('[signIn:google] user has password — returning true')
             return true
           }
         }
