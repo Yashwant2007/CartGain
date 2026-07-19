@@ -32,6 +32,7 @@ function SetupContent() {
     storeName: '',
     storeDomain: '',
     password: '',
+    confirmPassword: '',
   })
 
   useEffect(() => {
@@ -71,14 +72,12 @@ function SetupContent() {
     e.preventDefault()
     setError(null)
 
-    if (!requirePassword && formData.password.length === 0) {
-      // Password optional in the non-required flow — skip validation.
-    } else if (formData.password.length > 0 && formData.password.length < 8) {
+    if (formData.password.length > 0 && formData.password.length < 8) {
       setError('Password must be at least 8 characters')
       return
     }
-    if (requirePassword && formData.password.length < 8) {
-      setError('Please set a password of at least 8 characters to continue')
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match')
       return
     }
     if (!storeExists && !formData.storeDomain) {
@@ -154,11 +153,9 @@ function SetupContent() {
           <p className="text-sm sm:text-base text-blue-200">
             Signed in as <span className="text-blue-300 font-medium">{session?.user?.email}</span>
           </p>
-          {requirePassword && (
-            <p className="text-xs sm:text-sm text-blue-300/80 mt-2">
-              Set a password so you can also sign in with email + password next time.
-            </p>
-          )}
+          <p className="text-xs sm:text-sm text-blue-300/80 mt-2">
+            This password will be required to access your account or make changes. You can also sign in with Google anytime.
+          </p>
         </div>
 
         {error && (
@@ -202,10 +199,7 @@ function SetupContent() {
 
           <div>
             <label htmlFor="password" className="block text-xs sm:text-sm font-medium text-blue-200 mb-2">
-              Password{' '}
-              {requirePassword
-                ? <span className="text-red-400/80 font-normal">(required)</span>
-                : <span className="text-blue-400/60 font-normal">(optional — for email sign-in)</span>}
+              Create a strong password
             </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-blue-400 flex-shrink-0 pointer-events-none" />
@@ -213,16 +207,40 @@ function SetupContent() {
                 id="password"
                 type="password"
                 minLength={8}
-                required={requirePassword}
                 autoComplete="new-password"
                 disabled={isLoading}
                 className="input w-full pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base rounded-lg px-4 py-3"
-                placeholder="••••••••"
+                placeholder="At least 8 characters"
                 value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value, confirmPassword: '' })}
               />
             </div>
-            <p className="text-xs text-blue-400/70 mt-1">Minimum 8 characters</p>
+          </div>
+
+          <div>
+            <label htmlFor="confirmPassword" className="block text-xs sm:text-sm font-medium text-blue-200 mb-2">
+              Confirm password
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-blue-400 flex-shrink-0 pointer-events-none" />
+              <input
+                id="confirmPassword"
+                type="password"
+                minLength={8}
+                autoComplete="new-password"
+                disabled={isLoading}
+                className="input w-full pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base rounded-lg px-4 py-3"
+                placeholder="Re-enter password"
+                value={formData.confirmPassword}
+                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+              />
+            </div>
+            {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
+              <p className="text-xs text-red-400 mt-1">Passwords do not match</p>
+            )}
+            {formData.password && formData.confirmPassword && formData.password === formData.confirmPassword && formData.password.length >= 8 && (
+              <p className="text-xs text-green-400 mt-1">Passwords match</p>
+            )}
           </div>
 
           <button
