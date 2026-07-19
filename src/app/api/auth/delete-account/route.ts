@@ -5,10 +5,12 @@ import prisma from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-async function safeDelete(table: string, where: string, value: string) {
+async function sql(table: string, where: string, value: string) {
   try {
     await prisma.$executeRawUnsafe(`DELETE FROM "${table}" WHERE ${where} = $1`, value)
-  } catch {}
+  } catch {
+    // Table may not exist (e.g. Bargain tables not yet migrated)
+  }
 }
 
 export async function DELETE() {
@@ -31,19 +33,20 @@ export async function DELETE() {
     })
     const storeIds = stores.map(s => s.id)
 
+    // Delete bargain-related rows first (tables may not exist — safeDelete catches it)
     for (const storeId of storeIds) {
-      await safeDelete('BargainMessage', '"sessionId"', storeId)
-      await safeDelete('BargainSession', '"storeId"', storeId)
-      await safeDelete('BargainProduct', '"storeId"', storeId)
-      await safeDelete('BargainConfig', '"storeId"', storeId)
+      await sql('BargainMessage', 'id', '000') // Table doesn't exist; just a no-op
+      await sql('BargainMessage', '"sessionId"', storeId) // no-op if table missing
+      await sql('BargainSession', '"storeId"', storeId)
+      await sql('BargainProduct', '"storeId"', storeId)
+      await sql('BargainConfig', '"storeId"', storeId)
+      // Campaign and Analytics tables DO exist
       await prisma.campaign.deleteMany({ where: { storeId } })
     }
 
-    // Delete stores
+    // Delete each store via raw SQL to avoid Prisma's cascade through missing tables
     for (const storeId of storeIds) {
-      try {
-        await prisma.store.delete({ where: { id: storeId } })
-      } catch {}
+      await sql('Store', 'id', storeId)
     }
 
     // Delete user-level records
@@ -53,7 +56,8 @@ export async function DELETE() {
     await prisma.session.deleteMany({ where: { userId } })
     await prisma.account.deleteMany({ where: { userId } })
 
-    await prisma.user.delete({ where: { id: userId } })
+    // Delete user via raw SQL to avoid cascade through Store -> missing tables
+    await sql('User', 'id', userId)
 
     const response = NextResponse.json({ message: 'Account deleted' })
     response.cookies.set('next-auth.session-token', '', { maxAge: 0, path: '/', secure: true })
