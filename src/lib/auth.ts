@@ -111,15 +111,16 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
   providers,
   secret: process.env.NEXTAUTH_SECRET,
-  // SameSite=none is required so the session cookie is sent when CartGain
-  // runs inside a third-party iframe (e.g. Shopify admin). Without this,
-  // Safari blocks the cookie entirely and the user appears logged out.
-  cookies: nextAuthUrl.startsWith('https://') ? {
+  // SameSite=lax works for navigation flows (OAuth, login); the cookie is
+  // still sent with Secure so it never leaks over plain HTTP. We intentionally
+  // avoid the __Secure- prefix because Chromium may drop it in cross-site 302
+  // redirect chains that happen during OAuth callbacks.
+  cookies: {
     sessionToken: {
-      name: '__Secure-next-auth.session-token',
-      options: { httpOnly: true, sameSite: 'none', path: '/', secure: true },
+      name: 'next-auth.session-token',
+      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: true },
     },
-  } : undefined,
+  },
   pages: {
     signIn: '/login',
     error: '/login',

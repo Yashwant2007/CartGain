@@ -5,6 +5,12 @@ import prisma from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
+async function safeDelete(table: string, where: string, value: string) {
+  try {
+    await prisma.$executeRawUnsafe(`DELETE FROM "${table}" WHERE ${where} = $1`, value)
+  } catch {}
+}
+
 export async function DELETE() {
   try {
     const session = await getServerSession(authOptions)
@@ -19,11 +25,38 @@ export async function DELETE() {
       return NextResponse.json({ message: 'User not found' }, { status: 404 })
     }
 
+    const stores = await prisma.store.findMany({
+      where: { userId },
+      select: { id: true },
+    })
+    const storeIds = stores.map(s => s.id)
+
+    for (const storeId of storeIds) {
+      await safeDelete('BargainMessage', '"sessionId"', storeId)
+      await safeDelete('BargainSession', '"storeId"', storeId)
+      await safeDelete('BargainProduct', '"storeId"', storeId)
+      await safeDelete('BargainConfig', '"storeId"', storeId)
+      await prisma.campaign.deleteMany({ where: { storeId } })
+    }
+
+    // Delete stores
+    for (const storeId of storeIds) {
+      try {
+        await prisma.store.delete({ where: { id: storeId } })
+      } catch {}
+    }
+
+    // Delete user-level records
+    await prisma.campaign.deleteMany({ where: { userId } })
+    await prisma.analytics.deleteMany({ where: { userId } })
+    await prisma.subscription.deleteMany({ where: { userId } })
+    await prisma.session.deleteMany({ where: { userId } })
+    await prisma.account.deleteMany({ where: { userId } })
+
     await prisma.user.delete({ where: { id: userId } })
 
     const response = NextResponse.json({ message: 'Account deleted' })
-    response.cookies.set('next-auth.session-token', '', { maxAge: 0, path: '/' })
-    response.cookies.set('__Secure-next-auth.session-token', '', { maxAge: 0, path: '/', secure: true })
+    response.cookies.set('next-auth.session-token', '', { maxAge: 0, path: '/', secure: true })
 
     return response
   } catch (error) {
