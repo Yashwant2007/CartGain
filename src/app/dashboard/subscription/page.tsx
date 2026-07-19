@@ -23,6 +23,7 @@ type StoreData = {
   id: string
   name: string
   currency: string
+  cartsRecovered?: number
 }
 
 type InvoiceData = {
@@ -47,7 +48,6 @@ export default function SubscriptionPage() {
   const [razorpayLoaded, setRazorpayLoaded] = useState(false)
   const [processing, setProcessing] = useState<string | null>(null)
   const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null)
-  const [totalRecoveredCarts, setTotalRecoveredCarts] = useState(0)
   const [monthlyRecoveredRevenue, setMonthlyRecoveredRevenue] = useState(0)
   const [generatingInvoice, setGeneratingInvoice] = useState(false)
   const [invoiceMsg, setInvoiceMsg] = useState<string | null>(null)
@@ -75,7 +75,6 @@ export default function SubscriptionPage() {
         const overviewData = await overviewRes.json()
         const current = overviewData?.current?.overview
         if (current) {
-          setTotalRecoveredCarts(current.cartsRecovered ?? 0)
           setMonthlyRecoveredRevenue(current.netRevenue ?? current.revenueRecovered ?? 0)
         }
       }
@@ -123,10 +122,11 @@ export default function SubscriptionPage() {
     ? (new Date(subscription.currentPeriodEnd).getTime() - Date.now()) > 45 * 24 * 60 * 60 * 1000
     : false
 
-  const cartsUsed = totalRecoveredCarts
+  const cartsUsed = subscription?.cartsUsedInPeriod ?? 0
+  const recoveredCarts = store?.cartsRecovered ?? 0
   const freeCartsRemaining = Math.max(0, FREE_CARTS_THRESHOLD - cartsUsed)
-  const revShareCarts = Math.max(0, cartsUsed - FREE_CARTS_THRESHOLD)
-  const avgCartValue = monthlyRecoveredRevenue > 0 && cartsUsed > 0 ? Math.round(monthlyRecoveredRevenue / cartsUsed) : 1000
+  const revShareCarts = Math.max(0, recoveredCarts - FREE_CARTS_THRESHOLD)
+  const avgCartValue = monthlyRecoveredRevenue > 0 && recoveredCarts > 0 ? Math.round(monthlyRecoveredRevenue / recoveredCarts) : 1000
   const revSharePercent = currentPlan ? currentPlan.revSharePercent : 0
   const estimatedRevShare = revShareCarts * avgCartValue * (revSharePercent / 100)
 
@@ -401,10 +401,9 @@ export default function SubscriptionPage() {
       </div>
 
       {/* Usage Warning (paid users only) */}
-      {isPaidUser && currentPlan && currentPlan.maxCarts < Infinity && totalRecoveredCarts > 0 && (
+      {isPaidUser && currentPlan && currentPlan.maxCarts < Infinity && cartsUsed > 0 && (
         (() => {
-          const estimatedProcessed = Math.round(totalRecoveredCarts / 0.20)
-          const usagePercent = Math.min(100, (estimatedProcessed / currentPlan.maxCarts) * 100)
+          const usagePercent = Math.min(100, (cartsUsed / currentPlan.maxCarts) * 100)
           if (usagePercent < 60) return null
 
           const nextPlan = Object.values(PLANS).find(p => p.price > currentPlan.price && p.id !== 'enterprise')
@@ -422,7 +421,7 @@ export default function SubscriptionPage() {
                     {isUrgent ? 'Plan limit nearly reached' : 'Approaching plan limit'}
                   </h3>
                   <p className="text-xs text-blue-300/70">
-                    Estimated cart processing: {estimatedProcessed.toLocaleString('en-IN')} of {currentPlan.maxCarts.toLocaleString('en-IN')} ({Math.round(usagePercent)}%).
+                    Carts processed: {cartsUsed.toLocaleString('en-IN')} of {currentPlan.maxCarts.toLocaleString('en-IN')} ({Math.round(usagePercent)}%).
                     {nextPlan ? ` Upgrade to ${nextPlan.name} to keep recovering without interruption.` : ''}
                   </p>
                 </div>

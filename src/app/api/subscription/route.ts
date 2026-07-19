@@ -21,9 +21,18 @@ export async function GET() {
       where: { userId: session.user.id },
     })
 
+    let cartsProcessed = 0
     let cartsRecovered = 0
     let activeCampaigns = 0
     if (store) {
+      const processed = await prisma.message.groupBy({
+        by: ['cartId'],
+        where: {
+          campaign: { userId: session.user.id },
+          status: 'sent',
+        },
+      })
+      cartsProcessed = processed.length
       cartsRecovered = await prisma.recoveredCart.count({
         where: { storeId: store.id },
       })
@@ -67,7 +76,7 @@ export async function GET() {
           }
         : null,
       store: store
-        ? { id: store.id, name: store.name, currency: store.currency, cartsRecovered }
+        ? { id: store.id, name: store.name, currency: store.currency, cartsProcessed, cartsRecovered }
         : null,
       invoices,
       plans: PLANS,

@@ -52,13 +52,13 @@ function DashboardLayoutInner({
       .then(data => {
         if (data?.subscription) {
           const sub = data.subscription
-          const recovered = data.store?.cartsRecovered ?? 0
+          const processed = data.store?.cartsProcessed ?? 0
           const freeThreshold = 50
           setSubStatus({
             isFree: sub.plan === 'free' || !['starter', 'growth', 'pro'].includes(sub.plan),
-            isExhausted: (sub.plan === 'free' || !['starter', 'growth', 'pro'].includes(sub.plan)) && recovered >= freeThreshold,
-            cartsUsed: recovered,
-            cartsRemaining: Math.max(0, freeThreshold - recovered),
+            isExhausted: (sub.plan === 'free' || !['starter', 'growth', 'pro'].includes(sub.plan)) && processed >= freeThreshold,
+            cartsUsed: processed,
+            cartsRemaining: Math.max(0, freeThreshold - processed),
           })
         }
         setSubLoading(false)
