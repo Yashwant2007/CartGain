@@ -157,6 +157,9 @@ export default function SignUpPage() {
   const initiateGoogleSignIn = async () => {
     setIsLoading(true)
     try {
+      // Tell the NextAuth signIn callback this is a sign-up intent so it
+      // may create a new Google-linked account. Cleared after use.
+      document.cookie = 'cg_oauth_intent=signup; path=/; max-age=600; SameSite=Lax; Secure'
       await signIn('google', { callbackUrl: '/setup' })
     } catch (err) {
       console.error('Google sign-in error:', err)

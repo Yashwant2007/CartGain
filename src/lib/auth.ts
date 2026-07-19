@@ -3,6 +3,7 @@ import GoogleProvider from 'next-auth/providers/google'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import EmailProvider from 'next-auth/providers/email'
 import type { NextAuthOptions } from 'next-auth'
+import { cookies } from 'next/headers'
 import prisma from '@/lib/db'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { loginSchema } from '@/lib/auth-utils'
@@ -159,60 +160,99 @@ export const authOptions: NextAuthOptions = {
     },
     async signIn({ user, account, profile }) {
       try {
-        // Allow linking Google OAuth to existing credentials-based accounts
         if (account?.provider === 'google') {
           const email = user.email || profile?.email
-          if (email) {
-            const existingUser = await prisma.user.findUnique({
-              where: { email },
-              include: { accounts: true },
-            })
-            if (existingUser) {
-              const isLinked = existingUser.accounts.some(
-                a => a.provider === 'google'
-              )
-              if (!isLinked) {
-                await prisma.account.upsert({
-                  where: {
-                    provider_providerAccountId: {
-                      provider: 'google',
-                      providerAccountId: account.providerAccountId,
-                    },
-                  },
-                  update: {},
-                  create: {
-                    userId: existingUser.id,
-                    type: account.type,
+          if (!email) {
+            // No email returned by Google — block sign-in.
+            return false
+          }
+
+          // The signup and login pages set a short-lived cookie before
+          // redirecting to Google so we can tell whether this OAuth round-trip
+          // is a brand-new sign-up attempt or an existing-user sign-in.
+          const intent = cookies().get('cg_oauth_intent')?.value
+          const isSignupIntent = intent === 'signup'
+
+          // Always clear the cookie once consumed.
+          cookies().set('cg_oauth_intent', '', {
+            path: '/',
+            maxAge: 0,
+            sameSite: 'lax',
+            httpOnly: true,
+          })
+
+          const existingUser = await prisma.user.findUnique({
+            where: { email },
+            include: { accounts: true },
+          })
+
+          // Sign-in flow: the account must already exist. Block silent
+          // account creation and send the visitor back to sign up first.
+          if (!existingUser) {
+            if (isSignupIntent) {
+              // Allow the signup flow to create the account. NextAuth v4
+              // PrismaAdapter creates the User + Account records before this
+              // callback fires, so user.id is already available. We fall
+              // through to the generic store-creation block below to make
+              // sure the new user has a Store row before they hit /setup.
+              // No early return — keep going.
+            } else {
+              // Login flow — account does not exist. Surface friendly error.
+              return `/login?error=NoAccount`
+            }
+          } else {
+            const isLinked = existingUser.accounts.some(
+              a => a.provider === 'google'
+            )
+            if (!isLinked) {
+              await prisma.account.upsert({
+                where: {
+                  provider_providerAccountId: {
                     provider: 'google',
                     providerAccountId: account.providerAccountId,
-                    access_token: account.access_token,
-                    refresh_token: account.refresh_token,
-                    expires_at: account.expires_at,
-                    token_type: account.token_type,
-                    scope: account.scope,
-                    id_token: account.id_token,
-                    session_state: account.session_state,
                   },
-                })
-              }
-              // Ensure store exists for the existing user
-              const existingStore = await prisma.store.findFirst({
-                where: { userId: existingUser.id },
+                },
+                update: {},
+                create: {
+                  userId: existingUser.id,
+                  type: account.type,
+                  provider: 'google',
+                  providerAccountId: account.providerAccountId,
+                  access_token: account.access_token,
+                  refresh_token: account.refresh_token,
+                  expires_at: account.expires_at,
+                  token_type: account.token_type,
+                  scope: account.scope,
+                  id_token: account.id_token,
+                  session_state: account.session_state,
+                },
               })
-              if (!existingStore) {
-                await prisma.store.create({
-                  data: {
-                    userId: existingUser.id,
-                    name: existingUser.name || 'My Store',
-                    domain: (email || '').split('@')[0] || 'store',
-                    platform: 'shopify',
-                    currency: 'USD',
-                    timezone: 'UTC',
-                  },
-                })
-              }
-              return true
             }
+
+            // Ensure a store exists for the existing user
+            const existingStore = await prisma.store.findFirst({
+              where: { userId: existingUser.id },
+            })
+            if (!existingStore) {
+              await prisma.store.create({
+                data: {
+                  userId: existingUser.id,
+                  name: existingUser.name || 'My Store',
+                  domain: (email || '').split('@')[0] || 'store',
+                  platform: 'shopify',
+                  currency: 'USD',
+                  timezone: 'UTC',
+                },
+              })
+            }
+
+            // Force users without a password through the set-password flow
+            // so they can later sign in with email + password too.
+            if (!existingUser.password) {
+              return `/setup?requirePassword=1`
+            }
+
+            return true
           }
         }
 
@@ -236,6 +276,8 @@ export const authOptions: NextAuthOptions = {
         }
       } catch (error) {
         console.error('signIn callback error:', error)
+        // Fail closed on unexpected errors
+        return false
       }
       return true
     },
@@ -243,6 +285,28 @@ export const authOptions: NextAuthOptions = {
   events: {
     async createUser({ user }) {
       console.log('New user created:', user.email)
+      // Make sure every new user has a Store row so the dashboard and the
+      // /setup page can rely on it. This fires after the User row is
+      // persisted, so user.id is the real DB cuid.
+      try {
+        const existingStore = await prisma.store.findFirst({
+          where: { userId: user.id },
+        })
+        if (!existingStore) {
+          await prisma.store.create({
+            data: {
+              userId: user.id,
+              name: user.name || 'My Store',
+              domain: user.email?.split('@')[0] || 'store',
+              platform: 'shopify',
+              currency: 'USD',
+              timezone: 'UTC',
+            },
+          })
+        }
+      } catch (error) {
+        console.error('createUser: failed to create default store:', error)
+      }
     },
   },
 }

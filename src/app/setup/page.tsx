@@ -1,17 +1,33 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Zap, Mail, Lock, User, ArrowRight, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
+import { Suspense } from 'react'
 
 export default function SetupPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center">
+        <div className="text-blue-300/60 text-sm">Loading...</div>
+      </div>
+    }>
+      <SetupContent />
+    </Suspense>
+  )
+}
+
+function SetupContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const requirePassword = searchParams.get('requirePassword') === '1'
   const { data: session, status } = useSession()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [checking, setChecking] = useState(true)
+  const [storeExists, setStoreExists] = useState(false)
   const [formData, setFormData] = useState({
     storeName: '',
     storeDomain: '',
@@ -30,9 +46,17 @@ export default function SetupPage() {
         const res = await fetch('/api/stores/current')
         if (res.ok) {
           const data = await res.json()
-          if (data?.hasPassword) {
+          if (data?.hasPassword && !requirePassword) {
             router.replace('/dashboard')
             return
+          }
+          if (data?.store) {
+            setStoreExists(true)
+            setFormData(prev => ({
+              ...prev,
+              storeName: data.store.name || '',
+              storeDomain: data.store.domain || '',
+            }))
           }
         }
       } catch {
@@ -41,35 +65,43 @@ export default function SetupPage() {
       setChecking(false)
     }
     checkStore()
-  }, [status, router])
+  }, [status, router, requirePassword])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
-    if (formData.password.length < 8) {
+    if (!requirePassword && formData.password.length === 0) {
+      // Password optional in the non-required flow — skip validation.
+    } else if (formData.password.length > 0 && formData.password.length < 8) {
       setError('Password must be at least 8 characters')
       return
     }
-    if (!formData.storeDomain) {
+    if (requirePassword && formData.password.length < 8) {
+      setError('Please set a password of at least 8 characters to continue')
+      return
+    }
+    if (!storeExists && !formData.storeDomain) {
       setError('Please enter a store domain')
       return
     }
 
     setIsLoading(true)
     try {
-      // Update store name + domain
-      const storeRes = await fetch('/api/stores/current', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.storeName,
-          domain: formData.storeDomain,
-        }),
-      })
-      if (!storeRes.ok) {
-        const err = await storeRes.json()
-        throw new Error(err.message || 'Failed to update store')
+      // Update store name + domain only if store does not yet exist
+      if (!storeExists) {
+        const storeRes = await fetch('/api/stores/current', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: formData.storeName,
+            domain: formData.storeDomain,
+          }),
+        })
+        if (!storeRes.ok) {
+          const err = await storeRes.json()
+          throw new Error(err.message || 'Failed to update store')
+        }
       }
 
       // Set password for the user account
@@ -116,10 +148,17 @@ export default function SetupPage() {
         </Link>
 
         <div className="mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Complete your setup</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
+            {requirePassword ? 'Set a password' : 'Complete your setup'}
+          </h1>
           <p className="text-sm sm:text-base text-blue-200">
             Signed in as <span className="text-blue-300 font-medium">{session?.user?.email}</span>
           </p>
+          {requirePassword && (
+            <p className="text-xs sm:text-sm text-blue-300/80 mt-2">
+              Set a password so you can also sign in with email + password next time.
+            </p>
+          )}
         </div>
 
         {error && (
@@ -129,42 +168,52 @@ export default function SetupPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="storeName" className="block text-xs sm:text-sm font-medium text-blue-200 mb-2">Store Name</label>
-            <input
-              id="storeName"
-              type="text"
-              required
-              disabled={isLoading}
-              className="input w-full bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base rounded-lg px-4 py-3"
-              placeholder="My Awesome Store"
-              value={formData.storeName}
-              onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
-            />
-          </div>
+          {!storeExists && (
+            <>
+              <div>
+                <label htmlFor="storeName" className="block text-xs sm:text-sm font-medium text-blue-200 mb-2">Store Name</label>
+                <input
+                  id="storeName"
+                  type="text"
+                  required
+                  disabled={isLoading}
+                  className="input w-full bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base rounded-lg px-4 py-3"
+                  placeholder="My Awesome Store"
+                  value={formData.storeName}
+                  onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="storeDomain" className="block text-xs sm:text-sm font-medium text-blue-200 mb-2">Store Domain</label>
+                <input
+                  id="storeDomain"
+                  type="text"
+                  required
+                  disabled={isLoading}
+                  className="input w-full bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base rounded-lg px-4 py-3"
+                  placeholder="mystore.com"
+                  value={formData.storeDomain}
+                  onChange={(e) => setFormData({ ...formData, storeDomain: e.target.value })}
+                />
+              </div>
+            </>
+          )}
 
           <div>
-            <label htmlFor="storeDomain" className="block text-xs sm:text-sm font-medium text-blue-200 mb-2">Store Domain</label>
-            <input
-              id="storeDomain"
-              type="text"
-              required
-              disabled={isLoading}
-              className="input w-full bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base rounded-lg px-4 py-3"
-              placeholder="mystore.com"
-              value={formData.storeDomain}
-              onChange={(e) => setFormData({ ...formData, storeDomain: e.target.value })}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-xs sm:text-sm font-medium text-blue-200 mb-2">Password <span className="text-blue-400/60 font-normal">(optional — for email sign-in)</span></label>
+            <label htmlFor="password" className="block text-xs sm:text-sm font-medium text-blue-200 mb-2">
+              Password{' '}
+              {requirePassword
+                ? <span className="text-red-400/80 font-normal">(required)</span>
+                : <span className="text-blue-400/60 font-normal">(optional — for email sign-in)</span>}
+            </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-blue-400 flex-shrink-0 pointer-events-none" />
               <input
                 id="password"
                 type="password"
                 minLength={8}
+                required={requirePassword}
                 autoComplete="new-password"
                 disabled={isLoading}
                 className="input w-full pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base rounded-lg px-4 py-3"
@@ -173,7 +222,7 @@ export default function SetupPage() {
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               />
             </div>
-            <p className="text-xs text-blue-400/70 mt-1">Set a password to sign in with email later (minimum 8 characters)</p>
+            <p className="text-xs text-blue-400/70 mt-1">Minimum 8 characters</p>
           </div>
 
           <button
@@ -181,7 +230,7 @@ export default function SetupPage() {
             disabled={isLoading}
             className="w-full py-3 sm:py-3.5 bg-primary-600 text-white text-sm sm:text-base font-semibold rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 transition active:scale-95 flex items-center justify-center gap-2 min-h-12"
           >
-            {isLoading ? 'Setting up...' : 'Complete Setup'}
+            {isLoading ? 'Saving...' : (requirePassword ? 'Set Password' : 'Complete Setup')}
             {!isLoading && <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />}
           </button>
         </form>

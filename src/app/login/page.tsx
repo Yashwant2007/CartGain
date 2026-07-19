@@ -87,9 +87,15 @@ function LoginContent() {
 
       if (isInIframe && window.top) {
         // Shopify embed — top-level redirect since popups/cookies don't work in iframes
+        document.cookie = 'cg_oauth_intent=signin; path=/; max-age=600; SameSite=Lax; Secure'
         window.top.location.href = `${window.location.origin}/api/auth/signin/google?callbackUrl=${encodeURIComponent('/setup')}`
         return
       }
+
+      // Tell the NextAuth signIn callback this is a sign-in (existing user)
+      // intent. If the email isn't already registered, the user is bounced
+      // back to /login?error=NoAccount and prompted to sign up first.
+      document.cookie = 'cg_oauth_intent=signin; path=/; max-age=600; SameSite=Lax; Secure'
 
       // Normal browser — use POST-based signIn (NextAuth handles popup internally)
       // GET requests to /api/auth/signin/google are broken by NextAuth's internal
