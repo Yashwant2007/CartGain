@@ -7,6 +7,7 @@ import { cookies } from 'next/headers'
 import prisma from '@/lib/db'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { loginSchema } from '@/lib/auth-utils'
+import { createFreeSubscription } from '@/lib/subscription'
 
 // Server-side only - load bcrypt when needed
 let bcrypt: any = null;
@@ -285,6 +286,8 @@ export const authOptions: NextAuthOptions = {
               },
             })
           }
+          // Ensure every user has a free subscription so they can create campaigns
+          await createFreeSubscription(user.id)
         }
       } catch (error) {
         console.error('signIn callback error:', error)
@@ -318,6 +321,11 @@ export const authOptions: NextAuthOptions = {
         }
       } catch (error) {
         console.error('createUser: failed to create default store:', error)
+      }
+      try {
+        await createFreeSubscription(user.id)
+      } catch (error) {
+        console.error('createUser: failed to create free subscription:', error)
       }
     },
   },
