@@ -133,7 +133,7 @@ export const WhatsAppTemplates = {
       header: productImage
         ? { type: 'image', imageUrl: productImage }
         : undefined,
-      body: [customerName || 'there', bodyContent, cartUrl],
+      body: [customerName || 'there', bodyContent],
       buttons: [{ type: 'url', text: '🛒 Complete Purchase', url: cartUrl }],
     }),
   },
@@ -149,7 +149,7 @@ export const WhatsAppTemplates = {
       header: productImage
         ? { type: 'image', imageUrl: productImage }
         : undefined,
-      body: [customerName || 'there', bodyContent, cartUrl],
+      body: [customerName || 'there', bodyContent],
       buttons: [{ type: 'url', text: '👉 Complete Order', url: cartUrl }],
     }),
   },
@@ -165,7 +165,7 @@ export const WhatsAppTemplates = {
       header: productImage
         ? { type: 'image', imageUrl: productImage }
         : undefined,
-      body: [customerName || 'there', bodyContent, cartUrl],
+      body: [customerName || 'there', bodyContent],
       buttons: [{ type: 'url', text: '🏃‍♂️ Complete Now', url: cartUrl }],
     }),
   },
