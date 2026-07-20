@@ -138,7 +138,7 @@ ${ctx.discountCode ? `\nINCLUDE this discount offer: code ${ctx.discountCode}${c
   }
 }
 
-export async function generateWhatsAppContent(ctx: CartContext, storeId?: string): Promise<GeneratedContent | null> {
+export async function generateWhatsAppContent(ctx: CartContext, step: number = 0, storeId?: string): Promise<GeneratedContent | null> {
   const userKey = storeId || 'default'
   const ai = getClient(userKey)
   if (!ai) return null
@@ -147,21 +147,54 @@ export async function generateWhatsAppContent(ctx: CartContext, storeId?: string
     `• ${i.name}${i.description ? `: ${i.description}` : ''} — ${ctx.currencySymbol}${i.price}`
   ).join('\n')
 
+  const stepPrompts: Record<number, string> = {
+    0: `Write a warm, persuasive body (2-4 sentences, max 50 words) for a WhatsApp cart recovery message. No greeting, no sign-off, no URL — those are added separately.
+
+Rules:
+- Sentence 1: Validate their choice — compliment their taste
+- Sentences 2-3: Paint the desire — describe how the product makes them feel or look
+- Optional sentence 4: Gentle social proof ("our #1 bestseller", "everyone loves it")
+- Warm, like a trusted friend who's a beauty insider. Never desperate.
+- Use 1-2 emojis.`,
+
+    1: `Write an engaging body (2-4 sentences, max 50 words) for a WhatsApp follow-up message. No greeting, no sign-off, no URL.
+
+Rules:
+- Reference the specific products they chose
+- Add social proof or popularity signal
+- Include the discount/offer if there's one — make it feel exclusive
+- Gentle urgency without being pushy
+- Use 1 emoji max.`,
+
+    2: `Write a graceful but urgent body (2-3 sentences, max 45 words) for a WhatsApp final reminder. No greeting, no sign-off, no URL.
+
+Rules:
+- Loss aversion: they'll miss out on their specific picks
+- Time sensitivity: cart won't be saved forever
+- Still warm and gracious — never aggressive
+- Discount as last-chance incentive if available
+- Use 1 emoji max.`,
+  }
+
+  const prompt = stepPrompts[step] || stepPrompts[0]
+  const discountLine = ctx.discountCode
+    ? `\nDiscount available: code ${ctx.discountCode}${ctx.discountValue ? ` for ${ctx.discountValue}${ctx.discountType === 'percentage' ? '%' : ''} off` : ''}.`
+    : ''
+
   try {
     const res = await ai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
-          content: `Write a warm WhatsApp message for abandoned cart recovery. Keep it tight — just 3-5 short lines. Mention 1-2 products by name. Use 1-2 emojis. Friendly, conversational tone. Do NOT include the URL — it will be appended separately. Return ONLY the message text, no JSON, no quotes.
-${ctx.discountCode ? `\nINCLUDE this discount offer in the message: code ${ctx.discountCode}${ctx.discountValue ? ` for ${ctx.discountValue}${ctx.discountType === 'percentage' ? '%' : ''} off` : ''}.` : ''}`,
+          content: prompt + discountLine + '\n\nReturn ONLY the message text, no JSON, no quotes.',
         },
         {
           role: 'user',
           content: `Name: ${ctx.customerName}\nStore: ${ctx.storeName}\nItems:\n${itemsStr}\nTotal: ${ctx.currencySymbol}${ctx.total.toFixed(2)}`,
         },
       ],
-      max_tokens: 150,
+      max_tokens: 200,
       temperature: 0.8,
     })
 

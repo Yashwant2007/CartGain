@@ -68,14 +68,15 @@ export async function sendWhatsAppMessage({
       }
 
       if (templateParams?.buttons?.length) {
-        components.push({
-          type: 'button',
-          sub_type: 'quick_reply',
-          index: 0,
-          parameters: templateParams.buttons.map((btn) => ({
-            type: btn.type === 'url' ? 'url' : 'payload',
-            text: btn.url || btn.text,
-          })),
+        templateParams.buttons.forEach((btn, idx) => {
+          components.push({
+            type: 'button',
+            sub_type: btn.type === 'url' ? 'url' : 'quick_reply',
+            index: idx,
+            parameters: btn.type === 'url'
+              ? [{ type: 'text', text: btn.url || '' }]
+              : [{ type: 'payload', payload: btn.text }],
+          })
         })
       }
 
@@ -125,18 +126,47 @@ export const WhatsAppTemplates = {
     name: 'abandoned_cart_reminder',
     generateParams: (
       customerName: string,
-      productName: string,
+      bodyContent: string,
       productImage: string | undefined,
       cartUrl: string,
     ): WhatsAppTemplateParams => ({
       header: productImage
         ? { type: 'image', imageUrl: productImage }
-        : { type: 'text', text: `Hey ${customerName || 'there'}!` },
-      body: [
-        customerName || 'there',
-        productName || 'your items',
-        cartUrl,
-      ],
+        : undefined,
+      body: [customerName || 'there', bodyContent, cartUrl],
+      buttons: [{ type: 'url', text: '🛒 Complete Purchase', url: cartUrl }],
+    }),
+  },
+
+  abandoned_cart_followup: {
+    name: 'abandoned_cart_followup',
+    generateParams: (
+      customerName: string,
+      bodyContent: string,
+      productImage: string | undefined,
+      cartUrl: string,
+    ): WhatsAppTemplateParams => ({
+      header: productImage
+        ? { type: 'image', imageUrl: productImage }
+        : undefined,
+      body: [customerName || 'there', bodyContent, cartUrl],
+      buttons: [{ type: 'url', text: '👉 Complete Order', url: cartUrl }],
+    }),
+  },
+
+  abandoned_cart_urgent: {
+    name: 'abandoned_cart_urgent',
+    generateParams: (
+      customerName: string,
+      bodyContent: string,
+      productImage: string | undefined,
+      cartUrl: string,
+    ): WhatsAppTemplateParams => ({
+      header: productImage
+        ? { type: 'image', imageUrl: productImage }
+        : undefined,
+      body: [customerName || 'there', bodyContent, cartUrl],
+      buttons: [{ type: 'url', text: '🏃‍♂️ Complete Now', url: cartUrl }],
     }),
   },
 
