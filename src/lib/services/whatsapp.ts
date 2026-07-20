@@ -127,13 +127,14 @@ export const WhatsAppTemplates = {
     generateParams: (
       customerName: string,
       bodyContent: string,
+      discountLine: string,
       productImage: string | undefined,
       cartUrl: string,
     ): WhatsAppTemplateParams => ({
       header: productImage
         ? { type: 'image', imageUrl: productImage }
         : undefined,
-      body: [customerName || 'there', bodyContent],
+      body: [customerName || 'there', bodyContent, discountLine],
       buttons: [{ type: 'url', text: '🛒 Complete Purchase', url: cartUrl }],
     }),
   },
@@ -143,13 +144,14 @@ export const WhatsAppTemplates = {
     generateParams: (
       customerName: string,
       bodyContent: string,
+      discountLine: string,
       productImage: string | undefined,
       cartUrl: string,
     ): WhatsAppTemplateParams => ({
       header: productImage
         ? { type: 'image', imageUrl: productImage }
         : undefined,
-      body: [customerName || 'there', bodyContent],
+      body: [customerName || 'there', bodyContent, discountLine],
       buttons: [{ type: 'url', text: '👉 Complete Order', url: cartUrl }],
     }),
   },
@@ -159,13 +161,14 @@ export const WhatsAppTemplates = {
     generateParams: (
       customerName: string,
       bodyContent: string,
+      discountLine: string,
       productImage: string | undefined,
       cartUrl: string,
     ): WhatsAppTemplateParams => ({
       header: productImage
         ? { type: 'image', imageUrl: productImage }
         : undefined,
-      body: [customerName || 'there', bodyContent],
+      body: [customerName || 'there', bodyContent, discountLine],
       buttons: [{ type: 'url', text: '🏃‍♂️ Complete Now', url: cartUrl }],
     }),
   },

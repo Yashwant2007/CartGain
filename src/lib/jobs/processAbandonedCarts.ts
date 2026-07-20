@@ -478,8 +478,12 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
               bodyContent = fallbackBodyContent(customerName, cartItems, formattedTotal, templateStep, campaign)
             }
 
+            const discountLine = campaign.discountEnabled && campaign.discountCode
+              ? `Use code ${campaign.discountCode}${campaign.discountValue ? ` for ${campaign.discountValue}${campaign.discountType === 'percentage' ? '%' : ''} off` : ''}! 🎉`
+              : ''
+
             const template = templateMap[templateStep]
-            const params = template.generateParams(customerName, bodyContent, firstImage, cartUrl)
+            const params = template.generateParams(customerName, bodyContent, discountLine, firstImage, cartUrl)
             const whatsappResult = await sendWhatsAppMessage({
               to: sanitizePhoneNumber(cart.customerPhone!),
               templateName: template.name,
@@ -644,13 +648,9 @@ function fallbackBodyContent(
     ? `${productList} & ${restCount} more`
     : productList || 'your items'
 
-  const discountLine = campaign.discountEnabled && campaign.discountCode
-    ? ` with code ${campaign.discountCode}`
-    : ''
-
   const fallbacks = [
     `${customerName}, you have incredible taste! ✨ ${productLine} was made for you — we saved your cart so you don't miss out. Just one tap and it's yours 🚚`,
-    `Still thinking about ${productLine}, ${customerName}? 💭 It's one of our most-loved picks and selling fast. Grab it now${discountLine} while it's still reserved for you 💫`,
+    `Still thinking about ${productLine}, ${customerName}? 💭 It's one of our most-loved picks and selling fast. Grab it now while it's still reserved for you 💫`,
     `${customerName}, your ${productLine} won't stay warm forever ⏳ Once it's gone, the deal goes too. This is your last chance to complete your order 🏃‍♂️`,
   ]
 
