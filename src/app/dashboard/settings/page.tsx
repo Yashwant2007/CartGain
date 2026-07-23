@@ -427,16 +427,52 @@ function NotificationSettings() {
     weeklyDigest: false,
     milestoneAlerts: true,
   })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch('/api/settings/notifications')
+        const data = await res.json()
+        if (data.prefs) setSettings(data.prefs)
+      } catch {} finally { setLoading(false) }
+    }
+    load()
+  }, [])
+
+  const handleToggle = async (key: keyof typeof settings, value: boolean) => {
+    const updated = { ...settings, [key]: value }
+    setSettings(updated)
+    setSaving(true); setMessage(null)
+    try {
+      const res = await fetch('/api/settings/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      })
+      const data = await res.json()
+      if (res.ok) { setMessage('Saved'); setTimeout(() => setMessage(null), 2000) }
+      else throw new Error()
+    } catch { setMessage('Failed to save') } finally { setSaving(false) }
+  }
+
+  if (loading) return <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 max-w-2xl text-sm text-blue-300/60">Loading preferences...</div>
 
   return (
     <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 max-w-2xl backdrop-blur-sm">
-      <h2 className="text-lg font-semibold text-white mb-6">Notification Preferences</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-lg font-semibold text-white">Notification Preferences</h2>
+        {message && <span className="text-xs text-emerald-300/80">{message}</span>}
+        {saving && <span className="text-xs text-blue-300/60">Saving...</span>}
+      </div>
       <div className="space-y-4">
-        <ToggleSetting label="Email Notifications" description="Receive notifications via email" checked={settings.emailNotifications} onChange={(v) => setSettings({ ...settings, emailNotifications: v })} />
-        <ToggleSetting label="Recovery Alerts" description="Get notified when a cart is recovered" checked={settings.recoveryAlerts} onChange={(v) => setSettings({ ...settings, recoveryAlerts: v })} />
-        <ToggleSetting label="Daily Reports" description="Receive daily recovery summary" checked={settings.dailyReports} onChange={(v) => setSettings({ ...settings, dailyReports: v })} />
-        <ToggleSetting label="Weekly Digest" description="Weekly performance summary" checked={settings.weeklyDigest} onChange={(v) => setSettings({ ...settings, weeklyDigest: v })} />
-        <ToggleSetting label="Milestone Alerts" description="Celebrate recovery milestones (₹1k, ₹10k, etc.)" checked={settings.milestoneAlerts} onChange={(v) => setSettings({ ...settings, milestoneAlerts: v })} />
+        <ToggleSetting label="Email Notifications" description="Receive notifications via email" checked={settings.emailNotifications} onChange={(v) => handleToggle('emailNotifications', v)} />
+        <ToggleSetting label="Recovery Alerts" description="Get notified when a cart is recovered" checked={settings.recoveryAlerts} onChange={(v) => handleToggle('recoveryAlerts', v)} />
+        <ToggleSetting label="Daily Reports" description="Receive daily recovery summary" checked={settings.dailyReports} onChange={(v) => handleToggle('dailyReports', v)} />
+        <ToggleSetting label="Weekly Digest" description="Weekly performance summary" checked={settings.weeklyDigest} onChange={(v) => handleToggle('weeklyDigest', v)} />
+        <ToggleSetting label="Milestone Alerts" description="Celebrate recovery milestones (₹1k, ₹10k, etc.)" checked={settings.milestoneAlerts} onChange={(v) => handleToggle('milestoneAlerts', v)} />
       </div>
     </div>
   )
@@ -462,108 +498,121 @@ function BillingSettings() {
 }
 
 function SecuritySettings() {
-  const [passwords, setPasswords] = useState({
-    current: '',
-    new: '',
-    confirm: '',
-  })
+  const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' })
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [changingPassword, setChangingPassword] = useState(false)
+
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
   const [twoFactorLoading, setTwoFactorLoading] = useState(false)
+  const [twoFactorError, setTwoFactorError] = useState<string | null>(null)
+  const [twoFactorMessage, setTwoFactorMessage] = useState<string | null>(null)
+  const [show2FASetup, setShow2FASetup] = useState(false)
+  const [show2FADisable, setShow2FADisable] = useState(false)
+  const [qrCodeUrl, setQrCodeUrl] = useState('')
+  const [setupCode, setSetupCode] = useState('')
+  const [disableCode, setDisableCode] = useState('')
+  const [setupStep, setSetupStep] = useState<'loading' | 'showqr' | 'verify'>('loading')
+
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const handlePasswordChange = async () => {
-    setPasswordError(null)
-    setPasswordMessage(null)
-
-    if (!passwords.current || !passwords.new || !passwords.confirm) {
-      setPasswordError('Please fill in all password fields')
-      return
-    }
-
-    if (passwords.new !== passwords.confirm) {
-      setPasswordError('New passwords do not match')
-      return
-    }
-
-    if (passwords.new.length < 8) {
-      setPasswordError('Password must be at least 8 characters')
-      return
-    }
-
+    setPasswordError(null); setPasswordMessage(null)
+    if (!passwords.current || !passwords.new || !passwords.confirm) { setPasswordError('Please fill in all password fields'); return }
+    if (passwords.new !== passwords.confirm) { setPasswordError('New passwords do not match'); return }
+    if (passwords.new.length < 8) { setPasswordError('Password must be at least 8 characters'); return }
     try {
       setChangingPassword(true)
-
-      const response = await fetch('/api/auth/reset-password', {
+      const res = await fetch('/api/auth/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          currentPassword: passwords.current,
-          newPassword: passwords.new,
-        }),
+        body: JSON.stringify({ currentPassword: passwords.current, newPassword: passwords.new }),
       })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || 'Failed to change password')
-      }
-
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to change password')
       setPasswordMessage('Password updated successfully!')
       setPasswords({ current: '', new: '', confirm: '' })
       setTimeout(() => setPasswordMessage(null), 3000)
     } catch (error) {
       setPasswordError(error instanceof Error ? error.message : 'Failed to change password')
-    } finally {
-      setChangingPassword(false)
+    } finally { setChangingPassword(false) }
+  }
+
+  const handleStart2FASetup = async () => {
+    setTwoFactorError(null); setShow2FASetup(true); setSetupStep('loading')
+    try {
+      const res = await fetch('/api/auth/2fa/setup', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to start setup')
+      setQrCodeUrl(data.qrCodeUrl)
+      setSetupStep('showqr')
+    } catch (error) {
+      setTwoFactorError(error instanceof Error ? error.message : 'Failed to start setup')
+      setShow2FASetup(false)
     }
   }
 
-  const handleToggleTwoFactor = async () => {
+  const handleVerify2FA = async () => {
+    if (setupCode.length !== 6) { setTwoFactorError('Enter the 6-digit code from your authenticator app'); return }
+    setTwoFactorError(null); setTwoFactorLoading(true)
     try {
-      setTwoFactorLoading(true)
-
-      // Simulate API call for 2FA toggle
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      setTwoFactorEnabled(!twoFactorEnabled)
+      const res = await fetch('/api/auth/2fa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: setupCode }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Verification failed')
+      setTwoFactorEnabled(true)
+      setShow2FASetup(false)
+      setSetupCode('')
+      setTwoFactorMessage('2FA enabled successfully!')
+      setTimeout(() => setTwoFactorMessage(null), 4000)
     } catch (error) {
-      console.error('2FA toggle error:', error)
-    } finally {
-      setTwoFactorLoading(false)
-    }
+      setTwoFactorError(error instanceof Error ? error.message : 'Verification failed')
+    } finally { setTwoFactorLoading(false) }
+  }
+
+  const handleStart2FADisable = () => {
+    setShow2FADisable(true); setDisableCode(''); setTwoFactorError(null)
+  }
+
+  const handleConfirmDisable2FA = async () => {
+    if (disableCode.length !== 6) { setTwoFactorError('Enter your 6-digit code'); return }
+    setTwoFactorError(null); setTwoFactorLoading(true)
+    try {
+      const res = await fetch('/api/auth/2fa/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: disableCode }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to disable')
+      setTwoFactorEnabled(false)
+      setShow2FADisable(false)
+      setDisableCode('')
+      setTwoFactorMessage('2FA disabled successfully')
+      setTimeout(() => setTwoFactorMessage(null), 4000)
+    } catch (error) {
+      setTwoFactorError(error instanceof Error ? error.message : 'Failed to disable')
+    } finally { setTwoFactorLoading(false) }
   }
 
   const handleDeleteAccount = async () => {
-    if (deleteConfirm !== 'DELETE') {
-      return
-    }
-
+    if (deleteConfirm !== 'DELETE') return
     try {
-      setDeletingAccount(true)
-      setDeleteError(null)
-
-      const response = await fetch('/api/auth/delete-account', {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        let errorMsg = 'Failed to delete account'
-        try {
-          const data = await response.json()
-          if (data?.message) errorMsg = data.message
-        } catch {}
-        throw new Error(errorMsg)
+      setDeletingAccount(true); setDeleteError(null)
+      const res = await fetch('/api/auth/delete-account', { method: 'DELETE' })
+      if (!res.ok) {
+        let msg = 'Failed to delete account'
+        try { const d = await res.json(); if (d?.message) msg = d.message } catch {}
+        throw new Error(msg)
       }
-
-      // Redirect to login after deletion
       window.location.href = '/login?deleted=true'
     } catch (error) {
-      console.error('Delete account error:', error)
       setDeleteError(error instanceof Error ? error.message : 'Something went wrong')
       setDeletingAccount(false)
     }
@@ -577,47 +626,19 @@ function SecuritySettings() {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-blue-200 mb-2">Current Password</label>
-            <input
-              type="password"
-              value={passwords.current}
-              onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
-              className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
-              placeholder="Enter current password"
-            />
+            <input type="password" value={passwords.current} onChange={(e) => setPasswords({ ...passwords, current: e.target.value })} className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400" placeholder="Enter current password" />
           </div>
           <div>
             <label className="block text-sm font-medium text-blue-200 mb-2">New Password</label>
-            <input
-              type="password"
-              value={passwords.new}
-              onChange={(e) => setPasswords({ ...passwords, new: e.target.value })}
-              className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
-              placeholder="Enter new password"
-            />
+            <input type="password" value={passwords.new} onChange={(e) => setPasswords({ ...passwords, new: e.target.value })} className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400" placeholder="Enter new password" />
           </div>
           <div>
             <label className="block text-sm font-medium text-blue-200 mb-2">Confirm New Password</label>
-            <input
-              type="password"
-              value={passwords.confirm}
-              onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
-              className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
-              placeholder="Confirm new password"
-            />
+            <input type="password" value={passwords.confirm} onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })} className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400" placeholder="Confirm new password" />
           </div>
-
-          {passwordError && (
-            <p className="text-sm text-red-300/80 bg-red-600/20 border border-red-700/30 rounded-lg p-3">{passwordError}</p>
-          )}
-          {passwordMessage && (
-            <p className="text-sm text-emerald-300/80 bg-emerald-600/20 border border-emerald-700/30 rounded-lg p-3">{passwordMessage}</p>
-          )}
-
-          <button
-            onClick={handlePasswordChange}
-            disabled={changingPassword}
-            className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all mt-4"
-          >
+          {passwordError && <p className="text-sm text-red-300/80 bg-red-600/20 border border-red-700/30 rounded-lg p-3">{passwordError}</p>}
+          {passwordMessage && <p className="text-sm text-emerald-300/80 bg-emerald-600/20 border border-emerald-700/30 rounded-lg p-3">{passwordMessage}</p>}
+          <button onClick={handlePasswordChange} disabled={changingPassword} className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all mt-4">
             {changingPassword ? 'Updating...' : 'Update Password'}
           </button>
         </div>
@@ -626,23 +647,21 @@ function SecuritySettings() {
       {/* Two-Factor Authentication */}
       <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
         <h2 className="text-lg font-semibold text-white mb-6">Two-Factor Authentication</h2>
+        {twoFactorMessage && <p className="mb-4 text-sm text-emerald-300/80 bg-emerald-600/20 border border-emerald-700/30 rounded-lg p-3">{twoFactorMessage}</p>}
         <div className="flex items-center justify-between p-4 bg-slate-700/40 border border-blue-700/30 rounded-lg">
           <div>
             <p className="font-medium text-white">Authenticator App</p>
-            <p className="text-sm text-blue-300/60">
-              {twoFactorEnabled ? '2FA is enabled' : 'Add an extra layer of security'}
-            </p>
+            <p className="text-sm text-blue-300/60">{twoFactorEnabled ? '2FA is enabled' : 'Add an extra layer of security'}</p>
           </div>
           <button
-            onClick={handleToggleTwoFactor}
-            disabled={twoFactorLoading}
+            onClick={twoFactorEnabled ? handleStart2FADisable : handleStart2FASetup}
             className={`px-4 py-2 rounded-lg text-sm transition-all ${
               twoFactorEnabled
                 ? 'bg-red-600/20 text-red-300 border border-red-600/40 hover:bg-red-600/30'
                 : 'border border-blue-700/50 text-blue-300 hover:bg-slate-700/40'
             }`}
           >
-            {twoFactorLoading ? 'Loading...' : twoFactorEnabled ? 'Disable' : 'Enable'}
+            {twoFactorEnabled ? 'Disable' : 'Enable'}
           </button>
         </div>
         {twoFactorEnabled && (
@@ -652,18 +671,60 @@ function SecuritySettings() {
         )}
       </div>
 
+      {/* 2FA Setup Modal */}
+      {show2FASetup && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { if (setupStep !== 'loading') { setShow2FASetup(false); setTwoFactorError(null) }}}>
+          <div className="bg-slate-800 border border-cyan-700/50 rounded-xl p-6 max-w-md w-full shadow-2xl shadow-cyan-500/10" onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-bold text-white mb-4">Set Up Two-Factor Auth</h3>
+            {setupStep === 'loading' && <p className="text-blue-300/80">Generating setup key...</p>}
+            {setupStep === 'showqr' && (
+              <div className="space-y-4">
+                <p className="text-sm text-blue-300/80">Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.):</p>
+                <div className="flex justify-center">
+                  {qrCodeUrl && <img src={qrCodeUrl} alt="2FA QR Code" className="rounded-lg border border-blue-700/30" />}
+                </div>
+                <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-3">
+                  <p className="text-xs text-blue-300/60 mb-1">Then enter the 6-digit code from the app:</p>
+                  <div className="flex space-x-2">
+                    <input type="text" maxLength={6} value={setupCode} onChange={(e) => { setSetupCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setTwoFactorError(null) }} placeholder="000000" className="flex-1 px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg font-mono text-lg tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                  </div>
+                </div>
+                {twoFactorError && <p className="text-sm text-red-300/80 bg-red-600/20 border border-red-700/30 rounded-lg p-3">{twoFactorError}</p>}
+                <div className="flex space-x-3">
+                  <button onClick={() => { setShow2FASetup(false); setSetupCode(''); setTwoFactorError(null) }} className="flex-1 py-2.5 text-sm text-blue-300/60 hover:text-white border border-blue-700/40 rounded-lg transition-colors">Cancel</button>
+                  <button onClick={handleVerify2FA} disabled={setupCode.length !== 6 || twoFactorLoading} className="flex-1 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all">
+                    {twoFactorLoading ? 'Verifying...' : 'Verify & Enable'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 2FA Disable Modal */}
+      {show2FADisable && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { setShow2FADisable(false); setTwoFactorError(null) }}>
+          <div className="bg-slate-800 border border-red-700/50 rounded-xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-bold text-white mb-4">Disable Two-Factor Auth</h3>
+            <p className="text-sm text-blue-300/80 mb-4">Enter a code from your authenticator app to confirm disabling 2FA:</p>
+            <input type="text" maxLength={6} value={disableCode} onChange={(e) => { setDisableCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setTwoFactorError(null) }} placeholder="000000" className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg font-mono text-lg tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-red-400 mb-4" />
+            {twoFactorError && <p className="mb-4 text-sm text-red-300/80 bg-red-600/20 border border-red-700/30 rounded-lg p-3">{twoFactorError}</p>}
+            <div className="flex space-x-3">
+              <button onClick={() => { setShow2FADisable(false); setTwoFactorError(null) }} className="flex-1 py-2.5 text-sm text-blue-300/60 hover:text-white border border-blue-700/40 rounded-lg transition-colors">Cancel</button>
+              <button onClick={handleConfirmDisable2FA} disabled={disableCode.length !== 6 || twoFactorLoading} className="flex-1 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-all">
+                {twoFactorLoading ? 'Disabling...' : 'Disable 2FA'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Danger Zone */}
       <div className="bg-slate-800/50 border border-red-700/30 rounded-xl p-6 backdrop-blur-sm">
         <h2 className="text-lg font-semibold text-white mb-4">Danger Zone</h2>
-        <p className="text-sm text-blue-300/60 mb-6">
-          Once you delete your account, there is no going back. Please be certain.
-        </p>
-        <button
-          onClick={() => setShowDeleteModal(true)}
-          className="px-6 py-2 text-red-400 border border-red-600/40 rounded-lg hover:bg-red-600/20 transition-colors"
-        >
-          Delete Account
-        </button>
+        <p className="text-sm text-blue-300/60 mb-6">Once you delete your account, there is no going back. Please be certain.</p>
+        <button onClick={() => setShowDeleteModal(true)} className="px-6 py-2 text-red-400 border border-red-600/40 rounded-lg hover:bg-red-600/20 transition-colors">Delete Account</button>
       </div>
 
       {/* Delete Account Modal */}
@@ -671,47 +732,15 @@ function SecuritySettings() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-slate-800 border border-red-700/50 rounded-xl p-6 max-w-md w-full">
             <h3 className="text-xl font-bold text-white mb-4">Delete Account?</h3>
-            <p className="text-blue-300/80 mb-6">
-              This action cannot be undone. All your data, including stores, campaigns, and analytics will be permanently deleted.
-            </p>
-
+            <p className="text-blue-300/80 mb-6">This action cannot be undone. All your data, including stores, campaigns, and analytics will be permanently deleted.</p>
             <div className="mb-6">
-              <label className="block text-sm font-medium text-blue-200 mb-2">
-                Type <span className="text-red-400 font-mono">DELETE</span> to confirm
-              </label>
-              <input
-                type="text"
-                value={deleteConfirm}
-                onChange={(e) => setDeleteConfirm(e.target.value.toUpperCase())}
-                className="w-full px-4 py-2 bg-slate-700/50 border border-red-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 font-mono"
-                placeholder="DELETE"
-              />
+              <label className="block text-sm font-medium text-blue-200 mb-2">Type <span className="text-red-400 font-mono">DELETE</span> to confirm</label>
+              <input type="text" value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value.toUpperCase())} className="w-full px-4 py-2 bg-slate-700/50 border border-red-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 font-mono" placeholder="DELETE" />
             </div>
-
-            {deleteError && (
-              <div className="mb-4 p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-sm text-red-300">
-                {deleteError}
-              </div>
-            )}
-
+            {deleteError && <div className="mb-4 p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-sm text-red-300">{deleteError}</div>}
             <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowDeleteModal(false)
-                  setDeleteConfirm('')
-                  setDeleteError(null)
-                }}
-                className="flex-1 px-4 py-2 border border-blue-700/50 text-blue-300 rounded-lg hover:bg-slate-700/40 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteAccount}
-                disabled={deleteConfirm !== 'DELETE' || deletingAccount}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              >
-                {deletingAccount ? 'Deleting...' : 'Delete Account'}
-              </button>
+              <button onClick={() => { setShowDeleteModal(false); setDeleteConfirm(''); setDeleteError(null) }} className="flex-1 px-4 py-2 border border-blue-700/50 text-blue-300 rounded-lg hover:bg-slate-700/40 transition-all">Cancel</button>
+              <button onClick={handleDeleteAccount} disabled={deleteConfirm !== 'DELETE' || deletingAccount} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">{deletingAccount ? 'Deleting...' : 'Delete Account'}</button>
             </div>
           </div>
         </div>
@@ -721,34 +750,153 @@ function SecuritySettings() {
 }
 
 function APISettings({ store }: { store: StoreSettings | null }) {
-  const apiKey = store?.apiKey || 'rf_live_xxxxxxxxxxxxxxxxxxxx'
-  const [copied, setCopied] = useState(false)
+  const [keys, setKeys] = useState<Array<{ id: string; name: string; prefix: string; permissions: string[]; lastUsedAt: string | null; createdAt: string }>>([])
+  const [loading, setLoading] = useState(true)
+  const [showGenerate, setShowGenerate] = useState(false)
+  const [newKeyName, setNewKeyName] = useState('')
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null)
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [showRevokeConfirm, setShowRevokeConfirm] = useState<string | null>(null)
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(apiKey)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const loadKeys = async () => {
+    try {
+      setLoading(true)
+      const res = await fetch('/api/keys')
+      const data = await res.json()
+      if (data.keys) setKeys(data.keys)
+    } catch {} finally { setLoading(false) }
+  }
+
+  useEffect(() => { loadKeys() }, [])
+
+  const handleGenerate = async () => {
+    if (!newKeyName.trim()) { setError('Enter a name for this key'); return }
+    setError(null); setGenerating(true)
+    try {
+      const res = await fetch('/api/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newKeyName.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to generate key')
+      setGeneratedKey(data.key)
+      setNewKeyName('')
+      await loadKeys()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate key')
+    } finally { setGenerating(false) }
+  }
+
+  const handleRevoke = async (id: string) => {
+    try {
+      const res = await fetch(`/api/keys/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to revoke')
+      setKeys(keys.filter(k => k.id !== id))
+      setShowRevokeConfirm(null)
+    } catch {} 
   }
 
   return (
-    <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 max-w-2xl backdrop-blur-sm">
-      <h2 className="text-lg font-semibold text-white mb-6">API Keys</h2>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-blue-200 mb-1">Live API Key</label>
-          <div className="flex space-x-2">
-            <input type="password" value={apiKey} readOnly className="flex-1 px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg text-sm focus:outline-none" />
-            <button onClick={handleCopy} className="px-4 py-2 rounded-lg border border-blue-700/50 text-blue-300 hover:bg-slate-700/40 transition-all whitespace-nowrap">{copied ? 'Copied!' : 'Copy'}</button>
+    <div className="space-y-6 max-w-2xl">
+      <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-semibold text-white">API Keys</h2>
+          <button onClick={() => { setShowGenerate(true); setGeneratedKey(null); setError(null) }} className="px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 transition-all">
+            + Generate New Key
+          </button>
+        </div>
+
+        {loading ? (
+          <p className="text-sm text-blue-300/60">Loading keys...</p>
+        ) : keys.length === 0 ? (
+          <div className="text-center py-8">
+            <Key className="w-10 h-10 text-blue-300/30 mx-auto mb-3" />
+            <p className="text-sm text-blue-300/60">No API keys yet. Generate one to get started.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {keys.map((key) => (
+              <div key={key.id} className="flex items-center justify-between p-4 bg-slate-700/40 border border-blue-700/30 rounded-lg">
+                <div>
+                  <p className="font-medium text-white text-sm">{key.name}</p>
+                  <p className="text-xs text-blue-300/50 mt-0.5">{key.prefix} · Created {new Date(key.createdAt).toLocaleDateString()}</p>
+                </div>
+                <button onClick={() => setShowRevokeConfirm(key.id)} className="px-3 py-1.5 text-xs text-red-400 border border-red-600/40 rounded-lg hover:bg-red-600/20 transition-colors">
+                  Revoke
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Generate Key Modal */}
+      {showGenerate && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { if (!generatedKey) { setShowGenerate(false); setError(null) }}}>
+          <div className="bg-slate-800 border border-cyan-700/50 rounded-xl p-6 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+            {generatedKey ? (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <span className="text-2xl">🔑</span>
+                  <h3 className="text-lg font-semibold text-white">API Key Generated</h3>
+                </div>
+                <div className="bg-slate-900 border border-amber-500/40 rounded-lg p-4">
+                  <p className="text-xs text-amber-400 font-medium mb-2">⚠️ Copy this key now. You won&apos;t be able to see it again.</p>
+                  <div className="bg-slate-950 border border-blue-700/30 rounded p-3">
+                    <code className="text-sm text-cyan-300 break-all">{generatedKey}</code>
+                  </div>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(generatedKey); setTimeout(() => {}, 1500) }}
+                    className="mt-3 px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg transition-all w-full"
+                  >
+                    Copy Key
+                  </button>
+                </div>
+                <button onClick={() => { setShowGenerate(false); setGeneratedKey(null) }} className="w-full py-2.5 text-sm text-blue-300/60 hover:text-white border border-blue-700/40 rounded-lg transition-colors">
+                  Done
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-white">Generate New API Key</h3>
+                <div>
+                  <label className="block text-sm font-medium text-blue-200 mb-2">Key Name</label>
+                  <input type="text" value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} placeholder="e.g. Production, Staging" className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400" autoFocus />
+                </div>
+                {error && <p className="text-sm text-red-300/80 bg-red-600/20 border border-red-700/30 rounded-lg p-3">{error}</p>}
+                <div className="flex space-x-3">
+                  <button onClick={() => { setShowGenerate(false); setError(null) }} className="flex-1 py-2.5 text-sm text-blue-300/60 hover:text-white border border-blue-700/40 rounded-lg transition-colors">Cancel</button>
+                  <button onClick={handleGenerate} disabled={!newKeyName.trim() || generating} className="flex-1 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all">
+                    {generating ? 'Generating...' : 'Generate Key'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
+      )}
+
+      {/* Revoke Confirm Modal */}
+      {showRevokeConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowRevokeConfirm(null)}>
+          <div className="bg-slate-800 border border-red-700/50 rounded-xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-white mb-2">Revoke API Key?</h3>
+            <p className="text-sm text-blue-300/80 mb-6">Any service using this key will immediately lose access. This cannot be undone.</p>
+            <div className="flex space-x-3">
+              <button onClick={() => setShowRevokeConfirm(null)} className="flex-1 py-2.5 text-sm text-blue-300/60 hover:text-white border border-blue-700/40 rounded-lg transition-colors">Cancel</button>
+              <button onClick={() => handleRevoke(showRevokeConfirm)} className="flex-1 py-2.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all">Revoke</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
         <div className="bg-slate-700/40 border border-cyan-500/30 rounded-lg p-4">
           <h3 className="font-medium text-cyan-300 mb-2">API Documentation</h3>
-          <p className="text-sm text-blue-300/80 mb-4">
-            Learn how to use our API to integrate CartGain with your custom systems.
-          </p>
-          <Link href="/docs/api" className="text-sm text-cyan-400 hover:text-cyan-300 font-medium">
-            View Documentation →
-          </Link>
+          <p className="text-sm text-blue-300/80 mb-4">Learn how to use our API to integrate CartGain with your custom systems.</p>
+          <Link href="/docs/api" className="text-sm text-cyan-400 hover:text-cyan-300 font-medium">View Documentation →</Link>
         </div>
       </div>
     </div>
