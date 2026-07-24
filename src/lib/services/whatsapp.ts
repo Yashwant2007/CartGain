@@ -121,7 +121,25 @@ export async function sendWhatsAppMessage({
 }
 
 // WhatsApp template configs — these must match templates created in Meta Business Manager
+// Template format reference for Meta:
+//   Header: Image (product) or Text (emoji + headline)
+//   Body: Short, punchy lines. {{1}} = name, {{2}} = AI body, {{3}} = product/total line
+//   Footer: Optional brand name
+//   Button: Single URL CTA button
 export const WhatsAppTemplates = {
+  /**
+   * Step 0 — First touch (1h after abandonment)
+   * Validates their choice, paints desire, ends with easy CTA.
+   *
+   * Meta template body:
+   *   Hey {{1}} 👋
+   *
+   *   {{2}}
+   *
+   *   Your cart: {{3}}
+   *
+   *   Button: 🛒 Complete Purchase
+   */
   abandoned_cart: {
     name: 'abandoned_cart_reminder',
     generateParams: (
@@ -134,11 +152,26 @@ export const WhatsAppTemplates = {
       header: productImage
         ? { type: 'image', imageUrl: productImage }
         : undefined,
-      body: [customerName || 'there', bodyContent, discountLine],
+      body: [
+        customerName || 'there',
+        bodyContent,
+        discountLine || 'saved just for you',
+      ],
       buttons: [{ type: 'url', text: '🛒 Complete Purchase', url: cartUrl }],
     }),
   },
 
+  /**
+   * Step 1 — Follow-up (3-4h after)
+   * Social proof + gentle urgency. Warm nudge.
+   *
+   * Meta template body:
+   *   {{1}} 💫
+   *
+   *   {{2}}
+   *
+   *   Button: 👉 Complete Order
+   */
   abandoned_cart_followup: {
     name: 'abandoned_cart_followup',
     generateParams: (
@@ -151,11 +184,25 @@ export const WhatsAppTemplates = {
       header: productImage
         ? { type: 'image', imageUrl: productImage }
         : undefined,
-      body: [customerName || 'there', bodyContent, discountLine],
+      body: [
+        customerName || 'there',
+        bodyContent,
+      ],
       buttons: [{ type: 'url', text: '👉 Complete Order', url: cartUrl }],
     }),
   },
 
+  /**
+   * Step 2 — Urgent (12-24h after)
+   * Loss aversion. Time sensitivity. Last chance.
+   *
+   * Meta template body:
+   *   {{1}} ⏳
+   *
+   *   {{2}}
+   *
+   *   Button: 🏃‍♂️ Complete Now
+   */
   abandoned_cart_urgent: {
     name: 'abandoned_cart_urgent',
     generateParams: (
@@ -168,11 +215,27 @@ export const WhatsAppTemplates = {
       header: productImage
         ? { type: 'image', imageUrl: productImage }
         : undefined,
-      body: [customerName || 'there', bodyContent, discountLine],
+      body: [
+        customerName || 'there',
+        bodyContent,
+      ],
       buttons: [{ type: 'url', text: '🏃‍♂️ Complete Now', url: cartUrl }],
     }),
   },
 
+  /**
+   * Discount offer — triggered when campaign has discount enabled
+   * Surprise + exclusivity framing
+   *
+   * Meta template body:
+   *   🎉 Just for {{1}}
+   *
+   *   {{2}}
+   *
+   *   Code: {{3}} → tap to claim
+   *
+   *   Button: 🛒 Claim Offer
+   */
   discount_offer: {
     name: 'cart_discount_offer',
     generateParams: (
@@ -185,17 +248,26 @@ export const WhatsAppTemplates = {
     ): WhatsAppTemplateParams => ({
       header: productImage
         ? { type: 'image', imageUrl: productImage }
-        : { type: 'text', text: `🎉 ${discountPercent}% Off Just for You!` },
+        : { type: 'text', text: `🎉 ${discountPercent}% Off — Just for You` },
       body: [
         customerName || 'there',
         productName || 'your items',
         discountCode,
-        discountPercent.toString(),
-        cartUrl,
       ],
+      buttons: [{ type: 'url', text: '🛒 Claim Offer', url: cartUrl }],
     }),
   },
 
+  /**
+   * Back in stock — for out-of-stock products that got restocked
+   *
+   * Meta template body:
+   *   {{1}}, it's back! 🎉
+   *
+   *   {{2}}
+   *
+   *   Button: 🛒 Shop Now
+   */
   back_in_stock: {
     name: 'product_back_in_stock',
     generateParams: (
@@ -206,12 +278,12 @@ export const WhatsAppTemplates = {
     ): WhatsAppTemplateParams => ({
       header: productImage
         ? { type: 'image', imageUrl: productImage }
-        : { type: 'text', text: `Back in Stock!` },
+        : { type: 'text', text: `Back in Stock! 🎉` },
       body: [
         customerName || 'there',
         productName || 'your item',
-        cartUrl,
       ],
+      buttons: [{ type: 'url', text: '🛒 Shop Now', url: cartUrl }],
     }),
   },
 }

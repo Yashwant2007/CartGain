@@ -147,32 +147,57 @@ export async function generateWhatsAppContent(ctx: CartContext, step: number = 0
     `• ${i.name}${i.description ? `: ${i.description}` : ''} — ${ctx.currencySymbol}${i.price}`
   ).join('\n')
 
+  const discountStr = ctx.discountCode
+    ? `\nDiscount available: ${ctx.discountValue}${ctx.discountType === 'percentage' ? '%' : ctx.currencySymbol} off with code ${ctx.discountCode}`
+    : ''
+
   const stepPrompts: Record<number, string> = {
-    0: `Write a warm, persuasive body (2-4 sentences, max 50 words) for a WhatsApp cart recovery message. No greeting, no sign-off, no URL, no discount mention — those are added separately.
+    0: `You are a world-class copywriter for high-converting WhatsApp cart recovery. Write 1-3 sentences (max 40 words total) — tight, punchy, irresistible.
 
-Rules:
-- Sentence 1: Validate their choice — compliment their taste
-- Sentences 2-3: Paint the desire — describe how the product makes them feel or look
-- Optional sentence 4: Gentle social proof ("our #1 bestseller", "everyone loves it")
-- Warm, like a trusted friend who's a beauty insider. Never desperate.
-- Use 1-2 emojis.`,
+RULES:
+- No greetings, no sign-offs, no URLs
+- No discount mentions — the template shows it separately
+- Validate their taste FIRST, then paint desire, end with subtle FOMO
+- Use 1-2 emojis naturally
+- Sound like a stylish friend who knows what's good, not a salesperson
+- Vary sentence length for rhythm
 
-    1: `Write an engaging body (2-4 sentences, max 50 words) for a WhatsApp follow-up message. No greeting, no sign-off, no URL, no discount mention.
+PSYCHOLOGY STACK:
+Sentence 1 → Validation ("you've got incredible taste ✨")
+Sentence 2 → Desire ("imagine the glow with this on your skin")
+Sentence 3 → Gentle FOMO ("your picks are saved — one tap away")
 
-Rules:
-- Reference the specific products they chose
-- Add social proof or popularity signal
-- Gentle urgency without being pushy
-- Use 1 emoji max.`,
+CRITICAL: Under 40 words. Every word must earn its place.`,
 
-    2: `Write a graceful but urgent body (2-3 sentences, max 45 words) for a WhatsApp final reminder. No greeting, no sign-off, no URL, no discount mention.
+    1: `You are a world-class copywriter for a WhatsApp follow-up (step 2). Write 1-3 sentences (max 38 words total).
 
-Rules:
-- Loss aversion: they'll miss out on their specific picks
-- Time sensitivity: cart won't be saved forever
-- Still warm and gracious — never aggressive
-- Use 1 emoji max.`,
-  }
+RULES:
+- No greetings, no sign-offs, no URLs
+- If a discount code is available (see context), mention it naturally as a "bonus" — never desperate
+- Start with social proof, add scarcity, end with regret aversion
+- Use 1-2 emojis — one for feeling, one for urgency
+- Confident. Like a text from a cool friend who's looking out for you.
+
+PSYCHOLOGY STACK:
+Sentence 1 → Social proof ("our bestseller for a reason 🔥")
+Sentence 2 → Scarcity + personal ("selling fast & yours is still waiting")
+Sentence 3 → Bonus close with discount if available ("plus an extra {{discount}}% off — just for you 🎁")
+
+CRITICAL: Under 38 words. Make every word pull weight.`,
+
+    2: `You are a world-class copywriter for a WhatsApp FINAL reminder (last chance). Write 1-2 sentences (max 35 words total).
+
+RULES:
+- No greetings, no sign-offs, no URLs
+- If a discount code is available (see context), weave it in as a "last chance bonus"
+- Loss aversion is your weapon. Time sensitivity drives action. Gratitude keeps it warm.
+- Use exactly 1 emoji
+
+PSYCHOLOGY STACK:
+Sentence 1 → Loss aversion ("your cart won't wait forever ⏳")
+Sentence 2 → Urgency + discount closer ("stock is low + your code expires soon — grab it now")
+
+CRITICAL: Under 35 words. Elegant urgency, never aggressive.`,  }
 
   const prompt = stepPrompts[step] || stepPrompts[0]
 
@@ -186,11 +211,11 @@ Rules:
         },
         {
           role: 'user',
-          content: `Name: ${ctx.customerName}\nStore: ${ctx.storeName}\nItems:\n${itemsStr}\nTotal: ${ctx.currencySymbol}${ctx.total.toFixed(2)}`,
+          content: `Name: ${ctx.customerName}\nStore: ${ctx.storeName}\nItems:\n${itemsStr}\nTotal: ${ctx.currencySymbol}${ctx.total.toFixed(2)}${discountStr}`,
         },
       ],
       max_tokens: 200,
-      temperature: 0.8,
+      temperature: 0.9,
     })
 
     const body = res.choices[0]?.message?.content?.trim()
@@ -442,6 +467,88 @@ function classifyIntentHeuristic(customer: { totalOrders: number; totalAbandons:
     return { intentType: 'window_shopper', confidence: 65, description: 'Previous buyer returning after a long gap' }
   }
   return { intentType: 'returning', confidence: 60, description: 'Returning customer with purchase history' }
+}
+
+export type PersonalizedDiscount = {
+  code: string
+  value: number
+  type: 'percentage' | 'fixed' | 'free_shipping'
+  confidence: number
+}
+
+export async function generatePersonalizedDiscount(
+  customerName: string,
+  cartValue: number,
+  customerHistory: { totalOrders: number; totalAbandons: number; lifetimeValue: number },
+  storeName: string,
+  storeMargin: number,
+  storeId?: string
+): Promise<PersonalizedDiscount> {
+  const userKey = storeId || 'default'
+  const ai = getClient(userKey)
+  const firstName = (customerName || 'YOU').split(' ')[0].toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5) || 'YOU'
+
+  if (ai) {
+    try {
+      const res = await ai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `You generate personalized discount offers for abandoned cart recovery. Return JSON:
+{
+  "code": "unique code using customer's name + value (e.g. PRIYA15)",
+  "value": number (5-30),
+  "type": "percentage" | "fixed" | "free_shipping",
+  "confidence": 0-100
+}
+
+Rules:
+- Code MUST be 4-10 chars, all caps, include customer's name prefix + value (e.g. PRIYA_15, GLOW10)
+- Value: 5-15% for most, up to 20% for high-value carts (>5000), free_shipping for very high (>10000)
+- Be conservative — minimum effective discount
+- If customer has 0 orders, use higher value (new customer incentive)
+- If customer has 3+ orders, use lower value (loyal, less incentive needed)`,
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              customerName,
+              cartValue,
+              totalOrders: customerHistory.totalOrders,
+              totalAbandons: customerHistory.totalAbandons,
+              estimatedLifetimeValue: customerHistory.lifetimeValue,
+              storeMarginPercent: storeMargin,
+              storeName,
+            }),
+          },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 150,
+        temperature: 0.5,
+      })
+
+      const parsed = JSON.parse(res.choices[0]?.message?.content || '{}')
+      return {
+        code: parsed.code || `${firstName}_10`,
+        value: Math.min(30, Math.max(5, parsed.value || 10)),
+        type: parsed.type || 'percentage',
+        confidence: parsed.confidence || 70,
+      }
+    } catch (err) {
+      console.error('AI personalized discount error:', err)
+      if (isQuotaError(err)) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
+    }
+  }
+
+  const value = cartValue > 10000 ? 0 : cartValue > 5000 ? 10 : customerHistory.totalOrders === 0 ? 15 : 10
+  const type: 'percentage' | 'fixed' | 'free_shipping' = cartValue > 10000 ? 'free_shipping' : 'percentage'
+  return {
+    code: `${firstName}_${value}`,
+    value,
+    type,
+    confidence: 60,
+  }
 }
 
 export async function generateRevenueCoachSuggestions(

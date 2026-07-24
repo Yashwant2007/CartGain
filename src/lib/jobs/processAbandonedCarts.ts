@@ -3,8 +3,8 @@ import { logDataAccess } from '@/lib/data-protection'
 import { sendEmail, EmailTemplates } from '@/lib/services/email'
 import { sendSMS, sanitizePhoneNumber } from '@/lib/services/sms'
 import { sendWhatsAppMessage, WhatsAppTemplates } from '@/lib/services/whatsapp'
-import { generateEmailContent, generateSMSContent, generateWhatsAppContent } from '@/lib/services/ai'
-import type { CartContext } from '@/lib/services/ai'
+import { generateEmailContent, generateSMSContent, generateWhatsAppContent, generatePersonalizedDiscount } from '@/lib/services/ai'
+import type { CartContext, PersonalizedDiscount } from '@/lib/services/ai'
 import { releaseLock } from '@/lib/job-lock'
 import { redisSetNX, redisIncr, redisGet, redisExpire, getRedis } from '@/lib/redis'
 import { FREE_CARTS_THRESHOLD, PLANS } from '@/lib/payment'
@@ -291,6 +291,31 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
   return counts
 }
 
+async function getCustomerHistory(customerIdentifier: string | undefined, storeId: string): Promise<{ totalOrders: number; totalAbandons: number; lifetimeValue: number }> {
+  if (!customerIdentifier) return { totalOrders: 0, totalAbandons: 0, lifetimeValue: 0 }
+  try {
+    const customer = await prisma.customer.findFirst({
+      where: {
+        storeId,
+        OR: [
+          { email: customerIdentifier },
+          { phone: customerIdentifier.replace(/\D/g, '') },
+        ],
+      },
+      include: { customerInsights: { take: 1, orderBy: { updatedAt: 'desc' } } },
+    })
+    if (!customer) return { totalOrders: 0, totalAbandons: 0, lifetimeValue: 0 }
+    const insight = customer.customerInsights[0]
+    return {
+      totalOrders: customer.totalOrders || 0,
+      totalAbandons: insight?.totalAbandons || 0,
+      lifetimeValue: insight?.lifetimeValue || 0,
+    }
+  } catch {
+    return { totalOrders: 0, totalAbandons: 0, lifetimeValue: 0 }
+  }
+}
+
   async function processSingleCart(cart: any, config: CartConfig): Promise<{ sent: number; failed: number }> {
   const { campaign, store, subscription, sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest, optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts } = config
 
@@ -382,6 +407,30 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     const cartItems = rawItems as { name: string; description?: string; price: number; quantity: number; image?: string }[]
     const formattedTotal = `${currencySymbol}${cart.totalValue.toFixed(2)}`
 
+    let discountCode: string | undefined
+    let discountValue: number | undefined
+    let discountType: string | undefined
+    if (campaign.discountEnabled) {
+      try {
+        const customerHistory = await getCustomerHistory(cart.customerEmail || cart.customerPhone, store.id)
+        const personalized: PersonalizedDiscount = await generatePersonalizedDiscount(
+          customerName,
+          cart.totalValue,
+          customerHistory,
+          store.name,
+          40,
+          store.id,
+        )
+        discountCode = personalized.code
+        discountValue = personalized.value
+        discountType = personalized.type
+      } catch {
+        discountCode = campaign.discountCode || undefined
+        discountValue = campaign.discountValue || undefined
+        discountType = campaign.discountType || undefined
+      }
+    }
+
     await logDataAccess({
       actorType: 'system',
       action: 'read',
@@ -406,9 +455,9 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       total: cart.totalValue,
       currencySymbol,
       cartUrl: '',
-      discountCode: campaign.discountEnabled ? campaign.discountCode || undefined : undefined,
-      discountValue: campaign.discountEnabled ? campaign.discountValue || undefined : undefined,
-      discountType: campaign.discountEnabled ? campaign.discountType || undefined : undefined,
+      discountCode,
+      discountValue,
+      discountType,
     }
 
     let globalSendSuccess = false
@@ -449,9 +498,9 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             let smsBody: string
             if (campaign.aiOptimized) {
               const ai = await generateSMSContent(cartCtx, store.id)
-              smsBody = ai ? `${ai.body}\n\n${cartUrl}` : fallbackSMSText(customerName, store.name, formatProductList(cartItems), formattedTotal, cartUrl, campaign.discountCode ?? undefined, campaign.discountValue ?? undefined, campaign.discountType ?? undefined)
+              smsBody = ai ? `${ai.body}\n\n${cartUrl}` : fallbackSMSText(customerName, store.name, formatProductList(cartItems), formattedTotal, cartUrl, discountCode, discountValue, discountType)
             } else {
-              smsBody = fallbackSMSText(customerName, store.name, formatProductList(cartItems), formattedTotal, cartUrl, campaign.discountCode ?? undefined, campaign.discountValue ?? undefined, campaign.discountType ?? undefined)
+              smsBody = fallbackSMSText(customerName, store.name, formatProductList(cartItems), formattedTotal, cartUrl, discountCode, discountValue, discountType)
             }
             const phoneNumber = sanitizePhoneNumber(cart.customerPhone!)
             const smsResult = await sendSMS({ to: phoneNumber, body: smsBody })
@@ -462,13 +511,21 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
 
           case 'whatsapp': {
             const firstImage = getFirstProductImage(cartItems)
-            const templateStep = Math.min(step, 2) as 0 | 1 | 2
 
-            const templateMap = [
-              WhatsAppTemplates.abandoned_cart,
-              WhatsAppTemplates.abandoned_cart_followup,
-              WhatsAppTemplates.abandoned_cart_urgent,
-            ]
+            const templateMap: Array<{ name: string; generateParams: Function }> = discountCode
+              ? [
+                  WhatsAppTemplates.abandoned_cart,
+                  WhatsAppTemplates.abandoned_cart_followup,
+                  WhatsAppTemplates.abandoned_cart_urgent,
+                  WhatsAppTemplates.discount_offer,
+                ]
+              : [
+                  WhatsAppTemplates.abandoned_cart,
+                  WhatsAppTemplates.abandoned_cart_followup,
+                  WhatsAppTemplates.abandoned_cart_urgent,
+                ]
+
+            const templateStep = Math.min(step, templateMap.length - 1)
 
             let bodyContent: string
             if (campaign.aiOptimized) {
@@ -478,19 +535,32 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
               bodyContent = fallbackBodyContent(customerName, cartItems, formattedTotal, templateStep, campaign)
             }
 
-            const discountLine = campaign.discountEnabled && campaign.discountCode
-              ? `Use code ${campaign.discountCode}${campaign.discountValue ? ` for ${campaign.discountValue}${campaign.discountType === 'percentage' ? '%' : ''} off` : ''}! 🎉`
-              : ''
-
             const template = templateMap[templateStep]
-            const params = template.generateParams(customerName, bodyContent, discountLine, firstImage, cartUrl)
-            const whatsappResult = await sendWhatsAppMessage({
-              to: sanitizePhoneNumber(cart.customerPhone!),
-              templateName: template.name,
-              templateParams: params,
-            })
-            sendSuccess = whatsappResult.success
-            if (!sendSuccess) error = whatsappResult.error || 'Unknown error'
+
+            if (template.name === 'cart_discount_offer') {
+              const productName = cartItems[0]?.name || 'your items'
+              const params = (template.generateParams as Function)(customerName, productName, discountCode || '', discountValue || 10, firstImage, cartUrl)
+              const whatsappResult = await sendWhatsAppMessage({
+                to: sanitizePhoneNumber(cart.customerPhone!),
+                templateName: template.name,
+                templateParams: params as any,
+              })
+              sendSuccess = whatsappResult.success
+              if (!sendSuccess) error = whatsappResult.error || 'Unknown error'
+            } else {
+              const discountLine = discountCode
+                ? `✨ ${discountValue}${discountType === 'percentage' ? '%' : discountType === 'free_shipping' ? ' free shipping' : ''} off with code ${discountCode}`
+                : ''
+
+              const params = (template.generateParams as Function)(customerName, bodyContent, discountLine, firstImage, cartUrl)
+              const whatsappResult = await sendWhatsAppMessage({
+                to: sanitizePhoneNumber(cart.customerPhone!),
+                templateName: template.name,
+                templateParams: params as any,
+              })
+              sendSuccess = whatsappResult.success
+              if (!sendSuccess) error = whatsappResult.error || 'Unknown error'
+            }
             break
           }
         }
@@ -623,14 +693,11 @@ function fallbackSMSText(customerName: string, storeName: string, productList: s
     ? `Use code ${discountCode}${discountValue ? ` for ${discountValue}${discountType === 'percentage' ? '%' : ''} off` : ''}!`
     : ''
   return [
-    `✨ ${customerName}, you've got great taste!`,
-    `Your picks from ${storeName} are absolutely beautiful — each one chosen with care. We've saved them all for you. 💫`,
-    ``,
+    `${customerName}, your picks from ${storeName} are waiting ✨`,
     `${productList} — ${formattedTotal}`,
-    discountLine ? `` : null,
     discountLine ? discountLine : null,
-    ``,
-    `Complete checkout: ${cartUrl}`,
+    `👇 Complete checkout:`,
+    cartUrl,
     `Reply STOP to unsubscribe`,
   ].filter(Boolean).join('\n')
 }
@@ -649,9 +716,9 @@ function fallbackBodyContent(
     : productList || 'your items'
 
   const fallbacks = [
-    `${customerName}, you have incredible taste! ✨ ${productLine} was made for you — we saved your cart so you don't miss out. Just one tap and it's yours 🚚`,
-    `Still thinking about ${productLine}, ${customerName}? 💭 It's one of our most-loved picks and selling fast. Grab it now while it's still reserved for you 💫`,
-    `${customerName}, your ${productLine} won't stay warm forever ⏳ Once it's gone, the deal goes too. This is your last chance to complete your order 🏃‍♂️`,
+    `${customerName}, you've got incredible taste ✨ ${productLine} looks absolutely stunning — we saved it all for you. Just one tap and it's yours 🚚`,
+    `${productLine} is our #1 bestseller this month 💫 People are loving it — and we saved your picks before they sell out. Don't miss yours 👉`,
+    `${customerName}, your ${productLine} won't wait forever ⏳ Stock is moving fast and this deal ends soon. Last chance to grab what's yours 🏃‍♂️`,
   ]
 
   return fallbacks[step] || fallbacks[0]
