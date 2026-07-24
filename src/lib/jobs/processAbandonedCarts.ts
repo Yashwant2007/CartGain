@@ -511,21 +511,13 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
 
           case 'whatsapp': {
             const firstImage = getFirstProductImage(cartItems)
+            const templateStep = Math.min(step, 2)
 
-            const templateMap: Array<{ name: string; generateParams: Function }> = discountCode
-              ? [
-                  WhatsAppTemplates.abandoned_cart,
-                  WhatsAppTemplates.abandoned_cart_followup,
-                  WhatsAppTemplates.abandoned_cart_urgent,
-                  WhatsAppTemplates.discount_offer,
-                ]
-              : [
-                  WhatsAppTemplates.abandoned_cart,
-                  WhatsAppTemplates.abandoned_cart_followup,
-                  WhatsAppTemplates.abandoned_cart_urgent,
-                ]
-
-            const templateStep = Math.min(step, templateMap.length - 1)
+            const templateMap = [
+              WhatsAppTemplates.abandoned_cart,
+              WhatsAppTemplates.abandoned_cart_followup,
+              WhatsAppTemplates.abandoned_cart_urgent,
+            ]
 
             let bodyContent: string
             if (campaign.aiOptimized) {
@@ -535,32 +527,19 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
               bodyContent = fallbackBodyContent(customerName, cartItems, formattedTotal, templateStep, campaign)
             }
 
+            const discountLine = discountCode
+              ? `✨ ${discountValue}${discountType === 'percentage' ? '%' : discountType === 'free_shipping' ? ' free shipping' : ''} off with code ${discountCode}`
+              : ''
+
             const template = templateMap[templateStep]
-
-            if (template.name === 'cart_discount_offer') {
-              const productName = cartItems[0]?.name || 'your items'
-              const params = (template.generateParams as Function)(customerName, productName, discountCode || '', discountValue || 10, firstImage, cartUrl)
-              const whatsappResult = await sendWhatsAppMessage({
-                to: sanitizePhoneNumber(cart.customerPhone!),
-                templateName: template.name,
-                templateParams: params as any,
-              })
-              sendSuccess = whatsappResult.success
-              if (!sendSuccess) error = whatsappResult.error || 'Unknown error'
-            } else {
-              const discountLine = discountCode
-                ? `✨ ${discountValue}${discountType === 'percentage' ? '%' : discountType === 'free_shipping' ? ' free shipping' : ''} off with code ${discountCode}`
-                : ''
-
-              const params = (template.generateParams as Function)(customerName, bodyContent, discountLine, firstImage, cartUrl)
-              const whatsappResult = await sendWhatsAppMessage({
-                to: sanitizePhoneNumber(cart.customerPhone!),
-                templateName: template.name,
-                templateParams: params as any,
-              })
-              sendSuccess = whatsappResult.success
-              if (!sendSuccess) error = whatsappResult.error || 'Unknown error'
-            }
+            const params = template.generateParams(customerName, bodyContent, discountLine, firstImage, cartUrl)
+            const whatsappResult = await sendWhatsAppMessage({
+              to: sanitizePhoneNumber(cart.customerPhone!),
+              templateName: template.name,
+              templateParams: params,
+            })
+            sendSuccess = whatsappResult.success
+            if (!sendSuccess) error = whatsappResult.error || 'Unknown error'
             break
           }
         }

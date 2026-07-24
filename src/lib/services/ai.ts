@@ -152,52 +152,65 @@ export async function generateWhatsAppContent(ctx: CartContext, step: number = 0
     : ''
 
   const stepPrompts: Record<number, string> = {
-    0: `You are a world-class copywriter for high-converting WhatsApp cart recovery. Write 1-3 sentences (max 40 words total) — tight, punchy, irresistible.
+    0: `You write ONLY the {{text}} variable for a WhatsApp cart recovery template. The template already has the greeting + name + discount line + footer. You fill the MIDDLE — 2-3 sentences that convince.
 
 RULES:
-- No greetings, no sign-offs, no URLs
-- No discount mentions — the template shows it separately
-- Validate their taste FIRST, then paint desire, end with subtle FOMO
+- No greetings ("hey"), no sign-offs, no URLs, no name, no discount mention
+- Max 40 words total
 - Use 1-2 emojis naturally
-- Sound like a stylish friend who knows what's good, not a salesperson
-- Vary sentence length for rhythm
+- Sound like a stylish friend, not a salesperson
 
-PSYCHOLOGY STACK:
-Sentence 1 → Validation ("you've got incredible taste ✨")
-Sentence 2 → Desire ("imagine the glow with this on your skin")
-Sentence 3 → Gentle FOMO ("your picks are saved — one tap away")
+PSYCHOLOGY (pick one flow):
+A) Validation → Desire → FOMO
+B) Desire → Social proof → Easy close
+C) Validation → Urgency → Action
 
-CRITICAL: Under 40 words. Every word must earn its place.`,
+EXAMPLES ({{text}} part only):
+→ "You've got incredible taste ✨ The Vitamin C Serum is your shortcut to that glass-skin glow. We saved your picks — just one tap away 🚚"
+→ "This routine is made for you 💫 Imagine waking up to glowing skin every morning. Your complete set is waiting to ship."
+→ "Great choices 🔥 These products are flying off the shelves. Don't let your perfect match slip away."
 
-    1: `You are a world-class copywriter for a WhatsApp follow-up (step 2). Write 1-3 sentences (max 38 words total).
+CRITICAL: Under 40 words. Every word earns its place.`,
 
-RULES:
-- No greetings, no sign-offs, no URLs
-- If a discount code is available (see context), mention it naturally as a "bonus" — never desperate
-- Start with social proof, add scarcity, end with regret aversion
-- Use 1-2 emojis — one for feeling, one for urgency
-- Confident. Like a text from a cool friend who's looking out for you.
-
-PSYCHOLOGY STACK:
-Sentence 1 → Social proof ("our bestseller for a reason 🔥")
-Sentence 2 → Scarcity + personal ("selling fast & yours is still waiting")
-Sentence 3 → Bonus close with discount if available ("plus an extra {{discount}}% off — just for you 🎁")
-
-CRITICAL: Under 38 words. Make every word pull weight.`,
-
-    2: `You are a world-class copywriter for a WhatsApp FINAL reminder (last chance). Write 1-2 sentences (max 35 words total).
+    1: `You write ONLY the {{text}} variable for a WhatsApp FOLLOW-UP template (step 2). The template handles greeting + name + discount. You fill the MIDDLE — 1-3 sentences.
 
 RULES:
-- No greetings, no sign-offs, no URLs
-- If a discount code is available (see context), weave it in as a "last chance bonus"
-- Loss aversion is your weapon. Time sensitivity drives action. Gratitude keeps it warm.
-- Use exactly 1 emoji
+- No greetings, no sign-offs, no URLs, no name, no discount codes
+- Max 38 words
+- Use 1 emoji naturally
+- Confident. Social proof + scarcity. Like a friend reminding you.
 
-PSYCHOLOGY STACK:
-Sentence 1 → Loss aversion ("your cart won't wait forever ⏳")
-Sentence 2 → Urgency + discount closer ("stock is low + your code expires soon — grab it now")
+PSYCHOLOGY:
+→ Open with social proof ("our bestseller", "everyone loves it")
+→ Add scarcity + personal ("selling fast + yours is waiting")
+→ Optional: hint that discount exists ("with a little surprise waiting")
 
-CRITICAL: Under 35 words. Elegant urgency, never aggressive.`,  }
+EXAMPLES ({{text}} part only):
+→ "Our #1 bestseller this month 🔥 Everyone's obsessed. We saved your picks — grab them before they're gone."
+→ "This sells out fast every single time. Yours is still here, but not for long 💫"
+→ "The product everyone's talking about — plus a little surprise we added just for you."
+
+CRITICAL: Under 38 words. Punchy. Make them feel the FOMO.`,
+
+    2: `You write ONLY the {{text}} variable for a WhatsApp LAST-CHANCE template (step 3). Template handles name + discount. You fill the MIDDLE — 1-2 sentences.
+
+RULES:
+- No greetings, no sign-offs, no URLs, no name, no discount words
+- Max 35 words
+- Use 0-1 emoji
+- Loss aversion. Time sensitivity. Still warm. Never aggressive.
+
+PSYCHOLOGY:
+→ Loss aversion ("won't last", "your picks won't wait")
+→ Time sensitivity ("reservation ending", "last chance")
+→ Graceful close ("still yours if you act now")
+
+EXAMPLES ({{text}} part only):
+→ "Your picks won't wait forever ⏳ Stock is low and this deal ends soon. One last chance to grab what's yours."
+→ "This is your final reminder — your cart expires today. Don't lose your perfect picks."
+→ "We held your items as long as we could. They won't be here tomorrow 💫"
+
+CRITICAL: Under 35 words. Elegant urgency. This is the closer.`,  }
 
   const prompt = stepPrompts[step] || stepPrompts[0]
 

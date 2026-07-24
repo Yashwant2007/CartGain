@@ -1,6 +1,7 @@
 export interface WhatsAppTemplateParams {
   header?: { type: 'image'; imageUrl: string } | { type: 'text'; text: string }
   body?: string[]
+  footer?: string
   buttons?: Array<{ type: 'url' | 'quick_reply'; text: string; url?: string }>
 }
 
@@ -67,6 +68,13 @@ export async function sendWhatsAppMessage({
         })
       }
 
+      if (templateParams?.footer) {
+        components.push({
+          type: 'footer',
+          parameters: [{ type: 'text', text: templateParams.footer }],
+        })
+      }
+
       if (templateParams?.buttons?.length) {
         templateParams.buttons.forEach((btn, idx) => {
           components.push({
@@ -120,25 +128,25 @@ export async function sendWhatsAppMessage({
   }
 }
 
-// WhatsApp template configs — these must match templates created in Meta Business Manager
-// Template format reference for Meta:
-//   Header: Image (product) or Text (emoji + headline)
-//   Body: Short, punchy lines. {{1}} = name, {{2}} = AI body, {{3}} = product/total line
-//   Footer: Optional brand name
-//   Button: Single URL CTA button
+// ─── 3 CORE WHATSAPP TEMPLATES ───
+// Register these exact bodies in Meta Business Manager.
+// Variable mapping:  {{1}} = name | {{2}} = AI body text | {{3}} = discount line (empty if none)
+// All templates include CartGain footer + single URL button.
+
 export const WhatsAppTemplates = {
   /**
-   * Step 0 — First touch (1h after abandonment)
-   * Validates their choice, paints desire, ends with easy CTA.
+   * ── REMINDER (Step 0, +1h after abandonment) ──
+   * Warm validation. Desire. Gentle nudge.
    *
-   * Meta template body:
+   * Meta body:
    *   Hey {{1}} 👋
    *
    *   {{2}}
    *
-   *   Your cart: {{3}}
+   *   {{3}}
    *
-   *   Button: 🛒 Complete Purchase
+   * Footer: Powered by CartGain — recoverflow.com
+   * Button: 🛒 Complete Purchase
    */
   abandoned_cart: {
     name: 'abandoned_cart_reminder',
@@ -155,22 +163,26 @@ export const WhatsAppTemplates = {
       body: [
         customerName || 'there',
         bodyContent,
-        discountLine || 'saved just for you',
+        discountLine,
       ],
-      buttons: [{ type: 'url', text: '🛒 Complete Purchase', url: cartUrl }],
+      footer: 'Powered by CartGain \u2014 recoverflow.com',
+      buttons: [{ type: 'url', text: '\uD83D\uDED2 Complete Purchase', url: cartUrl }],
     }),
   },
 
   /**
-   * Step 1 — Follow-up (3-4h after)
-   * Social proof + gentle urgency. Warm nudge.
+   * ── FOLLOW-UP (Step 1, +4h after abandonment) ──
+   * Social proof. Scarcity. Warmer nudge.
    *
-   * Meta template body:
-   *   {{1}} 💫
+   * Meta body:
+   *   {{1}}, still thinking? \uD83D\uDCAB
    *
    *   {{2}}
    *
-   *   Button: 👉 Complete Order
+   *   {{3}}
+   *
+   * Footer: Powered by CartGain — recoverflow.com
+   * Button: 👉 Complete Order
    */
   abandoned_cart_followup: {
     name: 'abandoned_cart_followup',
@@ -185,23 +197,28 @@ export const WhatsAppTemplates = {
         ? { type: 'image', imageUrl: productImage }
         : undefined,
       body: [
-        customerName || 'there',
+        `${customerName}, still thinking? \uD83D\uDCAB`,
         bodyContent,
+        discountLine,
       ],
-      buttons: [{ type: 'url', text: '👉 Complete Order', url: cartUrl }],
+      footer: 'Powered by CartGain \u2014 recoverflow.com',
+      buttons: [{ type: 'url', text: '\uD83D\uDC49 Complete Order', url: cartUrl }],
     }),
   },
 
   /**
-   * Step 2 — Urgent (12-24h after)
-   * Loss aversion. Time sensitivity. Last chance.
+   * ── URGENT (Step 2, +24h after abandonment) ──
+   * Loss aversion. Time sensitivity. Final call.
    *
-   * Meta template body:
-   *   {{1}} ⏳
+   * Meta body:
+   *   {{1}}, last chance \u23F3
    *
    *   {{2}}
    *
-   *   Button: 🏃‍♂️ Complete Now
+   *   {{3}}
+   *
+   * Footer: Powered by CartGain — recoverflow.com
+   * Button: 🏃‍♂️ Complete Now
    */
   abandoned_cart_urgent: {
     name: 'abandoned_cart_urgent',
@@ -216,74 +233,12 @@ export const WhatsAppTemplates = {
         ? { type: 'image', imageUrl: productImage }
         : undefined,
       body: [
-        customerName || 'there',
+        `${customerName}, last chance \u23F3`,
         bodyContent,
+        discountLine,
       ],
-      buttons: [{ type: 'url', text: '🏃‍♂️ Complete Now', url: cartUrl }],
-    }),
-  },
-
-  /**
-   * Discount offer — triggered when campaign has discount enabled
-   * Surprise + exclusivity framing
-   *
-   * Meta template body:
-   *   🎉 Just for {{1}}
-   *
-   *   {{2}}
-   *
-   *   Code: {{3}} → tap to claim
-   *
-   *   Button: 🛒 Claim Offer
-   */
-  discount_offer: {
-    name: 'cart_discount_offer',
-    generateParams: (
-      customerName: string,
-      productName: string,
-      discountCode: string,
-      discountPercent: number,
-      productImage: string | undefined,
-      cartUrl: string,
-    ): WhatsAppTemplateParams => ({
-      header: productImage
-        ? { type: 'image', imageUrl: productImage }
-        : { type: 'text', text: `🎉 ${discountPercent}% Off — Just for You` },
-      body: [
-        customerName || 'there',
-        productName || 'your items',
-        discountCode,
-      ],
-      buttons: [{ type: 'url', text: '🛒 Claim Offer', url: cartUrl }],
-    }),
-  },
-
-  /**
-   * Back in stock — for out-of-stock products that got restocked
-   *
-   * Meta template body:
-   *   {{1}}, it's back! 🎉
-   *
-   *   {{2}}
-   *
-   *   Button: 🛒 Shop Now
-   */
-  back_in_stock: {
-    name: 'product_back_in_stock',
-    generateParams: (
-      customerName: string,
-      productName: string,
-      productImage: string | undefined,
-      cartUrl: string,
-    ): WhatsAppTemplateParams => ({
-      header: productImage
-        ? { type: 'image', imageUrl: productImage }
-        : { type: 'text', text: `Back in Stock! 🎉` },
-      body: [
-        customerName || 'there',
-        productName || 'your item',
-      ],
-      buttons: [{ type: 'url', text: '🛒 Shop Now', url: cartUrl }],
+      footer: 'Powered by CartGain \u2014 recoverflow.com',
+      buttons: [{ type: 'url', text: '\uD83C\uDFC3\u200D\u2642\uFE0F Complete Now', url: cartUrl }],
     }),
   },
 }
