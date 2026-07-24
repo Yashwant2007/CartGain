@@ -152,65 +152,92 @@ export async function generateWhatsAppContent(ctx: CartContext, step: number = 0
     : ''
 
   const stepPrompts: Record<number, string> = {
-    0: `You write ONLY the {{text}} variable for a WhatsApp cart recovery template. The template already has the greeting + name + discount line + footer. You fill the MIDDLE — 2-3 sentences that convince.
+    0: `You write ONLY the {{text}} that goes between the greeting and the discount line in a WhatsApp cart recovery message. This is the FIRST touch — make it irresistible.
+
+CONTEXT YOU RECEIVE: customer name, store name, specific products with prices, total amount, optional discount code.
 
 RULES:
-- No greetings ("hey"), no sign-offs, no URLs, no name, no discount mention
+- NEVER mention greetings, name, URL, discount code, or "powered by" — template handles those
 - Max 40 words total
-- Use 1-2 emojis naturally
-- Sound like a stylish friend, not a salesperson
+- 1-2 emojis that amplify the emotion, not decorate
+- Sound like the customer's stylish friend who's genuinely excited for them
+- Reference SPECIFIC product names from the context
 
-PSYCHOLOGY (pick one flow):
-A) Validation → Desire → FOMO
-B) Desire → Social proof → Easy close
-C) Validation → Urgency → Action
+PSYCHOLOGY ARCHITECTURE (pick the best flow based on context):
+→ Validation + Desire: "You've got incredible taste ✨ [Product] was made for your skin. Saved and ready." [USE when products sound premium/exclusive]
+→ Desire + Social Proof: "Imagine waking up to glass-skin glow 💫 Everyone who tries this combo is obsessed." [USE for popular/trending products]  
+→ Validation + FOMO: "You literally picked the best-sellers 🔥 Stock flies every time. Yours is waiting." [USE when cart value is mid-range]
+→ Urgency + Benefit: "This exact routine is selling out nationwide. We saved your set — just one tap 🚚" [USE for high-value carts]
 
-EXAMPLES ({{text}} part only):
-→ "You've got incredible taste ✨ The Vitamin C Serum is your shortcut to that glass-skin glow. We saved your picks — just one tap away 🚚"
-→ "This routine is made for you 💫 Imagine waking up to glowing skin every morning. Your complete set is waiting to ship."
-→ "Great choices 🔥 These products are flying off the shelves. Don't let your perfect match slip away."
+PERSONALIZATION RULES:
+- If customer is first-time (no order history in context): sound extra warm, welcoming
+- If total > 5000: emphasize value, quality, investment in self
+- If products have descriptions: reference the BENEFIT, not just the name
 
-CRITICAL: Under 40 words. Every word earns its place.`,
+EXAMPLES (output ONLY the {{text}}, nothing else):
+✓ "You've got incredible taste ✨ The Vitamin C Serum + Retinol Moisturizer is the ultimate glow duo. Saved and one tap away 🚚"
+✓ "Glass-skin starts here 💫 This routine is literally everything. We saved your picks so you don't miss out."
+✓ "These are our hottest sellers for a reason 🔥 They sell out fast — grab yours before they're gone."
 
-    1: `You write ONLY the {{text}} variable for a WhatsApp FOLLOW-UP template (step 2). The template handles greeting + name + discount. You fill the MIDDLE — 1-3 sentences.
+CRITICAL: Every word must hook. Max 40 words. Return ONLY the text.`,
+
+    1: `You write ONLY the {{text}} for a WhatsApp FOLLOW-UP (step 2). They didn't buy from the first message. This is where social proof + scarcity closes them.
+
+CONTEXT YOU RECEIVE: customer name, store name, products, total, optional discount.
 
 RULES:
-- No greetings, no sign-offs, no URLs, no name, no discount codes
+- NO greetings, name, URL, discount code mention
 - Max 38 words
-- Use 1 emoji naturally
-- Confident. Social proof + scarcity. Like a friend reminding you.
+- 1 emoji max — make it count
+- Reference SPECIFIC products from context by name
+- Tone: confident insider who knows what's good, not pushy
 
-PSYCHOLOGY:
-→ Open with social proof ("our bestseller", "everyone loves it")
-→ Add scarcity + personal ("selling fast + yours is waiting")
-→ Optional: hint that discount exists ("with a little surprise waiting")
+PSYCHOLOGY ARCHITECTURE (choose based on context):
+→ Best-seller + Scarcity: "Our #1 bestseller for three months running 🔥 It sells out within days every restock. Yours is waiting." [USE for popular products]
+→ Social proof + FOMO: "Everyone who's tried [Product] is obsessed. The reviews are insane — and your set is still here 💫" [USE for reviewed products]
+→ Exclusivity + Scarcity: "This is one of our most-loved sets and stock is running low. We saved yours but it won't last." [USE for sets/combo deals]
+→ Gentle nudge + Surprise: "Still thinking about [Product]? We saved your picks — plus a little surprise waiting at checkout ✨" [USE when discount is available]
 
-EXAMPLES ({{text}} part only):
-→ "Our #1 bestseller this month 🔥 Everyone's obsessed. We saved your picks — grab them before they're gone."
-→ "This sells out fast every single time. Yours is still here, but not for long 💫"
-→ "The product everyone's talking about — plus a little surprise we added just for you."
+PERSONALIZATION:
+- For returning customers: "You already know how good this is — your favorites are waiting"
+- For new customers: "This is where it starts — your first step to [benefit from product description]"
+- If discount exists in context: hint at it naturally ("with something extra waiting for you")
 
-CRITICAL: Under 38 words. Punchy. Make them feel the FOMO.`,
+EXAMPLES (output ONLY the {{text}}):
+✓ "Our best-seller for a reason 🔥 Everyone's obsessed and it sells out every time. We saved your picks — don't wait."
+✓ "This flies off the shelf every single restock. Yours is still waiting but not for long 💫"
+✓ "People are raving about [Product]. Your set is reserved — plus a little surprise we added just for you."
 
-    2: `You write ONLY the {{text}} variable for a WhatsApp LAST-CHANCE template (step 3). Template handles name + discount. You fill the MIDDLE — 1-2 sentences.
+CRITICAL: Under 38 words. Make them feel the urgency without desperation. Only output the text.`,
+
+    2: `You write ONLY the {{text}} for a WhatsApp FINAL REMINDER (step 3/3). This is the CLOSER. Loss aversion + time sensitivity. One shot left.
+
+CONTEXT YOU RECEIVE: customer name, store name, specific products, total, optional discount.
 
 RULES:
-- No greetings, no sign-offs, no URLs, no name, no discount words
+- NO greetings, name, URL, discount code mention
 - Max 35 words
-- Use 0-1 emoji
-- Loss aversion. Time sensitivity. Still warm. Never aggressive.
+- 0-1 emoji
+- Elegant urgency: like "last call" from a classy brand
+- Never aggressive, never desperate — graceful but final
 
-PSYCHOLOGY:
-→ Loss aversion ("won't last", "your picks won't wait")
-→ Time sensitivity ("reservation ending", "last chance")
-→ Graceful close ("still yours if you act now")
+PSYCHOLOGY ARCHITECTURE (choose based on context):
+→ Pure Loss Aversion: "Your [Product] set won't be held much longer. Stock is low and once it's gone, it's gone ⏳" [USE for popular/limited products]
+→ Time + Value: "This is your final reminder — your cart expires today. Don't lose the perfect routine you built 💫" [USE for multi-item carts]
+→ Finality + Grace: "We held your items as long as we could. They won't be here after today — this is your last chance." [USE for high-value carts]
+→ Discount Expiry + Loss: "Your [discount] off expires with your cart. Don't lose both your picks AND your savings." [USE when discount is active]
 
-EXAMPLES ({{text}} part only):
-→ "Your picks won't wait forever ⏳ Stock is low and this deal ends soon. One last chance to grab what's yours."
-→ "This is your final reminder — your cart expires today. Don't lose your perfect picks."
-→ "We held your items as long as we could. They won't be here tomorrow 💫"
+PERSONALIZATION:
+- Reference products by name to make it real
+- If total is high: "Your investment in yourself is worth it — don't second-guess it now"
+- If discount exists: tie the discount expiry to the cart expiry for double loss
 
-CRITICAL: Under 35 words. Elegant urgency. This is the closer.`,  }
+EXAMPLES (output ONLY the {{text}}):
+✓ "Your picks won't wait forever ⏳ Stock is running low and this is your last chance to grab what's yours."
+✓ "This is it — your cart expires today. Don't lose the perfect routine you built 💫"
+✓ "We saved your [Product] set as long as we could. They won't be here after today."
+
+CRITICAL: Under 35 words. Graceful finality. Make them feel "I need to do this now." Only output the text.`,  }
 
   const prompt = stepPrompts[step] || stepPrompts[0]
 
