@@ -145,7 +145,9 @@ export const WhatsAppTemplates = {
    *
    *   {{3}}
    *
-   * Footer: Powered by CartGain — recoverflow.com
+   *   Tap below to make it yours ✨
+   *
+   * Footer: Powered by CartGain — cart-gain.com
    * Button: 🛒 Complete Purchase
    */
   abandoned_cart: {
@@ -165,7 +167,7 @@ export const WhatsAppTemplates = {
         bodyContent,
         discountLine,
       ],
-      footer: 'Powered by CartGain \u2014 recoverflow.com',
+      footer: 'Powered by CartGain \u2014 cart-gain.com',
       buttons: [{ type: 'url', text: '\uD83D\uDED2 Complete Purchase', url: cartUrl }],
     }),
   },
@@ -181,7 +183,9 @@ export const WhatsAppTemplates = {
    *
    *   {{3}}
    *
-   * Footer: Powered by CartGain — recoverflow.com
+   *   Still reserved just for you 👉
+   *
+   * Footer: Powered by CartGain — cart-gain.com
    * Button: 👉 Complete Order
    */
   abandoned_cart_followup: {
@@ -201,7 +205,7 @@ export const WhatsAppTemplates = {
         bodyContent,
         discountLine,
       ],
-      footer: 'Powered by CartGain \u2014 recoverflow.com',
+      footer: 'Powered by CartGain \u2014 cart-gain.com',
       buttons: [{ type: 'url', text: '\uD83D\uDC49 Complete Order', url: cartUrl }],
     }),
   },
@@ -217,7 +221,9 @@ export const WhatsAppTemplates = {
    *
    *   {{3}}
    *
-   * Footer: Powered by CartGain — recoverflow.com
+   *   Act now before it's gone 🏃‍♂️
+   *
+   * Footer: Powered by CartGain — cart-gain.com
    * Button: 🏃‍♂️ Complete Now
    */
   abandoned_cart_urgent: {
@@ -237,7 +243,7 @@ export const WhatsAppTemplates = {
         bodyContent,
         discountLine,
       ],
-      footer: 'Powered by CartGain \u2014 recoverflow.com',
+      footer: 'Powered by CartGain \u2014 cart-gain.com',
       buttons: [{ type: 'url', text: '\uD83C\uDFC3\u200D\u2642\uFE0F Complete Now', url: cartUrl }],
     }),
   },
