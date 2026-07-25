@@ -85,12 +85,9 @@ function LoginContent() {
     try {
       document.cookie = 'cg_oauth_intent=signin; path=/; max-age=600; SameSite=Lax; Secure'
 
-      // Use top-level redirect instead of popup-based signIn().
-      // Popups and postMessage are blocked in incognito/third-party contexts,
-      // so the standard NextAuth signIn('google') flow breaks there.
-      // Navigating directly to the sign-in URL avoids both issues.
-      const target = window !== window.top && window.top ? window.top : window
-      target.location.href = `${window.location.origin}/api/auth/signin/google?callbackUrl=${encodeURIComponent('/setup')}`
+      // signIn('google') — NextAuth v4 does a full-page POST (not popup) by default,
+      // which works in all browser contexts including incognito.
+      await signIn('google', { callbackUrl: '/setup' })
     } catch (err) {
       console.error('Google sign-in error:', err)
     } finally {
