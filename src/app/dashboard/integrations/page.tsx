@@ -148,8 +148,12 @@ export default function IntegrationsPage() {
     if (!status?.store) return
     setShopifyConnecting(true)
     setShopifyInputError(null)
+
+    // Open popup BEFORE await to preserve browser's user-gesture context.
+    // window.open after an await is blocked by most browsers as a popup.
+    const popup = window.open('', '_blank')
+
     try {
-      // Normalise: strip protocol/path, enforce .myshopify.com suffix
       let domain = rawDomain.trim().toLowerCase()
       if (domain.startsWith('http://') || domain.startsWith('https://')) {
         domain = new URL(domain).hostname
@@ -168,18 +172,16 @@ export default function IntegrationsPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to initiate connection')
 
       setShopifyModal(false)
-      // Open OAuth in a new tab — redirecting window.top loses the Shopify admin
-      // session on the cross-domain hop (admin.shopify.com → store.myshopify.com)
-      // which sends the merchant to the password-protected storefront instead.
-      const popup = window.open(data.authUrl, '_blank')
-      if (!popup) {
-        // Popup blocked — fall back to same-window redirect
-        window.location.href = data.authUrl
-      } else {
+
+      if (popup) {
+        popup.location.href = data.authUrl
         popupRef.current = popup
         setActionMsg({ type: 'success', text: 'A new tab has opened for Shopify authorization — complete the steps there, then come back here.' })
+      } else {
+        window.location.href = data.authUrl
       }
     } catch (error) {
+      if (popup) popup.close()
       setShopifyInputError(error instanceof Error ? error.message : 'Connection failed')
     } finally {
       setShopifyConnecting(false)

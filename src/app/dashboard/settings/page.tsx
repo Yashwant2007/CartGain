@@ -220,11 +220,13 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
       return
     }
 
-    try {
-      setConnecting(true)
-      setShopifyError(null)
-      setConnectMessage(null)
+    setConnecting(true)
+    setShopifyError(null)
+    setConnectMessage(null)
 
+    const popup = window.open('', '_blank')
+
+    try {
       const storeId = store?.id
       if (!storeId) {
         throw new Error('Store not found')
@@ -242,15 +244,14 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
         throw new Error(data.error || 'Failed to initiate connection')
       }
 
-      // Open OAuth in a new tab — redirecting window.top loses the Shopify admin
-      // session on the cross-domain hop (admin.shopify.com → store.myshopify.com)
-      const popup = window.open(data.authUrl, '_blank')
-      if (!popup) {
-        window.location.href = data.authUrl
-      } else {
+      if (popup) {
+        popup.location.href = data.authUrl
         popupRef.current = popup
+      } else {
+        window.location.href = data.authUrl
       }
     } catch (error) {
+      if (popup) popup.close()
       setShopifyError(error instanceof Error ? error.message : 'Connection failed')
       setConnecting(false)
     }

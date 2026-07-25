@@ -4,6 +4,7 @@ const REFRESH_MARGIN_MS = 5 * 60 * 1000 // refresh 5 min before expiry
 
 export async function getAccessToken(store: {
   id: string
+  domain: string
   apiKey: string | null
   shopifyRefreshToken: string | null
   shopifyTokenExpiresAt: Date | null
@@ -31,7 +32,7 @@ export async function getAccessToken(store: {
   try { refreshToken = decrypt(store.shopifyRefreshToken) } catch { return null }
 
   try {
-    const res = await fetch('https://admin.shopify.com/admin/oauth/access_token', {
+    const res = await fetch(`https://${store.domain}/admin/oauth/access_token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

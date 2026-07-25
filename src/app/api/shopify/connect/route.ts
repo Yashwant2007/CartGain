@@ -52,7 +52,9 @@ export async function POST(req: NextRequest) {
     authUrl.searchParams.set('scope', scopes)
     authUrl.searchParams.set('redirect_uri', redirectUri)
     authUrl.searchParams.set('state', state)
-    // No grant_options[] → offline token with refresh_token (Shopify defaults to offline)
+    // Request expiring online tokens (Shopify deprecated non-expiring offline tokens).
+    // Online tokens include expires_in + refresh_token — we store both in the callback.
+    authUrl.searchParams.append('grant_options[]', 'per-user')
 
     const response = NextResponse.json({ authUrl: authUrl.toString(), state })
 
