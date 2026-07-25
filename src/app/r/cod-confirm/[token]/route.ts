@@ -9,10 +9,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
 
   const data = verifySecureToken(token)
   if (!data) {
-    return NextResponse.redirect(new URL('/?status=invalid_link', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'))
+    return NextResponse.redirect(new URL('/?status=invalid_link', process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'))
   }
 
   await markNudgeConverted(token)
 
-  return NextResponse.redirect(new URL('/?status=cod_confirmed', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'))
+  return NextResponse.redirect(new URL('/?status=cod_confirmed', process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'))
 }

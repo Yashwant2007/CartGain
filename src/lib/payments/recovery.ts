@@ -52,7 +52,7 @@ export async function handlePaymentFailure(
   const now = new Date()
   const nextRetryAt = new Date(now.getTime() + schedule.delayMinutes * 60 * 1000)
   const token = generateSecureToken(`${attempt.id}:${event.orderRef}`)
-  const resumeUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/r/resume-payment/${token}`
+  const resumeUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/r/resume-payment/${token}`
 
   const channels = config.paymentChannelPriority.length > 0
     ? config.paymentChannelPriority

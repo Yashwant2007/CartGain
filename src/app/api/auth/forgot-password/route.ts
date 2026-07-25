@@ -15,10 +15,9 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    // Check rate limiting - stricter for password reset
     const rateLimitResult = await checkRateLimit('auth/forgot-password', {
       maxAttempts: 5,
-      windowMs: 60 * 60 * 1000, // 1 hour
+      windowMs: 60 * 60 * 1000,
     })
 
     if (!rateLimitResult.success) {
@@ -34,7 +33,6 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
 
-    // Validate input
     const validationResult = forgotPasswordSchema.safeParse(body)
     if (!validationResult.success) {
       return NextResponse.json(
@@ -49,12 +47,10 @@ export async function POST(request: NextRequest) {
 
     const { email } = validationResult.data
 
-    // Check if user exists
     const user = await prisma.user.findUnique({
       where: { email },
     })
 
-    // Don't reveal if email exists (security best practice)
     if (!user) {
       return NextResponse.json(
         createSuccessResponse(
@@ -65,11 +61,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate reset token
     const resetToken = generateRandomToken()
     const resetTokenExpires = new Date(Date.now() + PASSWORD_RESET_EXPIRES_IN)
 
-    // Store reset token
     await prisma.verificationToken.deleteMany({
       where: { identifier: email },
     })
@@ -82,10 +76,10 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://cart-gain.com'
     const resetLink = `${appUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`
 
-    await sendEmail({
+    const result = await sendEmail({
       to: email,
       subject: 'Reset your password',
       html: `
@@ -116,6 +110,18 @@ export async function POST(request: NextRequest) {
       `,
       text: `Reset your password: ${resetLink}`,
     })
+
+    if (!result.success) {
+      console.error('Forgot password: failed to send email:', result.error)
+      return NextResponse.json(
+        createErrorResponse(
+          AUTH_ERROR_CODES.SERVER_ERROR,
+          'Failed to send reset email. Please try again later.',
+          500
+        ),
+        { status: 500 }
+      )
+    }
 
     return NextResponse.json(
       createSuccessResponse(

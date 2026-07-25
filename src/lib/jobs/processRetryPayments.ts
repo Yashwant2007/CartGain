@@ -54,7 +54,7 @@ export async function processRetryPayments(): Promise<RetryResult> {
       const schedule = DEFAULT_RETRY_SCHEDULE[campaign.attempt.failureCategory as FailureCategory] ?? DEFAULT_RETRY_SCHEDULE.unknown
       const nextRetryAt = new Date(now.getTime() + schedule.delayMinutes * 60 * 1000)
       const token = generateSecureToken(`${campaign.attempt.id}:retry:${campaign.retryCount + 1}`)
-      const resumeUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/r/resume-payment/${token}`
+      const resumeUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/r/resume-payment/${token}`
 
       const channels = config.paymentChannelPriority.length > 0
         ? config.paymentChannelPriority

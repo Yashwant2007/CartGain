@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       'read_webhooks',
     ].join(',')
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://cart-gain.com'
     const redirectUri = `${baseUrl}/api/shopify/callback`
 
     const secret = process.env.NEXTAUTH_SECRET

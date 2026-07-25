@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://cart-gain.com'
       await setupShopifyWebhooks(shop, accessToken, baseUrl)
     } catch (webhookError) {
       console.error('Failed to set up Shopify webhooks:', webhookError)

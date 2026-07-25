@@ -123,10 +123,10 @@ export async function POST(request: NextRequest) {
     // Create free subscription for the user
     await createFreeSubscription(user.id)
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://cart-gain.com'
     const verifyLink = `${appUrl}/verify-email?token=${verificationToken}&email=${encodeURIComponent(email)}`
 
-    await sendEmail({
+    const emailResult = await sendEmail({
       to: email,
       subject: 'Verify your email address',
       html: `
@@ -157,6 +157,10 @@ export async function POST(request: NextRequest) {
       `,
       text: `Verify your email: ${verifyLink}`,
     })
+
+    if (!emailResult.success) {
+      console.error('Registration: failed to send verification email:', emailResult.error)
+    }
 
     // Return user without password
     const { password: _, ...userWithoutPassword } = user

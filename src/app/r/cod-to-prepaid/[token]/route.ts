@@ -9,11 +9,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
 
   const data = verifySecureToken(token)
   if (!data) {
-    return NextResponse.redirect(new URL('/?status=invalid_link', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'))
+    return NextResponse.redirect(new URL('/?status=invalid_link', process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'))
   }
 
   await markNudgeConverted(token)
 
-  const checkoutUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/checkout?prepaid=1&token=${token}`
+  const checkoutUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/checkout?prepaid=1&token=${token}`
   return NextResponse.redirect(new URL(checkoutUrl))
 }

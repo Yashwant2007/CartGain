@@ -9,11 +9,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
 
   const data = verifySecureToken(token)
   if (!data) {
-    return NextResponse.redirect(new URL('/?status=invalid_link', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'))
+    return NextResponse.redirect(new URL('/?status=invalid_link', process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'))
   }
 
   await markPaymentRecovered(token)
 
-  const checkoutUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/checkout?resume=1&token=${token}`
+  const checkoutUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/checkout?resume=1&token=${token}`
   return NextResponse.redirect(new URL(checkoutUrl))
 }

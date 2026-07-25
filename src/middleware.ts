@@ -1,10 +1,5 @@
 import { withAuth } from 'next-auth/middleware'
 
-const isHttps =
-  process.env.NEXTAUTH_URL?.startsWith('https://') ||
-  process.env.VERCEL_URL !== undefined ||
-  process.env.NEXT_PUBLIC_APP_URL?.startsWith('https://')
-
 export default withAuth({
   callbacks: {
     authorized: ({ token }) => !!token,
@@ -12,11 +7,11 @@ export default withAuth({
   pages: {
     signIn: '/login',
   },
-  cookies: isHttps ? {
+  cookies: {
     sessionToken: {
-      name: '__Secure-next-auth.session-token',
+      name: 'next-auth.session-token',
     },
-  } : undefined,
+  },
 })
 
 export const config = {

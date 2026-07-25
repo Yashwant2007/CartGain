@@ -79,9 +79,6 @@ const providers: any[] = [
   }),
 ]
 
-const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined
-const nextAuthUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || vercelUrl || 'https://cart-gain.com'
-
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   providers.push(
     GoogleProvider({

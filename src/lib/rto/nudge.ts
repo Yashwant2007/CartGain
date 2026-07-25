@@ -95,8 +95,8 @@ async function sendNudge(params: NudgeParams): Promise<void> {
   const { storeId, orderId, riskScore, customer, incentive } = params
 
   const token = generateSecureToken(`${storeId}:${orderId}`)
-  const resumeUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/r/cod-confirm/${token}`
-  const prepaidUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/r/cod-to-prepaid/${token}`
+  const resumeUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/r/cod-confirm/${token}`
+  const prepaidUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/r/cod-to-prepaid/${token}`
 
   const channels = customer.phone ? ['whatsapp', 'sms'] : ['email']
 
