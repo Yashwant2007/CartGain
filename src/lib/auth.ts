@@ -109,14 +109,25 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
   providers,
   secret: process.env.NEXTAUTH_SECRET,
-  // SameSite=lax works for navigation flows (OAuth, login); the cookie is
-  // still sent with Secure so it never leaks over plain HTTP. We intentionally
-  // avoid the __Secure- prefix because Chromium may drop it in cross-site 302
-  // redirect chains that happen during OAuth callbacks.
+  // We intentionally avoid the __Secure- prefix because Chromium may drop it
+  // in cross-site 302 redirect chains during OAuth callbacks. All cookies
+  // still have Secure flag so they never leak over plain HTTP.
   cookies: {
     sessionToken: {
       name: 'next-auth.session-token',
       options: { httpOnly: true, sameSite: 'lax', path: '/', secure: true },
+    },
+    callbackUrl: {
+      name: 'next-auth.callback-url',
+      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: true },
+    },
+    csrfToken: {
+      name: 'next-auth.csrf-token',
+      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: true },
+    },
+    pkceCodeVerifier: {
+      name: 'next-auth.pkce.code_verifier',
+      options: { httpOnly: true, sameSite: 'samesite', path: '/', secure: true },
     },
   },
   pages: {

@@ -55,10 +55,20 @@ export async function POST(req: NextRequest) {
     // No grant_options[] → offline token with refresh_token (Shopify defaults to offline)
 
     const response = NextResponse.json({ authUrl: authUrl.toString(), state })
-    response.headers.append(
-      'Set-Cookie',
-      '__Secure-next-auth.session-token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax'
-    )
+
+    const staleCookies = [
+      '__Secure-next-auth.session-token',
+      '__Secure-next-auth.callback-url',
+      '__Secure-next-auth.csrf-token',
+      '__Secure-next-auth.pkce.code_verifier',
+    ]
+    for (const name of staleCookies) {
+      response.headers.append(
+        'Set-Cookie',
+        `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax`
+      )
+    }
+
     return response
   } catch (error) {
     const validationResponse = handleValidationError(error)

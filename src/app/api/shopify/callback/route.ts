@@ -7,6 +7,24 @@ import { generateCampaignSetup } from '@/lib/services/ai'
 
 export const dynamic = 'force-dynamic'
 
+const STALE_COOKIE_NAMES = [
+  '__Secure-next-auth.session-token',
+  '__Secure-next-auth.callback-url',
+  '__Secure-next-auth.csrf-token',
+  '__Secure-next-auth.pkce.code_verifier',
+]
+
+function redirectWithCleanup(path: string, baseUrl: string): NextResponse {
+  const res = NextResponse.redirect(new URL(path, baseUrl))
+  for (const name of STALE_COOKIE_NAMES) {
+    res.headers.append(
+      'Set-Cookie',
+      `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax`
+    )
+  }
+  return res
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
@@ -15,12 +33,9 @@ export async function GET(req: NextRequest) {
     const state = searchParams.get('state')
 
     if (!shop || !code) {
-      return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=Missing+parameters', req.url))
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=Missing+parameters', req.url)
     }
 
-
-
-    // Verify state HMAC to prevent CSRF
     let storeId: string | null = null
     if (state) {
       try {
@@ -41,7 +56,7 @@ export async function GET(req: NextRequest) {
         const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString())
         storeId = decoded.storeId
       } catch {
-        return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=Invalid+state', req.url))
+        return redirectWithCleanup('/dashboard/integrations?shopify_error=Invalid+state', req.url)
       }
     }
 
@@ -49,7 +64,7 @@ export async function GET(req: NextRequest) {
     const apiSecret = process.env.SHOPIFY_API_SECRET
 
     if (!apiKey || !apiSecret) {
-      return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=Shopify+not+configured', req.url))
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=Shopify+not+configured', req.url)
     }
 
     const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
@@ -65,14 +80,14 @@ export async function GET(req: NextRequest) {
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
       console.error('Shopify token exchange failed:', errorText)
-      return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=Token+exchange+failed', req.url))
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=Token+exchange+failed', req.url)
     }
 
     const tokenData = await tokenResponse.json()
     const accessToken = tokenData.access_token
 
     if (!accessToken) {
-      return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=No+access+token+received', req.url))
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=No+access+token+received', req.url)
     }
 
     const tokenExpiresAt = tokenData.expires_in
@@ -104,7 +119,6 @@ export async function GET(req: NextRequest) {
       console.error('Failed to set up Shopify webhooks:', webhookError)
     }
 
-    // AI-powered one-click campaign setup
     try {
       const targetStore = storeId
         ? await prisma.store.findUnique({ where: { id: storeId } })
@@ -157,9 +171,9 @@ export async function GET(req: NextRequest) {
       console.error('Failed to auto-create campaign:', campaignError)
     }
 
-    return NextResponse.redirect(new URL('/shopify-connected', req.url))
+    return redirectWithCleanup('/shopify-connected', req.url)
   } catch (error) {
     console.error('Shopify callback error:', error)
-    return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=Callback+processing+failed', req.url))
+    return redirectWithCleanup('/dashboard/integrations?shopify_error=Callback+processing+failed', req.url)
   }
 }
