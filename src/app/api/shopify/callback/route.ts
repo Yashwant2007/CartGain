@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard/integrations?shopify_error=Missing+parameters', req.url))
     }
 
+
+
     // Verify state HMAC to prevent CSRF
     let storeId: string | null = null
     if (state) {
