@@ -127,7 +127,7 @@ export const authOptions: NextAuthOptions = {
     },
     pkceCodeVerifier: {
       name: 'next-auth.pkce.code_verifier',
-      options: { httpOnly: true, sameSite: 'samesite', path: '/', secure: true },
+      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: true },
     },
   },
   pages: {
