@@ -159,7 +159,8 @@ export default function SignUpPage() {
     setError(null)
     try {
       document.cookie = 'cg_oauth_intent=signup; path=/; max-age=600; SameSite=Lax; Secure'
-      await signIn('google', { callbackUrl: '/setup' })
+      const target = window !== window.top && window.top ? window.top : window
+      target.location.href = `${window.location.origin}/api/auth/signin/google?callbackUrl=${encodeURIComponent('/setup')}`
     } catch (err) {
       console.error('Google sign-in error:', err)
       setError('An unexpected error occurred. Please try again.')

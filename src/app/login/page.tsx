@@ -83,24 +83,14 @@ function LoginContent() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true)
     try {
-      const isInIframe = window !== window.top
-
-      if (isInIframe && window.top) {
-        // Shopify embed — top-level redirect since popups/cookies don't work in iframes
-        document.cookie = 'cg_oauth_intent=signin; path=/; max-age=600; SameSite=Lax; Secure'
-        window.top.location.href = `${window.location.origin}/api/auth/signin/google?callbackUrl=${encodeURIComponent('/setup')}`
-        return
-      }
-
-      // Tell the NextAuth signIn callback this is a sign-in (existing user)
-      // intent. If the email isn't already registered, the user is bounced
-      // back to /login?error=NoAccount and prompted to sign up first.
       document.cookie = 'cg_oauth_intent=signin; path=/; max-age=600; SameSite=Lax; Secure'
 
-      // Normal browser — use POST-based signIn (NextAuth handles popup internally)
-      // GET requests to /api/auth/signin/google are broken by NextAuth's internal
-      // error: the URL path segment "google" is misinterpreted as an error code.
-      await signIn('google', { callbackUrl: '/setup' })
+      // Use top-level redirect instead of popup-based signIn().
+      // Popups and postMessage are blocked in incognito/third-party contexts,
+      // so the standard NextAuth signIn('google') flow breaks there.
+      // Navigating directly to the sign-in URL avoids both issues.
+      const target = window !== window.top && window.top ? window.top : window
+      target.location.href = `${window.location.origin}/api/auth/signin/google?callbackUrl=${encodeURIComponent('/setup')}`
     } catch (err) {
       console.error('Google sign-in error:', err)
     } finally {
