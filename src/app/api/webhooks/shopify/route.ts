@@ -160,7 +160,7 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
     },
     update: {
       items: normalizeShopifyItems(cart),
-      totalValue: cart.total_price ? parseFloat(cart.total_price) / 100 : 0,
+      totalValue: cart.total_price ? parseFloat(cart.total_price) : 0,
       ...(customerEmail ? { customerEmail } : {}),
       ...(customerPhone ? { customerPhone } : {}),
       ...(customerName ? { customerName } : {}),
@@ -170,7 +170,7 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
       storeId: store.id,
       cartId: cart.token,
       items: normalizeShopifyItems(cart),
-      totalValue: cart.total_price ? parseFloat(cart.total_price) / 100 : 0,
+      totalValue: cart.total_price ? parseFloat(cart.total_price) : 0,
       customerEmail,
       customerPhone,
       customerName,

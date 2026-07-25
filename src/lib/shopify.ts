@@ -201,7 +201,7 @@ export async function fetchAbandonedCheckouts(
   limit: number = 50
 ): Promise<any[] | null> {
   try {
-    const url = `https://${shopDomain}/admin/api/2026-04/checkouts.json?status=open&limit=${limit}`
+    const url = `https://${shopDomain}/admin/api/2026-04/abandoned_checkouts.json?limit=${limit}`
     const response = await fetch(url, {
       headers: { 'X-Shopify-Access-Token': accessToken },
     })
@@ -213,7 +213,7 @@ export async function fetchAbandonedCheckouts(
       return []
     }
     const data = await response.json()
-    return data.checkouts || []
+    return data.abandoned_checkouts || []
   } catch (error) {
     console.error('Failed to fetch Shopify checkouts:', error)
     return []
