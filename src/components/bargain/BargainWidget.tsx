@@ -54,6 +54,7 @@ export default function BargainWidget({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [decision, setDecision] = useState<'idle' | 'counter' | 'accept' | 'reject'>('idle')
+  const [sessionEnded, setSessionEnded] = useState(false)
   const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null)
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [discountCode, setDiscountCode] = useState<string | null>(null)
@@ -105,13 +106,26 @@ export default function BargainWidget({
       setSessionId(data.sessionId)
       setAttemptsRemaining(data.attemptsRemaining ?? null)
       setExpiresAt(data.expiresAt ?? null)
-      const aiMsg: Message = {
-        id: 'opening',
-        role: 'ai',
-        content: data.openingMessage ?? 'Welcome! What price were you thinking?',
-        createdAt: new Date().toISOString(),
+      // Restore full message history if resuming an existing session
+      if (data.existingSession && data.session?.messages?.length) {
+        const restored: Message[] = data.session.messages.map((m: any) => ({
+          id: m.id,
+          role: m.role === 'ai' ? 'ai' : m.role === 'customer' ? 'customer' : 'system',
+          content: m.content,
+          offeredPrice: m.offeredPrice ?? null,
+          createdAt: m.createdAt,
+        }))
+        setMessages(restored)
+        if (data.session.status !== 'active') setSessionEnded(true)
+      } else {
+        const aiMsg: Message = {
+          id: 'opening',
+          role: 'ai',
+          content: data.openingMessage ?? 'Welcome! What price were you thinking?',
+          createdAt: new Date().toISOString(),
+        }
+        setMessages([aiMsg])
       }
-      setMessages([aiMsg])
     } catch (err: any) {
       setError(err.message ?? 'Failed to start')
     } finally {
@@ -137,7 +151,19 @@ export default function BargainWidget({
         body: JSON.stringify({ sessionId, message: msg }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.message ?? 'Bargain failed')
+      if (!res.ok) {
+        // Terminal status (accepted/rejected/expired) — show message and stop
+        if (data.terminal) {
+          setSessionEnded(true)
+          setMessages(prev => [...prev, {
+            id: `s-${Date.now()}`, role: 'system', content: data.message ?? 'Session ended.',
+            offeredPrice: null, createdAt: new Date().toISOString(),
+          }])
+          if (data.status === 'rejected') setDecision('reject')
+          return
+        }
+        throw new Error(data.message ?? 'Bargain failed')
+      }
       setMessages(prev => [
         ...prev,
         {
@@ -401,30 +427,31 @@ export default function BargainWidget({
           }}>
             <input
               type="text"
-              placeholder="Type your offer or message..."
+                placeholder={sessionEnded ? 'Session ended' : 'Type your offer or message...'}
               value={input}
               onChange={e => setInput(e.target.value)}
-              disabled={loading || decision === 'accept' || decision === 'reject'}
+              disabled={loading || sessionEnded}
               style={{
                 flex: 1, padding: '10px 12px', borderRadius: 8,
                 border: '1px solid rgba(59,130,246,0.4)',
                 background: '#020617', color: '#fff', fontSize: 14,
                 outline: 'none',
+                opacity: sessionEnded ? 0.4 : 1,
               }}
               onKeyDown={e => {
-                if (e.key === 'Enter') void sendMessage()
+                if (e.key === 'Enter' && !sessionEnded) void sendMessage()
               }}
             />
             <button
               onClick={() => sendMessage()}
-              disabled={loading || !input.trim() || decision === 'accept' || decision === 'reject'}
+              disabled={loading || !input.trim() || sessionEnded}
               style={{
                 background: '#2563eb', color: 'white',
                 border: 'none', borderRadius: 8,
                 padding: '0 14px', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: 6,
                 fontSize: 14, fontWeight: 600,
-                opacity: (loading || !input.trim() || decision === 'accept' || decision === 'reject') ? 0.5 : 1,
+                opacity: (loading || !input.trim() || sessionEnded) ? 0.5 : 1,
               }}
             >
               {loading ? <Loader2 size={16} className="spin" style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={16} />}

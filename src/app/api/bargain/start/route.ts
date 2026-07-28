@@ -48,6 +48,39 @@ export async function POST(request: NextRequest) {
     const now = new Date()
     const expiredAt = new Date(now.getTime() + config.sessionTimeout * 1000)
 
+    // Block duplicate active sessions for same product+email (prevents attempt abuse)
+    if (data.customerEmail) {
+      const existing = await prisma.bargainSession.findFirst({
+        where: {
+          storeId: data.storeId,
+          shopifyProductId: data.shopifyProductId,
+          customerEmail: data.customerEmail,
+          status: 'active',
+          expiredAt: { gt: new Date() },
+        },
+        include: { messages: { orderBy: { createdAt: 'asc' }, take: 1 } },
+      })
+      if (existing) {
+        return NextResponse.json({
+          sessionId: existing.id,
+          session: existing,
+          openingMessage: existing.messages[0]?.content ?? buildOpeningMessage({
+            storeName: store.name,
+            currencySymbol: store.currency === 'INR' ? '₹' : store.currency === 'USD' ? '$' : store.currency === 'EUR' ? '€' : store.currency + ' ',
+            originalPrice: existing.originalPrice,
+            minPrice: 0,
+            attemptsUsed: existing.attemptsUsed,
+            maxAttempts: config.maxAttempts,
+            persona: config.aiPersona as any,
+            customerContext: `Returning to continue an existing session.`,
+          }),
+          expiresAt: existing.expiredAt.toISOString(),
+          attemptsRemaining: Math.max(0, config.maxAttempts - existing.attemptsUsed),
+          existingSession: true,
+        }, { status: 200 })
+      }
+    }
+
     const currencySymbol = store.currency === 'INR' ? '₹' : store.currency === 'USD' ? '$' : store.currency === 'EUR' ? '€' : store.currency + ' '
 
     const ctx: NegotiationContext = {

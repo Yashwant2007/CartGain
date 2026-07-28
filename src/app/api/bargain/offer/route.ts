@@ -44,8 +44,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Bargain session not found' }, { status: 404 })
     }
     if (bargainSession.status !== 'active') {
+      const terminalReplies: Record<string, string> = {
+        accepted: 'This deal is already done! 🎉 Your discount code is ready. Start a new session if you\'re interested in another product.',
+        rejected: 'This negotiation has ended. Start a new session for a different product if you\'d like to bargain again.',
+        expired: 'This session expired. Please start a new one if you\'re still interested.',
+        abandoned: 'This session was abandoned. Please start a new one.',
+      }
       return NextResponse.json({
-        message: `This session is already ${bargainSession.status}`,
+        message: terminalReplies[bargainSession.status] ?? `Session is ${bargainSession.status}. No further messages accepted.`,
+        terminal: true,
         status: bargainSession.status,
       }, { status: 409 })
     }
