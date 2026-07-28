@@ -106,6 +106,7 @@ STRICT RULES (apply regardless of persona):
 - If the customer mentions a specific price, evaluate it against the minimum.
 - If the customer does NOT mention a price, engage them conversationally and gently guide them toward making an offer.
 - You can initiate a counter-offer even if they haven't named a price.
+- IMPORTANT — DO NOT JUMP TO THE FLOOR PRICE ON EARLY ATTEMPTS. Make graduated concessions. On early attempts, counter closer to the original price. Only approach the floor on the last 2 attempts. Reveal the floor only on the final attempt.
 - On the final attempt, give your genuine final offer and make it clear.
 - Never be rude, dismissive, or pushy.
 - Keep most replies to 1-3 sentences. You can go longer if the customer shares a meaningful story.
@@ -174,6 +175,20 @@ export async function computeMinPrice(opts: {
   return { minPrice: Math.round(minPrice * 100) / 100, isBargainable: true }
 }
 
+// ── Graduated counter: returns a reasonable counter-price based on attempts remaining ──
+// Early attempts → near original price. Late attempts → near floor.
+function graduatedCounter(ctx: NegotiationContext): number {
+  const { originalPrice, minPrice, attemptsUsed, maxAttempts } = ctx
+  const attemptsLeft = maxAttempts - attemptsUsed
+  // t = 0 (first attempt, all left) → counter near original
+  // t = maxAttempts (last attempt) → counter near floor
+  const progress = attemptsUsed / maxAttempts // 0 → 1
+  const priceRange = originalPrice - minPrice
+  // Linear interpolation: at progress=0, original; at progress=1, minPrice
+  const counter = originalPrice - priceRange * progress
+  return Math.round(counter * 100) / 100
+}
+
 // ── Decision engine (rule-based fallback when AI unavailable) ──
 
 export function ruleBasedDecision(
@@ -195,20 +210,21 @@ export function ruleBasedDecision(
     }
   }
 
-  // Absurd lowball (< 50% of floor) → polite hold
-  if (offer < minPrice * 0.5) {
+  // $0 / absurdly low / free request → engage, don't jump to floor
+  if (offer < minPrice * 0.3) {
+    const counter = graduatedCounter(ctx)
     return {
-      reply: `Oof, ${currencySymbol}${offer.toFixed(2)} is way below what I can do for this. The quality really speaks for itself here. Could you come up a bit closer to ${currencySymbol}${minPrice.toFixed(2)}?`,
+      reply: `I appreciate the creativity 😄 but I can't do ${currencySymbol}${offer.toFixed(2)}. Let me offer ${currencySymbol}${counter.toFixed(2)} — a fair starting point. What do you think?`,
       decision: 'counter',
-      counterOffer: minPrice,
-      tactic: 'hold_firm_quality',
-      sentiment: 'firm',
+      counterOffer: counter,
+      tactic: 'graduated_open',
+      sentiment: 'playful',
     }
   }
 
-  // Below floor but reasonable → counter just above floor on first/second attempt
+  // Below floor but reasonable → graduated counter based on attempts
+  const counter = graduatedCounter(ctx)
   if (attemptsLeft > 1) {
-    const counter = Math.min(originalPrice, Math.round((minPrice * 1.05) * 100) / 100)
     return {
       reply: `Hmm, ${currencySymbol}${offer.toFixed(2)} is a bit low for me. Let me meet you partway — how about ${currencySymbol}${counter.toFixed(2)}? I think that's fair given the quality.`,
       decision: 'counter',
@@ -304,10 +320,13 @@ Respond with strict JSON in this shape:
       ? parsed.decision
       : (customerOffer != null && customerOffer >= ctx.minPrice ? 'accept' : 'counter')
 
+    const attemptsLeft = ctx.maxAttempts - ctx.attemptsUsed
+    // Default to graduated counter instead of floor on early attempts
+    const fallbackCounter = attemptsLeft <= 2 ? ctx.minPrice : graduatedCounter(ctx)
     const counterOffer =
       typeof parsed.counterOffer === 'number' && parsed.counterOffer > 0
         ? Math.round(parsed.counterOffer * 100) / 100
-        : ctx.minPrice
+        : fallbackCounter
 
     // Safety: if AI claims "accept" but offer < floor, downgrade to counter
     const safeDecision =
@@ -315,9 +334,10 @@ Respond with strict JSON in this shape:
         ? 'counter'
         : decision
 
+    // Only force to floor on the last 2 attempts. On early attempts, let the graduated counter stand.
     const safeCounter =
       (safeDecision === 'counter' || safeDecision === 'accept') && counterOffer < ctx.minPrice
-        ? ctx.minPrice
+        ? (attemptsLeft <= 2 ? ctx.minPrice : counterOffer)
         : counterOffer
 
     return {
