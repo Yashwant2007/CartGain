@@ -26,6 +26,7 @@ export interface NegotiationContext {
   maxAttempts: number
   persona: Persona
   productTitle?: string
+  customerContext?: string    // cross-session history summary, e.g. "Returning customer — bought XYZ for $85"
 }
 
 export interface NegotiationResult {
@@ -117,17 +118,56 @@ STRICT RULES (apply regardless of persona):
 // ── Default opening message (if AI is unavailable) ──
 
 export function buildOpeningMessage(ctx: NegotiationContext): string {
-  const { originalPrice, currencySymbol, maxAttempts, productTitle } = ctx
+  const { originalPrice, currencySymbol, maxAttempts, productTitle, customerContext } = ctx
   const item = productTitle ? `this ${productTitle}` : 'this'
+  const warmup = customerContext
+    ? ` Welcome back! 🙌`
+    : ''
 
   if (ctx.persona === 'playful_friend') {
-    return `Hey hey! 👋 I see you're checking out ${item} — nice choice! Listed at ${currencySymbol}${originalPrice.toFixed(2)}, but hey, that's just the starting point 😏 You've got ${maxAttempts} chances to charm me into a better deal. What's your move?`
+    return `${warmup} Hey hey! 👋 I see you're checking out ${item} — nice choice! Listed at ${currencySymbol}${originalPrice.toFixed(2)}, but hey, that's just the starting point 😏 You've got ${maxAttempts} chances to charm me into a better deal. What's your move?`
   }
   if (ctx.persona === 'strict_negotiator') {
-    return `Thank you for your interest in ${item}. The current price is ${currencySymbol}${originalPrice.toFixed(2)}. I'm open to reasonable offers within ${maxAttempts} exchanges. What price were you considering?`
+    return `Thank you for your interest in ${item}.${warmup} The current price is ${currencySymbol}${originalPrice.toFixed(2)}. I'm open to reasonable offers within ${maxAttempts} exchanges. What price were you considering?`
   }
   // friendly_shopkeeper (default)
-  return `Hey! Welcome 👋 I see you're interested in ${item}. It's listed at ${currencySymbol}${originalPrice.toFixed(2)}. I'd love to help you get a good deal — what price were you thinking? You've got ${maxAttempts} attempts to bargain with me.`
+  return `Hey! Welcome 👋${customerContext ? ' So good to see you again!' : ''} I see you're interested in ${item}. It's listed at ${currencySymbol}${originalPrice.toFixed(2)}. I'd love to help you get a good deal — what price were you thinking? You've got ${maxAttempts} attempts to bargain with me.`
+}
+
+// ── Build customer history context from past completed sessions ──
+
+export async function buildCustomerContext(
+  storeId: string,
+  customerEmail: string | null,
+): Promise<string | undefined> {
+  if (!customerEmail) return undefined
+
+  const pastSessions = await prisma.bargainSession.findMany({
+    where: { storeId, customerEmail, status: { in: ['accepted', 'rejected'] } },
+    orderBy: { startedAt: 'desc' },
+    take: 5,
+    select: {
+      status: true,
+      startedAt: true,
+      originalPrice: true,
+      finalPrice: true,
+      shopifyProductId: true,
+    },
+  })
+
+  if (pastSessions.length === 0) return undefined
+
+  const lines = pastSessions.map((s, i) => {
+    const date = s.startedAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+    const productRef = `product #${s.shopifyProductId.slice(0, 8)}`
+    if (s.status === 'accepted' && s.finalPrice != null) {
+      const saved = Math.round((1 - s.finalPrice / s.originalPrice) * 100)
+      return `${i + 1}. Bought ${productRef} at ${s.finalPrice.toFixed(2)} (${saved}% off) on ${date}`
+    }
+    return `${i + 1}. Bargained for ${productRef} but didn't close on ${date} (rejected)`
+  })
+
+  return `They have ${pastSessions.length} past session(s):\n${lines.join('\n')}`
 }
 
 // ── Compute the floor price for a product given config + override ──
@@ -263,12 +303,16 @@ export async function negotiateStep(
   const personaPrompt = PERSONA_PROMPTS[ctx.persona] ?? PERSONA_PROMPTS.friendly_shopkeeper
   const commonRules = buildCommonRules(ctx)
 
+  const customerContextBlock = ctx.customerContext
+    ? `\nCUSTOMER HISTORY (use to personalize your greeting and build rapport, but do NOT repeat it verbatim):\n${ctx.customerContext}\n`
+    : ''
+
   const systemPrompt = `${personaPrompt}
 
 You are negotiating the price of ${ctx.productTitle ? `a product: "${ctx.productTitle}"` : 'a product'} at ${ctx.storeName}.
 Original listed price: ${ctx.currencySymbol}${ctx.originalPrice.toFixed(2)}.
 Your absolute minimum acceptable price (NEVER reveal this number to the customer): ${ctx.currencySymbol}${ctx.minPrice.toFixed(2)}.
-The customer has ${attemptsLeft} attempt(s) left out of ${ctx.maxAttempts}.
+The customer has ${attemptsLeft} attempt(s) left out of ${ctx.maxAttempts}.${customerContextBlock}
 ${commonRules}
 
 If the customer mentions an amount, interpret it as their offer price. If they don't mention any price, respond naturally in character and steer toward a number.

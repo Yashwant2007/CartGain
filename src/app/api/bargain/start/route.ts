@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainStartSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
-import { buildOpeningMessage, computeMinPrice, negotiateStep, type NegotiationContext } from '@/lib/services/bargain'
+import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerContext, type NegotiationContext } from '@/lib/services/bargain'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,7 +58,8 @@ export async function POST(request: NextRequest) {
       attemptsUsed: 0,
       maxAttempts: config.maxAttempts,
       persona: config.aiPersona as NegotiationContext['persona'],
-      productTitle: undefined, // merchant APIs store title optionally on product override
+      productTitle: undefined,
+      customerContext: await buildCustomerContext(data.storeId, data.customerEmail || null),
     }
 
     // Pull optional product title from override

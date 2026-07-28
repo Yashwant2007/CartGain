@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainOfferSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
-import { negotiateStep, ruleBasedDecision, buildOpeningMessage, type NegotiationContext } from '@/lib/services/bargain'
+import { negotiateStep, ruleBasedDecision, buildOpeningMessage, buildCustomerContext, type NegotiationContext } from '@/lib/services/bargain'
 
 export const dynamic = 'force-dynamic'
 
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       attemptsUsed: bargainSession.attemptsUsed,
       maxAttempts: config.maxAttempts,
       persona: config.aiPersona as NegotiationContext['persona'],
-      productTitle: bargainSession.messages.find(m => m.role === 'ai')?.content ? undefined : undefined,
+      customerContext: await buildCustomerContext(bargainSession.storeId, bargainSession.customerEmail),
     }
 
     const history = bargainSession.messages
