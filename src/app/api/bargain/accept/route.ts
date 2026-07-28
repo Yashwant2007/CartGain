@@ -43,6 +43,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'No agreed final price' }, { status: 400 })
     }
 
+    // Verify final price isn't below floor (safety against manipulated originalPrice)
+    const { computeMinPrice } = await import('@/lib/services/bargain')
+    const { minPrice } = await computeMinPrice({
+      storeId: bargainSession.storeId,
+      shopifyProductId: bargainSession.shopifyProductId,
+      originalPrice: bargainSession.originalPrice,
+    })
+    if (finalPrice < minPrice) {
+      return NextResponse.json({ message: 'Price mismatch — session may have been tampered with' }, { status: 409 })
+    }
+
     const discountPercent = Math.round(
       ((bargainSession.originalPrice - finalPrice) / bargainSession.originalPrice) * 100
     )

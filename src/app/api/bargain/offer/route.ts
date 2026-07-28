@@ -71,8 +71,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Bargaining disabled' }, { status: 403 })
     }
 
+    const currencySymbol = bargainSession.store.currency === 'INR' ? '₹' : bargainSession.store.currency === 'USD' ? '$' : bargainSession.store.currency + ' '
+
     // Compute floor price
-    const { minPrice } = await (async () => {
+    const { minPrice, productTitle } = await (async () => {
       const product = await prisma.bargainProduct.findUnique({
         where: {
           storeId_shopifyProductId: {
@@ -81,8 +83,9 @@ export async function POST(request: NextRequest) {
           },
         },
       })
+      let title = product?.productTitle ?? undefined
       if (product?.minPrice != null) {
-        return { minPrice: Math.min(product.minPrice, bargainSession.originalPrice) }
+        return { minPrice: Math.min(product.minPrice, bargainSession.originalPrice), productTitle: title }
       }
       const profitPercent = product?.minProfitPercent ?? config.minProfitPercent
       let floor = bargainSession.originalPrice * (1 - profitPercent / 100)
@@ -90,33 +93,32 @@ export async function POST(request: NextRequest) {
         const cap = bargainSession.originalPrice * (1 - product.maxDiscountPercent / 100)
         floor = Math.max(floor, cap)
       }
-      return { minPrice: Math.round(floor * 100) / 100 }
+      return { minPrice: Math.round(floor * 100) / 100, productTitle: title }
     })()
 
-    const currencySymbol = bargainSession.store.currency === 'INR' ? '₹' : bargainSession.store.currency === 'USD' ? '$' : bargainSession.store.currency + ' '
-
-    const ctx: NegotiationContext = {
-      storeName: bargainSession.store.name,
-      currencySymbol,
-      originalPrice: bargainSession.originalPrice,
-      minPrice,
-      attemptsUsed: bargainSession.attemptsUsed,
-      maxAttempts: config.maxAttempts,
-      persona: config.aiPersona as NegotiationContext['persona'],
-      customerContext: await buildCustomerContext(bargainSession.storeId, bargainSession.customerEmail),
+    // Atomic attempt claim — prevents race conditions from concurrent requests
+    const claimResult = await prisma.bargainSession.updateMany({
+      where: {
+        id: bargainSession.id,
+        status: 'active',
+        attemptsUsed: bargainSession.attemptsUsed,
+      },
+      data: { attemptsUsed: { increment: 1 } },
+    })
+    if (claimResult.count === 0) {
+      // Another request already claimed this attempt or status changed
+      const refreshed = await prisma.bargainSession.findUnique({ where: { id: bargainSession.id }, select: { status: true, attemptsUsed: true } })
+      if (!refreshed || refreshed.status !== 'active') {
+        return NextResponse.json({ message: `Session is ${refreshed?.status ?? 'gone'}.`, terminal: true, status: refreshed?.status }, { status: 409 })
+      }
+      return NextResponse.json({ message: 'Too fast — someone else just used this attempt. Please try again.', terminal: false }, { status: 429 })
     }
 
-    const history = bargainSession.messages
-      .filter((m: any) => m.role === 'customer' || m.role === 'ai')
-      .map((m: any) => ({
-        role: (m.role === 'customer' ? 'customer' : 'ai') as 'customer' | 'ai',
-        content: m.content,
-        offeredPrice: m.offeredPrice ?? undefined,
-      }))
+    const attemptsUsed = bargainSession.attemptsUsed + 1
+    const attemptsRemaining = Math.max(0, config.maxAttempts - attemptsUsed)
+    const attemptsExhausted = attemptsUsed >= config.maxAttempts
 
-    const attemptsExhausted = bargainSession.attemptsUsed >= config.maxAttempts
-
-    if (attemptsExhausted) {
+    if (attemptsExhausted && attemptsRemaining <= 0) {
       const rejectReply = 'Sorry, you\'ve used all your attempts for this item. Maybe next time! 🙂'
       await prisma.$transaction([
         prisma.bargainMessage.create({
@@ -130,15 +132,33 @@ export async function POST(request: NextRequest) {
         }),
         prisma.bargainSession.update({
           where: { id: bargainSession.id },
-          data: { status: 'rejected', attemptsUsed: bargainSession.attemptsUsed + 1, currentOffer: customerOffer ?? bargainSession.currentOffer },
+          data: { status: 'rejected', currentOffer: customerOffer ?? bargainSession.currentOffer },
         }),
       ])
       return NextResponse.json({ reply: rejectReply, decision: 'reject', attemptsRemaining: 0, sessionStatus: 'rejected' })
     }
 
+    const ctx: NegotiationContext = {
+      storeName: bargainSession.store.name,
+      currencySymbol,
+      originalPrice: bargainSession.originalPrice,
+      minPrice,
+      attemptsUsed,
+      maxAttempts: config.maxAttempts,
+      persona: config.aiPersona as NegotiationContext['persona'],
+      productTitle,
+      customerContext: await buildCustomerContext(bargainSession.storeId, bargainSession.customerEmail),
+    }
+
+    const history = bargainSession.messages
+      .filter((m: any) => m.role === 'customer' || m.role === 'ai')
+      .map((m: any) => ({
+        role: (m.role === 'customer' ? 'customer' : 'ai') as 'customer' | 'ai',
+        content: m.content,
+        offeredPrice: m.offeredPrice ?? undefined,
+      }))
+
     const result = await negotiateStep(ctx, history, data.message, customerOffer ?? undefined)
-    const attemptsUsed = bargainSession.attemptsUsed + 1
-    const attemptsRemaining = Math.max(0, config.maxAttempts - attemptsUsed)
 
     const sessionStatus =
       result.decision === 'accept' ? 'accepted' :
@@ -158,7 +178,6 @@ export async function POST(request: NextRequest) {
       prisma.bargainSession.update({
         where: { id: bargainSession.id },
         data: {
-          attemptsUsed,
           currentOffer: customerOffer ?? bargainSession.currentOffer,
           status: sessionStatus,
           finalPrice: result.decision === 'accept' ? (result.counterOffer ?? customerOffer ?? bargainSession.currentOffer) : null,
