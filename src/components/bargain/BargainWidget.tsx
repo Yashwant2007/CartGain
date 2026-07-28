@@ -208,6 +208,7 @@ export default function BargainWidget({
         },
       ])
       setDecision('accept')
+      setSessionEnded(true)
     } catch (err: any) {
       setError(err.message ?? 'Could not complete the deal')
     } finally {

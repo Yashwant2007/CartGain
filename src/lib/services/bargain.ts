@@ -285,16 +285,13 @@ export async function computeMinPrice(opts: {
 
   // Otherwise derive from profit %
   const profitPercent = product?.minProfitPercent ?? config?.minProfitPercent ?? 20
-  // minPrice = originalPrice * (1 - profitPercent/100)... but we want to PROTECT at least profitPercent of margin
-  // i.e. floor = originalPrice * (profitPercent / 100) means we never sell below cost*...
-  // Simpler interpretation: floor = originalPrice * (1 - maxDiscountPercent/100) if provided, else originalPrice * (profitPercent/100) as cost baseline works only if profit % of price.
-  // We treat minProfitPercent as: profit must be >= minProfitPercent % of originalPrice
-  const minPrice = originalPrice * (1 - (profitPercent / 100) * (product?.maxDiscountPercent ? 1 : 1))
+  // Floor = originalPrice minus at most (profitPercent)% discount
+  const minPrice = originalPrice * (1 - profitPercent / 100)
 
-  // Apply max discount cap if present
+  // Apply max discount cap if present (tighter restriction than profit floor)
   if (product?.maxDiscountPercent != null) {
     const capFloor = originalPrice * (1 - product.maxDiscountPercent / 100)
-    return { minPrice: Math.max(minPrice, capFloor), isBargainable: true }
+    return { minPrice: Math.max(Math.round(minPrice * 100) / 100, capFloor), isBargainable: true }
   }
 
   return { minPrice: Math.round(minPrice * 100) / 100, isBargainable: true }
@@ -379,9 +376,8 @@ export async function negotiateStep(
 ): Promise<NegotiationResult> {
   const ai = getClient()
   if (!ai) {
-    return customerOffer != null
-      ? ruleBasedDecision(customerOffer, ctx)
-      : ruleBasedDecision(ctx.minPrice, ctx) // probe
+    if (customerOffer != null) return ruleBasedDecision(customerOffer, ctx)
+    return { reply: buildOpeningMessage(ctx), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'ai_unavailable', sentiment: 'neutral' }
   }
 
   const attemptsLeft = ctx.maxAttempts - ctx.attemptsUsed
@@ -440,9 +436,8 @@ Respond with strict JSON in this shape:
     try {
       parsed = JSON.parse(raw)
     } catch {
-      return customerOffer != null
-        ? ruleBasedDecision(customerOffer, ctx)
-        : ruleBasedDecision(ctx.minPrice, ctx)
+      if (customerOffer != null) return ruleBasedDecision(customerOffer, ctx)
+      return { reply: buildOpeningMessage(ctx), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'parse_fallback', sentiment: 'neutral' }
     }
 
     const decision = ['accept', 'counter', 'reject', 'chat'].includes(parsed.decision)

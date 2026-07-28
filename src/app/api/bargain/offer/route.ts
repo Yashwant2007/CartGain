@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainOfferSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
-import { negotiateStep, ruleBasedDecision, buildOpeningMessage, buildCustomerContext, type NegotiationContext } from '@/lib/services/bargain'
+import { negotiateStep, ruleBasedDecision, buildOpeningMessage, buildCustomerContext, computeMinPrice, type NegotiationContext } from '@/lib/services/bargain'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,27 +73,19 @@ export async function POST(request: NextRequest) {
 
     const currencySymbol = bargainSession.store.currency === 'INR' ? '₹' : bargainSession.store.currency === 'USD' ? '$' : bargainSession.store.currency + ' '
 
-    // Compute floor price
-    const { minPrice, productTitle } = await (async () => {
-      const product = await prisma.bargainProduct.findUnique({
-        where: {
-          storeId_shopifyProductId: {
-            storeId: bargainSession.storeId,
-            shopifyProductId: bargainSession.shopifyProductId,
-          },
-        },
+    // Compute floor price (reuses shared computeMinPrice with proper defaults)
+    const { minPrice } = await computeMinPrice({
+      storeId: bargainSession.storeId,
+      shopifyProductId: bargainSession.shopifyProductId,
+      originalPrice: bargainSession.originalPrice,
+    })
+    // Fetch product title separately (not part of computeMinPrice)
+    const productTitle = await (async () => {
+      const p = await prisma.bargainProduct.findUnique({
+        where: { storeId_shopifyProductId: { storeId: bargainSession.storeId, shopifyProductId: bargainSession.shopifyProductId } },
+        select: { productTitle: true },
       })
-      let title = product?.productTitle ?? undefined
-      if (product?.minPrice != null) {
-        return { minPrice: Math.min(product.minPrice, bargainSession.originalPrice), productTitle: title }
-      }
-      const profitPercent = product?.minProfitPercent ?? config.minProfitPercent
-      let floor = bargainSession.originalPrice * (1 - profitPercent / 100)
-      if (product?.maxDiscountPercent != null) {
-        const cap = bargainSession.originalPrice * (1 - product.maxDiscountPercent / 100)
-        floor = Math.max(floor, cap)
-      }
-      return { minPrice: Math.round(floor * 100) / 100, productTitle: title }
+      return p?.productTitle ?? undefined
     })()
 
     // Atomic attempt claim — prevents race conditions from concurrent requests
