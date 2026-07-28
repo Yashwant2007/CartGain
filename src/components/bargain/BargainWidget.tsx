@@ -51,7 +51,6 @@ export default function BargainWidget({
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
-  const [offer, setOffer] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [decision, setDecision] = useState<'idle' | 'counter' | 'accept' | 'reject'>('idle')
@@ -120,56 +119,39 @@ export default function BargainWidget({
     }
   }
 
-  async function submitOffer(value?: number) {
+  async function sendMessage(text?: string) {
     if (!sessionId) return
-    const offerValue = value ?? parseFloat(offer)
-    if (!offerValue || offerValue <= 0) {
-      setError('Enter a valid offer')
-      return
-    }
-    if (offerValue > originalPrice) {
-      setError(`Offer must be under ${currencySymbol}${originalPrice.toFixed(2)} (the list price)`)
-      return
-    }
+    const msg = (text ?? input).trim()
+    if (!msg) { setError('Type a message'); return }
     setLoading(true)
     setError(null)
     setMessages(prev => [
       ...prev,
-      {
-        id: `c-${Date.now()}`,
-        role: 'customer',
-        content: `I'll offer ${currencySymbol}${offerValue.toFixed(2)}`,
-        offeredPrice: offerValue,
-        createdAt: new Date().toISOString(),
-      },
+      { id: `c-${Date.now()}`, role: 'customer', content: msg, offeredPrice: null, createdAt: new Date().toISOString() },
     ])
-    setOffer('')
+    setInput('')
     try {
       const res = await fetch(`${apiBase}/api/bargain/offer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, offer: offerValue }),
+        body: JSON.stringify({ sessionId, message: msg }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message ?? 'Bargain failed')
       setMessages(prev => [
         ...prev,
         {
-          id: `a-${Date.now()}`,
-          role: 'ai',
-          content: data.reply,
-          offeredPrice: data.counterOffer ?? null,
-          createdAt: new Date().toISOString(),
+          id: `a-${Date.now()}`, role: 'ai', content: data.reply,
+          offeredPrice: data.counterOffer ?? null, createdAt: new Date().toISOString(),
         },
       ])
       setAttemptsRemaining(data.attemptsRemaining ?? null)
-      setDecision(data.decision ?? 'counter')
-      if (data.finalPrice != null) setFinalPrice(data.finalPrice)
-      if (data.sessionStatus === 'accepted' || data.decision === 'accept') {
-        // Accept route will be called from customer "Confirm" action
+      if (data.decision === 'accept' || data.decision === 'reject') {
+        setDecision(data.decision)
       }
+      if (data.finalPrice != null) setFinalPrice(data.finalPrice)
     } catch (err: any) {
-      setError(err.message ?? 'Failed to send offer')
+      setError(err.message ?? 'Failed to send')
     } finally {
       setLoading(false)
     }
@@ -418,11 +400,11 @@ export default function BargainWidget({
             display: 'flex', gap: 8,
           }}>
             <input
-              type="number"
-              placeholder={`${currencySymbol} your offer`}
-              value={offer}
-              onChange={e => setOffer(e.target.value)}
-              disabled={loading || decision === 'accept'}
+              type="text"
+              placeholder="Type your offer or message..."
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              disabled={loading || decision === 'accept' || decision === 'reject'}
               style={{
                 flex: 1, padding: '10px 12px', borderRadius: 8,
                 border: '1px solid rgba(59,130,246,0.4)',
@@ -430,19 +412,19 @@ export default function BargainWidget({
                 outline: 'none',
               }}
               onKeyDown={e => {
-                if (e.key === 'Enter') void submitOffer()
+                if (e.key === 'Enter') void sendMessage()
               }}
             />
             <button
-              onClick={() => submitOffer()}
-              disabled={loading || !offer || decision === 'accept'}
+              onClick={() => sendMessage()}
+              disabled={loading || !input.trim() || decision === 'accept' || decision === 'reject'}
               style={{
                 background: '#2563eb', color: 'white',
                 border: 'none', borderRadius: 8,
                 padding: '0 14px', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: 6,
                 fontSize: 14, fontWeight: 600,
-                opacity: (loading || !offer || decision === 'accept') ? 0.5 : 1,
+                opacity: (loading || !input.trim() || decision === 'accept' || decision === 'reject') ? 0.5 : 1,
               }}
             >
               {loading ? <Loader2 size={16} className="spin" style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={16} />}

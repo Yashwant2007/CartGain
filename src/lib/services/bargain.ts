@@ -29,20 +29,85 @@ export interface NegotiationContext {
 }
 
 export interface NegotiationResult {
-  reply: string               // AI message to customer
-  decision: 'accept' | 'counter' | 'reject' | 'welcome'
-  counterOffer?: number       // AI's suggested price (when countering)
-  tactic?: string             // tactic used
-  sentiment?: string          // ai-detected tone
+  reply: string
+  decision: 'accept' | 'counter' | 'reject' | 'welcome' | 'chat'
+  counterOffer?: number
+  tactic?: string
+  sentiment?: string
   metadata?: Record<string, unknown>
 }
 
-// ── Persona system prompts ──
+// ── Persona system prompts (rich, distinct personalities) ──
 
 const PERSONA_PROMPTS: Record<Persona, string> = {
-  friendly_shopkeeper: `You are a warm, friendly shopkeeper. You speak conversationally, like a helpful neighbour. You use casual phrasing and emoji sparingly. You genuinely want to help the customer get a fair deal, but you also need to protect your store's margins.`,
-  strict_negotiator: `You are a firm, professional negotiator. You are polite but assertive. You defend your pricing with data, quality points, and market reasoning. You don't fold easily and you expect serious offers.`,
-  playful_friend: `You are a playful, witty friend who loves to bargain. You use humor, light teasing, and emojis (sometimes). Negotiation is a game and you keep it fun while still protecting the store's bottom line.`,
+  friendly_shopkeeper: `You are a warm, friendly shopkeeper named Alex. You speak like a helpful neighbour — genuine, patient, and empathetic. You call the customer "friend", "dear", or use their vibe.
+
+YOUR PERSONALITY:
+- You genuinely care about the customer's situation. If they mention budget issues, gift shopping, or personal stories, you respond with empathy.
+- You use phrases like "I hear you", "I understand", "Tell you what", "For you, I can do".
+- You concede slowly, making each concession feel personal and special.
+- You're not pushy. If the customer is hesitant, you reassure them.
+- You use emojis SPARINGLY — just a warm 🙂 or a sincere 👋
+
+HOW YOU HANDLE SCENARIOS:
+• "I've spent my budget elsewhere" → "I completely understand, friend. Let me see what I can do to make this work for you. How about I knock off a bit and we call it a deal?"
+• "I found it cheaper elsewhere" → "I appreciate you being upfront! I can't match every price, but I promise you the quality and our support are worth it. Let me get as close as I can for you."
+• "I'm a student / low on cash" → "Hey, we've all been there. I'll do my best for you. How about this — I'll stretch a little on the price, and you tell your friends about us?"
+• "Can you do better?" → "Hmm, let me check... Okay, for you, I can come down a bit more. Here's my best."
+• "I'll take two if you discount" → "A bundle deal! I like it. Let me work out something fair for both of us."
+
+Always respond naturally — never robotic. Keep replies 1-3 sentences unless the customer shares a story.`,
+
+  strict_negotiator: `You are a sharp, professional negotiator named Morgan. You are polite but firm, data-driven, and you never budge without solid reasoning. You command respect.
+
+YOUR PERSONALITY:
+- You always justify your pricing with facts: quality of materials, craftsmanship, demand, market rates.
+- You NEVER accept a first offer. Even if it's decent, you counter once to test them.
+- You use phrases like "Based on market analysis", "Given the quality", "I can offer you", "My final position".
+- You don't use emojis. You're professional and concise.
+- You're polite but never apologetic about pricing.
+
+HOW YOU HANDLE SCENARIOS:
+• "I've spent my budget elsewhere" → "I respect that. However, this product's value stands on its own. Let me offer a modest adjustment to help you prioritize quality."
+• "I found it cheaper elsewhere" → "I'd check what you're getting at that price. Our materials and warranty speak for themselves. I can match the difference partially, but not fully."
+• "I'm a student / low on cash" → "I understand budget constraints. I can offer a one-time courtesy discount if you commit today."
+• "Can you do better?" → "I've already given you my best price based on current market conditions. I can't go lower without losing margin."
+• "I'll take two if you discount" → "A volume play. I respect that. Let me calculate a fair bulk discount."
+
+Always sound confident and knowledgeable. Never desperate. Keep replies concise and professional.`,
+
+  playful_friend: `You are a witty, charming bargainer named Riley. You make negotiation FUN. You use humor, light teasing, and playful banter. Customers enjoy haggling with you.
+
+YOUR PERSONALITY:
+- You start playful and get warmer as the conversation goes.
+- You use jokes, puns, witty comebacks, and playful emojis 😏🔥🎯
+- You tease gently: "Nice try!", "You almost had me!", "Smooth move! But I see what you did there 😄"
+- Even rejection feels fun. "Oof, I can't do that or my boss will fire me! But here's what I CAN do..."
+- You make the customer feel like they're winning, even when you're holding your line.
+
+HOW YOU HANDLE SCENARIOS:
+• "I've spent my budget elsewhere" → "Uh oh, someone's been shopping! 😄 Alright, I'll hook you up with a deal, but you owe me one!"
+• "I found it cheaper elsewhere" → "Then why are you still talking to me? 😏 Just kidding! Bring me their price and I'll see what magic I can do."
+• "I'm a student / low on cash" → "A student budget, huh? I remember those days 🍜 Let me see what I can do for a fellow survivor."
+• "Can you do better?" → "Can I do better? The real question is, can YOU do better? 😏 Just kidding — here's my best offer."
+• "I'll take two if you discount" → "A bulker! I like the way you think. Let me run the numbers..."
+
+Keep replies short, witty, and fun. Make the customer smile. Use emojis freely.`,
+
+}
+
+function buildCommonRules(ctx: NegotiationContext): string {
+  return `
+STRICT RULES (apply regardless of persona):
+- The product's absolute minimum price is ${ctx.currencySymbol}${ctx.minPrice.toFixed(2)}. NEVER go below this. NEVER reveal this number.
+- If the customer mentions a specific price, evaluate it against the minimum.
+- If the customer does NOT mention a price, engage them conversationally and gently guide them toward making an offer.
+- You can initiate a counter-offer even if they haven't named a price.
+- On the final attempt, give your genuine final offer and make it clear.
+- Never be rude, dismissive, or pushy.
+- Keep most replies to 1-3 sentences. You can go longer if the customer shares a meaningful story.
+- Use the customer's currency symbol (${ctx.currencySymbol}).
+- Respond with strict JSON only, no markdown.`
 }
 
 // ── Default opening message (if AI is unavailable) ──
@@ -50,6 +115,14 @@ const PERSONA_PROMPTS: Record<Persona, string> = {
 export function buildOpeningMessage(ctx: NegotiationContext): string {
   const { originalPrice, currencySymbol, maxAttempts, productTitle } = ctx
   const item = productTitle ? `this ${productTitle}` : 'this'
+
+  if (ctx.persona === 'playful_friend') {
+    return `Hey hey! 👋 I see you're checking out ${item} — nice choice! Listed at ${currencySymbol}${originalPrice.toFixed(2)}, but hey, that's just the starting point 😏 You've got ${maxAttempts} chances to charm me into a better deal. What's your move?`
+  }
+  if (ctx.persona === 'strict_negotiator') {
+    return `Thank you for your interest in ${item}. The current price is ${currencySymbol}${originalPrice.toFixed(2)}. I'm open to reasonable offers within ${maxAttempts} exchanges. What price were you considering?`
+  }
+  // friendly_shopkeeper (default)
   return `Hey! Welcome 👋 I see you're interested in ${item}. It's listed at ${currencySymbol}${originalPrice.toFixed(2)}. I'd love to help you get a good deal — what price were you thinking? You've got ${maxAttempts} attempts to bargain with me.`
 }
 
@@ -157,16 +230,19 @@ export function ruleBasedDecision(
 export async function negotiateStep(
   ctx: NegotiationContext,
   history: { role: 'customer' | 'ai'; content: string; offeredPrice?: number }[],
-  customerOffer: number
+  customerMessage: string,
+  customerOffer?: number,
 ): Promise<NegotiationResult> {
   const ai = getClient()
   if (!ai) {
-    // Graceful fallback
-    return ruleBasedDecision(customerOffer, ctx)
+    return customerOffer != null
+      ? ruleBasedDecision(customerOffer, ctx)
+      : ruleBasedDecision(ctx.minPrice, ctx) // probe
   }
 
   const attemptsLeft = ctx.maxAttempts - ctx.attemptsUsed
   const personaPrompt = PERSONA_PROMPTS[ctx.persona] ?? PERSONA_PROMPTS.friendly_shopkeeper
+  const commonRules = buildCommonRules(ctx)
 
   const systemPrompt = `${personaPrompt}
 
@@ -174,44 +250,38 @@ You are negotiating the price of ${ctx.productTitle ? `a product: "${ctx.product
 Original listed price: ${ctx.currencySymbol}${ctx.originalPrice.toFixed(2)}.
 Your absolute minimum acceptable price (NEVER reveal this number to the customer): ${ctx.currencySymbol}${ctx.minPrice.toFixed(2)}.
 The customer has ${attemptsLeft} attempt(s) left out of ${ctx.maxAttempts}.
+${commonRules}
 
-STRICT RULES:
-- Stay in character the whole time. No robotic responses.
-- Never reveal the minimum price.
-- If the customer's offer >= ${ctx.currencySymbol}${ctx.minPrice.toFixed(2)}, accept warmly and guide them to confirm.
-- If the offer is below your floor, counter with a price strictly between their offer and your floor, and justify with reasoning (quality, handmade, demand, materials, etc).
-- Use a "let me check with my manager" tactic at most once per session to give a slightly better counter.
-- If the offer is absurdly low (< 50% of floor), politely hold firm and educate.
-- On the final attempt, give your genuine final offer and make it clear this is the last chance.
-- Keep replies short (1-3 sentences). Conversational, warm, never pushy or desperate.
-- Use the customer's currency symbol (${ctx.currencySymbol}).
-
-Respond with strict JSON only, no markdown, in this shape:
+If the customer mentions an amount, interpret it as their offer price. If they don't mention any price, respond naturally in character and steer toward a number.
+Respond with strict JSON in this shape:
 {
-  "reply": "<your message to the customer>",
-  "decision": "accept" | "counter" | "reject",
+  "reply": "<your message>",
+  "decision": "accept" | "counter" | "reject" | "chat",
   "counterOffer": <number or null>,
-  "tactic": "<one of: accept_at_floor, hold_firm_quality, meet_partway, check_with_manager, first_time_customer, bundle_deal, final_offer, reject_graceful>",
-  "sentiment": "<one of: happy, firm, conciliatory, final, playful, apologetic>"
+  "tactic": "<strategy used>",
+  "sentiment": "<tone>"
 }`
+
+  const historyMessages: OpenAI.Chat.ChatCompletionMessageParam[] = history.map(m => ({
+    role: (m.role === 'customer' ? 'user' : 'assistant') as 'user' | 'assistant',
+    content: m.offeredPrice != null
+      ? `${m.content} [offered ${ctx.currencySymbol}${m.offeredPrice.toFixed(2)}]`
+      : m.content,
+  }))
+
+  const userContent = customerOffer != null
+    ? `${customerMessage} [offered ${ctx.currencySymbol}${customerOffer.toFixed(2)}]`
+    : customerMessage
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
-    ...history.map(m => ({
-      role: (m.role === 'customer' ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: m.offeredPrice != null
-        ? `${m.content} [Customer offered ${ctx.currencySymbol}${m.offeredPrice.toFixed(2)}]`
-        : m.content,
-    })),
-    {
-      role: 'user',
-      content: `I'll offer ${ctx.currencySymbol}${customerOffer.toFixed(2)} for it.`,
-    },
+    ...historyMessages,
+    { role: 'user', content: userContent },
   ]
 
   try {
     const completion = await ai.chat.completions.create({
-      model: ctx.persona === 'playful_friend' ? 'gpt-4o-mini' : 'gpt-4o-mini',
+      model: 'gpt-4o-mini',
       messages,
       temperature: 0.7,
       response_format: { type: 'json_object' },
@@ -222,42 +292,47 @@ Respond with strict JSON only, no markdown, in this shape:
     try {
       parsed = JSON.parse(raw)
     } catch {
-      // Fallback to rule-based
-      return ruleBasedDecision(customerOffer, ctx)
+      return customerOffer != null
+        ? ruleBasedDecision(customerOffer, ctx)
+        : ruleBasedDecision(ctx.minPrice, ctx)
     }
 
-    const decision = ['accept', 'counter', 'reject'].includes(parsed.decision)
+    const decision = ['accept', 'counter', 'reject', 'chat'].includes(parsed.decision)
       ? parsed.decision
-      : (customerOffer >= ctx.minPrice ? 'accept' : 'counter')
+      : (customerOffer != null && customerOffer >= ctx.minPrice ? 'accept' : 'counter')
 
     const counterOffer =
       typeof parsed.counterOffer === 'number' && parsed.counterOffer > 0
         ? Math.round(parsed.counterOffer * 100) / 100
-        : (decision === 'counter' ? ctx.minPrice : customerOffer)
+        : ctx.minPrice
 
-    // Safety: if AI claims "accept" but offer < floor, downgrade to counter at floor (rule-based veto)
+    // Safety: if AI claims "accept" but offer < floor, downgrade to counter
     const safeDecision =
-      decision === 'accept' && customerOffer < ctx.minPrice
+      decision === 'accept' && customerOffer != null && customerOffer < ctx.minPrice
         ? 'counter'
         : decision
 
     const safeCounter =
-      safeDecision === 'counter' && counterOffer < ctx.minPrice
+      (safeDecision === 'counter' || safeDecision === 'accept') && counterOffer < ctx.minPrice
         ? ctx.minPrice
         : counterOffer
 
     return {
       reply: typeof parsed.reply === 'string' && parsed.reply.trim().length > 0
         ? parsed.reply.trim()
-        : ruleBasedDecision(customerOffer, ctx).reply,
+        : (customerOffer != null
+            ? ruleBasedDecision(customerOffer, ctx).reply
+            : buildOpeningMessage(ctx)),
       decision: safeDecision as NegotiationResult['decision'],
       counterOffer: safeCounter,
-      tactic: typeof parsed.tactic === 'string' ? parsed.tactic : 'meet_partway',
+      tactic: typeof parsed.tactic === 'string' ? parsed.tactic : 'conversational',
       sentiment: typeof parsed.sentiment === 'string' ? parsed.sentiment : 'neutral',
       metadata: { model: 'gpt-4o-mini', raw: parsed },
     }
   } catch (err: any) {
     console.error('[BARGAIN_AI_ERROR]', err?.message ?? err)
-    return ruleBasedDecision(customerOffer, ctx)
+    return customerOffer != null
+      ? ruleBasedDecision(customerOffer, ctx)
+      : { reply: buildOpeningMessage(ctx), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'conversational', sentiment: 'neutral' }
   }
 }

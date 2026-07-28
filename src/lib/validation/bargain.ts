@@ -58,7 +58,7 @@ export type BargainStartInput = z.infer<typeof bargainStartSchema>
 
 export const bargainOfferSchema = z.object({
   sessionId: z.string().min(1, 'sessionId is required').max(100),
-  offer: z.number().positive('Offer must be a positive number'),
+  message: z.string().min(1, 'Message is required').max(500),
 })
 
 export type BargainOfferInput = z.infer<typeof bargainOfferSchema>
