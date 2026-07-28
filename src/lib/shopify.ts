@@ -220,6 +220,40 @@ export async function fetchAbandonedCheckouts(
   }
 }
 
+export async function fetchShopifyProductPrice(
+  store: { id: string; domain: string; apiKey: string | null; shopifyRefreshToken: string | null; shopifyTokenExpiresAt: Date | null },
+  shopifyProductId: string,
+  variantId?: string | null,
+): Promise<number | null> {
+  const accessToken = await getAccessToken(store)
+  if (!accessToken) return null
+
+  const productId = shopifyProductId.replace(/^gid:\/\/shopify\/Product\//, '')
+  const url = `https://${store.domain}/admin/api/2026-04/products/${productId}.json`
+
+  try {
+    const res = await fetch(url, {
+      headers: { 'X-Shopify-Access-Token': accessToken },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const product = data.product
+    if (!product?.variants?.length) return null
+
+    if (variantId) {
+      const variantIdNum = variantId.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
+      const variant = product.variants.find((v: any) => String(v.id) === variantIdNum)
+      if (variant?.price) return parseFloat(variant.price)
+    }
+
+    const price = product.variants[0].price
+    return price != null ? parseFloat(price) : null
+  } catch {
+    return null
+  }
+}
+
 export async function syncAbandonedCheckouts(store: any): Promise<number> {
   const accessToken = await getAccessToken(store)
   if (!accessToken) {

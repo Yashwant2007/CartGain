@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainStartSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerContext, type NegotiationContext } from '@/lib/services/bargain'
+import { fetchShopifyProductPrice } from '@/lib/shopify'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +17,19 @@ export async function POST(request: NextRequest) {
     if (!store || !store.isActive) {
       return NextResponse.json({ message: 'Store not available' }, { status: 404 })
     }
+
+    // Verify originalPrice matches Shopify (prevents price manipulation)
+    const actualPrice = await fetchShopifyProductPrice(store, data.shopifyProductId, data.variantId)
+    if (actualPrice != null) {
+      const ratio = data.originalPrice / actualPrice
+      if (ratio < 0.8 || ratio > 1.2) {
+        return NextResponse.json({
+          message: `Price mismatch — the actual price is ${store.currency === 'INR' ? '₹' : '$'}${actualPrice.toFixed(2)}. Please refresh and try again.`,
+        }, { status: 400 })
+      }
+    }
+    // If fetchShopifyProductPrice returns null (network error, no token), we proceed without verification
+    // rather than blocking the bargain. This is a soft check — best-effort.
 
     // Load config (or auto-create defaults on merchant's first request)
     const config = await prisma.bargainConfig.upsert({
