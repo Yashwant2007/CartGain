@@ -18,7 +18,7 @@ export default function TermsPage() {
           </div>
           <h1 className="text-4xl font-bold text-white mb-4">Terms of Service</h1>
           <p className="text-lg text-blue-200 max-w-2xl mx-auto">
-            Last updated: {new Date().toLocaleDateString('en-IN', { month: 'long', day: 'numeric', year: 'numeric' })}
+            Last updated: July 1, 2026
           </p>
         </div>
 
@@ -243,7 +243,7 @@ export default function TermsPage() {
             <Link href="/" className="hover:text-white transition">Home</Link>
           </div>
           <p className="mt-4 text-xs text-blue-400/60">
-            &copy; {new Date().getFullYear()} CartGain. All rights reserved.
+            &copy; 2026 CartGain. All rights reserved.
           </p>
         </div>
       </div>

@@ -62,9 +62,36 @@ export async function PUT(req: NextRequest) {
       'paymentRetrySchedule', 'paymentChannelPriority', 'paymentIncentive', 'paymentEnabledGateways',
     ]
 
+    const booleanFields = ['rtoReductionEnabled', 'paymentRecoveryEnabled']
+    const numericFields = ['rtoWeights', 'rtoThresholds', 'rtoIncentive', 'paymentIncentive']
+    const arrayFields = ['rtoEnabledCategories', 'paymentRetrySchedule', 'paymentChannelPriority', 'paymentEnabledGateways']
+
     const data: Record<string, unknown> = {}
     for (const field of allowedFields) {
-      if (field in updates) data[field] = updates[field]
+      if (!(field in updates)) continue
+      const value = updates[field]
+      if (booleanFields.includes(field) && typeof value !== 'boolean') {
+        return NextResponse.json({ error: `${field} must be a boolean` }, { status: 400 })
+      }
+      if (numericFields.includes(field)) {
+        if (typeof value === 'number' && !Number.isFinite(value)) {
+          return NextResponse.json({ error: `${field} must be a finite number` }, { status: 400 })
+        }
+        if (typeof value === 'object' && value !== null) {
+          const nested = Object.values(value as Record<string, unknown>)
+          if (!nested.every(v => typeof v === 'number' && Number.isFinite(v))) {
+            return NextResponse.json({ error: `${field} values must be finite numbers` }, { status: 400 })
+          }
+        } else if (typeof value !== 'number') {
+          return NextResponse.json({ error: `${field} must be a number or number map` }, { status: 400 })
+        }
+      }
+      if (arrayFields.includes(field)) {
+        if (!Array.isArray(value) || !value.every(v => typeof v === 'string' || typeof v === 'number')) {
+          return NextResponse.json({ error: `${field} must be an array of strings or numbers` }, { status: 400 })
+        }
+      }
+      data[field] = value
     }
 
     if (Object.keys(data).length === 0) {

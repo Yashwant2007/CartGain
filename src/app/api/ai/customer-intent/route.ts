@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
@@ -13,9 +14,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
+    const aiRate = await checkSimpleRateLimit(`ai_${session.user.id}`)
+    if (!aiRate.allowed) {
+      return NextResponse.json({ message: 'Too many AI requests. Please try again later.' }, { status: 429 })
+    }
+
     const { customerId: extCustomerId, storeId } = await request.json()
 
-    if (!extCustomerId || !storeId) {
+    if (typeof extCustomerId !== 'string' || typeof storeId !== 'string' || !extCustomerId || !storeId) {
       return NextResponse.json({ message: 'customerId and storeId required' }, { status: 400 })
     }
 
@@ -27,6 +33,10 @@ export async function POST(request: NextRequest) {
     const customer = await prisma.customer.findUnique({
       where: { storeId_customerId: { storeId, customerId: extCustomerId } }
     })
+
+    if (!customer) {
+      return NextResponse.json({ message: 'Customer not found' }, { status: 404 })
+    }
 
     const totalAbandons = await prisma.cart.count({
       where: { storeId, customerId: extCustomerId, isRecovered: false }

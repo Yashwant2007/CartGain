@@ -9,6 +9,17 @@ export interface RateLimitConfig {
 const SIMPLE_WINDOW_MS = 60_000
 const SIMPLE_MAX_REQUESTS = 30
 
+// Take the first address from x-forwarded-for and validate it looks like an IP
+// so a spoofed/malformed header cannot be used to bypass or poison rate limits.
+function clientIp(headersList: Headers): string {
+  const raw = headersList.get('x-forwarded-for')?.split(',')[0]?.trim() || headersList.get('x-real-ip')?.trim() || 'unknown'
+  const ipv4 = /^(\d{1,3}\.){3}\d{1,3}$/
+  if (ipv4.test(raw)) return raw
+  const ipv6 = /^[0-9a-fA-F:]{2,45}$/
+  if (ipv6.test(raw)) return raw
+  return 'unknown'
+}
+
 export async function checkRateLimit(
   endpoint: string,
   config: RateLimitConfig = {}
@@ -22,7 +33,7 @@ export async function checkRateLimit(
 
   try {
     const headersList = await headers()
-    const ip = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || 'unknown'
+    const ip = clientIp(headersList)
     const key = `ratelimit:${ip}_${endpoint}`
 
     const count = await redisIncr(key)

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
@@ -11,6 +12,11 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    }
+
+    const aiRate = await checkSimpleRateLimit(`ai_${session.user.id}`)
+    if (!aiRate.allowed) {
+      return NextResponse.json({ message: 'Too many AI requests. Please try again later.' }, { status: 429 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -104,8 +110,21 @@ export async function POST(request: NextRequest) {
 
     const { storeId, type, title, description, impact, metrics } = await request.json()
 
-    if (!storeId || !title) {
-      return NextResponse.json({ message: 'storeId and title required' }, { status: 400 })
+    if (!storeId || typeof storeId !== 'string' || !title || typeof title !== 'string' || title.length > 200) {
+      return NextResponse.json({ message: 'storeId and title (max 200 chars) are required' }, { status: 400 })
+    }
+
+    if (typeof description !== 'undefined' && typeof description !== 'string') {
+      return NextResponse.json({ message: 'description must be a string' }, { status: 400 })
+    }
+
+    const validImpact = ['high', 'medium', 'low']
+    if (typeof impact !== 'undefined' && !validImpact.includes(impact)) {
+      return NextResponse.json({ message: 'impact must be high, medium or low' }, { status: 400 })
+    }
+
+    if (typeof metrics !== 'undefined' && (typeof metrics !== 'object' || metrics === null || Array.isArray(metrics))) {
+      return NextResponse.json({ message: 'metrics must be an object' }, { status: 400 })
     }
 
     const store = await prisma.store.findUnique({ where: { id: storeId } })
@@ -114,7 +133,7 @@ export async function POST(request: NextRequest) {
     }
 
     const suggestion = await prisma.aiSuggestion.create({
-      data: { storeId, userId: session.user.id, type: type || 'revenue_coach', title, description: description || '', impact, metrics: metrics || {} },
+      data: { storeId, userId: session.user.id, type: typeof type === 'string' && type ? type : 'revenue_coach', title, description: description || '', impact: impact || null, metrics: metrics || {} },
     })
 
     return NextResponse.json({ suggestion }, { status: 201 })

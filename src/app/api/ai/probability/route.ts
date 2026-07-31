@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
@@ -13,7 +14,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
+    const aiRate = await checkSimpleRateLimit(`ai_${session.user.id}`)
+    if (!aiRate.allowed) {
+      return NextResponse.json({ message: 'Too many AI requests. Please try again later.' }, { status: 429 })
+    }
+
     const { cartId, channel = 'email' } = await request.json()
+
+    if (!cartId || typeof cartId !== 'string') {
+      return NextResponse.json({ message: 'cartId is required' }, { status: 400 })
+    }
 
     const cart = await prisma.cart.findUnique({ where: { id: cartId } })
     if (!cart) {
@@ -52,7 +62,7 @@ export async function POST(request: NextRequest) {
         select: { totalValue: true }
       })
       const vals = goodCarts.map((c: any) => c.totalValue)
-      customerHistory.avgOrderValue = vals.length > 0 ? vals.reduce((a: any, b: any) => a + b, 0) / vals.length : 0
+      customerHistory.avgOrderValue = vals.length > 0 ? vals.reduce((a: number, b: number) => a + b, 0) / vals.length : 0
     }
 
     const result = await predictRecoveryProbability(cart.totalValue, customerHistory, channel)

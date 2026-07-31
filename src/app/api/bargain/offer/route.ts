@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainOfferSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { negotiateStep, ruleBasedDecision, buildOpeningMessage, buildCustomerContext, computeMinPrice, retentionOffer, type NegotiationContext } from '@/lib/services/bargain'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -105,6 +106,14 @@ function extractPrice(text: string): number | null {
 // POST /api/bargain/offer — customer sends a message, AI responds
 export async function POST(request: NextRequest) {
   try {
+    const rate = await checkSimpleRateLimit(`bargain_offer_${request.headers.get('x-forwarded-for') || 'unknown'}`)
+    if (!rate.allowed) {
+      return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
+        status: 429,
+        headers: { 'Retry-After': String(rate.retryAfter) },
+      })
+    }
+
     const body = await request.json()
     const data = validateOrThrow(bargainOfferSchema, body)
     const customerOffer = extractPrice(data.message)

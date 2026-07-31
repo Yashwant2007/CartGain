@@ -1,18 +1,26 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, Copy, Check, Key, Globe, Webhook, ShoppingCart } from 'lucide-react'
 import Link from 'next/link'
 
 export default function APIDocsPage() {
   const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null)
+  const [baseUrl, setBaseUrl] = useState('https://cart-gain.com')
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://cart-gain.com'
+  // window.location.origin differs between server and client — resolve after mount.
+  useEffect(() => {
+    setBaseUrl(window.location.origin)
+  }, [])
 
   const copyToClipboard = async (text: string, key: string) => {
-    await navigator.clipboard.writeText(text)
-    setCopiedEndpoint(key)
-    setTimeout(() => setCopiedEndpoint(null), 2000)
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedEndpoint(key)
+      setTimeout(() => setCopiedEndpoint(null), 2000)
+    } catch {
+      setCopiedEndpoint(null)
+    }
   }
 
   const endpoints = [
@@ -74,6 +82,7 @@ export default function APIDocsPage() {
                 <code className="text-cyan-300 text-sm font-mono">{baseUrl}</code>
                 <button
                   onClick={() => copyToClipboard(baseUrl, 'baseUrl')}
+                  aria-label="Copy base URL"
                   className="p-1.5 hover:bg-slate-700/50 rounded transition-colors text-blue-300/60 hover:text-blue-200"
                 >
                   {copiedEndpoint === 'baseUrl' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
@@ -115,6 +124,7 @@ export default function APIDocsPage() {
                       </div>
                       <button
                         onClick={() => copyToClipboard(`${ep.method} ${baseUrl}${ep.path.replace(/\{.*?\}/g, 'example')}`, ep.path)}
+                        aria-label={`Copy endpoint ${ep.method} ${ep.path}`}
                         className="p-1.5 hover:bg-slate-700/50 rounded transition-colors text-blue-300/60 hover:text-blue-200"
                       >
                         {copiedEndpoint === ep.path ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}

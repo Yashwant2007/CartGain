@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,15 +37,31 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const rate = await checkSimpleRateLimit(`optout_${request.headers.get('x-forwarded-for') || 'unknown'}`)
+    if (!rate.allowed) {
+      return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
+        status: 429,
+        headers: { 'Retry-After': String(rate.retryAfter) },
+      })
+    }
+
     const body = await request.json()
     const { storeId, email, phone } = body
 
-    if (!storeId) {
+    if (!storeId || typeof storeId !== 'string') {
       return NextResponse.json({ message: 'storeId is required' }, { status: 400 })
     }
 
     if (!email && !phone) {
       return NextResponse.json({ message: 'email or phone is required' }, { status: 400 })
+    }
+
+    if (email && (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+      return NextResponse.json({ message: 'A valid email is required' }, { status: 400 })
+    }
+
+    if (phone && (typeof phone !== 'string' || !/^\+?\d{8,15}$/.test(phone.replace(/[\s-]/g, '')))) {
+      return NextResponse.json({ message: 'A valid phone number is required' }, { status: 400 })
     }
 
     const store = await prisma.store.findUnique({ where: { id: storeId } })

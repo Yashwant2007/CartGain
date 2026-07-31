@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sendEmail, EmailTemplates } from '@/lib/services/email'
-import { isTestEndpointAllowed } from '@/lib/job-auth'
+import { isTestEndpointAllowed, requireJobAuth } from '@/lib/job-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +8,9 @@ export async function POST(request: NextRequest) {
   if (!isTestEndpointAllowed()) {
     return NextResponse.json({ message: 'Not available' }, { status: 403 })
   }
+
+  const authError = await requireJobAuth(request)
+  if (authError) return authError
 
   try {
     const { email } = await request.json()

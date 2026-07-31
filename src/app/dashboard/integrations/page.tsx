@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { CheckCircle2, XCircle, Settings, ExternalLink, Copy, Key, Webhook, Eye, EyeOff } from 'lucide-react'
+import { CheckCircle2, XCircle, Settings, ExternalLink, Copy, Key, Webhook } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 
 type IntegrationItem = {
@@ -44,7 +44,6 @@ export default function IntegrationsPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [credentialModal, setCredentialModal] = useState<CredentialModal>(null)
-  const [apiKeyVisible, setApiKeyVisible] = useState(false)
   const [shopifyModal, setShopifyModal] = useState(false)
   const [shopifyDomain, setShopifyDomain] = useState('')
   const [shopifyConnecting, setShopifyConnecting] = useState(false)
@@ -105,8 +104,11 @@ export default function IntegrationsPage() {
     if (!shopifyIntegration?.connected) return
     setShopifyHealth(null)
     fetch('/api/shopify/health')
-      .then(r => r.json())
-      .then(data => setShopifyHealth(data))
+      .then(async r => {
+        if (!r.ok) return
+        const data = await r.json()
+        setShopifyHealth(data)
+      })
       .catch(() => {})
   }, [status])
 
@@ -115,24 +117,39 @@ export default function IntegrationsPage() {
     if (!status?.store || status.integrations.find(i => i.id === 'shopify')?.connected) return
 
     fetch('/api/shopify/pending-install')
-      .then(r => r.json())
-      .then(({ shop }: { shop: string | null }) => {
+      .then(async r => {
+        if (!r.ok) return
+        const { shop }: { shop: string | null } = await r.json()
         if (!shop) return
-        fetch('/api/shopify/connect', {
+        const res = await fetch('/api/shopify/connect', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ shop, storeId: status.store.id }),
         })
-          .then(r => r.json())
-          .then(data => {
-            if (!data.authUrl) return
-            // Auto-install: merchant came from Shopify install flow, not inside admin iframe
-            window.location.href = data.authUrl
-          })
-          .catch(() => {})
+        if (!res.ok) {
+          const data = await res.json().catch(() => null)
+          setActionMsg({ type: 'error', text: data?.error || 'Failed to initiate Shopify connection. Please try again.' })
+          return
+        }
+        const data = await res.json()
+        if (!data.authUrl) return
+        // Auto-install: merchant came from Shopify install flow, not inside admin iframe
+        window.location.href = data.authUrl
       })
-      .catch(() => {})
+      .catch(() => {
+        setActionMsg({ type: 'error', text: 'Failed to initiate Shopify connection. Please try again.' })
+      })
   }, [status])
+
+  // Close the Shopify modal on Escape
+  useEffect(() => {
+    if (!shopifyModal) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShopifyModal(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [shopifyModal])
 
   const updatePlatform = async (platform: string, data: Record<string, string>) => {
     const res = await fetch('/api/stores/current', {
@@ -262,7 +279,7 @@ export default function IntegrationsPage() {
           actionMsg.type === 'success' ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/40' : 'bg-red-600/20 text-red-300 border border-red-500/40'
         }`}>
           {actionMsg.text}
-          <button onClick={() => setActionMsg(null)} className="float-right ml-4 opacity-60 hover:opacity-100">&times;</button>
+          <button onClick={() => setActionMsg(null)} aria-label="Dismiss message" className="float-right ml-4 opacity-60 hover:opacity-100">&times;</button>
         </div>
       )}
 
@@ -340,14 +357,9 @@ export default function IntegrationsPage() {
                 {status?.store.apiKey ? (
                   <div className="mt-2 flex items-center space-x-2">
                     <code className="px-2 py-1 bg-slate-900/60 rounded text-xs font-mono text-cyan-300">
-                      {apiKeyVisible ? status.store.apiKey : `${status.store.apiKey.slice(0, 8)}...${status.store.apiKey.slice(-4)}`}
+                      {status.store.apiKey}
                     </code>
-                    <button onClick={() => setApiKeyVisible(!apiKeyVisible)} className="p-1 hover:bg-slate-600/40 rounded text-blue-300/60 hover:text-blue-200">
-                      {apiKeyVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                    <button onClick={() => handleCopy(status.store.apiKey!)} className="p-1 hover:bg-slate-600/40 rounded text-blue-300/60 hover:text-blue-200">
-                      <Copy className="w-4 h-4" />
-                    </button>
+                    <span className="text-xs text-blue-300/40">Stored securely server-side</span>
                   </div>
                 ) : (
                   <p className="text-xs text-blue-300/40 mt-1">Connect an e-commerce platform to generate an API key</p>
@@ -383,11 +395,17 @@ export default function IntegrationsPage() {
       )}
 
       {shopifyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShopifyModal(false)}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="shopify-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShopifyModal(false)}
+        >
           <div className="bg-slate-800 border border-blue-700/50 rounded-xl p-6 w-full max-w-md shadow-2xl shadow-cyan-500/10" onClick={e => e.stopPropagation()}>
             <div className="flex items-center space-x-3 mb-4">
               <span className="text-2xl">🛍️</span>
-              <h3 className="text-lg font-semibold text-white">Connect Shopify Store</h3>
+              <h3 id="shopify-modal-title" className="text-lg font-semibold text-white">Connect Shopify Store</h3>
             </div>
 
             {shopifyInputError && (
@@ -520,7 +538,7 @@ function IntegrationCard({
               <button onClick={onDisconnect} className="px-3 py-1.5 text-xs text-red-400 hover:bg-red-600/20 rounded-lg transition-colors border border-red-500/30 hover:border-red-500/50">
                 Disconnect
               </button>
-              <button className="p-1.5 hover:bg-slate-700/50 rounded-lg transition-colors">
+              <button aria-label={`${integration.name} settings`} className="p-1.5 hover:bg-slate-700/50 rounded-lg transition-colors">
                 <Settings className="w-4 h-4 text-blue-300/60" />
               </button>
             </>
@@ -632,6 +650,15 @@ function CredentialModalComponent({
   const [verifying, setVerifying] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (!modal) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [modal, onClose])
+
   if (!modal) return null
   const form = CREDENTIAL_FORMS[modal.type]
   const isMessaging = ['msg91', 'whatsapp', 'resend', 'onesignal'].includes(modal.type)
@@ -669,11 +696,17 @@ function CredentialModalComponent({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="credential-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div className="bg-slate-800 border border-blue-700/50 rounded-xl p-6 w-full max-w-md shadow-2xl shadow-cyan-500/10" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center space-x-3 mb-4">
           <span className="text-2xl">{modal.icon}</span>
-          <h3 className="text-lg font-semibold text-white">{form.title}</h3>
+          <h3 id="credential-modal-title" className="text-lg font-semibold text-white">{form.title}</h3>
         </div>
 
         <p className="text-sm text-blue-300/70 mb-5">{form.description}</p>

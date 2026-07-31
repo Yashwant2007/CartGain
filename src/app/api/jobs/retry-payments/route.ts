@@ -4,6 +4,7 @@ import { sendAlertOnError } from '@/lib/alerter'
 import { requireJobAuth } from '@/lib/job-auth'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   const authError = await requireJobAuth(request)

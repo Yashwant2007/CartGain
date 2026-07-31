@@ -36,12 +36,13 @@ export default function CampaignAnalyticsPage() {
   const campaignId = params.id as string
 
   useEffect(() => {
+    const controller = new AbortController()
     const loadAnalytics = async () => {
       if (!storeId || !campaignId) return
 
       try {
         setLoading(true)
-        const response = await fetch(`/api/campaigns/${campaignId}/analytics`)
+        const response = await fetch(`/api/campaigns/${campaignId}/analytics`, { signal: controller.signal })
         if (!response.ok) {
           if (response.status === 404) {
             setError('Campaign not found')
@@ -54,13 +55,15 @@ export default function CampaignAnalyticsPage() {
         const data = await response.json()
         setAnalytics(data.analytics)
       } catch (err) {
+        if ((err as Error).name === 'AbortError') return
         setError(err instanceof Error ? err.message : 'Failed to load analytics')
       } finally {
-        setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       }
     }
 
     loadAnalytics()
+    return () => controller.abort()
   }, [storeId, campaignId])
 
   if (loading || resolvingStore) {

@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 })
   } catch (error) {
     console.error('Cashfree payment webhook error:', error)
-    return NextResponse.json({ received: true }, { status: 200 })
+    // Return 500 so the gateway retries — a 200 would silently drop the event.
+    return NextResponse.json({ error: 'Processing failed' }, { status: 500 })
   }
 }

@@ -1,32 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/lib/auth'
+import crypto from 'crypto'
 
 export function isJobAuthorized(request: NextRequest): boolean {
-  const configuredSecret = (process.env.JOB_SECRET || '').replace(/^["']|["']$/g, '').trim()
+  const configuredSecret = (process.env.JOB_SECRET || process.env.CRON_SECRET || '')
+    .replace(/^["']|["']$/g, '')
+    .trim()
 
   if (!configuredSecret) {
-    console.warn('[JOB_AUTH] JOB_SECRET is not set — jobs are publicly accessible! Set a strong JOB_SECRET in production.')
-    return true
+    console.error('[JOB_AUTH] JOB_SECRET/CRON_SECRET is not set — job endpoints are disabled. Set a strong secret in production.')
+    return false
   }
 
   const headerSecret = request.headers.get('x-job-secret')
   const bearer = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
-  const querySecret = request.nextUrl.searchParams.get('secret')
 
   const authorized =
-    headerSecret === configuredSecret ||
-    bearer === configuredSecret ||
-    querySecret === configuredSecret
+    (headerSecret !== null && constantTimeEqual(headerSecret, configuredSecret)) ||
+    (bearer !== undefined && constantTimeEqual(bearer, configuredSecret))
 
   return authorized
+}
+function constantTimeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a)
+  const bufB = Buffer.from(b)
+  if (bufA.length !== bufB.length) return false
+  return crypto.timingSafeEqual(bufA, bufB)
 }
 
 export async function requireJobAuth(request: NextRequest): Promise<NextResponse | null> {
   if (isJobAuthorized(request)) return null
-
-  const session = await getServerSession(authOptions)
-  if (session?.user?.id) return null
 
   return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
 }

@@ -80,6 +80,16 @@ export default function HomePage() {
   const openModal = (platform: string) => setActiveModal(platform)
   const closeModal = () => setActiveModal(null)
 
+  // Close the integration modal on Escape
+  useEffect(() => {
+    if (!activeModal) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeModal()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [activeModal])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
       {/* Navigation */}
@@ -225,12 +235,12 @@ export default function HomePage() {
             {/* Demo cards - improved responsiveness */}
             <div className="mt-6 sm:mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               <div className="bg-slate-800/40 border border-blue-700/30 rounded-xl p-4 sm:p-6 backdrop-blur-sm">
-                <h4 className="text-base sm:text-lg font-bold text-white mb-2">See the Logic</h4>
+                <h2 className="text-base sm:text-lg font-bold text-white mb-2">See the Logic</h2>
                 <p className="text-blue-300 text-xs sm:text-sm mb-4">Curious about how we recover carts?</p>
                 <CartGainAnimatic />
               </div>
               <div className="bg-slate-800/40 border border-blue-700/30 rounded-xl p-4 sm:p-6 backdrop-blur-sm flex flex-col justify-center">
-                <h4 className="text-base sm:text-lg font-bold text-white mb-2">Full Technical Demo</h4>
+                <h2 className="text-base sm:text-lg font-bold text-white mb-2">Full Technical Demo</h2>
                 <p className="text-blue-300 text-xs sm:text-sm mb-4">Want to see the actual dashboard in action?</p>
                 <div className="relative bg-slate-700 rounded-lg overflow-hidden">
                   <video
@@ -752,7 +762,7 @@ export default function HomePage() {
 
           <div className="mt-12 bg-gradient-to-r from-blue-900/40 to-cyan-900/40 border border-blue-700/40 rounded-xl p-8 text-center">
             <p className="text-white font-semibold mb-4">Didn&apos;t find your answer?</p>
-            <a href="https://wa.me/918708718426" target="_blank" className="inline-block px-6 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/50 transition font-medium">
+            <a href="https://wa.me/918708718426" target="_blank" rel="noopener noreferrer" className="inline-block px-6 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/50 transition font-medium">
               <MessageSquare className="w-4 h-4 inline-block mr-1.5" />
               Contact Us - We&apos;ll Explain Everything
             </a>
@@ -1010,7 +1020,13 @@ export default function HomePage() {
 
       {/* Integration Modal */}
       {activeModal && INTEGRATION_DETAILS[activeModal as keyof typeof INTEGRATION_DETAILS] && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeModal}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="integration-modal-title"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={closeModal}
+        >
           <div className="bg-slate-800 border border-blue-700/50 rounded-2xl p-6 sm:p-8 max-w-lg w-full relative" onClick={(e) => e.stopPropagation()}>
             <button 
               onClick={closeModal}
@@ -1021,7 +1037,7 @@ export default function HomePage() {
             </button>
 
             <div className="mb-6">
-              <h3 className="text-2xl font-bold text-white mb-2">
+              <h3 id="integration-modal-title" className="text-2xl font-bold text-white mb-2">
                 {INTEGRATION_DETAILS[activeModal as keyof typeof INTEGRATION_DETAILS].title}
               </h3>
               <p className="text-blue-200">

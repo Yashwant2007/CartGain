@@ -9,6 +9,7 @@ import prisma from '@/lib/db'
 import { requireJobAuth } from '@/lib/job-auth'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 const CURSOR_KEY = 'store_cursor'
 

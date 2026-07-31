@@ -12,7 +12,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     return NextResponse.redirect(new URL('/?status=invalid_link', process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'))
   }
 
-  await markPaymentRecovered(token)
+  try {
+    await markPaymentRecovered(token)
+  } catch (error) {
+    console.error('[resume-payment] markPaymentRecovered failed:', error)
+  }
 
   const checkoutUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/checkout?resume=1&token=${token}`
   return NextResponse.redirect(new URL(checkoutUrl))

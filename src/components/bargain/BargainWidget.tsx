@@ -299,7 +299,7 @@ export default function BargainWidget({
                 </div>
               </div>
             </div>
-            <button onClick={closePanel} style={{ background: 'transparent', border: 'none', color: '#9fb6e0', cursor: 'pointer' }}>
+            <button onClick={closePanel} aria-label="Close bargain widget" style={{ background: 'transparent', border: 'none', color: '#9fb6e0', cursor: 'pointer', minWidth: 44, minHeight: 44 }}>
               <X size={20} />
             </button>
           </div>
@@ -429,13 +429,15 @@ export default function BargainWidget({
             <input
               type="text"
                 placeholder={sessionEnded ? 'Session ended' : 'Type your offer or message...'}
+              aria-label="Type your offer or message"
               value={input}
               onChange={e => setInput(e.target.value)}
               disabled={loading || sessionEnded}
+              autoComplete="off"
               style={{
                 flex: 1, padding: '10px 12px', borderRadius: 8,
                 border: '1px solid rgba(59,130,246,0.4)',
-                background: '#020617', color: '#fff', fontSize: 14,
+                background: '#020617', color: '#fff', fontSize: 16,
                 outline: 'none',
                 opacity: sessionEnded ? 0.4 : 1,
               }}
@@ -446,12 +448,14 @@ export default function BargainWidget({
             <button
               onClick={() => sendMessage()}
               disabled={loading || !input.trim() || sessionEnded}
+              aria-label="Send message"
               style={{
                 background: '#2563eb', color: 'white',
                 border: 'none', borderRadius: 8,
                 padding: '0 14px', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 6,
-                fontSize: 14, fontWeight: 600,
+                minWidth: 44, minHeight: 44,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                fontSize: 16, fontWeight: 600,
                 opacity: (loading || !input.trim() || sessionEnded) ? 0.5 : 1,
               }}
             >

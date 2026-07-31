@@ -53,11 +53,11 @@ export async function GET() {
     const dbStart = Date.now()
     await prisma.$queryRaw`SELECT 1`
     dbStatus.latencyMs = Date.now() - dbStart
-  } catch (e) {
+  } catch {
     dbStatus = {
       status: 'error',
       latencyMs: Date.now() - start,
-      error: e instanceof Error ? e.message : String(e),
+      error: 'Database unreachable',
     }
   }
 
@@ -74,10 +74,10 @@ export async function GET() {
     } else {
       redisStatus = { status: 'degraded', error: 'Queue not initialized (Redis unavailable, using direct processing)' }
     }
-  } catch (e) {
+  } catch {
     redisStatus = {
       status: 'degraded',
-      error: e instanceof Error ? e.message : String(e),
+      error: 'Redis unavailable',
     }
   }
 
@@ -96,7 +96,8 @@ export async function GET() {
       redis: redisStatus,
       env: {
         status: missing.length === 0 ? 'ok' : 'degraded',
-        missing,
+        // Never expose WHICH variables are missing — an attacker would learn our stack.
+        missing: missing.length > 0 ? ['N'] : [],
       },
       version: '1.0.0',
     },

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   LineChart,
   Line,
@@ -26,9 +26,15 @@ interface RevenueChartProps {
 }
 
 export function RevenueChart({ data, variant = 'line' }: RevenueChartProps) {
+  // Empty-state labels use Date.now() — generate them only after mount
+  // so server HTML always matches the first client render.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
   const chartData = useMemo(() => {
     if (!data || data.length === 0) {
       // Return mock data for empty state
+      if (!mounted) return []
       return Array.from({ length: 7 }, (_, i) => ({
         date: new Date(Date.now() - (6 - i) * 24 * 60 * 60 * 1000)
           .toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -38,7 +44,7 @@ export function RevenueChart({ data, variant = 'line' }: RevenueChartProps) {
       }))
     }
     return data
-  }, [data])
+  }, [data, mounted])
 
   const hasData = data && data.length > 0 && data.some((d) => d.revenue > 0)
 

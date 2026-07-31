@@ -24,7 +24,7 @@ function Toast({ message, type, onClose }: { message: string; type: 'error' | 'i
         <CheckCircle className="w-5 h-5 text-blue-300 mt-0.5 flex-shrink-0" />
       )}
       <p className="text-sm text-white/90 max-w-sm">{message}</p>
-      <button onClick={onClose} className="p-0.5 hover:bg-white/10 rounded transition">
+      <button onClick={onClose} aria-label="Close notification" className="p-0.5 hover:bg-white/10 rounded transition">
         <X className="w-4 h-4 text-white/60" />
       </button>
     </div>
@@ -218,7 +218,7 @@ export default function SignUpPage() {
                   required
                   autoComplete="name"
                   disabled={isLoading}
-                  className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base"
+                  className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-base"
                   placeholder="John Doe"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -236,7 +236,7 @@ export default function SignUpPage() {
                   required
                   autoComplete="email"
                   disabled={isLoading}
-                  className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base"
+                  className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-base"
                   placeholder="john@example.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -255,7 +255,7 @@ export default function SignUpPage() {
                   minLength={8}
                   autoComplete="new-password"
                   disabled={isLoading}
-                  className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base"
+                  className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-base"
                   placeholder="••••••••"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -271,7 +271,7 @@ export default function SignUpPage() {
                 type="text"
                 required
                 disabled={isLoading}
-                className="input bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base"
+                className="input bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-base"
                 placeholder="My Awesome Store"
                 value={formData.storeName}
                 onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
@@ -285,7 +285,7 @@ export default function SignUpPage() {
                 type="text"
                 required
                 disabled={isLoading}
-                className="input bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base"
+                className="input bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-base"
                 placeholder="mystore.com"
                 value={formData.storeDomain}
                 onChange={(e) => setFormData({ ...formData, storeDomain: e.target.value })}

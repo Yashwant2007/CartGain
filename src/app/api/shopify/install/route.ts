@@ -37,39 +37,48 @@ function verifyShopifyInstallHmac(query: URLSearchParams): boolean {
 // Shopify sends: GET /api/shopify/install?shop=xxx.myshopify.com&hmac=...&timestamp=...&host=...
 // We verify the HMAC, store the shop in a cookie, and redirect to login/signup.
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-  const shop = searchParams.get('shop')
+  try {
+    const { searchParams } = new URL(req.url)
+    const shop = searchParams.get('shop')
 
-  if (!shop || !shop.endsWith('.myshopify.com')) {
-    return NextResponse.redirect(new URL('/?error=invalid_shop', req.url))
-  }
+    if (!shop || !shop.endsWith('.myshopify.com')) {
+      return NextResponse.redirect(new URL('/?error=invalid_shop', req.url))
+    }
 
-  // Verify Shopify's HMAC signature (skip only if SHOPIFY_API_SECRET not configured yet)
-  if (process.env.SHOPIFY_API_SECRET) {
+    // Verify Shopify's HMAC signature — fail closed if the secret is not configured.
+    const secretConfigured = Boolean(process.env.SHOPIFY_API_SECRET)
+    if (!secretConfigured) {
+      console.error('[Shopify Install] SHOPIFY_API_SECRET is not configured — refusing install')
+      return NextResponse.redirect(new URL('/?error=not_configured', req.url))
+    }
+
     const valid = verifyShopifyInstallHmac(searchParams)
     if (!valid) {
       return NextResponse.redirect(new URL('/?error=invalid_signature', req.url))
     }
+
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://cart-gain.com'
+
+    // Redirect merchant to signup, carrying the shop domain so after they log in
+    // they land on the integrations page ready to connect.
+    const signupUrl = new URL('/signup', baseUrl)
+    signupUrl.searchParams.set('shop', shop)
+    signupUrl.searchParams.set('next', '/dashboard/integrations')
+
+    const res = NextResponse.redirect(signupUrl)
+
+    // Also set a short-lived cookie so the dashboard can auto-fill the shop domain
+    res.cookies.set('shopify_install_shop', shop, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 60 * 30, // 30 minutes
+      path: '/',
+    })
+
+    return res
+  } catch (error) {
+    console.error('Shopify install error:', error)
+    return NextResponse.redirect(new URL('/?error=install_failed', req.url))
   }
-
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://cart-gain.com'
-
-  // Redirect merchant to signup, carrying the shop domain so after they log in
-  // they land on the integrations page ready to connect.
-  const signupUrl = new URL('/signup', baseUrl)
-  signupUrl.searchParams.set('shop', shop)
-  signupUrl.searchParams.set('next', '/dashboard/integrations')
-
-  const res = NextResponse.redirect(signupUrl)
-
-  // Also set a short-lived cookie so the dashboard can auto-fill the shop domain
-  res.cookies.set('shopify_install_shop', shop, {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'lax',
-    maxAge: 60 * 30, // 30 minutes
-    path: '/',
-  })
-
-  return res
 }

@@ -26,8 +26,16 @@ export async function GET() {
       return NextResponse.json({ message: 'No store found for this account' }, { status: 404 })
     }
 
-    const decryptedApiKey = store.apiKey ? decrypt(store.apiKey) : null
     const decryptedApiSecret = store.apiSecret ? decrypt(store.apiSecret) : null
+    const apiKeyPreview = store.apiKey
+      ? `••••••••${decrypt(store.apiKey).slice(-6)}`
+      : null
+    // For Shopify the apiSecret is the shop domain (needed for display); for
+    // other platforms it is a live secret — never ship the raw value.
+    const shopDomain = decryptedApiSecret?.endsWith('.myshopify.com') ? decryptedApiSecret : null
+    const apiSecretPreview = decryptedApiSecret
+      ? `••••••••${decryptedApiSecret.slice(-6)}`
+      : null
 
     return NextResponse.json({
       store: {
@@ -38,8 +46,12 @@ export async function GET() {
         currency: store.currency,
         platform: store.platform,
         webhookUrl: store.webhookUrl,
-        apiKey: decryptedApiKey,
-        apiSecret: decryptedApiSecret,
+        // Never expose the raw access token to the browser — only a masked preview.
+        apiKey: apiKeyPreview,
+        // Shopify shops expose their myshopify.com domain via shopDomain; raw
+        // apiSecret is never sent to the browser.
+        shopDomain,
+        apiSecret: apiSecretPreview,
       },
       hasPassword: !!(await prisma.user.findUnique({
         where: { id: session.user.id },

@@ -27,18 +27,21 @@ export async function POST(request: NextRequest) {
   const topic = request.headers.get('x-shopify-topic') || 'unknown'
 
   try {
-    const { allowed, retryAfter } = await checkRateLimit(shopDomain)
-    if (!allowed) {
-      console.warn(`Rate limited webhook from ${shopDomain} (${topic})`)
-      return NextResponse.json({ error: 'Rate limited' }, { status: 429, headers: { 'Retry-After': String(retryAfter) } })
-    }
-
     const body = await request.text()
     const headers = request.headers
 
+    // Verify signature FIRST — never trust or rate-limit on attacker-controlled headers.
     const verified = verifyShopifyWebhook(body, headers)
     if (!verified) {
       return NextResponse.json({ message: 'Invalid signature' }, { status: 401 })
+    }
+
+    const { allowed, retryAfter } = await checkRateLimit(
+      `webhook_shopify_${request.headers.get('x-forwarded-for') || 'unknown'}`
+    )
+    if (!allowed) {
+      console.warn(`Rate limited webhook from ${shopDomain} (${topic})`)
+      return NextResponse.json({ error: 'Rate limited' }, { status: 429, headers: { 'Retry-After': String(retryAfter) } })
     }
 
     const data = JSON.parse(body)
@@ -92,7 +95,8 @@ export async function POST(request: NextRequest) {
     const elapsed = Date.now() - startTime
     console.error(`Webhook [${topic}] from ${shopDomain} — failed after ${elapsed}ms:`, error)
     sendAlertOnError('Shopify webhook', error, { topic, shopDomain, elapsed }).catch(() => {})
-    return NextResponse.json({ message: 'Webhook processed', elapsed })
+    // Return 500 so Shopify retries — a 200 here silently drops the event.
+    return NextResponse.json({ message: 'Webhook processing failed' }, { status: 500 })
   }
 }
 

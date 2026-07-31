@@ -3,12 +3,21 @@ import prisma from '@/lib/db'
 import { bargainStartSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerContext, type NegotiationContext } from '@/lib/services/bargain'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
 // POST /api/bargain/start — open a new bargain session (no auth — storefront)
 export async function POST(request: NextRequest) {
   try {
+    const rate = await checkSimpleRateLimit(`bargain_start_${request.headers.get('x-forwarded-for') || 'unknown'}`)
+    if (!rate.allowed) {
+      return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
+        status: 429,
+        headers: { 'Retry-After': String(rate.retryAfter) },
+      })
+    }
+
     const body = await request.json()
     const data = validateOrThrow(bargainStartSchema, body)
 

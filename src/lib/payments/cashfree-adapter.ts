@@ -16,7 +16,10 @@ export const cashfreeAdapter: GatewayAdapter = {
       .update(body)
       .digest('base64')
 
-    return signature === expected
+    const expectedBuf = Buffer.from(expected)
+    const receivedBuf = Buffer.from(signature)
+    if (expectedBuf.length !== receivedBuf.length) return false
+    return crypto.timingSafeEqual(expectedBuf, receivedBuf)
   },
 
   parseEvent(body: string, _headers: Headers): GatewayPaymentEvent | null {

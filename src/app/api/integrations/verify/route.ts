@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { z } from 'zod'
+import { lookup } from 'dns/promises'
 
 const verifySchema = z.object({
   platform: z.enum(['woocommerce', 'magento', 'bigcommerce', 'custom']),
@@ -11,6 +12,47 @@ const verifySchema = z.object({
 })
 
 export const dynamic = 'force-dynamic'
+
+function isPrivateIp(ip: string): boolean {
+  const v4 = ip.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])]
+    if (a === 10) return true
+    if (a === 127) return true
+    if (a === 169 && b === 254) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 192 && b === 168) return true
+    if (a === 0) return true
+    return false
+  }
+  const lower = ip.toLowerCase()
+  if (lower === '::1') return true
+  if (lower.startsWith('fc') || lower.startsWith('fd')) return true
+  if (lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')) return true
+  return false
+}
+
+async function assertSafeDomain(domain: string): Promise<void> {
+  let parsed: URL
+  try {
+    parsed = new URL(domain)
+  } catch {
+    throw new Error('Invalid store URL. Use a full URL like https://yourstore.com')
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error('Store URL must use https://')
+  }
+  if (!parsed.hostname) {
+    throw new Error('Store URL must include a domain name')
+  }
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(parsed.hostname) && isPrivateIp(parsed.hostname)) {
+    throw new Error('Store URL cannot point to a private address')
+  }
+  const addresses = await lookup(parsed.hostname, { all: true })
+  if (addresses.some(a => isPrivateIp(a.address))) {
+    throw new Error('Store URL resolves to a private address and cannot be verified')
+  }
+}
 
 async function verifyWooCommerce(domain: string, consumerKey: string, consumerSecret: string) {
   const baseUrl = domain.replace(/\/+$/, '')
@@ -88,6 +130,12 @@ export async function POST(req: NextRequest) {
 
     const { platform, domain, apiKey, apiSecret } = parsed.data
     let result: { storeName: string }
+
+    // SSRF guard: never fetch user-supplied hosts that resolve to private/loopback
+    // networks or use non-https schemes.
+    if (platform !== 'bigcommerce') {
+      await assertSafeDomain(domain)
+    }
 
     switch (platform) {
       case 'woocommerce':

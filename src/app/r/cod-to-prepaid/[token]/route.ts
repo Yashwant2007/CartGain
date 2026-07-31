@@ -12,7 +12,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     return NextResponse.redirect(new URL('/?status=invalid_link', process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'))
   }
 
-  await markNudgeConverted(token)
+  try {
+    await markNudgeConverted(token)
+  } catch (error) {
+    console.error('[cod-to-prepaid] markNudgeConverted failed:', error)
+  }
 
   const checkoutUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/checkout?prepaid=1&token=${token}`
   return NextResponse.redirect(new URL(checkoutUrl))

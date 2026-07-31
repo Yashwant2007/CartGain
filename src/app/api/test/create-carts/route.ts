@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { isTestEndpointAllowed } from '@/lib/job-auth'
+import { isTestEndpointAllowed, requireJobAuth } from '@/lib/job-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +8,9 @@ export async function GET(request: NextRequest) {
   if (!isTestEndpointAllowed()) {
     return NextResponse.json({ error: 'Not available' }, { status: 403 })
   }
+
+  const authError = await requireJobAuth(request)
+  if (authError) return authError
 
   try {
     let user = await prisma.user.findUnique({

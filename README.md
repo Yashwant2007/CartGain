@@ -323,12 +323,17 @@ Configure `ORDER_PAYMENT_FAILED` event in Cashfree Dashboard:
 
 ### Cron Jobs
 
-For the retry-payments job, schedule a cron to call:
-```
-GET/POST https://yourdomain.com/api/jobs/retry-payments?secret=YOUR_JOB_SECRET
-```
+Set `CRON_SECRET` (same value as `JOB_SECRET`) in Vercel → Settings → Environment Variables.
+Vercel automatically sends it as `Authorization: Bearer <CRON_SECRET>` on every cron request —
+no `?secret=` query parameter is used (it leaks into function logs).
 
-Recommended schedule: every 15 minutes for payment retries.
+Cron endpoints:
+- `GET /api/jobs/process-carts` — every 5 minutes
+- `GET /api/jobs/retry-payments` — every 15 minutes
+- `GET /api/jobs/process-billing` — every 30 minutes
+- `GET /api/jobs/weekly-report` — weekly
+
+Cron routes are disabled (401) until a secret is configured — fail closed by design.
 
 ## Testing
 

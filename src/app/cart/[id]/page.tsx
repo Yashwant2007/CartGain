@@ -1,10 +1,17 @@
 import Image from 'next/image'
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import prisma from '@/lib/db'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, ShoppingBag, Zap } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+  title: 'Complete Your Purchase | CartGain',
+  description: 'You left something in your cart. Finish your checkout quickly and securely.',
+  robots: { index: false, follow: false },
+}
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$', INR: '₹', EUR: '€', GBP: '£', JPY: '¥',

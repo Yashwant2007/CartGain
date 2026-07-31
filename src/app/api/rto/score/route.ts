@@ -19,6 +19,15 @@ export async function POST(req: NextRequest) {
     if (!storeId || !orderId || !order || !customer || !address) {
       return NextResponse.json({ error: 'Missing required fields: storeId, orderId, order, customer, address' }, { status: 400 })
     }
+    if (typeof storeId !== 'string' || typeof orderId !== 'string') {
+      return NextResponse.json({ error: 'storeId and orderId must be strings' }, { status: 400 })
+    }
+    if (typeof order !== 'object' || order === null || typeof customer !== 'object' || customer === null || typeof address !== 'object' || address === null) {
+      return NextResponse.json({ error: 'order, customer and address must be objects' }, { status: 400 })
+    }
+    if (velocity !== undefined && (typeof velocity !== 'object' || velocity === null)) {
+      return NextResponse.json({ error: 'velocity must be an object' }, { status: 400 })
+    }
 
     const store = await prisma.store.findFirst({ where: { id: storeId, userId: session.user.id } })
     if (!store) {

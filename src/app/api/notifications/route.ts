@@ -127,6 +127,6 @@ export async function GET() {
         { status: 500 }
       )
     }
-    return NextResponse.json({ notifications: [] })
+    return NextResponse.json({ error: 'Something went wrong', notifications: [] }, { status: 500 })
   }
 }

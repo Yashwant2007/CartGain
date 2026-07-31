@@ -24,6 +24,7 @@ export default function CartsPage() {
   const { storeId, loading: resolving, error: storeError } = useResolvedStoreId()
   const [carts, setCarts] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [sortField, setSortField] = useState<'abandonedAt' | 'totalValue'>('abandonedAt')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -33,11 +34,20 @@ export default function CartsPage() {
   useEffect(() => {
     if (!storeId) return
     setLoading(true)
-    fetch(`/api/carts?storeId=${storeId}`)
-      .then(res => res.ok ? res.json() : { carts: [] })
+    setError(null)
+    const controller = new AbortController()
+    fetch(`/api/carts?storeId=${storeId}`, { signal: controller.signal })
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to load carts')
+        return res.json()
+      })
       .then(data => setCarts(data.carts || []))
-      .catch(() => setCarts([]))
-      .finally(() => setLoading(false))
+      .catch(err => {
+        if (err?.name === 'AbortError') return
+        setError('Failed to load carts')
+      })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
   }, [storeId])
 
   const toggleSort = (field: typeof sortField) => {
@@ -91,6 +101,7 @@ export default function CartsPage() {
           <input
             type="text"
             placeholder="Search by name, email or phone..."
+            aria-label="Search carts"
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(0) }}
             className="w-full pl-9 pr-3 py-2 bg-slate-800/40 border border-blue-700/30 rounded-lg text-sm text-white placeholder-blue-400/50 focus:border-blue-500/70 outline-none"
@@ -100,6 +111,10 @@ export default function CartsPage() {
 
       {isLoading ? (
         <div className="space-y-3">{[1,2,3,4,5].map(i => <div key={i} className="h-14 bg-slate-800/30 rounded-xl animate-pulse" />)}</div>
+      ) : error ? (
+        <div className="bg-slate-800/40 border border-red-800/40 rounded-xl p-12 text-center">
+          <p className="text-red-300 text-sm">{error}</p>
+        </div>
       ) : paged.length === 0 ? (
         <div className="bg-slate-800/40 border border-blue-700/20 rounded-xl p-12 text-center">
           <ShoppingCart className="w-12 h-12 text-blue-300/20 mx-auto mb-4" />
@@ -164,9 +179,9 @@ export default function CartsPage() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 text-sm">
-              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="p-2 rounded-lg bg-slate-800/40 border border-blue-700/20 text-blue-300/70 hover:bg-slate-700/40 disabled:opacity-30 disabled:cursor-not-allowed"><ChevronLeft className="w-4 h-4" /></button>
+              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} aria-label="Previous page" className="p-2 rounded-lg bg-slate-800/40 border border-blue-700/20 text-blue-300/70 hover:bg-slate-700/40 disabled:opacity-30 disabled:cursor-not-allowed"><ChevronLeft className="w-4 h-4" /></button>
               <span className="text-blue-300/60 px-2">{page + 1} / {totalPages}</span>
-              <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="p-2 rounded-lg bg-slate-800/40 border border-blue-700/20 text-blue-300/70 hover:bg-slate-700/40 disabled:opacity-30 disabled:cursor-not-allowed"><ChevronRight className="w-4 h-4" /></button>
+              <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} aria-label="Next page" className="p-2 rounded-lg bg-slate-800/40 border border-blue-700/20 text-blue-300/70 hover:bg-slate-700/40 disabled:opacity-30 disabled:cursor-not-allowed"><ChevronRight className="w-4 h-4" /></button>
             </div>
           )}
         </>

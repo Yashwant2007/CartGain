@@ -1,6 +1,13 @@
+import type { Metadata } from 'next'
 import BargainWidget from '@/components/bargain/BargainWidget'
 
 export const dynamic = 'force-static'
+
+export const metadata: Metadata = {
+  title: 'Bargain Widget | CartGain',
+  description: 'Real-time price negotiation for your cart.',
+  robots: { index: false, follow: false },
+}
 
 // Public embed page — iframe-able on Shopify product pages.
 // Query params: storeId, shopifyProductId, variantId, originalPrice, currency, cartToken, customerEmail, customerPhone, productTitle

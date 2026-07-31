@@ -71,7 +71,7 @@ export default function ContactPage() {
             <Link href="/" className="hover:text-white transition">Home</Link>
           </div>
           <p className="mt-4 text-xs text-blue-400/60">
-            &copy; {new Date().getFullYear()} CartGain. All rights reserved.
+            &copy; 2026 CartGain. All rights reserved.
           </p>
         </div>
       </div>

@@ -42,9 +42,10 @@ function SetupContent() {
     }
     if (status !== 'authenticated') return
 
+    const controller = new AbortController()
     const checkStore = async () => {
       try {
-        const res = await fetch('/api/stores/current')
+        const res = await fetch('/api/stores/current', { signal: controller.signal })
         if (res.ok) {
           const data = await res.json()
           if (data?.hasPassword && !requirePassword) {
@@ -60,12 +61,14 @@ function SetupContent() {
             }))
           }
         }
-      } catch {
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return
         // Show setup form
       }
-      setChecking(false)
+      if (!controller.signal.aborted) setChecking(false)
     }
     checkStore()
+    return () => controller.abort()
   }, [status, router, requirePassword])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -174,7 +177,7 @@ function SetupContent() {
                   type="text"
                   required
                   disabled={isLoading}
-                  className="input w-full bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base rounded-lg px-4 py-3"
+                  className="input w-full bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-base rounded-lg px-4 py-3"
                   placeholder="My Awesome Store"
                   value={formData.storeName}
                   onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
@@ -188,7 +191,7 @@ function SetupContent() {
                   type="text"
                   required
                   disabled={isLoading}
-                  className="input w-full bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base rounded-lg px-4 py-3"
+                  className="input w-full bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-base rounded-lg px-4 py-3"
                   placeholder="mystore.com"
                   value={formData.storeDomain}
                   onChange={(e) => setFormData({ ...formData, storeDomain: e.target.value })}
@@ -209,7 +212,7 @@ function SetupContent() {
                 minLength={8}
                 autoComplete="new-password"
                 disabled={isLoading}
-                className="input w-full pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base rounded-lg px-4 py-3"
+                className="input w-full pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-base rounded-lg px-4 py-3"
                 placeholder="At least 8 characters"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value, confirmPassword: '' })}
@@ -229,7 +232,7 @@ function SetupContent() {
                 minLength={8}
                 autoComplete="new-password"
                 disabled={isLoading}
-                className="input w-full pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base rounded-lg px-4 py-3"
+                className="input w-full pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-base rounded-lg px-4 py-3"
                 placeholder="Re-enter password"
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}

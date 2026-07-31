@@ -6,17 +6,22 @@ import prisma from '@/lib/db'
 export const dynamic = 'force-dynamic'
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const user = await prisma.user.findUnique({ where: { email: session.user.email } })
-  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  const key = await prisma.apiKey.findFirst({
-    where: { id: params.id, userId: user.id },
-  })
-  if (!key) return NextResponse.json({ error: 'API key not found' }, { status: 404 })
+    const key = await prisma.apiKey.findFirst({
+      where: { id: params.id, userId: user.id },
+    })
+    if (!key) return NextResponse.json({ error: 'API key not found' }, { status: 404 })
 
-  await prisma.apiKey.delete({ where: { id: params.id } })
-  return NextResponse.json({ success: true })
+    await prisma.apiKey.delete({ where: { id: params.id } })
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Delete API key error:', error)
+    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
+  }
 }

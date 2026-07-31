@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { razorpay, PLANS } from "@/lib/payment";
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
+    const rateLimitResult = await checkRateLimit('payments-create-order', {
+      maxAttempts: 10,
+      windowMs: 5 * 60 * 1000,
+    })
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+    }
+
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.email) {
@@ -30,7 +39,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const billingPeriod = period || 'monthly';
+    const billingPeriod = period === 'yearly' ? 'yearly' : 'monthly';
     const expectedPrice = billingPeriod === 'yearly' ? planConfig.yearlyPrice : planConfig.price;
     const serverAmount = Math.round(expectedPrice * 100);
 

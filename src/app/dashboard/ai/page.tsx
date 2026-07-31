@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import {
   BrainCircuit, TrendingUp, DollarSign, BarChart3, Target,
@@ -15,14 +15,24 @@ export default function AIPage() {
   const [activeTab, setActiveTab] = useState<TabType>('coach')
   const [loading, setLoading] = useState(false)
   const [healthScore, setHealthScore] = useState<{ score: number; components: Array<{ name: string; score: number; max: number }> } | null>(null)
+  const [healthError, setHealthError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!storeId) return
     setLoading(true)
-    fetch(`/api/ai/health-score?storeId=${storeId}`)
-      .then(r => r.json())
+    setHealthError(null)
+    const controller = new AbortController()
+    fetch(`/api/ai/health-score?storeId=${storeId}`, { signal: controller.signal })
+      .then(async r => {
+        if (!r.ok) throw new Error('Failed to load health score')
+        return r.json()
+      })
       .then(d => { setHealthScore(d); setLoading(false) })
-      .catch(() => setLoading(false))
+      .catch(err => {
+        if (err?.name === 'AbortError') return
+        setHealthError('Failed to load health score'); setLoading(false)
+      })
+    return () => controller.abort()
   }, [storeId])
 
   const tabs: Array<{ key: TabType; label: string; icon: any }> = [
@@ -50,6 +60,12 @@ export default function AIPage() {
         </div>
         {healthScore && <HealthScoreBadge score={healthScore.score} loading={loading} />}
       </div>
+
+      {healthError && (
+        <div className="border border-red-800/40 bg-red-900/20 rounded-lg px-4 py-2.5">
+          <p className="text-red-300 text-sm">{healthError}</p>
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="flex flex-wrap gap-2 border-b border-blue-800/30 pb-2">
@@ -96,12 +112,18 @@ function HealthScoreBadge({ score, loading }: { score: number; loading: boolean 
 function RevenueCoach({ storeId }: { storeId: string | null }) {
   const [suggestions, setSuggestions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const abortLoad = useRef<(() => void) | null>(null)
 
   const load = useCallback(async () => {
     if (!storeId) return
     setLoading(true)
+    setError(null)
+    const controller = new AbortController()
+    abortLoad.current = () => controller.abort()
     try {
-      const res = await fetch(`/api/ai/coach?storeId=${storeId}`)
+      const res = await fetch(`/api/ai/coach?storeId=${storeId}`, { signal: controller.signal })
+      if (!res.ok) throw new Error('Failed to load suggestions')
       const data = await res.json()
       const fresh = data.suggestions || []
       const saved = (data.existing || []).map((s: any) => ({
@@ -113,10 +135,18 @@ function RevenueCoach({ storeId }: { storeId: string | null }) {
         _saved: true,
       }))
       setSuggestions([...saved, ...fresh])
-    } catch {} finally { setLoading(false) }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return
+      setError('Failed to load suggestions')
+    } finally {
+      if (!controller.signal.aborted) setLoading(false)
+    }
   }, [storeId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    return () => abortLoad.current?.()
+  }, [load])
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-blue-400 animate-spin" /></div>
 
@@ -124,11 +154,15 @@ function RevenueCoach({ storeId }: { storeId: string | null }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-white">AI Revenue Coach</h2>
-        <button onClick={load} className="p-2 rounded-lg hover:bg-slate-800/40 text-blue-300/60 hover:text-blue-300 transition">
+        <button onClick={load} aria-label="Refresh suggestions" className="p-2 rounded-lg hover:bg-slate-800/40 text-blue-300/60 hover:text-blue-300 transition">
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
-      {suggestions.length === 0 ? (
+      {error ? (
+        <div className="border border-red-800/40 bg-red-900/20 rounded-xl px-4 py-3">
+          <p className="text-red-300 text-sm">{error}</p>
+        </div>
+      ) : suggestions.length === 0 ? (
         <div className="text-center py-12 text-blue-300/50">
           <Sparkles className="w-12 h-12 mx-auto mb-3 opacity-50" />
           <p>No suggestions yet. Start a campaign to get AI-powered recommendations.</p>
@@ -276,15 +310,26 @@ function MetricBox({ label, value, icon: Icon, color }: { label: string; value: 
 function Benchmarks({ storeId }: { storeId: string | null }) {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!storeId) return
-    fetch(`/api/ai/benchmarks?storeId=${storeId}`)
-      .then(r => r.json()).then(d => { setData(d); setLoading(false) })
-      .catch(() => setLoading(false))
+    const controller = new AbortController()
+    fetch(`/api/ai/benchmarks?storeId=${storeId}`, { signal: controller.signal })
+      .then(async r => {
+        if (!r.ok) throw new Error('Failed to load benchmark data')
+        return r.json()
+      })
+      .then(d => { setData(d); setLoading(false) })
+      .catch(err => {
+        if (err?.name === 'AbortError') return
+        setError('Failed to load benchmark data'); setLoading(false)
+      })
+    return () => controller.abort()
   }, [storeId])
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-blue-400 animate-spin" /></div>
+  if (error) return <div className="border border-red-800/40 bg-red-900/20 rounded-xl px-4 py-3 text-center"><p className="text-red-300 text-sm">{error}</p></div>
   if (!data) return <p className="text-blue-300/50 text-center py-12">No benchmark data available</p>
 
   const { comparison } = data
@@ -337,15 +382,26 @@ function Benchmarks({ storeId }: { storeId: string | null }) {
 function ROIDashboard({ storeId }: { storeId: string | null }) {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!storeId) return
-    fetch(`/api/ai/roi?storeId=${storeId}`)
-      .then(r => r.json()).then(d => { setData(d); setLoading(false) })
-      .catch(() => setLoading(false))
+    const controller = new AbortController()
+    fetch(`/api/ai/roi?storeId=${storeId}`, { signal: controller.signal })
+      .then(async r => {
+        if (!r.ok) throw new Error('Failed to load ROI data')
+        return r.json()
+      })
+      .then(d => { setData(d); setLoading(false) })
+      .catch(err => {
+        if (err?.name === 'AbortError') return
+        setError('Failed to load ROI data'); setLoading(false)
+      })
+    return () => controller.abort()
   }, [storeId])
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-blue-400 animate-spin" /></div>
+  if (error) return <div className="border border-red-800/40 bg-red-900/20 rounded-xl px-4 py-3 text-center"><p className="text-red-300 text-sm">{error}</p></div>
   if (!data) return <p className="text-blue-300/50 text-center py-12">No ROI data available</p>
 
   return (
@@ -386,20 +442,35 @@ function ROIDashboard({ storeId }: { storeId: string | null }) {
 function WeeklyReport({ storeId }: { storeId: string | null }) {
   const [report, setReport] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const abortLoad = useRef<(() => void) | null>(null)
 
   const load = useCallback(async () => {
     if (!storeId) return
     setLoading(true)
+    setError(null)
+    const controller = new AbortController()
+    abortLoad.current = () => controller.abort()
     try {
-      const res = await fetch(`/api/ai/weekly-report?storeId=${storeId}`)
+      const res = await fetch(`/api/ai/weekly-report?storeId=${storeId}`, { signal: controller.signal })
+      if (!res.ok) throw new Error('Failed to load weekly report')
       const data = await res.json()
       setReport(data.report || data)
-    } catch {} finally { setLoading(false) }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return
+      setError('Failed to load weekly report')
+    } finally {
+      if (!controller.signal.aborted) setLoading(false)
+    }
   }, [storeId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    return () => abortLoad.current?.()
+  }, [load])
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-blue-400 animate-spin" /></div>
+  if (error) return <div className="border border-red-800/40 bg-red-900/20 rounded-xl px-4 py-3 text-center"><p className="text-red-300 text-sm">{error}</p></div>
   if (!report) return <p className="text-blue-300/50 text-center py-12">No report available yet</p>
 
   return (
@@ -409,7 +480,7 @@ function WeeklyReport({ storeId }: { storeId: string | null }) {
           <h2 className="text-lg font-semibold text-white">{report.title}</h2>
           <p className="text-xs text-blue-300/50">AI-generated weekly summary</p>
         </div>
-        <button onClick={load} className="p-2 rounded-lg hover:bg-slate-800/40 text-blue-300/60 hover:text-blue-300 transition">
+        <button onClick={load} aria-label="Refresh weekly report" className="p-2 rounded-lg hover:bg-slate-800/40 text-blue-300/60 hover:text-blue-300 transition">
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>

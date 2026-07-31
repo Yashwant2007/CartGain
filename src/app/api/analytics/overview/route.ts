@@ -221,7 +221,11 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
 export async function GET(request: NextRequest) {
   try {
     const storeId = request.nextUrl.searchParams.get('storeId')
-    const days = parseInt(request.nextUrl.searchParams.get('days') || '30')
+    const daysParam = request.nextUrl.searchParams.get('days') || '30'
+    const days = parseInt(daysParam, 10)
+    if (!Number.isFinite(days) || days < 1 || days > 365) {
+      return NextResponse.json({ message: 'days must be between 1 and 365' }, { status: 400 })
+    }
     const session = await getServerSession(authOptions)
 
     if (!session?.user?.id) {

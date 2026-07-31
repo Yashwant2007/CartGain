@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { requireEnv } from "./env";
 
 let razorpayInstance: any = null;
 
@@ -6,8 +7,8 @@ if (typeof window === 'undefined') {
   try {
     const Razorpay = require("razorpay");
     razorpayInstance = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID!,
-      key_secret: process.env.RAZORPAY_KEY_SECRET!,
+      key_id: requireEnv("RAZORPAY_KEY_ID", "Razorpay payment processing"),
+      key_secret: requireEnv("RAZORPAY_KEY_SECRET", "Razorpay payment processing"),
     });
   } catch (e) {
     console.error("Failed to load Razorpay:", e);
@@ -18,7 +19,7 @@ export const razorpay = razorpayInstance;
 
 export function verifyWebhookSignature(body: string, signature: string): boolean {
   const expected = crypto
-    .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET!)
+    .createHmac("sha256", requireEnv("RAZORPAY_WEBHOOK_SECRET", "webhook signature verification"))
     .update(body)
     .digest("hex");
 

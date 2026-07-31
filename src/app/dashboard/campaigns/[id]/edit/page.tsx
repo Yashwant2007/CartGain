@@ -46,12 +46,13 @@ export default function EditCampaignPage() {
   const campaignId = params.id as string
 
   useEffect(() => {
+    const controller = new AbortController()
     const loadCampaign = async () => {
       if (!storeId || !campaignId) return
 
       try {
         setLoading(true)
-        const response = await fetch(`/api/campaigns/${campaignId}`)
+        const response = await fetch(`/api/campaigns/${campaignId}`, { signal: controller.signal })
         if (!response.ok) {
           if (response.status === 404) {
             setError('Campaign not found')
@@ -76,13 +77,15 @@ export default function EditCampaignPage() {
           discountCode: data.campaign.discountCode || '',
         })
       } catch (err) {
+        if ((err as Error).name === 'AbortError') return
         setError(err instanceof Error ? err.message : 'Failed to load campaign')
       } finally {
-        setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       }
     }
 
     loadCampaign()
+    return () => controller.abort()
   }, [storeId, campaignId])
 
   const handleChannelToggle = (channel: string) => {
@@ -232,6 +235,7 @@ export default function EditCampaignPage() {
           </div>
           <button
             onClick={() => setFormData({ ...formData, aiOptimized: !formData.aiOptimized })}
+            aria-label="AI optimization"
             className={`relative w-12 h-6 rounded-full transition-colors ${
               formData.aiOptimized ? 'bg-cyan-500' : 'bg-slate-600'
             }`}
@@ -294,6 +298,7 @@ export default function EditCampaignPage() {
             </div>
             <button
               onClick={() => setFormData({ ...formData, discountEnabled: !formData.discountEnabled })}
+              aria-label="Enable discount"
               className={`relative w-12 h-6 rounded-full transition-colors ${
                 formData.discountEnabled ? 'bg-cyan-500' : 'bg-slate-600'
               }`}

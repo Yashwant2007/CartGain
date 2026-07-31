@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkRateLimit } from '@/lib/rate-limit'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
@@ -12,28 +13,41 @@ const schema = z.object({
 })
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const rateLimitResult = await checkRateLimit('auth-2fa-disable', {
+      maxAttempts: 5,
+      windowMs: 15 * 60 * 1000,
+    })
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: 'Too many attempts. Please try again later.' }, { status: 429 })
+    }
 
-  const body = await request.json()
-  const parsed = schema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: 'Invalid code' }, { status: 400 })
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const user = await prisma.user.findUnique({ where: { email: session.user.email } })
-  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    const body = await request.json()
+    const parsed = schema.safeParse(body)
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid code' }, { status: 400 })
 
-  if (!user.totpEnabled || !user.totpSecret) {
-    return NextResponse.json({ error: '2FA is not enabled' }, { status: 400 })
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+    if (!user.totpEnabled || !user.totpSecret) {
+      return NextResponse.json({ error: '2FA is not enabled' }, { status: 400 })
+    }
+
+    if (!verifyTotpCode(user.totpSecret, parsed.data.code)) {
+      return NextResponse.json({ error: 'Invalid code' }, { status: 400 })
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { totpEnabled: false, totpSecret: null },
+    })
+
+    return NextResponse.json({ success: true, message: '2FA disabled successfully' })
+  } catch (error) {
+    console.error('2FA disable error:', error)
+    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
   }
-
-  if (!verifyTotpCode(user.totpSecret, parsed.data.code)) {
-    return NextResponse.json({ error: 'Invalid code' }, { status: 400 })
-  }
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { totpEnabled: false, totpSecret: null },
-  })
-
-  return NextResponse.json({ success: true, message: '2FA disabled successfully' })
 }

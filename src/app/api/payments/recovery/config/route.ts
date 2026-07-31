@@ -58,7 +58,30 @@ export async function PUT(req: NextRequest) {
 
     const data: Record<string, unknown> = {}
     for (const field of allowedFields) {
-      if (field in updates) data[field] = updates[field]
+      if (!(field in updates)) continue
+      const value = updates[field]
+      if (field === 'paymentRecoveryEnabled' && typeof value !== 'boolean') {
+        return NextResponse.json({ error: 'paymentRecoveryEnabled must be a boolean' }, { status: 400 })
+      }
+      if (field === 'paymentIncentive') {
+        if (typeof value === 'number' && !Number.isFinite(value)) {
+          return NextResponse.json({ error: 'paymentIncentive must be a finite number' }, { status: 400 })
+        }
+        if (typeof value === 'object' && value !== null) {
+          const nested = Object.values(value as Record<string, unknown>)
+          if (!nested.every(v => typeof v === 'number' && Number.isFinite(v))) {
+            return NextResponse.json({ error: 'paymentIncentive values must be finite numbers' }, { status: 400 })
+          }
+        } else if (typeof value !== 'number') {
+          return NextResponse.json({ error: 'paymentIncentive must be a number or number map' }, { status: 400 })
+        }
+      }
+      if (['paymentRetrySchedule', 'paymentChannelPriority', 'paymentEnabledGateways'].includes(field)) {
+        if (!Array.isArray(value) || !value.every(v => typeof v === 'string' || typeof v === 'number')) {
+          return NextResponse.json({ error: `${field} must be an array of strings or numbers` }, { status: 400 })
+        }
+      }
+      data[field] = value
     }
 
     const config = await prisma.merchantConfig.upsert({

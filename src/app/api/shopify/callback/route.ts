@@ -36,28 +36,31 @@ export async function GET(req: NextRequest) {
       return redirectWithCleanup('/dashboard/integrations?shopify_error=Missing+parameters', req.url)
     }
 
+    if (!state) {
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=Missing+state', req.url)
+    }
+
     let storeId: string | null = null
-    if (state) {
-      try {
-        const secret = process.env.NEXTAUTH_SECRET
-        const dotIndex = state.lastIndexOf('.')
-        if (!secret || dotIndex === -1) throw new Error('Invalid state format')
+    try {
+      const secret = process.env.NEXTAUTH_SECRET
+      const dotIndex = state.lastIndexOf('.')
+      if (!secret || dotIndex === -1) throw new Error('Invalid state format')
 
-        const payload = state.slice(0, dotIndex)
-        const receivedSig = state.slice(dotIndex + 1)
-        const expectedSig = crypto.createHmac('sha256', secret).update(payload).digest('hex')
+      const payload = state.slice(0, dotIndex)
+      const receivedSig = state.slice(dotIndex + 1)
+      const expectedSig = crypto.createHmac('sha256', secret).update(payload).digest('hex')
 
-        const sigValid = crypto.timingSafeEqual(
-          Buffer.from(receivedSig.padEnd(64, '0').slice(0, 64), 'hex'),
-          Buffer.from(expectedSig, 'hex'),
-        )
-        if (!sigValid) throw new Error('Signature mismatch')
+      const sigValid = crypto.timingSafeEqual(
+        Buffer.from(receivedSig.padEnd(64, '0').slice(0, 64), 'hex'),
+        Buffer.from(expectedSig, 'hex'),
+      )
+      if (!sigValid) throw new Error('Signature mismatch')
 
-        const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString())
-        storeId = decoded.storeId
-      } catch {
-        return redirectWithCleanup('/dashboard/integrations?shopify_error=Invalid+state', req.url)
-      }
+      const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString())
+      storeId = decoded.storeId
+      if (!storeId || typeof storeId !== 'string') throw new Error('Invalid storeId in state')
+    } catch {
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=Invalid+state', req.url)
     }
 
     const apiKey = process.env.SHOPIFY_API_KEY

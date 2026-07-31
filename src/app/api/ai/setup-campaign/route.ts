@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
@@ -11,6 +12,11 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    }
+
+    const aiRate = await checkSimpleRateLimit(`ai_${session.user.id}`)
+    if (!aiRate.allowed) {
+      return NextResponse.json({ message: 'Too many AI requests. Please try again later.' }, { status: 429 })
     }
 
     const { storeId } = await request.json()

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import {
@@ -78,6 +78,7 @@ export default function BargainDashboardPage() {
 
   const [products, setProducts] = useState<BargainProduct[]>([])
   const [loadingProducts, setLoadingProducts] = useState(false)
+  const [productsError, setProductsError] = useState<string | null>(null)
   const [newProduct, setNewProduct] = useState<Partial<BargainProduct>>({
     shopifyProductId: '',
     productTitle: '',
@@ -90,12 +91,15 @@ export default function BargainDashboardPage() {
   const [sessions, setSessions] = useState<BargainSession[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loadingSessions, setLoadingSessions] = useState(false)
+  const [sessionsError, setSessionsError] = useState<string | null>(null)
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [sessionMessages, setSessionMessages] = useState<
     Array<{ id: string; role: string; content: string; offeredPrice: number | null; createdAt: string }>
   >([])
   const [loadingMessages, setLoadingMessages] = useState(false)
+  const [messagesError, setMessagesError] = useState<string | null>(null)
+  const abortRef = useRef<(() => void)[]>([])
 
   useEffect(() => {
     if (!storeError) return
@@ -108,16 +112,23 @@ export default function BargainDashboardPage() {
     void fetchConfig()
     void fetchProducts()
     void fetchSessions()
+    return () => {
+      abortRef.current.forEach(abort => abort())
+      abortRef.current = []
+    }
   }, [storeId])
 
   async function fetchConfig() {
+    const controller = new AbortController()
+    abortRef.current.push(() => controller.abort())
     try {
-      const res = await fetch(`/api/bargain/config?storeId=${storeId}`)
+      const res = await fetch(`/api/bargain/config?storeId=${storeId}`, { signal: controller.signal })
       if (!res.ok) throw new Error('Failed to load config')
       const data = await res.json()
       setConfig(data.config)
       setConfigForm(data.config)
     } catch (err: any) {
+      if (err?.name === 'AbortError') return
       setConfigMessage({ type: 'error', text: err.message ?? 'Failed to load config' })
     }
   }
@@ -150,15 +161,19 @@ export default function BargainDashboardPage() {
   async function fetchProducts() {
     if (!storeId) return
     setLoadingProducts(true)
+    setProductsError(null)
+    const controller = new AbortController()
+    abortRef.current.push(() => controller.abort())
     try {
-      const res = await fetch(`/api/bargain/products?storeId=${storeId}&take=100`)
+      const res = await fetch(`/api/bargain/products?storeId=${storeId}&take=100`, { signal: controller.signal })
       if (!res.ok) throw new Error('Failed to load products')
       const data = await res.json()
       setProducts(data.products || [])
-    } catch {
-      setProducts([])
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return
+      setProductsError('Failed to load products')
     } finally {
-      setLoadingProducts(false)
+      if (!controller.signal.aborted) setLoadingProducts(false)
     }
   }
 
@@ -198,29 +213,34 @@ export default function BargainDashboardPage() {
   async function fetchSessions() {
     if (!storeId) return
     setLoadingSessions(true)
+    setSessionsError(null)
+    const controller = new AbortController()
+    abortRef.current.push(() => controller.abort())
     try {
-      const res = await fetch(`/api/bargain/sessions?storeId=${storeId}&take=50`)
+      const res = await fetch(`/api/bargain/sessions?storeId=${storeId}&take=50`, { signal: controller.signal })
       if (!res.ok) throw new Error('Failed to load sessions')
       const data = await res.json()
       setSessions(data.sessions || [])
       setSummary(data.summary || null)
-    } catch {
-      setSessions([])
-      setSummary(null)
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return
+      setSessionsError('Failed to load sessions')
     } finally {
-      setLoadingSessions(false)
+      if (!controller.signal.aborted) setLoadingSessions(false)
     }
   }
 
   async function openSessionLog(id: string) {
     setSelectedSessionId(id)
     setLoadingMessages(true)
+    setMessagesError(null)
     try {
       const res = await fetch(`/api/bargain/sessions/${id}`)
-      if (!res.ok) throw new Error('Failed to load messages')
+      if (!res.ok) throw new Error('Failed to load conversation')
       const data = await res.json()
       setSessionMessages(data.session?.messages || [])
     } catch {
+      setMessagesError('Failed to load conversation')
       setSessionMessages([])
     } finally {
       setLoadingMessages(false)
@@ -401,12 +421,14 @@ export default function BargainDashboardPage() {
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <input
                 placeholder="Shopify Product ID"
+                aria-label="Shopify Product ID"
                 value={newProduct.shopifyProductId ?? ''}
                 onChange={e => setNewProduct({ ...newProduct, shopifyProductId: e.target.value })}
                 className="bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white text-sm"
               />
               <input
                 placeholder="Title (optional)"
+                aria-label="Override title"
                 value={newProduct.productTitle ?? ''}
                 onChange={e => setNewProduct({ ...newProduct, productTitle: e.target.value })}
                 className="bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white text-sm"
@@ -414,6 +436,7 @@ export default function BargainDashboardPage() {
               <input
                 type="number"
                 placeholder="Min Price (absolute)"
+                aria-label="Minimum price"
                 value={newProduct.minPrice ?? ''}
                 onChange={e => setNewProduct({ ...newProduct, minPrice: e.target.value ? parseFloat(e.target.value) : undefined })}
                 className="bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white text-sm"
@@ -421,6 +444,7 @@ export default function BargainDashboardPage() {
               <input
                 type="number"
                 placeholder="Max Discount %"
+                aria-label="Maximum discount percentage"
                 value={newProduct.maxDiscountPercent ?? ''}
                 onChange={e => setNewProduct({ ...newProduct, maxDiscountPercent: e.target.value ? parseInt(e.target.value) : undefined })}
                 className="bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white text-sm"
@@ -442,6 +466,8 @@ export default function BargainDashboardPage() {
             </div>
             {loadingProducts ? (
               <div className="p-5 text-blue-300/60"><Loader2 className="w-4 h-4 animate-spin mr-2 inline" /> Loading…</div>
+            ) : productsError ? (
+              <div className="p-5 text-red-300 text-sm">{productsError}</div>
             ) : products.length === 0 ? (
               <div className="p-5 text-blue-300/60 text-sm">No overrides yet. Per-product settings cascade over the global config.</div>
             ) : (
@@ -473,6 +499,7 @@ export default function BargainDashboardPage() {
                         <td className="px-4 py-2 text-right">
                           <button
                             onClick={() => deleteProduct(p.id)}
+                            aria-label="Delete product override"
                             className="text-red-400 hover:text-red-300"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -491,7 +518,9 @@ export default function BargainDashboardPage() {
       {/* Analytics tab */}
       {tab === 'analytics' && (
         <div className="space-y-5">
-          {summary ? (
+          {sessionsError ? (
+            <div className="text-red-300 text-sm">{sessionsError}</div>
+          ) : summary ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <MetricCard icon={Users} label="Total Sessions" value={summary.totalSessions} color="text-blue-300" />
               <MetricCard icon={TrendingUp} label="Win Rate" value={`${summary.winRate}%`} color="text-emerald-300" />
@@ -506,6 +535,8 @@ export default function BargainDashboardPage() {
             <div className="px-5 py-3 border-b border-blue-800/30 text-blue-100 font-semibold">Recent Sessions</div>
             {loadingSessions ? (
               <div className="p-5"><Loader2 className="w-4 h-4 animate-spin mr-2 inline text-blue-300" /> Loading…</div>
+            ) : sessionsError ? (
+              <div className="p-5 text-red-300 text-sm">{sessionsError}</div>
             ) : sessions.length === 0 ? (
               <div className="p-5 text-blue-300/60 text-sm">No bargain sessions yet.</div>
             ) : (
@@ -549,6 +580,8 @@ export default function BargainDashboardPage() {
             <div className="px-5 py-3 border-b border-blue-800/30 text-blue-100 font-semibold">Sessions</div>
             {loadingSessions ? (
               <div className="p-5"><Loader2 className="w-4 h-4 animate-spin mr-2 inline text-blue-300" /> Loading…</div>
+            ) : sessionsError ? (
+              <div className="p-5 text-red-300 text-sm">{sessionsError}</div>
             ) : sessions.length === 0 ? (
               <div className="p-5 text-blue-300/60 text-sm">No sessions to inspect.</div>
             ) : (
@@ -580,6 +613,8 @@ export default function BargainDashboardPage() {
               <div className="text-blue-300/60 text-sm">Select a session to view the conversation.</div>
             ) : loadingMessages ? (
               <div><Loader2 className="w-4 h-4 animate-spin mr-2 inline text-blue-300" /> Loading conversation…</div>
+            ) : messagesError ? (
+              <div className="text-red-300 text-sm">{messagesError}</div>
             ) : sessionMessages.length === 0 ? (
               <div className="text-blue-300/60 text-sm">No messages.</div>
             ) : (

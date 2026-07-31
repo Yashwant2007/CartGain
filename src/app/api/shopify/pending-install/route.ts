@@ -5,13 +5,17 @@ export const dynamic = 'force-dynamic'
 // Called by the integrations page on mount to check if this session came from
 // a Shopify install flow. Returns the pending shop domain and clears the cookie.
 export async function GET(req: NextRequest) {
-  const shop = req.cookies.get('shopify_install_shop')?.value || null
+  try {
+    const shop = req.cookies.get('shopify_install_shop')?.value || null
 
-  const res = NextResponse.json({ shop })
+    const res = NextResponse.json({ shop })
 
-  if (shop) {
-    res.cookies.delete('shopify_install_shop')
+    if (shop) {
+      res.cookies.delete('shopify_install_shop')
+    }
+
+    return res
+  } catch {
+    return NextResponse.json({ shop: null }, { status: 500 })
   }
-
-  return res
 }

@@ -22,17 +22,23 @@ function VerifyContent() {
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying')
   const [message, setMessage] = useState('')
 
-  useEffect(() => {
-    const token = searchParams.get('token')
-    const email = searchParams.get('email')
+  const token = searchParams.get('token')
+  const email = searchParams.get('email')
 
+  useEffect(() => {
+    // Depend on the primitive values — searchParams identity changes each
+    // render, which would re-trigger this verification fetch on every render.
     if (!token || !email) {
       setStatus('error')
       setMessage('Missing verification parameters.')
       return
     }
 
-    fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`)
+    const controller = new AbortController()
+
+    fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`, {
+      signal: controller.signal,
+    })
       .then(res => {
         if (res.redirected) {
           window.location.href = res.url
@@ -46,11 +52,14 @@ function VerifyContent() {
           setMessage('Verification failed. The link may be expired.')
         }
       })
-      .catch(() => {
+      .catch(err => {
+        if (err?.name === 'AbortError') return
         setStatus('error')
         setMessage('Something went wrong. Please try again.')
       })
-  }, [searchParams])
+
+    return () => controller.abort()
+  }, [token, email])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-6">

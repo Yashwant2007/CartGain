@@ -504,22 +504,35 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
   })
 
   useEffect(() => {
-    requestAnimationFrame(() => setFadeIn(true))
+    const id = requestAnimationFrame(() => setFadeIn(true))
+    return () => cancelAnimationFrame(id)
   }, [])
 
+  // Close the modal on Escape
   useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  useEffect(() => {
+    const controller = new AbortController()
     const fetchABTests = async () => {
       try {
-        const res = await fetch(`/api/campaigns/${campaign.id}/ab-tests`)
+        const res = await fetch(`/api/campaigns/${campaign.id}/ab-tests`, { signal: controller.signal })
         const data = await res.json()
         if (res.ok) setAbTests(data.abTests || [])
       } catch (err) {
+        if ((err as Error).name === 'AbortError') return
         console.error('Failed to fetch AB tests', err)
       } finally {
-        setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       }
     }
     fetchABTests()
+    return () => controller.abort()
   }, [campaign.id])
 
   const handleCreate = async () => {
@@ -574,15 +587,21 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
   }
 
   return (
-    <div className={`fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 transition-opacity duration-200 ${fadeIn ? 'opacity-100' : 'opacity-0'}`} onClick={onClose}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ab-test-modal-title"
+      className={`fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 transition-opacity duration-200 ${fadeIn ? 'opacity-100' : 'opacity-0'}`}
+      onClick={onClose}
+    >
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-blue-700/30 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="p-6 border-b border-blue-700/30">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-white">A/B Tests</h2>
+              <h2 id="ab-test-modal-title" className="text-xl font-bold text-white">A/B Tests</h2>
               <p className="text-sm text-blue-300/80 mt-1">{campaign.name}</p>
             </div>
-            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-blue-300/60 hover:text-white hover:bg-slate-700/50 transition-all text-xl">&times;</button>
+            <button onClick={onClose} aria-label="Close A/B tests modal" className="w-8 h-8 flex items-center justify-center rounded-lg text-blue-300/60 hover:text-white hover:bg-slate-700/50 transition-all text-xl">&times;</button>
           </div>
         </div>
 

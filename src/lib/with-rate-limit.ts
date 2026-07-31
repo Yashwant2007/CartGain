@@ -14,10 +14,9 @@ export async function withRateLimit(
 ): Promise<NextResponse> {
   const { maxAttempts = 30, windowMs = 60_000 } = options
 
-  const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
   const endpoint = options.key || new URL(request.url).pathname
 
-  const result = await checkRateLimit(`${endpoint}_${ip}`, { maxAttempts, windowMs })
+  const result = await checkRateLimit(endpoint, { maxAttempts, windowMs })
 
   if (!result.success) {
     return NextResponse.json(

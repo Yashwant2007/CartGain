@@ -47,7 +47,8 @@ function DashboardLayoutInner({
 
   useEffect(() => {
     if (status !== 'authenticated') return
-    fetch('/api/subscription')
+    const controller = new AbortController()
+    fetch('/api/subscription', { signal: controller.signal })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data?.subscription) {
@@ -61,9 +62,13 @@ function DashboardLayoutInner({
             cartsRemaining: Math.max(0, freeThreshold - processed),
           })
         }
+        if (!controller.signal.aborted) setSubLoading(false)
+      })
+      .catch(err => {
+        if (err?.name === 'AbortError') return
         setSubLoading(false)
       })
-      .catch(() => setSubLoading(false))
+    return () => controller.abort()
   }, [status])
 
   if (status === 'loading') {

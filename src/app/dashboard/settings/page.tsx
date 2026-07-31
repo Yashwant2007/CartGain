@@ -19,6 +19,7 @@ type StoreSettings = {
   webhookUrl?: string | null
   apiKey?: string | null
   apiSecret?: string | null
+  shopDomain?: string | null
 }
 
 type SessionResponse = {
@@ -152,8 +153,8 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
         currency: store.currency,
         platform: store.platform,
       })
-      if (store.apiSecret && store.apiSecret.endsWith('.myshopify.com')) {
-        setShopifyShop(store.apiSecret)
+      if (store.shopDomain) {
+        setShopifyShop(store.shopDomain)
       }
     }
   }, [store])
@@ -183,6 +184,16 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
     window.addEventListener('message', handler)
     return () => window.removeEventListener('message', handler)
   }, [])
+
+  // Close the Shopify consent modal on Escape
+  useEffect(() => {
+    if (!shopifyConsentModal) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShopifyConsentModal(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [shopifyConsentModal])
 
   const handleSave = async () => {
     try {
@@ -325,7 +336,7 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
               <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse" />
               <div>
                 <p className="font-medium text-emerald-300">Connected to Shopify</p>
-                <p className="text-sm text-blue-300/60">{store?.apiSecret || shopifyShop}</p>
+                <p className="text-sm text-blue-300/60">{shopifyShop || store?.shopDomain}</p>
               </div>
             </div>
             <p className="text-sm text-blue-300/80">Your store is connected and webhooks are active. Abandoned carts will be automatically tracked.</p>
@@ -359,11 +370,17 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
       </div>
 
       {shopifyConsentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShopifyConsentModal(false)}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="shopify-consent-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShopifyConsentModal(false)}
+        >
           <div className="bg-slate-800 border border-blue-700/50 rounded-xl p-6 w-full max-w-md shadow-2xl shadow-cyan-500/10" onClick={e => e.stopPropagation()}>
             <div className="flex items-center space-x-3 mb-4">
               <span className="text-2xl">🛍️</span>
-              <h3 className="text-lg font-semibold text-white">Connect Shopify Store</h3>
+              <h3 id="shopify-consent-modal-title" className="text-lg font-semibold text-white">Connect Shopify Store</h3>
             </div>
 
             <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-4 space-y-3 mb-4">
@@ -431,16 +448,25 @@ function NotificationSettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
+    const controller = new AbortController()
     const load = async () => {
       try {
-        const res = await fetch('/api/settings/notifications')
+        const res = await fetch('/api/settings/notifications', { signal: controller.signal })
+        if (!res.ok) throw new Error('Failed to load notification preferences')
         const data = await res.json()
         if (data.prefs) setSettings(data.prefs)
-      } catch {} finally { setLoading(false) }
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return
+        setLoadError('Failed to load notification preferences')
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
     }
     load()
+    return () => controller.abort()
   }, [])
 
   const handleToggle = async (key: keyof typeof settings, value: boolean) => {
@@ -468,6 +494,7 @@ function NotificationSettings() {
         {message && <span className="text-xs text-emerald-300/80">{message}</span>}
         {saving && <span className="text-xs text-blue-300/60">Saving...</span>}
       </div>
+      {loadError && <div className="p-3 bg-red-600/20 border border-red-500/40 rounded-lg text-sm text-red-300 mb-4">{loadError}</div>}
       <div className="space-y-4">
         <ToggleSetting label="Email Notifications" description="Receive notifications via email" checked={settings.emailNotifications} onChange={(v) => handleToggle('emailNotifications', v)} />
         <ToggleSetting label="Recovery Alerts" description="Get notified when a cart is recovered" checked={settings.recoveryAlerts} onChange={(v) => handleToggle('recoveryAlerts', v)} />
@@ -619,6 +646,29 @@ function SecuritySettings() {
     }
   }
 
+  // Close modals on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (show2FASetup && setupStep !== 'loading') {
+        setShow2FASetup(false)
+        setTwoFactorError(null)
+      }
+      if (show2FADisable) {
+        setShow2FADisable(false)
+        setTwoFactorError(null)
+      }
+      if (showDeleteModal) {
+        setShowDeleteModal(false)
+        setDeleteConfirm('')
+        setDeleteError(null)
+      }
+    }
+    if (!show2FASetup && !show2FADisable && !showDeleteModal) return
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [show2FASetup, setupStep, show2FADisable, showDeleteModal])
+
   return (
     <div className="space-y-6 max-w-2xl">
       {/* Password Change */}
@@ -674,9 +724,15 @@ function SecuritySettings() {
 
       {/* 2FA Setup Modal */}
       {show2FASetup && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { if (setupStep !== 'loading') { setShow2FASetup(false); setTwoFactorError(null) }}}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="twofa-setup-modal-title"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => { if (setupStep !== 'loading') { setShow2FASetup(false); setTwoFactorError(null) }}}
+        >
           <div className="bg-slate-800 border border-cyan-700/50 rounded-xl p-6 max-w-md w-full shadow-2xl shadow-cyan-500/10" onClick={e => e.stopPropagation()}>
-            <h3 className="text-xl font-bold text-white mb-4">Set Up Two-Factor Auth</h3>
+            <h3 id="twofa-setup-modal-title" className="text-xl font-bold text-white mb-4">Set Up Two-Factor Auth</h3>
             {setupStep === 'loading' && <p className="text-blue-300/80">Generating setup key...</p>}
             {setupStep === 'showqr' && (
               <div className="space-y-4">
@@ -687,7 +743,7 @@ function SecuritySettings() {
                 <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-3">
                   <p className="text-xs text-blue-300/60 mb-1">Then enter the 6-digit code from the app:</p>
                   <div className="flex space-x-2">
-                    <input type="text" maxLength={6} value={setupCode} onChange={(e) => { setSetupCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setTwoFactorError(null) }} placeholder="000000" className="flex-1 px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg font-mono text-lg tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                    <input type="text" maxLength={6} value={setupCode} onChange={(e) => { setSetupCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setTwoFactorError(null) }} placeholder="000000" aria-label="2FA verification code" className="flex-1 px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg font-mono text-lg tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-cyan-400" />
                   </div>
                 </div>
                 {twoFactorError && <p className="text-sm text-red-300/80 bg-red-600/20 border border-red-700/30 rounded-lg p-3">{twoFactorError}</p>}
@@ -705,11 +761,17 @@ function SecuritySettings() {
 
       {/* 2FA Disable Modal */}
       {show2FADisable && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { setShow2FADisable(false); setTwoFactorError(null) }}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="twofa-disable-modal-title"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => { setShow2FADisable(false); setTwoFactorError(null) }}
+        >
           <div className="bg-slate-800 border border-red-700/50 rounded-xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
-            <h3 className="text-xl font-bold text-white mb-4">Disable Two-Factor Auth</h3>
+            <h3 id="twofa-disable-modal-title" className="text-xl font-bold text-white mb-4">Disable Two-Factor Auth</h3>
             <p className="text-sm text-blue-300/80 mb-4">Enter a code from your authenticator app to confirm disabling 2FA:</p>
-            <input type="text" maxLength={6} value={disableCode} onChange={(e) => { setDisableCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setTwoFactorError(null) }} placeholder="000000" className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg font-mono text-lg tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-red-400 mb-4" />
+            <input type="text" maxLength={6} value={disableCode} onChange={(e) => { setDisableCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setTwoFactorError(null) }} placeholder="000000" aria-label="2FA code to disable" className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg font-mono text-lg tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-red-400 mb-4" />
             {twoFactorError && <p className="mb-4 text-sm text-red-300/80 bg-red-600/20 border border-red-700/30 rounded-lg p-3">{twoFactorError}</p>}
             <div className="flex space-x-3">
               <button onClick={() => { setShow2FADisable(false); setTwoFactorError(null) }} className="flex-1 py-2.5 text-sm text-blue-300/60 hover:text-white border border-blue-700/40 rounded-lg transition-colors">Cancel</button>
@@ -730,9 +792,14 @@ function SecuritySettings() {
 
       {/* Delete Account Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-account-modal-title"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        >
           <div className="bg-slate-800 border border-red-700/50 rounded-xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold text-white mb-4">Delete Account?</h3>
+            <h3 id="delete-account-modal-title" className="text-xl font-bold text-white mb-4">Delete Account?</h3>
             <p className="text-blue-300/80 mb-6">This action cannot be undone. All your data, including stores, campaigns, and analytics will be permanently deleted.</p>
             <div className="mb-6">
               <label className="block text-sm font-medium text-blue-200 mb-2">Type <span className="text-red-400 font-mono">DELETE</span> to confirm</label>
@@ -758,18 +825,55 @@ function APISettings({ store }: { store: StoreSettings | null }) {
   const [generatedKey, setGeneratedKey] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [showRevokeConfirm, setShowRevokeConfirm] = useState<string | null>(null)
 
+  const abortLoadKeys = useRef<(() => void) | null>(null)
+
   const loadKeys = async () => {
+    const controller = new AbortController()
+    abortLoadKeys.current = () => controller.abort()
     try {
       setLoading(true)
-      const res = await fetch('/api/keys')
+      const res = await fetch('/api/keys', { signal: controller.signal })
+      if (!res.ok) throw new Error('Failed to load API keys')
       const data = await res.json()
       if (data.keys) setKeys(data.keys)
-    } catch {} finally { setLoading(false) }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return
+      setLoadError('Failed to load API keys')
+    } finally {
+      if (!controller.signal.aborted) setLoading(false)
+    }
   }
 
-  useEffect(() => { loadKeys() }, [])
+  useEffect(() => {
+    loadKeys()
+    return () => abortLoadKeys.current?.()
+  }, [])
+
+  // Close the generate-key modal on Escape (unless a key was just generated)
+  useEffect(() => {
+    if (!showGenerate) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !generatedKey) {
+        setShowGenerate(false)
+        setError(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showGenerate, generatedKey])
+
+  // Close the revoke-confirm modal on Escape
+  useEffect(() => {
+    if (!showRevokeConfirm) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowRevokeConfirm(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showRevokeConfirm])
 
   const handleGenerate = async () => {
     if (!newKeyName.trim()) { setError('Enter a name for this key'); return }
@@ -809,6 +913,8 @@ function APISettings({ store }: { store: StoreSettings | null }) {
           </button>
         </div>
 
+        {loadError && <div className="p-3 bg-red-600/20 border border-red-500/40 rounded-lg text-sm text-red-300 mb-4">{loadError}</div>}
+
         {loading ? (
           <p className="text-sm text-blue-300/60">Loading keys...</p>
         ) : keys.length === 0 ? (
@@ -835,13 +941,19 @@ function APISettings({ store }: { store: StoreSettings | null }) {
 
       {/* Generate Key Modal */}
       {showGenerate && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { if (!generatedKey) { setShowGenerate(false); setError(null) }}}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="generate-key-modal-title"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => { if (!generatedKey) { setShowGenerate(false); setError(null) }}}
+        >
           <div className="bg-slate-800 border border-cyan-700/50 rounded-xl p-6 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
             {generatedKey ? (
               <div className="space-y-4">
                 <div className="flex items-center space-x-3">
                   <span className="text-2xl">🔑</span>
-                  <h3 className="text-lg font-semibold text-white">API Key Generated</h3>
+                  <h3 id="generate-key-modal-title" className="text-lg font-semibold text-white">API Key Generated</h3>
                 </div>
                 <div className="bg-slate-900 border border-amber-500/40 rounded-lg p-4">
                   <p className="text-xs text-amber-400 font-medium mb-2">⚠️ Copy this key now. You won&apos;t be able to see it again.</p>
@@ -849,7 +961,7 @@ function APISettings({ store }: { store: StoreSettings | null }) {
                     <code className="text-sm text-cyan-300 break-all">{generatedKey}</code>
                   </div>
                   <button
-                    onClick={() => { navigator.clipboard.writeText(generatedKey); setTimeout(() => {}, 1500) }}
+                    onClick={() => { navigator.clipboard.writeText(generatedKey).catch(() => {}) }}
                     className="mt-3 px-4 py-2 text-sm rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg transition-all w-full"
                   >
                     Copy Key
@@ -861,7 +973,7 @@ function APISettings({ store }: { store: StoreSettings | null }) {
               </div>
             ) : (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-white">Generate New API Key</h3>
+                <h3 id="generate-key-modal-title" className="text-lg font-semibold text-white">Generate New API Key</h3>
                 <div>
                   <label className="block text-sm font-medium text-blue-200 mb-2">Key Name</label>
                   <input type="text" value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} placeholder="e.g. Production, Staging" className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400" autoFocus />
@@ -881,9 +993,15 @@ function APISettings({ store }: { store: StoreSettings | null }) {
 
       {/* Revoke Confirm Modal */}
       {showRevokeConfirm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowRevokeConfirm(null)}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="revoke-key-modal-title"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setShowRevokeConfirm(null)}
+        >
           <div className="bg-slate-800 border border-red-700/50 rounded-xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-white mb-2">Revoke API Key?</h3>
+            <h3 id="revoke-key-modal-title" className="text-lg font-semibold text-white mb-2">Revoke API Key?</h3>
             <p className="text-sm text-blue-300/80 mb-6">Any service using this key will immediately lose access. This cannot be undone.</p>
             <div className="flex space-x-3">
               <button onClick={() => setShowRevokeConfirm(null)} className="flex-1 py-2.5 text-sm text-blue-300/60 hover:text-white border border-blue-700/40 rounded-lg transition-colors">Cancel</button>
@@ -909,11 +1027,13 @@ function ToggleSetting({
   description,
   checked,
   onChange,
+  ariaLabel,
 }: {
   label: string
   description: string
   checked: boolean
   onChange: (value: boolean) => void
+  ariaLabel?: string
 }) {
   return (
     <div className="flex items-center justify-between py-3">
@@ -923,6 +1043,7 @@ function ToggleSetting({
       </div>
       <button
         onClick={() => onChange(!checked)}
+        aria-label={ariaLabel ?? label}
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
           checked ? 'bg-cyan-500' : 'bg-slate-600'
         }`}

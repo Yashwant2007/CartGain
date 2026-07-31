@@ -81,7 +81,10 @@ export function verifyShopifyWebhook(body: string, headers: Headers): boolean {
     .update(body, 'utf8')
     .digest('base64')
 
-  return hmac === hmacHeader
+  const expected = Buffer.from(hmac)
+  const received = Buffer.from(hmacHeader)
+  if (expected.length !== received.length) return false
+  return crypto.timingSafeEqual(expected, received)
 }
 
 export async function verifyShopifyAccessToken(accessToken: string): Promise<{

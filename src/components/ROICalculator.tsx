@@ -135,6 +135,7 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
             <input
               type="number"
               value={monthlyVisitors}
+              aria-label="Monthly Website Visitors"
               onChange={(e) => {setMonthlyVisitors(e.target.value ? Number(e.target.value) : ''); handleInputChange()}}
               className="w-24 px-3 py-2 border border-blue-700/50 bg-slate-700/50 text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
               disabled={!isLoggedIn && showResults}
@@ -162,6 +163,7 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
             <input
               type="number"
               value={avgCartValue}
+              aria-label="Average Cart Value"
               onChange={(e) => {setAvgCartValue(e.target.value ? Number(e.target.value) : ''); handleInputChange()}}
               className="w-24 px-3 py-2 border border-blue-700/50 bg-slate-700/50 text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
               disabled={!isLoggedIn && showResults}
@@ -187,6 +189,7 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
             <input
               type="number"
               value={currentRecoveryRate}
+              aria-label="Current recovery rate"
               onChange={(e) => {setCurrentRecoveryRate(e.target.value ? Number(e.target.value) : ''); handleInputChange()}}
               step="0.5"
               className="w-24 px-3 py-2 border border-blue-700/50 bg-slate-700/50 text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"
@@ -214,6 +217,7 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
             <input
               type="number"
               value={targetRecoveryRate}
+              aria-label="Target recovery rate"
               onChange={(e) => {setTargetRecoveryRate(e.target.value ? Number(e.target.value) : ''); handleInputChange()}}
               step="0.5"
               className="w-24 px-3 py-2 border border-blue-700/50 bg-slate-700/50 text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400"

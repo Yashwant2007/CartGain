@@ -31,13 +31,18 @@ function LoginContent() {
   })
 
   useEffect(() => {
-    if (searchParams.get('verified') === 'true') {
+    // Read values as primitives — searchParams identity changes every render,
+    // so depending on the object itself would re-run this effect repeatedly.
+    const verifiedParam = searchParams.get('verified')
+    const registeredParam = searchParams.get('registered')
+    const err = searchParams.get('error')
+
+    if (verifiedParam === 'true') {
       setVerified(true)
     }
-    if (searchParams.get('registered') === 'true') {
+    if (registeredParam === 'true') {
       setJustRegistered(true)
     }
-    const err = searchParams.get('error')
     if (err) {
       const messages: Record<string, string> = {
         google: `Google sign-in failed. Make sure ${typeof window !== 'undefined' ? window.location.origin : 'https://cart-gain.com'}/api/auth/callback/google is listed in your Google Cloud Console → Authorized redirect URIs.`,
@@ -52,7 +57,8 @@ function LoginContent() {
       }
       setError(messages[err] ?? messages.Default)
     }
-  }, [searchParams])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.get('verified'), searchParams.get('registered'), searchParams.get('error')])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -134,7 +140,7 @@ function LoginContent() {
                 required
                 autoComplete="email"
                 disabled={isLoading}
-                className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base"
+                className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-base"
                 placeholder="john@example.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -152,7 +158,7 @@ function LoginContent() {
                 required
                 autoComplete="current-password"
                 disabled={isLoading}
-                className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-sm sm:text-base"
+                className="input pl-10 bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70 text-base"
                 placeholder="••••••••"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}

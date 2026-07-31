@@ -8,7 +8,8 @@ export default function StatusBadge() {
   const [status, setStatus] = useState<SystemStatus>('loading')
 
   useEffect(() => {
-    fetch('/api/integrations/status')
+    const controller = new AbortController()
+    fetch('/api/integrations/status', { signal: controller.signal })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (!data) {
@@ -25,7 +26,11 @@ export default function StatusBadge() {
           setStatus('inactive')
         }
       })
-      .catch(() => setStatus('inactive'))
+      .catch(err => {
+        if (err?.name === 'AbortError') return
+        setStatus('inactive')
+      })
+    return () => controller.abort()
   }, [])
 
   if (status === 'loading') {

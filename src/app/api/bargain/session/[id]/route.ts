@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
 // GET /api/bargain/session/[id] — customer polls session status (no auth — storefront)
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const rate = await checkSimpleRateLimit(`bargain_session_${request.headers.get('x-forwarded-for') || 'unknown'}`)
+    if (!rate.allowed) {
+      return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
+        status: 429,
+        headers: { 'Retry-After': String(rate.retryAfter) },
+      })
+    }
+
     const bargainSession = await prisma.bargainSession.findUnique({
       where: { id: params.id },
       include: {

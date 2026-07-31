@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
@@ -13,10 +14,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
+    const aiRate = await checkSimpleRateLimit(`ai_${session.user.id}`)
+    if (!aiRate.allowed) {
+      return NextResponse.json({ message: 'Too many AI requests. Please try again later.' }, { status: 429 })
+    }
+
     const { cartId, storeMargin = 30 } = await request.json()
 
-    if (!cartId) {
+    if (!cartId || typeof cartId !== 'string') {
       return NextResponse.json({ message: 'cartId is required' }, { status: 400 })
+    }
+
+    const margin = Number(storeMargin)
+    if (!Number.isFinite(margin) || margin < 1 || margin > 95) {
+      return NextResponse.json({ message: 'storeMargin must be between 1 and 95' }, { status: 400 })
     }
 
     const cart = await prisma.cart.findUnique({ where: { id: cartId } })
@@ -48,7 +59,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const result = await optimizeDiscount(cart.totalValue, { totalOrders, totalAbandons, lifetimeValue }, storeMargin)
+    const result = await optimizeDiscount(cart.totalValue, { totalOrders, totalAbandons, lifetimeValue }, margin)
 
     return NextResponse.json(result, { status: 200 })
   } catch (error) {

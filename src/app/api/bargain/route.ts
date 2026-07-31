@@ -22,7 +22,11 @@ export async function GET(request: NextRequest) {
       take: (request.nextUrl.searchParams.get('take') ?? undefined) as unknown as number | undefined,
     }
 
-    const { storeId, status, cursor, take } = bargainSessionQuerySchema.parse(params)
+    const parsed = bargainSessionQuerySchema.safeParse(params)
+    if (!parsed.success) {
+      return NextResponse.json({ message: parsed.error.errors[0]?.message || 'Invalid query parameters' }, { status: 400 })
+    }
+    const { storeId, status, cursor, take } = parsed.data
 
     const store = await prisma.store.findFirst({
       where: { id: storeId, userId: session.user.id },

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { isTestEndpointAllowed } from '@/lib/job-auth'
+import { isTestEndpointAllowed, requireJobAuth } from '@/lib/job-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +8,9 @@ export async function GET(request: NextRequest) {
   if (!isTestEndpointAllowed()) {
     return NextResponse.json({ error: 'Not available' }, { status: 403 })
   }
+
+  const authError = await requireJobAuth(request)
+  if (authError) return authError
 
   try {
     const user = await prisma.user.findUnique({
@@ -19,12 +22,12 @@ export async function GET(request: NextRequest) {
     })
 
     if (!user) {
-      return NextResponse.json({ success: false, message: 'No test user found' })
+      return NextResponse.json({ success: false, message: 'No test user found' }, { status: 404 })
     }
 
     const store = user.stores[0]
     if (!store) {
-      return NextResponse.json({ success: false, message: 'No test store found' })
+      return NextResponse.json({ success: false, message: 'No test store found' }, { status: 404 })
     }
 
     const carts = await prisma.cart.findMany({

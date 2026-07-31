@@ -12,7 +12,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     return NextResponse.redirect(new URL('/?status=invalid_link', process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'))
   }
 
-  await markNudgeConverted(token)
+  try {
+    await markNudgeConverted(token)
+  } catch (error) {
+    console.error('[cod-confirm] markNudgeConverted failed:', error)
+  }
 
   return NextResponse.redirect(new URL('/?status=cod_confirmed', process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'))
 }

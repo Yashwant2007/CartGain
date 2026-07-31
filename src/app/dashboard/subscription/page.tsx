@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Check, Shield, Percent, Zap, FileText, Download, ToggleLeft, Mail, Smartphone, MessageSquare } from 'lucide-react'
 import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/payment'
 
@@ -56,12 +56,17 @@ export default function SubscriptionPage() {
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [activeCampaigns, setActiveCampaigns] = useState(0)
   const [overageToggling, setOverageToggling] = useState(false)
+  const [isYearly, setIsYearly] = useState(false)
+
+  const abortFetchData = useRef<(() => void) | null>(null)
 
   const fetchData = async () => {
+    const controller = new AbortController()
+    abortFetchData.current = () => controller.abort()
     try {
       const [subRes, overviewRes] = await Promise.all([
-        fetch('/api/subscription'),
-        fetch('/api/analytics/overview'),
+        fetch('/api/subscription', { signal: controller.signal }),
+        fetch('/api/analytics/overview', { signal: controller.signal }),
       ])
 
       if (subRes.ok) {
@@ -69,6 +74,7 @@ export default function SubscriptionPage() {
         setSubscription(subData.subscription)
         setStore(subData.store)
         setInvoices(subData.invoices || [])
+        setActiveCampaigns(subData.meta?.activeCampaigns ?? 0)
       }
 
       if (overviewRes.ok) {
@@ -78,33 +84,44 @@ export default function SubscriptionPage() {
           setMonthlyRecoveredRevenue(current.netRevenue ?? current.revenueRecovered ?? 0)
         }
       }
-
-      if (subRes.ok) {
-        const subData = await subRes.json()
-        if (subData.meta) {
-          setActiveCampaigns(subData.meta.activeCampaigns ?? 0)
-        }
-      }
     } catch (err) {
+      if ((err as Error).name === 'AbortError') return
       console.error('Failed to load subscription data', err)
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) setLoading(false)
     }
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    fetchData()
+    return () => abortFetchData.current?.()
+  }, [])
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !(window as any).Razorpay) {
       const script = document.createElement('script')
       script.src = 'https://checkout.razorpay.com/v1/checkout.js'
       script.async = true
-      script.onload = () => setRazorpayLoaded(true)
+      let finished = false
+      script.onload = () => { if (!finished) setRazorpayLoaded(true) }
       document.body.appendChild(script)
+      return () => {
+        finished = true
+        document.body.removeChild(script)
+      }
     } else {
       setRazorpayLoaded(true)
     }
   }, [])
+
+  // Billing-period heuristic depends on Date.now() — evaluate only after mount
+  // so the server-rendered HTML always matches the first client render.
+  useEffect(() => {
+    if (subscription?.currentPeriodEnd) {
+      const endMs = new Date(subscription.currentPeriodEnd).getTime()
+      setIsYearly(endMs - Date.now() > 45 * 24 * 60 * 60 * 1000)
+    }
+  }, [subscription?.currentPeriodEnd])
 
   const PAID_PLANS = Object.values(PLANS).filter(p => p.price > 0).map(p => p.id)
   const isPaidUser = !!(subscription && PAID_PLANS.includes(subscription.plan) && subscription.status === 'active')
@@ -117,10 +134,6 @@ export default function SubscriptionPage() {
     ? (Object.keys(PLANS).find(k => PLANS[k].id === currentPlanKey) as PlanKey)
     : null
   const currentPlan = normalizedKey ? PLANS[normalizedKey] : null
-
-  const isYearly = subscription?.currentPeriodEnd
-    ? (new Date(subscription.currentPeriodEnd).getTime() - Date.now()) > 45 * 24 * 60 * 60 * 1000
-    : false
 
   const cartsUsed = subscription?.cartsUsedInPeriod ?? 0
   const recoveredCarts = store?.cartsRecovered ?? 0
@@ -499,6 +512,7 @@ export default function SubscriptionPage() {
             <button
               onClick={handleOverageToggle}
               disabled={overageToggling}
+              aria-label="Toggle overage billing"
               className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all ${
                 subscription?.overageEnabled ? 'bg-cyan-500' : 'bg-slate-600'
               } ${overageToggling ? 'opacity-60 cursor-wait' : 'cursor-pointer'}`}

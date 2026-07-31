@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
@@ -13,10 +14,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
+    const aiRate = await checkSimpleRateLimit(`ai_${session.user.id}`)
+    if (!aiRate.allowed) {
+      return NextResponse.json({ message: 'Too many AI requests. Please try again later.' }, { status: 429 })
+    }
+
     const { storeId, improvements } = await request.json()
 
-    if (!storeId) {
+    if (!storeId || typeof storeId !== 'string') {
       return NextResponse.json({ message: 'storeId required' }, { status: 400 })
+    }
+
+    if (typeof improvements !== 'undefined' && (typeof improvements !== 'object' || improvements === null || Array.isArray(improvements))) {
+      return NextResponse.json({ message: 'improvements must be an object' }, { status: 400 })
     }
 
     const store = await prisma.store.findUnique({ where: { id: storeId } })

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
@@ -13,7 +14,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
+    const aiRate = await checkSimpleRateLimit(`ai_${session.user.id}`)
+    if (!aiRate.allowed) {
+      return NextResponse.json({ message: 'Too many AI requests. Please try again later.' }, { status: 429 })
+    }
+
     const { cartId, count = 3 } = await request.json()
+
+    if (!cartId || typeof cartId !== 'string') {
+      return NextResponse.json({ message: 'cartId is required' }, { status: 400 })
+    }
+
+    const parsedCount = Math.min(Math.max(Math.round(Number(count) || 3), 1), 10)
 
     const cart = await prisma.cart.findUnique({ where: { id: cartId } })
     if (!cart) {
@@ -35,7 +47,7 @@ export async function POST(request: NextRequest) {
       total: cart.totalValue,
       currencySymbol,
       cartUrl: '',
-    }, count)
+    }, parsedCount)
 
     return NextResponse.json({ subjectLines }, { status: 200 })
   } catch (error) {

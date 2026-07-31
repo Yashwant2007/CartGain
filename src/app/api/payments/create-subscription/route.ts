@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkRateLimit } from '@/lib/rate-limit'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createRazorpaySubscription, PLANS } from '@/lib/payment'
@@ -8,12 +9,21 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
+    const rateLimitResult = await checkRateLimit('payments-create-subscription', {
+      maxAttempts: 10,
+      windowMs: 5 * 60 * 1000,
+    })
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+    }
+
     const session = await getServerSession(authOptions)
     if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { plan, period = 'monthly' } = await req.json()
+    const { plan, period } = await req.json()
+    const normalizedPeriod = period === 'yearly' ? 'yearly' : 'monthly'
 
     if (!plan) {
       return NextResponse.json({ error: 'Plan is required' }, { status: 400 })
@@ -32,7 +42,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Already have an active subscription' }, { status: 400 })
     }
 
-    const result = await createRazorpaySubscription(plan, session.user.email, period as 'monthly' | 'yearly')
+    const result = await createRazorpaySubscription(plan, session.user.email, normalizedPeriod)
 
     await prisma.subscription.upsert({
       where: { id: existingSub?.id || 'none' },
@@ -41,7 +51,7 @@ export async function POST(req: NextRequest) {
         plan,
         status: 'pending',
         currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(Date.now() + (period === 'yearly' ? 365 : 30) * 86400000),
+        currentPeriodEnd: new Date(Date.now() + (normalizedPeriod === 'yearly' ? 365 : 30) * 86400000),
       },
       create: {
         userId: session.user.id,
@@ -50,7 +60,7 @@ export async function POST(req: NextRequest) {
         plan,
         status: 'pending',
         currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(Date.now() + (period === 'yearly' ? 365 : 30) * 86400000),
+        currentPeriodEnd: new Date(Date.now() + (normalizedPeriod === 'yearly' ? 365 : 30) * 86400000),
       },
     })
 

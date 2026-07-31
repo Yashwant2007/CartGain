@@ -42,6 +42,12 @@ export const metadata: Metadata = {
       },
     ],
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'CartGain | Recover Lost Revenue from Abandoned Carts',
+    description: 'Recover more abandoned carts with AI-powered WhatsApp, SMS, and Email recovery.',
+    images: ['https://images.unsplash.com/photo-1556740738-b6a63e27c4df?w=1200&h=630&fit=crop'],
+  },
   robots: {
     index: true,
     follow: true,
@@ -64,7 +70,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="theme-color" content="#1e293b" />

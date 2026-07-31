@@ -7,23 +7,28 @@ import { generateTotpSecret, generateOtpauthUrl, generateQrCodeUrl } from '@/lib
 export const dynamic = 'force-dynamic'
 
 export async function POST() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const user = await prisma.user.findUnique({ where: { email: session.user.email } })
-  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  if (user.totpEnabled) return NextResponse.json({ error: '2FA is already enabled. Disable it first to reconfigure.' }, { status: 400 })
+    if (user.totpEnabled) return NextResponse.json({ error: '2FA is already enabled. Disable it first to reconfigure.' }, { status: 400 })
 
-  const secret = generateTotpSecret()
-  const otpauthUrl = generateOtpauthUrl(secret, user.email)
-  const qrCodeUrl = generateQrCodeUrl(secret, user.email)
+    const secret = generateTotpSecret()
+    const otpauthUrl = generateOtpauthUrl(secret, user.email)
+    const qrCodeUrl = generateQrCodeUrl(secret, user.email)
 
-  await prisma.user.update({ where: { id: user.id }, data: { totpSecret: secret } })
+    await prisma.user.update({ where: { id: user.id }, data: { totpSecret: secret } })
 
-  return NextResponse.json({
-    secret,
-    otpauthUrl,
-    qrCodeUrl,
-  })
+    return NextResponse.json({
+      secret,
+      otpauthUrl,
+      qrCodeUrl,
+    })
+  } catch (error) {
+    console.error('2FA setup error:', error)
+    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
+  }
 }

@@ -2,12 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainAcceptSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
 // POST /api/bargain/accept — customer accepts the final price; generate Shopify discount code
 export async function POST(request: NextRequest) {
   try {
+    const rate = await checkSimpleRateLimit(`bargain_accept_${request.headers.get('x-forwarded-for') || 'unknown'}`)
+    if (!rate.allowed) {
+      return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
+        status: 429,
+        headers: { 'Retry-After': String(rate.retryAfter) },
+      })
+    }
+
     const body = await request.json()
     const data = validateOrThrow(bargainAcceptSchema, body)
 

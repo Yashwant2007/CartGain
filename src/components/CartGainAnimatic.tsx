@@ -19,6 +19,18 @@ export default function CartGainAnimatic() {
   const counterRef = useRef<HTMLDivElement>(null)
   const dotsContainerRef = useRef<HTMLDivElement>(null)
   const timerLblRef = useRef<HTMLDivElement>(null)
+  const counterRafRef = useRef<number | null>(null)
+  const sceneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cancel every animation frame and timer on unmount so we never
+  // call setState on an unmounted component.
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      if (counterRafRef.current) cancelAnimationFrame(counterRafRef.current)
+      if (sceneTimerRef.current) clearTimeout(sceneTimerRef.current)
+    }
+  }, [])
 
   const scenes = useMemo(() => [
     { id: 's1', label: 'Intro', start: 0, end: 4 },
@@ -81,9 +93,13 @@ export default function CartGainAnimatic() {
     const step = () => {
       v = Math.min(v + Math.ceil(target / 60), target)
       setCounterValue(v)
-      if (v < target) requestAnimationFrame(step)
+      if (v < target) {
+        counterRafRef.current = requestAnimationFrame(step)
+      } else {
+        counterRafRef.current = null
+      }
     }
-    requestAnimationFrame(step)
+    counterRafRef.current = requestAnimationFrame(step)
   }
 
   function togglePlay() {
@@ -111,7 +127,8 @@ export default function CartGainAnimatic() {
     counterDoneRef.current = false
     setCounterValue(0)
     if (idx === 4) {
-      setTimeout(startCounter, 100)
+      if (sceneTimerRef.current) clearTimeout(sceneTimerRef.current)
+      sceneTimerRef.current = setTimeout(startCounter, 100)
     }
   }
 
@@ -282,10 +299,13 @@ export default function CartGainAnimatic() {
           <button className={`${styles.ctrlBtn} ${isPlaying ? styles.active : ''}`} onClick={togglePlay}>
             {isPlaying ? '⏸ Pause' : '▶ Play'}
           </button>
-          <div className={styles.sceneDots}>
+          <div className={styles.sceneDots} role="group" aria-label="Jump to scene">
             {scenes.map((scene, idx) => (
-              <div
+              <button
                 key={scene.id}
+                type="button"
+                aria-label={`Go to scene ${idx + 1}: ${scene.label}`}
+                aria-current={currentScene === idx}
                 className={`${styles.dot} ${currentScene === idx ? styles.active : ''}`}
                 onClick={() => goToScene(idx)}
               />

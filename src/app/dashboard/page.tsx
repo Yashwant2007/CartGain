@@ -439,20 +439,25 @@ function NotificationFeed({ isLoading, storeId, campaigns }: { isLoading: boolea
 
   useEffect(() => {
     if (!storeId) return
+    const controller = new AbortController()
     const fetchNotifications = async () => {
       try {
-        const res = await fetch('/api/notifications')
+        const res = await fetch('/api/notifications', { signal: controller.signal })
         const data = await res.json()
         if (res.ok) setNotifications(data.notifications || [])
-      } catch {
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return
         // silent
       } finally {
-        setFeedLoading(false)
+        if (!controller.signal.aborted) setFeedLoading(false)
       }
     }
     fetchNotifications()
     const interval = setInterval(fetchNotifications, 30000)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      controller.abort()
+    }
   }, [storeId])
 
   const iconMap: Record<string, React.ReactNode> = {

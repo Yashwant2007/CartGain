@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Zap, Lock, ArrowLeft, CheckCircle } from 'lucide-react'
@@ -17,6 +17,7 @@ export default function ResetPasswordForm() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [valid, setValid] = useState(true)
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (!token || !email) {
@@ -24,6 +25,12 @@ export default function ResetPasswordForm() {
       setError('Invalid reset link. Please request a new one.')
     }
   }, [token, email])
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current)
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -52,7 +59,7 @@ export default function ResetPasswordForm() {
 
       if (res.ok) {
         setSuccess(true)
-        setTimeout(() => router.push('/login'), 3000)
+        redirectTimerRef.current = setTimeout(() => router.push('/login'), 3000)
       } else {
         setError(data.message || 'Failed to reset password')
       }
