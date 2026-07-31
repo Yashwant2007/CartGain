@@ -43,12 +43,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'No agreed final price' }, { status: 400 })
     }
 
-    // Verify final price isn't below floor (safety against manipulated originalPrice)
+    // Verify final price isn't below floor (bulk-aware; safety against manipulated originalPrice)
     const { computeMinPrice } = await import('@/lib/services/bargain')
+    const recentMsgs = await prisma.bargainMessage.findMany({
+      where: { sessionId: bargainSession.id, role: 'customer' },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { metadata: true },
+    })
+    const bulkQuantity = recentMsgs
+      .map((m: any) => (m.metadata as any)?.bulkQuantity)
+      .find((q: any) => q != null) ?? undefined
     const { minPrice } = await computeMinPrice({
       storeId: bargainSession.storeId,
       shopifyProductId: bargainSession.shopifyProductId,
       originalPrice: bargainSession.originalPrice,
+      bulkQuantity,
     })
     if (finalPrice < minPrice) {
       return NextResponse.json({ message: 'Price mismatch — session may have been tampered with' }, { status: 409 })

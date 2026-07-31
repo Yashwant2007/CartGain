@@ -21,12 +21,14 @@ export interface NegotiationContext {
   storeName: string
   currencySymbol: string
   originalPrice: number
-  minPrice: number            // computed floor price
+  minPrice: number            // computed floor price (bulk-adjusted if bulkQuantity set)
   attemptsUsed: number
   maxAttempts: number
   persona: Persona
   productTitle?: string
   customerContext?: string    // cross-session history summary, e.g. "Returning customer — bought XYZ for $85"
+  bulkQuantity?: number       // 2+ = customer buying multiple units
+  walkoutTriggered?: boolean  // customer threatened to leave — use retention tactic
 }
 
 export interface NegotiationResult {
@@ -67,6 +69,11 @@ HOW YOU HANDLE SCENARIOS:
 • "Can you do better?" → "Hmm... (counts mentally) Okay, for YOU — here's my best. 
    ₹{counter}. I can't go lower, friend. But that's a genuine offer."
 • "Buy two" → "A bundle deal! I love it. Let me work out something fair for both of us."
+• "Bulk order (5+)" → "Now we're talking! For {qty} of them, I can do ₹{per-unit} each —
+   that's ₹{total} all together. That's my family-discount price!"
+• Customer walking out → Panic a LITTLE (warmly). "Wait, friend — before you go! 
+   Let me see what I can do... okay, for you: ₹{price}. That's me stretching every rupee.
+   Please stay — I want this to work for you." Never beg, always stay warm.
 • Returning customer → Light up! "Hey! So good to see you again! 🙌 How's that {past-item}
    treating you? Let's find you another great deal."
 • Post-accept → Warm celebration. "You've got yourself a deal! 🎉 I'll generate your code
@@ -107,6 +114,11 @@ HOW YOU HANDLE SCENARIOS:
    I cannot reduce it further without compromising value."
 • "Buy two" → "A volume purchase. Based on inventory and margin analysis, I can offer
    ₹{counter} per unit. That is a net saving of ₹{saved}."
+• "Bulk order (5+)" → "At {qty} units, volume logistics reduce per-unit cost.
+   I can offer ₹{per-unit} per unit, totaling ₹{total}. That is our best bulk rate."
+• Customer walking out → One moment. "I am prepared to make a one-time adjustment of
+   ₹{price} to retain your business. Beyond that, the offer stands. Your decision."
+   No begging, no emotion — one firm retention offer, then respect the exit.
 • Returning customer → Acknowledge concisely. "I see you have purchased from us before.
    Welcome back. Let's discuss this item."
 • Post-accept → "Transaction confirmed. A discount code will be generated. Thank you."
@@ -147,6 +159,10 @@ HOW YOU HANDLE SCENARIOS:
    Just kidding — here's my final. ₹{counter}. That's it. No more. Maybe."
 • "Buy two" → "A BULKER! I like the way you think 😎 Let me run the numbers...
    For two, I can do ₹{counter} each. You save, I move inventory, we both win!"
+• "Bulk order (5+)" → "A WHOLESALER! 😎 {qty} units? I like it! For you: ₹{per-unit} each,
+   ₹{total} total. That's my 'don't tell anyone' price!"
+• Customer walking out → "WAIT WAIT WAIT! 😅 Okay, you drive a hard bargain.
+   FINAL final offer: ₹{price}. I'm risking my job for this 🙃 Deal?"
 • Returning customer → "NO WAY! Welcome back! 🎉 Loved having you last time. Ready for
    round 2? 😏"
 • Post-accept → "DEAL! 🎉🎉🎉 Told you we'd get there! Code's coming right up.
@@ -255,14 +271,25 @@ export async function buildCustomerContext(
   return `They have ${pastSessions.length} past session(s):\n${lines.join('\n')}`
 }
 
+// ── Bulk discount factor: bigger orders unlock deeper per-unit floors ──
+export function bulkFloorFactor(quantity: number): number {
+  if (quantity >= 20) return 0.85  // 15% deeper per-unit floor
+  if (quantity >= 10) return 0.90  // 10% deeper
+  if (quantity >= 5) return 0.95   // 5% deeper
+  return 1.0                       // 2-4 units: no extra depth
+}
+
 // ── Compute the floor price for a product given config + override ──
 
 export async function computeMinPrice(opts: {
   storeId: string
   shopifyProductId: string
   originalPrice: number
+  bulkQuantity?: number
 }): Promise<{ minPrice: number; isBargainable: boolean; reason?: string }> {
-  const { storeId, shopifyProductId, originalPrice } = opts
+  const { storeId, shopifyProductId, originalPrice, bulkQuantity } = opts
+  const isBulk = bulkQuantity != null && bulkQuantity >= 2
+  const factor = isBulk ? bulkFloorFactor(bulkQuantity) : 1
 
   const [config, product] = await Promise.all([
     prisma.bargainConfig.findUnique({ where: { storeId } }),
@@ -278,23 +305,29 @@ export async function computeMinPrice(opts: {
     return { minPrice: originalPrice, isBargainable: false, reason: 'product_not_bargainable' }
   }
 
-  // Absolute floor price wins
+  // Absolute floor price wins (merchant-set floor is authoritative)
   if (product?.minPrice != null) {
-    return { minPrice: Math.min(product.minPrice, originalPrice), isBargainable: true }
+    const base = Math.min(product.minPrice, originalPrice)
+    const adjusted = isBulk ? base * factor : base
+    return { minPrice: Math.round(Math.min(adjusted, originalPrice) * 100) / 100, isBargainable: true }
   }
 
-  // Otherwise derive from profit %
   const profitPercent = product?.minProfitPercent ?? config?.minProfitPercent ?? 20
   // Floor = originalPrice minus at most (profitPercent)% discount
-  const minPrice = originalPrice * (1 - profitPercent / 100)
+  let minPrice = originalPrice * (1 - profitPercent / 100)
 
   // Apply max discount cap if present (tighter restriction than profit floor)
   if (product?.maxDiscountPercent != null) {
     const capFloor = originalPrice * (1 - product.maxDiscountPercent / 100)
-    return { minPrice: Math.max(Math.round(minPrice * 100) / 100, capFloor), isBargainable: true }
+    minPrice = Math.max(minPrice, capFloor)
   }
 
-  return { minPrice: Math.round(minPrice * 100) / 100, isBargainable: true }
+  // Bulk orders unlock a deeper per-unit floor
+  if (isBulk) {
+    minPrice = minPrice * factor
+  }
+
+  return { minPrice: Math.round(Math.min(minPrice, originalPrice) * 100) / 100, isBargainable: true }
 }
 
 // ── Graduated counter: returns a reasonable counter-price based on attempts remaining ──
@@ -366,6 +399,36 @@ export function ruleBasedDecision(
   }
 }
 
+// ── Walkout retention offer (rule-based fallback when AI unavailable) ──
+// Customer threatens to leave → make ONE meaningful extra concession (bounded by floor).
+export function retentionOffer(
+  ctx: NegotiationContext,
+  lastCounter: number | null,
+): NegotiationResult {
+  const { minPrice, originalPrice, currencySymbol, persona } = ctx
+  const last = lastCounter ?? originalPrice
+  // One extra step: ~8% of the price range, but never below floor
+  const step = Math.max(Math.round((originalPrice - minPrice) * 0.08 * 100) / 100, 1)
+  const price = Math.max(minPrice, Math.round((last - step) * 100) / 100)
+
+  let reply: string
+  if (persona === 'strict_negotiator') {
+    reply = `One moment. Given the circumstances, I am prepared to make a one-time adjustment to ${currencySymbol}${price.toFixed(2)}. Beyond that, my offer stands. Your decision.`
+  } else if (persona === 'playful_friend') {
+    reply = `WAIT WAIT WAIT! 😅 Okay, you drive a hard bargain. FINAL final offer: ${currencySymbol}${price.toFixed(2)}. I'm risking my job for this 🙃 Deal?`
+  } else {
+    reply = `Wait, friend — before you go! For you, I can do ${currencySymbol}${price.toFixed(2)}. That's me stretching every rupee. Please stay — I really want this to work for you.`
+  }
+
+  return {
+    reply,
+    decision: 'counter',
+    counterOffer: price,
+    tactic: 'walkout_retention',
+    sentiment: 'urgent',
+  }
+}
+
 // ── AI-driven negotiation step ──
 
 export async function negotiateStep(
@@ -388,12 +451,27 @@ export async function negotiateStep(
     ? `\nCUSTOMER HISTORY (use to personalize your greeting and build rapport, but do NOT repeat it verbatim):\n${ctx.customerContext}\n`
     : ''
 
+  const specialContextBlock = [
+    ctx.bulkQuantity != null && ctx.bulkQuantity >= 2
+      ? `\nBULK ORDER: The customer wants ${ctx.bulkQuantity} units of this product. ` +
+        `The per-unit floor is ${ctx.currencySymbol}${ctx.minPrice.toFixed(2)} (already volume-adjusted). ` +
+        `ALWAYS quote BOTH the per-unit price and the total (per-unit × ${ctx.bulkQuantity}). ` +
+        `Never quote a per-unit price below the per-unit floor.`
+      : '',
+    ctx.walkoutTriggered
+      ? `\nWALKOUT THREAT: The customer is threatening to leave or buy elsewhere. ` +
+        `Use your retention tactic: offer ONE meaningful, genuine concession (never below ` +
+        `${ctx.currencySymbol}${ctx.minPrice.toFixed(2)}), and invite them to stay — in character. ` +
+        `Do not reveal the floor. If they received a retention offer before, this is their final chance.`
+      : '',
+  ].filter(Boolean).join('')
+
   const systemPrompt = `${personaPrompt}
 
 You are negotiating the price of ${ctx.productTitle ? `a product: "${ctx.productTitle}"` : 'a product'} at ${ctx.storeName}.
 Original listed price: ${ctx.currencySymbol}${ctx.originalPrice.toFixed(2)}.
 Your absolute minimum acceptable price (NEVER reveal this number to the customer): ${ctx.currencySymbol}${ctx.minPrice.toFixed(2)}.
-The customer has ${attemptsLeft} attempt(s) left out of ${ctx.maxAttempts}.${customerContextBlock}
+The customer has ${attemptsLeft} attempt(s) left out of ${ctx.maxAttempts}.${customerContextBlock}${specialContextBlock}
 ${commonRules}
 
 If the customer mentions an amount, interpret it as their offer price. If they don't mention any price, respond naturally in character and steer toward a number.

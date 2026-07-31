@@ -159,7 +159,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       sessionId: bargainSession.id,
       session: bargainSession,
-      minPrice, // NOTE: do NOT expose to client in production UI — only used server-side
       openingMessage: openingReply,
       expiresAt: expiredAt.toISOString(),
       attemptsRemaining: config.maxAttempts,
