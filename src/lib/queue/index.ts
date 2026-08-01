@@ -21,12 +21,41 @@ function hasValidRedisConfig(): boolean {
   return !!process.env.REDIS_HOST && process.env.REDIS_HOST !== 'localhost'
 }
 
+// Parse a redis:// or rediss:// connection string into ioredis options.
+// ioredis options objects have no `url` key — host/port/password must be
+// extracted explicitly (rediss:// URIs also need tls: {}).
+function parseRedisUrl(url: string): {
+  host: string
+  port: number
+  password?: string
+  username?: string
+  tls?: object
+} {
+  try {
+    const parsed = new URL(url)
+    const result: { host: string; port: number; password?: string; username?: string; tls?: object } = {
+      host: parsed.hostname,
+      port: parseInt(parsed.port || '6379', 10),
+    }
+    if (parsed.username) result.username = decodeURIComponent(parsed.username)
+    if (parsed.password) result.password = decodeURIComponent(parsed.password)
+    if (parsed.protocol === 'rediss:') result.tls = {}
+    return result
+  } catch {
+    return { host: 'localhost', port: 6379 }
+  }
+}
+
 function getCartQueue(): any {
   if (!queueInstance && Bull && hasValidRedisConfig()) {
     try {
       const redisUrl = process.env.REDIS_URL
+      // Bull passes the redis option straight to ioredis. A connection string
+      // (redis:// or rediss://) must be given as a string — wrapping it in an
+      // options object ({ url }) is silently ignored and ioredis falls back to
+      // localhost:6379. ioredis enables TLS automatically for rediss:// URIs.
       const redisConfig = redisUrl
-        ? { url: redisUrl, maxRetriesPerRequest: null, enableReadyCheck: false, tls: redisUrl.startsWith('rediss://') ? {} : undefined }
+        ? { maxRetriesPerRequest: null, enableReadyCheck: false, ...parseRedisUrl(redisUrl) }
         : {
             host: process.env.REDIS_HOST || 'localhost',
             port: parseInt(process.env.REDIS_PORT || '6379'),
