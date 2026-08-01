@@ -47,17 +47,11 @@ export async function scheduleCartProcessing() {
     // Register processor first
     registerProcessor()
 
-    // Clear stale repeating jobs
-    try {
-      const repeatingJobs = await queue.getRepeatableJobs()
-      for (const job of repeatingJobs) {
-        if (job.key === 'process-carts-every-5-min' || job.key === 'process-billing-daily') {
-          await queue.removeRepeatableByKey(job.key)
-        }
-      }
-    } catch (error: any) {
-      console.warn('Could not clear repeating jobs:', error.message)
-    }
+    // NOTE: deliberately no removeRepeatableByKey cleanup here. Bull dedupes
+    // repeatable jobs by their `key` across instances, so re-adding is a no-op
+    // for existing schedules. Removing + re-adding on every cold start (every
+    // cron invocation is a fresh serverless instance) disrupts in-flight jobs
+    // in other instances and produces "Missing lock"/"stalled" errors.
 
     // Cart processing — every 5 minutes
     await queue.add(
