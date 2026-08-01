@@ -35,6 +35,7 @@ export async function getAccessToken(store: {
     const res = await fetch(`https://${store.domain}/admin/oauth/access_token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
         client_id: apiKey,
         client_secret: apiSecret,
@@ -99,6 +100,7 @@ export async function verifyShopifyAccessToken(accessToken: string): Promise<{
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
         client_id: process.env.SHOPIFY_API_KEY,
         client_secret: process.env.SHOPIFY_API_SECRET,
@@ -136,6 +138,7 @@ export async function createShopifyWebhook(
         'Content-Type': 'application/json',
         'X-Shopify-Access-Token': accessToken,
       },
+      signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
         webhook: {
           topic,
@@ -187,6 +190,7 @@ export async function fetchShopifyCarts(
         headers: {
           'X-Shopify-Access-Token': accessToken,
         },
+        signal: AbortSignal.timeout(10000),
       }
     )
 
@@ -207,6 +211,7 @@ export async function fetchAbandonedCheckouts(
     const url = `https://${shopDomain}/admin/api/2026-04/abandoned_checkouts.json?limit=${limit}`
     const response = await fetch(url, {
       headers: { 'X-Shopify-Access-Token': accessToken },
+      signal: AbortSignal.timeout(10000),
     })
 
     if (!response.ok) {
