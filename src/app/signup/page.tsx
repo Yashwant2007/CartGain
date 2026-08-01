@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { signIn } from 'next-auth/react'
+import { signIn, signOut } from 'next-auth/react'
 import { Zap, Mail, Lock, User, ArrowRight, CheckCircle, AlertTriangle, X } from 'lucide-react'
 
 function Toast({ message, type, onClose }: { message: string; type: 'error' | 'info'; onClose: () => void }) {
@@ -159,6 +159,10 @@ export default function SignUpPage() {
     setError(null)
     try {
       document.cookie = 'cg_oauth_intent=signup; path=/; max-age=600; SameSite=Lax; Secure'
+      // If a session already exists, NextAuth links the new Google account to
+      // the signed-in user instead of creating a fresh account. Sign out
+      // first so "Sign up with Google" always creates the new account.
+      await signOut({ redirect: false })
       await signIn('google', { callbackUrl: '/setup' })
     } catch (err) {
       console.error('Google sign-in error:', err)

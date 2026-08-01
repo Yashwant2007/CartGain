@@ -51,6 +51,7 @@ function LoginContent() {
         OAuthAccountNotLinked: 'This email is already registered with a password. Sign in with email & password instead.',
         Verification: 'The sign-in link has expired. Please request a new one.',
         NoAccount: 'No account found with this email. Please sign up first.',
+        AlreadySignedIn: 'You are already signed in. Sign out first, then sign up with another Google account.',
         GoogleOnly: 'This account uses Google sign-in. Sign in with Google or set a password in your account settings.',
         WrongPassword: 'Incorrect password. Please try again.',
         Default: 'Sign-in failed. Please try again.',

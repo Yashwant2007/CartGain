@@ -3,6 +3,7 @@ import GoogleProvider from 'next-auth/providers/google'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import EmailProvider from 'next-auth/providers/email'
 import type { NextAuthOptions } from 'next-auth'
+import { getToken } from 'next-auth/jwt'
 import { cookies } from 'next/headers'
 import prisma from '@/lib/db'
 import { checkRateLimit } from '@/lib/rate-limit'
@@ -84,7 +85,6 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      allowDangerousEmailAccountLinking: true,
       authorization: {
         params: {
           prompt: 'select_account consent',
@@ -197,16 +197,32 @@ export const authOptions: NextAuthOptions = {
             include: { accounts: true },
           })
 
+          // NextAuth v4 links a new OAuth account to the *current session
+          // user* instead of creating a new user when a session already
+          // exists (core/lib/callback-handler.js, handleLoginOrRegistration).
+          // So signing in with a Google account whose email belongs to nobody
+          // — or to another user — while signed in silently attaches that
+          // Google account to the signed-in user and never creates an account.
+          // Block that: the visitor must sign out first. The session JWT is
+          // decoded directly because the signIn callback cannot clear the
+          // session cookie (NextAuth's SessionStore reads it up front).
+          const sessionToken = await getToken({
+            req: { cookies: cookies() } as any,
+            secret: process.env.NEXTAUTH_SECRET,
+          })
+          if (sessionToken?.sub && (!existingUser || sessionToken.sub !== existingUser.id)) {
+            return `/login?error=AlreadySignedIn`
+          }
+
 
           // Sign-in flow: the account must already exist. Block silent
           // account creation and send the visitor back to sign up first.
           if (!existingUser) {
             if (isSignupIntent) {
               // Allow the signup flow to create the account. NextAuth v4
-              // PrismaAdapter creates the User + Account records before this
-              // callback fires, so user.id is already available. We fall
-              // through to the generic store-creation block below to make
-              // sure the new user has a Store row before they hit /setup.
+              // creates the User + Account records after this callback
+              // returns, and the `createUser` event then creates the
+              // Store + free subscription with the real user id.
               // No early return — keep going.
             } else {
               // Login flow — account does not exist. Surface friendly error.
@@ -268,26 +284,12 @@ export const authOptions: NextAuthOptions = {
           }
         }
 
-        // For all other OAuth providers, ensure a store exists
-        if (account?.provider !== 'credentials' && user.id) {
-          const existingStore = await prisma.store.findFirst({
-            where: { userId: user.id },
-          })
-          if (!existingStore) {
-            await prisma.store.create({
-              data: {
-                userId: user.id,
-                name: user.name || 'My Store',
-                domain: user.email?.split('@')[0] || 'store',
-                platform: 'shopify',
-                currency: 'USD',
-                timezone: 'UTC',
-              },
-            })
-          }
-          // Ensure every user has a free subscription so they can create campaigns
-          await createFreeSubscription(user.id)
-        }
+        // NOTE: no store-creation block here. In the OAuth signIn callback
+        // `user.id` is the provider's account id (Google sub), not the DB
+        // user id — creating a Store here used to attach orphan stores to
+        // non-existent users. The `createUser` event below creates the
+        // Store + free subscription with the real user id for new users,
+        // and the Google branch above ensures one for existing users.
       } catch (error) {
         console.error('signIn callback error:', error)
         // Fail closed on unexpected errors
