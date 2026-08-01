@@ -66,8 +66,12 @@ function getCartQueue(): any {
       queueInstance = new Bull('process-carts', {
         redis: redisConfig,
         settings: {
-          lockDuration: 30000,
-          lockRenewTime: 15000,
+          // Serverless workers can run up to Vercel's maxDuration (60s) — the
+          // lock must outlive the whole run or Bull marks jobs "stalled" and
+          // retries them, causing duplicate processing. Bull renews the lock
+          // automatically on lockRenewTime while a job is being processed.
+          lockDuration: 120000,
+          lockRenewTime: 30000,
         },
         defaultJobOptions: {
           attempts: 3,
