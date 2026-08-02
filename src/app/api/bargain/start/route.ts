@@ -84,6 +84,11 @@ export async function POST(request: NextRequest) {
         include: { messages: { orderBy: { createdAt: 'asc' }, take: 1 } },
       })
       if (existing) {
+        const existingFloor = await computeMinPrice({
+          storeId: data.storeId,
+          shopifyProductId: existing.shopifyProductId,
+          originalPrice: existing.originalPrice,
+        })
         return NextResponse.json({
           sessionId: existing.id,
           session: existing,
@@ -91,7 +96,7 @@ export async function POST(request: NextRequest) {
             storeName: store.name,
             currencySymbol: store.currency === 'INR' ? '₹' : store.currency === 'USD' ? '$' : store.currency === 'EUR' ? '€' : store.currency + ' ',
             originalPrice: existing.originalPrice,
-            minPrice: 0,
+            minPrice: existingFloor.minPrice,
             attemptsUsed: existing.attemptsUsed,
             maxAttempts: config.maxAttempts,
             persona: config.aiPersona as any,

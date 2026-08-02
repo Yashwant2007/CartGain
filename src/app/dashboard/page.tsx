@@ -231,6 +231,35 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {!isLoading && storeId && campaigns.length === 0 && (
+        <div className="bg-slate-800/50 border border-cyan-500/30 rounded-xl p-5 backdrop-blur-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="w-4 h-4 text-cyan-400" />
+            <h2 className="text-sm font-semibold text-white">Get started in 5 minutes</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { step: 1, title: 'Connect channels', desc: 'WhatsApp, SMS & email', href: '/dashboard/integrations' },
+              { step: 2, title: 'Create a campaign', desc: 'Automated recovery flow', href: '/dashboard/campaigns' },
+              { step: 3, title: 'Enable AI Bargain', desc: 'Negotiate price at checkout', href: '/dashboard/bargain' },
+              { step: 4, title: 'Watch it work', desc: 'Recovery starts instantly', href: '/dashboard/carts' },
+            ].map((s) => (
+              <a
+                key={s.step}
+                href={s.href}
+                className="group flex items-start gap-3 rounded-lg border border-blue-700/30 bg-slate-900/40 p-3 transition hover:border-cyan-500/50 hover:bg-slate-900/70 no-underline"
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 text-xs font-bold text-white">{s.step}</span>
+                <span>
+                  <span className="block text-sm font-medium text-white group-hover:text-cyan-300">{s.title}</span>
+                  <span className="block text-xs text-blue-300/60">{s.desc}</span>
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
           <h3 className="text-lg font-semibold text-white mb-4">Revenue Recovered (Last 30 Days)</h3>

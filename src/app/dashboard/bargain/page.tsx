@@ -16,6 +16,7 @@ import {
   ListChecks,
   Settings,
   BarChart3,
+  IndianRupee,
 } from 'lucide-react'
 
 type BargainConfig = {
@@ -44,6 +45,7 @@ type BargainProduct = {
 type BargainSession = {
   id: string
   shopifyProductId: string
+  customerEmail: string | null
   originalPrice: number
   finalPrice: number | null
   discountCode: string | null
@@ -62,6 +64,15 @@ type Summary = {
   avgOriginalPrice: number | null
   avgFinalPrice: number | null
   winRate: number
+  revenueSaved: number
+  productBreakdown: Array<{
+    productId: string
+    sessions: number
+    accepted: number
+    winRate: number
+    revenueSaved: number
+    avgOriginal: number
+  }>
 }
 
 type Tab = 'config' | 'products' | 'analytics' | 'logs'
@@ -521,11 +532,46 @@ export default function BargainDashboardPage() {
           {sessionsError ? (
             <div className="text-red-300 text-sm">{sessionsError}</div>
           ) : summary ? (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <MetricCard icon={Users} label="Total Sessions" value={summary.totalSessions} color="text-blue-300" />
               <MetricCard icon={TrendingUp} label="Win Rate" value={`${summary.winRate}%`} color="text-emerald-300" />
               <MetricCard icon={Percent} label="Accepted" value={summary.accepted} color="text-emerald-300" />
+              <MetricCard icon={IndianRupee} label="Revenue Saved" value={`₹${summary.revenueSaved.toLocaleString('en-IN')}`} color="text-emerald-300" />
               <MetricCard icon={BarChart3} label="Abandoned" value={summary.abandoned} color="text-amber-300" />
+              </div>
+
+            {summary.productBreakdown.length > 0 && (
+              <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl overflow-hidden">
+                <div className="px-5 py-3 border-b border-blue-800/30 text-blue-100 font-semibold">
+                  Revenue by Product
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-950/60 text-blue-300/80">
+                      <tr>
+                        <th className="text-left px-4 py-2">Product ID</th>
+                        <th className="text-right px-4 py-2">Sessions</th>
+                        <th className="text-right px-4 py-2">Win Rate</th>
+                        <th className="text-right px-4 py-2">Avg Original</th>
+                        <th className="text-right px-4 py-2">Revenue Saved</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summary.productBreakdown.map(p => (
+                        <tr key={p.productId} className="border-t border-blue-800/20 text-blue-100">
+                          <td className="px-4 py-2 font-mono text-xs">{p.productId}</td>
+                          <td className="px-4 py-2 text-right">{p.sessions}</td>
+                          <td className="px-4 py-2 text-right">{p.winRate}%</td>
+                          <td className="px-4 py-2 text-right">₹{p.avgOriginal.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right text-emerald-300">₹{p.revenueSaved.toLocaleString('en-IN')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
             </div>
           ) : (
             <div className="text-blue-300/60 text-sm">No analytics yet.</div>
@@ -545,6 +591,7 @@ export default function BargainDashboardPage() {
                   <thead className="bg-slate-950/60 text-blue-300/80">
                     <tr>
                       <th className="text-left px-4 py-2">Product ID</th>
+                      <th className="text-left px-4 py-2">Customer</th>
                       <th className="text-left px-4 py-2">Original</th>
                       <th className="text-left px-4 py-2">Final</th>
                       <th className="text-left px-4 py-2">Attempts</th>
@@ -556,6 +603,7 @@ export default function BargainDashboardPage() {
                     {sessions.map(s => (
                       <tr key={s.id} className="border-t border-blue-800/20 text-blue-100">
                         <td className="px-4 py-2 font-mono text-xs">{s.shopifyProductId}</td>
+                        <td className="px-4 py-2 text-xs text-blue-300/70">{s.customerEmail ?? '—'}</td>
                         <td className="px-4 py-2">₹{s.originalPrice.toFixed(2)}</td>
                         <td className="px-4 py-2">{s.finalPrice != null ? `₹${s.finalPrice.toFixed(2)}` : '—'}</td>
                         <td className="px-4 py-2">{s.attemptsUsed}</td>
