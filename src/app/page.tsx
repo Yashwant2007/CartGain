@@ -112,6 +112,9 @@ export default function HomePage() {
               <Link href="#features" className="px-3 py-2 text-sm font-medium text-blue-200 hover:text-blue-100 hover:bg-blue-600/10 rounded-md transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600">
                 Features
               </Link>
+              <Link href="#bargain" className="px-3 py-2 text-sm font-medium text-blue-200 hover:text-blue-100 hover:bg-blue-600/10 rounded-md transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600">
+                AI Bargain
+              </Link>
               <Link href="#results" className="px-3 py-2 text-sm font-medium text-blue-200 hover:text-blue-100 hover:bg-blue-600/10 rounded-md transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600">
                 Results
               </Link>
@@ -500,6 +503,68 @@ export default function HomePage() {
               <div className="text-center px-4">
                 <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-3 sm:mb-4">See Abandoned Carts Come Back</h3>
                 <p className="text-base sm:text-lg text-cyan-300">Real customers, real recoveries, real revenue</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* AI Bargain Section */}
+      <section id="bargain" className="py-12 sm:py-16 md:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-950 to-blue-950/60" aria-labelledby="bargain-heading">
+        <div className="max-w-7xl mx-auto">
+          <div className="relative rounded-3xl overflow-hidden border border-cyan-500/30 bg-gradient-to-br from-slate-900 via-blue-950/80 to-slate-900 p-8 sm:p-12 md:p-16 shadow-2xl shadow-cyan-500/10">
+            <div className="absolute -top-24 -right-24 w-72 h-72 bg-cyan-500/10 rounded-full blur-3xl"></div>
+            <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+              <div>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/40 text-cyan-300 text-xs font-semibold uppercase tracking-wider mb-5">
+                  <Sparkles className="w-3.5 h-3.5" /> AI Bargain — Our Hook
+                </span>
+                <h2 id="bargain-heading" className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">
+                  Let AI negotiate. <span className="text-cyan-400">Turn &ldquo;too expensive&rdquo; into a sale.</span>
+                </h2>
+                <p className="text-lg text-blue-100 max-w-xl mb-8">
+                  Bargain hunters walk away when they can&apos;t get a deal. CartGain puts an AI shopkeeper at your checkout that negotiates with them — while protecting your margins.
+                </p>
+                <ul className="space-y-3 mb-8">
+                  {[
+                    'Customers counter-offer, AI accepts or politely counters',
+                    'You set the floor price — the AI never sells below it',
+                    'Accepted deals auto-create a Shopify discount code',
+                    'Handles bulk orders, walkout retention & returning customers',
+                    '3 personalities: Friendly, Strict, Playful'
+                  ].map((item) => (
+                    <li key={item} className="flex items-start gap-2.5 text-blue-100">
+                      <CheckCircle2 className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button isLink href="/pricing" variant="primary">
+                  Start Free <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+              <div className="relative">
+                <div className="rounded-2xl border border-blue-700/40 bg-slate-900/80 backdrop-blur-sm p-6 shadow-xl">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-blue-300/70 mb-4">Live Negotiation Preview</div>
+                  <div className="space-y-3">
+                    <div className="flex justify-end">
+                      <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm text-white">I love this serum, but ₹1,499 is too much for me. Can you do ₹1,200?</div>
+                    </div>
+                    <div className="flex justify-start">
+                      <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-slate-700/70 px-4 py-3 text-sm text-blue-100">I get it — it&apos;s our best-seller for a reason. For you today, I can do ₹1,349. That&apos;s 10% off. Deal?</div>
+                    </div>
+                    <div className="flex justify-end">
+                      <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm text-white">Deal! 🎉</div>
+                    </div>
+                    <div className="flex justify-start">
+                      <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-emerald-600/40 border border-emerald-500/40 px-4 py-3 text-sm text-emerald-200">Done! Here&apos;s your code: <span className="font-bold">BARGAIN10</span> — 24 hours only.</div>
+                    </div>
+                  </div>
+                  <div className="mt-5 pt-4 border-t border-blue-700/30 flex items-center justify-between text-xs text-blue-300/60">
+                    <span>Floor price set by you: ₹1,250</span>
+                    <span className="text-emerald-400">Margin protected ✓</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
