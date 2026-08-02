@@ -54,7 +54,10 @@ export default function ForgotPasswordPage() {
           <div className="bg-slate-800/40 border border-green-700/30 rounded-xl p-6 text-center">
             <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-4" />
             <h2 className="text-lg font-semibold text-white mb-2">Check your inbox</h2>
-            <p className="text-sm text-blue-200 mb-6">If an account exists for {email}, you&apos;ll receive a reset link shortly.</p>
+            <p className="text-sm text-blue-200 mb-3">If an account exists for {email}, you&apos;ll receive a reset link shortly.</p>
+            <p className="text-xs text-blue-300/70 mb-6">
+              Didn&apos;t see it? Check your <span className="text-blue-100 font-medium">spam / promotions</span> folder — and make sure you&apos;re using the email you signed up with.
+            </p>
             <Link href="/login" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium">
               Back to sign in
             </Link>

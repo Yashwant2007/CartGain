@@ -1,5 +1,12 @@
 import { Resend } from 'resend'
+import nodemailer from 'nodemailer'
 import { redactSensitive } from '@/lib/data-protection'
+
+// NOTE: cart-gain.com is NOT domain-verified in Resend (no resend._domainkey /
+// Resend SPF records exist on the domain). Resend silently drops sends from
+// unverified domains. SMTP fallback (EMAIL_SERVER_*) covers this case — any
+// SMTP relay (e.g. a verified domain, Brevo, Mailgun, etc.) works immediately.
+// Preferred fix long-term: verify cart-gain.com in the Resend dashboard.
 
 const apiKey = process.env.RESEND_API_KEY
 const fromEmail = process.env.FROM_EMAIL || 'noreply@cart-gain.com'
@@ -14,12 +21,59 @@ if (apiKey) {
   }
 }
 
+const smtpHost = process.env.EMAIL_SERVER_HOST
+const smtpPort = Number(process.env.EMAIL_SERVER_PORT || '587')
+const smtpUser = process.env.EMAIL_SERVER_USER
+const smtpPass = process.env.EMAIL_SERVER_PASSWORD
+
+let smtpTransport: nodemailer.Transporter | null = null
+if (smtpHost && smtpUser && smtpPass) {
+  try {
+    smtpTransport = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: { user: smtpUser, pass: smtpPass },
+    })
+  } catch (e) {
+    console.error('Failed to init SMTP transport:', e)
+  }
+}
+
 export interface EmailOptions {
   to: string
   subject: string
   html: string
   text?: string
   from?: string
+}
+
+function sendViaResend({ to, subject, html, text, from }: Required<Pick<EmailOptions, 'to' | 'subject' | 'html' | 'from'>> & { text?: string }): Promise<{
+  success: boolean
+  messageId?: string
+  error?: string
+}> {
+  return resend!.emails.send({ from, to: [to], subject, html, ...(text ? { text } : {}) }).then(
+    ({ data, error }) => {
+      if (error) throw error
+      return { success: true, messageId: data?.id }
+    },
+    (error) => ({ success: false, error: error?.message || 'Failed to send email' })
+  )
+}
+
+function sendViaSmtp({ to, subject, html, text, from }: Required<Pick<EmailOptions, 'to' | 'subject' | 'html' | 'from'>> & { text?: string }): Promise<{
+  success: boolean
+  messageId?: string
+  error?: string
+}> {
+  if (!smtpTransport) {
+    return Promise.resolve({ success: false, error: 'SMTP not configured' })
+  }
+  return smtpTransport.sendMail({ from, to, subject, html, ...(text ? { text } : {}) }).then(
+    (info) => ({ success: true, messageId: info.messageId }),
+    (error) => ({ success: false, error: error?.message || 'Failed to send email' })
+  )
 }
 
 export async function sendEmail({
@@ -33,27 +87,28 @@ export async function sendEmail({
   messageId?: string
   error?: string
 }> {
-  if (!resend) {
+  const channels: { name: string; send: typeof sendViaResend }[] = []
+  if (resend) channels.push({ name: 'resend', send: sendViaResend })
+  if (smtpTransport) channels.push({ name: 'smtp', send: sendViaSmtp })
+
+  if (channels.length === 0) {
     // Not configured — log for local dev, but report failure so analytics
     // never count an email that was never actually sent.
-    console.warn(`[EMAIL NOT SENT — Resend not configured] ${JSON.stringify(redactSensitive({ to, subject }))}`)
-    return { success: false, error: 'Email service (Resend) not configured' }
+    console.warn(`[EMAIL NOT SENT — no email provider configured] ${JSON.stringify(redactSensitive({ to, subject }))}`)
+    return { success: false, error: 'Email service not configured' }
   }
 
-  try {
-    const { data, error } = await resend.emails.send({
-      from,
-      to: [to],
-      subject,
-      html,
-      ...(text ? { text } : {}),
-    })
-    if (error) throw error
-    return { success: true, messageId: data?.id }
-  } catch (error: any) {
-    console.error('Email send error:', redactSensitive(error))
-    return { success: false, error: error?.message || 'Failed to send email' }
+  for (const channel of channels) {
+    try {
+      const result = await channel.send({ to, subject, html, text, from })
+      if (result.success) return result
+      console.warn(`[EMAIL] ${channel.name} failed for ${JSON.stringify(redactSensitive({ to }))}: ${result.error}`)
+    } catch (error) {
+      console.warn(`[EMAIL] ${channel.name} threw for ${JSON.stringify(redactSensitive({ to }))}:`, redactSensitive(error))
+    }
   }
+
+  return { success: false, error: `All email providers failed (${channels.map((c) => c.name).join(', ')})` }
 }
 
 export const EmailTemplates = {
