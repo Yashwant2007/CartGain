@@ -52,3 +52,5 @@ skills/
 .agents/
 build-output.txt
 .claude/
+
+.env*.local
