@@ -37,6 +37,21 @@ export type LoginInput = z.infer<typeof loginSchema>
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
 
+// Shared password policy (staff accounts): min 8 chars, uppercase + number.
+export const passwordPolicy = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .regex(/[A-Z]/, 'Password must include an uppercase letter')
+  .regex(/[0-9]/, 'Password must include a number')
+
+export function validatePasswordStrength(password: string): string | null {
+  const result = passwordPolicy.safeParse(password)
+  if (!result.success) {
+    return result.error.errors[0]?.message ?? 'Password does not meet requirements'
+  }
+  return null
+}
+
 // Email verification token utilities
 export const VERIFICATION_EXPIRES_IN = 24 * 60 * 60 * 1000 // 24 hours
 export const PASSWORD_RESET_EXPIRES_IN = 60 * 60 * 1000 // 1 hour

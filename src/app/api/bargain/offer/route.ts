@@ -61,6 +61,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Bargaining disabled' }, { status: 403 })
     }
 
+    // Automated decision-making opt-out (DPDP Act 2023, GDPR Art. 22): end the
+    // session without the AI consuming an attempt or responding.
+    if (data.message?.trim().toLowerCase() === 'opt-out') {
+      await prisma.bargainSession.update({
+        where: { id: bargainSession.id },
+        data: { status: 'abandoned' },
+      })
+      return NextResponse.json({
+        message: 'You opted out of AI pricing. Buy at the regular price instead.',
+        terminal: true,
+        status: 'abandoned',
+      }, { status: 200 })
+    }
+
     const currencySymbol = bargainSession.store.currency === 'INR' ? '₹' : bargainSession.store.currency === 'USD' ? '$' : bargainSession.store.currency + ' '
 
     // Resolve bulk quantity: from this message, or carry over the last known one

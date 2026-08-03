@@ -2,5 +2,11 @@
   "buildCommand": "npm run build",
   "env": {
     "NODE_ENV": "production"
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/jobs/data-retention",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }

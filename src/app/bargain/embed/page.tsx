@@ -54,6 +54,7 @@ export default function EmbedPage({
         customerEmail={sp.customerEmail}
         customerPhone={sp.customerPhone}
         productTitle={sp.productTitle}
+        linkout={sp.linkout}
       />
     </>
   )

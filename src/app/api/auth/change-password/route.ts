@@ -5,12 +5,13 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
+import { validatePasswordStrength } from '@/lib/auth-utils'
 
 export const dynamic = 'force-dynamic'
 
 const schema = z.object({
   currentPassword: z.string().min(1),
-  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+  newPassword: z.string().min(1),
 })
 
 export async function POST(request: NextRequest) {
@@ -29,6 +30,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const parsed = schema.safeParse(body)
     if (!parsed.success) return NextResponse.json({ error: parsed.error.errors[0]?.message || 'Invalid input' }, { status: 400 })
+
+    const passwordError = validatePasswordStrength(parsed.data.newPassword)
+    if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 })
 
     const user = await prisma.user.findUnique({ where: { email: session.user.email } })
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })

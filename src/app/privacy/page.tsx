@@ -1,4 +1,4 @@
-import { Shield, Lock, Eye, Database, Globe, Mail, Phone } from 'lucide-react'
+import { Shield, Lock, Eye, Database, Globe, Mail, Phone, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 
 export const metadata = {
@@ -140,8 +140,33 @@ export default function PrivacyPolicyPage() {
                   Data Retention
                 </h2>
                 <p className="leading-relaxed">
-                  We retain your data for as long as your account is active or as needed to provide services. After account termination, we retain data for up to 90 days for backup purposes, then securely delete or anonymize it, unless required by law to retain longer.
+                  We retain your data for as long as your account is active or as needed to provide services. Applied retention limits:
                 </p>
+                <ul className="list-disc pl-5 space-y-2 mt-3">
+                  <li><strong>Cart data:</strong> Customer contact details and cart contents are anonymized 90 days after abandonment.</li>
+                  <li><strong>Bargain sessions:</strong> AI negotiation sessions and messages are deleted 90 days after they start.</li>
+                  <li><strong>Access logs:</strong> Internal audit logs of data access are deleted after 180 days.</li>
+                  <li><strong>Verification tokens:</strong> Password-reset / verification tokens are deleted shortly after expiry.</li>
+                  <li><strong>Opt-out / suppression records:</strong> kept for as long as needed to honor your customers&apos; choices.</li>
+                </ul>
+                <p className="leading-relaxed mt-4">
+                  Automated schedules enforce these limits on a daily basis. Data is either irreversibly deleted or anonymized so it can no longer identify a person.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+                  <Sparkles className="w-6 h-6 text-cyan-400" />
+                  Automated Decision-Making
+                </h2>
+                <p className="leading-relaxed">
+                  CartGain&apos;s optional <strong>AI Bargain</strong> feature uses automated decision-making to negotiate product prices with customers. If enabled for your store, the AI may accept, counter, or reject a customer&apos;s offer and generate a discount code — decisions that determine the final purchase price.
+                </p>
+                <ul className="list-disc pl-5 space-y-2 mt-3">
+                  <li><strong>Human override:</strong> You set a floor price, so the AI can never sell below the price you approve.</li>
+                  <li><strong>Customer opt-out:</strong> Customers are shown a clear &ldquo;Skip AI, buy at full price&rdquo; option that ends AI negotiation immediately and takes them to normal checkout.</li>
+                  <li><strong>Merchant control:</strong> You can disable the AI bargain system entirely at any time from your dashboard.</li>
+                </ul>
               </section>
 
               <section>

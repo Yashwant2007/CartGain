@@ -12,14 +12,14 @@ export function detectWalkout(text: string): boolean {
 
   const strong = [
     /(?:i'?m|i am)\s+(?:out|gone|done|leaving|heading\s+out)/,
-    /forget\s+it/i,
+    /forget\s+(?:it|this|that)/i,
     /never\s+mind/i,
     /chang(?:e|ed|ing)\s+my\s+mind/i,
     /walk(?:ing)?\s+away/i,
     /(?:going|heading)\s+(?:elsewhere|somewhere\s+else)/,
     /(?:buy|purchase|get|shop)\s+(?:it\s+)?(?:from|at)\s+another/i,
     /not\s+(?:interested|buying)\s+anymore/i,
-    /(?:no|skip|drop)\s+the\s+deal/i,
+    /(?:no|skip|drop|dropping)\s+the\s+deal/i,
     /\b(?:bye|goodbye|good\s+bye)\b/i,
     /(?:eff|screw)\s+this|give\s+up/i,
     /too\s+expensive,?\s+(?:i'?m|i)\s+(?:leaving|going|out)/i,
@@ -28,13 +28,13 @@ export function detectWalkout(text: string): boolean {
 
   // Price complaint + exit intent combined
   if (/(?:too\s+expensive|rip\s*off|overpriced|high\s+price|can'?t\s+afford)/.test(t)
-    && /(?:leav(?:e|ing)|go|walk|out|away|elsewhere|another\s+store|amazon|flipkart|meesho)/.test(t)) {
+    && /\b(?:leav(?:e|ing)|go(?:ing)?|walk(?:ing)?|out|away|elsewhere|another\s+store|amazon|flipkart|meesho)\b/.test(t)) {
     return true
   }
 
   // "I'll take my business elsewhere"
-  if (/(?:take|bring)\s+my\s+(?:business|money)/.test(t)
-    && /(?:elsewhere|another|away|somewhere\s+else)/.test(t)) {
+  if (/(?:take|taking|bring|bringing)\s+my\s+(?:business|money)/.test(t)
+    && /\b(?:elsewhere|another|away|somewhere\s+else)\b/.test(t)) {
     return true
   }
 
@@ -45,8 +45,8 @@ export function detectWalkout(text: string): boolean {
 export function extractQuantity(text: string): number | null {
   const t = text.trim()
 
-  if (/(?:half\s+dozen)/i.test(t)) return 6
-  if (/(?:dozen)/i.test(t)) return 12
+  if (/(?:half\s+(?:a\s+)?dozen)/i.test(t)) return 6
+  if (/(?:\bdozen\b)/i.test(t)) return 12
 
   const patterns = [
     // explicit unit words: "2 units", "5 pieces", "3 qty", "4 pcs", "10 items"

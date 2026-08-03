@@ -16,6 +16,7 @@ type Props = {
   customerPhone?: string
   productTitle?: string
   apiBase?: string // e.g. https://cart-gain.com — defaults to current origin
+  linkout?: string // full-price purchase URL (e.g. Shopify cart URL) — used for AI opt-out
 }
 
 type Message = {
@@ -46,6 +47,7 @@ export default function BargainWidget({
   customerPhone,
   productTitle,
   apiBase = '',
+  linkout,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
@@ -183,6 +185,37 @@ export default function BargainWidget({
     }
   }
 
+  // Automated decision-making opt-out: closes the AI negotiation and hands the
+  // customer to normal full-price checkout (DPDP Act 2023 / GDPR Art. 22).
+  async function optOutOfAI() {
+    try {
+      setLoading(true)
+      if (sessionId) {
+        await fetch(`${apiBase}/api/bargain/offer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, message: 'opt-out' }),
+        })
+      }
+      setSessionEnded(true)
+      setMessages(prev => [
+        ...prev,
+        {
+          id: `s-${Date.now()}`, role: 'system',
+          content: 'No problem — you can buy at the regular price below. You opted out of AI pricing.',
+          offeredPrice: null, createdAt: new Date().toISOString(),
+        },
+      ])
+      if (linkout) {
+        window.location.href = linkout
+      }
+    } catch {
+      if (linkout) window.location.href = linkout
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function acceptDeal() {
     if (!sessionId) return
     setLoading(true)
@@ -296,6 +329,15 @@ export default function BargainWidget({
                 <div style={{ fontWeight: 700, fontSize: 15 }}>Bargain with us</div>
                 <div style={{ fontSize: 11, color: '#9fb6e0' }}>
                   {productTitle ? productTitle : 'Product'} · {currencySymbol}{originalPrice.toFixed(2)}
+                </div>
+                <div style={{ fontSize: 10, color: '#7d94bd', marginTop: 2 }}>
+                  Prices are set automatically by AI · <a
+                    href={linkout ? `${linkout}?ai_opt_out=1` : undefined}
+                    onClick={linkout ? undefined : (e) => { e.preventDefault(); void optOutOfAI() }}
+                    style={{ color: '#93c5fd', textDecoration: 'underline', cursor: 'pointer' }}
+                  >
+                    Skip AI, buy at full price
+                  </a>
                 </div>
               </div>
             </div>

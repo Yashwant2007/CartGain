@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { validatePasswordStrength } from '@/lib/auth-utils'
 
 let bcrypt: any = null
 if (typeof window === 'undefined') {
@@ -27,8 +28,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Email mismatch' }, { status: 400 })
     }
 
-    if (!password || password.length < 8) {
-      return NextResponse.json({ message: 'Password must be at least 8 characters' }, { status: 400 })
+    const passwordError = validatePasswordStrength(password ?? '')
+    if (passwordError) {
+      return NextResponse.json({ message: passwordError }, { status: 400 })
     }
 
     const hashedPassword = await bcrypt.hash(password, 12)
