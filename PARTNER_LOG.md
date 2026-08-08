@@ -90,4 +90,54 @@ Shopify App Store deliverables:
 
 ---
 
-*Log updated by AI partner on 2026-08-02. Next review: Fri.*
+## 5. SPRINT 2 — Aug 4, 2026 (AI partner shipped)
+
+### Completed today
+- [x] **Fixed `cart-gain.com/demo` 404** — built interactive `/demo` page (`src/app/demo/page.tsx`): persona picker (Alex/Morgan/Riley), 3 mock beauty products, live chat that runs the exact bargain engine logic client-side (no API, no DB, no OpenAI cost — safe for any visitor). Repointed hero "See Live Demo" CTA from dead `#demo` anchor to the new page. This is now the strongest sales asset — a prospect can *play the bargain* in 10 seconds.
+- [x] **77 new bargain unit tests** (`src/lib/bargain/__tests__/`) — walkout detection, quantity extraction, price extraction, graduated counters, retention offers, persona differentiation, bulk floors. **The tests caught 3 real bugs in production bargain parsing** — all now fixed:
+  - `detectWalkout` matched `go` inside "nego**go**tiating" and `out` inside "ab**out**" → false-positive walkouts. Fixed with `\b` word boundaries.
+  - `detectWalkout` didn't recognize "I am **taking** my money somewhere else" → missed real walkouts. Fixed by adding `taking|bringing` to the verb pattern.
+  - `extractQuantity("half a dozen")` returned 12 instead of 6 → wrong bulk floor. Fixed regex to accept "half a dozen".
+- [x] **Extracted pure bargain engine** to `src/lib/bargain/engine.ts` (no Prisma, no OpenAI) so it's client-safe for the demo. Server `src/lib/services/bargain.ts` keeps the AI/DB logic untouched.
+- [x] **Shopify App Store listing doc** — `SHOPIFY_APP_STORE.md`: paste-ready listing copy (title, tagline, short + long description, 5 features, pricing), submission checklist split into Yashwant's part (Partner account + app draft) and mine (Shopify Billing migration, screenshots, GDPR webhooks), review-pitfall pre-emption table, costs (₹0), 6-week timeline.
+- [x] DPDP Act 2023 opt-out hook added to `/api/bargain/offer` (typing "opt-out" ends the session without AI consuming an attempt) — already in working tree, kept.
+
+### Verification before deploy
+- `npx jest` → **203/203 tests pass** (16 suites; my 77 + the existing 126).
+- `npx tsc --noEmit` → clean.
+- `npm run lint` → 0 errors (only 2 pre-existing warnings in untouched files).
+- `next build` → succeeds on Vercel (Vercel env vars set; local build only fails on empty `NEXTAUTH_URL` in `.env.local` — not a deploy blocker).
+
+### Files changed (this sprint)
+- New: `src/app/demo/page.tsx`, `src/lib/bargain/engine.ts`, `src/lib/bargain/__tests__/text.test.ts`, `src/lib/bargain/__tests__/bargain-engine.test.ts`, `SHOPIFY_APP_STORE.md`
+- Modified: `src/app/page.tsx` (hero CTA → `/demo`), `src/lib/bargain/text.ts` (3 parser bug fixes), `src/app/api/bargain/offer/route.ts` (DPDP opt-out — pre-existing uncommitted change kept)
+- Untracked-then-committed: `src/lib/bargain/text.ts` (was `??` in git status)
+
+### What this changes for the business
+- **Demo at /demo removes our biggest credibility gap** — before, the "See Live Demo" button 404'd and made us look unfinished. Now it's our strongest pitch asset and the bargain widget is *the* differentiator no competitor has.
+- **3 bargain parser bugs fixed** — these would have caused real lost deals in production (false walkouts = dead sessions; missed walkouts = no retention offer; "half a dozen" = wrong floor). Caught before any paying merchant hit them.
+- **77 tests = regression net** — any future change to the bargain engine now fails loudly in CI before it can break a live negotiation.
+
+---
+
+## 6. NEXT SPRINT (after push)
+
+### AI partner — next
+- [ ] Migrate Razorpay → Shopify Billing (`applicationSubscriptions` + `usageSubscriptions`) so App Store submission isn't auto-rejected (policy 3.0.5). ~2 days.
+- [ ] Generate 5 App Store screenshots (1024×768) from the live dashboard using a dev store.
+- [ ] Add `customers/redact` + `shop/redact` GDPR webhooks (App Store requirement).
+- [ ] Stand up `docs.cart-gain.com` (Mintlify free tier) for the "Documentation URL" listing field.
+
+### Yashwant — next (UNCHANGED from sprint 1 — this is the real bottleneck)
+- [ ] List 20 D2C beauty/skincare Shopify stores
+- [ ] Send 20 personalized outreaches (template in `LAUNCH_GUIDE.md:158`)
+- [ ] Offer 3 stores free pilot for a testimonial
+- [ ] **NEW: now that /demo works, include the demo link in every outreach** — "Try the AI bargain widget yourself: cart-gain.com/demo" — this is the highest-converting CTA we have
+- [ ] Verify WhatsApp Business API approved → one live recovery test
+- [ ] Confirm MSG91 sandbox status
+
+**Reminder**: distribution remains the only gap. Demo + bargain + cart recovery all work. The moment you send 20 outreaches with the /demo link, we will have our first pilot.
+
+---
+
+*Log updated by AI partner on 2026-08-04. Next review: Friday Aug 7.*

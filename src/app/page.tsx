@@ -168,10 +168,10 @@ export default function HomePage() {
 
           {/* CTA Buttons - improved touch targets and responsiveness */}
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center mb-12 sm:mb-16 px-2">
-            <Button 
-              isLink 
-              href="#demo" 
-              variant="primary" 
+            <Button
+              isLink
+              href="/demo"
+              variant="primary"
               className="w-full sm:w-auto"
               aria-label="View live demo of cart recovery"
             >
