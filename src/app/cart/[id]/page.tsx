@@ -68,7 +68,7 @@ export default async function CartRecoveryPage({ params }: { params: { id: strin
           originalPrice={perItemPrice}
           currency={cart.currency || 'INR'}
           cartToken={cart.cartId}
-          customerEmail={cart.customerEmail}
+          customerEmail={cart.customerEmail || undefined}
           productTitle={items.length > 0 ? items[0]?.name : 'Product'}
         />
 
