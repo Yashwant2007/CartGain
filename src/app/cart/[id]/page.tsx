@@ -115,17 +115,6 @@ export default async function CartRecoveryPage({ params }: { params: { id: strin
           </div>
 
           {/* Show final price if bargain was already accepted */}
-          {cart.finalPrice && (
-            <div className="border-t border-blue-700/30 pt-4 mb-8">
-              <div className="flex justify-between items-center">
-                <span className="text-blue-200">You got it for</span>
-                <span className="text-2xl font-bold text-emerald-400">{symbol}{(cart.finalPrice).toFixed(2)}</span>
-              </div>
-              <p className="text-center text-xs text-blue-400/60 mt-2">
-                Discount code applied at checkout
-              </p>
-            </div>
-          )}
 
           <a
             href={checkoutUrl}
