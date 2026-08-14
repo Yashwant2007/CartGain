@@ -34,13 +34,16 @@ export default async function CartRecoveryPage({ params }: { params: { id: strin
   }
 
   const symbol = getSymbol(cart.currency || cart.store.currency)
-  const items = Array.isArray(cart.items) ? cart.items : []
+  const itemsArray = Array.isArray(cart.items) ? cart.items : []
+  const items = itemsArray.map((item: any) => ({
+    ...item,
+    shopifyProductId: item.shopifyProductId || '',
+  }))
   const storeId = cart.store.id
   const checkoutUrl = `https://${cart.store.domain}/cart/${cart.cartId}`
 
   // Calculate per-item price for bargain widget
-  const itemsArray = Array.isArray(cart.items) ? cart.items : []
-  const itemCount = itemsArray.length || 1
+  const itemCount = items.length || 1
   const perItemPrice = cart.totalValue / itemCount
 
   return (
