@@ -30,6 +30,8 @@ export async function POST(req: NextRequest) {
       'write_customers',
       'read_products',
       'write_products',
+      'read_discounts',
+      'write_discounts',
       'read_merchant_managed_fulfillment_orders',
       'write_webhooks',
       'read_webhooks',

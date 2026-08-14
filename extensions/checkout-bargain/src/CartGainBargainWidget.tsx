@@ -1,6 +1,6 @@
 import { extension, CheckoutExtensionPoint } from '@shopify/ui-extensions/checkout';
 import { useState, useEffect } from 'react';
-import { render } from '@shopify/ui-extensions-react/checkout';
+import { render, useApi } from '@shopify/ui-extensions-react/checkout';
 import {
   Banner,
   Button,

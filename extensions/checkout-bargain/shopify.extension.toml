@@ -9,15 +9,6 @@ api_version = "2026-01"
 surface = "checkout"
 block = "cart_line_item"
 
-# Or use this for a more prominent placement:
-# surface = "checkout"
-# block = "checkout_information"
-
 [[extensions.targeting]]
 target = "purchase.checkout.block.render"
-module = "CartGainBargainWidget"
-
-# Also add to order status page for post-purchase upsell
-[[extensions.targeting]]
-target = "customer-account.order-status.block.render"
 module = "CartGainBargainWidget"
