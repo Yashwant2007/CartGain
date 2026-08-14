@@ -30,6 +30,14 @@ const nextConfig = {
     maxInactiveAge: 60 * 1000,
     pagesBufferLength: 5,
   },
+  // Ignore Shopify CLI extension folder - it's built/deployed separately via `shopify app deploy`
+  webpack: (config) => {
+    config.watchOptions = {
+      ...config.watchOptions,
+      ignored: ['**/extensions/**', '**/node_modules/**'],
+    };
+    return config;
+  },
   async redirects() {
     return [
       {
