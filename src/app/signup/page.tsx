@@ -5,6 +5,12 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { signIn, signOut } from 'next-auth/react'
 import { Zap, Mail, Lock, User, ArrowRight, CheckCircle, AlertTriangle, X } from 'lucide-react'
+import {
+  isInShopifyEmbed,
+  getEmbedAwareRedirectUrl,
+  openGoogleAuthPopup,
+  redirectTopForAuth,
+} from '@/lib/shopify-embed'
 
 function Toast({ message, type, onClose }: { message: string; type: 'error' | 'info'; onClose: () => void }) {
   useEffect(() => {
@@ -159,6 +165,22 @@ export default function SignUpPage() {
     setError(null)
     try {
       document.cookie = 'cg_oauth_intent=signup; path=/; max-age=600; SameSite=Lax; Secure'
+
+      if (isInShopifyEmbed()) {
+        // Inside the Shopify admin iframe Google refuses to render
+        // (X-Frame-Options: DENY), so run the OAuth in a popup window.
+        // A session can't exist yet inside the embedded flow (no login page
+        // was shown), so signOut() below is skipped here on purpose.
+        const outcome = await openGoogleAuthPopup(getEmbedAwareRedirectUrl('/shopify-auth-success'))
+        if (outcome === 'success') {
+          router.push(getEmbedAwareRedirectUrl('/dashboard'))
+          router.refresh()
+        } else if (outcome === 'blocked') {
+          redirectTopForAuth()
+        }
+        return
+      }
+
       // If a session already exists, NextAuth links the new Google account to
       // the signed-in user instead of creating a fresh account. Sign out
       // first so "Sign up with Google" always creates the new account.

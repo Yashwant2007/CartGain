@@ -5,6 +5,12 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import { Zap, Mail, Lock, ArrowRight, CheckCircle2 } from 'lucide-react'
+import {
+  isInShopifyEmbed,
+  getEmbedAwareRedirectUrl,
+  openGoogleAuthPopup,
+  redirectTopForAuth,
+} from '@/lib/shopify-embed'
 
 export default function LoginPage() {
   return (
@@ -91,6 +97,19 @@ function LoginContent() {
     setIsLoading(true)
     try {
       document.cookie = 'cg_oauth_intent=signin; path=/; max-age=600; SameSite=Lax; Secure'
+
+      if (isInShopifyEmbed()) {
+        // Inside the Shopify admin iframe Google refuses to render
+        // (X-Frame-Options: DENY), so run the OAuth in a popup window.
+        const outcome = await openGoogleAuthPopup(getEmbedAwareRedirectUrl('/shopify-auth-success'))
+        if (outcome === 'success') {
+          router.push(getEmbedAwareRedirectUrl('/dashboard'))
+          router.refresh()
+        } else if (outcome === 'blocked') {
+          redirectTopForAuth()
+        }
+        return
+      }
 
       // signIn('google') — NextAuth v4 does a full-page POST (not popup) by default,
       // which works in all browser contexts including incognito.
