@@ -39,7 +39,8 @@ export default async function CartRecoveryPage({ params }: { params: { id: strin
   const checkoutUrl = `https://${cart.store.domain}/cart/${cart.cartId}`
 
   // Calculate per-item price for bargain widget
-  const itemCount = cart.items?.length || 1
+  const itemsArray = Array.isArray(cart.items) ? cart.items : []
+  const itemCount = itemsArray.length || 1
   const perItemPrice = cart.totalValue / itemCount
 
   return (
