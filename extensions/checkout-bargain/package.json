@@ -1,0 +1,20 @@
+{
+  "name": "@cartgain/checkout-bargain",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "shopify app dev",
+    "deploy": "shopify app deploy",
+    "build": "shopify app build"
+  },
+  "dependencies": {
+    "@shopify/ui-extensions": "^2026.01.0",
+    "@shopify/ui-extensions-react": "^2026.01.0",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@shopify/cli": "^3.0.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -44,3 +44,9 @@ api_version = "2026-01"
 
 # App extensions are configured from the Partner Dashboard UI (listing images,
 # screenshots, pricing). Nothing more is required in TOML for a simple listing.
+
+# Checkout UI Extension — AI Bargain Widget at Checkout
+[[extensions]]
+handle = "cartgain-bargain"
+type = "checkout_ui_extension"
+description = "AI-powered price negotiation widget at checkout — converts price-sensitive shoppers into buyers"
