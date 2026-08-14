@@ -1,0 +1,23 @@
+name = "CartGain Bargain Widget"
+type = "checkout_ui_extension"
+handle = "cartgain-bargain"
+description = "AI-powered price negotiation widget at checkout — converts price-sensitive shoppers into buyers"
+api_version = "2026-01"
+
+[settings]
+# Extension appears on the checkout page, before payment
+surface = "checkout"
+block = "cart_line_item"
+
+# Or use this for a more prominent placement:
+# surface = "checkout"
+# block = "checkout_information"
+
+[[extensions.targeting]]
+target = "purchase.checkout.block.render"
+module = "CartGainBargainWidget"
+
+# Also add to order status page for post-purchase upsell
+[[extensions.targeting]]
+target = "customer-account.order-status.block.render"
+module = "CartGainBargainWidget"

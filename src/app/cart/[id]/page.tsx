@@ -4,6 +4,7 @@ import type { Metadata } from 'next'
 import prisma from '@/lib/db'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, ShoppingBag, Zap } from 'lucide-react'
+import BargainWidget from '@/components/bargain/BargainWidget'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +35,12 @@ export default async function CartRecoveryPage({ params }: { params: { id: strin
 
   const symbol = getSymbol(cart.currency || cart.store.currency)
   const items = Array.isArray(cart.items) ? cart.items : []
+  const storeId = cart.store.id
   const checkoutUrl = `https://${cart.store.domain}/cart/${cart.cartId}`
+
+  // Calculate per-item price for bargain widget
+  const itemCount = cart.items?.length || 1
+  const perItemPrice = cart.totalValue / itemCount
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
@@ -50,6 +56,17 @@ export default async function CartRecoveryPage({ params }: { params: { id: strin
           <ArrowLeft className="w-4 h-4" />
           Back to {cart.store.name}
         </Link>
+
+        {/* Bargain Widget - Visible at cart recovery checkout */}
+        <BargainWidget
+          storeId={storeId}
+          shopifyProductId={items?.[0]?.shopifyProductId || ''}
+          originalPrice={perItemPrice}
+          currency={cart.currency || 'INR'}
+          cartToken={cart.cartId}
+          customerEmail={cart.customerEmail}
+          productTitle={items.length > 0 ? items[0]?.name : 'Product'}
+        />
 
         <div className="bg-slate-800/50 border border-blue-700/30 rounded-2xl p-6 sm:p-8">
           <div className="flex items-center gap-3 mb-6">
@@ -92,6 +109,19 @@ export default async function CartRecoveryPage({ params }: { params: { id: strin
               <span className="text-2xl font-bold text-white">{symbol}{cart.totalValue.toFixed(2)}</span>
             </div>
           </div>
+
+          {/* Show final price if bargain was already accepted */}
+          {cart.finalPrice && (
+            <div className="border-t border-blue-700/30 pt-4 mb-8">
+              <div className="flex justify-between items-center">
+                <span className="text-blue-200">You got it for</span>
+                <span className="text-2xl font-bold text-emerald-400">{symbol}{(cart.finalPrice).toFixed(2)}</span>
+              </div>
+              <p className="text-center text-xs text-blue-400/60 mt-2">
+                Discount code applied at checkout
+              </p>
+            </div>
+          )}
 
           <a
             href={checkoutUrl}
