@@ -14,9 +14,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 })
     }
 
-    // Find store by domain
-    const store = await prisma.store.findUnique({
-      where: { domain: shopDomain.replace('.myshopify.com', '') },
+    // Find store by domain (domain is not unique alone, use findFirst)
+    const cleanDomain = shopDomain.replace('.myshopify.com', '')
+    const store = await prisma.store.findFirst({
+      where: { domain: cleanDomain },
     })
 
     if (!store) {
