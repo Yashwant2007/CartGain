@@ -150,6 +150,12 @@ export async function createShopifyWebhook(
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '(no body)')
+      // Duplicate subscriptions (same topic + address) are expected on
+      // reconnects — treat them as success so OAuth completes cleanly.
+      if (response.status === 422 && errText.includes('already been taken')) {
+        console.log(`Webhook ${topic} already registered — skipping`)
+        return true
+      }
       console.error(`Shopify webhook ${topic} registration failed: ${response.status} ${errText}`)
     }
     return response.ok
@@ -157,6 +163,53 @@ export async function createShopifyWebhook(
     console.error('Failed to create Shopify webhook:', error)
     return false
   }
+}
+
+// Registers a webhook only if the same topic isn't already subscribed to the
+// same address, and re-points stale subscriptions (old address) instead of
+// creating duplicates. Makes setupShopifyWebhooks idempotent across reconnects.
+export async function createShopifyWebhookIfMissing(
+  shopDomain: string,
+  accessToken: string,
+  topic: string,
+  webhookUrl: string
+): Promise<boolean> {
+  try {
+    const listRes = await fetch(
+      `https://${shopDomain}/admin/api/2026-04/webhooks.json?topic=${encodeURIComponent(topic)}`,
+      {
+        headers: { 'X-Shopify-Access-Token': accessToken },
+        signal: AbortSignal.timeout(10000),
+      }
+    )
+
+    if (listRes.ok) {
+      const data = await listRes.json()
+      const existing: { id: number; address: string }[] = data.webhooks || []
+
+      const sameAddress = existing.find((w) => w.address === webhookUrl)
+      if (sameAddress) return true
+
+      const stale = existing.find((w) => w.address !== webhookUrl)
+      if (stale) {
+        const updateRes = await fetch(`https://${shopDomain}/admin/api/2026-04/webhooks/${stale.id}.json`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Shopify-Access-Token': accessToken,
+          },
+          signal: AbortSignal.timeout(10000),
+          body: JSON.stringify({ webhook: { address: webhookUrl } }),
+        })
+        if (updateRes.ok) return true
+        console.error(`Failed to re-point webhook ${topic} (${stale.id}): ${updateRes.status}`)
+      }
+    }
+  } catch (error) {
+    console.error(`Failed to list Shopify webhooks for ${topic}:`, error)
+  }
+
+  return createShopifyWebhook(shopDomain, accessToken, topic, webhookUrl)
 }
 
 export async function setupShopifyWebhooks(
@@ -174,7 +227,7 @@ export async function setupShopifyWebhooks(
   ]
 
   for (const topic of topics) {
-    await createShopifyWebhook(shopDomain, accessToken, topic, webhookUrl)
+    await createShopifyWebhookIfMissing(shopDomain, accessToken, topic, webhookUrl)
   }
 }
 
