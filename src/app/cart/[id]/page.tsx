@@ -114,8 +114,6 @@ export default async function CartRecoveryPage({ params }: { params: { id: strin
             </div>
           </div>
 
-          {/* Show final price if bargain was already accepted */}
-
           <a
             href={checkoutUrl}
             className="block w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-center font-semibold rounded-xl hover:shadow-lg hover:shadow-cyan-500/50 transition-all active:scale-95"
