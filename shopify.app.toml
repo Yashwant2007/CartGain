@@ -1,52 +1,29 @@
-# shopify.app.toml — CartGain Shopify App configuration
-# Used by the Shopify CLI (`shopify app deploy`) and the Partner Dashboard.
-#
-# Setup:
-#   1. Create the app in Shopify Partners (https://partners.shopify.com) with
-#      App URL: https://cart-gain.com/api/shopify/install
-#      Redirection URL: https://cart-gain.com/api/shopify/callback
-#   2. Run `shopify app config link --store <your-dev-store>` (optional)
-#   3. Run `shopify app deploy` to push this config.
-#
-# NOTE: API keys themselves live in the Partner Dashboard / env vars
-# (SHOPIFY_API_KEY, SHOPIFY_API_SECRET) — never hardcode secrets in this file.
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-name = "CartGain"
-handle = "cartgain"
+client_id = "67beb1794fab10553102c134b63e1277"
+name = "CARTGAIN"
 description = "Recover abandoned carts with WhatsApp, Email and SMS — plus AI price negotiation at checkout that converts bargain hunters into buyers."
-
-# Production app URL (public part of the app; embedded views live under /dashboard)
-application_url = "https://cart-gain.com"
+application_url = "https://cart-gain.com/api/shopify/install"
 embedded = true
+# handle = "cartgain"  # linked via client_id; omitted to avoid branding validation bug
 
-# Redirect URLs must match exactly what is configured in the Partner Dashboard.
-[access_scopes]
-# write_discounts is required for the AI bargain system (auto-creates the agreed
-# discount code on the merchant's store).
-scopes = "read_checkouts,write_checkouts,read_orders,write_orders,read_customers,write_customers,read_products,write_products,read_discounts,write_discounts,read_merchant_managed_fulfillment_orders,write_webhooks,read_webhooks"
-
-# Webhooks received by the app. Topics must match what setupShopifyWebhooks()
-# registers at install time (src/lib/shopify.ts) to avoid duplicate subscriptions.
 [webhooks]
-api_version = "2026-01"
+api_version = "2026-07"
 
   [[webhooks.subscriptions]]
-  topics = ["carts/update"]
   uri = "/api/webhooks/shopify"
+  topics = [
+  "carts/update",
+  "checkouts/create",
+  "checkouts/update",
+  "orders/create"
+]
 
-  [[webhooks.subscriptions]]
-  topics = ["checkouts/create", "checkouts/update"]
-  uri = "/api/webhooks/shopify"
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "write_checkouts,read_checkouts,read_customers,write_customers,read_discounts,write_discounts,write_draft_orders,read_draft_orders,read_orders,write_orders,read_products,write_products"
+optional_scopes = [ ]
+use_legacy_install_flow = false
 
-  [[webhooks.subscriptions]]
-  topics = ["orders/create"]
-  uri = "/api/webhooks/shopify"
-
-# App extensions are configured from the Partner Dashboard UI (listing images,
-# screenshots, pricing). Nothing more is required in TOML for a simple listing.
-
-# Checkout UI Extension — AI Bargain Widget at Checkout
-[[extensions]]
-handle = "cartgain-bargain"
-type = "checkout_ui_extension"
-description = "AI-powered price negotiation widget at checkout — converts price-sensitive shoppers into buyers"
+[auth]
+redirect_urls = [ "https://cart-gain.com/api/shopify/callback" ]

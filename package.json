@@ -15,7 +15,9 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
     "@hookform/resolvers": "^3.6.0",
+    "@preact/signals": "^2.11.1",
     "@prisma/client": "^5.22.0",
+    "@shopify/ui-extensions": "2026.7.0",
     "autoprefixer": "^10.4.19",
     "axios": "^1.6.8",
     "bcryptjs": "^2.4.3",
@@ -30,6 +32,7 @@
     "nodemailer": "^7.0.7",
     "openai": "^6.44.0",
     "postcss": "^8.5.10",
+    "preact": "^10.29.8",
     "prisma": "^5.22.0",
     "prop-types": "^15.8.1",
     "razorpay": "^2.9.2",
