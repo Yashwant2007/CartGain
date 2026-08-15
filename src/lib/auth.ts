@@ -109,25 +109,26 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
   providers,
   secret: process.env.NEXTAUTH_SECRET,
-  // We intentionally avoid the __Secure- prefix because Chromium may drop it
-  // in cross-site 302 redirect chains during OAuth callbacks. All cookies
-  // still have Secure flag so they never leak over plain HTTP.
+  // NOTE: cookies use SameSite=None so they're sent to cross-site requests
+  // from the embedded Shopify admin iframe (admin.shopify.com → cart-gain.com).
+  // Lax cookies are withheld for iframe requests, which broke the session
+  // in the embedded app. Secure is required for SameSite=None.
   cookies: {
     sessionToken: {
       name: 'next-auth.session-token',
-      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: true },
+      options: { httpOnly: true, sameSite: 'none', path: '/', secure: true },
     },
     callbackUrl: {
       name: 'next-auth.callback-url',
-      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: true },
+      options: { httpOnly: true, sameSite: 'none', path: '/', secure: true },
     },
     csrfToken: {
       name: 'next-auth.csrf-token',
-      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: true },
+      options: { httpOnly: true, sameSite: 'none', path: '/', secure: true },
     },
     pkceCodeVerifier: {
       name: 'next-auth.pkce.code_verifier',
-      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: true },
+      options: { httpOnly: true, sameSite: 'none', path: '/', secure: true },
     },
   },
   pages: {

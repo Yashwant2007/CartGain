@@ -45,11 +45,32 @@ export function redirectTopForAuth(): void {
 // 'success'  — OAuth completed and the popup signalled back
 // 'closed'   — user closed / cancelled the popup without completing
 // 'blocked'  — browser blocked window.open (no popup at all)
-export function openGoogleAuthPopup(callbackUrl: string): Promise<'success' | 'closed' | 'blocked'> {
+//
+// Instead of opening the NextAuth sign-in page (which in v4 does NOT
+// auto-submit and would add a second click inside the popup), we start the
+// OAuth with the same CSRF round-trip NextAuth's own client uses: fetch the
+// CSRF token, POST it to the callback endpoint, and grab the Google authorize
+// URL from the redirect — then open that URL in the popup.
+export async function openGoogleAuthPopup(callbackUrl: string): Promise<'success' | 'closed' | 'blocked'> {
   if (typeof window === 'undefined') return Promise.resolve('blocked')
 
-  const popupUrl = `${window.location.origin}/api/auth/signin/google?callbackUrl=${encodeURIComponent(callbackUrl)}`
-  const popup = window.open(popupUrl, 'cartgain_google_auth', 'width=520,height=640')
+  let oauthUrl: string
+  try {
+    const csrfRes = await fetch('/api/auth/csrf', { credentials: 'include' })
+    const { csrfToken } = await csrfRes.json()
+    const res = await fetch('/api/auth/callback/google', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ csrfToken, callbackUrl }),
+    })
+    if (!res.ok || !res.url || !/^https?:\/\//.test(res.url)) return Promise.resolve('blocked')
+    oauthUrl = res.url
+  } catch {
+    return Promise.resolve('blocked')
+  }
+
+  const popup = window.open(oauthUrl, 'cartgain_google_auth', 'width=520,height=640')
   if (!popup) return Promise.resolve('blocked')
 
   return new Promise((resolve) => {

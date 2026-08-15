@@ -96,7 +96,7 @@ function LoginContent() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true)
     try {
-      document.cookie = 'cg_oauth_intent=signin; path=/; max-age=600; SameSite=Lax; Secure'
+      document.cookie = 'cg_oauth_intent=signin; path=/; max-age=600; SameSite=None; Secure'
 
       if (isInShopifyEmbed()) {
         // Inside the Shopify admin iframe Google refuses to render

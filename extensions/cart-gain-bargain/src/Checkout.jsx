@@ -92,7 +92,6 @@ const graduatedCounter = (originalPrice, minPrice, attemptsUsed) => {
 
 function CartGainBargainWidget() {
   const api = shopify;
-  const { lines, applyDiscount, discountCodes } = api;
 
   const [showBargain, setShowBargain] = useState(false);
   const [bargainStep, setBargainStep] = useState('intro');
@@ -109,18 +108,19 @@ function CartGainBargainWidget() {
   const [originalPrice, setOriginalPrice] = useState(0);
   const [minPrice, setMinPrice] = useState(0);
 
-  const line = lines.current?.[0];
+  const line = api.lines.value?.[0];
 
   useEffect(() => {
     if (line) {
       setProductTitle(line.merchandise.title);
-      const price = parseFloat(line.merchandise.price.amount);
+      const price = parseFloat(line.cost.totalAmount.amount);
       setOriginalPrice(price);
       setMinPrice(Math.round(price * (1 - PROFIT_PERCENT / 100) * 100) / 100);
     }
   }, [line]);
 
-  const hasCartGainDiscount = discountCodes.current?.some(
+  const appliedCodes = api.discountCodes.value || [];
+  const hasCartGainDiscount = appliedCodes.some(
     (code) => code.code.startsWith('BARGAIN_') || code.code.startsWith('CARTGAIN_')
   );
 
@@ -217,19 +217,19 @@ function CartGainBargainWidget() {
     if (!discountCode || !finalPrice) return;
     setLoading(true);
     try {
-      const shopDomain = api.shop?.domain || '';
+      const shopDomain = api.shop?.myshopifyDomain || '';
       if (!shopDomain) throw new Error('Shop domain not available');
 
-      const variantId = line.merchandise.id.includes('ProductVariant/')
+      const variantId = line?.merchandise?.id?.includes('ProductVariant/')
         ? line.merchandise.id
         : null;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/api/bargain/checkout-accept`, {
+      const response = await fetch(`https://cart-gain.com/api/bargain/checkout-accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           shopDomain,
-          shopifyProductId: line.merchandise.id,
+          shopifyProductId: line?.merchandise?.id,
           variantId,
           originalPrice,
           finalPrice,
@@ -241,7 +241,13 @@ function CartGainBargainWidget() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Failed to create discount code');
 
-      await applyDiscount(discountCode);
+      const result = await api.applyDiscountCodeChange({
+        type: 'addDiscountCode',
+        code: discountCode,
+      });
+      if (result.type === 'error') {
+        throw new Error(result.message || 'Failed to apply discount code');
+      }
     } catch (err) {
       console.error('Failed to apply bargain discount:', err);
       setError(err.message || 'Failed to apply discount. Please try again.');
@@ -254,8 +260,8 @@ function CartGainBargainWidget() {
 
   if (hasCartGainDiscount && !showBargain) {
     return (
-      <s-banner status="success" title="✅ Bargain Applied!">
-        <s-text appearance="subdued">Your negotiated price has been applied to this order.</s-text>
+      <s-banner tone="success" heading="Bargain Applied!">
+        <s-text color="subdued">Your negotiated price has been applied to this order.</s-text>
       </s-banner>
     );
   }
@@ -263,116 +269,98 @@ function CartGainBargainWidget() {
   return (
     <>
       {!showBargain && !hasCartGainDiscount && (
-        <s-banner status="info" title="Want a better price?">
-          <s-inline-stack alignment="center" spacing="loose">
-            <s-text appearance="subdued">Negotiate the price of {productTitle} with our AI shopkeeper</s-text>
-            <s-button onPress={openBargain} variant="primary">
-              🤝 Bargain Now
-            </s-button>
-          </s-inline-stack>
+        <s-banner heading="Want a better price?">
+          <s-stack direction="inline" gap="small-200">
+            <s-text color="subdued">Negotiate the price of {productTitle} with our AI shopkeeper</s-text>
+            <s-button onClick={openBargain}>Bargain Now</s-button>
+          </s-stack>
         </s-banner>
       )}
 
       {showBargain && (
-        <s-modal title="🤝 Bargain with AI" open={showBargain} onClose={closeBargain}>
-          <s-view padding="base">
+        <s-modal title="Bargain with AI" open={showBargain} onClose={closeBargain}>
+          <s-box padding="base">
             {bargainStep === 'intro' && (
-              <s-block-stack spacing="loose">
+              <s-stack direction="block" gap="small-200">
                 {line.merchandise.image?.url && (
-                  <s-image source={line.merchandise.image.url} aspectRatio={1} border="base" />
+                  <s-image src={line.merchandise.image.url} />
                 )}
                 <s-heading>{productTitle}</s-heading>
-                <s-subheading>Listed: ₹{originalPrice.toFixed(2)}</s-subheading>
+                <s-text color="subdued">Listed: ₹{originalPrice.toFixed(2)}</s-text>
                 <s-divider />
-                <s-text-block>{PersonaOpenings[persona](productTitle, originalPrice)}</s-text-block>
+                <s-text>{PersonaOpenings[persona](productTitle, originalPrice)}</s-text>
                 <s-divider />
-                <s-inline-stack spacing="loose">
-                  <s-select
-                    label="Choose negotiator"
-                    value={persona}
-                    options={Object.entries(PersonaLabels).map(([value, label]) => ({ label, value }))}
-                    onChange={setPersona}
-                  />
-                  <s-button onPress={() => setBargainStep('chat')} variant="primary">
-                    Start Bargaining
-                  </s-button>
-                </s-inline-stack>
-              </s-block-stack>
+                <s-text>Choose your negotiator:</s-text>
+                <s-stack direction="inline" gap="small-200">
+                  {Object.entries(PersonaLabels).map(([value, label]) => (
+                    <s-button key={value} onClick={() => setPersona(value)}>
+                      {label}
+                    </s-button>
+                  ))}
+                </s-stack>
+                <s-button onClick={() => setBargainStep('chat')}>Start Bargaining</s-button>
+              </s-stack>
             )}
 
             {bargainStep === 'chat' && (
-              <s-block-stack spacing="base">
-                <s-inline-stack justification="space-between">
-                  <s-text appearance="subdued">Attempts left: {MAX_ATTEMPTS - attempts}/{MAX_ATTEMPTS}</s-text>
-                  <s-text appearance="subdued">Floor: ₹{minPrice.toFixed(2)} (hidden)</s-text>
-                </s-inline-stack>
+              <s-stack direction="block" gap="small-200">
+                <s-text color="subdued">Attempts left: {MAX_ATTEMPTS - attempts}/{MAX_ATTEMPTS}</s-text>
                 <s-divider />
-                <s-block-stack spacing="tight" overflow="auto" maxBlockSize="300">
+                <s-stack direction="block" gap="small-200">
                   {messages.map((msg, idx) => (
-                    <s-inline-stack key={String(idx)} alignment={msg.role === 'customer' ? 'end' : 'start'} spacing="tight">
-                      <s-banner
-                        status={msg.role === 'customer' ? 'info' : 'neutral'}
-                        appearance={msg.role === 'customer' ? 'accent' : 'outline'}
-                      >
-                        <s-text>{msg.content}</s-text>
-                        {msg.price != null && (
-                          <s-text appearance="subdued" size="small">
-                            {msg.role === 'customer' ? 'Offered' : 'Counter'}: ₹{msg.price.toFixed(2)}
-                          </s-text>
-                        )}
-                      </s-banner>
-                    </s-inline-stack>
+                    <s-banner key={String(idx)} tone={msg.role === 'customer' ? 'info' : 'neutral'}>
+                      <s-text>{msg.content}</s-text>
+                      {msg.price != null && (
+                        <s-text color="subdued">
+                          {msg.role === 'customer' ? 'Offered' : 'Counter'}: ₹{msg.price.toFixed(2)}
+                        </s-text>
+                      )}
+                    </s-banner>
                   ))}
-                </s-block-stack>
+                </s-stack>
                 <s-divider />
-                <s-inline-stack spacing="tight">
+                <s-stack direction="inline" gap="small-200">
                   <s-text-field
                     label="Your offer"
-                    placeholder={`e.g. "₹400" or "I'll think about it"`}
+                    placeholder='e.g. "₹400" or "I will think about it"'
                     value={input}
-                    onChange={setInput}
-                    onSubmit={handleSend}
+                    onChange={(e) => setInput(e.target.value)}
                   />
-                  <s-button onPress={handleSend} loading={loading} variant="primary" disabled={!input.trim()}>
-                    Send
+                  <s-button onClick={handleSend} disabled={!input.trim() || loading}>
+                    {loading ? 'Sending...' : 'Send'}
                   </s-button>
-                </s-inline-stack>
-              </s-block-stack>
+                </s-stack>
+              </s-stack>
             )}
 
             {bargainStep === 'deal' && finalPrice != null && (
-              <s-block-stack spacing="loose" alignment="center">
-                <s-text appearance="success">🎉 Deal Accepted!</s-text>
+              <s-stack direction="block" gap="small-200" align="center">
+                <s-text>Deal Accepted!</s-text>
                 <s-heading>Final Price: ₹{finalPrice.toFixed(2)}</s-heading>
-                <s-text appearance="subdued">You saved ₹{(originalPrice - finalPrice).toFixed(2)}</s-text>
-                <s-text appearance="subdued">Discount code: {discountCode}</s-text>
-                {error && <s-alert status="critical" title="Error">{error}</s-alert>}
-                <s-button onPress={applyBargainDiscount} variant="primary" loading={loading}>
-                  Apply to Checkout →
+                <s-text color="subdued">You saved ₹{(originalPrice - finalPrice).toFixed(2)}</s-text>
+                <s-text color="subdued">Discount code: {discountCode}</s-text>
+                {error && <s-banner tone="critical" heading="Error">{error}</s-banner>}
+                <s-button onClick={applyBargainDiscount} disabled={loading}>
+                  {loading ? 'Applying...' : 'Apply to Checkout'}
                 </s-button>
-                <s-button onPress={closeBargain} variant="secondary">
-                  Close
-                </s-button>
-              </s-block-stack>
+                <s-button onClick={closeBargain}>Close</s-button>
+              </s-stack>
             )}
 
             {bargainStep === 'rejected' && (
-              <s-block-stack spacing="loose" alignment="center">
-                <s-text appearance="critical">😔 Negotiation Ended</s-text>
-                <s-text appearance="subdued">Attempts exhausted. No deal this time.</s-text>
-                <s-button onPress={closeBargain} variant="primary">
-                  Continue Checkout
-                </s-button>
-              </s-block-stack>
+              <s-stack direction="block" gap="small-200" align="center">
+                <s-text>Negotiation Ended</s-text>
+                <s-text color="subdued">Attempts exhausted. No deal this time.</s-text>
+                <s-button onClick={closeBargain}>Continue Checkout</s-button>
+              </s-stack>
             )}
-          </s-view>
+          </s-box>
         </s-modal>
       )}
     </>
   );
 }
 
-// 1. Export the extension
 export default async () => {
   render(<CartGainBargainWidget />, document.body);
 };
