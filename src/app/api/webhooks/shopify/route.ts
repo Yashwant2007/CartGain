@@ -1,57 +1,79 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { waitUntil } from '@vercel/functions'
 import prisma from '@/lib/db'
 import { logDataAccess } from '@/lib/data-protection'
 import { verifyShopifyWebhook } from '@/lib/shopify'
-import { checkSimpleRateLimit as checkRateLimit } from '@/lib/rate-limit'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS } from '@/lib/payment'
 import { sendAlertOnError } from '@/lib/alerter'
-import { getRedis, redisSetNX } from '@/lib/redis'
+import { redisSetNX } from '@/lib/redis'
 
 export const dynamic = 'force-dynamic'
 
 const DEDUP_TTL_MS = 60 * 60 * 1000
 
+// Webhooks must be acknowledged with a fast 2xx — Shopify treats slowness and
+// non-2xx (including 429) as a delivery failure and retries, which is exactly
+// what inflates the failure rate. So this handler:
+//   1. verifies the HMAC synchronously (fast, no I/O)
+//   2. returns 200 immediately
+//   3. does all DB/network work asynchronously, isolated per job
+// There is deliberately NO IP-based rate limiting here: Shopify is a trusted
+// publisher that already retries+throttles, and 429 would itself be a failure.
+
 async function isDuplicateOrder(orderId: string): Promise<boolean> {
-  const redis = getRedis()
-  if (redis) {
-    const key = `dedup:order:${orderId}`
-    const stored = await redisSetNX(key, '1', DEDUP_TTL_MS)
+  try {
+    const stored = await redisSetNX(`dedup:order:${orderId}`, '1', DEDUP_TTL_MS)
     return !stored
+  } catch {
+    return false
   }
-  return false
+}
+
+function safeRun(label: string, fn: () => Promise<void>) {
+  fn().catch(async (err) => {
+    console.error(`Async ${label} error:`, err)
+    try {
+      await sendAlertOnError(label, err instanceof Error ? err : new Error(String(err)))
+    } catch {}
+  })
 }
 
 export async function POST(request: NextRequest) {
-  const startTime = Date.now()
   const shopDomain = request.headers.get('x-shopify-shop-domain') || 'unknown'
   const topic = request.headers.get('x-shopify-topic') || 'unknown'
 
+  let body: string
   try {
-    const body = await request.text()
-    const headers = request.headers
+    body = await request.text()
+  } catch (e) {
+    console.error(`Webhook [${topic}] body read failed from ${shopDomain}:`, e)
+    return NextResponse.json({ received: false }, { status: 200 })
+  }
 
-    // Verify signature FIRST — never trust or rate-limit on attacker-controlled headers.
-    const verified = verifyShopifyWebhook(body, headers)
-    if (!verified) {
-      return NextResponse.json({ message: 'Invalid signature' }, { status: 401 })
-    }
+  // Verify signature FIRST — never process or trust unverified payloads.
+  if (!verifyShopifyWebhook(body, request.headers)) {
+    console.warn(`Webhook [${topic}] from ${shopDomain} — invalid signature rejected`)
+    return NextResponse.json({ message: 'Invalid signature' }, { status: 401 })
+  }
 
-    const { allowed, retryAfter } = await checkRateLimit(
-      `webhook_shopify_${request.headers.get('x-forwarded-for') || 'unknown'}`
-    )
-    if (!allowed) {
-      console.warn(`Rate limited webhook from ${shopDomain} (${topic})`)
-      return NextResponse.json({ error: 'Rate limited' }, { status: 429, headers: { 'Retry-After': String(retryAfter) } })
-    }
+  let data: any
+  try {
+    data = JSON.parse(body)
+  } catch (e) {
+    console.error(`Webhook [${topic}] from ${shopDomain} — unparseable payload, acking to stop retries:`, e)
+    return NextResponse.json({ received: true, skipped: 'unparseable' }, { status: 200 })
+  }
 
-    const data = JSON.parse(body)
+  // Acknowledge immediately — all processing happens after the response.
+  // waitUntil() guarantees Vercel keeps the function alive until the async
+  // work finishes (it would otherwise be frozen the moment we return 200).
+  console.log(`Webhook [${topic}] from ${shopDomain} — acked (async processing)`)
 
-    console.log(`Webhook [${topic}] from ${shopDomain} — processing`)
-
-    const store = await findStoreByDomain(shopDomain)
+  waitUntil((async () => {
+    const store = await prisma.store.findFirst({ where: { domain: shopDomain } })
     if (!store) {
-      console.log(`No store found for domain ${shopDomain} — returning 200 to stop retries`)
-      return NextResponse.json({ received: true })
+      console.log(`No store found for domain ${shopDomain} — dropping event`)
+      return
     }
 
     if (topic === 'orders/create') {
@@ -60,51 +82,33 @@ export async function POST(request: NextRequest) {
         const dup = await isDuplicateOrder(String(orderId))
         if (dup) {
           console.log(`Duplicate order ${orderId} from ${shopDomain} — skipping`)
-          return NextResponse.json({ received: true, deduplicated: true })
+          return
         }
       }
     }
 
     switch (topic) {
       case 'carts/update':
-        handleCartUpdate(data, store, shopDomain).catch(err => {
-          console.error(`Async cart update error for ${shopDomain}:`, err)
-        })
+        safeRun('cart update', () => handleCartUpdate(data, store, shopDomain))
         break
       case 'checkouts/create':
       case 'checkouts/update':
-        handleCheckout(data, store, shopDomain).catch(err => {
-          console.error(`Async checkout error for ${shopDomain}:`, err)
-        })
+        safeRun('checkout', () => handleCheckout(data, store, shopDomain))
         break
       case 'orders/create':
-        processOrderCreate(data, store, shopDomain).catch(err => {
-          console.error(`Async order processing error for ${shopDomain}:`, err)
-          sendAlertOnError('Async order processing', err, { shopDomain, orderId: data.id }).catch(() => {})
-        })
+        safeRun('order processing', () => processOrderCreate(data, store, shopDomain))
         break
       default:
         console.log('Unhandled webhook topic:', topic)
     }
+  })().catch(async (err) => {
+    console.error(`Async webhook processing error [${topic}] from ${shopDomain}:`, err)
+    try {
+      await sendAlertOnError('Shopify webhook processing', err instanceof Error ? err : new Error(String(err)), { topic, shopDomain })
+    } catch {}
+  }))
 
-    const elapsed = Date.now() - startTime
-    console.log(`Webhook [${topic}] from ${shopDomain} — done in ${elapsed}ms`)
-
-    return NextResponse.json({ received: true, elapsed })
-  } catch (error) {
-    const elapsed = Date.now() - startTime
-    console.error(`Webhook [${topic}] from ${shopDomain} — failed after ${elapsed}ms:`, error)
-    sendAlertOnError('Shopify webhook', error, { topic, shopDomain, elapsed }).catch(() => {})
-    // Return 500 so Shopify retries — a 200 here silently drops the event.
-    return NextResponse.json({ message: 'Webhook processing failed' }, { status: 500 })
-  }
-}
-
-async function findStoreByDomain(domain: string | null) {
-  if (!domain) return null
-  return prisma.store.findFirst({
-    where: { domain },
-  })
+  return NextResponse.json({ received: true })
 }
 
 function extractPhone(cart: any): string | null {
