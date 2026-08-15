@@ -93,6 +93,10 @@ const graduatedCounter = (originalPrice, minPrice, attemptsUsed) => {
 function CartGainBargainWidget() {
   const api = shopify;
 
+  // Thank-you page = buyer already checked out → bargain a % off their NEXT
+  // order instead of the current one (no product/variant to attach).
+  const isThankYou = !!(api.order || api.orderConfirmation);
+
   const [showBargain, setShowBargain] = useState(false);
   const [bargainStep, setBargainStep] = useState('intro');
   const [messages, setMessages] = useState([]);
@@ -101,6 +105,7 @@ function CartGainBargainWidget() {
   const [persona, setPersona] = useState('friendly');
   const [finalPrice, setFinalPrice] = useState(null);
   const [discountCode, setDiscountCode] = useState(null);
+  const [codeSaved, setCodeSaved] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -108,16 +113,24 @@ function CartGainBargainWidget() {
   const [originalPrice, setOriginalPrice] = useState(0);
   const [minPrice, setMinPrice] = useState(0);
 
-  const line = api.lines.value?.[0];
+  const line = isThankYou ? undefined : api.lines.value?.[0];
+  const referencePrice = isThankYou
+    ? parseFloat(api.cost?.subtotalAmount?.value?.amount ?? api.cost?.totalAmount?.value?.amount ?? 0) || 100
+    : 0;
 
   useEffect(() => {
-    if (line) {
+    if (isThankYou) {
+      setProductTitle('your next order');
+      const price = referencePrice || 100;
+      setOriginalPrice(price);
+      setMinPrice(Math.round(price * (1 - PROFIT_PERCENT / 100) * 100) / 100);
+    } else if (line) {
       setProductTitle(line.merchandise.title);
       const price = parseFloat(line.cost.totalAmount.amount);
       setOriginalPrice(price);
       setMinPrice(Math.round(price * (1 - PROFIT_PERCENT / 100) * 100) / 100);
     }
-  }, [line]);
+  }, [line, referencePrice, isThankYou]);
 
   const appliedCodes = api.discountCodes.value || [];
   const hasCartGainDiscount = appliedCodes.some(
@@ -132,6 +145,7 @@ function CartGainBargainWidget() {
     setInput('');
     setFinalPrice(null);
     setDiscountCode(null);
+    setCodeSaved(false);
     setError(null);
   };
 
@@ -229,17 +243,25 @@ function CartGainBargainWidget() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           shopDomain,
-          shopifyProductId: line?.merchandise?.id,
-          variantId,
+          shopifyProductId: isThankYou ? null : line?.merchandise?.id,
+          variantId: isThankYou ? null : variantId,
           originalPrice,
           finalPrice,
           discountPercent: Math.round((1 - finalPrice / originalPrice) * 100),
           code: discountCode,
+          orderLevel: isThankYou,
         }),
       });
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Failed to create discount code');
+
+      if (isThankYou) {
+        // Order already placed — nothing to apply now; the code is for the next
+        // checkout.
+        setCodeSaved(true);
+        return;
+      }
 
       const result = await api.applyDiscountCodeChange({
         type: 'addDiscountCode',
@@ -256,7 +278,7 @@ function CartGainBargainWidget() {
     }
   };
 
-  if (!line) return null;
+  if (!isThankYou && !line) return null;
 
   if (hasCartGainDiscount && !showBargain) {
     return (
@@ -282,7 +304,7 @@ function CartGainBargainWidget() {
           <s-box padding="base">
             {bargainStep === 'intro' && (
               <s-stack direction="block" gap="small-200">
-                {line.merchandise.image?.url && (
+                {!isThankYou && line?.merchandise?.image?.url && (
                   <s-image src={line.merchandise.image.url} />
                 )}
                 <s-heading>{productTitle}</s-heading>
@@ -336,13 +358,32 @@ function CartGainBargainWidget() {
             {bargainStep === 'deal' && finalPrice != null && (
               <s-stack direction="block" gap="small-200" align="center">
                 <s-text>Deal Accepted!</s-text>
-                <s-heading>Final Price: ₹{finalPrice.toFixed(2)}</s-heading>
-                <s-text color="subdued">You saved ₹{(originalPrice - finalPrice).toFixed(2)}</s-text>
+                {isThankYou ? (
+                  <>
+                    <s-heading>{Math.round((1 - finalPrice / originalPrice) * 100)}% off your next order</s-heading>
+                    <s-text color="subdued">Use code below within 24 hours at your next checkout</s-text>
+                  </>
+                ) : (
+                  <>
+                    <s-heading>Final Price: ₹{finalPrice.toFixed(2)}</s-heading>
+                    <s-text color="subdued">You saved ₹{(originalPrice - finalPrice).toFixed(2)}</s-text>
+                  </>
+                )}
                 <s-text color="subdued">Discount code: {discountCode}</s-text>
                 {error && <s-banner tone="critical" heading="Error">{error}</s-banner>}
-                <s-button onClick={applyBargainDiscount} disabled={loading}>
-                  {loading ? 'Applying...' : 'Apply to Checkout'}
-                </s-button>
+                {isThankYou ? (
+                  codeSaved ? (
+                    <s-text color="subdued">Code is ready — apply it when you check out next time.</s-text>
+                  ) : (
+                    <s-button onClick={applyBargainDiscount} disabled={loading || !discountCode || !finalPrice}>
+                      {loading ? 'Generating...' : 'Get My Code'}
+                    </s-button>
+                  )
+                ) : (
+                  <s-button onClick={applyBargainDiscount} disabled={loading}>
+                    {loading ? 'Applying...' : 'Apply to Checkout'}
+                  </s-button>
+                )}
                 <s-button onClick={closeBargain}>Close</s-button>
               </s-stack>
             )}

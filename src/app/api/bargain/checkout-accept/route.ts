@@ -33,9 +33,9 @@ export async function POST(request: NextRequest) {
   const headers = corsHeaders(request.headers.get('origin'))
   try {
     const body = await request.json()
-    const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, discountPercent, code } = body
+    const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, discountPercent, code, orderLevel } = body
 
-    if (!shopDomain || !shopifyProductId || !originalPrice || !finalPrice || !code) {
+    if (!shopDomain || !originalPrice || !finalPrice || !code) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400, headers })
     }
 
@@ -58,8 +58,8 @@ export async function POST(request: NextRequest) {
     // Generate the discount code in Shopify
     const result = await generateBargainDiscountCode({
       store,
-      shopifyProductId,
-      variantId: variantId || null,
+      shopifyProductId: orderLevel ? null : shopifyProductId,
+      variantId: orderLevel ? null : variantId || null,
       originalPrice,
       finalPrice,
       discountPercent: calculatedPercent,

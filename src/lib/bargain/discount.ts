@@ -23,19 +23,26 @@ export type GeneratedBargainDiscount = {
  * Create a Shopify discountCodeBasic for an accepted bargain.
  * - Usage limit: 1
  * - 24h expiry
- * - Applies to specific product variant with `percentage` off the original price,
- *   effectively bringing the customer to the agreed `finalPrice`.
+ * - scope 'product' | 'variant': applies to specific product/variant with
+ *   `percentage` off the original price, bringing the customer to `finalPrice`.
+ * - scope 'order' (default when no product given): applies percentage off the
+ *   whole order — used by the Thank-you "next order" bargain.
  */
 export async function generateBargainDiscountCode(opts: {
   store: Store
-  shopifyProductId: string
-  variantId: string | null
+  shopifyProductId?: string | null
+  variantId?: string | null
   originalPrice: number
   finalPrice: number
   discountPercent: number
   code: string
 }): Promise<GeneratedBargainDiscount> {
   const { store, shopifyProductId, variantId, originalPrice, finalPrice, discountPercent, code } = opts
+  const scope: 'order' | 'product' | 'variant' = variantId
+    ? 'variant'
+    : shopifyProductId
+      ? 'product'
+      : 'order'
 
   // Shop domain must be `<shop>.myshopify.com` for GraphQL API
   const shopDomain = store.domain.includes('.')
@@ -69,7 +76,7 @@ export async function generateBargainDiscountCode(opts: {
   const expiresAt = new Date(Date.now() + ONE_DAY * 1000).toISOString()
 
   const variantGid = variantId ? `gid://shopify/ProductVariant/${variantId}` : null
-  const productGid = `gid://shopify/Product/${shopifyProductId}`
+  const productGid = shopifyProductId ? `gid://shopify/Product/${shopifyProductId}` : null
 
   const mutation = `
     mutation discountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
@@ -95,8 +102,8 @@ export async function generateBargainDiscountCode(opts: {
       usageLimit: 1,
       appliesOncePerCustomer: true,
       customerSelection: { all: true },
-      eligibleProducts: variantGid ? undefined : { productsV2: { productsToAdd: [productGid] } },
-      variants: variantGid ? { productVariantsToAdd: [variantGid] } : undefined,
+      eligibleProducts: scope === 'product' ? { productsV2: { productsToAdd: [productGid!] } } : undefined,
+      variants: scope === 'variant' ? { productVariantsToAdd: [variantGid!] } : undefined,
       value: {
         percentage: discountPercent,
       },
