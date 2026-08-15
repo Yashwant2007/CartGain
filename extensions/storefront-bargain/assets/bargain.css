@@ -1,0 +1,11 @@
+.cg-bargain-block {
+  width: 100%;
+  margin: 8px 0;
+}
+
+.cg-bargain-frame {
+  border-radius: 12px;
+  overflow: hidden;
+  background: transparent;
+  transition: height 0.2s ease;
+}

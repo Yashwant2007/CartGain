@@ -1,8 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
+import { redisIncr, redisExpire } from '@/lib/redis'
 
 export const dynamic = 'force-dynamic'
+
+// Public (storefront + checkout) tier — cap how many discount codes each shop
+// can mint per hour to prevent spam, while staying generous for real traffic.
+const MAX_CODES_PER_SHOP_HOUR = 250
+const CODE_WINDOW_SECONDS = 60 * 60
+
+async function underCodeBudget(shopKey: string): Promise<boolean> {
+  try {
+    const count = await redisIncr(`bargain:codes:${shopKey}`)
+    if (count === 1) {
+      await redisExpire(`bargain:codes:${shopKey}`, CODE_WINDOW_SECONDS * 1000)
+    }
+    return count <= MAX_CODES_PER_SHOP_HOUR
+  } catch {
+    return true
+  }
+}
 
 // Checkout UI extensions run on https://checkout.shopify.com — allow those
 // cross-origin requests (plus the storefront admin/preview origins).
@@ -47,6 +65,14 @@ export async function POST(request: NextRequest) {
 
     if (!store) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404, headers })
+    }
+
+    const withinBudget = await underCodeBudget(cleanDomain)
+    if (!withinBudget) {
+      return NextResponse.json(
+        { message: 'Too many codes generated for this store recently. Try again later.' },
+        { status: 429, headers }
+      )
     }
 
     // Verify the discount percent matches

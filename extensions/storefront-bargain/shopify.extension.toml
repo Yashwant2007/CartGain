@@ -1,0 +1,6 @@
+# CartGain Bargain — theme app extension (product + cart page pre-checkout bargaining)
+# Merchants add the blocks in the theme editor: Customize → Add block → CartGain.
+name = "CartGain Bargain (Storefront)"
+handle = "storefront-bargain"
+type = "theme"
+uid = "a5c5cb13-b6e8-329a-b6d1-98d578cde5427a4295cd"
