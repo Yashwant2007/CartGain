@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 // Top-level entry point for the embedded Shopify admin Google OAuth popup.
@@ -27,6 +27,7 @@ function Loading({ label }: { label: string }) {
 function StartContent() {
   const searchParams = useSearchParams()
   const [fatal, setFatal] = useState<string | null>(null)
+  const navigatedRef = useRef(false)
 
   useEffect(() => {
     // Read primitive once — searchParams identity changes on every render.
@@ -39,32 +40,49 @@ function StartContent() {
         if (!csrfRes.ok) throw new Error('Could not start sign-in (CSRF)')
         const { csrfToken } = await csrfRes.json()
 
-        // NextAuth v4: provider sign-in is INITIATED via POST
-        // /api/auth/signin/{provider} (POST to /api/auth/callback/{provider}
-        // fails with "OAuthCallback"). We use a real form submission instead of
-        // fetch: the browser follows the 302 to accounts.google.com as a plain
-        // top-level navigation — no CORS, no opaque-redirect quirks — which is
-        // reliable in every browser, including the popup window.
         if (cancelled) return
+
+        const signinUrl = `/api/auth/signin/google?callbackUrl=${encodeURIComponent(cb)}`
+
+        // 1) Preferred: real form POST. The browser follows the 302 to
+        //    accounts.google.com as a plain top-level navigation — no CORS.
         const form = document.createElement('form')
         form.method = 'POST'
-        form.action = `/api/auth/signin/google?callbackUrl=${encodeURIComponent(cb)}`
+        form.action = signinUrl
         const input = document.createElement('input')
         input.type = 'hidden'
         input.name = 'csrfToken'
         input.value = csrfToken
         form.appendChild(input)
         document.body.appendChild(form)
-        form.submit()
+
+        try {
+          form.submit()
+        } catch {
+          // form submission blocked (e.g., sandboxed popup without allow-forms)
+        }
+        navigatedRef.current = true
+
+        // 2) Fallback: if the form submit didn't take us anywhere (some
+        //    browsers/popup sandboxes block it), force a top-level navigation
+        //    to the sign-in page, which lets the user continue with a click.
+        setTimeout(() => {
+          if (cancelled || document.hidden) return
+          if (window.location.pathname === '/shopify-auth-start') {
+            window.location.assign(`${signinUrl}&csrf=${encodeURIComponent(csrfToken)}`)
+          }
+        }, 2500)
       } catch (err) {
         if (cancelled) return
         setFatal(err instanceof Error ? err.message : 'Sign-in failed to start')
       }
     }
 
-    run()
+    // Small delay so the popup is fully rendered before submitting.
+    const t = setTimeout(run, 250)
     return () => {
       cancelled = true
+      clearTimeout(t)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
