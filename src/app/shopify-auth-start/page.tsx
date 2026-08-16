@@ -39,12 +39,17 @@ function StartContent() {
         if (!csrfRes.ok) throw new Error('Could not start sign-in (CSRF)')
         const { csrfToken } = await csrfRes.json()
 
-        const res = await fetch('/api/auth/callback/google', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ csrfToken, callbackUrl: cb }),
-        })
+        // NextAuth v4: provider sign-in is INITIATED via POST /api/auth/signin/{provider}
+        // (the route /api/auth/callback/{provider} POST fails with "OAuthCallback").
+        const res = await fetch(
+          `/api/auth/signin/google?callbackUrl=${encodeURIComponent(cb)}`,
+          {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ csrfToken }),
+          }
+        )
 
         if (!res.url || !/^https?:\/\//.test(res.url)) {
           throw new Error('Could not reach Google')
