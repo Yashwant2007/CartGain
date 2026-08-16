@@ -39,30 +39,23 @@ function StartContent() {
         if (!csrfRes.ok) throw new Error('Could not start sign-in (CSRF)')
         const { csrfToken } = await csrfRes.json()
 
-        // NextAuth v4: provider sign-in is INITIATED via POST /api/auth/signin/{provider}
-        // (the route /api/auth/callback/{provider} POST fails with "OAuthCallback").
-        // redirect:'manual' stops the fetch at the 302 so we can navigate the
-        // popup to Google ourselves — following the redirect inside fetch hits
-        // accounts.google.com cross-origin with no CORS headers → "Failed to fetch".
-        const res = await fetch(
-          `/api/auth/signin/google?callbackUrl=${encodeURIComponent(cb)}`,
-          {
-            method: 'POST',
-            redirect: 'manual',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ csrfToken }),
-          }
-        )
-
-        const oauthUrl = res.url || ''
-        if (!/^https:\/\/(accounts\.google\.com|accounts\.googleusercontent\.com)/.test(oauthUrl)) {
-          throw new Error('Could not reach Google')
-        }
-
+        // NextAuth v4: provider sign-in is INITIATED via POST
+        // /api/auth/signin/{provider} (POST to /api/auth/callback/{provider}
+        // fails with "OAuthCallback"). We use a real form submission instead of
+        // fetch: the browser follows the 302 to accounts.google.com as a plain
+        // top-level navigation — no CORS, no opaque-redirect quirks — which is
+        // reliable in every browser, including the popup window.
         if (cancelled) return
-        // Full navigation (not fetch) so Google's own cookies work normally.
-        window.location.href = oauthUrl
+        const form = document.createElement('form')
+        form.method = 'POST'
+        form.action = `/api/auth/signin/google?callbackUrl=${encodeURIComponent(cb)}`
+        const input = document.createElement('input')
+        input.type = 'hidden'
+        input.name = 'csrfToken'
+        input.value = csrfToken
+        form.appendChild(input)
+        document.body.appendChild(form)
+        form.submit()
       } catch (err) {
         if (cancelled) return
         setFatal(err instanceof Error ? err.message : 'Sign-in failed to start')
