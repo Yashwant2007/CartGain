@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useRouter } from 'next/navigation'
 
 // Landing page for the Google OAuth popup used by the embedded Shopify admin
@@ -8,7 +9,16 @@ import { useRouter } from 'next/navigation'
 // redirect lands here after the OAuth round-trip; we signal the opener (the
 // app frame inside the Shopify admin) and close the popup.
 export default function ShopifyAuthSuccessPage() {
+  return (
+    <Suspense fallback={null}>
+      <AuthSuccessContent />
+    </Suspense>
+  )
+}
+
+function AuthSuccessContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     try {
@@ -20,8 +30,14 @@ export default function ShopifyAuthSuccessPage() {
     } catch {
       // cross-origin opener — fall through to a plain redirect
     }
+    // Check for error parameter from NextAuth OAuth callback
+    const error = searchParams.get('error')
+    if (error) {
+      // Could post error to opener if needed
+      console.error('OAuth error:', error)
+    }
     router.replace('/dashboard')
-  }, [router])
+  }, [router, searchParams])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center">
