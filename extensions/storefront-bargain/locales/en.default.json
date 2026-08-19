@@ -1,0 +1,30 @@
+{
+  "blocks": {
+    "product-bargain": {
+      "name": "CartGain Bargain",
+      "settings": {
+        "heading": {
+          "label": "Heading",
+          "default": "Want a better price?"
+        },
+        "accent": {
+          "label": "Accent color",
+          "default": "#1d4ed8"
+        }
+      }
+    },
+    "cart-bargain": {
+      "name": "CartGain Cart Bargain",
+      "settings": {
+        "heading": {
+          "label": "Heading",
+          "default": "Need a better total?"
+        },
+        "accent": {
+          "label": "Accent color",
+          "default": "#1d4ed8"
+        }
+      }
+    }
+  }
+}

@@ -88,6 +88,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       authorization: {
         params: {
           prompt: 'select_account consent',
+      callbackUrl: `${process.env.NEXTAUTH_URL}/api/auth/callback/google`,
         },
       },
     })

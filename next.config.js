@@ -14,6 +14,22 @@ const csp = [
   "object-src 'none'",
 ].join('; ')
 
+// More permissive CSP for storefront bargain widget (needs cross-origin embedding)
+const bargainWidgetCsp = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://checkout.razorpay.com https://js.stripe.com https://cdn.shopify.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "img-src 'self' data: https: blob:",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "connect-src 'self' https://api.cart-gain.com https://checkout.razorpay.com https://api.razorpay.com https://lumberjack.razorpay.com https://api.stripe.com https://admin.shopify.com",
+  "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://*.razorpay.com https://js.stripe.com https://cdn.shopify.com https://admin.shopify.com",
+  "child-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://*.razorpay.com",
+  "frame-ancestors 'self' https://*.myshopify.com https://admin.shopify.com https://checkout.shopify.com",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "object-src 'none'",
+].join('; ')
+
 const nextConfig = {
   images: {
     remotePatterns: [
@@ -30,7 +46,6 @@ const nextConfig = {
     maxInactiveAge: 60 * 1000,
     pagesBufferLength: 5,
   },
-  // Ignore Shopify CLI extension folder - it's built/deployed separately via `shopify app deploy`
   webpack: (config) => {
     config.watchOptions = {
       ...config.watchOptions,
@@ -61,9 +76,38 @@ const nextConfig = {
           { key: 'X-XSS-Protection', value: '1; mode=block' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'geolocation=(), microphone=(), camera=(), payment=(self), publickey-credentials-get=()' },
-          { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+          // Cross-Origin-Resource-Policy: same-origin blocks cross-origin iframe embedding
+          // Remove for routes that need to be embedded (like /s/bargain)
           { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
           { key: 'Content-Security-Policy', value: csp },
+        ],
+      },
+      // Storefront bargain widget needs cross-origin embedding + no CORP
+      {
+        source: '/s/bargain',
+        headers: [
+          { key: 'Content-Security-Policy', value: bargainWidgetCsp },
+          // Allow cross-origin embedding in Shopify themes/checkout
+          { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
+          { key: 'Cross-Origin-Opener-Policy', value: 'unsafe-none' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
+      // Shopify auth callback needs cross-origin for popup flow
+      {
+        source: '/shopify-auth-success',
+        headers: [
+          { key: 'Cross-Origin-Opener-Policy', value: 'unsafe-none' },
+          { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
+        ],
+      },
+      // Auth callbacks need cross-origin for OAuth
+      {
+        source: '/api/auth/callback/:provider*',
+        headers: [
+          { key: 'Cross-Origin-Opener-Policy', value: 'unsafe-none' },
+          { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
         ],
       },
     ]

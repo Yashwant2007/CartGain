@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useMemo, useState, type ReactNode } from 'react'
+import { Suspense, useMemo, useState, type ReactNode, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import BargainWidget, { type BargainItem } from '@/components/bargain/StorefrontBargainWidget'
 
@@ -80,6 +80,12 @@ function PageContent() {
   }, [mode, params, wholeCart, selected, items, total])
 
   const checkoutUrl = shop ? `https://${shop}/checkout` : '/checkout'
+
+  // Ensure iframe can be embedded in Shopify themes/checkout
+  useEffect(() => {
+    // Send ready signal to parent (theme editor/preview)
+    try { window.parent?.postMessage({ type: 'cg_ready' }, '*'); } catch {}
+  }, [])
 
   if (mode === 'cart' && items.length > 0) {
     return (

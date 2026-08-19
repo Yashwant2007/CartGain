@@ -9,8 +9,9 @@
 {% assign currency = cart.currency.iso_code | default: shop.currency %}
 {% assign img = v.featured_image | default: product.featured_image %}
 {% assign img_url = img | image_url: width: 640 %}
+{% assign shop_domain = shop.permanent_domain %}
 {% assign widget_src = 'https://cart-gain.com/s/bargain?mode=item'
-  | append: '&shop=' | append: shop.permanent_domain
+  | append: '&shop=' | append: shop_domain
   | append: '&product=' | append: product.id
   | append: '&variant=' | append: v.id
   | append: '&title=' | append: product.title
@@ -21,15 +22,29 @@
 %}
 
 <div class="cg-bargain-block" data-cg-bargain-root {{ block.shopify_attributes }}>
-  <iframe
-    class="cg-bargain-frame"
-    data-cg-bargain
-    src="{{ widget_src }}"
-    title="CartGain price negotiation"
-    loading="lazy"
-    style="border:0;width:100%;height:180px;display:block;"
-    allow="clipboard-write; clipboard-read"
-  ></iframe>
+  {% if request.design_mode %}
+    <!-- Theme editor preview: show static placeholder -->
+    <div class="cg-bargain-placeholder" style="border:0;width:100%;height:180px;display:flex;align-items:center;justify-content:center;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:16px;text-align:center;">
+      <div style="color:#64748b;font-family:system-ui,sans-serif;">
+        <div style="font-size:24px;margin-bottom:8px;">🤝</div>
+        <div style="font-weight:600;color:#334155;margin-bottom:4px;">CartGain Bargain Widget</div>
+        <div style="font-size:13px;color:#94a3b8;">Widget loads on live storefront.<br>Preview disabled in theme editor.</div>
+      </div>
+    </div>
+  {% else %}
+    <!-- Live storefront: load actual widget -->
+    <iframe
+      class="cg-bargain-frame"
+      data-cg-bargain
+      src="{{ widget_src }}"
+      title="CartGain price negotiation"
+      loading="lazy"
+      style="border:0;width:100%;height:180px;display:block;"
+      allow="clipboard-write; clipboard-read"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+      referrerpolicy="origin"
+    ></iframe>
+  {% endif %}
 </div>
 
 {% schema %}

@@ -46,19 +46,14 @@ export function redirectTopForAuth(): void {
 // 'closed'   — user closed / cancelled the popup without completing
 // 'blocked'  — browser blocked window.open (no popup at all)
 //
-// Instead of opening the NextAuth sign-in page (which in v4 does NOT
-// auto-submit and would add a second click inside the popup), we open a tiny
-// top-level popup page (/shopify-auth-start) that runs the same CSRF
-// round-trip NextAuth's own client uses — but INSIDE the popup as a real
-// top-level window. Doing the handshake from the iframe caused Chrome (which
-// partitions cookies set from cross-site frames) to not match NextAuth's
-// OAuth `state` cookie on the redirect back, producing "OAuthCallback".
+// Use direct NextAuth sign-in URL with callbackUrl — simpler and avoids
+// the intermediate /shopify-auth-start page which can have cookie issues.
 export async function openGoogleAuthPopup(callbackUrl: string): Promise<'success' | 'closed' | 'blocked'> {
   if (typeof window === 'undefined') return Promise.resolve('blocked')
 
-  const startUrl = `/shopify-auth-start?cb=${encodeURIComponent(callbackUrl)}`
+  const signinUrl = `/api/auth/signin/google?callbackUrl=${encodeURIComponent(callbackUrl)}`
 
-  const popup = window.open(startUrl, 'cartgain_google_auth', 'width=520,height=640')
+  const popup = window.open(signinUrl, 'cartgain_google_auth', 'width=520,height=640')
   if (!popup) return Promise.resolve('blocked')
 
   return new Promise((resolve) => {
