@@ -102,119 +102,74 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
     setError(null)
   }
 
-  const handleSend = async () => {
-    if (!input.trim() || loading) return
-    const userText = input.trim()
-    setMessages((prev) => [...prev, { role: 'customer', content: userText }])
-    setInput('')
-    setLoading(true)
-    setError(null)
-
-    try {
-      const res = await fetch(`/api/bargain/offer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: `storefront_${shop}_${productId || 'cart'}_${line.kind}_${originalPrice}`,
-          message: userText,
-          // Pass context for session creation
-          shopDomain: shop,
-          productId: isCart ? null : productId,
-          variantId: isCart ? null : variantId,
-          originalPrice,
-          currency,
-          title,
-          minPrice: Math.round(originalPrice * (1 - PROFIT_PERCENT / 100) * 100) / 100,
-          maxAttempts: MAX_ATTEMPTS,
-          persona,
-        }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        // Fallback to local logic if API fails
-        throw new Error(data.message || 'API error')
+  // Local fallback helpers
+  const extractPrice = (text: string): number | null => {
+    const patterns = [
+      /(?:₹|INR|Rs\.?|USD|\$|€|£|¥)\s*(\d+(?:\.\d{1,2})?)/i,
+      /(\d+(?:\.\d{1,2})?)\s*(?:₹|rs\.?|inr|rupees?|\$|usd|us\s?dollars?|euros?|eur|pounds?|gbp)/i,
+      /\b(\d+(?:\.\d{1,2})?)\b/,
+    ]
+    for (const p of patterns) {
+      const m = text.match(p)
+      if (m) {
+        const v = parseFloat(m[1])
+        if (v > 0 && v < 1_000_000) return v
       }
-
-      const nextAttempt = attempts + 1
-      const exhausted = nextAttempt >= MAX_ATTEMPTS
-
-      setMessages((prev) => [...prev, { role: 'ai', content: data.reply, price: data.counterOffer }])
-      setAttempts(nextAttempt)
-
-      if (data.decision === 'accept') {
-        setStep('deal')
-        setFinalPrice(data.counterOffer ?? data.finalPrice)
-        setDiscountCode(data.discountCode || `BARGAIN_${Date.now().toString(36).toUpperCase()}`)
-      } else if (data.decision === 'reject' || data.sessionStatus === 'rejected' || data.sessionStatus === 'abandoned') {
-        setStep('rejected')
-      } else {
-        setStep('chat')
-      }
-    } catch (err: any) {
-      console.warn('[StorefrontBargain] API failed, using local fallback:', err.message)
-      // Local fallback logic (existing rule-based)
-      const userText = input.trim()
-      const offer = extractPrice(userText)
-      const isWalkout = detectWalkout(userText)
-      const nextAttempt = attempts + 1
-      const exhausted = nextAttempt >= MAX_ATTEMPTS
-
-      let result: { reply: string; decision: string; counterOffer?: number }
-      let newStep: string = 'chat'
-      let newFinal: number | null = null
-      let newCode: string | null = null
-
-      if (isWalkout && attempts < MAX_ATTEMPTS - 1) {
-        const lastCounter = [...messages].reverse().find((m) => m.role === 'ai' && m.price != null)?.price ?? originalPrice
-        const stepSize = Math.max(Math.round((originalPrice - minPrice) * 0.08 * 100) / 100, 1)
-        const p = Math.max(minPrice, Math.round((lastCounter - stepSize) * 100) / 100)
-        result = { reply: PersonaRetention[persona](p, (n) => money(currency, n)), decision: 'counter', counterOffer: p }
-      } else if (isWalkout) {
-        setMessages((prev) => [...prev, { role: 'ai', content: PersonaFarewell[persona] }])
-        setStep('rejected')
-        setLoading(false)
-        return
-      } else if (offer != null) {
-        if (offer >= minPrice) {
-          result = { reply: PersonaAccept[persona](offer, (n) => money(currency, n)), decision: 'accept', counterOffer: offer }
-        } else if (offer < minPrice * 0.3) {
-          const counter = graduatedCounter(originalPrice, minPrice, attempts)
-          result = { reply: PersonaLowball[persona](offer, counter, (n) => money(currency, n)), decision: 'counter', counterOffer: counter }
-        } else {
-          const counter = graduatedCounter(originalPrice, minPrice, attempts)
-          if (exhausted) {
-            result = { reply: PersonaFinal[persona](minPrice, (n) => money(currency, n)), decision: 'counter', counterOffer: minPrice }
-          } else {
-            result = { reply: PersonaCounter[persona](offer, counter, (n) => money(currency, n)), decision: 'counter', counterOffer: counter }
-          }
-        }
-      } else {
-        const counter = graduatedCounter(originalPrice, minPrice, attempts)
-        result = {
-          reply: `What price did you have in mind? I could probably do ${money(currency, counter)} if you make me a fair offer.`,
-          decision: 'counter',
-          counterOffer: counter,
-        }
-      }
-
-      if (exhausted && result.decision !== 'accept') {
-        setStep('rejected')
-      } else if (result.decision === 'accept') {
-        setStep('deal')
-        setFinalPrice(result.counterOffer ?? offer)
-        setDiscountCode(`BARGAIN_${Date.now().toString(36).toUpperCase()}`)
-      } else {
-        setStep('chat')
-      }
-
-      setMessages((prev) => [...prev, { role: 'ai', content: result.reply, price: result.counterOffer }])
-      setAttempts(nextAttempt)
-    } finally {
-      setLoading(false)
     }
+    return null
   }
 
-  // Local fallback helpers (copied from original for fallback)
-  const extractPrice 
+  const detectWalkout = (text: string): boolean => {
+    const t = text.toLowerCase()
+    if (/(?:leaving|going)\s+(?:for|to)\s+(?:work|school|gym|dinner|lunch)/.test(t)) return false
+    if (/(?:i'?m|i am)\s+(?:out|leaving|done)/.test(t)) return true
+    if (/forget\s+(?:it|this)/.test(t)) return true
+    if (/never\s+mind|bye|goodbye/.test(t)) return true
+    if (/(?:too\s+expensive|rip\s*off|can'?t\s+afford)/.test(t) && /\b(?:leav|go|walk|out|away|elsewhere|another)\b/.test(t)) return true
+    if (/(?:take|taking|bring|bringing)\s+my\s+(?:business|money)/.test(t) && /\b(?:elsewhere|another|away|somewhere\s+else)\b/.test(t)) return true
+    return false
+  }
+
+  const graduatedCounter = (originalPrice: number, minPrice: number, attemptsUsed: number): number => {
+    const progress = attemptsUsed / MAX_ATTEMPTS
+    const counter = originalPrice - (originalPrice - minPrice) * progress
+    return Math.round(counter * 100) / 100
+  }
+
+  const PersonaOpenings: Record<string, (item: string, price: number, fmt: (n: number) => string) => string> = {
+    friendly: (item, price, f) =>
+      `Hey! Welcome 👋 I see you're interested in ${item}. It's listed at ${f(price)}. I'd love to help you get a good deal — what price were you thinking? You've got ${MAX_ATTEMPTS} attempts to bargain with me.`,
+    strict: (item, price, f) =>
+      `Thank you for your interest in ${item}. The current price is ${f(price)}. I'm open to reasonable offers within ${MAX_ATTEMPTS} exchanges. What price were you considering?`,
+    playful: (item, price, f) =>
+      `Hey hey! 👋 I see you're checking out ${item} — nice choice! Listed at ${f(price)}, but hey, that's just the starting point 😏 You've got ${MAX_ATTEMPTS} chances to charm me into a better deal. What's your move?`,
+  }
+
+  const PersonaAccept: Record<string, (p: number, f: (n: number) => string) => string> = {
+    friendly: (p, f) => `Done! ${f(p)} works for me 🎉 Shall we lock it in?`,
+    strict: (p, f) => `Transaction confirmed at ${f(p)}. A discount code will be generated.`,
+    playful: (p, f) => `DEAL! 🎉🎉🎉 Told you we'd get there! Code's coming right up.`,
+  }
+
+  const PersonaLowball: Record<string, (offer: number, counter: number, f: (n: number) => string) => string> = {
+    friendly: (offer, counter, f) => `I appreciate the creativity 😄 but I can't do ${f(offer)}. Let me offer ${f(counter)} — a fair starting point. What do you think?`,
+    strict: (offer, counter, f) => `That is not a viable offer. A reasonable starting point would be ${f(counter)}.`,
+    playful: (offer, counter, f) => `Free?! 😂 I like your confidence! Best I can do is ${f(counter)} and that's me being generous.`,
+  }
+
+  const PersonaCounter: Record<string, (offer: number, counter: number, f: (n: number) => string) => string> = {
+    friendly: (offer, counter, f) => `Hmm, ${f(offer)} is a bit low for me. Let me meet you partway — how about ${f(counter)}? I think that's fair given the quality.`,
+    strict: (offer, counter, f) => `My offer already reflects the market rate for this quality tier. I can offer ${f(counter)}.`,
+    playful: (offer, counter, f) => `Can *I* do better? The real question is, can *you*? 😏 Just kidding — here's my final. ${f(counter)}. That's it. No more. Maybe.`,
+  }
+
+  const PersonaFinal: Record<string, (floor: number, f: (n: number) => string) => string> = {
+    friendly: (floor, f) => `Alright, I've done my best 🙂 This is my final offer: ${f(floor)}. It's the lowest I can go. Take it or leave it — but I really hope you take it!`,
+    strict: (floor, f) => `This is my final position: ${f(floor)}. Beyond this, the offer stands. Your decision.`,
+    playful: (floor, f) => `OKAY OKAY you win! Here's my absolute last offer: ${f(floor)}. My manager is gonna kill me 🙃 Deal?`,
+  }
+
+  const PersonaRetention: Record<string, (price: number, f: (n: number) => string) => string> = {
+    friendly: (price, f) => `Wait, friend — before you go! For you, I can do ${f(price)}. That's me stretching every rupee. Please stay — I really want this to work for you.`,
+    strict: (price, f) => `One moment. I am prepared to make a one-time adjustment to ${f(price)}. Beyond that, my offer stands. Your decision.`,
+    playful: (price, f) => `WAIT WAIT WAIT! 😅 Okay, you drive a hard bargain. FINAL final offer: ${f(price)}. I'm risking my job for this 🙃 Deal?`,
