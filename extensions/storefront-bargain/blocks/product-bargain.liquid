@@ -10,15 +10,16 @@
 {% assign img = v.featured_image | default: product.featured_image %}
 {% assign img_url = img | image_url: width: 640 %}
 {% assign shop_domain = shop.permanent_domain %}
+{% assign title_enc = product.title | url_encode %}
+{% assign img_enc = img_url | url_encode %}
 {% assign widget_src = 'https://cart-gain.com/s/bargain?mode=item'
   | append: '&shop=' | append: shop_domain
   | append: '&product=' | append: product.id
   | append: '&variant=' | append: v.id
-  | append: '&title=' | append: product.title
+  | append: '&title=' | append: title_enc
   | append: '&price=' | append: pprice
   | append: '&currency=' | append: currency
-  | append: '&image=' | append: img_url
-  | url_encode
+  | append: '&image=' | append: img_enc
 %}
 
 <div class="cg-bargain-block" data-cg-bargain-root {{ block.shopify_attributes }}>
