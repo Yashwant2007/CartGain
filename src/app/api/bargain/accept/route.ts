@@ -77,8 +77,10 @@ export async function POST(request: NextRequest) {
       ((bargainSession.originalPrice - finalPrice) / bargainSession.originalPrice) * 100
     )
 
-    // Generate short discount code
+    // Generate short discount code - bind to cartToken to prevent sharing
     const code = `BARGAIN-${bargainSession.id.slice(-6).toUpperCase()}`
+    const customerEmail = bargainSession.customerEmail
+    const cartToken = bargainSession.cartToken
 
     // Persist system message marking acceptance
     await prisma.$transaction([
@@ -87,7 +89,7 @@ export async function POST(request: NextRequest) {
           sessionId: bargainSession.id,
           role: 'system',
           content: `Customer accepted final price of ${bargainSession.store.currency} ${finalPrice.toFixed(2)}. Discount code issued: ${code} (${discountPercent}% off)`,
-          metadata: { event: 'accept', finalPrice, discountPercent, code },
+          metadata: { event: 'accept', finalPrice, discountPercent, code, customerEmail, cartToken },
         } as any,
       }),
       prisma.bargainSession.update({
@@ -96,6 +98,8 @@ export async function POST(request: NextRequest) {
           status: 'accepted',
           finalPrice,
           discountCode: code,
+          discountCodeCustomerEmail: customerEmail,
+          discountCodeCartToken: cartToken,
         },
       }),
     ])
@@ -111,6 +115,8 @@ export async function POST(request: NextRequest) {
         finalPrice,
         discountPercent,
         code,
+        customerEmail,
+        cartToken,
       })
       shopifyCode = result
     } catch (err: any) {

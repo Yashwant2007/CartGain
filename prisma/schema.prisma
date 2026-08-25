@@ -330,11 +330,13 @@ model BargainSession {
   currentOffer      Float     // latest offer from customer
   finalPrice        Float?    // agreed price (null = no deal)
   discountCode      String?   // Shopify discount code if accepted
+  discountCodeCustomerEmail String?   // email the code was bound to (prevents sharing)
+  discountCodeCartToken String?    // cartToken the code was bound to (prevents sharing)
   attemptsUsed      Int       @default(0)
   status            String    @default("active") // active, accepted, rejected, expired, abandoned
   startedAt         DateTime  @default(now())
   expiredAt         DateTime
-  updatedAt         DateTime  @updatedAt
+  updatedAt         DateTime @updatedAt
   createdAt         DateTime  @default(now())
 
   store    Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
