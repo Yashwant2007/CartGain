@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
     let openingMeta: any = { source: 'fallback' }
 
     try {
-      const ai = await negotiateStep(ctx, [], "I'm interested in this item", data.originalPrice)
+      const ai = await negotiateStep(ctx, [], "I'm interested in this item", data.originalPrice, 'opening')
       // Treat negotiation as welcome for opening (don't actually evaluate originalPrice as customer offer)
       openingReply = ai.reply || openingReply
       openingMeta = { source: 'openai', tactic: ai.tactic, sentiment: ai.sentiment }

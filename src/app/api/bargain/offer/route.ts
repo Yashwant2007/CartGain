@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
       }
 
       // First walkout → retention offer (one meaningful extra concession)
-      const retentionResult = await negotiateStep(ctx, history, data.message, customerOffer ?? undefined)
+      const retentionResult = await negotiateStep(ctx, history, data.message, customerOffer ?? undefined, bargainSession.id)
       const retentionPrice = retentionResult.counterOffer ?? retentionOffer(ctx, lastCounter).counterOffer ?? minPrice
       const retentionReply = retentionResult.reply || retentionOffer(ctx, lastCounter).reply
 
@@ -241,11 +241,26 @@ export async function POST(request: NextRequest) {
     }
 
     // ── NORMAL NEGOTIATION (incl. bulk) ──
-    const result = await negotiateStep(ctx, history, data.message, customerOffer ?? undefined)
+    const result = await negotiateStep(ctx, history, data.message, customerOffer ?? undefined, bargainSession.id)
+
+    // If abuse was detected and doesn't consume an attempt, don't count it
+    const isAbuseNoConsume = (result.metadata as any)?.abuse === true &&
+      (result.metadata as any)?.consumeAttempt === false
 
     const sessionStatus =
       result.decision === 'accept' ? 'accepted' :
       result.decision === 'reject' ? 'rejected' : 'active'
+
+    // Roll back the attempt if abuse doesn't consume it
+    const effectiveAttemptsUsed = isAbuseNoConsume ? attemptsUsed - 1 : attemptsUsed
+    const effectiveAttemptsRemaining = Math.max(0, config.maxAttempts - effectiveAttemptsUsed)
+
+    if (isAbuseNoConsume) {
+      await prisma.bargainSession.update({
+        where: { id: bargainSession.id },
+        data: { attemptsUsed: { decrement: 1 } },
+      })
+    }
 
     const [customerMsg, aiMsg, updatedSession] = await prisma.$transaction([
       prisma.bargainMessage.create({
@@ -276,10 +291,11 @@ export async function POST(request: NextRequest) {
       reply: result.reply,
       decision: result.decision,
       counterOffer: result.counterOffer ?? null,
-      attemptsRemaining,
+      attemptsRemaining: effectiveAttemptsRemaining,
       sessionStatus,
       finalPrice: updatedSession.finalPrice,
       sessionId: bargainSession.id,
+      ...(isAbuseNoConsume ? { abuseDetected: true, abuseCategory: (result.metadata as any)?.category } : {}),
     })
   } catch (error) {
     const validationResponse = handleValidationError(error)
