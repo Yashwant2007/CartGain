@@ -1050,7 +1050,13 @@ export default function HomePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-10 mb-8 sm:mb-12">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-primary-400 flex-shrink-0" />
+                <Image
+                  src="/favicon-32x32.png"
+                  alt="CartGain"
+                  width={24}
+                  height={24}
+                  className="w-6 h-6 rounded-md flex-shrink-0"
+                />
                 <span className="text-base sm:text-lg font-bold">CartGain</span>
               </div>
               <p className="text-gray-400 text-xs sm:text-sm leading-relaxed">

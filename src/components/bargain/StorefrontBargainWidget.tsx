@@ -332,27 +332,27 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
 
   const buttonCls =
     'px-4 py-2 rounded-lg font-semibold text-sm transition-colors disabled:opacity-50 ' +
-    'bg-blue-600 text-white hover:bg-blue-700 disabled:cursor-not-allowed'
+    'bg-indigo-600 text-white hover:bg-indigo-700 disabled:cursor-not-allowed'
   const ghostCls =
-    'px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-white/10 text-blue-200 hover:bg-white/20'
+    'px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200'
   return (
-    <div ref={rootRef} className="w-full text-slate-300" data-cg-bargain-widget>
+    <div ref={rootRef} className="w-full bg-white text-gray-900 rounded-xl shadow-lg border border-gray-200" data-cg-bargain-widget>
       {step === 'intro' && (
         <div className="space-y-3 p-4">
           <div className="flex items-start gap-3">
             {!isCart && line.image ? (
               <Image src={line.image} alt="" width={48} height={48} className="w-12 h-12 rounded-lg object-cover" unoptimized />
             ) : (
-              <div className="w-12 h-12 rounded-lg bg-blue-600/20 flex items-center justify-center text-lg">🛒</div>
+              <div className="w-12 h-12 rounded-lg bg-indigo-100 flex items-center justify-center text-lg">🛒</div>
             )}
             <div className="min-w-0">
-              <p className="font-semibold text-white text-sm truncate">{title}</p>
-              <p className="text-blue-300 text-xs mt-0.5">Listed: {money(currency, originalPrice)}</p>
-              {isCart && <p className="text-blue-300 text-xs mt-0.5">Negotiate the whole cart total</p>}
+              <p className="font-semibold text-gray-900 text-sm truncate">{title}</p>
+              <p className="text-gray-500 text-xs mt-0.5">Listed: {money(currency, originalPrice)}</p>
+              {isCart && <p className="text-gray-500 text-xs mt-0.5">Negotiate the whole cart total</p>}
             </div>
           </div>
 
-          <p className="text-xs leading-relaxed">{PersonaOpenings[persona](title, originalPrice, (n) => money(currency, n))}</p>
+          <p className="text-xs leading-relaxed text-gray-600">{PersonaOpenings[persona](title, originalPrice, (n) => money(currency, n))}</p>
 
           <div className="flex flex-wrap gap-2">
             {Object.entries(PersonaLabels).map(([value, label]) => (
@@ -376,8 +376,8 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
       {step === 'chat' && (
         <div className="space-y-3 p-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-blue-300">Attempts left: {MAX_ATTEMPTS - attempts}/{MAX_ATTEMPTS}</p>
-            <button type="button" className="text-xs text-slate-400 hover:text-slate-200" onClick={() => setStep('intro')}>
+            <p className="text-xs text-gray-500">Attempts left: {MAX_ATTEMPTS - attempts}/{MAX_ATTEMPTS}</p>
+            <button type="button" className="text-xs text-gray-400 hover:text-gray-600" onClick={() => setStep('intro')}>
               Change negotiator
             </button>
           </div>
@@ -388,13 +388,13 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
                 key={idx}
                 className={`rounded-lg px-3 py-2 text-xs leading-relaxed ${
                   msg.role === 'customer'
-                    ? 'bg-blue-600/25 text-blue-100 text-right'
-                    : 'bg-white/10 text-slate-200'
+                    ? 'bg-indigo-600 text-white text-right ml-8'
+                    : 'bg-gray-100 text-gray-700 mr-8'
                 }`}
               >
                 {msg.content}
                 {msg.price != null && (
-                  <span className="block mt-1 text-blue-300">
+                  <span className={`block mt-1 ${msg.role === 'customer' ? 'text-indigo-200' : 'text-indigo-600'}`}>
                     {msg.role === 'customer' ? 'Offered' : 'Counter'}: {money(currency, msg.price)}
                   </span>
                 )}
@@ -408,7 +408,7 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               placeholder='e.g. "₹400" or "I will think about it"'
-              className="flex-1 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:border-blue-500"
+              className="flex-1 bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-indigo-500"
             />
             <button type="button" className={buttonCls} onClick={handleSend} disabled={!input.trim() || loading}>
               {loading ? '…' : 'Send'}
@@ -419,20 +419,20 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
 
       {step === 'deal' && finalPrice != null && (
         <div className="space-y-3 p-4 text-center">
-          <p className="text-green-400 font-semibold text-sm">Deal Accepted! 🎉</p>
+          <p className="text-emerald-600 font-semibold text-sm">Deal Accepted! 🎉</p>
           <div>
-            <p className="text-white font-bold text-lg">
+            <p className="text-gray-900 font-bold text-lg">
               {isCart ? 'New order total:' : 'Final price:'} {money(currency, finalPrice)}
             </p>
-            <p className="text-blue-300 text-xs mt-1">
+            <p className="text-gray-500 text-xs mt-1">
               You saved {money(currency, Math.max(0, originalPrice - finalPrice))} ({Math.round((1 - finalPrice / originalPrice) * 100)}%)
             </p>
           </div>
 
-          <div className="bg-white/10 rounded-lg p-3 space-y-2">
-            <p className="text-xs text-slate-400">Use this single-use code at checkout, valid 24h:</p>
+          <div className="bg-gray-100 rounded-lg p-3 space-y-2">
+            <p className="text-xs text-gray-500">Use this single-use code at checkout, valid 24h:</p>
             <div className="flex items-center justify-center gap-2">
-              <code className="text-blue-300 font-mono font-bold text-sm tracking-wider bg-blue-600/20 rounded-lg px-3 py-1">
+              <code className="text-indigo-600 font-mono font-bold text-sm tracking-wider bg-indigo-100 rounded-lg px-3 py-1">
                 {discountCode}
               </code>
               <button type="button" className={`${ghostCls} text-xs`} onClick={copyCode}>
@@ -441,10 +441,10 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
             </div>
           </div>
 
-          {error && <p className="text-xs text-red-400 bg-red-500/10 rounded-lg p-2">{error}</p>}
+          {error && <p className="text-xs text-red-500 bg-red-50 rounded-lg p-2">{error}</p>}
 
           {codeSaved ? (
-            <p className="text-xs text-green-400">Code is ready — copy it and apply at checkout.</p>
+            <p className="text-xs text-emerald-600">Code is ready — copy it and apply at checkout.</p>
           ) : (
             <button type="button" className={buttonCls} onClick={saveDeal} disabled={loading}>
               {loading ? 'Creating code…' : 'Create My Discount Code'}
@@ -464,8 +464,8 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
 
       {step === 'rejected' && (
         <div className="space-y-3 p-4 text-center">
-          <p className="text-red-400 font-semibold text-sm">Negotiation Ended</p>
-          <p className="text-xs text-slate-400">Attempts exhausted. No deal this time.</p>
+          <p className="text-red-500 font-semibold text-sm">Negotiation Ended</p>
+          <p className="text-xs text-gray-500">Attempts exhausted. No deal this time.</p>
           <div className="flex justify-center gap-2">
             <a href={checkoutUrl} className={buttonCls + ' no-underline'}>
               Continue to Checkout
