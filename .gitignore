@@ -52,5 +52,23 @@ skills/
 .agents/
 build-output.txt
 .claude/
+.kimi-code/
+cache/
+bin/
+credentials/
+updates/
+user-history/
+workspace-trust/
+workspaces.json
+tui.toml
+migrations-effort.json
+config.toml
+debug.js
+device_id
+region
+*.part1
+*.part2
+*.part3
+*.part4
 
 .env*.local

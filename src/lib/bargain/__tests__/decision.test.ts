@@ -671,7 +671,7 @@ describe('Edge Cases - AI System Prompt Security', () => {
     // but should NOT contain the raw min_price as a leaked value
     expect(systemMsg?.content).toContain('73.50') // It IS in commonRulesText (that's by design)
     // But the persona prompt itself should not contain it
-    const personaPart = systemMsg?.content.split('You are negotiating')[0] || ''
+    const personaPart = systemMsg?.content.split('NEGOTIATION SCENARIO')[0] || ''
     expect(personaPart).not.toContain('73.50')
   })
 })
