@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { BarChart3, ArrowRight, Lock, Globe, TrendingUp, ShoppingCart, MessageSquare, Zap } from 'lucide-react'
+import { BarChart3, ArrowRight, Lock, TrendingUp, ShoppingCart, Zap } from 'lucide-react'
 
 const PLANS = [
   { name: 'Starter', price: 999, yearlyPrice: 9990, maxCarts: 500, revShare: 3 },
@@ -37,17 +37,14 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
     }
   }
 
-  const handleInputChange = () => {
-    setHasDataEntered(true)
-  }
+  const handleInputChange = () => setHasDataEntered(true)
 
   const visitors = typeof monthlyVisitors === 'number' ? monthlyVisitors : 0
   const cartValue = typeof avgCartValue === 'number' ? avgCartValue : 0
   const currentRate = typeof currentRecoveryRate === 'number' ? currentRecoveryRate : 0
   const targetRate = typeof targetRecoveryRate === 'number' ? targetRecoveryRate : 0
 
-  const abandonmentRate = 0.7
-  const abandonedCarts = Math.round(visitors * abandonmentRate)
+  const abandonedCarts = Math.round(visitors * 0.7)
   const currentRecovered = Math.round(abandonedCarts * (currentRate / 100))
   const targetRecovered = Math.round(abandonedCarts * (targetRate / 100))
   const additionalRecovered = targetRecovered - currentRecovered
@@ -61,347 +58,274 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
   const subscriptionCost = plan.price
   const revenueShareCost = Math.round((targetRevenue * plan.revShare) / 100)
   const totalMonthlyCost = subscriptionCost + revenueShareCost
-
   const netProfit = additionalRevenue - totalMonthlyCost
   const yearlyNetProfit = netProfit * 12
   const roi = totalMonthlyCost > 0 ? Math.round((netProfit / totalMonthlyCost) * 100) : 0
 
   if (!isLoggedIn && hasUsedFreeCalculation && !showResults) {
     return (
-      <div className="bg-white rounded-2xl p-8 shadow-xl border border-gray-100">
-        <Lock className="w-12 h-12 text-indigo-500 mx-auto mb-4" />
-        <h3 className="text-2xl font-bold text-gray-900 mb-3 text-center">Continue Calculating Your ROI</h3>
-        <p className="text-gray-500 mb-6 max-w-md mx-auto text-center">
-          You&apos;ve used your free calculation. Sign up to unlock unlimited calculations and get a personalized dashboard.
+      <div className="bg-slate-800/60 backdrop-blur-md rounded-2xl p-6 border border-blue-500/20">
+        <Lock className="w-10 h-10 text-blue-400 mx-auto mb-3" />
+        <h3 className="text-xl font-bold text-white mb-2 text-center">Continue Calculating</h3>
+        <p className="text-blue-300/70 text-sm mb-5 max-w-sm mx-auto text-center">
+          Sign up to unlock unlimited calculations and a personalized dashboard.
         </p>
         <div className="flex justify-center">
-          <Link
-            href="/signup"
-            className="inline-flex items-center gap-2 bg-indigo-600 text-white font-semibold py-3 px-8 rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
-          >
-            Sign Up Free
-            <ArrowRight className="w-5 h-5" />
+          <Link href="/signup" className="inline-flex items-center gap-2 bg-blue-600 text-white font-semibold py-2.5 px-6 rounded-xl hover:bg-blue-500 transition text-sm">
+            Sign Up Free <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
-        <p className="text-sm text-gray-400 mt-4 text-center">No credit card required</p>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+    <div className="bg-slate-800/60 backdrop-blur-md rounded-2xl border border-blue-500/20 overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-8 py-6">
+      <div className="bg-gradient-to-r from-blue-600 to-cyan-500 px-5 py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-              <BarChart3 className="w-6 h-6 text-white" />
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+              <BarChart3 className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white">ROI Calculator</h3>
-              <p className="text-indigo-100 text-sm">See your potential revenue recovery</p>
+              <h3 className="text-base font-bold text-white">ROI Calculator</h3>
+              <p className="text-blue-100 text-xs">See your recovery potential</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg">
-            <Globe className="w-4 h-4 text-white" />
-            <span className="text-white text-sm font-medium">INR (₹)</span>
-          </div>
+          <span className="text-white/80 text-xs font-medium bg-white/10 px-2.5 py-1 rounded-md">INR ₹</span>
         </div>
       </div>
 
-      <div className="p-8">
-        {/* Input Controls */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
+      <div className="p-5">
+        {/* Inputs */}
+        <div className="grid grid-cols-2 gap-4 mb-5">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
-              Monthly Website Visitors
-            </label>
+            <label className="block text-xs font-medium text-blue-200/80 mb-1.5">Monthly Visitors</label>
             <input
-              type="range"
-              min="1000"
-              max="100000"
-              step="1000"
+              type="range" min="1000" max="100000" step="1000"
               value={monthlyVisitors || 0}
               onChange={(e) => { setMonthlyVisitors(Number(e.target.value)); handleInputChange() }}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
               disabled={!isLoggedIn && showResults}
             />
-            <div className="flex justify-between items-center mt-2">
+            <div className="flex items-center mt-1.5">
               <input
-                type="number"
-                value={monthlyVisitors}
-                aria-label="Monthly Website Visitors"
+                type="number" value={monthlyVisitors} aria-label="Monthly Website Visitors"
                 onChange={(e) => { setMonthlyVisitors(e.target.value ? Number(e.target.value) : ''); handleInputChange() }}
-                className="w-28 px-3 py-2 border border-gray-200 bg-gray-50 text-gray-900 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-20 px-2 py-1.5 border border-blue-500/30 bg-slate-700/50 text-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                 disabled={!isLoggedIn && showResults}
               />
-              <span className="text-sm text-gray-500">visitors/mo</span>
+              <span className="text-xs text-blue-300/60 ml-1.5">/mo</span>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
-              Average Cart Value
-            </label>
+            <label className="block text-xs font-medium text-blue-200/80 mb-1.5">Avg Cart Value</label>
             <input
-              type="range"
-              min="100"
-              max="5000"
-              step="50"
+              type="range" min="100" max="5000" step="50"
               value={avgCartValue || 0}
               onChange={(e) => { setAvgCartValue(Number(e.target.value)); handleInputChange() }}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
               disabled={!isLoggedIn && showResults}
             />
-            <div className="flex justify-between items-center mt-2">
-              <div className="flex items-center">
-                <span className="text-sm text-gray-500 mr-2">₹</span>
-                <input
-                  type="number"
-                  value={avgCartValue}
-                  aria-label="Average Cart Value"
-                  onChange={(e) => { setAvgCartValue(e.target.value ? Number(e.target.value) : ''); handleInputChange() }}
-                  className="w-28 px-3 py-2 border border-gray-200 bg-gray-50 text-gray-900 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  disabled={!isLoggedIn && showResults}
-                />
-              </div>
+            <div className="flex items-center mt-1.5">
+              <span className="text-xs text-blue-300/60">₹</span>
+              <input
+                type="number" value={avgCartValue} aria-label="Average Cart Value"
+                onChange={(e) => { setAvgCartValue(e.target.value ? Number(e.target.value) : ''); handleInputChange() }}
+                className="w-20 px-2 py-1.5 border border-blue-500/30 bg-slate-700/50 text-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ml-1"
+                disabled={!isLoggedIn && showResults}
+              />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
-              Current Recovery Rate
-            </label>
+            <label className="block text-xs font-medium text-blue-200/80 mb-1.5">Current Rate</label>
             <input
-              type="range"
-              min="0"
-              max="10"
-              step="0.5"
+              type="range" min="0" max="10" step="0.5"
               value={currentRecoveryRate || 0}
               onChange={(e) => { setCurrentRecoveryRate(Number(e.target.value)); handleInputChange() }}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
               disabled={!isLoggedIn && showResults}
             />
-            <div className="flex justify-between items-center mt-2">
+            <div className="flex items-center mt-1.5">
               <input
-                type="number"
-                value={currentRecoveryRate}
-                aria-label="Current recovery rate"
+                type="number" value={currentRecoveryRate} aria-label="Current recovery rate"
                 onChange={(e) => { setCurrentRecoveryRate(e.target.value ? Number(e.target.value) : ''); handleInputChange() }}
                 step="0.5"
-                className="w-28 px-3 py-2 border border-gray-200 bg-gray-50 text-gray-900 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-20 px-2 py-1.5 border border-blue-500/30 bg-slate-700/50 text-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                 disabled={!isLoggedIn && showResults}
               />
-              <span className="text-sm text-gray-500">% without CartGain</span>
+              <span className="text-xs text-blue-300/60 ml-1.5">%</span>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
-              Target Recovery Rate
-            </label>
+            <label className="block text-xs font-medium text-blue-200/80 mb-1.5">Target Rate</label>
             <input
-              type="range"
-              min="5"
-              max="25"
-              step="0.5"
+              type="range" min="5" max="25" step="0.5"
               value={targetRecoveryRate || 0}
               onChange={(e) => { setTargetRecoveryRate(Number(e.target.value)); handleInputChange() }}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
               disabled={!isLoggedIn && showResults}
             />
-            <div className="flex justify-between items-center mt-2">
+            <div className="flex items-center mt-1.5">
               <input
-                type="number"
-                value={targetRecoveryRate}
-                aria-label="Target recovery rate"
+                type="number" value={targetRecoveryRate} aria-label="Target recovery rate"
                 onChange={(e) => { setTargetRecoveryRate(e.target.value ? Number(e.target.value) : ''); handleInputChange() }}
                 step="0.5"
-                className="w-28 px-3 py-2 border border-gray-200 bg-gray-50 text-gray-900 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-20 px-2 py-1.5 border border-blue-500/30 bg-slate-700/50 text-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                 disabled={!isLoggedIn && showResults}
               />
-              <span className="text-sm text-gray-500">% with CartGain</span>
+              <span className="text-xs text-blue-300/60 ml-1.5">%</span>
             </div>
           </div>
         </div>
 
         {/* Plan Selection */}
-        <div className="mb-8">
-          <label className="block text-sm font-semibold text-gray-700 mb-3">Select Plan</label>
-          <div className="grid grid-cols-3 gap-3">
+        <div className="mb-5">
+          <label className="block text-xs font-medium text-blue-200/80 mb-2">Select Plan</label>
+          <div className="grid grid-cols-3 gap-2">
             {PLANS.map((p, i) => (
               <button
                 key={p.name}
                 onClick={() => { setSelectedPlan(i); handleInputChange() }}
-                className={`relative p-4 rounded-xl border-2 transition-all ${
+                className={`relative p-2.5 rounded-xl border transition-all text-center ${
                   selectedPlan === i
-                    ? 'border-indigo-600 bg-indigo-50 shadow-md'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
+                    ? 'border-blue-500 bg-blue-500/20 shadow-lg shadow-blue-500/10'
+                    : 'border-slate-600/50 bg-slate-700/30 hover:border-slate-500'
                 }`}
               >
                 {p.recommended && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                    Popular
-                  </span>
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-cyan-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">Best</span>
                 )}
-                <div className={`text-sm font-bold ${selectedPlan === i ? 'text-indigo-600' : 'text-gray-900'}`}>
-                  {p.name}
-                </div>
-                <div className="text-lg font-bold text-gray-900 mt-1">₹{p.price.toLocaleString('en-IN')}</div>
-                <div className="text-xs text-gray-500">/month</div>
-                <div className="text-xs text-gray-400 mt-1">{p.revShare}% rev share</div>
+                <div className={`text-xs font-bold ${selectedPlan === i ? 'text-blue-300' : 'text-white'}`}>{p.name}</div>
+                <div className="text-sm font-bold text-white mt-0.5">₹{p.price.toLocaleString('en-IN')}</div>
+                <div className="text-[10px] text-blue-300/50">{p.revShare}% rev share</div>
               </button>
             ))}
           </div>
         </div>
 
         {/* Calculate Button */}
-        <div className="mb-8">
-          <button
-            onClick={handleCalculate}
-            disabled={!hasDataEntered || (!isLoggedIn && showResults)}
-            className={`w-full py-4 px-6 rounded-xl font-semibold transition-all ${
-              !hasDataEntered || (!isLoggedIn && showResults)
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200 hover:shadow-xl'
-            }`}
-          >
-            {isLoggedIn ? 'Calculate My ROI' : showResults ? 'Free calculation used' : 'Calculate ROI (Free)'}
-          </button>
-          {!isLoggedIn && !showResults && hasDataEntered && (
-            <p className="text-xs text-gray-400 text-center mt-2">One free calculation. Unlimited after signup!</p>
-          )}
-        </div>
+        <button
+          onClick={handleCalculate}
+          disabled={!hasDataEntered || (!isLoggedIn && showResults)}
+          className={`w-full py-2.5 px-4 rounded-xl font-semibold text-sm transition-all ${
+            !hasDataEntered || (!isLoggedIn && showResults)
+              ? 'bg-slate-700/50 text-blue-300/40 cursor-not-allowed'
+              : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20'
+          }`}
+        >
+          {isLoggedIn ? 'Calculate ROI' : showResults ? 'Free calculation used' : 'Calculate ROI'}
+        </button>
+        {!isLoggedIn && !showResults && hasDataEntered && (
+          <p className="text-[10px] text-blue-300/50 text-center mt-1.5">One free calculation • Unlimited after signup</p>
+        )}
 
-        {/* Results Section */}
+        {/* Results */}
         {showResults && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Key Metrics */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-2 mb-2">
-                  <ShoppingCart className="w-4 h-4 text-gray-400" />
-                  <span className="text-xs font-medium text-gray-500">Abandoned Carts</span>
+          <div className="mt-5 space-y-3 animate-in fade-in duration-300">
+            {/* Key Metrics Row */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-slate-700/40 rounded-xl p-3 border border-slate-600/30">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <ShoppingCart className="w-3 h-3 text-blue-400" />
+                  <span className="text-[10px] text-blue-300/60">Abandoned</span>
                 </div>
-                <p className="text-2xl font-bold text-gray-900">{abandonedCarts.toLocaleString('en-IN')}</p>
-                <p className="text-xs text-gray-400 mt-1">per month</p>
+                <p className="text-lg font-bold text-white">{abandonedCarts.toLocaleString('en-IN')}</p>
+                <p className="text-[10px] text-blue-300/40">carts/mo</p>
               </div>
-
-              <div className="bg-red-50 rounded-xl p-4 border border-red-100">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-medium text-red-500">Lost Revenue</span>
-                </div>
-                <p className="text-2xl font-bold text-red-600">₹{lostRevenue.toLocaleString('en-IN')}</p>
-                <p className="text-xs text-red-400 mt-1">per month</p>
+              <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
+                <span className="text-[10px] text-red-400/80">Lost Revenue</span>
+                <p className="text-lg font-bold text-red-400">₹{lostRevenue.toLocaleString('en-IN')}</p>
+                <p className="text-[10px] text-red-400/40">per month</p>
               </div>
+            </div>
 
-              <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-medium text-amber-600">Currently Recovering</span>
-                </div>
-                <p className="text-2xl font-bold text-amber-600">₹{currentRevenue.toLocaleString('en-IN')}</p>
-                <p className="text-xs text-amber-500 mt-1">{currentRecovered.toLocaleString('en-IN')} carts/mo</p>
+            {/* Revenue Gains */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-amber-500/10 rounded-xl p-3 border border-amber-500/20">
+                <span className="text-[10px] text-amber-400/80">Currently Recovering</span>
+                <p className="text-lg font-bold text-amber-400">₹{currentRevenue.toLocaleString('en-IN')}</p>
+                <p className="text-[10px] text-amber-400/40">{currentRecovered.toLocaleString('en-IN')} carts</p>
               </div>
-
-              <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
-                <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp className="w-4 h-4 text-emerald-500" />
-                  <span className="text-xs font-medium text-emerald-600">Additional Revenue</span>
+              <div className="bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/20">
+                <div className="flex items-center gap-1 mb-1">
+                  <TrendingUp className="w-3 h-3 text-emerald-400" />
+                  <span className="text-[10px] text-emerald-400/80">With CartGain</span>
                 </div>
-                <p className="text-2xl font-bold text-emerald-600">+₹{additionalRevenue.toLocaleString('en-IN')}</p>
-                <p className="text-xs text-emerald-500 mt-1">+{additionalRecovered.toLocaleString('en-IN')} carts/mo</p>
+                <p className="text-lg font-bold text-emerald-400">+₹{additionalRevenue.toLocaleString('en-IN')}</p>
+                <p className="text-[10px] text-emerald-400/40">+{additionalRecovered.toLocaleString('en-IN')} carts</p>
               </div>
             </div>
 
             {/* Cost Breakdown */}
-            <div className="bg-gray-50 rounded-xl p-6 mb-6 border border-gray-100">
-              <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-indigo-500" />
-                CartGain Cost Breakdown
-              </h4>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">{plan.name} Subscription</span>
-                  <span className="font-semibold text-gray-900">₹{subscriptionCost.toLocaleString('en-IN')}/mo</span>
+            <div className="bg-slate-700/30 rounded-xl p-3 border border-slate-600/30">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Zap className="w-3 h-3 text-blue-400" />
+                <span className="text-xs font-medium text-blue-200/80">CartGain Cost</span>
+              </div>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-blue-300/60">{plan.name} subscription</span>
+                  <span className="text-white">₹{subscriptionCost.toLocaleString('en-IN')}/mo</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Revenue Share ({plan.revShare}% of ₹{targetRevenue.toLocaleString('en-IN')})</span>
-                  <span className="font-semibold text-gray-900">₹{revenueShareCost.toLocaleString('en-IN')}/mo</span>
+                <div className="flex justify-between">
+                  <span className="text-blue-300/60">Revenue share ({plan.revShare}%)</span>
+                  <span className="text-white">₹{revenueShareCost.toLocaleString('en-IN')}/mo</span>
                 </div>
-                <div className="border-t border-gray-200 pt-3 flex justify-between items-center">
-                  <span className="font-semibold text-gray-900">Total Monthly Cost</span>
-                  <span className="text-lg font-bold text-gray-900">₹{totalMonthlyCost.toLocaleString('en-IN')}</span>
+                <div className="flex justify-between border-t border-slate-600/30 pt-1.5">
+                  <span className="text-blue-200/80 font-medium">Total cost</span>
+                  <span className="text-white font-bold">₹{totalMonthlyCost.toLocaleString('en-IN')}/mo</span>
                 </div>
               </div>
             </div>
 
-            {/* Net Profit Card */}
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl p-6 text-white mb-6">
+            {/* Net Profit */}
+            <div className="bg-gradient-to-r from-blue-600 to-cyan-500 rounded-xl p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-indigo-100 text-sm font-medium">Net Monthly Profit</p>
-                  <p className="text-4xl font-bold mt-1">₹{netProfit.toLocaleString('en-IN')}</p>
-                  <p className="text-indigo-200 text-sm mt-2">
-                    Yearly: ₹{yearlyNetProfit.toLocaleString('en-IN')}
-                  </p>
+                  <p className="text-blue-100 text-xs">Net Monthly Profit</p>
+                  <p className="text-2xl font-bold text-white mt-0.5">₹{netProfit.toLocaleString('en-IN')}</p>
+                  <p className="text-blue-200/70 text-xs">Yearly: ₹{yearlyNetProfit.toLocaleString('en-IN')}</p>
                 </div>
-                <div className="text-right">
-                  <div className="bg-white/20 rounded-xl px-4 py-3">
-                    <p className="text-indigo-100 text-sm">ROI</p>
-                    <p className="text-3xl font-bold">{roi}%</p>
-                  </div>
+                <div className="bg-white/20 rounded-xl px-3 py-2 text-center">
+                  <p className="text-blue-100 text-[10px]">ROI</p>
+                  <p className="text-xl font-bold text-white">{roi}%</p>
                 </div>
               </div>
             </div>
 
             {/* Summary */}
-            <div className="bg-gray-50 rounded-xl p-6 mb-6 border border-gray-100">
-              <h4 className="font-semibold text-gray-900 mb-4">Recovery Summary</h4>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Carts recovered currently (email only)</span>
-                  <span className="font-semibold text-gray-900">{currentRecovered.toLocaleString('en-IN')} carts/mo</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Carts you could recover with CartGain</span>
-                  <span className="font-semibold text-emerald-600">{targetRecovered.toLocaleString('en-IN')} carts/mo</span>
-                </div>
-                <div className="flex justify-between border-t border-gray-200 pt-3">
-                  <span className="font-semibold text-gray-900">Additional carts recovered</span>
-                  <span className="font-bold text-emerald-600">+{additionalRecovered.toLocaleString('en-IN')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-semibold text-gray-900">Recovery rate improvement</span>
-                  <span className="font-bold text-indigo-600">+{(targetRate - currentRate).toFixed(1)}%</span>
-                </div>
+            <div className="bg-slate-700/30 rounded-xl p-3 border border-slate-600/30 text-xs space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-blue-300/60">Recovery rate improvement</span>
+                <span className="text-emerald-400 font-semibold">+{(targetRate - currentRate).toFixed(1)}%</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-blue-300/60">Additional carts recovered</span>
+                <span className="text-emerald-400 font-semibold">+{additionalRecovered.toLocaleString('en-IN')}</span>
               </div>
             </div>
 
             {/* CTA */}
-            <div className="text-center">
-              <Link
-                href="/signup"
-                className="inline-flex items-center gap-2 bg-indigo-600 text-white font-semibold py-3 px-8 rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
-              >
-                Start Your Free Trial
-                <ArrowRight className="w-5 h-5" />
+            <div className="text-center pt-1">
+              <Link href="/signup" className="inline-flex items-center gap-1.5 bg-blue-600 text-white font-semibold py-2 px-5 rounded-xl hover:bg-blue-500 transition text-sm shadow-lg shadow-blue-500/20">
+                Start Free Trial <ArrowRight className="w-4 h-4" />
               </Link>
-              <p className="text-sm text-gray-400 mt-3">2-minute setup • No credit card required • First 50 carts free</p>
+              <p className="text-[10px] text-blue-300/40 mt-2">2-min setup • No credit card • First 50 carts free</p>
             </div>
           </div>
         )}
 
         {!isLoggedIn && showResults && (
-          <div className="mt-8 p-6 bg-gray-50 border border-gray-200 rounded-xl text-center">
-            <Lock className="w-8 h-8 text-indigo-500 mx-auto mb-3" />
-            <h4 className="font-semibold text-gray-900 mb-2">Want to adjust calculations?</h4>
-            <p className="text-sm text-gray-500 mb-4">
-              Sign up to unlock unlimited calculations and save your data.
-            </p>
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-indigo-700 transition-all text-sm"
-            >
+          <div className="mt-5 p-4 bg-slate-700/30 border border-slate-600/30 rounded-xl text-center">
+            <Lock className="w-6 h-6 text-blue-400 mx-auto mb-2" />
+            <h4 className="font-semibold text-white text-sm mb-1">Want to adjust?</h4>
+            <p className="text-xs text-blue-300/60 mb-3">Sign up for unlimited calculations.</p>
+            <Link href="/signup" className="inline-flex items-center gap-1 bg-blue-600 text-white font-semibold py-1.5 px-4 rounded-lg hover:bg-blue-500 transition text-xs">
               Sign Up Free
             </Link>
           </div>
