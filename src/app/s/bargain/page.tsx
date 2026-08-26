@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useMemo, useState, type ReactNode, useEffect } from 'react'
+import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import BargainWidget, { type BargainItem } from '@/components/bargain/StorefrontBargainWidget'
 
@@ -122,7 +123,7 @@ function PageContent() {
                 }`}
               >
                 {item.featured_image?.url || item.image ? (
-                  <img src={item.featured_image?.url || item.image || ''} alt="" className="w-8 h-8 rounded object-cover" />
+                  <Image src={item.featured_image?.url || item.image || ''} alt="" width={32} height={32} className="w-8 h-8 rounded object-cover" unoptimized />
                 ) : (
                   <span className="w-8 h-8 rounded bg-blue-600/20 flex items-center justify-center">📦</span>
                 )}

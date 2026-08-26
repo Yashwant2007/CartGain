@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Bell, CreditCard, Shield, User, Key, ExternalLink } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 
@@ -738,7 +739,7 @@ function SecuritySettings() {
               <div className="space-y-4">
                 <p className="text-sm text-blue-300/80">Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.):</p>
                 <div className="flex justify-center">
-                  {qrCodeUrl && <img src={qrCodeUrl} alt="2FA QR Code" className="rounded-lg border border-blue-700/30" />}
+                  {qrCodeUrl && <Image src={qrCodeUrl} alt="2FA QR Code" width={200} height={200} className="rounded-lg border border-blue-700/30" unoptimized />}
                 </div>
                 <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-3">
                   <p className="text-xs text-blue-300/60 mb-1">Then enter the 6-digit code from the app:</p>

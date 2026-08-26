@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 
 const MAX_ATTEMPTS = 3
 const PROFIT_PERCENT = 25
@@ -340,7 +341,7 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
         <div className="space-y-3 p-4">
           <div className="flex items-start gap-3">
             {!isCart && line.image ? (
-              <img src={line.image} alt="" className="w-12 h-12 rounded-lg object-cover" />
+              <Image src={line.image} alt="" width={48} height={48} className="w-12 h-12 rounded-lg object-cover" unoptimized />
             ) : (
               <div className="w-12 h-12 rounded-lg bg-blue-600/20 flex items-center justify-center text-lg">🛒</div>
             )}

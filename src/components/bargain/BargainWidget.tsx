@@ -342,7 +342,7 @@ export default function BargainWidget({
                 <MessageCircle size={22} style={{ color: '#ffffff' }} />
               </div>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>Let's make a deal</div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>Let&apos;s make a deal</div>
                 <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
                   {productTitle ? productTitle : 'Product'} · {currencySymbol}{originalPrice.toFixed(2)}
                 </div>

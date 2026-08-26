@@ -127,6 +127,7 @@ export default function BargainDashboardPage() {
       abortRef.current.forEach(abort => abort())
       abortRef.current = []
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId])
 
   async function fetchConfig() {
