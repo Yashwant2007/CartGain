@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import {
@@ -116,9 +117,13 @@ function DashboardLayoutInner({
           {/* Logo */}
           <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 border-b border-blue-800/30">
             <Link href={withStoreId('/dashboard')} className="flex items-center space-x-2 group min-h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded" onClick={closeSidebar}>
-              <div className="w-8 h-8 bg-gradient-to-br from-primary-600 to-primary-800 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:shadow-lg group-hover:shadow-primary-600/50 transition-all">
-                <Zap className="w-4 h-4 text-white" />
-              </div>
+              <Image
+                src="/favicon-32x32.png"
+                alt="CartGain"
+                width={32}
+                height={32}
+                className="w-8 h-8 rounded-lg flex-shrink-0 group-hover:shadow-lg group-hover:shadow-primary-600/50 transition-all"
+              />
               <span className="text-base sm:text-lg font-bold text-white group-hover:text-blue-200 transition truncate">CartGain</span>
             </Link>
             <button

@@ -98,9 +98,14 @@ export default function HomePage() {
           <div className="flex justify-between items-center h-14 sm:h-16 min-h-12">
             {/* Logo */}
             <Link href="/" className="flex items-center space-x-2 group flex-shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded-md">
-              <div className="w-8 h-8 bg-gradient-to-br from-primary-600 to-primary-800 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
+              <Image
+                src="/favicon-32x32.png"
+                alt="CartGain"
+                width={32}
+                height={32}
+                className="w-8 h-8 rounded-lg flex-shrink-0"
+                priority
+              />
               <span className="text-base sm:text-lg font-bold text-white group-hover:text-blue-200 transition">CartGain</span>
             </Link>
 

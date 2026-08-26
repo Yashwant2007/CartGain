@@ -15,8 +15,8 @@ type Props = {
   customerEmail?: string
   customerPhone?: string
   productTitle?: string
-  apiBase?: string // e.g. https://cart-gain.com — defaults to current origin
-  linkout?: string // full-price purchase URL (e.g. Shopify cart URL) — used for AI opt-out
+  apiBase?: string
+  linkout?: string
 }
 
 type Message = {
@@ -68,14 +68,12 @@ export default function BargainWidget({
 
   const currencySymbol = currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency + ' '
 
-  // Auto-scroll on new messages
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [messages])
 
-  // Countdown timer
   useEffect(() => {
     if (!expiresAt) return
     const t = setInterval(() => {
@@ -108,7 +106,6 @@ export default function BargainWidget({
       setSessionId(data.sessionId)
       setAttemptsRemaining(data.attemptsRemaining ?? null)
       setExpiresAt(data.expiresAt ?? null)
-      // Restore full message history if resuming an existing session
       if (data.existingSession && data.session?.messages?.length) {
         const restored: Message[] = data.session.messages.map((m: any) => ({
           id: m.id,
@@ -154,7 +151,6 @@ export default function BargainWidget({
       })
       const data = await res.json()
       if (!res.ok) {
-        // Terminal status (accepted/rejected/expired) — show message and stop
         if (data.terminal) {
           setSessionEnded(true)
           setMessages(prev => [...prev, {
@@ -185,8 +181,6 @@ export default function BargainWidget({
     }
   }
 
-  // Automated decision-making opt-out: closes the AI negotiation and hands the
-  // customer to normal full-price checkout (DPDP Act 2023 / GDPR Art. 22).
   async function optOutOfAI() {
     try {
       setLoading(true)
@@ -268,27 +262,42 @@ export default function BargainWidget({
   }
 
   return (
-    <div className="bargain-widget-root" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      {/* Trigger button */}
+    <div className="bargain-widget-root" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
+      {/* Floating trigger button */}
       <button
         onClick={openPanel}
         style={{
-          background: 'linear-gradient(135deg, #2563eb, #1e40af)',
-          color: 'white',
-          padding: '10px 18px',
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          background: '#ffffff',
+          color: '#1e293b',
+          padding: '14px 22px',
           borderRadius: 999,
-          border: 'none',
+          border: '1px solid #e2e8f0',
           fontWeight: 600,
           fontSize: 14,
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 8,
+          gap: 10,
           cursor: 'pointer',
-          boxShadow: '0 4px 12px rgba(37,99,235,0.35)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06)',
+          transition: 'all 0.2s ease',
+          zIndex: 99998,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = '#f8fafc'
+          e.currentTarget.style.borderColor = '#cbd5e1'
+          e.currentTarget.style.boxShadow = '0 6px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = '#ffffff'
+          e.currentTarget.style.borderColor = '#e2e8f0'
+          e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06)'
         }}
       >
-        <Sparkles size={16} />
-        Bargain for a better price
+        <Sparkles size={18} style={{ color: '#6366f1' }} />
+        <span>Negotiate Price</span>
       </button>
 
       {/* Slide-out panel */}
@@ -296,72 +305,131 @@ export default function BargainWidget({
         <div
           style={{
             position: 'fixed',
-            bottom: 0, right: 0, top: 0,
+            bottom: 0,
+            right: 0,
+            top: 0,
             width: '100%',
-            maxWidth: 400,
-            background: '#0b1220',
-            color: '#e6eefc',
-            boxShadow: '-8px 0 32px rgba(0,0,0,0.45)',
+            maxWidth: 440,
+            background: '#ffffff',
+            color: '#1e293b',
+            boxShadow: '-8px 0 40px rgba(0,0,0,0.15)',
             zIndex: 99999,
             display: 'flex',
             flexDirection: 'column',
-            borderLeft: '1px solid rgba(59,130,246,0.3)',
+            overflow: 'hidden',
           }}
         >
           {/* Header */}
           <div style={{
-            padding: '14px 16px',
-            borderBottom: '1px solid rgba(59,130,246,0.25)',
+            padding: '20px 24px',
+            borderBottom: '1px solid #f1f5f9',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: 'rgba(30,41,99,0.4)',
+            background: '#ffffff',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{
-                width: 32, height: 32, borderRadius: 8,
-                background: 'linear-gradient(135deg, #3b82f6, #1e3a8a)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
               }}>
-                <MessageCircle size={18} />
+                <MessageCircle size={22} style={{ color: '#ffffff' }} />
               </div>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>Bargain with us</div>
-                <div style={{ fontSize: 11, color: '#9fb6e0' }}>
+                <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>Let's make a deal</div>
+                <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
                   {productTitle ? productTitle : 'Product'} · {currencySymbol}{originalPrice.toFixed(2)}
-                </div>
-                <div style={{ fontSize: 10, color: '#7d94bd', marginTop: 2 }}>
-                  Prices are set automatically by AI · <a
-                    href={linkout ? `${linkout}?ai_opt_out=1` : undefined}
-                    onClick={linkout ? undefined : (e) => { e.preventDefault(); void optOutOfAI() }}
-                    style={{ color: '#93c5fd', textDecoration: 'underline', cursor: 'pointer' }}
-                  >
-                    Skip AI, buy at full price
-                  </a>
                 </div>
               </div>
             </div>
-            <button onClick={closePanel} aria-label="Close bargain widget" style={{ background: 'transparent', border: 'none', color: '#9fb6e0', cursor: 'pointer', minWidth: 44, minHeight: 44 }}>
-              <X size={20} />
+            <button
+              onClick={closePanel}
+              aria-label="Close"
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 8,
+                color: '#64748b',
+                cursor: 'pointer',
+                width: 36,
+                height: 36,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#f1f5f9'
+                e.currentTarget.style.color = '#334155'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#f8fafc'
+                e.currentTarget.style.color = '#64748b'
+              }}
+            >
+              <X size={18} />
             </button>
           </div>
 
-          {/* Attempt + timer bar */}
+          {/* Subtle AI opt-out link */}
+          <div style={{
+            padding: '10px 24px',
+            fontSize: 12,
+            color: '#94a3b8',
+            background: '#fafbfc',
+            borderBottom: '1px solid #f1f5f9',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <span>AI-powered negotiation</span>
+            <a
+              href={linkout ? `${linkout}?ai_opt_out=1` : undefined}
+              onClick={linkout ? undefined : (e) => { e.preventDefault(); void optOutOfAI() }}
+              style={{ color: '#6366f1', textDecoration: 'none', fontWeight: 500, cursor: 'pointer' }}
+              onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline' }}
+              onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none' }}
+            >
+              Skip — buy at full price →
+            </a>
+          </div>
+
+          {/* Attempts + timer */}
           {(attemptsRemaining != null || timeLeft != null) && (
             <div style={{
-              padding: '8px 16px',
-              fontSize: 11,
-              color: '#9fb6e0',
-              background: 'rgba(15,23,42,0.6)',
-              borderBottom: '1px solid rgba(59,130,246,0.15)',
-              display: 'flex', justifyContent: 'space-between',
+              padding: '10px 24px',
+              fontSize: 13,
+              color: '#64748b',
+              background: '#ffffff',
+              borderBottom: '1px solid #f1f5f9',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
             }}>
               {attemptsRemaining != null && (
-                <span>Attempts left: <strong style={{ color: '#dbeafe' }}>{attemptsRemaining}</strong></span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{
+                    background: attemptsRemaining <= 1 ? '#fef2f2' : '#f0fdf4',
+                    color: attemptsRemaining <= 1 ? '#dc2626' : '#16a34a',
+                    padding: '2px 8px',
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}>
+                    {attemptsRemaining} left
+                  </span>
+                </span>
               )}
               {timeLeft != null && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Clock size={12} /> {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#94a3b8' }}>
+                  <Clock size={13} />
+                  {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
                 </span>
               )}
             </div>
@@ -369,12 +437,17 @@ export default function BargainWidget({
 
           {/* Messages */}
           <div ref={scrollRef} style={{
-            flex: 1, overflowY: 'auto', padding: 16,
-            display: 'flex', flexDirection: 'column', gap: 10,
+            flex: 1,
+            overflowY: 'auto',
+            padding: '20px 20px 8px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
           }}>
             {messages.length === 0 && (
-              <div style={{ textAlign: 'center', color: '#9fb6e0', fontSize: 13 }}>
-                <Loader2 size={16} className="spin" style={{ animation: 'spin 1s linear infinite' }} /> Starting…
+              <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, padding: '40px 0' }}>
+                <Loader2 size={20} className="spin" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 8px' }} />
+                Connecting...
               </div>
             )}
             {messages.map(m => (
@@ -385,104 +458,170 @@ export default function BargainWidget({
                   maxWidth: '85%',
                 }}
               >
+                {/* Role label */}
+                {m.role !== 'customer' && (
+                  <div style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: m.role === 'ai' ? '#6366f1' : '#94a3b8',
+                    marginBottom: 4,
+                    paddingLeft: 4,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                  }}>
+                    {m.role === 'ai' ? 'Assistant' : 'Notice'}
+                  </div>
+                )}
                 <div
                   style={{
                     background:
                       m.role === 'customer'
-                        ? '#2563eb'
+                        ? '#6366f1'
                         : m.role === 'system'
-                        ? '#334155'
-                        : '#1e293b',
-                    color: m.role === 'system' ? '#cbd5e1' : '#fff',
-                    padding: '10px 12px',
-                    borderRadius: 12,
-                    fontSize: 13,
-                    lineHeight: 1.45,
-                    border: m.role === 'ai' ? '1px solid rgba(59,130,246,0.25)' : 'none',
+                        ? '#f8fafc'
+                        : '#ffffff',
+                    color: m.role === 'customer' ? '#ffffff' : '#334155',
+                    padding: '12px 16px',
+                    borderRadius: m.role === 'customer' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                    fontSize: 14,
+                    lineHeight: 1.5,
+                    border: m.role !== 'customer' ? '1px solid #e2e8f0' : 'none',
+                    boxShadow: m.role !== 'customer' ? '0 1px 3px rgba(0,0,0,0.04)' : 'none',
                   }}
                 >
                   {m.content}
                   {m.offeredPrice != null && (
-                    <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4 }}>
-                      Counter: {currencySymbol}{m.offeredPrice.toFixed(2)}
+                    <div style={{
+                      marginTop: 8,
+                      padding: '8px 12px',
+                      background: '#f0fdf4',
+                      borderRadius: 8,
+                      border: '1px solid #bbf7d0',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: '#15803d',
+                    }}>
+                      Offered: {currencySymbol}{m.offeredPrice.toFixed(2)}
                     </div>
                   )}
                 </div>
               </div>
             ))}
 
-            {/* Accepted deal banner */}
+            {/* Accepted deal card */}
             {decision === 'accept' && finalPrice != null && (
               <div style={{
-                background: 'linear-gradient(135deg, #065f46, #047857)',
-                color: '#ecfdf5',
-                padding: 14,
-                borderRadius: 12,
+                background: '#ffffff',
+                border: '2px solid #6366f1',
+                padding: 20,
+                borderRadius: 16,
                 textAlign: 'center',
+                margin: '8px 0',
               }}>
-                <CheckCircle2 size={28} style={{ margin: '0 auto 6px' }} />
-                <div style={{ fontWeight: 700, fontSize: 16 }}>
-                  You got it for {currencySymbol}{finalPrice.toFixed(2)}!
+                <div style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 12,
+                  background: '#f0fdf4',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 12px',
+                }}>
+                  <CheckCircle2 size={28} style={{ color: '#16a34a' }} />
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 18, color: '#0f172a', marginBottom: 4 }}>
+                  You saved {currencySymbol}{(originalPrice - finalPrice).toFixed(2)}!
+                </div>
+                <div style={{ fontSize: 14, color: '#64748b', marginBottom: 16 }}>
+                  New price: <span style={{ fontWeight: 700, color: '#0f172a' }}>{currencySymbol}{finalPrice.toFixed(2)}</span>
                 </div>
                 {discountCode && (
                   <div style={{
-                    marginTop: 10,
-                    background: '#022c22', padding: '8px 10px',
-                    borderRadius: 8, fontSize: 13,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    padding: '12px 16px',
+                    borderRadius: 12,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
                   }}>
-                    <Tag size={14} />
-                    <code style={{ fontWeight: 700, letterSpacing: 0.5 }}>{discountCode}</code>
+                    <Tag size={16} style={{ color: '#6366f1' }} />
+                    <code style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', letterSpacing: 0.5 }}>{discountCode}</code>
                     <button
                       onClick={copyCode}
                       style={{
-                        background: 'transparent', border: '1px solid #10b981',
-                        color: '#a7f3d0', borderRadius: 6, padding: '2px 8px',
-                        fontSize: 11, cursor: 'pointer', marginLeft: 4,
+                        background: '#6366f1',
+                        border: 'none',
+                        color: '#ffffff',
+                        borderRadius: 8,
+                        padding: '6px 14px',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'background 0.15s ease',
                       }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = '#4f46e5' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = '#6366f1' }}
                     >
                       Copy
                     </button>
                   </div>
                 )}
                 {shopifyStatus === 'pending' && (
-                  <div style={{ fontSize: 11, marginTop: 6, color: '#a7f3d0' }}>
-                    Code will be applied automatically at checkout when available.
+                  <div style={{ fontSize: 12, marginTop: 10, color: '#94a3b8' }}>
+                    Code will apply automatically at checkout.
                   </div>
                 )}
               </div>
             )}
-          </div>
 
-          {/* Error */}
-          {error && (
-            <div style={{ padding: '6px 16px', fontSize: 12, color: '#fca5a5' }}>
-              {error}
-            </div>
-          )}
+            {/* Error */}
+            {error && (
+              <div style={{
+                padding: '10px 16px',
+                fontSize: 13,
+                color: '#dc2626',
+                background: '#fef2f2',
+                borderRadius: 10,
+                border: '1px solid #fecaca',
+              }}>
+                {error}
+              </div>
+            )}
+          </div>
 
           {/* Composer */}
           <div style={{
-            padding: 12,
-            borderTop: '1px solid rgba(59,130,246,0.25)',
-            background: 'rgba(15,23,42,0.6)',
-            display: 'flex', gap: 8,
+            padding: '16px 20px',
+            borderTop: '1px solid #f1f5f9',
+            background: '#ffffff',
+            display: 'flex',
+            gap: 10,
           }}>
             <input
               type="text"
-                placeholder={sessionEnded ? 'Session ended' : 'Type your offer or message...'}
-              aria-label="Type your offer or message"
+              placeholder={sessionEnded ? 'Session ended' : 'Type your offer...'}
+              aria-label="Type your offer"
               value={input}
               onChange={e => setInput(e.target.value)}
               disabled={loading || sessionEnded}
               autoComplete="off"
               style={{
-                flex: 1, padding: '10px 12px', borderRadius: 8,
-                border: '1px solid rgba(59,130,246,0.4)',
-                background: '#020617', color: '#fff', fontSize: 16,
+                flex: 1,
+                padding: '12px 16px',
+                borderRadius: 12,
+                border: '1px solid #e2e8f0',
+                background: '#f8fafc',
+                color: '#0f172a',
+                fontSize: 15,
                 outline: 'none',
-                opacity: sessionEnded ? 0.4 : 1,
+                transition: 'border-color 0.15s ease',
+                opacity: sessionEnded ? 0.5 : 1,
               }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#6366f1' }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = '#e2e8f0' }}
               onKeyDown={e => {
                 if (e.key === 'Enter' && !sessionEnded) void sendMessage()
               }}
@@ -490,44 +629,64 @@ export default function BargainWidget({
             <button
               onClick={() => sendMessage()}
               disabled={loading || !input.trim() || sessionEnded}
-              aria-label="Send message"
+              aria-label="Send"
               style={{
-                background: '#2563eb', color: 'white',
-                border: 'none', borderRadius: 8,
-                padding: '0 14px', cursor: 'pointer',
-                minWidth: 44, minHeight: 44,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                fontSize: 16, fontWeight: 600,
+                background: '#6366f1',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 12,
+                padding: '0 20px',
+                cursor: 'pointer',
+                minWidth: 52,
+                minHeight: 52,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                fontSize: 15,
+                fontWeight: 600,
                 opacity: (loading || !input.trim() || sessionEnded) ? 0.5 : 1,
+                transition: 'background 0.15s ease',
               }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#4f46e5' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#6366f1' }}
             >
-              {loading ? <Loader2 size={16} className="spin" style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={16} />}
+              {loading ? <Loader2 size={18} className="spin" style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={18} />}
             </button>
           </div>
 
           {/* Accept bar */}
           {decision === 'accept' && (
-            <div style={{ padding: '8px 12px 14px', background: 'rgba(6,78,59,0.2)' }}>
+            <div style={{ padding: '12px 20px 16px', background: '#ffffff', borderTop: '1px solid #f1f5f9' }}>
               <button
                 onClick={acceptDeal}
                 disabled={loading || !!discountCode}
                 style={{
-                  width: '100%', padding: '12px',
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  color: 'white', border: 'none', borderRadius: 10,
-                  cursor: 'pointer', fontWeight: 700, fontSize: 15,
-                  opacity: (loading || !!discountCode) ? 0.7 : 1,
+                  width: '100%',
+                  padding: '14px',
+                  background: discountCode ? '#16a34a' : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 12,
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: 15,
+                  opacity: (loading || !!discountCode) ? 0.8 : 1,
+                  boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+                  transition: 'all 0.2s ease',
                 }}
               >
-                {discountCode ? '✓ Deal Complete' : `Accept & Get Code`}
+                {discountCode ? '✓ Deal Complete' : 'Accept & Get Code'}
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* Tiny keyframe for spinner */}
-      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}.spin{animation:spin 1s linear infinite}`}</style>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
+        .spin { animation: spin 1s linear infinite }
+      `}</style>
     </div>
   )
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import { Zap, Mail, Lock, ArrowRight, CheckCircle2 } from 'lucide-react'
@@ -125,9 +126,14 @@ function LoginContent() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-md">
         <Link href="/" className="flex items-center space-x-2 mb-8 group">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary-600 to-primary-800 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:shadow-lg group-hover:shadow-primary-600/50 transition-all">
-            <Zap className="w-5 h-5 text-white" />
-          </div>
+          <Image
+            src="/favicon-32x32.png"
+            alt="CartGain"
+            width={32}
+            height={32}
+            className="w-8 h-8 rounded-lg flex-shrink-0 group-hover:shadow-lg group-hover:shadow-primary-600/50 transition-all"
+            priority
+          />
           <span className="text-lg font-bold text-white group-hover:text-blue-200 transition">CartGain</span>
         </Link>
 

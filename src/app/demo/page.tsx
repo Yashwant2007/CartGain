@@ -218,9 +218,13 @@ export default function DemoPage() {
       <header className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-lg border-b border-blue-800/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary-600 to-primary-800 rounded-lg flex items-center justify-center">
-              <Zap className="w-4 h-4 text-white" />
-            </div>
+            <Image
+              src="/favicon-32x32.png"
+              alt="CartGain"
+              width={32}
+              height={32}
+              className="w-8 h-8 rounded-lg"
+            />
             <span className="text-lg font-bold">CartGain</span>
             <span className="hidden sm:inline-block ml-2 px-2 py-0.5 rounded-full text-xs bg-blue-900/50 text-blue-300 border border-blue-700/40">
               Live Demo
