@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, CheckCircle2, Zap, Globe, MessageSquare, Mail, BarChart3, TrendingUp, Sparkles, PhoneCall, ArrowUpRight, X, Shield, UsersRound, Handshake } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Zap, Globe, MessageSquare, Mail, BarChart3, TrendingUp, Sparkles, PhoneCall, ArrowUpRight, X, Shield, UsersRound, Handshake, Wallet, Lock } from 'lucide-react'
 import ROICalculator from '@/components/ROICalculator'
 import CartGainAnimatic from '@/components/CartGainAnimatic'
 import { Button } from '@/components/Button'
@@ -436,17 +436,20 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Problem Section */}
+      {/* Why CartGain - Problem left, differentiated solution right */}
       <section id="why" className="py-12 sm:py-16 md:py-20 lg:py-24 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
             {/* Left - Problem */}
             <div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/40 text-red-300 text-xs font-semibold uppercase tracking-wider mb-4">
+                The Real Cost
+              </span>
               <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-6">
                 You&apos;re Leaving <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-orange-600">₹50L+</span> on the Table
               </h2>
               <p className="text-lg sm:text-xl text-blue-100 mb-8">
-                Every week, your customers add products to their cart, then leave without buying. That&apos;s not a problem with your product—it&apos;s a <strong>recovery problem</strong>.
+                Every week, your customers add products to their cart, then leave without buying. That&apos;s not a problem with your product—it&apos;s a <strong>recovery problem</strong>. And most of it starts with one word: <strong>price</strong>.
               </p>
               <ul className="space-y-4">
                 <li className="flex gap-3">
@@ -467,23 +470,83 @@ export default function HomePage() {
                   <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-primary-600 flex-shrink-0 mt-1" />
                   <div>
                     <p className="font-semibold text-white text-sm sm:text-base">Email Only = Missed Chance</p>
-                    <p className="text-blue-200 text-xs sm:text-sm">Email gets just 20% open rate</p>
+                    <p className="text-blue-200 text-xs sm:text-sm">Email gets just 20% open rate — and can&apos;t fix a price objection</p>
                   </div>
                 </li>
               </ul>
             </div>
 
-            {/* Right - Solution Preview */}
+            {/* Right - Why CartGain Wins */}
             <div className="relative">
-              <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/20 rounded-2xl overflow-hidden border border-blue-700/40 shadow-2xl aspect-video">
-                {/* Hero Image: Multi-channel recovery with product */}
-                <Image
-                  src="https://images.unsplash.com/photo-1556740738-b6a63e27c4df?w=600&h=500&fit=crop" 
-                  alt="Professional multichannel cart recovery communication through WhatsApp, SMS, and email for e-commerce businesses"
-                  fill
-                  className="object-cover animate-fade-in"
-                  sizes="(max-width: 768px) 100vw, 600px"
-                />
+              <div className="rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-slate-900 via-blue-950/60 to-slate-900 overflow-hidden">
+                <div className="absolute -top-16 -right-16 w-56 h-56 bg-cyan-500/10 rounded-full blur-3xl"></div>
+                <div className="relative p-6 sm:p-8">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/40 text-cyan-300 text-xs font-semibold uppercase tracking-wider mb-6">
+                    <Sparkles className="w-3.5 h-3.5" /> Why CartGain Wins
+                  </span>
+                  <div className="space-y-5">
+                    <div className="flex gap-3">
+                      <div className="w-9 h-9 bg-cyan-600/20 border border-cyan-500/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Zap className="w-4 h-4 text-cyan-400" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-white text-sm sm:text-base">Sells the moment it hurts</p>
+                        <p className="text-blue-200 text-xs sm:text-sm">An AI negotiator closes price objections at checkout — before the customer ever walks away.</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="w-9 h-9 bg-cyan-600/20 border border-cyan-500/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <MessageSquare className="w-4 h-4 text-cyan-400" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-white text-sm sm:text-base">WhatsApp-first recovery</p>
+                        <p className="text-blue-200 text-xs sm:text-sm">85% open rates vs 20% for email bring back what still leaves — with product images, instantly.</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="w-9 h-9 bg-cyan-600/20 border border-cyan-500/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Shield className="w-4 h-4 text-cyan-400" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-white text-sm sm:text-base">Margins, hard-protected</p>
+                        <p className="text-blue-200 text-xs sm:text-sm">Your floor price is enforced at the engine level — the AI physically can&apos;t sell below it.</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="w-9 h-9 bg-cyan-600/20 border border-cyan-500/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Lock className="w-4 h-4 text-cyan-400" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-white text-sm sm:text-base">Compliance built in</p>
+                        <p className="text-blue-200 text-xs sm:text-sm">DPDP Act &amp; GDPR aligned, opt-out honored on every channel — privacy that scales with you.</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="w-9 h-9 bg-cyan-600/20 border border-cyan-500/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <BarChart3 className="w-4 h-4 text-cyan-400" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-white text-sm sm:text-base">18–25% recovery benchmark</p>
+                        <p className="text-blue-200 text-xs sm:text-sm">Engineered results, not promises — versus 3–5% for email-only recovery stacks.</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="w-9 h-9 bg-cyan-600/20 border border-cyan-500/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Wallet className="w-4 h-4 text-cyan-400" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-white text-sm sm:text-base">We earn when you do</p>
+                        <p className="text-blue-200 text-xs sm:text-sm">Revenue-share pricing — no setup fees, first 50 recovered carts free, no lock-in.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-7 pt-6 border-t border-cyan-500/20">
+                    <Button isLink href="/demo" variant="primary" className="w-full sm:w-auto" aria-label="See why CartGain wins">
+                      See it work for yourself
+                      <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
