@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, CheckCircle2, Zap, Globe, MessageSquare, Mail, BarChart3, TrendingUp, Sparkles, PhoneCall, ArrowUpRight, X } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Zap, Globe, MessageSquare, Mail, BarChart3, TrendingUp, Sparkles, PhoneCall, ArrowUpRight, X, Shield, UsersRound } from 'lucide-react'
 import ROICalculator from '@/components/ROICalculator'
 import CartGainAnimatic from '@/components/CartGainAnimatic'
 import { Button } from '@/components/Button'
@@ -156,19 +156,19 @@ export default function HomePage() {
           {/* Badge */}
           <div className="flex justify-center mb-6 sm:mb-8">
             <Badge variant="default" size="md">
-              <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-blue-300 mr-2 flex-shrink-0" />
-              <span>Built for D2C Beauty Brands</span>
+              <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-cyan-300 mr-2 flex-shrink-0" />
+              <span>The AI Negotiation Engine for E-commerce</span>
             </Badge>
           </div>
 
           {/* Main Headline - responsive typography */}
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white text-center mb-4 sm:mb-6 leading-tight tracking-tight">
-            Recover Your <span className="bg-gradient-to-r from-primary-600 via-accent-600 to-primary-600 bg-clip-text text-transparent">Lost Revenue</span>
+            Turn &ldquo;Too Expensive&rdquo; Into <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">Sold</span>
           </h1>
 
           {/* Subheadline */}
           <p className="text-base sm:text-lg md:text-xl text-blue-100 text-center mb-8 sm:mb-12 max-w-3xl mx-auto leading-relaxed px-2">
-            Turn abandoned carts into confirmed sales with AI-powered WhatsApp, Email, and SMS recovery (coming soon). Built specifically for beauty founders.
+            CartGain embeds a world-class AI shopkeeper at your checkout that negotiates with bargain-hunting customers in real time — while your margins stay protected. Full abandoned-cart recovery across WhatsApp, Email &amp; SMS rounds out the stack.
           </p>
 
           {/* CTA Buttons - improved touch targets and responsiveness */}
@@ -178,9 +178,9 @@ export default function HomePage() {
               href="/demo"
               variant="primary"
               className="w-full sm:w-auto"
-              aria-label="View live demo of cart recovery"
+              aria-label="View live demo of AI bargaining"
             >
-              See Live Demo
+              Try the AI Negotiator
               <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
             <Button 
@@ -199,16 +199,16 @@ export default function HomePage() {
           {/* Trust Indicators - responsive layout */}
           <div className="flex flex-col sm:flex-row justify-center gap-6 sm:gap-8 text-xs sm:text-sm text-blue-100 flex-wrap px-2">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 flex-shrink-0" />
-              <span><strong>3-7 days</strong> setup</span>
+              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 flex-shrink-0" />
+              <span><strong>OpenAI-powered</strong> negotiation</span>
             </div>
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 flex-shrink-0" />
-              <span><strong>Industry: 18-25%</strong> recovery rate</span>
+              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 flex-shrink-0" />
+              <span><strong>Your floor price</strong> always protected</span>
             </div>
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 flex-shrink-0" />
-              <span><strong>5-6x better</strong> than email alone</span>
+              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 flex-shrink-0" />
+              <span><strong>18-25%</strong> recovery rate, multi-channel</span>
             </div>
           </div>
 
@@ -514,7 +514,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* AI Bargain Section */}
+      {/* AI Bargain Section — The Hero Feature */}
       <section id="bargain" className="py-12 sm:py-16 md:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-950 to-blue-950/60" aria-labelledby="bargain-heading">
         <div className="max-w-7xl mx-auto">
           <div className="relative rounded-3xl overflow-hidden border border-cyan-500/30 bg-gradient-to-br from-slate-900 via-blue-950/80 to-slate-900 p-8 sm:p-12 md:p-16 shadow-2xl shadow-cyan-500/10">
@@ -522,21 +522,21 @@ export default function HomePage() {
             <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
               <div>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/40 text-cyan-300 text-xs font-semibold uppercase tracking-wider mb-5">
-                  <Sparkles className="w-3.5 h-3.5" /> AI Bargain — Our Hook
+                  <Sparkles className="w-3.5 h-3.5" /> The AI Negotiator — Our Core
                 </span>
                 <h2 id="bargain-heading" className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">
-                  Let AI negotiate. <span className="text-cyan-400">Turn &ldquo;too expensive&rdquo; into a sale.</span>
+                  The world&apos;s first AI shopkeeper that <span className="text-cyan-400">never loses a sale.</span>
                 </h2>
                 <p className="text-lg text-blue-100 max-w-xl mb-8">
-                  Bargain hunters walk away when they can&apos;t get a deal. CartGain puts an AI shopkeeper at your checkout that negotiates with them — while protecting your margins.
+                  Bargain hunters walk away when they can&apos;t get a deal. CartGain embeds an AI negotiator at your checkout that reads your customer&apos;s tactics, adapts its strategy in real time, and closes deals a human shopkeeper would — while your margin stays protected.
                 </p>
                 <ul className="space-y-3 mb-8">
                   {[
-                    'Customers counter-offer, AI accepts or politely counters',
-                    'You set the floor price — the AI never sells below it',
-                    'Accepted deals auto-create a Shopify discount code',
-                    'Handles bulk orders, walkout retention & returning customers',
-                    '3 personalities: Friendly, Strict, Playful'
+                    'Not a chatbot — a trained negotiation agent with real-world psychology running on OpenAI',
+                    'Reads 15+ customer behavioral patterns and adapts its strategy mid-conversation',
+                    'You set the floor price — the AI never sells below it, guaranteed at the engine level',
+                    '3 distinct shopkeeper personas, each with a consistent negotiation style',
+                    'Handles bullying, abuse & prompt-injection without breaking character or leaking data'
                   ].map((item) => (
                     <li key={item} className="flex items-start gap-2.5 text-blue-100">
                       <CheckCircle2 className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
@@ -544,9 +544,15 @@ export default function HomePage() {
                     </li>
                   ))}
                 </ul>
-                <Button isLink href="/pricing" variant="primary">
-                  Start Free <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
+                <div className="flex flex-wrap gap-3 sm:gap-4">
+                  <Button isLink href="/demo" variant="primary">
+                    Try the Negotiator <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                  <Button isLink href="/s/bargain" variant="accent" className="border-2 border-cyan-400">
+                    <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
+                    Live Demo
+                  </Button>
+                </div>
               </div>
               <div className="relative">
                 <div className="rounded-2xl border border-blue-700/40 bg-slate-900/80 backdrop-blur-sm p-6 shadow-xl">
@@ -559,6 +565,12 @@ export default function HomePage() {
                       <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-slate-700/70 px-4 py-3 text-sm text-blue-100">I get it — it&apos;s our best-seller for a reason. For you today, I can do ₹1,349. That&apos;s 10% off. Deal?</div>
                     </div>
                     <div className="flex justify-end">
+                      <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm text-white">Amazon has it for ₹1,280. Match that?</div>
+                    </div>
+                    <div className="flex justify-start">
+                      <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-slate-700/70 px-4 py-3 text-sm text-blue-100">You&apos;ve done your homework! I can&apos;t match Amazon blindly, but I&apos;ll split the difference at ₹1,299 — with our 90-day quality guarantee included. Fair?</div>
+                    </div>
+                    <div className="flex justify-end">
                       <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm text-white">Deal! 🎉</div>
                     </div>
                     <div className="flex justify-start">
@@ -569,6 +581,135 @@ export default function HomePage() {
                     <span>Floor price set by you: ₹1,250</span>
                     <span className="text-emerald-400">Margin protected ✓</span>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Capability Pillars ── */}
+          <div className="grid grid-cols-1 gap-5 mt-12 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <FeatureCard
+              className="h-full"
+              icon={<MessageSquare className="w-6 h-6 sm:w-7 sm:h-7 text-cyan-400" />}
+              title="Real-World Negotiation Psychology"
+              description="The AI is trained on how real humans haggle — not canned discount scripts."
+              features={[
+                'Anchoring, reciprocity, loss aversion & scarcity',
+                'Concession patterns that signal your floor without revealing it',
+                'Silence handling, round-number & split-the-difference plays',
+                'Fluid adaptation to customer emotional state'
+              ]}
+            />
+            <FeatureCard
+              className="h-full"
+              icon={<Shield className="w-6 h-6 sm:w-7 sm:h-7 text-cyan-400" />}
+              title="Margin Safety by Design"
+              description="Protection isn&apos;t a prompt — it&apos;s enforced at the engine level."
+              features={[
+                'Your floor price is a hard constraint, never a suggestion',
+                'Accept decisions below the floor are downgraded automatically',
+                'Bulk orders unlock controlled, merchant-defined discounts',
+                'Never reveals the floor, margin or internal pricing'
+              ]}
+            />
+            <FeatureCard
+              className="h-full"
+              icon={<UsersRound className="w-6 h-6 sm:w-7 sm:h-7 text-cyan-400" />}
+              title="Abuse & Brand Protection"
+              description="The AI stays professional through the worst humans throw at it."
+              features={[
+                '6-layer abuse firewall: profanity, threats, harassment',
+                'Jailbreak & prompt-injection immune — stays in character',
+                'Toxic users get graceful, dignified responses',
+                'Flooding & spam don&apos;t burn your customer&apos;s attempts'
+              ]}
+            />
+            <FeatureCard
+              className="h-full"
+              icon={<Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-cyan-400" />}
+              title="Turns Negotiations Into Sales"
+              description="Every hard-won agreement becomes revenue — fully automated."
+              features={[
+                'Accepted deal auto-generates a Shopify discount code',
+                'Codes bound to that customer + that cart — no sharing',
+                'Walkout retention saves customers who threaten to leave',
+                'Memory of returning customers rewards loyalty'
+              ]}
+            />
+          </div>
+
+          {/* ── Deeper Capabilities — 3 Personas ── */}
+          <div className="mt-12 sm:mt-16 relative rounded-3xl overflow-hidden border border-blue-700/30 bg-slate-900/60 p-8 sm:p-12">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-start">
+              <div>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/40 text-blue-300 text-xs font-semibold uppercase tracking-wider mb-5">
+                  <UsersRound className="w-3.5 h-3.5" /> Three Shopkeeper Personas
+                </span>
+                <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">Choose the voice that fits your brand.</h3>
+                <p className="text-blue-100 mb-8 max-w-xl">
+                  Each persona holds the same negotiation mastery but speaks in its own voice — so you can match the personality of your store.
+                </p>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-4 bg-slate-800/40 border border-cyan-500/20 rounded-xl p-5">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white font-bold flex-shrink-0">A</div>
+                    <div>
+                      <p className="font-semibold text-white">Alex — The Friendly Shopkeeper</p>
+                      <p className="text-sm text-blue-200 mt-1">Warm and folksy, treats customers like family. Concedes with stories and personal touches. Ideal for beauty & lifestyle stores.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-4 bg-slate-800/40 border border-blue-500/20 rounded-xl p-5">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white font-bold flex-shrink-0">M</div>
+                    <div>
+                      <p className="font-semibold text-white">Morgan — The Strict Negotiator</p>
+                      <p className="text-sm text-blue-200 mt-1">Measured and precise, uses silence and value-framing. Never makes the first move. Perfect for electronics or B2B catalogues.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-4 bg-slate-800/40 border border-purple-500/20 rounded-xl p-5">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold flex-shrink-0">R</div>
+                    <div>
+                      <p className="font-semibold text-white">Riley — The Playful Friend</p>
+                      <p className="text-sm text-blue-200 mt-1">Witty and dramatic, makes haggling fun while staying razor-sharp. Great for streetwear, toys & Gen-Z brands.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-6">
+                  <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-cyan-400" /> Handles every real-world bargaining scenario
+                  </h3>
+                  <p className="text-sm text-blue-200 mb-4">The behavioral engine reads intent — not just words — and adapts mid-conversation. It&apos;s trained to recognize and masterfully respond to:</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {[
+                    'Lowball openers ("₹200 take it or leave it")',
+                    'Comparison shoppers ("Amazon has it cheaper")',
+                    'Price haggling ("can you do better?")',
+                    'Emotional appeals (student, birthday, budget)',
+                    'Walkout threats & retention saves',
+                    'Chatting hesitation — indecisive buyers',
+                    '"My manager / partner" excuses',
+                    'Round-number games & split-the-difference',
+                    'Bulk / multi-unit wholesale requests',
+                    'Cash & UPI payment haggling',
+                    'Flattery & charm attacks',
+                    'Quality & feature complaints',
+                    'Loyalty & returning-customer rewards',
+                    'Rude, aggressive, or abusive behavior',
+                    '"My friend got it for ₹X"',
+                    'Combo tactics — multiple at once',
+                    '"Let me think about it"',
+                    'Absurd offers: ₹0, free, ₹1'
+                  ].map((item) => (
+                    <div key={item} className="flex items-start gap-2 bg-slate-800/30 border border-blue-700/20 rounded-lg px-3 py-2.5 text-sm text-blue-100">
+                      <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                      {item}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-900/20 p-4 text-sm text-emerald-200">
+                  <strong className="text-emerald-300">The result:</strong> customers get the feeling they won — and stores get the sale without giving away margins.
                 </div>
               </div>
             </div>

@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+*.kimi-code
+cache
+bin
+credentials
+updates
+user-history
+workspace-trust
