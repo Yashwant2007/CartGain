@@ -68,7 +68,7 @@ export default function PrivacyPolicyPage() {
                     <ul className="list-disc pl-5 space-y-2">
                       <li><strong>Usage Data:</strong> Pages visited, features used, time spent, and interaction patterns.</li>
                       <li><strong>Device Data:</strong> IP address, browser type, operating system, and device information.</li>
-                      <li><strong>Cookies:</strong> We use essential cookies for functionality and analytics cookies (with your consent).</li>
+                      <li><strong>Cookies:</strong> We use essential cookies for functionality (such as keeping you logged in). We do not run third-party advertising or analytics trackers that profile visitors.</li>
                     </ul>
                   </div>
                 </div>
@@ -116,7 +116,6 @@ export default function PrivacyPolicyPage() {
                   <li><strong>AI Services:</strong> OpenAI (GPT-4o-mini) for AI-powered message generation — customer names and cart product details are processed to generate personalized recovery messages. OpenAI does not use API data for training.</li>
                   <li><strong>Payment Processors:</strong> Razorpay for secure payment processing.</li>
                   <li><strong>Cloud Infrastructure:</strong> Vercel and Supabase for hosting and database.</li>
-                  <li><strong>Analytics Tools:</strong> Google Analytics (anonymized data only).</li>
                   <li><strong>Legal Authorities:</strong> When required by law or to protect our rights.</li>
                 </ul>
                 <p className="mt-4">

@@ -52,6 +52,8 @@ New installs are unaffected.
 > - Accepted deals auto-generate a Shopify discount code (usage limit 1, 24h)
 > - 3 personalities: Friendly Shopkeeper, Strict Negotiator, Playful Friend
 > - Bulk-order discounts, walkout retention ("wait — let me match that!"), returning-customer memory
+> - Built-in abuse & brand protection: a 6-layer firewall keeps profanity, jailbreaks and
+>   prompt-injection from breaking character, and abusive messages don't burn negotiation attempts
 >
 > **Your dashboard**
 > - Revenue recovered, win rates, per-product breakdown
@@ -89,12 +91,17 @@ Shopify Billing. Use **one-time Shopify Billing** for the subscription amounts o
 
 Real store names/data preferred — use a demo store with your own product photos if needed.
 
+**Fastest path to screenshots/video:** the pixel-perfect, self-contained demo lives at
+`https://cart-gain.com/demo` — a pure client-side AI-bargain widget (Lumina Beauty store,
+₹1,299 serum) with no merchant data or API calls required. It runs instantly in any browser,
+supports all 3 personas, and is ideal for capture #3 (AI Bargain mid-negotiation) and the video.
+
 ## 5. Submission checklist
 
 - [ ] App icon + screenshots uploaded (§4)
 - [ ] Listing copy pasted (§2)
 - [ ] Pricing plans created (§3)
-- [ ] Privacy policy + terms + DPA URLs live (https://cart-gain.com/privacy, /terms, /dpa)
+- [ ] Privacy policy + terms + DPA URLs live (https://cart-gain.com/privacy, /terms, /dpa) + security policy (https://cart-gain.com/security-policy)
 - [ ] App serves embedded correctly: install from a test store → opens inside admin → connect → dashboard loads
 - [ ] `shopify app deploy` pushed app config (optional — dashboard config is authoritative)
 - [ ] "Uninstall" webhook handling verified (app/uninstalled → store deactivated)
