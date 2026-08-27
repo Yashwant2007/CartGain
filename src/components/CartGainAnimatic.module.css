@@ -225,7 +225,7 @@
   animation: fadeUp 1s 0.5s both;
 }
 
-.s1Headline h1 {
+.s1HeadlineTitle {
   font-size: clamp(14px, 3vw, 22px);
   color: #fff;
   font-weight: 500;

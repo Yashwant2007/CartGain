@@ -155,7 +155,7 @@ export default function CartGainAnimatic() {
               ))}
             </div>
             <div className={styles.s1Headline}>
-              <h1>Your customers want to buy.</h1>
+              <p className={styles.s1HeadlineTitle}>Your customers want to buy.</p>
               <p>They just forgot.</p>
             </div>
           </div>
