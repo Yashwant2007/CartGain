@@ -58,10 +58,11 @@
   background: none;
   border: 1px solid #1e3a5f;
   color: #7ea8c9;
-  padding: 5px 14px;
-  border-radius: 6px;
+  padding: 10px 18px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 600;
   transition: all 0.2s;
 }
 
@@ -84,12 +85,23 @@
 }
 
 .dot {
-  width: 8px;
-  height: 8px;
+  position: relative;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: #1e3a5f;
   cursor: pointer;
   transition: all 0.2s;
+}
+
+.dot::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 36px;
+  height: 36px;
 }
 
 .dot.active {
