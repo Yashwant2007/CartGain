@@ -68,6 +68,12 @@ function LoginContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.get('verified'), searchParams.get('registered'), searchParams.get('error')])
 
+  // Only allow internal paths so a ?callbackUrl query can never be an open redirect
+  function safeCallbackUrl(param: string | null): string {
+    if (param && param.startsWith('/') && !param.startsWith('//')) return param
+    return '/dashboard'
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -83,7 +89,7 @@ function LoginContent() {
       if (result?.error) {
         setError('Invalid email or password')
       } else if (result?.ok) {
-        router.push('/dashboard')
+        router.push(safeCallbackUrl(searchParams.get('callbackUrl')))
         router.refresh()
       }
     } catch (err) {
@@ -104,7 +110,7 @@ function LoginContent() {
         // (X-Frame-Options: DENY), so run the OAuth in a popup window.
         const outcome = await openGoogleAuthPopup(getEmbedAwareRedirectUrl('/shopify-auth-success'))
         if (outcome === 'success') {
-          router.push(getEmbedAwareRedirectUrl('/dashboard'))
+          router.push(getEmbedAwareRedirectUrl(safeCallbackUrl(searchParams.get('callbackUrl'))))
           router.refresh()
         } else if (outcome === 'blocked') {
           redirectTopForAuth()
@@ -114,7 +120,8 @@ function LoginContent() {
 
       // signIn('google') — NextAuth v4 does a full-page POST (not popup) by default,
       // which works in all browser contexts including incognito.
-      await signIn('google', { callbackUrl: '/setup' })
+      const target = safeCallbackUrl(searchParams.get('callbackUrl'))
+      await signIn('google', { callbackUrl: target })
     } catch (err) {
       console.error('Google sign-in error:', err)
     } finally {

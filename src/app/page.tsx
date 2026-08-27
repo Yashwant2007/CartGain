@@ -167,8 +167,13 @@ export default function HomePage() {
           </h1>
 
           {/* Subheadline */}
-          <p className="text-base sm:text-lg md:text-xl text-blue-100 text-center mb-8 sm:mb-12 max-w-3xl mx-auto leading-relaxed px-2">
-            CartGain embeds a world-class AI shopkeeper at your checkout that negotiates with bargain-hunting customers in real time — while your margins stay protected. Full abandoned-cart recovery across WhatsApp, Email &amp; SMS rounds out the stack.
+          <p className="text-base sm:text-lg md:text-xl text-blue-100 text-center mb-4 sm:mb-5 max-w-3xl mx-auto leading-relaxed px-2">
+            Customers say it right at your checkout, at the worst possible moment — &ldquo;Too expensive.&rdquo; CartGain embeds a world-class AI shopkeeper that negotiates with bargain-hunting customers in real time, while your margins stay protected. If a deal still walks, our WhatsApp, Email &amp; SMS recovery engine brings them back.
+          </p>
+
+          {/* Hook line */}
+          <p className="text-sm sm:text-base text-cyan-200/90 text-center mb-8 sm:mb-12 max-w-3xl mx-auto px-2">
+            No setup fee. First 50 recovered carts free — you only pay when revenue comes back to your store.
           </p>
 
           {/* CTA Buttons - improved touch targets and responsiveness */}
