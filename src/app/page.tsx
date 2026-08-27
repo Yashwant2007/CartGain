@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, CheckCircle2, Zap, Globe, MessageSquare, Mail, BarChart3, TrendingUp, Sparkles, PhoneCall, ArrowUpRight, X, Shield, UsersRound } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Zap, Globe, MessageSquare, Mail, BarChart3, TrendingUp, Sparkles, PhoneCall, ArrowUpRight, X, Shield, UsersRound, Search, Send, Handshake, BadgeCheck, Repeat, Timer, Wallet } from 'lucide-react'
 import ROICalculator from '@/components/ROICalculator'
 import CartGainAnimatic from '@/components/CartGainAnimatic'
 import { Button } from '@/components/Button'
@@ -275,91 +275,132 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Customer Journey Visual Section */}
-      <section className="py-12 sm:py-16 md:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-900/20 to-slate-950" aria-labelledby="journey-heading">
-        <div className="w-full max-w-7xl mx-auto">
+      {/* Customer Journey: From Abandonment to Sale */}
+      <section className="py-12 sm:py-16 md:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-950/40 to-slate-950" aria-labelledby="journey-heading">
+        <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12 sm:mb-16">
-            <h2 id="journey-heading" className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">See Recovery in Real Time</h2>
-            <p className="text-base sm:text-lg md:text-xl text-blue-100 max-w-2xl mx-auto">Multi-channel notifications that bring customers back to complete their purchase</p>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/40 text-green-300 text-xs font-semibold uppercase tracking-wider mb-4">
+              <Repeat className="w-3.5 h-3.5" /> The Recovery Pipeline
+            </span>
+            <h2 id="journey-heading" className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">
+              From Abandoned Cart to <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-cyan-400">Completed Sale</span>
+            </h2>
+            <p className="text-base sm:text-lg md:text-xl text-blue-100 max-w-2xl mx-auto">
+              One continuous flow — detect the hesitation, re-engage the customer, negotiate the price, and close the order before it is lost.
+            </p>
           </div>
 
-          {/* Three-column visual journey - responsive */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8 mb-12">
-            {/* Hour 1: WhatsApp */}
-            <div className="relative group">
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-green-600 to-green-400 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-300"></div>
-              <div className="relative bg-slate-800/50 border border-green-600/30 rounded-2xl p-4 sm:p-6 md:p-8 h-full flex flex-col justify-between">
-                <div>
-                  <div className="inline-block bg-green-600/20 border border-green-600/40 rounded-lg px-3 py-1 mb-4 text-xs">
-                    <span className="font-semibold text-green-300">Hour 1</span>
+          <ol className="flex flex-col lg:flex-row lg:items-stretch gap-4 sm:gap-6 list-none p-0 m-0" role="list">
+            {/* Step 1 — Cart Abandoned */}
+            <li className="flex-1">
+              <div className="relative bg-slate-800/50 border border-rose-500/25 hover:border-rose-500/60 rounded-2xl p-5 sm:p-7 h-full flex flex-col transition duration-300">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="w-11 h-11 bg-rose-600/20 border border-rose-500/40 rounded-xl flex items-center justify-center">
+                    <Search className="w-5 h-5 text-rose-400" />
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-bold text-white mb-3">WhatsApp Alert</h3>
-                  <p className="text-blue-100 text-sm mb-4">Instant notification with product images</p>
-                  <div className="bg-green-900/20 border border-green-700/40 rounded-lg p-3 mb-4">
-                    <p className="text-xs text-green-300 font-mono">
-                      &ldquo;OMG! Got it?! Is it amazing? 😍 ✅&rdquo;
-                    </p>
-                  </div>
+                  <span className="text-xs font-bold text-slate-500 tracking-widest">01</span>
                 </div>
-                <div className="flex items-center gap-2 text-green-400">
-                  <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                  <span className="text-sm font-semibold">85% Industry Avg Open Rate</span>
+                <h3 className="text-lg sm:text-xl font-bold text-white mb-2">Cart Abandoned</h3>
+                <p className="text-sm text-blue-100 flex-grow">
+                  Seven in ten visitors leave without buying — most simply hesitating on the price. The moment they walk away, CartGain captures the cart, the customer, and a clear way back.
+                </p>
+                <span className="mt-5 inline-flex items-center gap-1.5 text-xs font-medium text-rose-300 bg-rose-600/10 border border-rose-500/20 px-2.5 py-1 rounded-full w-fit">
+                  <Timer className="w-3 h-3" /> Captured the second they leave
+                </span>
+              </div>
+            </li>
+
+            {/* Connector */}
+            <li className="hidden lg:flex items-center justify-center flex-shrink-0" aria-hidden="true">
+              <ArrowRight className="w-7 h-7 text-green-500/60" />
+            </li>
+            <li className="lg:hidden flex justify-center py-1" aria-hidden="true">
+              <ArrowRight className="w-6 h-6 text-green-500/60 rotate-90" />
+            </li>
+
+            {/* Step 2 — Instant Re-engagement */}
+            <li className="flex-1">
+              <div className="relative bg-slate-800/50 border border-green-500/25 hover:border-green-500/60 rounded-2xl p-5 sm:p-7 h-full flex flex-col transition duration-300">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="w-11 h-11 bg-green-600/20 border border-green-500/40 rounded-xl flex items-center justify-center">
+                    <Send className="w-5 h-5 text-green-400" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-500 tracking-widest">02</span>
+                </div>
+                <h3 className="text-lg sm:text-xl font-bold text-white mb-2">Instant Re-engagement</h3>
+                <p className="text-sm text-blue-100 flex-grow">
+                  A personalized WhatsApp message with product images lands minutes later. Email and SMS follow in a measured sequence — persistent, never pushy.
+                </p>
+                <div className="mt-5 flex flex-wrap gap-1.5">
+                  <span className="text-xs font-medium text-green-300 bg-green-600/10 border border-green-500/20 px-2.5 py-1 rounded-full">WhatsApp — 85% open rate</span>
+                  <span className="text-xs font-medium text-blue-300 bg-blue-600/10 border border-blue-500/20 px-2.5 py-1 rounded-full">Email follow-up</span>
+                  <span className="text-xs font-medium text-purple-300 bg-purple-600/10 border border-purple-500/20 px-2.5 py-1 rounded-full">SMS — Coming Soon</span>
                 </div>
               </div>
-            </div>
+            </li>
 
-            {/* Hour 3: SMS */}
-            <div className="relative group">
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-blue-400 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-300"></div>
-              <div className="relative bg-slate-800/50 border border-blue-600/30 rounded-2xl p-4 sm:p-6 md:p-8 h-full flex flex-col justify-between">
-                <div>
-                  <div className="inline-block bg-blue-600/20 border border-blue-600/40 rounded-lg px-3 py-1 mb-4 text-xs">
-                    <span className="font-semibold text-blue-300">Hour 3</span>
+            {/* Connector */}
+            <li className="hidden lg:flex items-center justify-center flex-shrink-0" aria-hidden="true">
+              <ArrowRight className="w-7 h-7 text-cyan-500/60" />
+            </li>
+            <li className="lg:hidden flex justify-center py-1" aria-hidden="true">
+              <ArrowRight className="w-6 h-6 text-cyan-500/60 rotate-90" />
+            </li>
+
+            {/* Step 3 — The Negotiation Tab */}
+            <li className="flex-1">
+              <div className="relative bg-slate-800/50 border border-cyan-500/25 hover:border-cyan-500/60 rounded-2xl p-5 sm:p-7 h-full flex flex-col transition duration-300">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="w-11 h-11 bg-cyan-600/20 border border-cyan-500/40 rounded-xl flex items-center justify-center">
+                    <Handshake className="w-5 h-5 text-cyan-400" />
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-bold text-white mb-3">SMS <span className="text-xs font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">Coming Soon</span></h3>
-                  <p className="text-blue-100 text-sm mb-4">Quick nudge with exclusive discount</p>
-                  <div className="bg-blue-900/20 border border-blue-700/40 rounded-lg p-3 mb-4">
-                    <p className="text-xs text-blue-300 font-mono">
-                      &ldquo;Your Lumina order ships today! Use SAVE20 at checkout 🎁&rdquo;
-                    </p>
-                  </div>
+                  <span className="text-xs font-bold text-slate-500 tracking-widest">03</span>
                 </div>
-                <div className="flex items-center gap-2 text-blue-400">
-                  <Mail className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                  <span className="text-sm font-semibold">45% Click Rate</span>
-                </div>
+                <h3 className="text-lg sm:text-xl font-bold text-white mb-2">The Negotiation Tab</h3>
+                <p className="text-sm text-blue-100 flex-grow">
+                  Back on your store, the customer sees &ldquo;Still too expensive? Let&apos;s talk.&rdquo; The AI shopkeeper steps in — reads their tactic, counters the lowball, matches a competitor price — and lands on a deal your margin protects.
+                </p>
+                <span className="mt-5 inline-flex items-center gap-1.5 text-xs font-medium text-cyan-300 bg-cyan-600/10 border border-cyan-500/20 px-2.5 py-1 rounded-full w-fit">
+                  <Wallet className="w-3 h-3" /> Floor price hard-protected, never revealed
+                </span>
               </div>
-            </div>
+            </li>
 
-            {/* Day 1: Email */}
-            <div className="relative group sm:col-span-2 lg:col-span-1">
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-purple-400 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-300"></div>
-              <div className="relative bg-slate-800/50 border border-purple-600/30 rounded-2xl p-4 sm:p-6 md:p-8 h-full flex flex-col justify-between">
-                <div>
-                  <div className="inline-block bg-purple-600/20 border border-purple-600/40 rounded-lg px-3 py-1 mb-4 text-xs">
-                    <span className="font-semibold text-purple-300">Day 1</span>
+            {/* Connector */}
+            <li className="hidden lg:flex items-center justify-center flex-shrink-0" aria-hidden="true">
+              <ArrowRight className="w-7 h-7 text-emerald-500/60" />
+            </li>
+            <li className="lg:hidden flex justify-center py-1" aria-hidden="true">
+              <ArrowRight className="w-6 h-6 text-emerald-500/60 rotate-90" />
+            </li>
+
+            {/* Step 4 — Sale Recovered */}
+            <li className="flex-1">
+              <div className="relative bg-slate-800/50 border border-emerald-500/25 hover:border-emerald-500/60 rounded-2xl p-5 sm:p-7 h-full flex flex-col transition duration-300">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="w-11 h-11 bg-emerald-600/20 border border-emerald-500/40 rounded-xl flex items-center justify-center">
+                    <BadgeCheck className="w-5 h-5 text-emerald-400" />
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-bold text-white mb-3">Email Story</h3>
-                  <p className="text-blue-100 text-sm mb-4">Brand story that builds trust</p>
-                  <div className="bg-purple-900/20 border border-purple-700/40 rounded-lg p-3 mb-4">
-                    <p className="text-xs text-purple-300 font-mono">
-                      &ldquo;Why our founder created Lumina...&rdquo;
-                    </p>
-                  </div>
+                  <span className="text-xs font-bold text-slate-500 tracking-widest">04</span>
                 </div>
-                <div className="flex items-center gap-2 text-purple-400">
-                  <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                  <span className="text-sm font-semibold">Convert Warm Leads</span>
-                </div>
+                <h3 className="text-lg sm:text-xl font-bold text-white mb-2">Sale Recovered</h3>
+                <p className="text-sm text-blue-100 flex-grow">
+                  Deal accepted. A one-use discount code is generated, bound to the customer&apos;s email and cart, and applied automatically. The order lands — margin intact, customer convinced they won.
+                </p>
+                <span className="mt-5 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-300 bg-emerald-600/10 border border-emerald-500/20 px-2.5 py-1 rounded-full w-fit">
+                  <Zap className="w-3 h-3" /> Auto-generated, one-use discount code
+                </span>
               </div>
-            </div>
-          </div>
+            </li>
+          </ol>
 
-          {/* Conversion Result */}
-          <div className="bg-gradient-to-r from-green-900/30 via-cyan-900/30 to-green-900/30 border border-green-700/40 rounded-2xl p-6 sm:p-8 md:p-12 text-center">
-            <h3 className="text-2xl sm:text-3xl font-bold text-white mb-2">Result?</h3>
-            <p className="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-green-400 to-cyan-400 bg-clip-text text-transparent mb-4">Cart Recovered ✅</p>
-            <p className="text-base sm:text-lg text-blue-100">Customer bought 5 more products during browsing</p>
+          {/* Outcome */}
+          <div className="mt-10 sm:mt-14 bg-gradient-to-r from-green-900/30 via-cyan-900/30 to-green-900/30 border border-green-700/40 rounded-2xl p-6 sm:p-8 md:p-10 text-center">
+            <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">The Outcome</h3>
+            <p className="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-green-400 to-cyan-400 bg-clip-text text-transparent mb-4">Every recovery is revenue you would have lost</p>
+            <p className="text-base sm:text-lg text-blue-100">
+              Customers who negotiate walk away feeling they won — and your margins stay exactly where you set them.
+            </p>
           </div>
         </div>
       </section>
