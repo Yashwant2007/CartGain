@@ -3,6 +3,7 @@
 import { Suspense, useMemo, useState, type ReactNode, useEffect } from 'react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import BargainWidget, { type BargainItem } from '@/components/bargain/StorefrontBargainWidget'
 
 export default function BargainView() {
@@ -62,6 +63,36 @@ function PageContent() {
   const [selected, setSelected] = useState<number | null>(null)
   const [wholeCart, setWholeCart] = useState(true)
   const [alreadyUsed, setAlreadyUsed] = useState(false)
+
+  // Merchant decides how the store bargains. Pull the saved store config so the
+  // preview widget mirrors exactly what customers on the real storefront see.
+  const { data: session } = useSession()
+  const [storeCfg, setStoreCfg] = useState<{ persona: string; language: string; maxAttempts: number; minProfitPercent: number }>({
+    persona: 'friendly_shopkeeper',
+    language: 'auto',
+    maxAttempts: 3,
+    minProfitPercent: 25,
+  })
+
+  useEffect(() => {
+    const storeId = (session?.user as { storeId?: string } | undefined)?.storeId
+    if (!storeId) return
+    let cancelled = false
+    fetch(`/api/bargain/config?storeId=${storeId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (cancelled || !data?.config) return
+        const c = data.config
+        setStoreCfg({
+          persona: typeof c.aiPersona === 'string' ? c.aiPersona : 'friendly_shopkeeper',
+          language: typeof c.language === 'string' ? c.language : 'auto',
+          maxAttempts: typeof c.maxAttempts === 'number' ? c.maxAttempts : 3,
+          minProfitPercent: typeof c.minProfitPercent === 'number' ? c.minProfitPercent : 25,
+        })
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [session])
 
   // One live storefront demo per account — enforcement happens server-side.
   // This client call is a safety net if the demo was consumed in another tab.
@@ -174,6 +205,10 @@ function PageContent() {
           currency={currency}
           line={line}
           checkoutUrl={checkoutUrl}
+          persona={storeCfg.persona}
+          language={storeCfg.language}
+          maxAttempts={storeCfg.maxAttempts}
+          minProfitPercent={storeCfg.minProfitPercent}
         />
       </Shell>
     )

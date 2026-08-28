@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import prisma from '@/lib/db'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import {
   negotiateStep,
@@ -22,6 +23,26 @@ export const dynamic = 'force-dynamic'
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n))
 
 const VALID_PERSONAS: Persona[] = ['friendly_shopkeeper', 'strict_negotiator', 'playful_friend']
+
+// Merchant decides which negotiator the store runs. This is the single source
+// of truth: a storefront caller that does not pass an explicit persona — or
+// passes personaSource: 'store' — is always pinned to the merchant's saved
+// BargainConfig persona, so customers can never pick (or game) the mode.
+async function resolveMerchantPersona(userId: string): Promise<Persona> {
+  const store = await prisma.store.findFirst({
+    where: { userId },
+    orderBy: { createdAt: 'asc' },
+  })
+  if (!store) return 'friendly_shopkeeper'
+  const config = await prisma.bargainConfig.upsert({
+    where: { storeId: store.id },
+    create: { storeId: store.id },
+    update: {},
+  })
+  return VALID_PERSONAS.includes(config.aiPersona as Persona)
+    ? (config.aiPersona as Persona)
+    : 'friendly_shopkeeper'
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -52,7 +73,17 @@ export async function POST(request: NextRequest) {
     const maxAttempts = Math.round(clamp(typeof body.maxAttempts === 'number' ? body.maxAttempts : 3, 1, 10))
     const attemptsUsed = Math.round(clamp(typeof body.attemptsUsed === 'number' ? body.attemptsUsed : 0, 0, maxAttempts))
 
-    const persona: Persona = VALID_PERSONAS.includes(body.persona) ? body.persona : 'friendly_shopkeeper'
+    // Persona authority: 'store' (storefront preview + real embed) always uses
+    // the merchant's config. Marketing /demo may pass an explicit persona to
+    // compare versions. Anything else falls back to the merchant's config too.
+    let persona: Persona = 'friendly_shopkeeper'
+    if (body.personaSource === 'store') {
+      persona = await resolveMerchantPersona(session.user.id)
+    } else if (VALID_PERSONAS.includes(body.persona)) {
+      persona = body.persona
+    } else {
+      persona = await resolveMerchantPersona(session.user.id)
+    }
     const language = typeof body.language === 'string' && (SUPPORTED_LANGUAGES as readonly string[]).includes(body.language.toLowerCase())
       ? body.language.toLowerCase()
       : 'auto'
@@ -109,6 +140,7 @@ export async function POST(request: NextRequest) {
       counterOffer: result.counterOffer ?? null,
       tactic: result.tactic ?? 'conversational',
       sentiment: result.sentiment ?? 'neutral',
+      persona,
       abuse: (result.metadata as any)?.abuse === true,
     })
   } catch (err: any) {

@@ -4,9 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { currencySymbolFor } from '@/lib/bargain/i18n'
 
-const MAX_ATTEMPTS = 3
-const PROFIT_PERCENT = 25
-
 type Line =
   | { kind: 'item'; id: string; variantId?: string | null; title: string; price: number; image?: string }
   | { kind: 'cart'; total: number }
@@ -22,7 +19,13 @@ export type BargainItem = {
   featured_image?: { url?: string } | null
 }
 
-const PersonaLabels: Record<string, string> = {
+const ENGINE_TO_LOCAL: Record<string, 'friendly' | 'strict' | 'playful'> = {
+  friendly_shopkeeper: 'friendly',
+  strict_negotiator: 'strict',
+  playful_friend: 'playful',
+}
+
+const PERSONA_DISPLAY: Record<string, string> = {
   friendly: '😊 Alex — Friendly',
   strict: '📊 Morgan — Strict',
   playful: '😏 Riley — Playful',
@@ -39,6 +42,11 @@ type Props = {
   line: Line
   checkoutUrl: string
   language?: string
+  // Merchant-controlled (single source of truth). When omitted the widget
+  // falls back to whatever persona the server enforces for the store.
+  persona?: string
+  maxAttempts?: number
+  minProfitPercent?: number
 }
 
 const PERSONA_MAP: Record<string, string> = {
@@ -47,7 +55,17 @@ const PERSONA_MAP: Record<string, string> = {
   playful: 'playful_friend',
 }
 
-export default function StorefrontBargainWidget({ mode, shop, currency, line, checkoutUrl, language = 'auto' }: Props) {
+export default function StorefrontBargainWidget({
+  mode,
+  shop,
+  currency,
+  line,
+  checkoutUrl,
+  language = 'auto',
+  persona: personaProp,
+  maxAttempts = 3,
+  minProfitPercent = 25,
+}: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
 
   const isCart = line.kind === 'cart'
@@ -58,7 +76,9 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
   const [messages, setMessages] = useState<{ role: string; content: string; price?: number }[]>([])
   const [input, setInput] = useState('')
   const [attempts, setAttempts] = useState(0)
-  const [persona, setPersona] = useState('friendly')
+  const [persona, setPersona] = useState<'friendly' | 'strict' | 'playful'>(() =>
+    personaProp && ENGINE_TO_LOCAL[personaProp] ? ENGINE_TO_LOCAL[personaProp] : 'friendly',
+  )
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [discountCode, setDiscountCode] = useState<string | null>(null)
   const [codeSaved, setCodeSaved] = useState(false)
@@ -67,7 +87,7 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
   const [copied, setCopied] = useState(false)
 
   const originalPrice = line.kind === 'cart' ? line.total : line.price
-  const minPrice = Math.round(originalPrice * (1 - PROFIT_PERCENT / 100) * 100) / 100
+  const minPrice = Math.round(originalPrice * (1 - minProfitPercent / 100) * 100) / 100
   const title = isCart ? 'your cart order' : line.title
 
   const announceHeight = useCallback(() => {
@@ -134,17 +154,17 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
   }
 
   const graduatedCounter = (originalPrice: number, minPrice: number, attemptsUsed: number): number => {
-    const progress = attemptsUsed / MAX_ATTEMPTS
+    const progress = attemptsUsed / maxAttempts
     const counter = originalPrice - (originalPrice - minPrice) * progress
     return Math.round(counter * 100) / 100
   }
   const PersonaOpenings: Record<string, (item: string, price: number, fmt: (n: number) => string) => string> = {
     friendly: (item, price, f) =>
-      `Hey! Welcome 👋 I see you're interested in ${item}. It's listed at ${f(price)}. I'd love to help you get a good deal — what price were you thinking? You've got ${MAX_ATTEMPTS} attempts to bargain with me.`,
+      `Hey! Welcome 👋 I see you're interested in ${item}. It's listed at ${f(price)}. I'd love to help you get a good deal — what price were you thinking? You've got ${maxAttempts} attempts to bargain with me.`,
     strict: (item, price, f) =>
-      `Thank you for your interest in ${item}. The current price is ${f(price)}. I'm open to reasonable offers within ${MAX_ATTEMPTS} exchanges. What price were you considering?`,
+      `Thank you for your interest in ${item}. The current price is ${f(price)}. I'm open to reasonable offers within ${maxAttempts} exchanges. What price were you considering?`,
     playful: (item, price, f) =>
-      `Hey hey! 👋 I see you're checking out ${item} — nice choice! Listed at ${f(price)}, but hey, that's just the starting point 😏 You've got ${MAX_ATTEMPTS} chances to charm me into a better deal. What's your move?`,
+      `Hey hey! 👋 I see you're checking out ${item} — nice choice! Listed at ${f(price)}, but hey, that's just the starting point 😏 You've got ${maxAttempts} chances to charm me into a better deal. What's your move?`,
   }
 
   const PersonaAccept: Record<string, (p: number, f: (n: number) => string) => string> = {
@@ -209,10 +229,11 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
           storeName: shop,
           currencySymbol: currencySymbolFor(currency),
           originalPrice,
-          minPrice: Math.round(originalPrice * (1 - PROFIT_PERCENT / 100) * 100) / 100,
-          maxAttempts: MAX_ATTEMPTS,
+          minPrice,
+          maxAttempts,
           attemptsUsed: attempts,
           persona: PERSONA_MAP[persona] || 'friendly_shopkeeper',
+          personaSource: 'store',
           productTitle: title,
           language,
           walkoutTriggered: isWalkout,
@@ -226,8 +247,14 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
         throw new Error(data.error || data.message || 'API error')
       }
 
+      // Sync to whatever persona the server enforced for this store — the
+      // merchant's config is the single source of truth.
+      if (data.persona && ENGINE_TO_LOCAL[data.persona]) {
+        setPersona(ENGINE_TO_LOCAL[data.persona])
+      }
+
       const nextAttempt = attempts + 1
-      const exhausted = nextAttempt >= MAX_ATTEMPTS
+      const exhausted = nextAttempt >= maxAttempts
 
       setMessages((prev) => [...prev, { role: 'ai', content: data.reply, price: data.counterOffer }])
       setAttempts(nextAttempt)
@@ -248,14 +275,14 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
       const offer = extractPrice(userText)
       const isWalkout = detectWalkout(userText)
       const nextAttempt = attempts + 1
-      const exhausted = nextAttempt >= MAX_ATTEMPTS
+      const exhausted = nextAttempt >= maxAttempts
 
       let result: { reply: string; decision: string; counterOffer?: number }
       let newStep: string = 'chat'
       let newFinal: number | null = null
       let newCode: string | null = null
 
-      if (isWalkout && attempts < MAX_ATTEMPTS - 1) {
+      if (isWalkout && attempts < maxAttempts - 1) {
         const lastCounter = [...messages].reverse().find((m) => m.role === 'ai' && m.price != null)?.price ?? originalPrice
         const stepSize = Math.max(Math.round((originalPrice - minPrice) * 0.08 * 100) / 100, 1)
         const p = Math.max(minPrice, Math.round((lastCounter - stepSize) * 100) / 100)
@@ -367,18 +394,9 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
 
           <p className="text-xs leading-relaxed text-gray-600">{PersonaOpenings[persona](title, originalPrice, (n) => money(currency, n))}</p>
 
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(PersonaLabels).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setPersona(value)}
-                className={persona === value ? buttonCls : ghostCls}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <p className="text-[11px] text-indigo-600 bg-indigo-50 rounded-md px-3 py-1.5">
+            This store runs: <span className="font-semibold">{PERSONA_DISPLAY[persona]}</span>
+          </p>
 
           <button type="button" className={buttonCls} onClick={() => setStep('chat')}>
             Start Bargaining
@@ -389,10 +407,8 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
       {step === 'chat' && (
         <div className="space-y-3 p-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-500">Attempts left: {MAX_ATTEMPTS - attempts}/{MAX_ATTEMPTS}</p>
-            <button type="button" className="text-xs text-gray-400 hover:text-gray-600" onClick={() => setStep('intro')}>
-              Change negotiator
-            </button>
+            <p className="text-xs text-gray-500">Attempts left: {maxAttempts - attempts}/{maxAttempts}</p>
+            <p className="text-xs text-indigo-500 font-medium">{PERSONA_DISPLAY[persona]}</p>
           </div>
 
           <div className="space-y-2 max-h-56 overflow-y-auto">
