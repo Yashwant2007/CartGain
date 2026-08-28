@@ -85,10 +85,14 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      // The callback URL must be NextAuth's canonical absolute redirect_uri
+      // ({NEXTAUTH_URL}/api/auth/callback/google). Do NOT pass a callbackUrl
+      // param in authorization.params — a relative value breaks Google's
+      // redirect_uri validation with redirect_uri_mismatch. Google's OAuth
+      // server also strips unknown params, so it could never work anyway.
       authorization: {
         params: {
           prompt: 'select_account consent',
-      callbackUrl: `${process.env.NEXTAUTH_URL}/api/auth/callback/google`,
         },
       },
     })
@@ -117,19 +121,48 @@ export const authOptions: NextAuthOptions = {
   cookies: {
     sessionToken: {
       name: 'next-auth.session-token',
-      options: { httpOnly: true, sameSite: 'none', path: '/', secure: true },
+      // partitioned (CHIPS) lets Chrome keep the session when the app is
+      // embedded in a cross-site iframe (admin.shopify.com -> cart-gain.com)
+      // under third-party-cookie blocking. The OAuth popup opened from the
+      // iframe inherits the opener's partition, so the cookie it sets during
+      // the Google callback is readable by the iframe afterwards.
+      options: {
+        httpOnly: true,
+        sameSite: 'none',
+        path: '/',
+        secure: true,
+        partitioned: true,
+      } as any,
     },
     callbackUrl: {
       name: 'next-auth.callback-url',
-      options: { httpOnly: true, sameSite: 'none', path: '/', secure: true },
+      options: {
+        httpOnly: true,
+        sameSite: 'none',
+        path: '/',
+        secure: true,
+        partitioned: true,
+      } as any,
     },
     csrfToken: {
       name: 'next-auth.csrf-token',
-      options: { httpOnly: true, sameSite: 'none', path: '/', secure: true },
+      options: {
+        httpOnly: true,
+        sameSite: 'none',
+        path: '/',
+        secure: true,
+        partitioned: true,
+      } as any,
     },
     pkceCodeVerifier: {
       name: 'next-auth.pkce.code_verifier',
-      options: { httpOnly: true, sameSite: 'none', path: '/', secure: true },
+      options: {
+        httpOnly: true,
+        sameSite: 'none',
+        path: '/',
+        secure: true,
+        partitioned: true,
+      } as any,
     },
   },
   pages: {
