@@ -17,7 +17,10 @@ import {
   Settings,
   BarChart3,
   IndianRupee,
+  RotateCcw,
+  PlayCircle,
 } from 'lucide-react'
+import { DemoPanel } from './demo-panel'
 
 type BargainConfig = {
   id: string
@@ -26,6 +29,7 @@ type BargainConfig = {
   maxAttempts: number
   aiModel: string
   aiPersona: string
+  language: string
   minProfitPercent: number
   sessionTimeout: number
 }
@@ -75,7 +79,7 @@ type Summary = {
   }>
 }
 
-type Tab = 'config' | 'products' | 'analytics' | 'logs'
+type Tab = 'config' | 'products' | 'analytics' | 'logs' | 'demo'
 
 export default function BargainDashboardPage() {
   const router = useRouter()
@@ -134,8 +138,16 @@ export default function BargainDashboardPage() {
     const controller = new AbortController()
     abortRef.current.push(() => controller.abort())
     try {
+      setConfigMessage(null)
       const res = await fetch(`/api/bargain/config?storeId=${storeId}`, { signal: controller.signal })
-      if (!res.ok) throw new Error('Failed to load config')
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        if (res.status === 401) {
+          router.push('/login')
+          return
+        }
+        throw new Error(body?.message ?? `Failed to load config (HTTP ${res.status})`)
+      }
       const data = await res.json()
       setConfig(data.config)
       setConfigForm(data.config)
@@ -274,6 +286,7 @@ export default function BargainDashboardPage() {
 
   const tabs: { id: Tab; label: string; icon: any }[] = [
     { id: 'config', label: 'Config', icon: Settings },
+    { id: 'demo', label: 'Live Demo', icon: PlayCircle },
     { id: 'products', label: 'Products', icon: ListChecks },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'logs', label: 'Conversation Logs', icon: MessageSquare },
@@ -319,7 +332,15 @@ export default function BargainDashboardPage() {
         <div className="max-w-2xl space-y-5 bg-slate-900/60 border border-blue-800/30 rounded-xl p-6">
           {!config ? (
             configMessage ? (
-              <div className="text-red-300 text-sm p-4 text-center">{configMessage.text}</div>
+              <div className="text-red-300 text-sm p-4 text-center space-y-3">
+                <div>{configMessage.text}</div>
+                <button
+                  onClick={() => fetchConfig()}
+                  className="inline-flex items-center px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-blue-800/40 text-blue-200 text-xs font-medium transition"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Retry
+                </button>
+              </div>
             ) : (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-5 h-5 animate-spin text-blue-400 mr-2" />
@@ -361,6 +382,28 @@ export default function BargainDashboardPage() {
                   <option value="strict_negotiator">Strict Negotiator</option>
                   <option value="playful_friend">Playful Friend</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm text-blue-200 mb-1">Default language</label>
+                <select
+                  value={configForm.language ?? 'auto'}
+                  onChange={e => setConfigForm({ ...configForm, language: e.target.value })}
+                  className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                >
+                  <option value="auto">Auto · mirror the customer</option>
+                  <option value="en">English</option>
+                  <option value="hinglish">Hinglish</option>
+                  <option value="hi">हिन्दी (Hindi)</option>
+                  <option value="ta">தமிழ் (Tamil)</option>
+                  <option value="te">తెలుగు (Telugu)</option>
+                  <option value="bn">বাংলা (Bengali)</option>
+                  <option value="mr">मराठी (Marathi)</option>
+                  <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
+                </select>
+                <p className="text-xs text-blue-300/60 mt-1">
+                  Auto mirrors whatever language the customer writes in. Pick one to force that language branch.
+                </p>
               </div>
 
               <div>
@@ -423,6 +466,16 @@ export default function BargainDashboardPage() {
             </>
           )}
         </div>
+      )}
+
+      {/* Demo tab */}
+      {tab === 'demo' && (
+        <DemoPanel
+          defaultPersona={(config?.aiPersona as 'friendly_shopkeeper' | 'strict_negotiator' | 'playful_friend') ?? 'friendly_shopkeeper'}
+          defaultLanguage={config?.language ?? 'auto'}
+          maxAttempts={config?.maxAttempts ?? 3}
+          minProfitPercent={config?.minProfitPercent ?? 20}
+        />
       )}
 
       {/* Products tab */}

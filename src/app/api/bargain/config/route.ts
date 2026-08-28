@@ -23,7 +23,23 @@ export async function GET(request: NextRequest) {
       where: { id: storeId, userId: session.user.id },
     })
     if (!store) {
-      return NextResponse.json({ message: 'Store not found' }, { status: 404 })
+      // A stale storeId (e.g. persisted in the dashboard URL from an earlier
+      // install/account) must not brick the config tab. Fall back to that
+      // user's primary store — same rule /api/stores/current follows.
+      const fallback = await prisma.store.findFirst({
+        where: { userId: session.user.id },
+        orderBy: { createdAt: 'asc' },
+      })
+      if (!fallback) {
+        return NextResponse.json({ message: 'Store not found' }, { status: 404 })
+      }
+      const resolvedStoreId = fallback.id
+      const config = await prisma.bargainConfig.upsert({
+        where: { storeId: resolvedStoreId },
+        create: { storeId: resolvedStoreId },
+        update: {},
+      })
+      return NextResponse.json({ config, resolvedStoreId })
     }
 
     const config = await prisma.bargainConfig.upsert({
@@ -55,20 +71,29 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
+    let resolvedStoreId = storeId
     const store = await prisma.store.findFirst({
       where: { id: storeId, userId: session.user.id },
     })
     if (!store) {
-      return NextResponse.json({ message: 'Store not found' }, { status: 404 })
+      // Same stale-storeId fallback as GET.
+      const fallback = await prisma.store.findFirst({
+        where: { userId: session.user.id },
+        orderBy: { createdAt: 'asc' },
+      })
+      if (!fallback) {
+        return NextResponse.json({ message: 'Store not found' }, { status: 404 })
+      }
+      resolvedStoreId = fallback.id
     }
 
     const config = await prisma.bargainConfig.upsert({
-      where: { storeId },
-      create: { storeId, ...data },
+      where: { storeId: resolvedStoreId },
+      create: { storeId: resolvedStoreId, ...data },
       update: data,
     })
 
-    return NextResponse.json({ config })
+    return NextResponse.json({ config, resolvedStoreId })
   } catch (error) {
     const validationResponse = handleValidationError(error)
     if (validationResponse) return validationResponse

@@ -23,15 +23,10 @@ export function useResolvedStoreId(): HookState {
 
     const resolveStoreId = async () => {
       try {
-        const fromQuery = new URLSearchParams(window.location.search).get('storeId')
-        if (fromQuery) {
-          resolvedId = fromQuery
-          if (!cancelled) {
-            setState({ storeId: fromQuery, loading: false, error: null })
-          }
-          return
-        }
-
+        // Always resolve the store server-side so a stale storeId persisted in
+        // the URL (reinstall, shared browser, different account) can never make
+        // dashboard APIs 404. The query param is kept in the URL below purely
+        // as a cosmetic deep-link.
         const response = await fetch('/api/stores/current')
         if (!response.ok) {
           if (response.status === 401) {

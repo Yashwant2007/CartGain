@@ -15,6 +15,7 @@ export const bargainConfigUpsertSchema = z.object({
   maxAttempts: z.number().int().min(1).max(10).optional(),
   aiModel: z.enum(['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1']).optional(),
   aiPersona: z.enum(['friendly_shopkeeper', 'strict_negotiator', 'playful_friend']).optional(),
+  language: z.string().min(0).max(12).optional(),
   minProfitPercent: z.number().min(0).max(100).optional(),
   sessionTimeout: z.number().int().min(30).max(3600).optional(),
 })
