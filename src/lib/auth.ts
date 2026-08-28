@@ -180,7 +180,20 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id
         token.email = user.email
-        
+
+        // Flag accounts that still need a password so the client can route
+        // Google-only merchants to the set-password step instead of leaving
+        // them stranded after an OAuth redirect.
+        try {
+          const accountRow = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { password: true },
+          })
+          token.requirePassword = accountRow?.password ? false : true
+        } catch (error) {
+          console.error('Failed to check user password:', error)
+        }
+
         // Get user's primary store
         try {
           const store = await prisma.store.findFirst({
@@ -200,6 +213,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id as string
         session.user.storeId = token.storeId as string
+        session.user.requirePassword = token.requirePassword as boolean | undefined
       }
       return session
     },

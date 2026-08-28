@@ -49,7 +49,7 @@ function SetupContent() {
         const res = await fetch('/api/stores/current', { signal: controller.signal })
         if (res.ok) {
           const data = await res.json()
-          if (data?.hasPassword && !requirePassword) {
+          if (data?.hasPassword) {
             router.replace('/dashboard')
             return
           }

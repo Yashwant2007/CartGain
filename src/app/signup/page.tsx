@@ -165,7 +165,13 @@ export default function SignUpPage() {
     setIsLoading(true)
     setError(null)
     try {
-      document.cookie = 'cg_oauth_intent=signup; path=/; max-age=600; SameSite=None; Secure'
+      // Partitioned intent cookie so the embedded popup flow can distinguish
+      // sign-up from sign-in even under third-party-cookie blocking.
+      await fetch('/api/auth/oauth-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intent: 'signup' }),
+      }).catch(() => {})
 
       if (isInShopifyEmbed()) {
         // Inside the Shopify admin iframe Google refuses to render
@@ -173,13 +179,29 @@ export default function SignUpPage() {
         // A session can't exist yet inside the embedded flow (no login page
         // was shown), so signOut() below is skipped here on purpose.
         const outcome = await openGoogleAuthPopup(getEmbedAwareRedirectUrl('/shopify-auth-success'))
-        if (outcome === 'success') {
-          router.push(getEmbedAwareRedirectUrl('/dashboard'))
-          router.refresh()
-        } else if (outcome === 'blocked') {
+
+        if (outcome === 'blocked') {
           redirectTopForAuth()
+          return
         }
-        return
+
+        // NextAuth may land the popup on /setup or /login for new Google
+        // accounts instead of /shopify-auth-success, so never trust the
+        // message — verify the session from the iframe directly.
+        try {
+          const sess = await fetch('/api/auth/session', { cache: 'no-store' }).then(r => r.json())
+          if (sess?.user) {
+            router.push(getEmbedAwareRedirectUrl('/setup'))
+            router.refresh()
+          } else {
+            setError('Google sign-in didn\u2019t complete. Try again, or create your account at cart-gain.com.')
+          }
+          return
+        } catch (err) {
+          console.error('Session check failed:', err)
+          setError('Google sign-in didn\u2019t complete. Try again, or create your account at cart-gain.com.')
+          return
+        }
       }
 
       // If a session already exists, NextAuth links the new Google account to

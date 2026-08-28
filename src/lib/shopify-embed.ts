@@ -46,6 +46,11 @@ export function redirectTopForAuth(): void {
 // 'closed'   — user closed / cancelled the popup without completing
 // 'blocked'  — browser blocked window.open (no popup at all)
 //
+// NOTE: the popup can complete OAuth without ever signalling 'success' when
+// NextAuth redirects it somewhere other than /shopify-auth-success (e.g. to
+// /setup?requirePassword=1). Callers should treat 'success' and 'closed' the
+// same way: verify the session via /api/auth/session before navigating.
+//
 // Use direct NextAuth sign-in URL with callbackUrl — simpler and avoids
 // the intermediate /shopify-auth-start page which can have cookie issues.
 export async function openGoogleAuthPopup(callbackUrl: string): Promise<'success' | 'closed' | 'blocked'> {

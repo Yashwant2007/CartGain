@@ -103,18 +103,45 @@ function LoginContent() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true)
     try {
-      document.cookie = 'cg_oauth_intent=signin; path=/; max-age=600; SameSite=None; Secure'
+      // Set the OAuth intent server-side with a Partitioned cookie so it
+      // survives third-party-cookie blocking inside the Shopify admin iframe
+      // and reaches the popup's Google callback.
+      await fetch('/api/auth/oauth-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intent: 'signin' }),
+      }).catch(() => {})
 
       if (isInShopifyEmbed()) {
         // Inside the Shopify admin iframe Google refuses to render
         // (X-Frame-Options: DENY), so run the OAuth in a popup window.
+        const callbackUrl = safeCallbackUrl(searchParams.get('callbackUrl'))
         const outcome = await openGoogleAuthPopup(getEmbedAwareRedirectUrl('/shopify-auth-success'))
-        if (outcome === 'success') {
-          router.push(getEmbedAwareRedirectUrl(safeCallbackUrl(searchParams.get('callbackUrl'))))
-          router.refresh()
-        } else if (outcome === 'blocked') {
+
+        if (outcome === 'blocked') {
           redirectTopForAuth()
+          return
         }
+
+        // For Google-only accounts (no password) NextAuth redirects the popup
+        // to /setup?requirePassword=1 instead of /shopify-auth-success, so the
+        // cg_auth_complete message never fires. Never trust the message —
+        // verify the session from the iframe partition directly, and react
+        // whether the popup closed itself or reported success.
+        try {
+          const sess = await fetch('/api/auth/session', { cache: 'no-store' }).then(r => r.json())
+          if (sess?.user) {
+            const dest = sess.user.requirePassword
+              ? getEmbedAwareRedirectUrl('/setup?requirePassword=1')
+              : getEmbedAwareRedirectUrl(callbackUrl)
+            router.push(dest)
+            router.refresh()
+            return
+          }
+        } catch (err) {
+          console.error('Session check failed:', err)
+        }
+        setError('Google sign-in didn\u2019t complete. Try again, or sign in with your email & password.')
         return
       }
 
