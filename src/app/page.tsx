@@ -263,8 +263,12 @@ export default function HomePage() {
               Recover Your <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">Lost Revenue</span>
             </h1>
 
-            <p className="text-base sm:text-lg md:text-xl text-blue-100 text-center mb-8 sm:mb-12 max-w-3xl mx-auto leading-relaxed px-2">
+            <p className="text-base sm:text-lg md:text-xl text-blue-100 text-center mb-4 sm:mb-6 max-w-3xl mx-auto leading-relaxed px-2">
               Turn abandoned carts into confirmed sales with AI-powered WhatsApp &amp; Email recovery — with SMS coming soon. Built specifically for beauty founders.
+            </p>
+
+            <p className="text-sm sm:text-base text-cyan-200 text-center mb-8 sm:mb-12 max-w-2xl mx-auto leading-relaxed px-2">
+              Meet the AI shopkeeper: a real-time negotiator at your checkout that closes the deal — without ever dropping below the floor price you set.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center mb-12 sm:mb-16 px-2">
