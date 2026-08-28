@@ -11,6 +11,7 @@ import {
   type NegotiationContext,
   type NegotiationResult,
 } from '@/lib/services/bargain'
+import { detectLanguage } from '@/lib/bargain/language'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,6 +56,9 @@ export async function POST(request: NextRequest) {
     const language = typeof body.language === 'string' && (SUPPORTED_LANGUAGES as readonly string[]).includes(body.language.toLowerCase())
       ? body.language.toLowerCase()
       : 'auto'
+    // Auto = speak the customer's language. Detect from their latest message and
+    // hand the engine an explicit language so the reply mirror is reliable.
+    const effectiveLanguage = language !== 'auto' ? language : (detectLanguage(message) ?? 'auto')
 
     const storeName = typeof body.storeName === 'string' ? body.storeName.slice(0, 60) : 'Lumina Beauty'
     const productTitle = typeof body.productTitle === 'string' ? body.productTitle.slice(0, 120) : undefined
@@ -85,7 +89,7 @@ export async function POST(request: NextRequest) {
       persona,
       productTitle,
       bulkQuantity,
-      language,
+      language: effectiveLanguage,
       walkoutTriggered: body.walkoutTriggered === true,
       customerContext: 'Sequential guided product demo on the CartGain site.',
     }

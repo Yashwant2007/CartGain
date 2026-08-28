@@ -5,8 +5,16 @@ import { negotiateStep, ruleBasedDecision, buildOpeningMessage, buildCustomerCon
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { detectWalkout, extractQuantity, extractPrice } from '@/lib/bargain/text'
 import { uiText, currencySymbolFor } from '@/lib/bargain/i18n'
+import { detectLanguage } from '@/lib/bargain/language'
 
 export const dynamic = 'force-dynamic'
+
+// Respect an explicit store/session language; otherwise detect from the
+// customer's current message so the reply matches the language they speak.
+function detectedLang(sessionOrConfig: string | null | undefined, customerMessage: string): string {
+  if (sessionOrConfig && sessionOrConfig !== 'auto') return sessionOrConfig
+  return detectLanguage(customerMessage) ?? 'auto'
+}
 // POST /api/bargain/offer — customer sends a message, AI responds
 export async function POST(request: NextRequest) {
   try {
@@ -35,7 +43,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Bargain session not found' }, { status: 404 })
     }
     if (bargainSession.status !== 'active') {
-      const termLang = bargainSession.language ?? 'auto'
+      const termLang = detectedLang(bargainSession.language, data.message)
       const terminalReplies: Record<string, string> = {
         accepted: uiText(termLang, 'terminal_accepted'),
         rejected: uiText(termLang, 'terminal_rejected'),
@@ -63,7 +71,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Bargaining disabled' }, { status: 403 })
     }
 
-    const lang = bargainSession.language ?? config.language ?? 'auto'
+    // Resolve the negotiation language: honor an explicit session/config
+    // language; otherwise detect the customer's language from THIS message so
+    // every reply (AI + fixed strings) is spoken in the same language they use.
+    // Deliberately NOT persisted back to the session when auto — persisting a
+    // detected language would lock the session and break future mirroring.
+    const lang = detectedLang(bargainSession.language ?? config.language, data.message)
 
     // Automated decision-making opt-out (DPDP Act 2023, GDPR Art. 22): end the
     // session without the AI consuming an attempt or responding.
@@ -160,7 +173,7 @@ export async function POST(request: NextRequest) {
       productTitle,
       bulkQuantity: bulkQuantity ?? undefined,
       walkoutTriggered: isWalkout,
-      language: bargainSession.language ?? config.language ?? 'auto',
+      language: lang,
       customerContext: await buildCustomerContext(bargainSession.storeId, bargainSession.customerEmail),
     }
 

@@ -56,6 +56,7 @@ const PERSONAS: { id: Persona; name: string; blurb: string }[] = [
 ]
 
 const LANGUAGES: { id: string; label: string }[] = [
+  { id: 'auto', label: 'Auto · mirror me' },
   { id: 'en', label: 'English' },
   { id: 'hinglish', label: 'Hinglish' },
   { id: 'hi', label: 'हिन्दी' },
@@ -99,7 +100,7 @@ export default function DemoContent() {
   const { data: session, status } = useSession()
   const [product, setProduct] = useState<DemoProduct>(PRODUCTS[0])
   const [persona, setPersona] = useState<Persona>('friendly_shopkeeper')
-  const [language, setLanguage] = useState<string>('hinglish')
+  const [language, setLanguage] = useState<string>('auto')
   const [started, setStarted] = useState(false)
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
@@ -393,7 +394,7 @@ export default function DemoContent() {
             Try the AI negotiator. <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Live.</span>
           </h1>
           <p className="text-blue-200/70 text-sm sm:text-base max-w-2xl mx-auto">
-            Pick a product, pick a persona, pick a language — and bargain with the exact AI our engine runs on real beauty stores.
+            Pick a product, a persona, and a language — or leave it on Auto and it mirrors whatever language you type in.
             Talks in English, Hinglish, Hindi, Tamil, Telugu, Bengali, Marathi & Punjabi.
             One live session per account, signed in and server-verified.
           </p>

@@ -682,7 +682,7 @@ function buildLanguageGuidance(language?: string): string {
   const cur = '[[CUR]]'
 
   if (lang === 'auto') {
-    return `LANGUAGE: WATCH AND MIRROR. Detect the customer's language from THEIR messages and reply in it. On Indian stores, Hinglish (Roman-script Hindi mixed naturally with English) is the most common — use it when the customer does. Tamil, Telugu, Bengali, Marathi, Gujarati, Punjabi and other languages should be answered in kind. If the customer switches language, switch with them. Always keep numbers in standard digits and the currency symbol (${cur}) intact.`
+    return `LANGUAGE: SPEAK THE CUSTOMER'S LANGUAGE, ALWAYS. Reply in the exact same language as the customer's MOST RECENT message — that is the #1 rule of this conversation, more important than anything else in this prompt. If they write in Hinglish, reply in Hinglish. If they write in Tamil, reply in Tamil. If they switch language mid-conversation, switch with them immediately. A reply in the customer's language converts; a reply in another language makes them think the shopkeeper is mechanical and drives the deal away. On Indian stores, Hinglish (Roman-script Hindi mixed naturally with English) is the most common — use it when the customer does. Tamil, Telugu, Bengali, Marathi, Gujarati, Punjabi, Kannada, Malayalam and Odia should be answered in kind. Always keep numbers in standard digits and the currency symbol (${cur}) intact.`
   }
 
   if (lang === 'hinglish') {
