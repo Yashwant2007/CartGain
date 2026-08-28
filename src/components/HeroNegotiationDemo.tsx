@@ -20,7 +20,7 @@ const HOLD_MS = 4200
 const LOOP_MS = TIMINGS[TIMINGS.length - 1] + HOLD_MS
 
 export default function HeroNegotiationDemo() {
-  const [visible, setVisible] = useState(0)
+  const [visible, setVisible] = useState(1)
   const [typing, setTyping] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
 

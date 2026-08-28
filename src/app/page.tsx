@@ -255,20 +255,16 @@ export default function HomePage() {
             <div className="flex justify-center mb-6 sm:mb-8">
               <Badge variant="default" size="md">
                 <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-cyan-300 mr-2 flex-shrink-0" />
-                <span>The AI Negotiation Engine for E-commerce</span>
+                <span>Built for D2C Beauty Brands</span>
               </Badge>
             </div>
 
             <h1 id="hero-heading" className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white text-center mb-4 sm:mb-6 leading-tight tracking-tight">
-              Turn &ldquo;Too Expensive&rdquo; Into <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">Sold</span>
+              Recover Your <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">Lost Revenue</span>
             </h1>
 
-            <p className="text-base sm:text-lg md:text-xl text-blue-100 text-center mb-4 sm:mb-5 max-w-3xl mx-auto leading-relaxed px-2">
-              Customers say it right at your checkout, at the worst possible moment — &ldquo;Too expensive.&rdquo; CartGain embeds a world-class AI shopkeeper that negotiates with bargain-hunting customers in real time, while your margins stay protected. If a deal still walks, our WhatsApp &amp; Email recovery brings them back.
-            </p>
-
-            <p className="text-sm sm:text-base text-cyan-200/90 text-center mb-8 sm:mb-12 max-w-3xl mx-auto px-2">
-              No setup fee. First 50 recovered carts free — you only pay when revenue comes back to your store.
+            <p className="text-base sm:text-lg md:text-xl text-blue-100 text-center mb-8 sm:mb-12 max-w-3xl mx-auto leading-relaxed px-2">
+              Turn abandoned carts into confirmed sales with AI-powered WhatsApp &amp; Email recovery — with SMS coming soon. Built specifically for beauty founders.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center mb-12 sm:mb-16 px-2">
