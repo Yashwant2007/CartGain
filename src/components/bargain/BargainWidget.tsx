@@ -377,20 +377,21 @@ export default function BargainWidget({
           <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
             <span
               style={{
-                background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
-                color: '#ffffff',
+                background: '#ffffff',
+                color: '#4f46e5',
                 fontWeight: 700,
                 fontSize: 13,
-                padding: '9px 14px',
+                padding: '9px 16px',
                 borderRadius: 999,
-                boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+                border: '2px solid #4f46e5',
+                boxShadow: '0 2px 10px rgba(79,70,229,0.35)',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
                 whiteSpace: 'nowrap',
               }}
             >
-              <Sparkles size={14} />
+              <Sparkles size={14} style={{ color: '#4f46e5' }} />
               {t('negotiate')}
             </span>
             {persona && PERSONA_CHIP[persona] && (
@@ -409,29 +410,29 @@ export default function BargainWidget({
             bottom: 24,
             right: 24,
             background: '#ffffff',
-            color: '#1e293b',
+            color: '#4f46e5',
             padding: '14px 22px',
             borderRadius: 999,
-            border: '1px solid #e2e8f0',
-            fontWeight: 600,
+            border: '2px solid #4f46e5',
+            fontWeight: 700,
             fontSize: 14,
             display: 'inline-flex',
             alignItems: 'center',
             gap: 10,
             cursor: 'pointer',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06)',
+            boxShadow: '0 4px 16px rgba(79,70,229,0.25), 0 1px 4px rgba(0,0,0,0.06)',
             transition: 'all 0.2s ease',
             zIndex: 99998,
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#f8fafc'
-            e.currentTarget.style.borderColor = '#cbd5e1'
-            e.currentTarget.style.boxShadow = '0 6px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)'
+            e.currentTarget.style.background = '#eef2ff'
+            e.currentTarget.style.borderColor = '#4f46e5'
+            e.currentTarget.style.boxShadow = '0 6px 24px rgba(79,70,229,0.35), 0 2px 8px rgba(0,0,0,0.08)'
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = '#ffffff'
-            e.currentTarget.style.borderColor = '#e2e8f0'
-            e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06)'
+            e.currentTarget.style.borderColor = '#4f46e5'
+            e.currentTarget.style.boxShadow = '0 4px 16px rgba(79,70,229,0.25), 0 1px 4px rgba(0,0,0,0.06)'
           }}
         >
           <Sparkles size={18} style={{ color: '#6366f1' }} />
@@ -692,18 +693,18 @@ export default function BargainWidget({
                     <button
                       onClick={copyCode}
                       style={{
-                        background: '#6366f1',
-                        border: 'none',
-                        color: '#ffffff',
+                        background: '#ffffff',
+                        border: '2px solid #4f46e5',
+                        color: '#4f46e5',
                         borderRadius: 8,
                         padding: '6px 14px',
                         fontSize: 12,
-                        fontWeight: 600,
+                        fontWeight: 700,
                         cursor: 'pointer',
                         transition: 'background 0.15s ease',
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = '#4f46e5' }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = '#6366f1' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = '#eef2ff' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = '#ffffff' }}
                     >
                       {t('copy')}
                     </button>
@@ -771,9 +772,9 @@ export default function BargainWidget({
               disabled={loading || !input.trim() || sessionEnded}
               aria-label="Send"
               style={{
-                background: '#6366f1',
-                color: '#ffffff',
-                border: 'none',
+                background: '#ffffff',
+                color: '#4f46e5',
+                border: '2px solid #4f46e5',
                 borderRadius: 12,
                 padding: '0 20px',
                 cursor: 'pointer',
@@ -784,12 +785,13 @@ export default function BargainWidget({
                 justifyContent: 'center',
                 gap: 8,
                 fontSize: 15,
-                fontWeight: 600,
+                fontWeight: 700,
                 opacity: (loading || !input.trim() || sessionEnded) ? 0.5 : 1,
+                boxShadow: '0 2px 8px rgba(79,70,229,0.25)',
                 transition: 'background 0.15s ease',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#4f46e5' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#6366f1' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#4f46e5'; e.currentTarget.style.color = '#ffffff' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#4f46e5' }}
             >
               {loading ? <Loader2 size={18} className="spin" style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={18} />}
             </button>
@@ -804,15 +806,15 @@ export default function BargainWidget({
                 style={{
                   width: '100%',
                   padding: '14px',
-                  background: discountCode ? '#16a34a' : 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                  color: '#ffffff',
-                  border: 'none',
+                  background: discountCode ? '#16a34a' : '#ffffff',
+                  color: discountCode ? '#ffffff' : '#16a34a',
+                  border: discountCode ? 'none' : '2px solid #16a34a',
                   borderRadius: 12,
                   cursor: 'pointer',
                   fontWeight: 700,
                   fontSize: 15,
                   opacity: (loading || !!discountCode) ? 0.8 : 1,
-                  boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+                  boxShadow: '0 2px 10px rgba(22,163,74,0.3)',
                   transition: 'all 0.2s ease',
                 }}
               >
