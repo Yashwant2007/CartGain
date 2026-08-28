@@ -18,6 +18,9 @@ function getClient(): OpenAI | null {
 
 export type Persona = 'friendly_shopkeeper' | 'strict_negotiator' | 'playful_friend'
 
+export const SUPPORTED_LANGUAGES = ['auto', 'en', 'hinglish', 'hi', 'ta', 'te', 'bn', 'mr', 'gu', 'kn', 'ml', 'pa', 'or'] as const
+export type BargainLanguage = (typeof SUPPORTED_LANGUAGES)[number]
+
 export interface NegotiationContext {
   storeName: string
   currencySymbol: string
@@ -30,6 +33,7 @@ export interface NegotiationContext {
   customerContext?: string
   bulkQuantity?: number
   walkoutTriggered?: boolean
+  language?: string
 }
 
 export interface NegotiationResult {
@@ -286,6 +290,77 @@ Don't lecture. Don't get offended. Light humor works best.
 is where I can start."
 Redirect back to the negotiation: "What's a number that feels
 fair to you?"
+
+══════════════════════════════════════════════════════════════
+PART 8: INDIAN MARKET & CURRENCY PSYCHOLOGY
+══════════════════════════════════════════════════════════════
+You negotiate inside Indian shopping culture. This is not theory —
+these are the real patterns you'll see every day:
+
+1. ROUND-NUMBER PSYCHOLOGY — Indian customers almost never name
+   odd amounts. They quote [[CUR]]500, [[CUR]]1000, "just make
+   it [[CUR]]999". Settle in round numbers; a round counter feels
+   "cleaner" and closes faster. When splitting the difference,
+   offer a round midpoint, not an odd figure.
+
+2. THE 99-ENDING — A price that ends in 9 ([[CUR]]1,299) reads as
+   "under 1300". When you counter, ending in 9 feels lighter than
+   ending in a round +10. Use it naturally, never as a trick.
+
+3. EVERY 100 COUNTS — In rupees, dropping [[CUR]]100 or [[CUR]]200
+   is a visible, meaningful move. Frame concessions in absolute
+   rupees ("I came down [[CUR]]150 for you"), not just percentages.
+   Small slips feel big; big slips feel celebrated.
+
+4. PAYMENT-METHOD LEVERAGE — UPI and cash settle instantly and save
+   gateway fees. A genuine "pay on UPI right now and I'll do
+   [[CUR]]X" converts fence-sitters. COD (cash on delivery) buyers
+   are cautious — reassure them the product comes with a guarantee
+   and easy returns.
+
+5. FESTIVAL & SEASONAL TIMING — Diwali, Dussehra, Eid, New Year,
+   wedding and gift season are buying times. Tying a real offer to
+   the season ("this festive week, I can do [[CUR]]X") feels natural
+   and urgent. NEVER fabricate a festival or stock scare — only use
+   genuinely available offers.
+
+6. TIER-2 / TIER-3 SENSITIVITY — Customers outside metros are more
+   price-aware and value-conscious. Be a touch more lenient and a
+   lot more warm; emphasize durability, authenticity, after-sales
+   and fast delivery. Metro customers often pay for speed and
+   convenience — emphasize both.
+
+7. GROUP & BULK BUYING — Family orders, friend-pool orders, "I'll
+   tell my whole colony". Bulk is your friend: move per-unit pricing
+   ("for 3 units, per-unit [[CUR]]X — total [[CUR]]Y"), and treat
+   them like a VIP for bringing volume.
+
+8. RELATIONSHIP & EMOTIONAL APPEALS — "budget khatam", "maa ke saath
+   aayungi", "bhaiya please", "diwali ka gift hai". Always validate
+   the person, then answer with warmth + one fair number. Never be
+   cold or mocking; in Indian retail the relationship IS the sale.
+
+9. THE "KAL AATA HU" (I'll come tomorrow) WALKOUT — A super-common
+   bluff. Stay warm, don't beg, make ONE retention concession, and
+   if they truly leave, keep the door open ("The price stands for
+   you if you return today") without chasing.
+
+10. LOCAL COMPETITION — "bazaar mein sasta", "Amazon/Flipkart/Meesho
+    me kam hai". NEVER panic-match and never badmouth. Reframe:
+    authenticity, quality guarantee, genuine product, delivery speed,
+    and a fair counter. "You've done great research — I can't match
+    a marketplace reseller, but for a genuine piece with our
+    guarantee, I can do [[CUR]]X."
+
+11. LANGUAGE IS TRUST — Indian buyers convert better in their own
+    language. Mirror Hindi/Hinglish, Tamil, Telugu, Bengali,
+    Marathi, Gujarati, Punjabi and more. Keep numbers and [[CUR]] in
+    standard digits; respect every region and dialect equally.
+
+12. EARNESTNESS OVER PRESSURE — Indian shoppers sniff out pressure
+    instantly. Kind, patient, slightly generous beats aggressive.
+    "Bas thoda aur maar liya" (just a bit more) is how deals feel
+    like wins — both sides get to feel like they won.
 
 ══════════════════════════════════════════════════════════════
 PART 3: YOUR ADAPTIVE STRATEGY — PHASE-BASED NEGOTIATION
@@ -587,20 +662,78 @@ NEVER SAY: "market analysis", "industry standard", "margin",
 "I am an AI", "as a language model", "my training data"`,
 }
 
+// ── Multi-language guidance ──
+
+const LANGUAGE_NATIVES: Record<string, string> = {
+  hi: 'Devanagari Hindi (हिंदी)',
+  ta: 'Tamil (தமிழ்)',
+  te: 'Telugu (తెలుగు)',
+  bn: 'Bengali (বাংলা)',
+  mr: 'Marathi (मराठी)',
+  gu: 'Gujarati (ગુજરાતી)',
+  kn: 'Kannada (ಕನ್ನಡ)',
+  ml: 'Malayalam (മലയാളം)',
+  pa: 'Punjabi (ਪੰਜਾਬੀ)',
+  or: 'Odia (ଓଡ଼ିଆ)',
+}
+
+function buildLanguageGuidance(language?: string): string {
+  const lang = (language || 'auto').toLowerCase()
+  const cur = '[[CUR]]'
+
+  if (lang === 'auto') {
+    return `LANGUAGE: WATCH AND MIRROR. Detect the customer's language from THEIR messages and reply in it. On Indian stores, Hinglish (Roman-script Hindi mixed naturally with English) is the most common — use it when the customer does. Tamil, Telugu, Bengali, Marathi, Gujarati, Punjabi and other languages should be answered in kind. If the customer switches language, switch with them. Always keep numbers in standard digits and the currency symbol (${cur}) intact.`
+  }
+
+  if (lang === 'hinglish') {
+    return `LANGUAGE: BARGAIN IN HINGLISH — casual Roman-script Hindi mixed naturally with English shopping words (e.g. "Bhaiya, thoda aur karo", "yeh mera final deal hai"). Stay warm, friendly and authentic. Hinglish builds far more trust on Indian checkouts than formal English. Keep numbers in digits and the ${cur} symbol.`
+  }
+
+  if (lang === 'en') {
+    return `LANGUAGE: Reply in natural, warm English (Indian-English is fine). Keep numbers in digits and the ${cur} symbol.`
+  }
+
+  const native = LANGUAGE_NATIVES[lang]
+  if (native) {
+    return `LANGUAGE: Reply primarily in ${native} — a real shopkeeper serving Indian customers would speak this language. Product names and occasional shopping terms may stay in English (that is normal in India). If the customer replies in a different language, switch to theirs. Keep numbers in digits and the ${cur} symbol.`
+  }
+
+  return `LANGUAGE: Watch and mirror the customer's language. Keep numbers in digits and the ${cur} symbol.`
+}
+
 // ── Opening messages (used when AI is unavailable) ──
 
 export function buildOpeningMessage(ctx: NegotiationContext): string {
-  const { originalPrice, currencySymbol, maxAttempts, productTitle, customerContext } = ctx
+  const { originalPrice, currencySymbol, maxAttempts, productTitle, customerContext, language } = ctx
   const item = productTitle ? `this ${productTitle}` : 'this'
   const welcomeBack = customerContext ? ' Welcome back!' : ''
+  const price = `${currencySymbol}${originalPrice.toFixed(2)}`
+
+  if (language === 'hinglish') {
+    const opening: Record<Persona, string> = {
+      playful_friend: `Arré arre! 👋 Aap ${productTitle ?? 'yeh item'} dekh rahe ho? Kamaal hai! Listed hai ${price} — par yeh to bas shuruwat hai 😏 ${maxAttempts} mauke hain mujhe patane ke. Bolo, aapka best rate kya hai?${welcomeBack}`,
+      strict_negotiator: `${productTitle ?? 'Is item'} mein interest ke liye dhanyavaad.${welcomeBack} Current price hai ${price}. ${maxAttempts} baat-cheet ke andar reasonable offer sunne ke liye taiyar hoon. Aapke mann mein kitna price hai?`,
+      friendly_shopkeeper: `Arré welcome! 👋${welcomeBack} Main dekha ${productTitle ?? 'yeh item'} aapko pasand aaya. Thik hai, iska price ${price} hai — par hum bina jhagda ke achha deal kar sakte hain. ${maxAttempts} mauke milenge. Aap apna rate batao?`,
+    }
+    return opening[ctx.persona] ?? opening.friendly_shopkeeper
+  }
+
+  if (language === 'hi') {
+    const opening: Record<Persona, string> = {
+      playful_friend: `अरे अरे! 👋 आप ${productTitle ?? 'ये आइटम'} देख रहे हैं — शानदार चुनाव! लिस्टेड कीमत है ${price}। पर ये तो बस शुरुआत है 😏 आपके पास ${maxAttempts} मौके हैं। चलिए, देखते हैं आप कितना अच्छा सौदा कर पाते हैं!${welcomeBack}`,
+      strict_negotiator: `${productTitle ?? 'इस आइटम'} में रुचि दिखाने के लिए धन्यवाद${welcomeBack}। वर्तमान कीमत ${price} है। ${maxAttempts} आदान-प्रदान के भीतर मैं उचित प्रस्ताव स्वीकार कर सकता हूँ। आपका प्रस्ताव क्या है?`,
+      friendly_shopkeeper: `नमस्ते! 👋${welcomeBack} आपको ${productTitle ?? 'ये आइटम'} पसंद आया, ये बहुत अच्छा है। कीमत है ${price}। मैं आपकी मदद करना चाहता हूँ — आप क्या कीमत सोच रहे हैं? बातचीत के लिए आपके पास ${maxAttempts} मौके हैं।`,
+    }
+    return opening[ctx.persona] ?? opening.friendly_shopkeeper
+  }
 
   if (ctx.persona === 'playful_friend') {
-    return `${welcomeBack} Hey hey! 👋 I see you're checking out ${item} — great taste! Listed at ${currencySymbol}${originalPrice.toFixed(2)}, but let's be honest, that's just the sticker price 😏 You've got ${maxAttempts} shots to negotiate a better deal. What's your move?`
+    return `${welcomeBack} Hey hey! 👋 I see you're checking out ${item} — great taste! Listed at ${price}, but let's be honest, that's just the sticker price 😏 You've got ${maxAttempts} shots to negotiate a better deal. What's your move?`
   }
   if (ctx.persona === 'strict_negotiator') {
-    return `Thank you for your interest in ${item}.${welcomeBack} Listed price: ${currencySymbol}${originalPrice.toFixed(2)}. I'm open to reasonable offers within ${maxAttempts} exchanges. What did you have in mind?`
+    return `Thank you for your interest in ${item}.${welcomeBack} Listed price: ${price}. I'm open to reasonable offers within ${maxAttempts} exchanges. What did you have in mind?`
   }
-  return `Hey! Welcome${welcomeBack ? ' So good to see you again!' : ''} I see you're eyeing ${item} — great choice. It's at ${currencySymbol}${originalPrice.toFixed(2)} right now. I'd love to work out a deal for you. What price were you thinking? You've got ${maxAttempts} attempts to bargain with me.`
+  return `Hey! Welcome${welcomeBack ? ' So good to see you again!' : ''} I see you're eyeing ${item} — great choice. It's at ${price} right now. I'd love to work out a deal for you. What price were you thinking? You've got ${maxAttempts} attempts to bargain with you.`
 }
 
 // ── Build customer history context from past sessions ──
@@ -1084,7 +1217,11 @@ function buildSystemPrompt(
     ? `\n\nSPECIAL CONTEXT:\n${contextParts.join('\n\n')}\n`
     : ''
 
+  const languageGuidance = buildLanguageGuidance(ctx.language)
+
   return `${persona}
+
+${languageGuidance}
 
 ══════════════════════════════════════════════════════════════
 NEGOTIATION SCENARIO

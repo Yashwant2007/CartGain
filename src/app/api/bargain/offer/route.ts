@@ -156,6 +156,7 @@ export async function POST(request: NextRequest) {
       productTitle,
       bulkQuantity: bulkQuantity ?? undefined,
       walkoutTriggered: isWalkout,
+      language: bargainSession.language ?? config.language ?? 'auto',
       customerContext: await buildCustomerContext(bargainSession.storeId, bargainSession.customerEmail),
     }
 

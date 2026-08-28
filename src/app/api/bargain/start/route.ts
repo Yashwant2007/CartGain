@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainStartSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
-import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerContext, type NegotiationContext } from '@/lib/services/bargain'
+import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerContext, SUPPORTED_LANGUAGES, type NegotiationContext } from '@/lib/services/bargain'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
 
@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
             attemptsUsed: existing.attemptsUsed,
             maxAttempts: config.maxAttempts,
             persona: config.aiPersona as any,
+            language: existing.language || 'auto',
             customerContext: `Returning to continue an existing session.`,
           }),
           expiresAt: existing.expiredAt.toISOString(),
@@ -110,6 +111,9 @@ export async function POST(request: NextRequest) {
     }
 
     const currencySymbol = store.currency === 'INR' ? '₹' : store.currency === 'USD' ? '$' : store.currency === 'EUR' ? '€' : store.currency + ' '
+    const language = data.language && SUPPORTED_LANGUAGES.includes(data.language as any)
+      ? data.language
+      : (config.language || 'auto')
 
     const ctx: NegotiationContext = {
       storeName: store.name,
@@ -120,6 +124,7 @@ export async function POST(request: NextRequest) {
       maxAttempts: config.maxAttempts,
       persona: config.aiPersona as NegotiationContext['persona'],
       productTitle: undefined,
+      language,
       customerContext: await buildCustomerContext(data.storeId, data.customerEmail || null),
     }
 
@@ -155,6 +160,7 @@ export async function POST(request: NextRequest) {
         currentOffer: data.originalPrice,
         attemptsUsed: 0,
         status: 'active',
+        language,
         startedAt: now,
         expiredAt,
         messages: {

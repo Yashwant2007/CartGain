@@ -55,6 +55,17 @@ const PERSONAS: { id: Persona; name: string; blurb: string }[] = [
   { id: 'playful_friend', name: 'Riley — Playful Friend', blurb: 'Cheeky, fun, makes you smile.' },
 ]
 
+const LANGUAGES: { id: string; label: string }[] = [
+  { id: 'en', label: 'English' },
+  { id: 'hinglish', label: 'Hinglish' },
+  { id: 'hi', label: 'हिन्दी' },
+  { id: 'ta', label: 'தமிழ்' },
+  { id: 'te', label: 'తెలుగు' },
+  { id: 'bn', label: 'বাংলা' },
+  { id: 'mr', label: 'मराठी' },
+  { id: 'pa', label: 'ਪੰਜਾਬੀ' },
+]
+
 const FAREWELLS: Record<Persona, string> = {
   friendly_shopkeeper:
     "I understand completely — you're a valued customer and the door is always open. If you change your mind, we are one message away.",
@@ -88,6 +99,7 @@ export default function DemoContent() {
   const { data: session, status } = useSession()
   const [product, setProduct] = useState<DemoProduct>(PRODUCTS[0])
   const [persona, setPersona] = useState<Persona>('friendly_shopkeeper')
+  const [language, setLanguage] = useState<string>('hinglish')
   const [started, setStarted] = useState(false)
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
@@ -129,6 +141,7 @@ export default function DemoContent() {
       maxAttempts: MAX_ATTEMPTS,
       persona,
       productTitle: product.title,
+      language,
     }
     sessionIdRef.current += 1
     setMessages([{ role: 'ai', content: buildOpeningMessage(ctx) }])
@@ -182,7 +195,7 @@ export default function DemoContent() {
     return 650 + Math.min(len, 240) * 1.1
   }
 
-  function send() {
+  async function send() {
     if (!input.trim() || ended || thinking) return
     const userText = input.trim()
     const offer = extractPriceLocal(userText)
@@ -201,45 +214,84 @@ export default function DemoContent() {
       maxAttempts: MAX_ATTEMPTS,
       persona,
       productTitle: product.title,
+      language,
     }
 
-    let reply: string
+    let reply = ''
     let counterOffer: number | null = null
     let decision: NegotiationResult['decision'] = 'counter'
     let newEnded: null | 'accepted' | 'rejected' | 'abandoned' | 'skipped' = null
     let newFinal: number | null = null
 
-    if (isWalkout && attemptsLeft > 0) {
-      // First walkout → retention offer
-      const lastCounter = [...messages].reverse().find(m => m.role === 'ai' && m.offeredPrice != null)?.offeredPrice ?? null
-      const r = retentionOffer(ctx, lastCounter)
-      reply = r.reply
-      counterOffer = r.counterOffer ?? null
-    } else if (isWalkout) {
-      // No attempts left + walks out → abandon
+    // Walkout with zero attempts left always abandons locally
+    if (isWalkout && attemptsLeft <= 0) {
       reply = FAREWELLS[persona]
       newEnded = 'abandoned'
-    } else if (offer != null) {
-      const result = ruleBasedDecision(offer, { ...ctx, attemptsUsed })
-      reply = result.reply
-      counterOffer = result.counterOffer ?? null
-      decision = result.decision
-      if (decision === 'accept') {
-        newFinal = offer
-      }
     } else {
-      // No price mentioned → conversational graduated counter
-      const counter = graduatedCounter({ ...ctx, attemptsUsed })
-      reply = `What price did you have in mind? I could probably do ₹${counter.toFixed(2)} if you make me a fair offer.`
-      counterOffer = counter
+      const history = messages.map(m => ({
+        role: m.role,
+        content: m.content,
+        offeredPrice: m.offeredPrice ?? undefined,
+      }))
+
+      try {
+        const res = await fetch('/api/bargain/demo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: userText,
+            offer,
+            history,
+            storeName: ctx.storeName,
+            currencySymbol: ctx.currencySymbol,
+            originalPrice: ctx.originalPrice,
+            minPrice: ctx.minPrice,
+            maxAttempts: ctx.maxAttempts,
+            attemptsUsed: ctx.attemptsUsed,
+            persona: ctx.persona,
+            productTitle: ctx.productTitle,
+            language: ctx.language,
+            walkoutTriggered: isWalkout,
+          }),
+        })
+        const data = await res.json()
+        if (res.ok && typeof data?.reply === 'string' && data.reply.trim()) {
+          reply = data.reply
+          counterOffer = typeof data.counterOffer === 'number' ? data.counterOffer : null
+          if (data.decision === 'accept') decision = 'accept'
+          else if (data.decision === 'reject') decision = 'reject'
+          else decision = 'counter'
+        }
+      } catch {}
+
+      // AI unavailable / rate-limited → local fallback engine
+      if (!reply) {
+        if (isWalkout && attemptsLeft > 0) {
+          const lastCounter = [...messages].reverse().find(m => m.role === 'ai' && m.offeredPrice != null)?.offeredPrice ?? null
+          const r = retentionOffer(ctx, lastCounter)
+          reply = r.reply
+          counterOffer = r.counterOffer ?? null
+        } else if (offer != null) {
+          const result = ruleBasedDecision(offer, { ...ctx, attemptsUsed })
+          reply = result.reply
+          counterOffer = result.counterOffer ?? null
+          decision = result.decision
+        } else {
+          const counter = graduatedCounter({ ...ctx, attemptsUsed })
+          reply = `What price did you have in mind? I could probably do ₹${counter.toFixed(2)} if you make me a fair offer.`
+          counterOffer = counter
+        }
+      }
     }
 
     // Exhausted final attempt → reject
-    if (exhausted && decision !== 'accept') {
+    if (newEnded != null) {
+      // already abandoned
+    } else if (exhausted && decision !== 'accept') {
       newEnded = 'rejected'
     } else if (decision === 'accept') {
       newEnded = 'accepted'
-      newFinal = newFinal ?? counterOffer ?? null
+      newFinal = newFinal ?? offer ?? counterOffer ?? null
     }
 
     const sid = sessionIdRef.current
@@ -341,7 +393,8 @@ export default function DemoContent() {
             Try the AI negotiator. <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Live.</span>
           </h1>
           <p className="text-blue-200/70 text-sm sm:text-base max-w-2xl mx-auto">
-            Pick a product, pick a persona, and bargain — the exact logic our AI runs on real beauty stores.
+            Pick a product, pick a persona, pick a language — and bargain with the exact AI our engine runs on real beauty stores.
+            Talks in English, Hinglish, Hindi, Tamil, Telugu, Bengali, Marathi & Punjabi.
             One live session per account, signed in and server-verified.
           </p>
           <p className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-blue-300/50">
@@ -350,7 +403,7 @@ export default function DemoContent() {
         </div>
 
         {/* Setup panel */}
-        <div className="grid lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid lg:grid-cols-4 gap-6 mb-8">
           {/* Product picker */}
           <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-blue-200 mb-3 flex items-center gap-2">
@@ -396,11 +449,33 @@ export default function DemoContent() {
             </div>
           </div>
 
+          {/* Language picker */}
+          <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-blue-200 mb-3 flex items-center gap-2">
+              <MessageCircle className="w-4 h-4" /> 3. Choose a language
+            </h3>
+            <div className="grid grid-cols-2 gap-1.5">
+              {LANGUAGES.map(l => (
+                <button
+                  key={l.id}
+                  onClick={() => { setLanguage(l.id); started && reset() }}
+                  className={`px-2 py-1.5 text-xs rounded-lg transition ${
+                    language === l.id
+                      ? 'bg-blue-900/40 border border-blue-600/50 text-blue-100'
+                      : 'hover:bg-slate-800/50 border border-transparent text-blue-300/70'
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Start button */}
           <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl p-5 flex flex-col justify-between">
             <div>
               <h3 className="text-sm font-semibold text-blue-200 mb-3 flex items-center gap-2">
-                <Sparkles className="w-4 h-4" /> 3. Start bargaining
+                <Sparkles className="w-4 h-4" /> 4. Start bargaining
               </h3>
               <div className="text-xs text-blue-300/70 space-y-1.5 mb-4">
                 <div className="flex justify-between">

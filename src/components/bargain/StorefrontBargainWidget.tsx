@@ -43,9 +43,16 @@ type Props = {
   currency: string
   line: Line
   checkoutUrl: string
+  language?: string
 }
 
-export default function StorefrontBargainWidget({ mode, shop, currency, line, checkoutUrl }: Props) {
+const PERSONA_MAP: Record<string, string> = {
+  friendly: 'friendly_shopkeeper',
+  strict: 'strict_negotiator',
+  playful: 'playful_friend',
+}
+
+export default function StorefrontBargainWidget({ mode, shop, currency, line, checkoutUrl, language = 'auto' }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
 
   const isCart = line.kind === 'cart'
@@ -189,28 +196,39 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
     setError(null)
 
     try {
-      const res = await fetch(`/api/bargain/offer`, {
+      const offer = extractPrice(userText)
+      const isWalkout = detectWalkout(userText)
+      const history = messages.map((m) => ({
+        role: m.role === 'customer' ? 'customer' : 'ai',
+        content: m.content,
+        offeredPrice: typeof m.price === 'number' ? m.price : undefined,
+      }))
+
+      const res = await fetch(`/api/bargain/demo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionId: `storefront_${shop}_${productId || 'cart'}_${line.kind}_${originalPrice}`,
           message: userText,
-          shopDomain: shop,
-          productId: isCart ? null : productId,
-          variantId: isCart ? null : variantId,
+          offer,
+          history,
+          storeName: shop,
+          currencySymbol: SYMBOLS[currency?.toUpperCase()] || (currency ? `${currency} ` : '₹'),
           originalPrice,
-          currency,
-          title,
           minPrice: Math.round(originalPrice * (1 - PROFIT_PERCENT / 100) * 100) / 100,
           maxAttempts: MAX_ATTEMPTS,
-          persona,
+          attemptsUsed: attempts,
+          persona: PERSONA_MAP[persona] || 'friendly_shopkeeper',
+          productTitle: title,
+          language,
+          walkoutTriggered: isWalkout,
+          bulkQuantity: isCart ? undefined : null,
         }),
       })
 
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.message || 'API error')
+        throw new Error(data.error || data.message || 'API error')
       }
 
       const nextAttempt = attempts + 1
@@ -221,9 +239,9 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
 
       if (data.decision === 'accept') {
         setStep('deal')
-        setFinalPrice(data.counterOffer ?? data.finalPrice)
-        setDiscountCode(data.discountCode || `BARGAIN_${Date.now().toString(36).toUpperCase()}`)
-      } else if (data.decision === 'reject' || data.sessionStatus === 'rejected' || data.sessionStatus === 'abandoned') {
+        setFinalPrice(data.counterOffer ?? offer)
+        setDiscountCode(`BARGAIN_${Date.now().toString(36).toUpperCase()}`)
+      } else if (data.decision === 'reject' || (exhausted && data.decision !== 'accept')) {
         setStep('rejected')
       } else {
         setStep('chat')

@@ -678,6 +678,8 @@ export default function HomePage() {
                       'Reads 15+ customer behavioral patterns and adapts its strategy mid-conversation',
                       'You set the floor price — the AI cannot sell below it, enforced at the engine level',
                       '3 distinct shopkeeper personas, each with a consistent negotiation style',
+                      'Has Indian-market psychology built in — round figures, festivals, UPI/cash leverage',
+                      'Negotiates in English, Hinglish, Hindi and 9 regional languages, mirroring your customer',
                       'Multi-layer protection against common prompt-injection and manipulation attempts',
                     ].map((item) => (
                       <li key={item} className="flex items-start gap-2.5 text-blue-100">

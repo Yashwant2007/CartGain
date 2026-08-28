@@ -49,6 +49,7 @@ export const bargainStartSchema = z.object({
   variantId: z.string().max(100).optional(),
   originalPrice: z.number().positive('originalPrice must be positive'),
   currency: z.string().length(3).optional().default('INR'),
+  language: z.string().max(12).optional().default('auto'),
   cartToken: z.string().max(200).optional(),
   customerEmail: z.string().email().optional().or(z.literal('')),
   customerPhone: z.string().max(20).optional().or(z.literal('')),
