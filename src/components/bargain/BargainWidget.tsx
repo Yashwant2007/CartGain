@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   X, Send, MessageCircle, Sparkles, Loader2, CheckCircle2, Clock, Tag,
 } from 'lucide-react'
@@ -19,6 +19,19 @@ type Props = {
   language?: string
   apiBase?: string
   linkout?: string
+  // Embedded (inline iframe on the Shopify storefront) mode: renders a light
+  // product card + in-frame panel instead of the floating launcher, and keeps
+  // the parent iframe sized via the cg_resize postMessage handshake.
+  embedded?: boolean
+  image?: string
+  persona?: string
+  mode?: 'item' | 'cart'
+}
+
+const PERSONA_CHIP: Record<string, { label: string; emoji: string }> = {
+  friendly_shopkeeper: { label: 'Friendly', emoji: '😊' },
+  strict_negotiator: { label: 'Strict', emoji: '📊' },
+  playful_friend: { label: 'Playful', emoji: '😏' },
 }
 
 type Message = {
@@ -51,6 +64,10 @@ export default function BargainWidget({
   language,
   apiBase = '',
   linkout,
+  embedded: isEmbed = false,
+  image,
+  persona,
+  mode,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
@@ -86,6 +103,37 @@ export default function BargainWidget({
     }, 1000)
     return () => clearInterval(t)
   }, [expiresAt])
+
+  // Embedded mode: keep the parent Shopify iframe sized to our content.
+  const announceHeight = useCallback(() => {
+    if (!isEmbed || typeof window === 'undefined') return
+    const h = Math.max(
+      document.documentElement?.scrollHeight ?? 0,
+      document.body?.scrollHeight ?? 0,
+    )
+    try {
+      window.parent?.postMessage({ type: 'cg_resize', height: h }, '*')
+    } catch {}
+  }, [isEmbed])
+
+  useEffect(() => {
+    if (!isEmbed) return
+    const onMessage = (e: MessageEvent) => {
+      if (e.data && (e.data as any).type === 'cg_get_height') announceHeight()
+    }
+    window.addEventListener('message', onMessage)
+    const t = setTimeout(announceHeight, 60)
+    return () => {
+      window.removeEventListener('message', onMessage)
+      clearTimeout(t)
+    }
+  }, [isEmbed, announceHeight])
+
+  useEffect(() => {
+    if (!isEmbed) return
+    const t = setTimeout(announceHeight, 40)
+    return () => clearTimeout(t)
+  }, [isEmbed, announceHeight, open, messages, decision, discountCode, attemptsRemaining, loading, sessionEnded])
 
   async function startSession() {
     setLoading(true)
@@ -267,57 +315,144 @@ export default function BargainWidget({
   }
 
   return (
-    <div className="bargain-widget-root" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
-      {/* Floating trigger button */}
-      <button
-        onClick={openPanel}
-        style={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
-          background: '#ffffff',
-          color: '#1e293b',
-          padding: '14px 22px',
-          borderRadius: 999,
-          border: '1px solid #e2e8f0',
-          fontWeight: 600,
-          fontSize: 14,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 10,
-          cursor: 'pointer',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06)',
-          transition: 'all 0.2s ease',
-          zIndex: 99998,
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#f8fafc'
-          e.currentTarget.style.borderColor = '#cbd5e1'
-          e.currentTarget.style.boxShadow = '0 6px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = '#ffffff'
-          e.currentTarget.style.borderColor = '#e2e8f0'
-          e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06)'
-        }}
-      >
-        <Sparkles size={18} style={{ color: '#6366f1' }} />
-        <span>{t('negotiate')}</span>
-      </button>
+    <div
+      className="bargain-widget-root"
+      style={{
+        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        ...(isEmbed
+          ? {
+              position: 'relative',
+              width: '100%',
+              background: '#ffffff',
+              borderRadius: 16,
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.06)',
+              overflow: 'hidden',
+              height: open ? 520 : 'auto',
+            }
+          : {}),
+      }}
+    >
+      {isEmbed ? (
+        <button
+          onClick={openPanel}
+          type="button"
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: 14,
+            background: '#ffffff',
+            border: 'none',
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          {image ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={image}
+              alt=""
+              width={52}
+              height={52}
+              style={{ width: 52, height: 52, borderRadius: 12, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc' }}
+            />
+          ) : (
+            <div style={{ width: 52, height: 52, borderRadius: 12, background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
+              🛍️
+            </div>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {productTitle ? productTitle : 'this item'}
+            </div>
+            <div style={{ fontSize: 13, color: '#334155', marginTop: 2 }}>
+              <span style={{ fontWeight: 600 }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
+            </div>
+            <div style={{ marginTop: 2, fontSize: 11, color: '#6366f1', fontWeight: 600 }}>
+              {isEmbed && mode === 'cart' ? 'Bargain a discount on this item before checkout' : 'Want a better price? Bargain with us'}
+            </div>
+          </div>
+          <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+            <span
+              style={{
+                background: 'linear-gradient(135deg, #4f46e5, #6366f1)',
+                color: '#ffffff',
+                fontWeight: 700,
+                fontSize: 13,
+                padding: '9px 14px',
+                borderRadius: 999,
+                boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <Sparkles size={14} />
+              {t('negotiate')}
+            </span>
+            {persona && PERSONA_CHIP[persona] && (
+              <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
+                {PERSONA_CHIP[persona].emoji} {PERSONA_CHIP[persona].label} negotiator
+              </span>
+            )}
+          </div>
+        </button>
+      ) : (
+        /* Floating trigger button */
+        <button
+          onClick={openPanel}
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            background: '#ffffff',
+            color: '#1e293b',
+            padding: '14px 22px',
+            borderRadius: 999,
+            border: '1px solid #e2e8f0',
+            fontWeight: 600,
+            fontSize: 14,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 10,
+            cursor: 'pointer',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06)',
+            transition: 'all 0.2s ease',
+            zIndex: 99998,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#f8fafc'
+            e.currentTarget.style.borderColor = '#cbd5e1'
+            e.currentTarget.style.boxShadow = '0 6px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#ffffff'
+            e.currentTarget.style.borderColor = '#e2e8f0'
+            e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06)'
+          }}
+        >
+          <Sparkles size={18} style={{ color: '#6366f1' }} />
+          <span>{t('negotiate')}</span>
+        </button>
+      )}
 
       {/* Slide-out panel */}
       {open && (
         <div
           style={{
-            position: 'fixed',
-            bottom: 0,
-            right: 0,
+            position: isEmbed ? 'absolute' : 'fixed',
             top: 0,
+            right: 0,
+            left: isEmbed ? 0 : undefined,
+            bottom: 0,
             width: '100%',
-            maxWidth: 440,
+            maxWidth: isEmbed ? 'none' : 440,
             background: '#ffffff',
             color: '#1e293b',
-            boxShadow: '-8px 0 40px rgba(0,0,0,0.15)',
+            boxShadow: isEmbed ? 'none' : '-8px 0 40px rgba(0,0,0,0.15)',
             zIndex: 99999,
             display: 'flex',
             flexDirection: 'column',

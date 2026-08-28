@@ -12,7 +12,8 @@
 {% assign shop_domain = shop.permanent_domain %}
 {% assign title_enc = product.title | url_encode %}
 {% assign img_enc = img_url | url_encode %}
-{% assign widget_src = 'https://cart-gain.com/s/bargain?mode=item'
+{% assign widget_src = 'https://cart-gain.com/bargain/embed'
+  | append: '?mode=' | append: 'item'
   | append: '&shop=' | append: shop_domain
   | append: '&product=' | append: product.id
   | append: '&variant=' | append: v.id

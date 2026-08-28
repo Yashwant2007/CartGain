@@ -5,14 +5,23 @@
 {% endcomment %}
 
 {% assign currency = cart.currency.iso_code | default: shop.currency %}
-{% assign ctotal = cart.total_price | times: 1.0 | divided_by: 100 %}
-{% assign items_json = cart.items | json | url_encode %}
 {% assign shop_domain = shop.permanent_domain %}
-{% assign widget_src = 'https://cart-gain.com/s/bargain?mode=cart'
+{% assign first_item = cart.items[0] %}
+{% if first_item %}
+  {% assign iprice = first_item.final_price | times: 1.0 | divided_by: 100 %}
+  {% assign iimg = first_item.image | image_url: width: 640 %}
+  {% assign ititle = first_item.title | url_encode %}
+  {% assign iimg_enc = iimg | url_encode %}
+{% endif %}
+{% assign widget_src = 'https://cart-gain.com/bargain/embed'
+  | append: '?mode=' | append: 'cart'
   | append: '&shop=' | append: shop_domain
   | append: '&currency=' | append: currency
-  | append: '&total=' | append: ctotal
-  | append: '&items=' | append: items_json
+  | append: '&product=' | append: first_item.product.id
+  | append: '&variant=' | append: first_item.variant.id
+  | append: '&title=' | append: ititle
+  | append: '&price=' | append: iprice
+  | append: '&image=' | append: iimg_enc
 %}
 
 <div class="cg-bargain-block" data-cg-bargain-root {{ block.shopify_attributes }}>

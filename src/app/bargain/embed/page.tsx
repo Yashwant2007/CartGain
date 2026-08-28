@@ -1,62 +1,122 @@
 import type { Metadata } from 'next'
+import prisma from '@/lib/db'
 import BargainWidget from '@/components/bargain/BargainWidget'
 
-export const dynamic = 'force-static'
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'Bargain Widget | CartGain',
+  title: 'Bargain | CartGain',
   description: 'Real-time price negotiation for your cart.',
   robots: { index: false, follow: false },
 }
 
-// Public embed page — iframe-able on Shopify product pages.
-// Query params: storeId, shopifyProductId, variantId, originalPrice, currency, cartToken, customerEmail, customerPhone, productTitle, lang
-export default function EmbedPage({
+// Public storefront embed — iframed on Shopify product + cart pages (no auth).
+// Query params: shop, product, variant, price, currency, title, image, mode, linkout
+// The store is resolved server-side by the Shopify shop domain, and the widget
+// is driven by the merchant's saved BargainConfig (persona, language, enabled).
+export default async function EmbedPage({
   searchParams,
 }: {
-  searchParams: Record<string, string | undefined>
+  searchParams: Record<string, string | string[] | undefined>
 }) {
-  const sp = searchParams
-  const storeId = sp.storeId
-  const shopifyProductId = sp.shopifyProductId
-  const originalPriceRaw = sp.originalPrice
-  const originalPrice = originalPriceRaw ? parseFloat(originalPriceRaw) : NaN
+  const sp = (key: string): string | undefined => {
+    const v = searchParams[key]
+    return typeof v === 'string' ? v : undefined
+  }
 
-  const missing = !storeId || !shopifyProductId || !originalPrice || originalPrice <= 0
+  const shop = sp('shop')
+  const shopifyProductId = sp('product')
+  const variantId = sp('variant')
+  const price = parseFloat(sp('price') ?? '')
+  const currency = sp('currency') || 'INR'
+  const title = sp('title')
+  const image = sp('image')
+  const mode = sp('mode') === 'cart' ? 'cart' : 'item'
 
-  if (missing) {
+  let storeId: string | null = null
+  let storeFound = false
+  let enabled = false
+  let persona: string | undefined
+  let language: string | undefined
+
+  if (shop) {
+    const store = await prisma.store.findFirst({
+      where: {
+        isActive: true,
+        OR: [{ domain: shop }, { domain: { contains: shop } }],
+      },
+      select: { id: true },
+    })
+    if (store) {
+      storeFound = true
+      storeId = store.id
+      const config = await prisma.bargainConfig.findUnique({ where: { storeId: store.id } })
+      enabled = config?.enabled ?? false
+      persona = config?.aiPersona ?? 'friendly_shopkeeper'
+      language = config?.language ?? 'auto'
+    }
+  }
+
+  const valid = storeId && shopifyProductId && Number.isFinite(price) && price > 0
+
+  if (!storeFound || !valid) {
     return (
       <div
         style={{
-          fontFamily: 'system-ui, sans-serif',
-          padding: 24,
-          color: '#9ca3af',
-          background: '#0b1220',
-          minHeight: 200,
-          borderRadius: 12,
-          fontSize: 14,
+          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: 16,
+          padding: '20px 24px',
+          color: '#64748b',
+          fontSize: 13,
+          lineHeight: 1.5,
+          textAlign: 'center',
         }}
       >
-        Bargain widget requires <code>storeId</code>, <code>shopifyProductId</code> and <code>originalPrice</code> query params.
+        <div style={{ fontSize: 22, marginBottom: 6 }}>🤝</div>
+        <div style={{ fontWeight: 600, color: '#334155', marginBottom: 2 }}>Price negotiation is not available for this store.</div>
+        Please continue with the regular checkout.
+      </div>
+    )
+  }
+
+  if (!enabled) {
+    return (
+      <div
+        style={{
+          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: 16,
+          padding: '20px 24px',
+          color: '#64748b',
+          fontSize: 13,
+          lineHeight: 1.5,
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ fontSize: 22, marginBottom: 6 }}>🔒</div>
+        <div style={{ fontWeight: 600, color: '#334155', marginBottom: 2 }}>Bargaining is temporarily paused by this store.</div>
+        Please continue with the regular checkout.
       </div>
     )
   }
 
   return (
-    <>
-      <BargainWidget
-        storeId={storeId as string}
-        shopifyProductId={shopifyProductId as string}
-        variantId={sp.variantId}
-        originalPrice={originalPrice}
-        currency={sp.currency ?? 'INR'}
-        cartToken={sp.cartToken}
-        customerEmail={sp.customerEmail}
-        customerPhone={sp.customerPhone}
-        productTitle={sp.productTitle}
-        language={sp.lang}
-        linkout={sp.linkout}
-      />
-    </>
+    <BargainWidget
+      storeId={storeId as string}
+      shopifyProductId={shopifyProductId as string}
+      variantId={variantId}
+      originalPrice={price}
+      currency={currency}
+      productTitle={title || 'this item'}
+      image={image}
+      language={language}
+      persona={persona}
+      mode={mode}
+      linkout={sp('linkout')}
+      embedded
+    />
   )
 }
