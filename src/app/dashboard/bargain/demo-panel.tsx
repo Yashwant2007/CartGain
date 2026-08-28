@@ -265,11 +265,13 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
                 key={p.id}
                 onClick={() => { setPersona(p.id); started && reset() }}
                 className={`w-full text-left p-2.5 rounded-lg transition ${
-                  persona === p.id ? 'bg-blue-900/40 border border-blue-600/50' : 'hover:bg-slate-800/50 border border-transparent'
+                  persona === p.id
+                    ? 'bg-blue-600 text-white border border-blue-600'
+                    : 'hover:bg-blue-900/40 border border-blue-800/40 text-blue-100'
                 }`}
               >
                 <div className="text-sm font-medium">{p.name}</div>
-                <div className="text-[11px] text-blue-300/70 mt-0.5">{p.blurb}</div>
+                <div className={`text-[11px] mt-0.5 ${persona === p.id ? 'text-white/80' : 'text-blue-300/70'}`}>{p.blurb}</div>
               </button>
             ))}
           </div>
@@ -286,8 +288,8 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
                 onClick={() => { setLanguage(l.id); started && reset() }}
                 className={`px-2 py-1.5 text-xs rounded-lg transition ${
                   language === l.id
-                    ? 'bg-blue-900/40 border border-blue-600/50 text-blue-100'
-                    : 'hover:bg-slate-800/50 border border-transparent text-blue-300/70'
+                    ? 'bg-blue-600 text-white border border-blue-600'
+                    : 'hover:bg-blue-900/40 border border-blue-800/40 text-blue-300/80'
                 }`}
               >
                 {l.label}
@@ -307,7 +309,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
           ) : (
             <button
               onClick={reset}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white text-sm font-semibold rounded-lg transition active:scale-95"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition active:scale-95"
             >
               <RotateCcw className="w-4 h-4" /> Reset Session
             </button>
@@ -406,19 +408,19 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
               <span className="text-[10px] uppercase tracking-wide text-blue-300/50 mr-1">Quick tries</span>
               <button
                 onClick={() => setInput('₹200')}
-                className="px-2.5 py-1 text-xs bg-slate-800/70 hover:bg-slate-700 border border-blue-800/40 rounded-full text-blue-300/80 transition"
+                className="px-2.5 py-1 text-xs bg-blue-600 hover:bg-blue-500 border border-blue-600 rounded-full text-white transition active:scale-95"
               >
                 Lowball ₹200
               </button>
               <button
                 onClick={() => setInput(`₹${Math.ceil(minPrice + 20)}`)}
-                className="px-2.5 py-1 text-xs bg-slate-800/70 hover:bg-slate-700 border border-blue-800/40 rounded-full text-blue-300/80 transition"
+                className="px-2.5 py-1 text-xs bg-blue-600 hover:bg-blue-500 border border-blue-600 rounded-full text-white transition active:scale-95"
               >
                 Offer near floor
               </button>
               <button
                 onClick={() => setInput('This is too expensive. I am going to leave.')}
-                className="px-2.5 py-1 text-xs bg-slate-800/70 hover:bg-slate-700 border border-blue-800/40 rounded-full text-blue-300/80 transition"
+                className="px-2.5 py-1 text-xs bg-blue-600 hover:bg-blue-500 border border-blue-600 rounded-full text-white transition active:scale-95"
               >
                 Walkout threat
               </button>
@@ -435,7 +437,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
               <button
                 onClick={send}
                 disabled={!input.trim() || thinking}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 rounded-lg transition active:scale-95"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-40 rounded-lg transition active:scale-95"
                 aria-label="Send message"
               >
                 <Send className="w-4 h-4" />
