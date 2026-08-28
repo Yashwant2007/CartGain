@@ -4,6 +4,7 @@ import { bargainOfferSchema, validateOrThrow, handleValidationError } from '@/li
 import { negotiateStep, ruleBasedDecision, buildOpeningMessage, buildCustomerContext, computeMinPrice, retentionOffer, type NegotiationContext } from '@/lib/services/bargain'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { detectWalkout, extractQuantity, extractPrice } from '@/lib/bargain/text'
+import { uiText, currencySymbolFor } from '@/lib/bargain/i18n'
 
 export const dynamic = 'force-dynamic'
 // POST /api/bargain/offer — customer sends a message, AI responds
@@ -34,11 +35,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Bargain session not found' }, { status: 404 })
     }
     if (bargainSession.status !== 'active') {
+      const termLang = bargainSession.language ?? 'auto'
       const terminalReplies: Record<string, string> = {
-        accepted: 'This deal is already done! 🎉 Your discount code is ready. Start a new session if you\'re interested in another product.',
-        rejected: 'This negotiation has ended. Start a new session for a different product if you\'d like to bargain again.',
-        expired: 'This session expired. Please start a new one if you\'re still interested.',
-        abandoned: 'This session was abandoned. Please start a new one.',
+        accepted: uiText(termLang, 'terminal_accepted'),
+        rejected: uiText(termLang, 'terminal_rejected'),
+        expired: uiText(termLang, 'terminal_expired'),
+        abandoned: uiText(termLang, 'terminal_abandoned'),
       }
       return NextResponse.json({
         message: terminalReplies[bargainSession.status] ?? `Session is ${bargainSession.status}. No further messages accepted.`,
@@ -61,6 +63,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Bargaining disabled' }, { status: 403 })
     }
 
+    const lang = bargainSession.language ?? config.language ?? 'auto'
+
     // Automated decision-making opt-out (DPDP Act 2023, GDPR Art. 22): end the
     // session without the AI consuming an attempt or responding.
     if (data.message?.trim().toLowerCase() === 'opt-out') {
@@ -69,13 +73,13 @@ export async function POST(request: NextRequest) {
         data: { status: 'abandoned' },
       })
       return NextResponse.json({
-        message: 'You opted out of AI pricing. Buy at the regular price instead.',
+        message: uiText(lang, 'opt_out'),
         terminal: true,
         status: 'abandoned',
       }, { status: 200 })
     }
 
-    const currencySymbol = bargainSession.store.currency === 'INR' ? '₹' : bargainSession.store.currency === 'USD' ? '$' : bargainSession.store.currency + ' '
+    const currencySymbol = currencySymbolFor(bargainSession.store.currency)
 
     // Resolve bulk quantity: from this message, or carry over the last known one
     const lastBulk = [...bargainSession.messages].reverse()
@@ -126,7 +130,7 @@ export async function POST(request: NextRequest) {
     const attemptsExhausted = attemptsUsed >= config.maxAttempts
 
     if (attemptsExhausted && attemptsRemaining <= 0) {
-      const rejectReply = 'Sorry, you\'ve used all your attempts for this item. Maybe next time! 🙂'
+      const rejectReply = uiText(lang, 'attempts_exhausted')
       await prisma.$transaction([
         prisma.bargainMessage.create({
           data: { sessionId: bargainSession.id, role: 'customer', content: data.message, offeredPrice: customerOffer ?? null },
@@ -176,10 +180,10 @@ export async function POST(request: NextRequest) {
 
       if (hadRetention || attemptsRemaining <= 0) {
         // Second walkout OR no attempts left → close the session (abandoned)
-        const farewellReplies = {
-          friendly_shopkeeper: 'I understand, friend. The door\'s always open if you change your mind. Take care! 👋',
-          strict_negotiator: 'Understood. This negotiation is closed. You may start a new session anytime.',
-          playful_friend: 'Aw, really? 😅 Well, if you change your mind, you know where I am! No hard feelings 🙌',
+        const farewellReplies: Record<string, string> = {
+          friendly_shopkeeper: uiText(lang, 'farewell_friendly'),
+          strict_negotiator: uiText(lang, 'farewell_strict'),
+          playful_friend: uiText(lang, 'farewell_playful'),
         } as Record<string, string>
         const farewell = farewellReplies[ctx.persona] ?? farewellReplies.friendly_shopkeeper
         await prisma.$transaction([

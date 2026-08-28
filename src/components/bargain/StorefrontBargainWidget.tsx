@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
+import { currencySymbolFor } from '@/lib/bargain/i18n'
 
 const MAX_ATTEMPTS = 3
 const PROFIT_PERCENT = 25
@@ -21,11 +22,6 @@ export type BargainItem = {
   featured_image?: { url?: string } | null
 }
 
-const SYMBOLS: Record<string, string> = {
-  USD: '$', EUR: '€', GBP: '£', INR: '₹', AED: 'AED ', AUD: 'A$',
-  CAD: 'C$', SGD: 'S$', JPY: '¥', PKR: 'Rs ', BDT: '৳',
-}
-
 const PersonaLabels: Record<string, string> = {
   friendly: '😊 Alex — Friendly',
   strict: '📊 Morgan — Strict',
@@ -33,8 +29,7 @@ const PersonaLabels: Record<string, string> = {
 }
 
 function money(currency: string, n: number): string {
-  const sym = SYMBOLS[currency?.toUpperCase()] || (currency ? `${currency} ` : '')
-  return `${sym}${n.toFixed(2)}`
+  return `${currencySymbolFor(currency)}${n.toFixed(2)}`
 }
 
 type Props = {
@@ -212,7 +207,7 @@ export default function StorefrontBargainWidget({ mode, shop, currency, line, ch
           offer,
           history,
           storeName: shop,
-          currencySymbol: SYMBOLS[currency?.toUpperCase()] || (currency ? `${currency} ` : '₹'),
+          currencySymbol: currencySymbolFor(currency),
           originalPrice,
           minPrice: Math.round(originalPrice * (1 - PROFIT_PERCENT / 100) * 100) / 100,
           maxAttempts: MAX_ATTEMPTS,

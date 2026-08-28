@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 }
 
 // Public embed page — iframe-able on Shopify product pages.
-// Query params: storeId, shopifyProductId, variantId, originalPrice, currency, cartToken, customerEmail, customerPhone, productTitle
+// Query params: storeId, shopifyProductId, variantId, originalPrice, currency, cartToken, customerEmail, customerPhone, productTitle, lang
 export default function EmbedPage({
   searchParams,
 }: {
@@ -54,6 +54,7 @@ export default function EmbedPage({
         customerEmail={sp.customerEmail}
         customerPhone={sp.customerPhone}
         productTitle={sp.productTitle}
+        language={sp.lang}
         linkout={sp.linkout}
       />
     </>

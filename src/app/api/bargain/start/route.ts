@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainStartSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerContext, SUPPORTED_LANGUAGES, type NegotiationContext } from '@/lib/services/bargain'
+import { currencySymbolFor } from '@/lib/bargain/i18n'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
 
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
           session: existing,
           openingMessage: existing.messages[0]?.content ?? buildOpeningMessage({
             storeName: store.name,
-            currencySymbol: store.currency === 'INR' ? '₹' : store.currency === 'USD' ? '$' : store.currency === 'EUR' ? '€' : store.currency + ' ',
+            currencySymbol: currencySymbolFor(store.currency),
             originalPrice: existing.originalPrice,
             minPrice: existingFloor.minPrice,
             attemptsUsed: existing.attemptsUsed,
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const currencySymbol = store.currency === 'INR' ? '₹' : store.currency === 'USD' ? '$' : store.currency === 'EUR' ? '€' : store.currency + ' '
+    const currencySymbol = currencySymbolFor(store.currency)
     const language = data.language && SUPPORTED_LANGUAGES.includes(data.language as any)
       ? data.language
       : (config.language || 'auto')

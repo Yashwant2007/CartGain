@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   X, Send, MessageCircle, Sparkles, Loader2, CheckCircle2, Clock, Tag,
 } from 'lucide-react'
+import { currencySymbolFor, uiText } from '@/lib/bargain/i18n'
 
 type Props = {
   storeId: string
@@ -15,6 +16,7 @@ type Props = {
   customerEmail?: string
   customerPhone?: string
   productTitle?: string
+  language?: string
   apiBase?: string
   linkout?: string
 }
@@ -46,6 +48,7 @@ export default function BargainWidget({
   customerEmail,
   customerPhone,
   productTitle,
+  language,
   apiBase = '',
   linkout,
 }: Props) {
@@ -66,7 +69,8 @@ export default function BargainWidget({
 
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const currencySymbol = currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency + ' '
+  const currencySymbol = currencySymbolFor(currency)
+  const t = (key: Parameters<typeof uiText>[1], vars?: Record<string, string | number>) => uiText(language, key, vars)
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -99,6 +103,7 @@ export default function BargainWidget({
           cartToken,
           customerEmail,
           customerPhone,
+          language,
         }),
       })
       const data = await res.json()
@@ -196,7 +201,7 @@ export default function BargainWidget({
         ...prev,
         {
           id: `s-${Date.now()}`, role: 'system',
-          content: 'No problem — you can buy at the regular price below. You opted out of AI pricing.',
+          content: t('optOutMsg'),
           offeredPrice: null, createdAt: new Date().toISOString(),
         },
       ])
@@ -297,7 +302,7 @@ export default function BargainWidget({
         }}
       >
         <Sparkles size={18} style={{ color: '#6366f1' }} />
-        <span>Negotiate Price</span>
+        <span>{t('negotiate')}</span>
       </button>
 
       {/* Slide-out panel */}
@@ -342,7 +347,7 @@ export default function BargainWidget({
                 <MessageCircle size={22} style={{ color: '#ffffff' }} />
               </div>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>Let&apos;s make a deal</div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>{t('dealTitle')}</div>
                 <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
                   {productTitle ? productTitle : 'Product'} · {currencySymbol}{originalPrice.toFixed(2)}
                 </div>
@@ -388,7 +393,7 @@ export default function BargainWidget({
             alignItems: 'center',
             justifyContent: 'space-between',
           }}>
-            <span>AI-powered negotiation</span>
+            <span>{t('aiPowered')}</span>
             <a
               href={linkout ? `${linkout}?ai_opt_out=1` : undefined}
               onClick={linkout ? undefined : (e) => { e.preventDefault(); void optOutOfAI() }}
@@ -396,7 +401,7 @@ export default function BargainWidget({
               onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline' }}
               onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none' }}
             >
-              Skip — buy at full price →
+              {t('skip')}
             </a>
           </div>
 
@@ -422,7 +427,7 @@ export default function BargainWidget({
                     fontSize: 12,
                     fontWeight: 600,
                   }}>
-                    {attemptsRemaining} left
+                    {t('attemptsLeft', { n: attemptsRemaining })}
                   </span>
                 </span>
               )}
@@ -447,7 +452,7 @@ export default function BargainWidget({
             {messages.length === 0 && (
               <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, padding: '40px 0' }}>
                 <Loader2 size={20} className="spin" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 8px' }} />
-                Connecting...
+                {t('connecting')}
               </div>
             )}
             {messages.map(m => (
@@ -469,7 +474,7 @@ export default function BargainWidget({
                     textTransform: 'uppercase',
                     letterSpacing: 0.5,
                   }}>
-                    {m.role === 'ai' ? 'Assistant' : 'Notice'}
+                    {m.role === 'ai' ? t('assistant') : t('notice')}
                   </div>
                 )}
                 <div
@@ -501,7 +506,7 @@ export default function BargainWidget({
                       fontWeight: 600,
                       color: '#15803d',
                     }}>
-                      Offered: {currencySymbol}{m.offeredPrice.toFixed(2)}
+                      {t('offered')} {currencySymbol}{m.offeredPrice.toFixed(2)}
                     </div>
                   )}
                 </div>
@@ -531,10 +536,10 @@ export default function BargainWidget({
                   <CheckCircle2 size={28} style={{ color: '#16a34a' }} />
                 </div>
                 <div style={{ fontWeight: 700, fontSize: 18, color: '#0f172a', marginBottom: 4 }}>
-                  You saved {currencySymbol}{(originalPrice - finalPrice).toFixed(2)}!
+                  {t('youSaved', { x: `${currencySymbol}${(originalPrice - finalPrice).toFixed(2)}` })}
                 </div>
                 <div style={{ fontSize: 14, color: '#64748b', marginBottom: 16 }}>
-                  New price: <span style={{ fontWeight: 700, color: '#0f172a' }}>{currencySymbol}{finalPrice.toFixed(2)}</span>
+                  {t('newPrice')} <span style={{ fontWeight: 700, color: '#0f172a' }}>{currencySymbol}{finalPrice.toFixed(2)}</span>
                 </div>
                 {discountCode && (
                   <div style={{
@@ -565,13 +570,13 @@ export default function BargainWidget({
                       onMouseEnter={(e) => { e.currentTarget.style.background = '#4f46e5' }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = '#6366f1' }}
                     >
-                      Copy
+                      {t('copy')}
                     </button>
                   </div>
                 )}
                 {shopifyStatus === 'pending' && (
                   <div style={{ fontSize: 12, marginTop: 10, color: '#94a3b8' }}>
-                    Code will apply automatically at checkout.
+                    {t('codeApply')}
                   </div>
                 )}
               </div>
@@ -602,7 +607,7 @@ export default function BargainWidget({
           }}>
             <input
               type="text"
-              placeholder={sessionEnded ? 'Session ended' : 'Type your offer...'}
+              placeholder={sessionEnded ? t('sessionEnded') : t('typeOffer')}
               aria-label="Type your offer"
               value={input}
               onChange={e => setInput(e.target.value)}
@@ -676,7 +681,7 @@ export default function BargainWidget({
                   transition: 'all 0.2s ease',
                 }}
               >
-                {discountCode ? '✓ Deal Complete' : 'Accept & Get Code'}
+                {discountCode ? t('dealComplete') : t('acceptDeal')}
               </button>
             </div>
           )}
