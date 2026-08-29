@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  X, Send, MessageCircle, Sparkles, Loader2, CheckCircle2, Clock, Tag,
+  X, Send, MessageCircle, Sparkles, Loader2, CheckCircle2, Clock, Tag, Zap, ShieldCheck, ChevronRight,
 } from 'lucide-react'
 import { currencySymbolFor, uiText } from '@/lib/bargain/i18n'
 
@@ -83,25 +83,30 @@ export default function BargainWidget({
   const [shopifyStatus, setShopifyStatus] = useState<'created' | 'pending' | 'failed' | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
   const [timeLeft, setTimeLeft] = useState<number | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const currencySymbol = currencySymbolFor(currency)
   const t = (key: Parameters<typeof uiText>[1], vars?: Record<string, string | number>) => uiText(language, key, vars)
 
+  const thinking = loading && decision !== 'accept'
+  const personaChip = persona ? PERSONA_CHIP[persona] : undefined
+  const savings = decision === 'accept' && finalPrice != null ? originalPrice - finalPrice : null
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [messages])
+  }, [messages, thinking])
 
   useEffect(() => {
     if (!expiresAt) return
-    const t = setInterval(() => {
+    const iv = setInterval(() => {
       const ms = new Date(expiresAt).getTime() - Date.now()
       setTimeLeft(Math.max(0, Math.floor(ms / 1000)))
     }, 1000)
-    return () => clearInterval(t)
+    return () => clearInterval(iv)
   }, [expiresAt])
 
   // Embedded mode: keep the parent Shopify iframe sized to our content.
@@ -133,7 +138,7 @@ export default function BargainWidget({
     if (!isEmbed) return
     const t = setTimeout(announceHeight, 40)
     return () => clearTimeout(t)
-  }, [isEmbed, announceHeight, open, messages, decision, discountCode, attemptsRemaining, loading, sessionEnded])
+  }, [isEmbed, announceHeight, open, messages, decision, discountCode, attemptsRemaining, loading, sessionEnded, copied])
 
   async function startSession() {
     setLoading(true)
@@ -311,7 +316,14 @@ export default function BargainWidget({
     if (!discountCode) return
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(discountCode).catch(() => {})
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
     }
+  }
+
+  function quickOffer(fn: () => void) {
+    if (sessionEnded || thinking) return
+    fn()
   }
 
   return (
@@ -328,7 +340,7 @@ export default function BargainWidget({
               border: '1px solid #e2e8f0',
               boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.06)',
               overflow: 'hidden',
-              height: open ? 520 : 'auto',
+              height: open ? 560 : 'auto',
             }
           : {}),
       }}
@@ -337,6 +349,7 @@ export default function BargainWidget({
         <button
           onClick={openPanel}
           type="button"
+          aria-label="Bargain for a better price"
           style={{
             width: '100%',
             display: 'flex',
@@ -347,19 +360,29 @@ export default function BargainWidget({
             border: 'none',
             cursor: 'pointer',
             textAlign: 'left',
+            borderRadius: 16,
+            transform: open ? 'translateY(0)' : undefined,
           }}
         >
+          {/* Indigo accent spine */}
+          <div style={{
+            alignSelf: 'stretch',
+            width: 4,
+            borderRadius: 4,
+            background: 'linear-gradient(180deg, #818cf8, #4f46e5)',
+            flexShrink: 0,
+          }} />
           {image ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={image}
               alt=""
-              width={52}
-              height={52}
-              style={{ width: 52, height: 52, borderRadius: 12, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc' }}
+              width={56}
+              height={56}
+              style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
             />
           ) : (
-            <div style={{ width: 52, height: 52, borderRadius: 12, background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
+            <div style={{ width: 56, height: 56, borderRadius: 12, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
               🛍️
             </div>
           )}
@@ -367,23 +390,27 @@ export default function BargainWidget({
             <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {productTitle ? productTitle : 'this item'}
             </div>
-            <div style={{ fontSize: 13, color: '#334155', marginTop: 2 }}>
-              <span style={{ fontWeight: 600 }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
-            </div>
-            <div style={{ marginTop: 2, fontSize: 11, color: '#6366f1', fontWeight: 600 }}>
-              {isEmbed && mode === 'cart' ? 'Bargain a discount on this item before checkout' : 'Want a better price? Bargain with us'}
+            <div style={{ fontSize: 13, color: '#334155', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontWeight: 700, color: '#0f172a' }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
+              <span style={{ color: '#94a3b8', fontSize: 11 }}>·</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                <Zap size={11} style={{ color: '#4f46e5' }} />
+                <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>
+                  {isEmbed && mode === 'cart' ? 'Bargain a discount before checkout' : 'Want a better price?'}
+                </span>
+              </span>
             </div>
           </div>
-          <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
             <span
               style={{
-                background: '#ffffff',
-                color: '#4f46e5',
+                background: '#4f46e5',
+                color: '#ffffff',
                 fontWeight: 700,
                 fontSize: 13,
                 padding: '9px 16px',
                 borderRadius: 999,
-                border: '2px solid #4f46e5',
+                border: 'none',
                 boxShadow: '0 2px 10px rgba(79,70,229,0.35)',
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -391,51 +418,51 @@ export default function BargainWidget({
                 whiteSpace: 'nowrap',
               }}
             >
-              <Sparkles size={14} style={{ color: '#4f46e5' }} />
+              <Sparkles size={14} />
               {t('negotiate')}
             </span>
-            {persona && PERSONA_CHIP[persona] && (
+            {personaChip && (
               <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
-                {PERSONA_CHIP[persona].emoji} {PERSONA_CHIP[persona].label} negotiator
+                {personaChip.emoji} {personaChip.label} negotiator
               </span>
             )}
           </div>
+          <ChevronRight size={18} style={{ color: '#94a3b8', flexShrink: 0 }} />
         </button>
       ) : (
         /* Floating trigger button */
         <button
           onClick={openPanel}
+          aria-label="Bargain for a better price"
           style={{
             position: 'fixed',
             bottom: 24,
             right: 24,
-            background: '#ffffff',
-            color: '#4f46e5',
+            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+            color: '#ffffff',
             padding: '14px 22px',
             borderRadius: 999,
-            border: '2px solid #4f46e5',
+            border: '1px solid rgba(255,255,255,0.2)',
             fontWeight: 700,
             fontSize: 14,
             display: 'inline-flex',
             alignItems: 'center',
             gap: 10,
             cursor: 'pointer',
-            boxShadow: '0 4px 16px rgba(79,70,229,0.25), 0 1px 4px rgba(0,0,0,0.06)',
+            boxShadow: '0 8px 28px rgba(79,70,229,0.4), 0 2px 8px rgba(0,0,0,0.12)',
             transition: 'all 0.2s ease',
             zIndex: 99998,
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#eef2ff'
-            e.currentTarget.style.borderColor = '#4f46e5'
-            e.currentTarget.style.boxShadow = '0 6px 24px rgba(79,70,229,0.35), 0 2px 8px rgba(0,0,0,0.08)'
+            e.currentTarget.style.background = 'linear-gradient(135deg, #4f46e5, #4338ca)'
+            e.currentTarget.style.boxShadow = '0 10px 34px rgba(79,70,229,0.5), 0 2px 8px rgba(0,0,0,0.14)'
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#ffffff'
-            e.currentTarget.style.borderColor = '#4f46e5'
-            e.currentTarget.style.boxShadow = '0 4px 16px rgba(79,70,229,0.25), 0 1px 4px rgba(0,0,0,0.06)'
+            e.currentTarget.style.background = 'linear-gradient(135deg, #6366f1, #4f46e5)'
+            e.currentTarget.style.boxShadow = '0 8px 28px rgba(79,70,229,0.4), 0 2px 8px rgba(0,0,0,0.12)'
           }}
         >
-          <Sparkles size={18} style={{ color: '#6366f1' }} />
+          <Sparkles size={18} />
           <span>{t('negotiate')}</span>
         </button>
       )}
@@ -443,6 +470,8 @@ export default function BargainWidget({
       {/* Slide-out panel */}
       {open && (
         <div
+          role="dialog"
+          aria-label="Price negotiation"
           style={{
             position: isEmbed ? 'absolute' : 'fixed',
             top: 0,
@@ -453,39 +482,57 @@ export default function BargainWidget({
             maxWidth: isEmbed ? 'none' : 440,
             background: '#ffffff',
             color: '#1e293b',
-            boxShadow: isEmbed ? 'none' : '-8px 0 40px rgba(0,0,0,0.15)',
+            boxShadow: isEmbed ? 'none' : '-8px 0 40px rgba(0,0,0,0.16)',
             zIndex: 99999,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
+            animation: 'cgPanelIn 0.22s ease-out',
           }}
         >
           {/* Header */}
           <div style={{
-            padding: '20px 24px',
-            borderBottom: '1px solid #f1f5f9',
+            padding: '18px 20px',
+            borderBottom: '1px solid #eef2f7',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: '#ffffff',
+            background: 'linear-gradient(180deg, #ffffff, #fafbff)',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{
-                width: 44,
-                height: 44,
+                width: 42,
+                height: 42,
                 borderRadius: 12,
                 background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+                boxShadow: '0 2px 8px rgba(99,102,241,0.35)',
+                flexShrink: 0,
               }}>
-                <MessageCircle size={22} style={{ color: '#ffffff' }} />
+                <MessageCircle size={20} style={{ color: '#ffffff' }} />
               </div>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>{t('dealTitle')}</div>
-                <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
-                  {productTitle ? productTitle : 'Product'} · {currencySymbol}{originalPrice.toFixed(2)}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {t('dealTitle')}
+                  {personaChip && (
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: '#4f46e5',
+                      background: '#eef2ff',
+                      border: '1px solid #e0e7ff',
+                      borderRadius: 999,
+                      padding: '2px 8px',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {personaChip.emoji} {personaChip.label}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {productTitle ? productTitle : 'Product'} · <span style={{ fontWeight: 600, color: '#0f172a' }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -495,81 +542,82 @@ export default function BargainWidget({
               style={{
                 background: '#f8fafc',
                 border: '1px solid #e2e8f0',
-                borderRadius: 8,
+                borderRadius: 10,
                 color: '#64748b',
                 cursor: 'pointer',
-                width: 36,
-                height: 36,
+                width: 34,
+                height: 34,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 transition: 'all 0.15s ease',
+                outline: 'none',
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#f1f5f9'
-                e.currentTarget.style.color = '#334155'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#f8fafc'
-                e.currentTarget.style.color = '#64748b'
-              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = '#6366f1' }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = '#e2e8f0' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#334155' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b' }}
             >
               <X size={18} />
             </button>
           </div>
 
-          {/* Subtle AI opt-out link */}
+          {/* Privacy / AI notice strip */}
           <div style={{
-            padding: '10px 24px',
-            fontSize: 12,
+            padding: '8px 20px',
+            fontSize: 11,
             color: '#94a3b8',
             background: '#fafbfc',
-            borderBottom: '1px solid #f1f5f9',
+            borderBottom: '1px solid #eef2f7',
             display: 'flex',
             alignItems: 'center',
+            gap: 6,
+            flexWrap: 'wrap',
             justifyContent: 'space-between',
           }}>
-            <span>{t('aiPowered')}</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <ShieldCheck size={12} style={{ color: '#94a3b8' }} />
+              {t('aiPowered')}
+            </span>
             <a
               href={linkout ? `${linkout}?ai_opt_out=1` : undefined}
               onClick={linkout ? undefined : (e) => { e.preventDefault(); void optOutOfAI() }}
-              style={{ color: '#6366f1', textDecoration: 'none', fontWeight: 500, cursor: 'pointer' }}
-              onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline' }}
-              onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none' }}
+              style={{ color: '#6366f1', textDecoration: 'none', fontWeight: 600, cursor: 'pointer', outline: 'none' }}
             >
               {t('skip')}
             </a>
           </div>
 
           {/* Attempts + timer */}
-          {(attemptsRemaining != null || timeLeft != null) && (
+          {(attemptsRemaining != null || timeLeft != null) && !sessionEnded && (
             <div style={{
-              padding: '10px 24px',
-              fontSize: 13,
+              padding: '8px 20px',
+              fontSize: 12,
               color: '#64748b',
               background: '#ffffff',
-              borderBottom: '1px solid #f1f5f9',
+              borderBottom: '1px solid #eef2f7',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
+              gap: 10,
             }}>
               {attemptsRemaining != null && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <span style={{
                     background: attemptsRemaining <= 1 ? '#fef2f2' : '#f0fdf4',
                     color: attemptsRemaining <= 1 ? '#dc2626' : '#16a34a',
-                    padding: '2px 8px',
-                    borderRadius: 6,
-                    fontSize: 12,
-                    fontWeight: 600,
+                    padding: '2px 9px',
+                    borderRadius: 999,
+                    fontSize: 11,
+                    fontWeight: 700,
                   }}>
                     {t('attemptsLeft', { n: attemptsRemaining })}
                   </span>
                 </span>
               )}
               {timeLeft != null && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#94a3b8' }}>
-                  <Clock size={13} />
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>
+                  <Clock size={12} />
                   {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
                 </span>
               )}
@@ -580,10 +628,11 @@ export default function BargainWidget({
           <div ref={scrollRef} style={{
             flex: 1,
             overflowY: 'auto',
-            padding: '20px 20px 8px',
+            padding: '16px 16px 8px',
             display: 'flex',
             flexDirection: 'column',
-            gap: 12,
+            gap: 10,
+            background: '#fbfcfe',
           }}>
             {messages.length === 0 && (
               <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, padding: '40px 0' }}>
@@ -596,52 +645,59 @@ export default function BargainWidget({
                 key={m.id}
                 style={{
                   alignSelf: m.role === 'customer' ? 'flex-end' : 'flex-start',
-                  maxWidth: '85%',
+                  maxWidth: '86%',
+                  animation: 'cgMsgIn 0.18s ease-out',
                 }}
               >
-                {/* Role label */}
                 {m.role !== 'customer' && (
                   <div style={{
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: 600,
                     color: m.role === 'ai' ? '#6366f1' : '#94a3b8',
                     marginBottom: 4,
-                    paddingLeft: 4,
+                    paddingLeft: 6,
                     textTransform: 'uppercase',
-                    letterSpacing: 0.5,
+                    letterSpacing: 0.6,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
                   }}>
-                    {m.role === 'ai' ? t('assistant') : t('notice')}
+                    {m.role === 'ai' ? <span>💬 {t('assistant')}</span> : <span>{t('notice')}</span>}
                   </div>
                 )}
                 <div
                   style={{
                     background:
                       m.role === 'customer'
-                        ? '#6366f1'
+                        ? 'linear-gradient(135deg, #6366f1, #4f46e5)'
                         : m.role === 'system'
-                        ? '#f8fafc'
+                        ? '#eef2ff'
                         : '#ffffff',
                     color: m.role === 'customer' ? '#ffffff' : '#334155',
-                    padding: '12px 16px',
+                    padding: '11px 15px',
                     borderRadius: m.role === 'customer' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
                     fontSize: 14,
                     lineHeight: 1.5,
                     border: m.role !== 'customer' ? '1px solid #e2e8f0' : 'none',
-                    boxShadow: m.role !== 'customer' ? '0 1px 3px rgba(0,0,0,0.04)' : 'none',
+                    boxShadow: m.role !== 'customer' ? '0 1px 3px rgba(15,23,42,0.05)' : '0 2px 8px rgba(79,70,229,0.18)',
                   }}
                 >
                   {m.content}
                   {m.offeredPrice != null && (
                     <div style={{
                       marginTop: 8,
-                      padding: '8px 12px',
-                      background: '#f0fdf4',
+                      padding: '7px 11px',
+                      background: m.role === 'customer' ? 'rgba(255,255,255,0.14)' : '#f0fdf4',
                       borderRadius: 8,
-                      border: '1px solid #bbf7d0',
+                      border: m.role === 'customer' ? 'none' : '1px solid #bbf7d0',
                       fontSize: 13,
-                      fontWeight: 600,
-                      color: '#15803d',
+                      fontWeight: 700,
+                      color: m.role === 'customer' ? '#ffffff' : '#15803d',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
                     }}>
+                      <Tag size={13} />
                       {t('offered')} {currencySymbol}{m.offeredPrice.toFixed(2)}
                     </div>
                   )}
@@ -649,78 +705,129 @@ export default function BargainWidget({
               </div>
             ))}
 
+            {/* AI thinking indicator */}
+            {thinking && (
+              <div style={{ alignSelf: 'flex-start', animation: 'cgMsgIn 0.18s ease-out' }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: '#6366f1', marginBottom: 4, paddingLeft: 6, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                  {t('assistant')}
+                </div>
+                <div style={{
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  padding: '12px 16px',
+                  borderRadius: '16px 16px 16px 4px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  boxShadow: '0 1px 3px rgba(15,23,42,0.05)',
+                }}>
+                  <span className="cg-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#6366f1' }} />
+                  <span className="cg-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#6366f1', animationDelay: '0.15s' }} />
+                  <span className="cg-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#6366f1', animationDelay: '0.3s' }} />
+                </div>
+              </div>
+            )}
+
             {/* Accepted deal card */}
             {decision === 'accept' && finalPrice != null && (
               <div style={{
                 background: '#ffffff',
-                border: '2px solid #6366f1',
-                padding: 20,
+                border: '1px solid #c7d2fe',
+                padding: 18,
                 borderRadius: 16,
                 textAlign: 'center',
-                margin: '8px 0',
+                margin: '6px 0 2px',
+                animation: 'cgMsgIn 0.2s ease-out',
+                boxShadow: '0 4px 16px rgba(79,70,229,0.12)',
               }}>
                 <div style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 12,
+                  width: 46,
+                  height: 46,
+                  borderRadius: '50%',
                   background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  margin: '0 auto 12px',
+                  margin: '0 auto 10px',
                 }}>
-                  <CheckCircle2 size={28} style={{ color: '#16a34a' }} />
+                  <CheckCircle2 size={26} style={{ color: '#16a34a' }} />
                 </div>
-                <div style={{ fontWeight: 700, fontSize: 18, color: '#0f172a', marginBottom: 4 }}>
-                  {t('youSaved', { x: `${currencySymbol}${(originalPrice - finalPrice).toFixed(2)}` })}
-                </div>
-                <div style={{ fontSize: 14, color: '#64748b', marginBottom: 16 }}>
-                  {t('newPrice')} <span style={{ fontWeight: 700, color: '#0f172a' }}>{currencySymbol}{finalPrice.toFixed(2)}</span>
+                {savings != null && (
+                  <div style={{ fontWeight: 800, fontSize: 17, color: '#0f172a', marginBottom: 3 }}>
+                    {t('youSaved', { x: `${currencySymbol}${savings.toFixed(2)}` })}
+                  </div>
+                )}
+                <div style={{ fontSize: 13, color: '#64748b', marginBottom: 14 }}>
+                  {t('newPrice')}{' '}
+                  <span style={{ textDecoration: 'line-through', color: '#cbd5e1', marginRight: 6 }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
+                  <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 16 }}>{currencySymbol}{finalPrice.toFixed(2)}</span>
                 </div>
                 {discountCode && (
                   <div style={{
                     background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    padding: '12px 16px',
+                    border: '1px dashed #c7d2fe',
+                    padding: '10px 14px',
                     borderRadius: 12,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 10,
+                    flexWrap: 'wrap',
                   }}>
-                    <Tag size={16} style={{ color: '#6366f1' }} />
-                    <code style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', letterSpacing: 0.5 }}>{discountCode}</code>
+                    <Tag size={15} style={{ color: '#6366f1' }} />
+                    <code style={{ fontWeight: 800, fontSize: 15, color: '#0f172a', letterSpacing: 0.8 }}>{discountCode}</code>
                     <button
                       onClick={copyCode}
                       style={{
-                        background: '#ffffff',
-                        border: '2px solid #4f46e5',
-                        color: '#4f46e5',
+                        background: copied ? '#16a34a' : '#ffffff',
+                        border: copied ? 'none' : '2px solid #4f46e5',
+                        color: copied ? '#ffffff' : '#4f46e5',
                         borderRadius: 8,
                         padding: '6px 14px',
                         fontSize: 12,
                         fontWeight: 700,
                         cursor: 'pointer',
-                        transition: 'background 0.15s ease',
+                        transition: 'all 0.15s ease',
+                        outline: 'none',
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = '#eef2ff' }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = '#ffffff' }}
+                      onMouseEnter={(e) => { if (!copied) { e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.color = '#4338ca' } }}
+                      onMouseLeave={(e) => { if (!copied) { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#4f46e5' } }}
                     >
-                      {t('copy')}
+                      {copied ? '✓ Copied' : t('copy')}
                     </button>
                   </div>
                 )}
-                {shopifyStatus === 'pending' && (
+                {shopifyStatus === 'pending' || !discountCode ? (
                   <div style={{ fontSize: 12, marginTop: 10, color: '#94a3b8' }}>
                     {t('codeApply')}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, marginTop: 10, color: '#94a3b8' }}>
+                    Apply the code at checkout to save now.
                   </div>
                 )}
               </div>
             )}
 
+            {/* Rejection footer message */}
+            {sessionEnded && decision === 'reject' && (
+              <div style={{
+                padding: '10px 16px',
+                fontSize: 13,
+                color: '#b45309',
+                background: '#fffbeb',
+                borderRadius: 10,
+                border: '1px solid #fde68a',
+                textAlign: 'center',
+              }}>
+                Looks like we couldn&apos;t reach a deal this time. Your cart stays at the listed price — no hard feelings!
+              </div>
+            )}
+
             {/* Error */}
             {error && (
-              <div style={{
+              <div role="alert" style={{
                 padding: '10px 16px',
                 fontSize: 13,
                 color: '#dc2626',
@@ -734,91 +841,115 @@ export default function BargainWidget({
           </div>
 
           {/* Composer */}
-          <div style={{
-            padding: '16px 20px',
-            borderTop: '1px solid #f1f5f9',
-            background: '#ffffff',
-            display: 'flex',
-            gap: 10,
-          }}>
-            <input
-              type="text"
-              placeholder={sessionEnded ? t('sessionEnded') : t('typeOffer')}
-              aria-label="Type your offer"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              disabled={loading || sessionEnded}
-              autoComplete="off"
-              style={{
-                flex: 1,
-                padding: '12px 16px',
-                borderRadius: 12,
-                border: '1px solid #e2e8f0',
-                background: '#f8fafc',
-                color: '#0f172a',
-                fontSize: 15,
-                outline: 'none',
-                transition: 'border-color 0.15s ease',
-                opacity: sessionEnded ? 0.5 : 1,
-              }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#6366f1' }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#e2e8f0' }}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !sessionEnded) void sendMessage()
-              }}
-            />
-            <button
-              onClick={() => sendMessage()}
-              disabled={loading || !input.trim() || sessionEnded}
-              aria-label="Send"
-              style={{
+          {startedComposer(sessionEnded, decision) && (
+            <>
+              {!sessionEnded && (
+                <div style={{
+                  padding: '8px 20px 0',
+                  background: '#ffffff',
+                  display: 'flex',
+                  gap: 6,
+                  borderTop: '1px solid #eef2f7',
+                  flexWrap: 'wrap',
+                }}>
+                  <QuickChip label={`−10%`} disabled={thinking} onClick={() => quickOffer(() => setInput(`${currencySymbol}${Math.round(originalPrice * 0.9)}`))} />
+                  <QuickChip label={t('bestOffer')} disabled={thinking} onClick={() => quickOffer(() => setInput(t('bestOfferPrompt')))} />
+                  <QuickChip label={t('walkout')} disabled={thinking} onClick={() => quickOffer(() => setInput(t('walkoutPrompt')))} />
+                </div>
+              )}
+              <div style={{
+                padding: '12px 16px 16px',
                 background: '#ffffff',
-                color: '#4f46e5',
-                border: '2px solid #4f46e5',
-                borderRadius: 12,
-                padding: '0 20px',
-                cursor: 'pointer',
-                minWidth: 52,
-                minHeight: 52,
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
                 gap: 8,
-                fontSize: 15,
-                fontWeight: 700,
-                opacity: (loading || !input.trim() || sessionEnded) ? 0.5 : 1,
-                boxShadow: '0 2px 8px rgba(79,70,229,0.25)',
-                transition: 'background 0.15s ease',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#4f46e5'; e.currentTarget.style.color = '#ffffff' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#4f46e5' }}
-            >
-              {loading ? <Loader2 size={18} className="spin" style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={18} />}
-            </button>
-          </div>
+              }}>
+                <input
+                  type="text"
+                  placeholder={sessionEnded ? t('sessionEnded') : t('typeOffer')}
+                  aria-label="Type your offer"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  disabled={loading || sessionEnded}
+                  autoComplete="off"
+                  style={{
+                    flex: 1,
+                    padding: '12px 15px',
+                    borderRadius: 12,
+                    border: '1px solid #e2e8f0',
+                    background: '#f8fafc',
+                    color: '#0f172a',
+                    fontSize: 15,
+                    outline: 'none',
+                    transition: 'border-color 0.15s ease',
+                    opacity: sessionEnded ? 0.55 : 1,
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.background = '#ffffff' }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc' }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !sessionEnded) void sendMessage()
+                  }}
+                />
+                <button
+                  onClick={() => sendMessage()}
+                  disabled={loading || !input.trim() || sessionEnded}
+                  aria-label="Send"
+                  style={{
+                    background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 12,
+                    padding: '0 18px',
+                    cursor: 'pointer',
+                    minWidth: 50,
+                    minHeight: 50,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: (loading || !input.trim() || sessionEnded) ? 0.5 : 1,
+                    boxShadow: '0 2px 10px rgba(79,70,229,0.35)',
+                    transition: 'all 0.15s ease',
+                    outline: 'none',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #4f46e5, #4338ca)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #6366f1, #4f46e5)' }}
+                >
+                  {loading ? <Loader2 size={18} className="spin" style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={18} />}
+                </button>
+              </div>
+            </>
+          )}
 
           {/* Accept bar */}
           {decision === 'accept' && (
-            <div style={{ padding: '12px 20px 16px', background: '#ffffff', borderTop: '1px solid #f1f5f9' }}>
+            <div style={{ padding: '10px 16px 14px', background: '#ffffff', borderTop: '1px solid #eef2f7' }}>
               <button
                 onClick={acceptDeal}
                 disabled={loading || !!discountCode}
                 style={{
                   width: '100%',
-                  padding: '14px',
-                  background: discountCode ? '#16a34a' : '#ffffff',
+                  padding: '13px',
+                  background: discountCode ? 'linear-gradient(135deg, #22c55e, #16a34a)' : '#ffffff',
                   color: discountCode ? '#ffffff' : '#16a34a',
                   border: discountCode ? 'none' : '2px solid #16a34a',
                   borderRadius: 12,
                   cursor: 'pointer',
-                  fontWeight: 700,
+                  fontWeight: 800,
                   fontSize: 15,
-                  opacity: (loading || !!discountCode) ? 0.8 : 1,
-                  boxShadow: '0 2px 10px rgba(22,163,74,0.3)',
+                  opacity: (loading || !!discountCode) ? 0.85 : 1,
+                  boxShadow: '0 3px 12px rgba(22,163,74,0.3)',
                   transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  outline: 'none',
                 }}
               >
-                {discountCode ? t('dealComplete') : t('acceptDeal')}
+                {discountCode ? (
+                  <><CheckCircle2 size={18} /> {t('dealComplete')}</>
+                ) : (
+                  <>{t('acceptDeal')} · {currencySymbol}{finalPrice?.toFixed(2)}</>
+                )}
               </button>
             </div>
           )}
@@ -827,8 +958,49 @@ export default function BargainWidget({
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
+        @keyframes cgPanelIn { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
+        @keyframes cgMsgIn { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: translateY(0) } }
+        @keyframes cgDotPulse { 0%, 60%, 100% { opacity: 0.35; transform: scale(0.9) } 30% { opacity: 1; transform: scale(1) } }
         .spin { animation: spin 1s linear infinite }
+        .cg-dot { animation: cgDotPulse 1.2s infinite ease-in-out }
+        .bargain-widget-root * { box-sizing: border-box }
+        .bargain-widget-root ::-webkit-scrollbar { width: 6px }
+        .bargain-widget-root ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 3px }
+        .bargain-widget-root button:focus-visible, .bargain-widget-root a:focus-visible, .bargain-widget-root input:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px }
       `}</style>
     </div>
+  )
+}
+
+function startedComposer(sessionEnded: boolean, decision: 'idle' | 'counter' | 'accept' | 'reject'): boolean {
+  // Keep the composer hidden once a deal is concluded with a code (accepted)
+  // or rejected — the accept bar takes over for the 'accept' state.
+  if (decision === 'accept') return false
+  return true
+}
+
+function QuickChip({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        background: '#f8fafc',
+        border: '1px solid #e2e8f0',
+        color: '#475569',
+        borderRadius: 999,
+        padding: '5px 11px',
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+        transition: 'all 0.15s ease',
+        outline: 'none',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.borderColor = '#c7d2fe'; e.currentTarget.style.color = '#4338ca' }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#475569' }}
+    >
+      {label}
+    </button>
   )
 }

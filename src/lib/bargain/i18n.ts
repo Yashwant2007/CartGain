@@ -51,6 +51,10 @@ export type UiKey =
   | 'newPrice'
   | 'copy'
   | 'codeApply'
+  | 'bestOffer'
+  | 'bestOfferPrompt'
+  | 'walkout'
+  | 'walkoutPrompt'
   | 'optOutMsg'
 
 const I18N: Record<UiLang, Record<UiKey, string>> = {
@@ -81,6 +85,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     newPrice: 'New price:',
     copy: 'Copy',
     codeApply: 'Code will apply automatically at checkout.',
+    bestOffer: 'Best offer',
+    bestOfferPrompt: "That's too high — what's your best offer?",
+    walkout: 'Walk out',
+    walkoutPrompt: "I'll have to walk if that's the final price.",
     optOutMsg: 'No problem — you can buy at the regular price below. You opted out of AI pricing.',
   },
   hinglish: {
@@ -110,6 +118,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     newPrice: 'Nayi qeemat:',
     copy: 'Copy',
     codeApply: 'Code checkout par automatically lag jayega.',
+    bestOffer: 'Best offer',
+    bestOfferPrompt: 'Yeh zyada hai — aapka best offer kya hoga?',
+    walkout: 'Walk out',
+    walkoutPrompt: 'Agar yehi final price hai toh main chala jaunga.',
     optOutMsg: 'Koi baat nahi — aap regular price par buy kar sakte ho. Aapne AI pricing se opt-out kiya.',
   },
   hi: {
@@ -139,6 +151,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     newPrice: 'नई कीमत:',
     copy: 'कॉपी',
     codeApply: 'कोड चेकआउट पर स्वतः लागू होगा।',
+    bestOffer: 'सर्वोत्तम भाव',
+    bestOfferPrompt: 'यह बहुत ज़्यादा है — आपका सबसे अच्छा भाव क्या होगा?',
+    walkout: 'चले जाओ',
+    walkoutPrompt: 'अगर यही अंतिम कीमत है तो मैं चला जाऊँगा।',
     optOutMsg: 'कोई बात नहीं — आप नियमित कीमत पर खरीद सकते हैं। आपने AI मूल्य-निर्धारण से ऑप्ट-आउट किया।',
   },
   ta: {
@@ -168,6 +184,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     newPrice: 'புதிய விலை:',
     copy: 'நகலெடு',
     codeApply: 'குறியீடு சரிபார்ப்பில் தானாகப் பயன்படும்.',
+    bestOffer: 'சிறந்த ஆஃபர்',
+    bestOfferPrompt: 'இது அதிகம் — உங்கள் சிறந்த ஆஃபர் என்ன?',
+    walkout: 'வெளியேறு',
+    walkoutPrompt: 'இதுவே இறுதி விலை என்றால் நான் சென்று விடுவேன்.',
     optOutMsg: 'பரவாயில்லை — நீங்கள் நியம விலையில் வாங்கலாம். AI விலையிலிருந்து விலகியுள்ளீர்கள்.',
   },
   te: {
@@ -197,6 +217,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     newPrice: 'కొత్త ధర:',
     copy: 'కాపీ',
     codeApply: 'కోడ్ చెకౌట్ వద్ద స్వయంచాలకంగా వర్తిస్తుంది.',
+    bestOffer: 'ఉత్తమ ఆఫర్',
+    bestOfferPrompt: 'ఇది చాలా ఎక్కువ — మీ ఉత్తమ ఆఫర్ ఏమిటి?',
+    walkout: 'వెళ్లిపో',
+    walkoutPrompt: 'ఇదే చివరి ధర అయితే నేను వెళ్లిపోతాను.',
     optOutMsg: 'ఫర్వాలేదు — మీరు నిర్ణీత ధరకు కొనవచ్చు. మీరు AI ధర నుండి తప్పుకున్నారు.',
   },
   bn: {
@@ -226,6 +250,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     newPrice: 'নতুন দাম:',
     copy: 'কপি',
     codeApply: 'চেকআউটে কোড স্বয়ংক্রিয়ভাবে প্রয়োগ হবে।',
+    bestOffer: 'সেরা অফার',
+    bestOfferPrompt: 'এটা বেশি — আপনার সেরা অফার কী?',
+    walkout: 'চলে যান',
+    walkoutPrompt: 'এটাই যদি সর্বশেষ দাম হয়, আমি চলে যাব।',
     optOutMsg: 'সমস্যা নেই — আপনি নিয়মিত দামে কিনতে পারেন। আপনি AI মূল্যধারণ থেকে অপ্ট-আউট করেছেন।',
   },
   mr: {
@@ -255,6 +283,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     newPrice: 'नवीन किंमत:',
     copy: 'कॉपी',
     codeApply: 'कोड चेकआउटवर आपोआप लागू होईल.',
+    bestOffer: 'सर्वोत्तम ऑफर',
+    bestOfferPrompt: 'हे जास्त आहे — तुमचा सर्वोत्तम ऑफर काय?',
+    walkout: 'निघून जा',
+    walkoutPrompt: 'हीच अंतिम किंमत असेल तर मी निघून जाईन.',
     optOutMsg: 'हरकत नाही — तुम्ही नियमित किमतीत खरेदी करू शकता. तुम्ही AI किंमतीतून बाहेर पडलात.',
   },
   gu: {
@@ -284,6 +316,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     newPrice: 'નવી કિંમત:',
     copy: 'કૉપિ',
     codeApply: 'કોડ ચેકઆઉટ પર આપમેળે લાગુ થશે.',
+    bestOffer: 'શ્રેષ્ઠ ઓફર',
+    bestOfferPrompt: 'આ વધુ છે — તમારી શ્રેષ્ઠ ઓફર શું છે?',
+    walkout: 'જતાં રહો',
+    walkoutPrompt: 'આ જ અંતિમ કિંમત હોય તો હું જતો રહીશ.',
     optOutMsg: 'કોઈ સમસ્યા નહીં — તમે નિયમિત કિંમતે ખરીદી શકો છો. તમે AI કિંમત-નિર્ધારણમાંથી બહાર નીકળ્યા છો.',
   },
   pa: {
@@ -313,6 +349,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     newPrice: 'ਨਵੀਂ ਕੀਮਤ:',
     copy: 'ਕਾਪੀ',
     codeApply: 'ਕੋਡ ਚੈੱਕਆਊਟ ’ਤੇ ਆਪਣੇ-ਆਪ ਲਾਗੂ ਹੋਵੇਗਾ।',
+    bestOffer: 'ਵਧੀਆ ਆਫਰ',
+    bestOfferPrompt: 'ਇਹ ਬਹੁਤ ਜ਼ਿਆਦਾ ਹੈ — ਤੁਹਾਡਾ ਸਭ ਤੋਂ ਵਧੀਆ ਆਫਰ ਕੀ ਹੈ?',
+    walkout: 'ਚੱਲੇ ਜਾਓ',
+    walkoutPrompt: 'ਜੇ ਇਹੀ ਆਖਰੀ ਕੀਮਤ ਹੈ ਤਾਂ ਮੈਂ ਚੱਲਾ ਜਾਵਾਂਗਾ।',
     optOutMsg: 'ਕੋਈ ਗੱਲ ਨਹੀਂ — ਤੁਸੀਂ ਰੈਗੂਲਰ ਕੀਮਤ ’ਤੇ ਖਰੀਦ ਸਕਦੇ ਹੋ। ਤੁਸੀਂ AI ਕੀਮਤ-ਨਿਰਧਾਰਨ ਤੋਂ ਬਾਹਰ ਹੋ ਗਏ।',
   },
 }

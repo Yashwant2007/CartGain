@@ -8,9 +8,33 @@ import BargainView from './bargain-view'
 
 export const dynamic = 'force-dynamic'
 
-export default async function BargainPreviewPage() {
+// Stale theme extensions (pre c134ce14) iframe THIS url instead of
+// /bargain/embed. They pass shop+product+price+mode storefront params and are
+// always anonymous (customers), so sending them through the merchant login
+// made customers see a sign-in window on the storefront. Forward those
+// requests to the public embed instead — the iframe follows the same-origin
+// redirect and renders the widget (or the unavailable/paused card) normally.
+export default async function BargainPreviewPage({
+  searchParams,
+}: {
+  searchParams: Record<string, string | string[] | undefined>
+}) {
+  const sp = (key: string): string | undefined => {
+    const v = searchParams[key]
+    return typeof v === 'string' && v ? v : undefined
+  }
+  const price = parseFloat(sp('price') ?? '')
+  const hasStorefrontParams = Boolean(sp('shop') && sp('product') && Number.isFinite(price) && price > 0)
+
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
+    if (hasStorefrontParams) {
+      const qs = new URLSearchParams()
+      for (const [k, v] of Object.entries(searchParams)) {
+        if (typeof v === 'string') qs.set(k, v)
+      }
+      redirect(`/bargain/embed?${qs.toString()}`)
+    }
     redirect('/login?callbackUrl=/s/bargain')
   }
 
