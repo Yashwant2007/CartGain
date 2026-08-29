@@ -9,11 +9,13 @@ import BargainView from './bargain-view'
 export const dynamic = 'force-dynamic'
 
 // Stale theme extensions (pre c134ce14) iframe THIS url instead of
-// /bargain/embed. They pass shop+product+price+mode storefront params and are
-// always anonymous (customers), so sending them through the merchant login
-// made customers see a sign-in window on the storefront. Forward those
-// requests to the public embed instead — the iframe follows the same-origin
-// redirect and renders the widget (or the unavailable/paused card) normally.
+// /bargain/embed. They pass shop+product+price+mode storefront params.
+// Sending those through the merchant login made customers see a sign-in
+// window, and logged-in merchants browsing their own storefront landed on the
+// merchant demo/"Demo already used" screen. Everyone hitting the storefront
+// param signature is forwarded to the public embed — the iframe follows the
+// same-origin redirect and renders the widget (or unavailable/paused card).
+// The merchant live-demo preview remains the NAKED /s/bargain URL.
 export default async function BargainPreviewPage({
   searchParams,
 }: {
@@ -26,15 +28,21 @@ export default async function BargainPreviewPage({
   const price = parseFloat(sp('price') ?? '')
   const hasStorefrontParams = Boolean(sp('shop') && sp('product') && Number.isFinite(price) && price > 0)
 
+  // The storefront-param query string is ALWAYS a stale-extension iframe — both
+  // for anonymous customers AND logged-in merchants browsing their own
+  // storefront (they carry a session, so the old code let them fall through to
+  // the merchant demo/Demo-used screen here). Send everyone to the public embed.
+  // The merchant live-demo preview is the naked URL /s/bargain only.
+  if (hasStorefrontParams) {
+    const qs = new URLSearchParams()
+    for (const [k, v] of Object.entries(searchParams)) {
+      if (typeof v === 'string') qs.set(k, v)
+    }
+    redirect(`/bargain/embed?${qs.toString()}`)
+  }
+
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
-    if (hasStorefrontParams) {
-      const qs = new URLSearchParams()
-      for (const [k, v] of Object.entries(searchParams)) {
-        if (typeof v === 'string') qs.set(k, v)
-      }
-      redirect(`/bargain/embed?${qs.toString()}`)
-    }
     redirect('/login?callbackUrl=/s/bargain')
   }
 
