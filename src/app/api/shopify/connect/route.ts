@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { getAppBaseUrl } from '@/lib/app-base-url'
 import { shopifyConnectSchema, validateOrThrow, handleValidationError } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
       'read_webhooks',
     ].join(',')
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://cart-gain.com'
+    const baseUrl = getAppBaseUrl(req)
     const redirectUri = `${baseUrl}/api/shopify/callback`
 
     const secret = process.env.NEXTAUTH_SECRET

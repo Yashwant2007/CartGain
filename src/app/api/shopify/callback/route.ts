@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import prisma from '@/lib/db'
+import { getAppBaseUrl } from '@/lib/app-base-url'
 import { encrypt } from '@/lib/encryption'
 import { setupShopifyWebhooks } from '@/lib/shopify'
 import { generateCampaignSetup } from '@/lib/services/ai'
@@ -116,7 +117,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://cart-gain.com'
+      const baseUrl = getAppBaseUrl(req)
       await setupShopifyWebhooks(shop, accessToken, baseUrl)
     } catch (webhookError) {
       console.error('Failed to set up Shopify webhooks:', webhookError)

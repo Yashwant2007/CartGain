@@ -132,11 +132,18 @@ export default function SignUpPage() {
 
       if (response.ok) {
         setToast({ message: 'Account created! Redirecting...', type: 'info' })
+        // Honor the deep-link Shopify install sends (?next=/dashboard/integrations)
+        // so a merchant who installs the app lands straight on the Connect page.
+        const installNext =
+          new URLSearchParams(window.location.search).get('next') || '/dashboard'
+        const finalNext = installNext.startsWith('/') && !installNext.startsWith('//')
+          ? installNext
+          : '/dashboard'
         // Auto-sign-in with redirect=true so NextAuth handles session + redirect natively
         await signIn('credentials', {
           email: formData.email,
           password: formData.password,
-          callbackUrl: '/dashboard',
+          callbackUrl: getEmbedAwareRedirectUrl(finalNext),
           redirect: true,
         })
         // If we reach here, sign-in silently failed — fallback to login page

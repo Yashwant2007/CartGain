@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
+import { getAppBaseUrl } from '@/lib/app-base-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,13 +58,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/?error=invalid_signature', req.url))
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://cart-gain.com'
+    const baseUrl = getAppBaseUrl(req)
+    const host = searchParams.get('host')
+    const embedded = searchParams.get('embedded') === '1'
 
     // Redirect merchant to signup, carrying the shop domain so after they log in
-    // they land on the integrations page ready to connect.
+    // they land on the integrations page ready to connect. When Shopify loaded
+    // the app inside its admin iframe (embedded) we also forward the host token
+    // so the auth pages keep the embedded context and stay connectable from
+    // within the admin after sign-in.
     const signupUrl = new URL('/signup', baseUrl)
     signupUrl.searchParams.set('shop', shop)
     signupUrl.searchParams.set('next', '/dashboard/integrations')
+    if (embedded && host) {
+      signupUrl.searchParams.set('host', host)
+    }
 
     const res = NextResponse.redirect(signupUrl)
 

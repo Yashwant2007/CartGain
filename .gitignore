@@ -25,6 +25,10 @@ pnpm-debug.log*
 .DS_Store
 *.pem
 
+# stray Shopify app configs (only shopify.app.toml is the real one)
+shopify.app.*.toml
+!shopify.app.toml
+
 # debug
 *.log
 
