@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Plus, Copy, Edit2, Trash2, Play, Pause, BarChart3, Split, Trophy, Info } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import { campaignCreateSchema, abTestCreateSchema } from '@/lib/validation'
+import { PLANS } from '@/lib/payment'
 
 type Campaign = {
   id: string
@@ -33,7 +34,7 @@ export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loadingData, setLoadingData] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [currentPlan, setCurrentPlan] = useState<{ name: string; maxCampaigns: number; maxMessagesPerCustomer: { email: number; sms: number; whatsapp: number } } | null>(null)
+  const [currentPlan, setCurrentPlan] = useState<{ id: string; name: string; price: number; maxCampaigns: number; maxMessagesPerCustomer: { email: number; sms: number; whatsapp: number } } | null>(null)
   const [activeCampaignCount, setActiveCampaignCount] = useState(0)
 
   // Check for auth errors from useResolvedStoreId
@@ -140,9 +141,9 @@ export default function CampaignsPage() {
 
   const campaignLimitReached = currentPlan && currentPlan.maxCampaigns !== Infinity && activeCampaignCount >= currentPlan.maxCampaigns
 
-  const nextPlanName = campaignLimitReached && currentPlan
-    ? currentPlan.name === 'Starter' ? 'Growth' : currentPlan.name === 'Growth' ? 'Pro' : null
-    : null
+const nextPlanName = campaignLimitReached && currentPlan
+  ? Object.values(PLANS).filter(p => p.id !== 'enterprise' && p.price > currentPlan.price).sort((a, b) => a.price - b.price)[0]?.name ?? null
+  : null
 
   return (
     <div className="space-y-6">

@@ -171,15 +171,15 @@ export default function PricingPage() {
                   </p>
                   <p className="flex items-start space-x-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                    <span>Revenue share: <strong className="text-white">3% Starter</strong> / <strong className="text-white">2.5% Growth</strong> / <strong className="text-white">2% Pro</strong>. Lower rates on higher plans.</span>
+                    <span>Revenue share: <strong className="text-white">{PLANS.GROWTH.revSharePercent}% Growth</strong> (capped at ₹{PLANS.GROWTH.revShareCap.toLocaleString('en-IN')}/mo) / <strong className="text-white">{PLANS.PRO.revSharePercent}% Pro</strong> (capped at ₹{PLANS.PRO.revShareCap.toLocaleString('en-IN')}/mo).</span>
                   </p>
                   <p className="flex items-start space-x-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                    <span>Campaign limits per plan — <strong className="text-white">5 Starter</strong> / <strong className="text-white">20 Growth</strong> / <strong className="text-white">50 Pro</strong> active campaigns</span>
+                    <span>Campaign limits per plan — <strong className="text-white">{PLANS.FREE.maxCampaigns} Free</strong> / <strong className="text-white">{PLANS.GROWTH.maxCampaigns} Growth</strong> / <strong className="text-white">{PLANS.PRO.maxCampaigns} Pro</strong> active campaigns</span>
                   </p>
                   <p className="flex items-start space-x-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                    <span>Per-customer message caps: <strong className="text-white">5 Starter</strong> / <strong className="text-white">10 Growth</strong> / <strong className="text-white">20 Pro</strong> per channel. Optional overage billing if you need more.</span>
+                    <span>Per-customer message caps: <strong className="text-white">{PLANS.FREE.maxMessagesPerCustomer.email} Free</strong> / <strong className="text-white">{PLANS.GROWTH.maxMessagesPerCustomer.email} Growth</strong> / <strong className="text-white">{PLANS.PRO.maxMessagesPerCustomer.email} Pro</strong> per channel. Paid overage billing if you need more.</span>
                   </p>
                 </div>
               </div>

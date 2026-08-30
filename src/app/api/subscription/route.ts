@@ -68,7 +68,9 @@ export async function GET() {
             overageEnabled: subscription.overageEnabled,
             overageMessages: subscription.overageMessages,
             resolvedPlan: {
+              id: resolvedPlan.id,
               name: resolvedPlan.name,
+              price: resolvedPlan.price,
               maxCampaigns: resolvedPlan.maxCampaigns,
               maxMessagesPerCustomer: resolvedPlan.maxMessagesPerCustomer,
             },

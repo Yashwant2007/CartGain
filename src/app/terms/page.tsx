@@ -67,7 +67,7 @@ export default function TermsPage() {
               </h2>
               <ul className="list-disc pl-5 space-y-2">
                 <li><strong>Free Trial:</strong> New users receive a free trial covering the first 50 recovered carts. No payment information is required during the trial period.</li>
-                <li><strong>Plan Selection:</strong> After the free trial, you must select a paid plan (Starter, Growth, or Pro) to continue using the service.</li>
+                <li><strong>Plan Selection:</strong> After the free trial, you must select a paid plan (Growth or Pro) to continue using the service.</li>
                 <li><strong>Plan Limits:</strong> Each plan has a maximum cart processing limit per month. Exceeding this limit may result in additional charges or service throttling.</li>
                 <li><strong>Plan Changes:</strong> You may upgrade your plan at any time. Downgrades take effect at the end of the current billing period.</li>
               </ul>
@@ -80,7 +80,7 @@ export default function TermsPage() {
               </h2>
               <ul className="list-disc pl-5 space-y-2">
                 <li><strong>Subscription Fees:</strong> Paid plans are billed monthly or annually as selected at checkout. All fees are in Indian Rupees (INR) unless otherwise stated.</li>
-                <li><strong>Revenue Share:</strong> In addition to the subscription fee, a revenue share percentage applies to recovered revenue after the first 50 free carts. Rates: Starter 3%, Growth 2.5%, Pro 2%.</li>
+                <li><strong>Revenue Share:</strong> In addition to the subscription fee, a revenue share percentage applies to recovered revenue after the first 50 free carts. Rates: Growth 3.5% (capped at ₹5,000/month), Pro 3% (capped at ₹10,000/month).</li>
                 <li><strong>Payment Processor:</strong> All payments are processed securely through Razorpay. We do not store your full payment card details.</li>
                 <li><strong>Auto-Renewal:</strong> Subscriptions automatically renew at the end of each billing period unless cancelled before the renewal date.</li>
                 <li><strong>Refunds:</strong> Subscription fees are non-refundable except as required by applicable law. Revenue share fees, once calculated, are final.</li>

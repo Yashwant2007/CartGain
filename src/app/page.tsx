@@ -1284,7 +1284,7 @@ export default function HomePage() {
                     </p>
                     <p className="flex items-start space-x-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                      <span>Revenue share: <strong className="text-white">3% Starter</strong> / <strong className="text-white">2.5% Growth</strong> / <strong className="text-white">2% Pro</strong>. Lower rates on higher plans.</span>
+                      <span>Revenue share: <strong className="text-white">{PLANS.GROWTH.revSharePercent}% Growth</strong> (capped at ₹{PLANS.GROWTH.revShareCap.toLocaleString('en-IN')}/mo) / <strong className="text-white">{PLANS.PRO.revSharePercent}% Pro</strong> (capped at ₹{PLANS.PRO.revShareCap.toLocaleString('en-IN')}/mo).</span>
                     </p>
                     <p className="flex items-start space-x-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
@@ -1292,11 +1292,11 @@ export default function HomePage() {
                     </p>
                     <p className="flex items-start space-x-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                      <span>Campaign limits per plan — <strong className="text-white">5 Starter</strong> / <strong className="text-white">20 Growth</strong> / <strong className="text-white">50 Pro</strong> active campaigns</span>
+                      <span>Campaign limits per plan — <strong className="text-white">{PLANS.FREE.maxCampaigns} Free</strong> / <strong className="text-white">{PLANS.GROWTH.maxCampaigns} Growth</strong> / <strong className="text-white">{PLANS.PRO.maxCampaigns} Pro</strong> active campaigns</span>
                     </p>
                     <p className="flex items-start space-x-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                      <span>Per-customer message caps: <strong className="text-white">5 Starter</strong> / <strong className="text-white">10 Growth</strong> / <strong className="text-white">20 Pro</strong> per channel. Optional overage billing if you need more.</span>
+                      <span>Per-customer message caps: <strong className="text-white">{PLANS.FREE.maxMessagesPerCustomer.email} Free</strong> / <strong className="text-white">{PLANS.GROWTH.maxMessagesPerCustomer.email} Growth</strong> / <strong className="text-white">{PLANS.PRO.maxMessagesPerCustomer.email} Pro</strong> per channel. Paid overage billing if you need more.</span>
                     </p>
                   </div>
                 </div>
@@ -1311,19 +1311,19 @@ export default function HomePage() {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-white mb-2">Example: What do I actually pay?</h3>
-                  <p className="text-sm text-blue-300/80 mb-3">On <strong className="text-white">Growth plan</strong> (₹2,999/mo) with <strong className="text-white">₹5,00,000/mo</strong> in CartGain-attributed recovered revenue:</p>
+                  <p className="text-sm text-blue-300/80 mb-3">On <strong className="text-white">Growth plan</strong> (₹{PLANS.GROWTH.price.toLocaleString('en-IN')}/mo) with <strong className="text-white">₹5,00,000/mo</strong> in CartGain-attributed recovered revenue:</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                     <div className="bg-slate-800/50 rounded-lg p-3">
                       <p className="text-blue-400/60 text-xs mb-1">Subscription</p>
-                      <p className="text-white font-semibold">₹2,999/mo</p>
+                      <p className="text-white font-semibold">₹{PLANS.GROWTH.price.toLocaleString('en-IN')}/mo</p>
                     </div>
                     <div className="bg-slate-800/50 rounded-lg p-3">
-                      <p className="text-blue-400/60 text-xs mb-1">Revenue share (2.5% of ₹5L recovered)</p>
-                      <p className="text-white font-semibold">₹12,500/mo</p>
+                      <p className="text-blue-400/60 text-xs mb-1">Revenue share ({PLANS.GROWTH.revSharePercent}% of ₹5L, capped at ₹{PLANS.GROWTH.revShareCap.toLocaleString('en-IN')})</p>
+                      <p className="text-white font-semibold">₹{PLANS.GROWTH.revShareCap.toLocaleString('en-IN')}/mo</p>
                     </div>
                     <div className="bg-slate-800/50 rounded-lg p-3">
                       <p className="text-blue-400/60 text-xs mb-1">Total monthly cost</p>
-                      <p className="text-white font-bold text-base">₹15,499/mo</p>
+                      <p className="text-white font-bold text-base">₹{(PLANS.GROWTH.price + PLANS.GROWTH.revShareCap).toLocaleString('en-IN')}/mo</p>
                     </div>
                   </div>
                   <p className="text-xs text-blue-400/60 mt-3">First {FREE_CARTS_THRESHOLD} recovered carts are free — no revenue share until we prove our value.</p>
