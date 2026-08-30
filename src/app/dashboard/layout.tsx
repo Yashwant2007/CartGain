@@ -56,9 +56,10 @@ function DashboardLayoutInner({
           const sub = data.subscription
           const processed = data.store?.cartsProcessed ?? 0
           const freeThreshold = 50
+          const PAID_PLAN_IDS = ['growth', 'pro', 'starter']
           setSubStatus({
-            isFree: sub.plan === 'free' || !['starter', 'growth', 'pro'].includes(sub.plan),
-            isExhausted: (sub.plan === 'free' || !['starter', 'growth', 'pro'].includes(sub.plan)) && processed >= freeThreshold,
+            isFree: !PAID_PLAN_IDS.includes(sub.plan),
+            isExhausted: !PAID_PLAN_IDS.includes(sub.plan) && processed >= freeThreshold,
             cartsUsed: processed,
             cartsRemaining: Math.max(0, freeThreshold - processed),
           })

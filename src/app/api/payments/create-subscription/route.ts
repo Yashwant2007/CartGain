@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Plan is required' }, { status: 400 })
     }
 
-    const planConfig = Object.values(PLANS).find(p => p.id === plan)
+    const planConfig = PLANS[plan]
     if (!planConfig || planConfig.price === 0) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
     }

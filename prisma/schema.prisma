@@ -107,6 +107,7 @@ model Store {
   recoveredCarts      RecoveredCart[]
   optOuts             OptOut[]
   revenueShareEvents  RevenueShareEvent[]
+  bargainRevenueShareEvents BargainRevenueShareEvent[]
   merchantConfig      MerchantConfig?
   rtoRiskScores       RtoRiskScore[]
   pincodeStats        PincodeStats[]
@@ -270,12 +271,19 @@ model Subscription {
   revenueSharePaid     Float @default(0)  // Total rev share paid over lifetime
   overageEnabled  Boolean   @default(false) // Merchant opted into overage billing
   overageMessages Int       @default(0)     // Messages sent beyond per-customer per-channel limits this period
+  bargainSessionsUsed Int   @default(0)     // Bargain sessions started this period
+  bargainDealsUsed    Int   @default(0)     // Accepted bargain deals this period
+  bargainOverageDeals Int  @default(0)      // Accepted deals billed as overage this period
+  bargainAccrued      Float @default(0)     // Rev share accrued on bargain deals this period
+  bargainAccruedValue Float @default(0)     // Recovered value (final prices) of accepted deals this period
+  cartOverage         Int   @default(0)     // Carts recovered beyond plan quota this period (paid plans only)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   invoices            Invoice[]
   revenueShareEvents  RevenueShareEvent[]
+  bargainRevenueShareEvents BargainRevenueShareEvent[]
 
   @@index([userId])
 }
@@ -387,6 +395,7 @@ model Invoice {
 
   subscription        Subscription        @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
   revenueShareEvents  RevenueShareEvent[]
+  bargainRevenueShareEvents BargainRevenueShareEvent[]
 
   @@index([subscriptionId])
   @@index([userId])
@@ -415,6 +424,34 @@ model RevenueShareEvent {
   recoveredCart RecoveredCart @relation(fields: [cartId], references: [cartId])
   store         Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
   invoice       Invoice?      @relation(fields: [invoiceId], references: [id])
+
+  @@index([subscriptionId])
+  @@index([subscriptionId, invoiceId])
+  @@index([storeId])
+  @@index([invoiceId])
+}
+
+// Revenue share accrued on considered-bargain accepted deals. Kept separate from
+// RevenueShareEvent (which is anchored to a recovered cart) because bargain deals
+// are anchored to a negotiation session. sessionId is unique — one event per
+// accepted deal — giving the same idempotency guard as cartId on RevenueShareEvent.
+model BargainRevenueShareEvent {
+  id                String   @id @default(cuid())
+  subscriptionId    String
+  sessionId         String   @unique
+  storeId           String
+  shopifyProductId  String?
+  grossAmount       Float    // originalPrice (pre-discount) — recovered value base
+  discountAmount    Float    @default(0)
+  netAmount         Float    // finalPrice — rev share base
+  revSharePercent   Float    // rate locked at event time
+  revShareAmount    Float    // netAmount × revSharePercent / 100
+  invoiceId         String?  // null = pending billing; set when invoiced
+  createdAt         DateTime @default(now())
+
+  subscription     Subscription      @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  store            Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  invoice          Invoice?          @relation(fields: [invoiceId], references: [id])
 
   @@index([subscriptionId])
   @@index([subscriptionId, invoiceId])

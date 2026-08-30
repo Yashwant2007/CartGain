@@ -99,8 +99,6 @@ export default function PricingPage() {
 
               const theme = isGrowth
                 ? { border: 'border-amber-500/50', glow: 'shadow-amber-500/20', gradient: 'from-amber-500 to-orange-500', bg: 'bg-gradient-to-br from-amber-900/20 to-amber-800/10', badge: 'from-amber-500 to-orange-500', accent: 'amber' }
-                : plan.id === 'starter'
-                ? { border: 'border-cyan-500/40', glow: 'shadow-cyan-500/20', gradient: 'from-cyan-500 to-blue-500', bg: 'bg-gradient-to-br from-blue-900/20 to-cyan-900/10', badge: 'from-cyan-500 to-blue-500', accent: 'cyan' }
                 : { border: 'border-violet-500/40', glow: 'shadow-violet-500/20', gradient: 'from-violet-500 to-purple-500', bg: 'bg-gradient-to-br from-violet-900/20 to-purple-900/10', badge: 'from-violet-500 to-purple-500', accent: 'violet' }
 
               return (
@@ -144,7 +142,7 @@ export default function PricingPage() {
                   <Link
                     href="/signup"
                     className={`w-full py-3 rounded-lg font-semibold text-center transition-all bg-gradient-to-r ${theme.gradient} text-white hover:shadow-lg group-hover:scale-[1.02] ${
-                      isGrowth ? 'group-hover:shadow-amber-500/50' : plan.id === 'starter' ? 'group-hover:shadow-cyan-500/50' : 'group-hover:shadow-violet-500/50'
+                      isGrowth ? 'group-hover:shadow-amber-500/50' : 'group-hover:shadow-violet-500/50'
                     }`}
                   >
                     {billing === 'yearly' ? 'Choose Plan' : 'Subscribe Now'}

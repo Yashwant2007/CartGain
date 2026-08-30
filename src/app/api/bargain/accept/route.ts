@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { bargainAcceptSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { getBargainGate, decideDealMode, recordBargainDealOps, BARGAIN_DEALS_EXHAUSTED } from '@/lib/bargain/gate'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,23 @@ export async function POST(request: NextRequest) {
     })
     if (!bargainSession) {
       return NextResponse.json({ message: 'Bargain session not found' }, { status: 404 })
+    }
+
+    // Idempotent replay — already accepted sessions resurface the issued code
+    // instead of double-counting the deal or re-creating the rev share event.
+    if (bargainSession.status === 'accepted' && bargainSession.discountCode) {
+      return NextResponse.json({
+        sessionId: bargainSession.id,
+        finalPrice: bargainSession.finalPrice,
+        discountPercent: Math.round(
+          ((bargainSession.originalPrice - (bargainSession.finalPrice ?? bargainSession.originalPrice)) / bargainSession.originalPrice) * 100
+        ),
+        discountCode: bargainSession.discountCode,
+        shopifyStatus: 'created',
+        currency: bargainSession.store.currency,
+        expiresAt: bargainSession.expiredAt.toISOString(),
+        message: `🎉 Deal already locked at ${bargainSession.store.currency} ${(bargainSession.finalPrice ?? bargainSession.originalPrice).toFixed(2)}! Use code: ${bargainSession.discountCode}`,
+      })
     }
 
     // Customer must have an accepted offer OR a previous AI counter they're accepting
@@ -73,6 +91,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Price mismatch — session may have been tampered with' }, { status: 409 })
     }
 
+    // Plan gate — free tiers hard-stop at the deal quota; paid tiers fall back
+    // to overage billing only when the store is opted in.
+    const gate = await getBargainGate(bargainSession.storeId)
+    const dealMode = decideDealMode(gate)
+    if (dealMode === 'blocked_free' || dealMode === 'blocked_no_overage') {
+      return NextResponse.json({
+        message:
+          dealMode === 'blocked_free'
+            ? 'This store has reached its free bargain deal limit. Please ask the store to upgrade.'
+            : 'This store has reached its bargain deal limit. Overage billing is off for this store.',
+        code: BARGAIN_DEALS_EXHAUSTED,
+        planId: gate.planId,
+        mode: dealMode,
+        upgradeUrl: 'https://cart-gain.com/pricing',
+      }, { status: 402 })
+    }
+
     const discountPercent = Math.round(
       ((bargainSession.originalPrice - finalPrice) / bargainSession.originalPrice) * 100
     )
@@ -82,14 +117,15 @@ export async function POST(request: NextRequest) {
     const customerEmail = bargainSession.customerEmail
     const cartToken = bargainSession.cartToken
 
-    // Persist system message marking acceptance
+    // Persist system message marking acceptance + meter the deal atomically
     await prisma.$transaction([
+      ...recordBargainDealOps(gate, bargainSession.id, bargainSession.originalPrice, finalPrice, dealMode as 'included' | 'overage'),
       prisma.bargainMessage.create({
         data: {
           sessionId: bargainSession.id,
           role: 'system',
           content: `Customer accepted final price of ${bargainSession.store.currency} ${finalPrice.toFixed(2)}. Discount code issued: ${code} (${discountPercent}% off)`,
-          metadata: { event: 'accept', finalPrice, discountPercent, code, customerEmail, cartToken },
+          metadata: { event: 'accept', finalPrice, discountPercent, code, customerEmail, cartToken, dealMode },
         } as any,
       }),
       prisma.bargainSession.update({

@@ -75,6 +75,7 @@ export default function BargainWidget({
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [limit, setLimit] = useState<{ code: string; planId?: string; upgradeUrl?: string } | null>(null)
   const [decision, setDecision] = useState<'idle' | 'counter' | 'accept' | 'reject'>('idle')
   const [sessionEnded, setSessionEnded] = useState(false)
   const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null)
@@ -160,7 +161,14 @@ export default function BargainWidget({
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.message ?? 'Could not start bargaining')
+      if (!res.ok) {
+        if (res.status === 402 && data.code) {
+          setLimit({ code: data.code, planId: data.planId, upgradeUrl: data.upgradeUrl })
+          setSessionEnded(true)
+          return
+        }
+        throw new Error(data.message ?? 'Could not start bargaining')
+      }
       setSessionId(data.sessionId)
       setAttemptsRemaining(data.attemptsRemaining ?? null)
       setExpiresAt(data.expiresAt ?? null)
@@ -279,7 +287,15 @@ export default function BargainWidget({
         body: JSON.stringify({ sessionId }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.message ?? 'Could not accept')
+      if (!res.ok) {
+        if (res.status === 402 && data.code) {
+          setLimit({ code: data.code, planId: data.planId, upgradeUrl: data.upgradeUrl })
+          setDecision('idle')
+          setSessionEnded(true)
+          return
+        }
+        throw new Error(data.message ?? 'Could not accept')
+      }
       setFinalPrice(data.finalPrice)
       setDiscountCode(data.discountCode)
       setShopifyStatus(data.shopifyStatus)
@@ -825,8 +841,50 @@ export default function BargainWidget({
               </div>
             )}
 
+            {/* Plan limit reached */}
+            {limit && (
+              <div role="alert" style={{
+                margin: '0 16px',
+                padding: '16px',
+                fontSize: 13,
+                color: '#1e293b',
+                background: 'linear-gradient(135deg,#eef2ff,#f5f3ff)',
+                borderRadius: 12,
+                border: '1px solid #c7d2fe',
+                textAlign: 'center',
+              }}>
+                <div style={{ fontSize: 22, marginBottom: 6 }}>🔒</div>
+                <div style={{ fontWeight: 700, color: '#4338ca', marginBottom: 4 }}>
+                  {limit.code === 'bargain_sessions_exhausted'
+                    ? 'This month\u2019s bargain sessions are used up'
+                    : 'This month\u2019s slate of deals has been filled'}
+                </div>
+                <div style={{ color: '#475569', lineHeight: 1.5, marginBottom: 10 }}>
+                  Bargaining reopens next month. The store can raise the limit on a Growth or Pro plan.
+                </div>
+                <a
+                  href={limit.upgradeUrl ?? 'https://cart-gain.com/pricing'}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: 'inline-block',
+                    background: 'linear-gradient(135deg,#6366f1,#4f46e5)',
+                    color: '#fff',
+                    padding: '9px 18px',
+                    borderRadius: 10,
+                    textDecoration: 'none',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    boxShadow: '0 2px 10px rgba(79,70,229,0.3)',
+                  }}
+                >
+                  View plans
+                </a>
+              </div>
+            )}
+
             {/* Error */}
-            {error && (
+            {!limit && error && (
               <div role="alert" style={{
                 padding: '10px 16px',
                 fontSize: 13,
@@ -841,7 +899,7 @@ export default function BargainWidget({
           </div>
 
           {/* Composer */}
-          {startedComposer(sessionEnded, decision) && (
+          {!limit && startedComposer(sessionEnded, decision) && (
             <>
               {!sessionEnded && (
                 <div style={{

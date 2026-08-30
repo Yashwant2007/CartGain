@@ -58,6 +58,12 @@ export interface Plan {
   maxMessagesPerCustomer: PerChannelLimits;
   features: string[];
   revSharePercent: number;
+  revShareCap: number;          // max rev share billed per period (0 = no cap)
+  bargainSessions: number;      // bargain sessions included per period
+  bargainDeals: number;         // accepted deals included per period
+  bargainOverageDealPrice: number; // ₹ per extra accepted deal beyond quota
+  bargainOverageCartPrice: number; // ₹ per extra recovered cart beyond quota
+  storesLimit: number;          // stores allowed on the plan
   estimatedRecovery: EstimatedRecovery;
   recommended?: boolean;
 }
@@ -141,13 +147,24 @@ export async function createRazorpaySubscription(planId: string, customerEmail: 
 
 export const PLAN_IDS = {
   FREE: 'free',
-  STARTER: 'starter',
   GROWTH: 'growth',
   PRO: 'pro',
   ENTERPRISE: 'enterprise',
 } as const
 
-export const PAID_PLAN_IDS = [PLAN_IDS.STARTER, PLAN_IDS.GROWTH, PLAN_IDS.PRO]
+// Legacy plan ids that existed before the unified pricing model. New code
+// resolves them to their nearest unified tier so existing subscriptions keep
+// working without a data migration.
+export const LEGACY_PLAN_MAP: Record<string, string> = {
+  starter: PLAN_IDS.GROWTH, // previous Starter (₹999/500 carts) → Growth
+}
+
+export function resolvePlanId(planId: string): string {
+  if (planId in PLANS) return planId
+  return LEGACY_PLAN_MAP[planId] ?? PLAN_IDS.FREE
+}
+
+export const PAID_PLAN_IDS = [PLAN_IDS.GROWTH, PLAN_IDS.PRO]
 
 export const PLANS: Record<string, Plan> = {
   FREE: {
@@ -159,78 +176,76 @@ export const PLANS: Record<string, Plan> = {
     maxCampaigns: 1,
     maxMessagesPerCustomer: { email: 3, sms: 3, whatsapp: 3 },
     revSharePercent: 0,
+    revShareCap: 0,
+    bargainSessions: 30,
+    bargainDeals: 5,
+    bargainOverageDealPrice: 0,
+    bargainOverageCartPrice: 0,
+    storesLimit: 1,
     estimatedRecovery: { min: 0, max: 25000 },
     features: [
       "All channels: SMS, WhatsApp, Email",
       "AI-powered recovery optimization",
-      "Up to 50 recovered carts — completely free",
-      "1 active campaign",
-      "Per-customer: up to 3 messages across email, SMS & WhatsApp",
+      "Cart recovery: up to 50 recovered carts — completely free",
+      "Bargain: up to 30 negotiation sessions & 5 accepted deals",
+      "1 active campaign · 1 store",
       "Real-time analytics dashboard",
       "Basic email support",
-    ],
-  },
-  STARTER: {
-    id: "starter",
-    name: "Starter",
-    price: 999,
-    yearlyPrice: 9990,
-    maxCarts: 500,
-    maxCampaigns: 5,
-    maxMessagesPerCustomer: { email: 5, sms: 5, whatsapp: 5 },
-    revSharePercent: 3,
-    estimatedRecovery: { min: 25000, max: 100000 },
-    features: [
-      "All channels: SMS, WhatsApp, Email",
-      "AI-powered recovery optimization",
-      "Up to 500 recovered carts",
-      "Up to 5 active campaigns",
-      "Per-customer: up to 5 messages across email, SMS & WhatsApp",
-      "Real-time analytics dashboard",
-      "3% revenue share on recovered revenue",
     ],
   },
   GROWTH: {
     id: "growth",
     name: "Growth",
-    price: 2999,
-    yearlyPrice: 29990,
-    maxCarts: 3000,
-    maxCampaigns: 20,
+    price: 1499,
+    yearlyPrice: 14990,
+    maxCarts: 750,
+    maxCampaigns: 5,
     maxMessagesPerCustomer: { email: 10, sms: 10, whatsapp: 10 },
-    revSharePercent: 2.5,
-    estimatedRecovery: { min: 100000, max: 500000 },
+    revSharePercent: 3.5,
+    revShareCap: 5000,
+    bargainSessions: 300,
+    bargainDeals: 30,
+    bargainOverageDealPrice: 25,
+    bargainOverageCartPrice: 3,
+    storesLimit: 3,
+    estimatedRecovery: { min: 25000, max: 250000 },
     features: [
-      "Everything in Starter, plus:",
-      "Up to 20 active campaigns",
-      "Per-customer: up to 10 messages across email, SMS & WhatsApp",
-      "A/B testing for optimal messaging",
-      "Priority email & chat support",
-      "Custom discount rules & timing",
-      "Advanced ROI & channel analytics",
-      "2.5% revenue share on recovered revenue",
+      "Everything in Free, plus:",
+      "Cart recovery: up to 750 recovered carts",
+      "Bargain: 300 sessions & 30 accepted deals, then ₹25/extra deal",
+      "No CartGain branding",
+      "All AI personas + automatic language detection",
+      "Per-product price floors & margin guides",
+      "Up to 5 active campaigns · 3 stores",
+      "3.5% revenue share on recovered value, capped at ₹5,000/mo",
     ],
     recommended: true,
   },
   PRO: {
     id: "pro",
     name: "Pro",
-    price: 8999,
-    yearlyPrice: 89990,
-    maxCarts: 15000,
-    maxCampaigns: 50,
+    price: 3999,
+    yearlyPrice: 39990,
+    maxCarts: 3000,
+    maxCampaigns: 20,
     maxMessagesPerCustomer: { email: 20, sms: 20, whatsapp: 20 },
-    revSharePercent: 2,
-    estimatedRecovery: { min: 500000, max: 2500000 },
+    revSharePercent: 3,
+    revShareCap: 10000,
+    bargainSessions: 1500,
+    bargainDeals: 150,
+    bargainOverageDealPrice: 15,
+    bargainOverageCartPrice: 2,
+    storesLimit: Infinity,
+    estimatedRecovery: { min: 250000, max: 1000000 },
     features: [
       "Everything in Growth, plus:",
-      "Up to 50 active campaigns",
-      "Per-customer: up to 20 messages across email, SMS & WhatsApp",
-      "White-label reports (your brand)",
-      "Dedicated account manager",
-      "Custom integrations & webhooks",
-      "SLA guarantee with priority support",
-      "2% revenue share on recovered revenue",
+      "Cart recovery: up to 3,000 recovered carts",
+      "Bargain: 1,500 sessions & 150 accepted deals, then ₹15/extra deal",
+      "A/B persona testing + margin simulator",
+      "Custom widget branding & colors",
+      "Up to 20 active campaigns · unlimited stores",
+      "Priority email & chat support",
+      "3% revenue share on recovered value, capped at ₹10,000/mo",
     ],
   },
   ENTERPRISE: {
@@ -242,13 +257,18 @@ export const PLANS: Record<string, Plan> = {
     maxCampaigns: Infinity,
     maxMessagesPerCustomer: { email: Infinity, sms: Infinity, whatsapp: Infinity },
     revSharePercent: 0,
+    revShareCap: 0,
+    bargainSessions: Infinity,
+    bargainDeals: Infinity,
+    bargainOverageDealPrice: 0,
+    bargainOverageCartPrice: 0,
+    storesLimit: Infinity,
     estimatedRecovery: { min: 2500000, max: 10000000 },
     features: [
-      "Unlimited carts & recovery campaigns",
+      "Unlimited recovered carts & bargain deals",
       "Everything in Pro",
-      "Custom contract & SLA",
-      "On-premise deployment option",
-      "Volume-based revenue share discount",
+      "Custom contract, rev share & SLA",
+      "Dedicated support",
     ],
   },
 };

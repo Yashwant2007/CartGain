@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyWebhookSignature, PLANS } from "@/lib/payment";
+import { verifyWebhookSignature, PLANS, resolvePlanId, PAID_PLAN_IDS } from "@/lib/payment";
 import prisma from "@/lib/db";
 
 export const dynamic = 'force-dynamic'
@@ -76,9 +76,7 @@ async function handlePaymentCaptured(payment: any) {
 
   if (!userId || !plan) return;
 
-  const planConfig = Object.values(PLANS).find(
-    (p) => p.id === plan || (plan === "credits")
-  );
+  const planConfig = PLANS[resolvePlanId(plan)]
   if (!planConfig) {
     console.error(`Webhook: unknown plan "${plan}" for user ${userId}`);
     return;
@@ -109,6 +107,7 @@ async function handlePaymentCaptured(payment: any) {
       updateData.plan = plan;
       updateData.smsCredits = smsToAdd;
       updateData.smsCreditsUsed = 0;
+      updateData.overageEnabled = (PAID_PLAN_IDS as readonly string[]).includes(resolvePlanId(plan));
       updateData.currentPeriodEnd = new Date(Date.now() + periodDays * 24 * 60 * 60 * 1000);
     } else {
       updateData.smsCredits = { increment: smsToAdd };
@@ -125,6 +124,7 @@ async function handlePaymentCaptured(payment: any) {
         customerId: payment.id || `customer_${userId}_${Date.now()}`,
         plan: isMonthlyPlan ? plan : "free",
         status: "active",
+        overageEnabled: isMonthlyPlan && (PAID_PLAN_IDS as readonly string[]).includes(resolvePlanId(plan)),
         smsCredits: smsToAdd,
         currentPeriodStart: new Date(),
         currentPeriodEnd: new Date(Date.now() + periodDays * 24 * 60 * 60 * 1000),
@@ -163,6 +163,7 @@ async function handleSubscriptionActivated(subscription: any) {
     data: {
       status: "active",
       customerId: subscription.customer_id,
+      overageEnabled: (PAID_PLAN_IDS as readonly string[]).includes(resolvePlanId(existing.plan)),
       currentPeriodStart: new Date(subscription.current_period_start * 1000),
       currentPeriodEnd: new Date(subscription.current_period_end * 1000),
     },

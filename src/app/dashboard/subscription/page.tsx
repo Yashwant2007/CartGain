@@ -124,11 +124,16 @@ export default function SubscriptionPage() {
   }, [subscription?.currentPeriodEnd])
 
   const PAID_PLANS = Object.values(PLANS).filter(p => p.price > 0).map(p => p.id)
-  const isPaidUser = !!(subscription && PAID_PLANS.includes(subscription.plan) && subscription.status === 'active')
-  const isFreeUser = !subscription || subscription.plan === 'free' || !PAID_PLANS.includes(subscription.plan)
+  // Legacy plan ids (e.g. the old Starter tier) resolve to their closest unified tier
+  const LEGACY_PLAN_MAP: Record<string, string> = { starter: 'growth' }
+  const currentPlanId = subscription?.plan
+    ? (LEGACY_PLAN_MAP[subscription.plan] ?? subscription.plan)
+    : 'free'
+  const isPaidUser = !!(subscription && PAID_PLANS.includes(currentPlanId) && subscription.status === 'active')
+  const isFreeUser = !subscription || currentPlanId === 'free' || !PAID_PLANS.includes(currentPlanId)
 
   const currentPlanKey = isPaidUser
-    ? (subscription!.plan.toLowerCase() as PlanKey)
+    ? (currentPlanId as PlanKey)
     : null
   const normalizedKey = currentPlanKey
     ? (Object.keys(PLANS).find(k => PLANS[k].id === currentPlanKey) as PlanKey)
@@ -720,8 +725,6 @@ export default function SubscriptionPage() {
               ? 'border-2 border-amber-500/60 bg-gradient-to-b from-amber-900/10 to-slate-800/60'
               : isFree
               ? 'border border-emerald-500/30 bg-gradient-to-b from-emerald-900/10 to-slate-800/60'
-              : plan.id === 'starter'
-              ? 'border border-blue-500/30 bg-gradient-to-b from-blue-900/10 to-slate-800/60'
               : 'border border-purple-500/30 bg-gradient-to-b from-purple-900/10 to-slate-800/60'
 
             // Button style

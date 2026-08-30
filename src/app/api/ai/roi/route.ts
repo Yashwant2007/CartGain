@@ -58,8 +58,8 @@ export async function GET(request: NextRequest) {
     })
 
     const plan = subscription?.plan || 'free'
-    const planCosts: Record<string, number> = { free: 0, starter: 999, growth: 2999, pro: 8999, enterprise: 0 }
-    const monthlyPlanCost = planCosts[plan] || 0
+    const planCosts: Record<string, number> = { free: 0, growth: 1499, pro: 3999, enterprise: 0 }
+    const monthlyPlanCost = planCosts[plan in planCosts ? plan : 'growth'] || 0
 
     const totalMonthlyCost = totalCost + monthlyPlanCost
     const monthlyRev = monthlyRevenue._sum.netRevenue || 0

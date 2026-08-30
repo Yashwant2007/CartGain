@@ -3,7 +3,7 @@ import { waitUntil } from '@vercel/functions'
 import prisma from '@/lib/db'
 import { logDataAccess } from '@/lib/data-protection'
 import { verifyShopifyWebhook } from '@/lib/shopify'
-import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS } from '@/lib/payment'
+import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS, resolvePlanId } from '@/lib/payment'
 import { sendAlertOnError } from '@/lib/alerter'
 import { redisSetNX } from '@/lib/redis'
 
@@ -344,14 +344,16 @@ async function accrueRevenueShare(params: AccrueParams) {
   })
   if (!subscription) return
 
-  const planConfig = Object.values(PLANS).find(p => p.id === subscription.plan)
+  const planConfig = PLANS[resolvePlanId(subscription.plan)]
   if (!planConfig || planConfig.revSharePercent <= 0) return
 
   const totalRecovered = await prisma.recoveredCart.count({
     where: { store: { userId } },
   })
 
-  if (totalRecovered <= FREE_CARTS_THRESHOLD) return
+  // Free tier: the first FREE_CARTS_THRESHOLD recovered carts are free,
+  // no rev share accrues until they're exhausted. Paid tiers accrue from cart 1.
+  if (resolvePlanId(subscription.plan) === 'free' && totalRecovered <= FREE_CARTS_THRESHOLD) return
 
   const revSharePercent = planConfig.revSharePercent
   const revShareAmount = netAmount * (revSharePercent / 100)

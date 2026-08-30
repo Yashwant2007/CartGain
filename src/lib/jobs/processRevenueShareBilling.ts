@@ -1,5 +1,5 @@
 import prisma from '@/lib/db'
-import { razorpay, OVERAGE_RATE_PER_MESSAGE } from '@/lib/payment'
+import { razorpay, OVERAGE_RATE_PER_MESSAGE, PLANS, resolvePlanId } from '@/lib/payment'
 import { sendEmail } from '@/lib/services/email'
 
 export interface BillingResult {
@@ -50,17 +50,34 @@ export async function processRevenueShareBilling(): Promise<BillingResult> {
         continue
       }
 
-      // Source of truth: sum unbilled RevenueShareEvent rows
-      const unbilledEvents = await prisma.revenueShareEvent.findMany({
-        where: { subscriptionId: subscription.id, invoiceId: null },
-      })
-      const revShareAmount = Math.round(
-        unbilledEvents.reduce((sum, e) => sum + e.revShareAmount, 0) * 100
-      ) / 100
+      // Source of truth: sum unbilled RevenueShareEvent + BargainRevenueShareEvent rows
+      const [unbilledCartEvents, unbilledBargainEvents] = await Promise.all([
+        prisma.revenueShareEvent.findMany({
+          where: { subscriptionId: subscription.id, invoiceId: null },
+        }),
+        prisma.bargainRevenueShareEvent.findMany({
+          where: { subscriptionId: subscription.id, invoiceId: null },
+        }),
+      ])
+      const revShareTotal =
+        Math.round(
+          (unbilledCartEvents.reduce((sum, e) => sum + e.revShareAmount, 0)
+            + unbilledBargainEvents.reduce((sum, e) => sum + e.revShareAmount, 0)) * 100
+        ) / 100
 
-      const overageCount = subscription.overageEnabled ? subscription.overageMessages : 0
-      const overageAmount = overageCount * OVERAGE_RATE_PER_MESSAGE
-      const invoiceAmount = revShareAmount + overageAmount
+      const planConfig = PLANS[resolvePlanId(subscription.plan)] || PLANS.FREE
+      const revShareCap = planConfig.revShareCap > 0 ? planConfig.revShareCap : Infinity
+      // "Capped at ₹5,000/mo" — anything accrued beyond the cap is written off
+      const revShareAmount = Math.min(revShareTotal, revShareCap)
+
+      const overageMessagesCount = subscription.overageMessages
+      const overageMessagesAmount = overageMessagesCount * OVERAGE_RATE_PER_MESSAGE
+      const bargainOverageDeals = subscription.bargainOverageDeals
+      const bargainOverageAmount = bargainOverageDeals * planConfig.bargainOverageDealPrice
+      const cartOverageCount = subscription.cartOverage
+      const cartOverageAmount = cartOverageCount * planConfig.bargainOverageCartPrice
+      const overageAmount = Math.round((overageMessagesAmount + bargainOverageAmount + cartOverageAmount) * 100) / 100
+      const invoiceAmount = Math.round((revShareAmount + overageAmount) * 100) / 100
 
       if (invoiceAmount < 100) {
         result.skipped++
@@ -69,7 +86,9 @@ export async function processRevenueShareBilling(): Promise<BillingResult> {
 
       const parts: string[] = []
       if (revShareAmount > 0) parts.push(`Revenue Share: ₹${revShareAmount.toLocaleString('en-IN')}`)
-      if (overageAmount > 0) parts.push(`Overage: ₹${overageAmount.toLocaleString('en-IN')} (${overageCount} msgs × ₹${OVERAGE_RATE_PER_MESSAGE})`)
+      if (overageMessagesAmount > 0) parts.push(`Message Overage: ₹${overageMessagesAmount.toLocaleString('en-IN')} (${overageMessagesCount} msgs × ₹${OVERAGE_RATE_PER_MESSAGE})`)
+      if (bargainOverageAmount > 0) parts.push(`Bargain Overage: ₹${bargainOverageAmount.toLocaleString('en-IN')} (${bargainOverageDeals} deals × ₹${planConfig.bargainOverageDealPrice})`)
+      if (cartOverageAmount > 0) parts.push(`Cart Overage: ₹${cartOverageAmount.toLocaleString('en-IN')} (${cartOverageCount} carts × ₹${planConfig.bargainOverageCartPrice})`)
       const description = parts.length > 0
         ? `${parts.join(' + ')} — ${subscription.currentPeriodStart.toLocaleDateString('en-IN')} to ${subscription.currentPeriodEnd.toLocaleDateString('en-IN')}`
         : `CartGain Billing — ${subscription.currentPeriodStart.toLocaleDateString('en-IN')} to ${subscription.currentPeriodEnd.toLocaleDateString('en-IN')}`
@@ -110,7 +129,7 @@ export async function processRevenueShareBilling(): Promise<BillingResult> {
               userId: subscription.userId,
               revShareAmount: String(revShareAmount),
               overageAmount: String(overageAmount),
-              overageCount: String(overageCount),
+              overageCount: String(overageMessagesCount + bargainOverageDeals + cartOverageCount),
             },
             expire_by: Math.round((now.getTime() + 30 * 24 * 60 * 60 * 1000) / 1000),
           })
@@ -121,15 +140,26 @@ export async function processRevenueShareBilling(): Promise<BillingResult> {
         }
       }
 
-      // Atomically link events to the invoice and reset counters.
+      // Atomically link events to the invoice and reset the period's meters.
       // If this transaction succeeds, the events are locked to this invoice and will
       // never be double-billed even if the job retries.
-      const subscriptionUpdate: any = { revenueShareAccrued: { decrement: revShareAmount } }
-      if (overageCount > 0) {
-        subscriptionUpdate.overageMessages = { decrement: overageCount }
+      const subscriptionUpdate: any = {
+        revenueShareAccrued: 0,
+        revenueSharePaid: { increment: revShareAmount },
+        bargainAccrued: 0,
+        bargainAccruedValue: 0,
+        bargainSessionsUsed: 0,
+        bargainDealsUsed: 0,
+        bargainOverageDeals: 0,
+        cartOverage: 0,
+        overageMessages: 0,
       }
       await prisma.$transaction([
         prisma.revenueShareEvent.updateMany({
+          where: { subscriptionId: subscription.id, invoiceId: null },
+          data: { invoiceId: invoice.id },
+        }),
+        prisma.bargainRevenueShareEvent.updateMany({
           where: { subscriptionId: subscription.id, invoiceId: null },
           data: { invoiceId: invoice.id },
         }),
@@ -161,8 +191,9 @@ export async function processRevenueShareBilling(): Promise<BillingResult> {
             periodStart: subscription.currentPeriodStart,
             periodEnd: subscription.currentPeriodEnd,
             dueDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
-            eventCount: unbilledEvents.length,
-            overageCount,
+            eventCount: unbilledCartEvents.length,
+            bargainEventCount: unbilledBargainEvents.length,
+            overageCount: overageMessagesCount + bargainOverageDeals + cartOverageCount,
             overageAmount,
           }),
         }).catch(e => console.error(`Invoice email failed for sub ${subscription.id}:`, e))
@@ -187,29 +218,36 @@ export interface InvoiceEmailParams {
   periodEnd: Date
   dueDate: Date
   eventCount: number
+  bargainEventCount?: number
   overageCount?: number
   overageAmount?: number
 }
 
 export function buildRevenueShareInvoiceEmail(params: InvoiceEmailParams): string {
-  const { userName, invoiceAmount, paymentLinkUrl, periodStart, periodEnd, dueDate, eventCount, overageCount, overageAmount } = params
+  const { userName, invoiceAmount, paymentLinkUrl, periodStart, periodEnd, dueDate, eventCount, bargainEventCount, overageCount, overageAmount } = params
   const fmt = (d: Date) =>
     d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-  const hasRevShare = eventCount > 0
+  const hasRevShare = eventCount > 0 || (bargainEventCount ?? 0) > 0
   const hasOverage = (overageCount ?? 0) > 0
 
   const title = hasRevShare && hasOverage ? 'CartGain Invoice' : hasRevShare ? 'Revenue Share Invoice' : 'Overage Invoice'
 
   let lineItemsHtml = ''
-  if (hasRevShare) {
+  if (eventCount > 0) {
     lineItemsHtml += `<tr style="background:#f8fafc;">
       <td style="padding:14px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;">Carts Recovered (revenue share)</td>
       <td style="padding:14px 16px;text-align:right;font-weight:600;border-bottom:1px solid #e2e8f0;">${eventCount}</td>
     </tr>`
   }
+  if ((bargainEventCount ?? 0) > 0) {
+    lineItemsHtml += `<tr style="${eventCount > 0 ? '' : 'background:#f8fafc;'}">
+      <td style="padding:14px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;">Bargain Deals (revenue share)</td>
+      <td style="padding:14px 16px;text-align:right;font-weight:600;border-bottom:1px solid #e2e8f0;">${bargainEventCount}</td>
+    </tr>`
+  }
   if (hasOverage) {
     lineItemsHtml += `<tr style="${hasRevShare ? '' : 'background:#f8fafc;'}">
-      <td style="padding:14px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;">Overage Messages (${overageCount} × ₹${OVERAGE_RATE_PER_MESSAGE})</td>
+      <td style="padding:14px 16px;font-size:14px;color:#64748b;border-bottom:1px solid #e2e8f0;">Overage (${overageCount} units)</td>
       <td style="padding:14px 16px;text-align:right;font-weight:600;border-bottom:1px solid #e2e8f0;">&#8377;${(overageAmount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
     </tr>`
   }

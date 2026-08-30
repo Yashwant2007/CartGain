@@ -1,5 +1,5 @@
 import prisma from '@/lib/db'
-import { PLANS, PAID_PLAN_IDS, FREE_CARTS_THRESHOLD } from '@/lib/payment'
+import { PLANS, PAID_PLAN_IDS, FREE_CARTS_THRESHOLD, resolvePlanId } from '@/lib/payment'
 
 export type SubscriptionStatus = {
   hasSubscription: boolean
@@ -11,10 +11,25 @@ export type SubscriptionStatus = {
   isExhausted: boolean
   cartsUsed: number
   cartsRemaining: number
+  bargainSessionsUsed: number
+  bargainSessionsRemaining: number
+  bargainDealsUsed: number
+  bargainDealsRemaining: number
+  storesUsed: number
   planLimits: {
     maxCarts: number
     revSharePercent: number
+    revShareCap: number
+    bargainSessions: number
+    bargainDeals: number
+    bargainOverageDealPrice: number
+    bargainOverageCartPrice: number
+    storesLimit: number
   }
+}
+
+export function planConfigFor(planId: string) {
+  return PLANS[resolvePlanId(planId)] || PLANS.FREE
 }
 
 export async function getSubscriptionStatus(userId: string): Promise<SubscriptionStatus | null> {
@@ -26,7 +41,7 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
   if (!subscription) return null
 
   const plan = subscription.plan || 'free'
-  const planConfig = Object.values(PLANS).find(p => p.id === plan) || PLANS.FREE
+  const planConfig = planConfigFor(plan)
   const isPaid = (PAID_PLAN_IDS as readonly string[]).includes(plan)
   const isActive = subscription.status === 'active'
   const isFree = !isPaid
@@ -44,6 +59,11 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
   const cartsRemaining = Math.max(0, maxCarts - cartsUsed)
   const isExhausted = isFree && cartsUsed >= FREE_CARTS_THRESHOLD
 
+  const bargainSessionsRemaining = Math.max(0, planConfig.bargainSessions - subscription.bargainSessionsUsed)
+  const bargainDealsRemaining = Math.max(0, planConfig.bargainDeals - subscription.bargainDealsUsed)
+
+  const storesCount = await prisma.store.count({ where: { userId } })
+
   return {
     hasSubscription: true,
     plan,
@@ -54,10 +74,21 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
     isExhausted,
     cartsUsed,
     cartsRemaining,
+    bargainSessionsUsed: subscription.bargainSessionsUsed,
+    bargainSessionsRemaining,
+    bargainDealsUsed: subscription.bargainDealsUsed,
+    bargainDealsRemaining,
     planLimits: {
       maxCarts,
       revSharePercent: planConfig.revSharePercent,
+      revShareCap: planConfig.revShareCap,
+      bargainSessions: planConfig.bargainSessions,
+      bargainDeals: planConfig.bargainDeals,
+      bargainOverageDealPrice: planConfig.bargainOverageDealPrice,
+      bargainOverageCartPrice: planConfig.bargainOverageCartPrice,
+      storesLimit: planConfig.storesLimit,
     },
+    storesUsed: storesCount,
   }
 }
 

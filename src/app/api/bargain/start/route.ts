@@ -5,6 +5,7 @@ import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerConte
 import { currencySymbolFor } from '@/lib/bargain/i18n'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { getBargainGate, recordBargainSessionOp, BARGAIN_SESSIONS_EXHAUSTED } from '@/lib/bargain/gate'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,6 +54,18 @@ export async function POST(request: NextRequest) {
         { message: 'Bargaining is not enabled for this store', enabled: false },
         { status: 403 }
       )
+    }
+
+    // Plan gate — bargain sessions are a hard quota on every tier.
+    // Return a 402 so the widget can surface the plan-limit card.
+    const gate = await getBargainGate(data.storeId)
+    if (gate.sessionsExhausted) {
+      return NextResponse.json({
+        message: 'This store has reached its bargain session limit.',
+        code: BARGAIN_SESSIONS_EXHAUSTED,
+        planId: gate.planId,
+        upgradeUrl: 'https://cart-gain.com/pricing',
+      }, { status: 402 })
     }
 
     // Compute floor price + bargainability
@@ -149,33 +162,36 @@ export async function POST(request: NextRequest) {
       // silent — fallback already set
     }
 
-    const bargainSession = await prisma.bargainSession.create({
-      data: {
-        storeId: data.storeId,
-        cartToken: data.cartToken ?? null,
-        shopifyProductId: data.shopifyProductId,
-        variantId: data.variantId ?? null,
-        customerEmail: data.customerEmail || null,
-        customerPhone: data.customerPhone || null,
-        originalPrice: data.originalPrice,
-        currentOffer: data.originalPrice,
-        attemptsUsed: 0,
-        status: 'active',
-        language,
-        startedAt: now,
-        expiredAt,
-        messages: {
-          create: [
-            {
-              role: 'ai',
-              content: openingReply,
-              metadata: openingMeta,
-            },
-          ],
+    const [bargainSession] = await prisma.$transaction([
+      prisma.bargainSession.create({
+        data: {
+          storeId: data.storeId,
+          cartToken: data.cartToken ?? null,
+          shopifyProductId: data.shopifyProductId,
+          variantId: data.variantId ?? null,
+          customerEmail: data.customerEmail || null,
+          customerPhone: data.customerPhone || null,
+          originalPrice: data.originalPrice,
+          currentOffer: data.originalPrice,
+          attemptsUsed: 0,
+          status: 'active',
+          language,
+          startedAt: now,
+          expiredAt,
+          messages: {
+            create: [
+              {
+                role: 'ai',
+                content: openingReply,
+                metadata: openingMeta,
+              },
+            ],
+          },
         },
-      },
-      include: { messages: { orderBy: { createdAt: 'asc' } } },
-    })
+        include: { messages: { orderBy: { createdAt: 'asc' } } },
+      }),
+      recordBargainSessionOp(gate.subscriptionId),
+    ])
 
     return NextResponse.json({
       sessionId: bargainSession.id,
