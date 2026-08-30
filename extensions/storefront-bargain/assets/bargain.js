@@ -13,11 +13,37 @@
 
   window.addEventListener('message', function (event) {
     if (!event.data || typeof event.data !== 'object') return;
+    if (event.data.type === 'cg_empty') {
+      // Bargaining is disabled for this store (or the embed could not resolve
+      // the store) — the iframe asked us to hide. Identify the sender frame
+      // and hide its block entirely so nothing shows on the theme.
+      var frames = getFrames();
+      for (var i = 0; i < frames.length; i++) {
+        if (event.source === frames[i].contentWindow || !event.source) {
+          hideBlock(frames[i]);
+        }
+      }
+      if (!event.source) {
+        // No usable source — hide every bargain block on the page.
+        for (var j = 0; j < frames.length; j++) hideBlock(frames[j]);
+      }
+      return;
+    }
     if (event.data.type === 'cg_resize') {
       var frames = getFrames();
       for (var i = 0; i < frames.length; i++) applyHeight(frames[i], event.data.height);
     }
   });
+
+  function hideBlock(frame) {
+    var root = frame;
+    if (frame.closest) {
+      root = frame.closest('[data-cg-bargain-root]') || frame.parentElement;
+    } else {
+      root = frame.parentElement;
+    }
+    if (root) root.classList.add('is-hidden');
+  }
 
   // The app may render/init after we attach the listener — re-ask for height
   // periodically until the iframe becomes interactive.

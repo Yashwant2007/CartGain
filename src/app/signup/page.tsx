@@ -11,6 +11,7 @@ import {
   getEmbedAwareRedirectUrl,
   openGoogleAuthPopup,
   redirectTopForAuth,
+  googleAuthErrorMessage,
 } from '@/lib/shopify-embed'
 
 function Toast({ message, type, onClose }: { message: string; type: 'error' | 'info'; onClose: () => void }) {
@@ -162,26 +163,37 @@ export default function SignUpPage() {
   }
 
   const initiateGoogleSignIn = async () => {
+    if (!acceptedPolicies) {
+      setError('Please accept our terms of service first.')
+      return
+    }
+
     setIsLoading(true)
     setError(null)
     try {
-      // Partitioned intent cookie so the embedded popup flow can distinguish
-      // sign-up from sign-in even under third-party-cookie blocking.
-      await fetch('/api/auth/oauth-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intent: 'signup' }),
-      }).catch(() => {})
-
       if (isInShopifyEmbed()) {
         // Inside the Shopify admin iframe Google refuses to render
-        // (X-Frame-Options: DENY), so run the OAuth in a popup window.
+        // (X-Frame-Options: DENY), so run the OAuth in a popup window. The
+        // popup opens synchronously to preserve the click's activation, and
+        // the sign-up intent cookie is set first-party inside the popup so the
+        // callback can create the account even under third-party-cookie
+        // blocking.
         // A session can't exist yet inside the embedded flow (no login page
         // was shown), so signOut() below is skipped here on purpose.
-        const outcome = await openGoogleAuthPopup(getEmbedAwareRedirectUrl('/shopify-auth-success'))
+        const outcome = await openGoogleAuthPopup({
+          callbackUrl: getEmbedAwareRedirectUrl('/shopify-auth-success'),
+          intent: 'signup',
+        })
 
-        if (outcome === 'blocked') {
+        if (outcome.status === 'blocked') {
           redirectTopForAuth()
+          return
+        }
+
+        // The popup completed but Google/NextAuth rejected it — surface the
+        // real, mapped error right in the app frame.
+        if (outcome.status === 'error') {
+          setError(googleAuthErrorMessage(outcome.error))
           return
         }
 

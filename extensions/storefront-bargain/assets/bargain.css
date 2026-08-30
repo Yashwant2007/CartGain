@@ -51,3 +51,10 @@
 .cg-bargain-embed.is-open .cg-bargain-embed__badge { display: none; }
 .cg-bargain-embed.is-open .cg-bargain-embed__panel { display: block; }
 
+/* Hidden state: the store has bargaining disabled (cg_empty received) — hide
+   the whole widget so no placeholder/badge appears on the customer's theme. */
+.cg-bargain-embed.is-hidden,
+.cg-bargain-block.is-hidden {
+  display: none !important;
+}
+

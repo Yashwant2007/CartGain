@@ -59,47 +59,26 @@ export default async function EmbedPage({
 
   const valid = storeId && shopifyProductId && Number.isFinite(price) && price > 0
 
-  if (!storeFound || !valid) {
+  // Bargaining is off (or the store/product/price params are invalid) — this is
+  // a customer-facing iframe, so we show NOTHING. Rendering an error card here
+  // would put a "Bargaining is paused" branded block on the store's product
+  // page, breaking the theme. Instead we emit an empty, transparent frame and
+  // tell the storefront controller (bargain.js / bargain-embed.js) to hide the
+  // whole widget via the cg_empty postMessage.
+  if (!storeFound || !valid || !enabled) {
     return (
-      <div
-        style={{
-          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: 16,
-          padding: '20px 24px',
-          color: '#64748b',
-          fontSize: 13,
-          lineHeight: 1.5,
-          textAlign: 'center',
-        }}
-      >
-        <div style={{ fontSize: 22, marginBottom: 6 }}>🤝</div>
-        <div style={{ fontWeight: 600, color: '#334155', marginBottom: 2 }}>Price negotiation is not available for this store.</div>
-        Please continue with the regular checkout.
-      </div>
-    )
-  }
-
-  if (!enabled) {
-    return (
-      <div
-        style={{
-          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: 16,
-          padding: '20px 24px',
-          color: '#64748b',
-          fontSize: 13,
-          lineHeight: 1.5,
-          textAlign: 'center',
-        }}
-      >
-        <div style={{ fontSize: 22, marginBottom: 6 }}>🔒</div>
-        <div style={{ fontWeight: 600, color: '#334155', marginBottom: 2 }}>Bargaining is temporarily paused by this store.</div>
-        Please continue with the regular checkout.
-      </div>
+      <>
+        <div aria-hidden style={{ width: 0, height: 0 }} />
+        {/* Runs at parse time: kill the app layout's dark gradient so there is
+            never a visible block on the merchant's theme, and ask the parent
+            controller to hide the embed entirely. */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var b=document.body;if(b){b.style.background='transparent';b.style.margin='0';b.style.padding='0';b.style.minHeight='0';}var r=document.documentElement;if(r){r.style.background='transparent';r.style.minHeight='0';}}catch(e){}try{if(window.parent){window.parent.postMessage({type:'cg_empty'},'*');window.parent.postMessage({type:'cg_resize',height:0},'*');}}catch(e){}})();`,
+          }}
+        />
+      </>
     )
   }
 

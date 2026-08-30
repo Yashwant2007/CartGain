@@ -6,6 +6,10 @@ import { checkAbuse } from '@/lib/bargain/abuse'
 
 let client: OpenAI | null = null
 
+// Model for the negotiation agent. Defaults to the full gpt-4o for best
+// negotiation quality; set BARGAIN_MODEL=gpt-4o-mini to cut OpenAI cost.
+const BARGAIN_MODEL = process.env.BARGAIN_MODEL || 'gpt-4o'
+
 function getClient(): OpenAI | null {
   if (client) return client
   const key = process.env.OPENAI_API_KEY
@@ -1332,7 +1336,7 @@ export async function negotiateStep(
 
   try {
     const completion = await ai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: BARGAIN_MODEL,
       messages,
       temperature: 0.85,
       max_tokens: 320,
@@ -1392,7 +1396,7 @@ export async function negotiateStep(
       tactic: typeof parsed.tactic === 'string' ? parsed.tactic : 'conversational',
       sentiment: typeof parsed.sentiment === 'string' ? parsed.sentiment : 'neutral',
       metadata: {
-        model: 'gpt-4o-mini',
+        model: BARGAIN_MODEL,
         usage: completion.usage,
         raw: parsed,
         conversationAnalysis: {

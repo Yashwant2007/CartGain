@@ -11,6 +11,7 @@ import {
   getEmbedAwareRedirectUrl,
   openGoogleAuthPopup,
   redirectTopForAuth,
+  googleAuthErrorMessage,
 } from '@/lib/shopify-embed'
 
 export default function LoginPage() {
@@ -55,7 +56,7 @@ function LoginContent() {
         google: `Google sign-in failed. Make sure ${typeof window !== 'undefined' ? window.location.origin : 'https://cart-gain.com'}/api/auth/callback/google is listed in your Google Cloud Console → Authorized redirect URIs.`,
         OAuthSignin: 'Could not start Google sign-in. Please try again.',
         OAuthCallback: 'Google returned an error. Check that GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set in Vercel.',
-        OAuthAccountNotLinked: 'This email is already registered with a password. Sign in with email & password instead.',
+        OAuthAccountNotLinked: 'This Google account is already used by a different CartGain account. Sign in with that account, or use a different Google/email account.',
         Verification: 'The sign-in link has expired. Please request a new one.',
         NoAccount: 'No account found with this email. Please sign up first.',
         AlreadySignedIn: 'You are already signed in. Sign out first, then sign up with another Google account.',
@@ -102,24 +103,26 @@ function LoginContent() {
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true)
+    setError(null)
     try {
-      // Set the OAuth intent server-side with a Partitioned cookie so it
-      // survives third-party-cookie blocking inside the Shopify admin iframe
-      // and reaches the popup's Google callback.
-      await fetch('/api/auth/oauth-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intent: 'signin' }),
-      }).catch(() => {})
-
       if (isInShopifyEmbed()) {
         // Inside the Shopify admin iframe Google refuses to render
-        // (X-Frame-Options: DENY), so run the OAuth in a popup window.
-        const callbackUrl = safeCallbackUrl(searchParams.get('callbackUrl'))
-        const outcome = await openGoogleAuthPopup(getEmbedAwareRedirectUrl('/shopify-auth-success'))
+        // (X-Frame-Options: DENY), so run the OAuth in a popup window. The
+        // popup opens synchronously (before the first await) to keep the
+        // click's transient activation, and the OAuth intent cookie is set
+        // first-party inside the popup.
+        const callbackUrl = getEmbedAwareRedirectUrl('/shopify-auth-success')
+        const outcome = await openGoogleAuthPopup({ callbackUrl, intent: 'signin' })
 
-        if (outcome === 'blocked') {
+        if (outcome.status === 'blocked') {
           redirectTopForAuth()
+          return
+        }
+
+        // The popup completed but Google/NextAuth rejected it — surface the
+        // real, mapped error right in the app frame.
+        if (outcome.status === 'error') {
+          setError(googleAuthErrorMessage(outcome.error))
           return
         }
 
@@ -133,7 +136,7 @@ function LoginContent() {
           if (sess?.user) {
             const dest = sess.user.requirePassword
               ? getEmbedAwareRedirectUrl('/setup?requirePassword=1')
-              : getEmbedAwareRedirectUrl(callbackUrl)
+              : getEmbedAwareRedirectUrl(safeCallbackUrl(searchParams.get('callbackUrl')))
             router.push(dest)
             router.refresh()
             return

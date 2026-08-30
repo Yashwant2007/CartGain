@@ -33,6 +33,12 @@
 
   window.addEventListener('message', function (event) {
     if (!event.data || typeof event.data !== 'object') return;
+    if (event.data.type === 'cg_empty') {
+      // Bargaining is disabled for this store — hide the entire embed so the
+      // badge/panel never appear on the theme. Also stop the auto-open below.
+      if (root) root.classList.add('is-hidden');
+      return;
+    }
     if (event.data.type === 'cg_resize') applyHeight(event.data.height);
   });
 
@@ -49,5 +55,7 @@
   }, 500);
 
   // Auto-open after a short delay so the widget is immediately visible.
-  setTimeout(function () { toggle(true); }, 600);
+  setTimeout(function () {
+    if (root && !root.classList.contains('is-hidden')) toggle(true);
+  }, 600);
 })();

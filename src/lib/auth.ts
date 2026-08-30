@@ -167,7 +167,10 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: '/login',
-    error: '/login',
+    // NextAuth redirects failed OAuth callbacks (OAuthAccountNotLinked, etc.)
+    // here with ?error=<code>. The embedded popup flow listens for cg_auth_error
+    // messages from this page to surface the real error inside the Shopify app.
+    error: '/auth/error',
   },
   session: {
     strategy: 'jwt',

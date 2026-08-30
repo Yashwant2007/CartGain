@@ -370,8 +370,8 @@ export default function BargainWidget({
             width: '100%',
             display: 'flex',
             alignItems: 'center',
-            gap: 12,
-            padding: 14,
+            gap: 14,
+            padding: '16px 18px',
             background: '#ffffff',
             border: 'none',
             cursor: 'pointer',
@@ -393,38 +393,43 @@ export default function BargainWidget({
             <img
               src={image}
               alt=""
-              width={56}
-              height={56}
-              style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
+              width={58}
+              height={58}
+              style={{ width: 58, height: 58, borderRadius: 12, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
             />
           ) : (
-            <div style={{ width: 56, height: 56, borderRadius: 12, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
-              🛍️
+            <div style={{ width: 58, height: 58, borderRadius: 12, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Tag size={24} style={{ color: '#6366f1' }} />
             </div>
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {productTitle ? productTitle : 'this item'}
+            <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {productTitle ? productTitle : 'This item'}
             </div>
-            <div style={{ fontSize: 13, color: '#334155', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontWeight: 700, color: '#0f172a' }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
-              <span style={{ color: '#94a3b8', fontSize: 11 }}>·</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                <Zap size={11} style={{ color: '#4f46e5' }} />
-                <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>
+            <div style={{ fontSize: 14, color: '#334155', marginTop: 3, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 16 }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
+              <span style={{ color: '#cbd5e1', fontSize: 12 }}>·</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Zap size={12} style={{ color: '#4f46e5' }} />
+                <span style={{ fontSize: 12.5, color: '#6366f1', fontWeight: 600 }}>
                   {isEmbed && mode === 'cart' ? 'Bargain a discount before checkout' : 'Want a better price?'}
                 </span>
               </span>
             </div>
+            {personaChip && (
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
+                {personaChip.emoji} {personaChip.label} negotiator
+              </div>
+            )}
           </div>
-          <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
             <span
               style={{
-                background: '#4f46e5',
+                background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
                 color: '#ffffff',
                 fontWeight: 700,
-                fontSize: 13,
-                padding: '9px 16px',
+                fontSize: 14,
+                padding: '10px 18px',
                 borderRadius: 999,
                 border: 'none',
                 boxShadow: '0 2px 10px rgba(79,70,229,0.35)',
@@ -437,13 +442,8 @@ export default function BargainWidget({
               <Sparkles size={14} />
               {t('negotiate')}
             </span>
-            {personaChip && (
-              <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
-                {personaChip.emoji} {personaChip.label} negotiator
-              </span>
-            )}
+            <ChevronRight size={18} style={{ color: '#94a3b8', flexShrink: 0, marginLeft: 10 }} />
           </div>
-          <ChevronRight size={18} style={{ color: '#94a3b8', flexShrink: 0 }} />
         </button>
       ) : (
         /* Floating trigger button */
@@ -513,12 +513,13 @@ export default function BargainWidget({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: 12,
             background: 'linear-gradient(180deg, #ffffff, #fafbff)',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
               <div style={{
-                width: 42,
-                height: 42,
+                width: 44,
+                height: 44,
                 borderRadius: 12,
                 background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
                 display: 'flex',
@@ -527,14 +528,14 @@ export default function BargainWidget({
                 boxShadow: '0 2px 8px rgba(99,102,241,0.35)',
                 flexShrink: 0,
               }}>
-                <MessageCircle size={20} style={{ color: '#ffffff' }} />
+                <MessageCircle size={21} style={{ color: '#ffffff' }} />
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontWeight: 800, fontSize: 16, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
                   {t('dealTitle')}
                   {personaChip && (
                     <span style={{
-                      fontSize: 10,
+                      fontSize: 10.5,
                       fontWeight: 600,
                       color: '#4f46e5',
                       background: '#eef2ff',
@@ -547,8 +548,8 @@ export default function BargainWidget({
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {productTitle ? productTitle : 'Product'} · <span style={{ fontWeight: 600, color: '#0f172a' }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
+                <div style={{ fontSize: 13, color: '#64748b', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {productTitle ? productTitle : 'Product'} · <span style={{ fontWeight: 700, color: '#0f172a' }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -644,15 +645,15 @@ export default function BargainWidget({
           <div ref={scrollRef} style={{
             flex: 1,
             overflowY: 'auto',
-            padding: '16px 16px 8px',
+            padding: '18px 18px 10px',
             display: 'flex',
             flexDirection: 'column',
-            gap: 10,
+            gap: 12,
             background: '#fbfcfe',
           }}>
             {messages.length === 0 && (
-              <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, padding: '40px 0' }}>
-                <Loader2 size={20} className="spin" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 8px' }} />
+              <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, padding: '48px 0' }}>
+                <Loader2 size={20} className="spin" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 10px' }} />
                 {t('connecting')}
               </div>
             )}
@@ -667,13 +668,11 @@ export default function BargainWidget({
               >
                 {m.role !== 'customer' && (
                   <div style={{
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: 600,
-                    color: m.role === 'ai' ? '#6366f1' : '#94a3b8',
-                    marginBottom: 4,
+                    color: m.role === 'ai' ? '#4f46e5' : '#94a3b8',
+                    marginBottom: 5,
                     paddingLeft: 6,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.6,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 5,
@@ -690,23 +689,24 @@ export default function BargainWidget({
                         ? '#eef2ff'
                         : '#ffffff',
                     color: m.role === 'customer' ? '#ffffff' : '#334155',
-                    padding: '11px 15px',
+                    padding: '12px 16px',
                     borderRadius: m.role === 'customer' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                    fontSize: 14,
-                    lineHeight: 1.5,
+                    fontSize: 15,
+                    lineHeight: 1.55,
                     border: m.role !== 'customer' ? '1px solid #e2e8f0' : 'none',
                     boxShadow: m.role !== 'customer' ? '0 1px 3px rgba(15,23,42,0.05)' : '0 2px 8px rgba(79,70,229,0.18)',
+                    wordBreak: 'break-word',
                   }}
                 >
                   {m.content}
                   {m.offeredPrice != null && (
                     <div style={{
-                      marginTop: 8,
-                      padding: '7px 11px',
+                      marginTop: 9,
+                      padding: '7px 12px',
                       background: m.role === 'customer' ? 'rgba(255,255,255,0.14)' : '#f0fdf4',
                       borderRadius: 8,
                       border: m.role === 'customer' ? 'none' : '1px solid #bbf7d0',
-                      fontSize: 13,
+                      fontSize: 14,
                       fontWeight: 700,
                       color: m.role === 'customer' ? '#ffffff' : '#15803d',
                       display: 'inline-flex',
@@ -724,7 +724,7 @@ export default function BargainWidget({
             {/* AI thinking indicator */}
             {thinking && (
               <div style={{ alignSelf: 'flex-start', animation: 'cgMsgIn 0.18s ease-out' }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: '#6366f1', marginBottom: 4, paddingLeft: 6, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#4f46e5', marginBottom: 5, paddingLeft: 6 }}>
                   {t('assistant')}
                 </div>
                 <div style={{
@@ -749,41 +749,41 @@ export default function BargainWidget({
               <div style={{
                 background: '#ffffff',
                 border: '1px solid #c7d2fe',
-                padding: 18,
+                padding: '20px 18px',
                 borderRadius: 16,
                 textAlign: 'center',
-                margin: '6px 0 2px',
+                margin: '4px 0 2px',
                 animation: 'cgMsgIn 0.2s ease-out',
                 boxShadow: '0 4px 16px rgba(79,70,229,0.12)',
               }}>
                 <div style={{
-                  width: 46,
-                  height: 46,
+                  width: 48,
+                  height: 48,
                   borderRadius: '50%',
                   background: '#f0fdf4',
                   border: '1px solid #bbf7d0',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  margin: '0 auto 10px',
+                  margin: '0 auto 12px',
                 }}>
-                  <CheckCircle2 size={26} style={{ color: '#16a34a' }} />
+                  <CheckCircle2 size={27} style={{ color: '#16a34a' }} />
                 </div>
                 {savings != null && (
-                  <div style={{ fontWeight: 800, fontSize: 17, color: '#0f172a', marginBottom: 3 }}>
+                  <div style={{ fontWeight: 800, fontSize: 18, color: '#0f172a', marginBottom: 4 }}>
                     {t('youSaved', { x: `${currencySymbol}${savings.toFixed(2)}` })}
                   </div>
                 )}
-                <div style={{ fontSize: 13, color: '#64748b', marginBottom: 14 }}>
+                <div style={{ fontSize: 14, color: '#64748b', marginBottom: 14 }}>
                   {t('newPrice')}{' '}
                   <span style={{ textDecoration: 'line-through', color: '#cbd5e1', marginRight: 6 }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
-                  <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 16 }}>{currencySymbol}{finalPrice.toFixed(2)}</span>
+                  <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 17 }}>{currencySymbol}{finalPrice.toFixed(2)}</span>
                 </div>
                 {discountCode && (
                   <div style={{
                     background: '#f8fafc',
                     border: '1px dashed #c7d2fe',
-                    padding: '10px 14px',
+                    padding: '11px 14px',
                     borderRadius: 12,
                     display: 'flex',
                     alignItems: 'center',
@@ -792,16 +792,16 @@ export default function BargainWidget({
                     flexWrap: 'wrap',
                   }}>
                     <Tag size={15} style={{ color: '#6366f1' }} />
-                    <code style={{ fontWeight: 800, fontSize: 15, color: '#0f172a', letterSpacing: 0.8 }}>{discountCode}</code>
+                    <code style={{ fontWeight: 800, fontSize: 16, color: '#0f172a', letterSpacing: 0.8 }}>{discountCode}</code>
                     <button
                       onClick={copyCode}
                       style={{
                         background: copied ? '#16a34a' : '#ffffff',
                         border: copied ? 'none' : '2px solid #4f46e5',
                         color: copied ? '#ffffff' : '#4f46e5',
-                        borderRadius: 8,
-                        padding: '6px 14px',
-                        fontSize: 12,
+                        borderRadius: 9,
+                        padding: '7px 16px',
+                        fontSize: 13,
                         fontWeight: 700,
                         cursor: 'pointer',
                         transition: 'all 0.15s ease',
@@ -814,15 +814,9 @@ export default function BargainWidget({
                     </button>
                   </div>
                 )}
-                {shopifyStatus === 'pending' || !discountCode ? (
-                  <div style={{ fontSize: 12, marginTop: 10, color: '#94a3b8' }}>
-                    {t('codeApply')}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 12, marginTop: 10, color: '#94a3b8' }}>
-                    Apply the code at checkout to save now.
-                  </div>
-                )}
+                <div style={{ fontSize: 12.5, marginTop: 12, color: '#94a3b8' }}>
+                  {t('codeApply')}
+                </div>
               </div>
             )}
 
@@ -845,22 +839,25 @@ export default function BargainWidget({
             {limit && (
               <div role="alert" style={{
                 margin: '0 16px',
-                padding: '16px',
-                fontSize: 13,
+                padding: '18px 16px',
+                fontSize: 13.5,
+                lineHeight: 1.55,
                 color: '#1e293b',
                 background: 'linear-gradient(135deg,#eef2ff,#f5f3ff)',
-                borderRadius: 12,
+                borderRadius: 14,
                 border: '1px solid #c7d2fe',
                 textAlign: 'center',
               }}>
-                <div style={{ fontSize: 22, marginBottom: 6 }}>🔒</div>
-                <div style={{ fontWeight: 700, color: '#4338ca', marginBottom: 4 }}>
+                <div style={{ fontSize: 24, marginBottom: 8 }}>🔒</div>
+                <div style={{ fontWeight: 800, color: '#4338ca', marginBottom: 5, fontSize: 14.5 }}>
                   {limit.code === 'bargain_sessions_exhausted'
                     ? 'This month\u2019s bargain sessions are used up'
                     : 'This month\u2019s slate of deals has been filled'}
                 </div>
-                <div style={{ color: '#475569', lineHeight: 1.5, marginBottom: 10 }}>
-                  Bargaining reopens next month. The store can raise the limit on a Growth or Pro plan.
+                <div style={{ color: '#475569', marginBottom: 12 }}>
+                  {limit.code === 'bargain_sessions_exhausted'
+                    ? 'New bargain sessions reopen when the plan resets each month. The limit depends on the store\u2019s plan.'
+                    : 'Bargaining is active but the plan\u2019s monthly deal limit is full for now. It resets with the next billing period.'}
                 </div>
                 <a
                   href={limit.upgradeUrl ?? 'https://cart-gain.com/pricing'}
@@ -870,15 +867,15 @@ export default function BargainWidget({
                     display: 'inline-block',
                     background: 'linear-gradient(135deg,#6366f1,#4f46e5)',
                     color: '#fff',
-                    padding: '9px 18px',
+                    padding: '10px 20px',
                     borderRadius: 10,
                     textDecoration: 'none',
                     fontWeight: 700,
-                    fontSize: 13,
+                    fontSize: 13.5,
                     boxShadow: '0 2px 10px rgba(79,70,229,0.3)',
                   }}
                 >
-                  View plans
+                  View plans &amp; limits
                 </a>
               </div>
             )}
@@ -931,12 +928,12 @@ export default function BargainWidget({
                   autoComplete="off"
                   style={{
                     flex: 1,
-                    padding: '12px 15px',
+                    padding: '14px 16px',
                     borderRadius: 12,
                     border: '1px solid #e2e8f0',
                     background: '#f8fafc',
                     color: '#0f172a',
-                    fontSize: 15,
+                    fontSize: 16,
                     outline: 'none',
                     transition: 'border-color 0.15s ease',
                     opacity: sessionEnded ? 0.55 : 1,
@@ -985,14 +982,14 @@ export default function BargainWidget({
                 disabled={loading || !!discountCode}
                 style={{
                   width: '100%',
-                  padding: '13px',
+                  padding: '14px',
                   background: discountCode ? 'linear-gradient(135deg, #22c55e, #16a34a)' : '#ffffff',
                   color: discountCode ? '#ffffff' : '#16a34a',
                   border: discountCode ? 'none' : '2px solid #16a34a',
                   borderRadius: 12,
                   cursor: 'pointer',
                   fontWeight: 800,
-                  fontSize: 15,
+                  fontSize: 16,
                   opacity: (loading || !!discountCode) ? 0.85 : 1,
                   boxShadow: '0 3px 12px rgba(22,163,74,0.3)',
                   transition: 'all 0.2s ease',
@@ -1047,8 +1044,8 @@ function QuickChip({ label, onClick, disabled }: { label: string; onClick: () =>
         border: '1px solid #e2e8f0',
         color: '#475569',
         borderRadius: 999,
-        padding: '5px 11px',
-        fontSize: 11,
+        padding: '6px 13px',
+        fontSize: 12.5,
         fontWeight: 600,
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.5 : 1,

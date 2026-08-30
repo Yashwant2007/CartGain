@@ -8,6 +8,11 @@ import { useSearchParams } from 'next/navigation'
 // cookies (csrf / pkce / state) are first-party to this popup instead of being
 // set from the cross-site iframe context — which Chrome partitions and would
 // otherwise break the callback (NextAuth "OAuthCallback" error).
+//
+// Called with ?intent=signin|signup&cb=<callbackUrl>. This page sets the
+// sign-in intent cookie in ITS OWN first-party context (the same context that
+// performs the Google POST and receives the callback), which is reliable in
+// every browser — unlike setting it from inside the cross-site iframe.
 export default function ShopifyAuthStartPage() {
   return (
     <Suspense fallback={<Loading label="Starting…" />}>
@@ -24,18 +29,38 @@ function Loading({ label }: { label: string }) {
   )
 }
 
+function reportErrorToOpener(error: string) {
+  try {
+    if (window.opener && window.opener !== window) {
+      window.opener.postMessage({ type: 'cg_auth_error', error }, window.location.origin)
+    }
+  } catch {
+    // cross-origin opener — nothing to report
+  }
+}
+
 function StartContent() {
   const searchParams = useSearchParams()
   const [fatal, setFatal] = useState<string | null>(null)
   const navigatedRef = useRef(false)
 
   useEffect(() => {
-    // Read primitive once — searchParams identity changes on every render.
+    // Read primitives once — searchParams identity changes on every render.
     const cb = searchParams.get('cb') || '/shopify-auth-success'
+    const intent = searchParams.get('intent') === 'signup' ? 'signup' : 'signin'
 
     let cancelled = false
     const run = async () => {
       try {
+        // Set the intent cookie first-party in this popup, before the Google
+        // authorization request. Non-fatal on failure — the opener's fallback
+        // Partitioned cookie may already be in place.
+        await fetch('/api/auth/oauth-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ intent }),
+        }).catch(() => {})
+
         const csrfRes = await fetch('/api/auth/csrf', { credentials: 'include' })
         if (!csrfRes.ok) throw new Error('Could not start sign-in (CSRF)')
         const { csrfToken } = await csrfRes.json()
@@ -74,7 +99,9 @@ function StartContent() {
         }, 2500)
       } catch (err) {
         if (cancelled) return
-        setFatal(err instanceof Error ? err.message : 'Sign-in failed to start')
+        const message = err instanceof Error ? err.message : 'Sign-in failed to start'
+        reportErrorToOpener('OAuthSignin')
+        setFatal(message)
       }
     }
 
@@ -90,10 +117,19 @@ function StartContent() {
   if (fatal) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center p-6">
-        <p className="text-red-300/80 text-sm text-center max-w-sm">
-          Sign-in failed to start. Try again, or sign in from the CartGain website in a normal browser tab.
-          <span className="block text-blue-300/60 mt-2">({fatal})</span>
-        </p>
+        <div className="text-center max-w-sm">
+          <p className="text-red-300/80 text-sm">
+            Sign-in failed to start. You can continue in a normal browser tab —
+            the Shopify app supports signing in from the CartGain website too.
+          </p>
+          <p className="text-blue-300/60 text-xs mt-3">({fatal})</p>
+          <button
+            onClick={() => window.close()}
+            className="mt-5 px-4 py-2 bg-slate-800 border border-slate-700 text-white/80 text-sm font-medium rounded-lg hover:bg-slate-700 transition"
+          >
+            Close window
+          </button>
+        </div>
       </div>
     )
   }

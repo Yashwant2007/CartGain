@@ -38,40 +38,99 @@ export function redirectTopForAuth(): void {
   window.top.location.href = `${window.location.origin}${authUrl}`
 }
 
+// ── Embedded Google OAuth outcome ──
+
+export type GoogleAuthOutcome =
+  | { status: 'success' }
+  | { status: 'closed' }
+  | { status: 'blocked' }
+  | { status: 'error'; error: string }
+
+// Friendly copy for every NextAuth OAuth error code the embedded popup can
+// land on. Shared by the popup's /auth/error page and the parent iframe.
+const GOOGLE_AUTH_ERROR_MESSAGES: Record<string, string> = {
+  OAuthSignin: 'Google sign-in could not be started. Please try again.',
+  OAuthCallback: 'Google did not complete the sign-in. Please try again.',
+  OAuthCreateAccount: 'Google could not create your account. Please try again.',
+  OAuthAccountNotLinked:
+    'This Google account is already used by a different CartGain account. Sign in with that account, or use a different Google/email account.',
+  AlreadySignedIn:
+    'A different account is currently signed in. Sign out first, then try again.',
+  NoAccount:
+    'No CartGain account exists for this Google account. Use the Sign up flow instead.',
+  AccessDenied: 'Google sign-in was not approved. Allow CartGain access to continue.',
+  Configuration:
+    'Google sign-in is not fully configured on this deployment. Please contact support.',
+  Verification: 'The sign-in link has expired or is invalid. Please try again.',
+  Default: 'Google sign-in did not complete. Please try again.',
+}
+
+export function googleAuthErrorMessage(code: string): string {
+  return GOOGLE_AUTH_ERROR_MESSAGES[code] ?? GOOGLE_AUTH_ERROR_MESSAGES.Default
+}
+
+export type GoogleAuthIntent = 'signin' | 'signup'
+
 // Google's OAuth page refuses to render inside any iframe (X-Frame-Options:
 // DENY), so the embedded Shopify admin flow cannot navigate the app frame to
-// accounts.google.com. Instead we run the OAuth in a real popup window. On
-// success, /shopify-auth-success posts a message back to this window.
-// 'success'  — OAuth completed and the popup signalled back
-// 'closed'   — user closed / cancelled the popup without completing
-// 'blocked'  — browser blocked window.open (no popup at all)
+// accounts.google.com. Instead we run the OAuth in a real popup window.
 //
-// NOTE: the popup can complete OAuth without ever signalling 'success' when
-// NextAuth redirects it somewhere other than /shopify-auth-success (e.g. to
-// /setup?requirePassword=1). Callers should treat 'success' and 'closed' the
-// same way: verify the session via /api/auth/session before navigating.
+// The popup is opened SYNCHRONOUSLY (before the first await) so the click's
+// transient user activation survives and the browser won't silently block it
+// (Safari/Firefox are strictest). The popup loads /shopify-auth-start, which
+// sets the sign-in intent cookie first-party (reliable in every browser) and
+// then performs the Google sign-in form POST as a real top-level navigation.
 //
-// Use direct NextAuth sign-in URL with callbackUrl — simpler and avoids
-// the intermediate /shopify-auth-start page which can have cookie issues.
-export async function openGoogleAuthPopup(callbackUrl: string): Promise<'success' | 'closed' | 'blocked'> {
-  if (typeof window === 'undefined') return Promise.resolve('blocked')
+// The popup reports back with postMessage:
+//   cg_auth_complete   — OAuth finished (NextAuth redirected to the success page)
+//   cg_auth_error      — NextAuth landed on an error page; listener carries the code
+// 'closed'            — user closed / cancelled the popup, or the popup never
+//                       surfaced our pages (e.g. NextAuth redirected elsewhere)
+//
+// Callers should treat 'success' and 'closed' identically: verify the session
+// via /api/auth/session before navigating — the popup can finish OAuth and
+// land somewhere other than the success page (e.g. /setup?requirePassword=1).
+export function openGoogleAuthPopup(opts: {
+  callbackUrl: string
+  intent: GoogleAuthIntent
+}): Promise<GoogleAuthOutcome> {
+  if (typeof window === 'undefined') return Promise.resolve({ status: 'blocked' })
 
-  const signinUrl = `/api/auth/signin/google?callbackUrl=${encodeURIComponent(callbackUrl)}`
+  const startUrl =
+    `/shopify-auth-start?intent=${opts.intent}` +
+    `&cb=${encodeURIComponent(opts.callbackUrl)}`
 
-  const popup = window.open(signinUrl, 'cartgain_google_auth', 'width=520,height=640')
-  if (!popup) return Promise.resolve('blocked')
+  // Synchronous window.open: must happen before any await so the popup isn't
+  // blocked. The intent cookie is set first-party by the popup itself.
+  const popup = window.open(startUrl, 'cartgain_google_auth', 'width=540,height=680')
+  if (!popup) return Promise.resolve({ status: 'blocked' })
+
+  // Fire-and-forget fallback: also set the Partitioned intent cookie from the
+  // iframe partition. The popup's own first-party set is authoritative under
+  // CHIPS; this covers browsers where the popup's set raced the OAuth POST.
+  fetch('/api/auth/oauth-intent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ intent: opts.intent }),
+  }).catch(() => {})
 
   return new Promise((resolve) => {
     const onMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return
-      if (event.data?.type !== 'cg_auth_complete') return
-      cleanup()
-      resolve('success')
+      const data = event.data as { type?: string; error?: string } | null
+      if (!data || typeof data.type !== 'string') return
+      if (data.type === 'cg_auth_complete') {
+        cleanup()
+        resolve({ status: 'success' })
+      } else if (data.type === 'cg_auth_error') {
+        cleanup()
+        resolve({ status: 'error', error: data.error || 'Default' })
+      }
     }
     const poll = window.setInterval(() => {
       if (popup.closed) {
         cleanup()
-        resolve('closed')
+        resolve({ status: 'closed' })
       }
     }, 800)
     const cleanup = () => {
