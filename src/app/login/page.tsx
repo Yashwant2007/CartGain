@@ -12,6 +12,7 @@ import {
   openGoogleAuthPopup,
   redirectTopForAuth,
   googleAuthErrorMessage,
+  shouldFallbackToTopOutcome,
 } from '@/lib/shopify-embed'
 
 export default function LoginPage() {
@@ -119,13 +120,6 @@ function LoginContent() {
           return
         }
 
-        // The popup completed but Google/NextAuth rejected it — surface the
-        // real, mapped error right in the app frame.
-        if (outcome.status === 'error') {
-          setError(googleAuthErrorMessage(outcome.error))
-          return
-        }
-
         // For Google-only accounts (no password) NextAuth redirects the popup
         // to /setup?requirePassword=1 instead of /shopify-auth-success, so the
         // cg_auth_complete message never fires. Never trust the message —
@@ -144,7 +138,23 @@ function LoginContent() {
         } catch (err) {
           console.error('Session check failed:', err)
         }
-        setError('Google sign-in didn\u2019t complete. Try again, or sign in with your email & password.')
+
+        // The popup rejected the sign-in (error=google / OAuthCallback etc.) or
+        // finished without a session. Cross-site cookie partitioning (CHIPS) can
+        // drop the OAuth state/PKCE cookies in the popup, so instead of just
+        // showing an error we fall back to the top-level full-page OAuth — the
+        // same first-party flow that reliably works outside the Shopify admin.
+        // If the merchant's browser also blocks top navigation from the embed,
+        // surface the mapped error as the next best thing.
+        if (outcome.status === 'error') {
+          if (shouldFallbackToTopOutcome(outcome.error)) {
+            redirectTopForAuth()
+            return
+          }
+          setError(googleAuthErrorMessage(outcome.error))
+          return
+        }
+        redirectTopForAuth()
         return
       }
 

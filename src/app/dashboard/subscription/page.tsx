@@ -200,6 +200,9 @@ export default function SubscriptionPage() {
 
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create subscription')
+      if (!data.keyId || !data.subscriptionId) {
+        throw new Error('Checkout is not configured on this deployment (missing payment key).')
+      }
 
       const options = {
         key: data.keyId,
@@ -226,10 +229,25 @@ export default function SubscriptionPage() {
       }
 
       const razorpay = new (window as any).Razorpay(options)
+
+      // Razorpay authorizations can still fail after the checkout opens (e.g.
+      // "Payment failed" from a declined card / bank timeout). Wire the real
+      // reason through instead of the generic alert, and give the merchant a
+      // sensible next step (retry, or switch plan / billing period).
+      razorpay.on('payment.failed', (response: any) => {
+        const code = response?.error?.code
+        const desc = response?.error?.description
+        alert(
+          `Payment was not completed${code ? ` (${code})` : ''}.${desc ? ` ${desc}` : ''} ` +
+          'Your subscription has not been changed. Please try again or use a different card / UPI.'
+        )
+      })
+
       razorpay.open()
     } catch (error) {
       console.error('Payment error:', error)
-      alert('Payment failed. Please try again.')
+      const msg = error instanceof Error ? error.message : 'Please try again.'
+      alert(`Payment failed. ${msg}`)
     } finally {
       setProcessing(null)
     }

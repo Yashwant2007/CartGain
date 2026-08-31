@@ -11,7 +11,6 @@ import {
   getEmbedAwareRedirectUrl,
   openGoogleAuthPopup,
   redirectTopForAuth,
-  googleAuthErrorMessage,
 } from '@/lib/shopify-embed'
 
 function Toast({ message, type, onClose }: { message: string; type: 'error' | 'info'; onClose: () => void }) {
@@ -197,13 +196,6 @@ export default function SignUpPage() {
           return
         }
 
-        // The popup completed but Google/NextAuth rejected it — surface the
-        // real, mapped error right in the app frame.
-        if (outcome.status === 'error') {
-          setError(googleAuthErrorMessage(outcome.error))
-          return
-        }
-
         // NextAuth may land the popup on /setup or /login for new Google
         // accounts instead of /shopify-auth-success, so never trust the
         // message — verify the session from the iframe directly.
@@ -213,12 +205,12 @@ export default function SignUpPage() {
             router.push(getEmbedAwareRedirectUrl('/setup'))
             router.refresh()
           } else {
-            setError('Google sign-in didn\u2019t complete. Try again, or create your account at cart-gain.com.')
+            redirectTopForAuth()
           }
           return
         } catch (err) {
           console.error('Session check failed:', err)
-          setError('Google sign-in didn\u2019t complete. Try again, or create your account at cart-gain.com.')
+          redirectTopForAuth()
           return
         }
       }

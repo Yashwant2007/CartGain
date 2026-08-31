@@ -40,13 +40,24 @@ export default async function EmbedPage({
   let language: string | undefined
 
   if (shop) {
-    const store = await prisma.store.findFirst({
+    const normalizedShop = shop.trim().toLowerCase().replace(/^www\./, '')
+    let store = await prisma.store.findFirst({
       where: {
         isActive: true,
-        OR: [{ domain: shop }, { domain: { contains: shop } }],
+        OR: [{ domain: normalizedShop }, { domain: { contains: normalizedShop } }],
       },
       select: { id: true },
     })
+    if (!store && normalizedShop.endsWith('.myshopify.com')) {
+      // A store's domain might be stored as a bare handle (e.g. "my-store")
+      // while the embed passes the full permanent domain. Match on the handle
+      // so the widget still resolves for auto-created/legacy store rows.
+      const handle = normalizedShop.slice(0, -'.myshopify.com'.length)
+      store = await prisma.store.findFirst({
+        where: { isActive: true, OR: [{ domain: handle }, { domain: { endsWith: handle } }] },
+        select: { id: true },
+      })
+    }
     if (store) {
       storeFound = true
       storeId = store.id

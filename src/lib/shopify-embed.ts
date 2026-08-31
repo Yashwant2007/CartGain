@@ -69,6 +69,22 @@ export function googleAuthErrorMessage(code: string): string {
   return GOOGLE_AUTH_ERROR_MESSAGES[code] ?? GOOGLE_AUTH_ERROR_MESSAGES.Default
 }
 
+// Error codes where a fallback to the top-level (first-party) OAuth is strictly
+// better than showing the error in-app. These are the transitions that break
+// when cross-site cookie partitioning (CHIPS) drops the popup's OAuth
+// state/PKCE cookies — a top-level redirect runs the whole round-trip in a
+// truly first-party context and succeeds where the partitioned popup can't.
+const TOP_LEVEL_FALLBACK_ERRORS = new Set([
+  'google',          // sign-in could not be initiated (redirect_uri / client / cookie)
+  'OAuthCallback',   // OAuth callback rejected (state/PKCE cookie missing under CHIPS)
+  'Configuration',   // provider not fully configured on this deployment
+  'OAuthSignin',     // could not build the authorization request
+])
+
+export function shouldFallbackToTopOutcome(code: string): boolean {
+  return TOP_LEVEL_FALLBACK_ERRORS.has(code)
+}
+
 export type GoogleAuthIntent = 'signin' | 'signup'
 
 // Google's OAuth page refuses to render inside any iframe (X-Frame-Options:
