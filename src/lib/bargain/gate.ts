@@ -1,7 +1,7 @@
 import prisma from '@/lib/db'
 import type { Prisma } from '@prisma/client'
 import type { Plan } from '@/lib/payment'
-import { PLANS, PAID_PLAN_IDS, resolvePlanId } from '@/lib/payment'
+import { PLANS, PAID_PLAN_IDS, resolvePlanId, getPlan } from '@/lib/payment'
 
 export const BARGAIN_SESSIONS_EXHAUSTED = 'bargain_sessions_exhausted'
 export const BARGAIN_DEALS_EXHAUSTED = 'bargain_deals_exhausted'
@@ -53,7 +53,7 @@ export async function getBargainGate(storeId: string): Promise<BargainGate> {
   }
 
   const planId = resolvePlanId(subscription.plan)
-  const plan = PLANS[planId] || PLANS.FREE
+  const plan = getPlan(subscription.plan) || PLANS.FREE
   const isPaid = (PAID_PLAN_IDS as readonly string[]).includes(planId)
 
   // Overage is the plan's default behaviour for paid tiers ("40 deals included,

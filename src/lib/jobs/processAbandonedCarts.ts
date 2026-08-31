@@ -7,7 +7,7 @@ import { generateEmailContent, generateSMSContent, generateWhatsAppContent, gene
 import type { CartContext, PersonalizedDiscount } from '@/lib/services/ai'
 import { releaseLock } from '@/lib/job-lock'
 import { redisSetNX, redisIncr, redisGet, redisExpire, getRedis } from '@/lib/redis'
-import { FREE_CARTS_THRESHOLD, PLANS, PAID_PLAN_IDS, resolvePlanId } from '@/lib/payment'
+import { FREE_CARTS_THRESHOLD, PLANS, PAID_PLAN_IDS, resolvePlanId, getPlan } from '@/lib/payment'
 
 const PAID_PLANS = PAID_PLAN_IDS
 const MAX_STORE_CONCURRENCY = 10
@@ -136,7 +136,7 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
     const isPaidUser = subscription && (PAID_PLAN_IDS as readonly string[]).includes(resolvePlanId(subscription.plan)) && subscription.status === 'active'
 
     if (isPaidUser) {
-      const plan = PLANS[resolvePlanId(subscription!.plan)]
+      const plan = getPlan(subscription!.plan)
       const maxCarts = plan?.maxCarts ?? Infinity
 
       const cartsUsed = await getCartsUsedForStore(campaign.userId, subscription)
@@ -160,7 +160,7 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
     }
 
     const planConfig = isPaidUser && subscription
-      ? PLANS[resolvePlanId(subscription.plan)] || PLANS.FREE
+      ? getPlan(subscription.plan)
       : PLANS.FREE
     const customerLimits = planConfig.maxMessagesPerCustomer
 

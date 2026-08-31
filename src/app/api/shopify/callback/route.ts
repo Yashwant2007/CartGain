@@ -170,6 +170,17 @@ export async function GET(req: NextRequest) {
 
           console.log(`✅ AI-powered campaign setup complete for store ${targetStore.id}`)
         }
+
+        // Onboarding: automatically enable the bargaining widget the moment a
+        // store connects. Without this, the storefront embed hides itself
+        // (cg_empty) until the merchant manually opens the Bargain dashboard
+        // and toggles "Enable Bargain" — a common reason the widget "never shows".
+        await prisma.bargainConfig.upsert({
+          where: { storeId: targetStore.id },
+          update: { enabled: true },
+          create: { storeId: targetStore.id, enabled: true },
+        })
+        console.log(`✅ Bargain enabled automatically for store ${targetStore.id}`)
       }
     } catch (campaignError) {
       console.error('Failed to auto-create campaign:', campaignError)

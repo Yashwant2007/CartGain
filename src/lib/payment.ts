@@ -160,8 +160,26 @@ export const LEGACY_PLAN_MAP: Record<string, string> = {
 }
 
 export function resolvePlanId(planId: string): string {
-  if (planId in PLANS) return planId
-  return LEGACY_PLAN_MAP[planId] ?? PLAN_IDS.FREE
+  const normalized = String(planId || '').toLowerCase().trim()
+  // PLANS is keyed by uppercase convenience keys (FREE/GROWTH/PRO), while the
+  // canonical ids, PLAN_IDS and what's stored on Subscription.plan and posted
+  // to the payment API are all lowercase ("growth"). Resolve against the real
+  // `.id` so a paid tier never collapses to free (that used to make
+  // create-subscription return "Invalid plan" and zero out paid billing/gates).
+  const match = Object.values(PLANS).find((p) => p.id === normalized)
+  if (match) return match.id
+  if (normalized in LEGACY_PLAN_MAP) return LEGACY_PLAN_MAP[normalized]
+  return PLAN_IDS.FREE
+}
+
+/**
+ * Resolve a plan object from any id/case (e.g. "growth", "GROWTH", legacy
+ * "starter"). Used everywhere instead of `PLANS[resolvePlanId(x)]` because
+ * PLANS is keyed by uppercase names while the canonical id is lowercase.
+ */
+export function getPlan(planId: string): Plan {
+  const id = resolvePlanId(planId)
+  return Object.values(PLANS).find((p) => p.id === id) || PLANS.FREE
 }
 
 export const PAID_PLAN_IDS = [PLAN_IDS.GROWTH, PLAN_IDS.PRO]

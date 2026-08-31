@@ -1,5 +1,5 @@
 import prisma from '@/lib/db'
-import { razorpay, OVERAGE_RATE_PER_MESSAGE, PLANS, resolvePlanId } from '@/lib/payment'
+import { razorpay, OVERAGE_RATE_PER_MESSAGE, getPlan } from '@/lib/payment'
 import { sendEmail } from '@/lib/services/email'
 
 export interface BillingResult {
@@ -65,7 +65,7 @@ export async function processRevenueShareBilling(): Promise<BillingResult> {
             + unbilledBargainEvents.reduce((sum, e) => sum + e.revShareAmount, 0)) * 100
         ) / 100
 
-      const planConfig = PLANS[resolvePlanId(subscription.plan)] || PLANS.FREE
+      const planConfig = getPlan(subscription.plan)
       const revShareCap = planConfig.revShareCap > 0 ? planConfig.revShareCap : Infinity
       // "Capped at ₹5,000/mo" — anything accrued beyond the cap is written off
       const revShareAmount = Math.min(revShareTotal, revShareCap)

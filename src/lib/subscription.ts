@@ -1,5 +1,5 @@
 import prisma from '@/lib/db'
-import { PLANS, PAID_PLAN_IDS, FREE_CARTS_THRESHOLD, resolvePlanId } from '@/lib/payment'
+import { PAID_PLAN_IDS, FREE_CARTS_THRESHOLD, resolvePlanId, getPlan } from '@/lib/payment'
 
 export type SubscriptionStatus = {
   hasSubscription: boolean
@@ -29,7 +29,7 @@ export type SubscriptionStatus = {
 }
 
 export function planConfigFor(planId: string) {
-  return PLANS[resolvePlanId(planId)] || PLANS.FREE
+  return getPlan(planId)
 }
 
 export async function getSubscriptionStatus(userId: string): Promise<SubscriptionStatus | null> {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { createRazorpaySubscription, PLANS, resolvePlanId } from '@/lib/payment'
+import { createRazorpaySubscription, resolvePlanId, getPlan } from '@/lib/payment'
 import prisma from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     }
 
     const resolvedPlanId = resolvePlanId(plan)
-    const planConfig = PLANS[resolvedPlanId]
+    const planConfig = getPlan(plan)
     if (!planConfig || planConfig.price === 0) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
     }

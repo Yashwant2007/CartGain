@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyWebhookSignature, PLANS, resolvePlanId, PAID_PLAN_IDS } from "@/lib/payment";
+import { verifyWebhookSignature, PLANS, resolvePlanId, PAID_PLAN_IDS, getPlan } from "@/lib/payment";
 import prisma from "@/lib/db";
 
 export const dynamic = 'force-dynamic'
@@ -76,7 +76,7 @@ async function handlePaymentCaptured(payment: any) {
 
   if (!userId || !plan) return;
 
-  const planConfig = PLANS[resolvePlanId(plan)]
+  const planConfig = getPlan(plan)
   if (!planConfig) {
     console.error(`Webhook: unknown plan "${plan}" for user ${userId}`);
     return;

@@ -3,7 +3,7 @@ import { waitUntil } from '@vercel/functions'
 import prisma from '@/lib/db'
 import { logDataAccess } from '@/lib/data-protection'
 import { verifyShopifyWebhook } from '@/lib/shopify'
-import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS, resolvePlanId } from '@/lib/payment'
+import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS, resolvePlanId, getPlan } from '@/lib/payment'
 import { sendAlertOnError } from '@/lib/alerter'
 import { redisSetNX } from '@/lib/redis'
 
@@ -344,7 +344,7 @@ async function accrueRevenueShare(params: AccrueParams) {
   })
   if (!subscription) return
 
-  const planConfig = PLANS[resolvePlanId(subscription.plan)]
+  const planConfig = getPlan(subscription.plan)
   if (!planConfig || planConfig.revSharePercent <= 0) return
 
   const totalRecovered = await prisma.recoveredCart.count({
