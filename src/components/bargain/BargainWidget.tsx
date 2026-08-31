@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  X, Send, MessageCircle, Sparkles, Loader2, CheckCircle2, Clock, Tag, Zap, ShieldCheck, ChevronRight,
+  X, Send, MessageCircle, Sparkles, Loader2, CheckCircle2, Clock, Tag, Zap, ShieldCheck, ChevronRight, BadgePercent, TrendingDown,
 } from 'lucide-react'
 import { currencySymbolFor, uiText } from '@/lib/bargain/i18n'
 
@@ -356,7 +356,7 @@ export default function BargainWidget({
               border: '1px solid #e2e8f0',
               boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 8px 24px rgba(15,23,42,0.06)',
               overflow: 'hidden',
-              height: open ? 560 : 'auto',
+              height: open ? 620 : 'auto',
             }
           : {}),
       }}
@@ -372,15 +372,24 @@ export default function BargainWidget({
             alignItems: 'center',
             gap: 14,
             padding: '16px 18px',
-            background: '#ffffff',
-            border: 'none',
+            background: 'linear-gradient(135deg, #ffffff 0%, #fafbff 100%)',
+            border: '1px solid #e0e7ff',
             cursor: 'pointer',
             textAlign: 'left',
             borderRadius: 16,
-            transform: open ? 'translateY(0)' : undefined,
+            position: 'relative',
+            overflow: 'hidden',
           }}
         >
-          {/* Indigo accent spine */}
+          {/* Indigo accent spine + attention pulse */}
+          <span className="cg-attn" style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            borderRadius: 16,
+            boxShadow: '0 0 0 0 rgba(99,102,241,0.35)',
+            animation: 'cgAttnPulse 2.4s infinite',
+          }} />
           <div style={{
             alignSelf: 'stretch',
             width: 4,
@@ -393,18 +402,28 @@ export default function BargainWidget({
             <img
               src={image}
               alt=""
-              width={58}
-              height={58}
-              style={{ width: 58, height: 58, borderRadius: 12, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
+              width={64}
+              height={64}
+              style={{ width: 64, height: 64, borderRadius: 12, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
             />
           ) : (
-            <div style={{ width: 58, height: 58, borderRadius: 12, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Tag size={24} style={{ color: '#6366f1' }} />
+            <div style={{ width: 64, height: 64, borderRadius: 12, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <BadgePercent size={28} style={{ color: '#6366f1' }} />
             </div>
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {productTitle ? productTitle : 'This item'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ fontWeight: 800, fontSize: 16, color: '#0f172a', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {productTitle ? productTitle : 'This item'}
+              </div>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', color: '#15803d',
+                border: '1px solid #bbf7d0', borderRadius: 999, padding: '2px 9px',
+                fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap',
+              }}>
+                <TrendingDown size={11} /> {t('saveNow')}
+              </span>
             </div>
             <div style={{ fontSize: 14, color: '#334155', marginTop: 3, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 16 }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
@@ -412,7 +431,7 @@ export default function BargainWidget({
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                 <Zap size={12} style={{ color: '#4f46e5' }} />
                 <span style={{ fontSize: 12.5, color: '#6366f1', fontWeight: 600 }}>
-                  {isEmbed && mode === 'cart' ? 'Bargain a discount before checkout' : 'Want a better price?'}
+                  {isEmbed && mode === 'cart' ? t('discountHint') : t('triggerSub')}
                 </span>
               </span>
             </div>
@@ -427,26 +446,27 @@ export default function BargainWidget({
               style={{
                 background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
                 color: '#ffffff',
-                fontWeight: 700,
+                fontWeight: 800,
                 fontSize: 14,
-                padding: '10px 18px',
+                padding: '12px 20px',
                 borderRadius: 999,
                 border: 'none',
-                boxShadow: '0 2px 10px rgba(79,70,229,0.35)',
+                boxShadow: '0 4px 16px rgba(79,70,229,0.45)',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 6,
+                gap: 7,
                 whiteSpace: 'nowrap',
+                animation: 'cgAttnPulse 2.4s infinite',
               }}
             >
-              <Sparkles size={14} />
+              <Sparkles size={15} />
               {t('negotiate')}
             </span>
             <ChevronRight size={18} style={{ color: '#94a3b8', flexShrink: 0, marginLeft: 10 }} />
           </div>
         </button>
       ) : (
-        /* Floating trigger button */
+        /* Floating trigger button — catchy, attention-grabbing launcher */
         <button
           onClick={openPanel}
           aria-label="Bargain for a better price"
@@ -456,30 +476,45 @@ export default function BargainWidget({
             right: 24,
             background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
             color: '#ffffff',
-            padding: '14px 22px',
+            padding: '16px 24px',
             borderRadius: 999,
-            border: '1px solid rgba(255,255,255,0.2)',
-            fontWeight: 700,
-            fontSize: 14,
+            border: '1px solid rgba(255,255,255,0.25)',
+            fontWeight: 800,
+            fontSize: 15,
             display: 'inline-flex',
             alignItems: 'center',
             gap: 10,
             cursor: 'pointer',
-            boxShadow: '0 8px 28px rgba(79,70,229,0.4), 0 2px 8px rgba(0,0,0,0.12)',
+            boxShadow: '0 10px 30px rgba(79,70,229,0.5), 0 2px 8px rgba(0,0,0,0.14)',
             transition: 'all 0.2s ease',
             zIndex: 99998,
+            animation: 'cgAttnFloat 3s ease-in-out infinite',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = 'linear-gradient(135deg, #4f46e5, #4338ca)'
-            e.currentTarget.style.boxShadow = '0 10px 34px rgba(79,70,229,0.5), 0 2px 8px rgba(0,0,0,0.14)'
+            e.currentTarget.style.boxShadow = '0 12px 38px rgba(79,70,229,0.6), 0 2px 8px rgba(0,0,0,0.16)'
+            e.currentTarget.style.transform = 'scale(1.05)'
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = 'linear-gradient(135deg, #6366f1, #4f46e5)'
-            e.currentTarget.style.boxShadow = '0 8px 28px rgba(79,70,229,0.4), 0 2px 8px rgba(0,0,0,0.12)'
+            e.currentTarget.style.boxShadow = '0 10px 30px rgba(79,70,229,0.5), 0 2px 8px rgba(0,0,0,0.14)'
+            e.currentTarget.style.transform = 'scale(1)'
           }}
         >
-          <Sparkles size={18} />
+          <span style={{ position: 'relative', display: 'inline-flex' }}>
+            <Sparkles size={20} />
+            <span style={{
+              position: 'absolute', top: -6, right: -8, width: 10, height: 10,
+              background: '#34d399', border: '2px solid #4f46e5', borderRadius: '50%',
+            }} />
+          </span>
           <span>{t('negotiate')}</span>
+          <span style={{
+            background: 'rgba(255,255,255,0.22)', border: '1px solid rgba(255,255,255,0.35)',
+            padding: '3px 10px', borderRadius: 999, fontSize: 12, fontWeight: 800,
+          }}>
+            {t('saveNow')}
+          </span>
         </button>
       )}
 
@@ -495,7 +530,7 @@ export default function BargainWidget({
             left: isEmbed ? 0 : undefined,
             bottom: 0,
             width: '100%',
-            maxWidth: isEmbed ? 'none' : 440,
+            maxWidth: isEmbed ? 'none' : 460,
             background: '#ffffff',
             color: '#1e293b',
             boxShadow: isEmbed ? 'none' : '-8px 0 40px rgba(0,0,0,0.16)',
@@ -1016,6 +1051,8 @@ export default function BargainWidget({
         @keyframes cgPanelIn { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
         @keyframes cgMsgIn { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: translateY(0) } }
         @keyframes cgDotPulse { 0%, 60%, 100% { opacity: 0.35; transform: scale(0.9) } 30% { opacity: 1; transform: scale(1) } }
+        @keyframes cgAttnPulse { 0% { box-shadow: 0 0 0 0 rgba(99,102,241,0.4) } 70% { box-shadow: 0 0 0 12px rgba(99,102,241,0) } 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0) } }
+        @keyframes cgAttnFloat { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
         .spin { animation: spin 1s linear infinite }
         .cg-dot { animation: cgDotPulse 1.2s infinite ease-in-out }
         .bargain-widget-root * { box-sizing: border-box }

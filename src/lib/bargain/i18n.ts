@@ -56,6 +56,10 @@ export type UiKey =
   | 'walkout'
   | 'walkoutPrompt'
   | 'optOutMsg'
+  | 'triggerLabel'
+  | 'triggerSub'
+  | 'saveNow'
+  | 'discountHint'
 
 const I18N: Record<UiLang, Record<UiKey, string>> = {
   en: {
@@ -90,6 +94,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     walkout: 'Walk out',
     walkoutPrompt: "I'll have to walk if that's the final price.",
     optOutMsg: 'No problem — you can buy at the regular price below. You opted out of AI pricing.',
+    triggerLabel: 'Negotiate Price',
+    triggerSub: 'Looks a bit steep? Ask for a better price.',
+    saveNow: 'Save now',
+    discountHint: 'Get an instant deal',
   },
   hinglish: {
     farewell_friendly: 'Theek hai dost, door hamesha khula hai. Agar mann badle toh bata dena. Dhyaan rakhna! 👋',
@@ -123,6 +131,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     walkout: 'Walk out',
     walkoutPrompt: 'Agar yehi final price hai toh main chala jaunga.',
     optOutMsg: 'Koi baat nahi — aap regular price par buy kar sakte ho. Aapne AI pricing se opt-out kiya.',
+    triggerLabel: 'Bhaw Bolo',
+    triggerSub: 'Bhaw thoda zyada lag raha hai? Better price maango.',
+    saveNow: 'Abhi bachao',
+    discountHint: 'Instant deal pao',
   },
   hi: {
     farewell_friendly: 'समझ गया दोस्त, दरवाज़ा हमेशा खुला है। अगर मन बदले तो बता देना। ध्यान रखना! 👋',
@@ -156,6 +168,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     walkout: 'चले जाओ',
     walkoutPrompt: 'अगर यही अंतिम कीमत है तो मैं चला जाऊँगा।',
     optOutMsg: 'कोई बात नहीं — आप नियमित कीमत पर खरीद सकते हैं। आपने AI मूल्य-निर्धारण से ऑप्ट-आउट किया।',
+    triggerLabel: 'भाव मोल करें',
+    triggerSub: 'कीमत थोड़ी ज़्यादा लग रही है? बेहतर कीमत माँगें।',
+    saveNow: 'अभी बचाएँ',
+    discountHint: 'तुरंत डील पाएँ',
   },
   ta: {
     farewell_friendly: 'புரிந்தது நண்பரே, கதவு எப்போதும் திறந்தே உள்ளது. மனம் மாறினால் சொல்லுங்கள். பார்த்துக்கொள்ளுங்கள்! 👋',
@@ -189,6 +205,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     walkout: 'வெளியேறு',
     walkoutPrompt: 'இதுவே இறுதி விலை என்றால் நான் சென்று விடுவேன்.',
     optOutMsg: 'பரவாயில்லை — நீங்கள் நியம விலையில் வாங்கலாம். AI விலையிலிருந்து விலகியுள்ளீர்கள்.',
+    triggerLabel: 'விலை பேசுங்கள்',
+    triggerSub: 'விலை கொஞ்சம் அதிகமாக இருக்கிறதா? சிறந்த விலை கேளுங்கள்.',
+    saveNow: 'இப்போதே சேமியுங்கள்',
+    discountHint: 'உடனடி ஒப்பந்தம் பெறுங்கள்',
   },
   te: {
     farewell_friendly: 'అర్థమైంది స్నేహితుడా, తలుపు ఎప్పుడూ తెరిచే ఉంది. మనసు మారితే చెప్పండి. జాగ్రత్త! 👋',
@@ -222,6 +242,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     walkout: 'వెళ్లిపో',
     walkoutPrompt: 'ఇదే చివరి ధర అయితే నేను వెళ్లిపోతాను.',
     optOutMsg: 'ఫర్వాలేదు — మీరు నిర్ణీత ధరకు కొనవచ్చు. మీరు AI ధర నుండి తప్పుకున్నారు.',
+    triggerLabel: 'ధర చర్చించండి',
+    triggerSub: 'ధర కొంచెం ఎక్కువగా ఉందా? మెరుగైన ధర అడగండి.',
+    saveNow: 'ఇప్పుడే ఆదా చేయండి',
+    discountHint: 'తక్షణ డీల్ పొందండి',
   },
   bn: {
     farewell_friendly: 'বুঝেছি বন্ধু, দরজা সবসময় খোলা। মন বদলালে জানিয়ে দিও। ভালো থেকো! 👋',
@@ -255,6 +279,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     walkout: 'চলে যান',
     walkoutPrompt: 'এটাই যদি সর্বশেষ দাম হয়, আমি চলে যাব।',
     optOutMsg: 'সমস্যা নেই — আপনি নিয়মিত দামে কিনতে পারেন। আপনি AI মূল্যধারণ থেকে অপ্ট-আউট করেছেন।',
+    triggerLabel: 'দরদাম করুন',
+    triggerSub: 'দাম একটু বেশি মনে হচ্ছে? ভালো দাম চান।',
+    saveNow: 'এখনই বাঁচান',
+    discountHint: 'তাৎক্ষণিক ডিল পান',
   },
   mr: {
     farewell_friendly: 'समजलो मित्रा, दार नेहमी उघडे आहे. मन बदललं तर सांग. काळजी घ्या! 👋',
@@ -288,6 +316,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     walkout: 'निघून जा',
     walkoutPrompt: 'हीच अंतिम किंमत असेल तर मी निघून जाईन.',
     optOutMsg: 'हरकत नाही — तुम्ही नियमित किमतीत खरेदी करू शकता. तुम्ही AI किंमतीतून बाहेर पडलात.',
+    triggerLabel: 'भाव मोल करा',
+    triggerSub: 'किंमत थोडी जास्त वाटते आहे? चांगली किंमत विचारा.',
+    saveNow: 'आता वाचवा',
+    discountHint: 'तात्काळ डील मिळवा',
   },
   gu: {
     farewell_friendly: 'સમજ્યો મિત્ર, દરવાજો હંમેશા ખુલ્લો છે. મન બદલાય તો કહેજે. કાળજી રાખજો! 👋',
@@ -321,6 +353,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     walkout: 'જતાં રહો',
     walkoutPrompt: 'આ જ અંતિમ કિંમત હોય તો હું જતો રહીશ.',
     optOutMsg: 'કોઈ સમસ્યા નહીં — તમે નિયમિત કિંમતે ખરીદી શકો છો. તમે AI કિંમત-નિર્ધારણમાંથી બહાર નીકળ્યા છો.',
+    triggerLabel: 'ભાવ મોલ કરો',
+    triggerSub: 'કિંમત થોડી વધારે લાગે છે? વધુ સારી કિંમત પૂછો.',
+    saveNow: 'હમણાં બચાવો',
+    discountHint: 'ઝટપટ ડીલ મેળવો',
   },
   pa: {
     farewell_friendly: 'ਸਮਝ ਗਿਆ ਮਿੱਤਰਾ, ਦਰਵਾਜ਼ਾ ਹਮੇਸ਼ਾ ਖੁੱਲ੍ਹਾ ਹੈ। ਮਨ ਬਦਲੇ ਤਾਂ ਦੱਸ ਦੇਣਾ। ਖ਼ਿਆਲ ਰੱਖੀਂ! 👋',
@@ -354,6 +390,10 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     walkout: 'ਚੱਲੇ ਜਾਓ',
     walkoutPrompt: 'ਜੇ ਇਹੀ ਆਖਰੀ ਕੀਮਤ ਹੈ ਤਾਂ ਮੈਂ ਚੱਲਾ ਜਾਵਾਂਗਾ।',
     optOutMsg: 'ਕੋਈ ਗੱਲ ਨਹੀਂ — ਤੁਸੀਂ ਰੈਗੂਲਰ ਕੀਮਤ ’ਤੇ ਖਰੀਦ ਸਕਦੇ ਹੋ। ਤੁਸੀਂ AI ਕੀਮਤ-ਨਿਰਧਾਰਨ ਤੋਂ ਬਾਹਰ ਹੋ ਗਏ।',
+    triggerLabel: 'ਭਾਅ ਮੁੱਲ ਕਰੋ',
+    triggerSub: 'ਕੀਮਤ ਥੋੜ੍ਹੀ ਵੱਧ ਲੱਗ ਰਹੀ ਹੈ? ਵਧੀਆ ਕੀਮਤ ਮੰਗੋ।',
+    saveNow: 'ਹੁਣੇ ਬਚਾਓ',
+    discountHint: 'ਤੁਰੰਤ ਡੀਲ ਪਾਓ',
   },
 }
 
