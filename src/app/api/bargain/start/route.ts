@@ -119,6 +119,7 @@ export async function POST(request: NextRequest) {
           }),
           expiresAt: existing.expiredAt.toISOString(),
           attemptsRemaining: Math.max(0, config.maxAttempts - existing.attemptsUsed),
+          maxDiscountPercent: Math.round((1 - existingFloor.minPrice / existing.originalPrice) * 100),
           existingSession: true,
         }, { status: 200 })
       }
@@ -128,6 +129,9 @@ export async function POST(request: NextRequest) {
     const language = data.language && SUPPORTED_LANGUAGES.includes(data.language as any)
       ? data.language
       : (config.language || 'auto')
+
+    const customerContext = await buildCustomerContext(data.storeId, data.customerEmail || null)
+    const returning = !!(customerContext && data.customerEmail)
 
     const ctx: NegotiationContext = {
       storeName: store.name,
@@ -139,7 +143,7 @@ export async function POST(request: NextRequest) {
       persona: config.aiPersona as NegotiationContext['persona'],
       productTitle: undefined,
       language,
-      customerContext: await buildCustomerContext(data.storeId, data.customerEmail || null),
+      customerContext,
     }
 
     // Pull optional product title from override
@@ -199,6 +203,8 @@ export async function POST(request: NextRequest) {
       openingMessage: openingReply,
       expiresAt: expiredAt.toISOString(),
       attemptsRemaining: config.maxAttempts,
+      maxDiscountPercent: Math.round((1 - minPrice / data.originalPrice) * 100),
+      returning,
     }, { status: 201 })
   } catch (error) {
     const validationResponse = handleValidationError(error)
