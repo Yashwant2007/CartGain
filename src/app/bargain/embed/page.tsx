@@ -35,7 +35,6 @@ export default async function EmbedPage({
 
   let storeId: string | null = null
   let storeFound = false
-  let enabled = false
   let persona: string | undefined
   let language: string | undefined
 
@@ -61,8 +60,12 @@ export default async function EmbedPage({
     if (store) {
       storeFound = true
       storeId = store.id
+      // Bargaining is ON for any connected, active store. The `enabled` master
+      // toggle is preserved in the dashboard as the merchant's preference, but a
+      // widget added in the theme editor always renders here — previously a
+      // stale `enabled=false` default silently hid the whole widget
+      // ("added it in the theme editor but it's not showing").
       const config = await prisma.bargainConfig.findUnique({ where: { storeId: store.id } })
-      enabled = config?.enabled ?? false
       persona = config?.aiPersona ?? 'friendly_shopkeeper'
       language = config?.language ?? 'auto'
     }
@@ -70,13 +73,13 @@ export default async function EmbedPage({
 
   const valid = storeId && shopifyProductId && Number.isFinite(price) && price > 0
 
-  // Bargaining is off (or the store/product/price params are invalid) — this is
-  // a customer-facing iframe, so we show NOTHING. Rendering an error card here
-  // would put a "Bargaining is paused" branded block on the store's product
-  // page, breaking the theme. Instead we emit an empty, transparent frame and
-  // tell the storefront controller (bargain.js / bargain-embed.js) to hide the
-  // whole widget via the cg_empty postMessage.
-  if (!storeFound || !valid || !enabled) {
+  // The store/product/price params are invalid (or no active store was found) —
+  // this is a customer-facing iframe, so we show NOTHING. Rendering an error
+  // card here would put a branded block on the store's product page, breaking
+  // the theme. Instead we emit an empty, transparent frame and tell the
+  // storefront controller (bargain.js / bargain-embed.js) to hide the whole
+  // widget via the cg_empty postMessage.
+  if (!storeFound || !valid) {
     return (
       <>
         <div aria-hidden style={{ width: 0, height: 0 }} />

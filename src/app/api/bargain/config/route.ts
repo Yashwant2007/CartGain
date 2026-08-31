@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       const resolvedStoreId = fallback.id
       const config = await prisma.bargainConfig.upsert({
         where: { storeId: resolvedStoreId },
-        create: { storeId: resolvedStoreId },
+        create: { storeId: resolvedStoreId, enabled: true },
         update: {},
       })
       return NextResponse.json({ config, resolvedStoreId })
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 
     const config = await prisma.bargainConfig.upsert({
       where: { storeId },
-      create: { storeId },
+      create: { storeId, enabled: true },
       update: {},
     })
 

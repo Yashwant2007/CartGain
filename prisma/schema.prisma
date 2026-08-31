@@ -293,7 +293,7 @@ model Subscription {
 model BargainConfig {
   id               String   @id @default(cuid())
   storeId          String   @unique
-  enabled          Boolean  @default(false)
+  enabled          Boolean  @default(true)
   maxAttempts      Int      @default(3)
   aiModel          String   @default("gpt-4o-mini")
   aiPersona        String   @default("friendly_shopkeeper") // friendly_shopkeeper, strict_negotiator, playful_friend
