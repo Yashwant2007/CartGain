@@ -720,7 +720,7 @@ export default function SubscriptionPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {Object.values(PLANS).filter(p => p.id !== 'enterprise').map((plan) => {
             const isFree = plan.price === 0
             const isCurrentPlan = isFree ? isFreeUser : isPaidUser && currentPlan?.id === plan.id

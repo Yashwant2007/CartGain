@@ -1204,7 +1204,7 @@ export default function HomePage() {
             </div>
 
             {/* Paid Plan Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto mb-12">
               {Object.values(PLANS).filter(p => p.price > 0 && p.id !== 'enterprise').map((plan) => {
                 const isGrowth = plan.recommended
                 const displayPrice = billing === 'yearly' ? Math.round(plan.yearlyPrice / 12) : plan.price
