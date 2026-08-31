@@ -1237,9 +1237,24 @@ export default function HomePage() {
                     <p className="text-xs text-emerald-400/80 mb-1">
                       Est. additional recovery ₹{plan.estimatedRecovery.min.toLocaleString('en-IN')}-{plan.estimatedRecovery.max.toLocaleString('en-IN')}/mo
                     </p>
-                    <p className="text-xs text-blue-300/40 mb-6">
-                      + {plan.revSharePercent}% revenue share on CartGain-attributed recoveries, after the first {FREE_CARTS_THRESHOLD}
+                    <p className="text-xs text-blue-300/40 mb-5">
+                      + {plan.revSharePercent}% revenue share on CartGain-attributed recoveries (capped at ₹{plan.revShareCap.toLocaleString('en-IN')}/mo), after the first {FREE_CARTS_THRESHOLD}
                     </p>
+
+                    {/* Bargain meters — the CartGain USP, surfaced per plan */}
+                    <div className="mb-6 grid grid-cols-2 gap-2 text-center">
+                      <div className="bg-slate-900/50 border border-blue-700/30 rounded-lg py-2.5">
+                        <div className="text-lg font-bold text-emerald-400">{plan.bargainSessions === Infinity ? '∞' : plan.bargainSessions.toLocaleString('en-IN')}</div>
+                        <div className="text-[10px] uppercase tracking-wide text-blue-300/50">Bargain sessions</div>
+                      </div>
+                      <div className="bg-slate-900/50 border border-blue-700/30 rounded-lg py-2.5">
+                        <div className="text-lg font-bold text-emerald-400">{plan.bargainDeals === Infinity ? '∞' : plan.bargainDeals.toLocaleString('en-IN')}{plan.bargainOverageDealPrice > 0 ? '+' : ''}</div>
+                        <div className="text-[10px] uppercase tracking-wide text-blue-300/50">Accepted deals</div>
+                        {plan.bargainOverageDealPrice > 0 && (
+                          <div className="text-[10px] text-amber-300/70 mt-0.5">then ₹{plan.bargainOverageDealPrice}/extra</div>
+                        )}
+                      </div>
+                    </div>
 
                     <ul className="space-y-3 mb-8 flex-grow">
                       {plan.features.map((feature, i) => (
