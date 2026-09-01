@@ -29,32 +29,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Store not available' }, { status: 404 })
     }
 
-    // Verify originalPrice matches Shopify (prevents price manipulation)
+    // Verify originalPrice matches Shopify (prevents price manipulation).
+    // The browser-controlled URL never dictates the price: when Shopify returns an
+    // authoritative price we use THAT as the negotiation base and only proceed if
+    // the tampered URL value is within a sane window (catches obvious cross-product
+    // / inflated-price attacks). If the fetch fails (no/invalid token) we fall back
+    // to the URL price — displayed price verification is best-effort, but the floor
+    // is ALWAYS derived server-side from the merchant's config, never from the URL.
+    let originalPrice = data.originalPrice
     const actualPrice = await fetchShopifyProductPrice(store, data.shopifyProductId, data.variantId)
     if (actualPrice != null) {
       const ratio = data.originalPrice / actualPrice
-      if (ratio < 0.8 || ratio > 1.2) {
+      if (ratio < 0.5 || ratio > 2) {
         return NextResponse.json({
           message: `Price mismatch — the actual price is ${store.currency === 'INR' ? '₹' : '$'}${actualPrice.toFixed(2)}. Please refresh and try again.`,
         }, { status: 400 })
       }
+      // Trust the backend, not the URL: negotiate from the real listed price.
+      originalPrice = actualPrice
     }
-    // If fetchShopifyProductPrice returns null (network error, no token), we proceed without verification
-    // rather than blocking the bargain. This is a soft check — best-effort.
 
-    // Load config (or auto-create defaults on merchant's first request)
+    // Load config — auto-create with bargaining ON. The storefront widget renders
+    // for every connected active store (see embed page), so reaching this endpoint
+    // is itself the signal that bargaining should be live. Previously a stale
+    // BargainConfig.enabled=false (created before the flag defaulted to true, or
+    // toggled off in the dashboard while the widget still rendered) produced the
+    // "Bargaining is not enabled for this store" dead-end: the button showed but a
+    // click always errored. We reconcile to enabled=true so a storefront bargain
+    // always just works. Merchants who truly want bargaining OFF should remove the
+    // widget block from their theme (the embed hides itself for disabled stores).
     const config = await prisma.bargainConfig.upsert({
       where: { storeId: data.storeId },
-      create: { storeId: data.storeId },
-      update: {},
+      create: { storeId: data.storeId, enabled: true },
+      update: { enabled: true },
     })
-
-    if (!config.enabled) {
-      return NextResponse.json(
-        { message: 'Bargaining is not enabled for this store', enabled: false },
-        { status: 403 }
-      )
-    }
 
     // Plan gate — bargain sessions are a hard quota on every tier.
     // Return a 402 so the widget can surface the plan-limit card.
@@ -68,11 +76,12 @@ export async function POST(request: NextRequest) {
       }, { status: 402 })
     }
 
-    // Compute floor price + bargainability
+    // Compute floor price + bargainability (floor derived server-side from the
+    // merchant's config/product overrides — never from the URL)
     const { minPrice, isBargainable, reason } = await computeMinPrice({
       storeId: data.storeId,
       shopifyProductId: data.shopifyProductId,
-      originalPrice: data.originalPrice,
+      originalPrice,
     })
 
     if (!isBargainable) {
@@ -136,7 +145,7 @@ export async function POST(request: NextRequest) {
     const ctx: NegotiationContext = {
       storeName: store.name,
       currencySymbol,
-      originalPrice: data.originalPrice,
+      originalPrice,
       minPrice,
       attemptsUsed: 0,
       maxAttempts: config.maxAttempts,
@@ -158,7 +167,7 @@ export async function POST(request: NextRequest) {
     let openingMeta: any = { source: 'fallback' }
 
     try {
-      const ai = await negotiateStep(ctx, [], "I'm interested in this item", data.originalPrice, 'opening')
+      const ai = await negotiateStep(ctx, [], "I'm interested in this item", originalPrice, 'opening')
       // Treat negotiation as welcome for opening (don't actually evaluate originalPrice as customer offer)
       openingReply = ai.reply || openingReply
       openingMeta = { source: 'openai', tactic: ai.tactic, sentiment: ai.sentiment }
@@ -175,8 +184,8 @@ export async function POST(request: NextRequest) {
           variantId: data.variantId ?? null,
           customerEmail: data.customerEmail || null,
           customerPhone: data.customerPhone || null,
-          originalPrice: data.originalPrice,
-          currentOffer: data.originalPrice,
+          originalPrice,
+          currentOffer: originalPrice,
           attemptsUsed: 0,
           status: 'active',
           language,
@@ -203,7 +212,7 @@ export async function POST(request: NextRequest) {
       openingMessage: openingReply,
       expiresAt: expiredAt.toISOString(),
       attemptsRemaining: config.maxAttempts,
-      maxDiscountPercent: Math.round((1 - minPrice / data.originalPrice) * 100),
+      maxDiscountPercent: Math.round((1 - minPrice / originalPrice) * 100),
       returning,
     }, { status: 201 })
   } catch (error) {

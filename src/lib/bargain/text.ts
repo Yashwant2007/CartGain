@@ -79,6 +79,12 @@ export function extractQuantity(text: string): number | null {
 
 // ── Price extraction: pull a numeric offer out of free text ──
 export function extractPrice(text: string): number | null {
+  // A leading minus before a number/currency means a negative/absurd "offer"
+  // (e.g. "-$50"). Never parse those as positive — the customer offered nothing.
+  if (/(?:^|[^A-Za-z0-9])-+\s*(?:₹|INR|Rs\.?|\$|USD|€|EUR)?\s*\d/i.test(text)) {
+    return null
+  }
+
   const patterns = [
     /(?:₹|INR|Rs\.?)\s*(\d+(?:\.\d{1,2})?)/i,
     /(?:\$|USD)\s*(\d+(?:\.\d{1,2})?)/i,

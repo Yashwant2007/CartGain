@@ -360,7 +360,7 @@ export default function BargainWidget({
               border: '1px solid #e0e7ff',
               boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 12px 32px rgba(79,70,229,0.10)',
               overflow: 'hidden',
-              height: open ? 700 : 'auto',
+              height: open ? 760 : 'auto',
             }
           : {}),
       }}
@@ -535,7 +535,7 @@ export default function BargainWidget({
             left: isEmbed ? 0 : undefined,
             bottom: 0,
             width: '100%',
-            maxWidth: isEmbed ? 'none' : 500,
+            maxWidth: isEmbed ? 'none' : 540,
             background: '#ffffff',
             color: '#1e293b',
             boxShadow: isEmbed ? 'none' : '-10px 0 48px rgba(15,23,42,0.18)',

@@ -1267,6 +1267,46 @@ neutral, dramatic, professional, friendly, final`
 // THE NEGOTIATION ENGINE — AI FIRST, SAFETY NET SECOND
 // ────────────────────────────────────────────────────────────
 
+// ────────────────────────────────────────────────────────────
+// LEAK GUARD — FINAL BACKEND LINE OF DEFENSE AGAINST PROMPT
+// INJECTION / SYSTEM-PROMPT EXTRACTION
+// ────────────────────────────────────────────────────────────
+// The floor price lives in the system prompt (the AI needs it to negotiate),
+// but if an injection succeeds in getting the model to print the floor or echo
+// its instructions, that is a Sev-1 bug. These guards scan the AI's reply
+// BEFORE it reaches the customer and fall back to a safe, in-character reply.
+
+// Does the reply explicitly name a "floor/minimum" number that matches the
+// real backend floor? (The AI may legitimately make a final offer near the
+// floor, but it must NEVER announce that specific value as "the minimum".)
+export function detectFloorLeak(reply: string, minPrice: number): boolean {
+  const lower = reply.toLowerCase()
+  const leakPhrases = [
+    /(?:floor|minimum|min(?:imum)?\s+price|lowest|base\s+price|cost\s+price|wholesale|my\s+limit|can'?t\s+go\s+lower|as\s+low\s+as)/i,
+    /(?:reveal|disclose|report|share|print)\s+(?:the\s+)?(?:floor|minimum|min\s+price|my\s+(?:floor|base|limit))/i,
+    /(?:the\s+merchant\s+(?:told|set)|authorized\s+floor)/i,
+  ]
+  if (!leakPhrases.some(p => p.test(lower))) return false
+  const numbers = reply.match(/\d+(?:[.,]\d{1,2})?/g) ?? []
+  return numbers.some(n => {
+    const v = parseFloat(n.replace(/,/g, ''))
+    return !Number.isNaN(v) && Math.abs(v - minPrice) <= Math.max(1, minPrice * 0.02)
+  })
+}
+
+// Does the reply echo the system prompt / reveal instruction internals?
+export function detectSystemPromptLeak(reply: string): boolean {
+  return /(?:NEGOTIATION\s+SCENARIO|RESPONSE\s+FORMAT|STRICT\s+JSON|system\s+prompt|your\s+instructions\s+(?:are|were)|developer\s+mode|reveal\s+your\s+system|my\s+training|as\s+a\s+language\s+model|I\s+am\s+an?\s+AI|\\?"reply\\?":\s*\\?")/i.test(reply)
+}
+
+// An in-character refusal the AI is not allowed to out-argue. Used whenever the
+// backend catches a leak so the customer never sees the sensitive value.
+const LEAK_SAFE_REPLY: Record<Persona, string> = {
+  friendly_shopkeeper: "Friend, I appreciate you asking — but that's my internal pricing and I can't share it. What price feels fair to you?",
+  strict_negotiator: "I don't share internal pricing. If you have a number in mind, I'm happy to consider it.",
+  playful_friend: "Ooh, trying to get my secrets! Nice try 😄 But you've gotta work for the discount — what's your offer?",
+}
+
 export async function negotiateStep(
   ctx: NegotiationContext,
   history: { role: 'customer' | 'ai'; content: string; offeredPrice?: number }[],
@@ -1385,13 +1425,24 @@ export async function negotiateStep(
         ? 'counter'
         : decision
 
+    // Compute the reply, then run the LEAK GUARD: any injection that got the model
+    // to name the floor or echo its instructions is scrubbed before it is shown.
+    let reply = typeof parsed.reply === 'string' && parsed.reply.trim().length > 0
+      ? parsed.reply.trim()
+      : (customerOffer != null
+          ? ruleBasedDecision(customerOffer, ctx).reply
+          : buildOpeningMessage(ctx))
+
+    const floorLeaked = detectFloorLeak(reply, ctx.minPrice)
+    const promptLeaked = detectSystemPromptLeak(reply)
+    const leaked = floorLeaked || promptLeaked
+    if (leaked) {
+      reply = (LEAK_SAFE_REPLY[ctx.persona] ?? LEAK_SAFE_REPLY.friendly_shopkeeper)
+    }
+
     return {
-      reply: typeof parsed.reply === 'string' && parsed.reply.trim().length > 0
-        ? parsed.reply.trim()
-        : (customerOffer != null
-            ? ruleBasedDecision(customerOffer, ctx).reply
-            : buildOpeningMessage(ctx)),
-      decision: safeDecision as NegotiationResult['decision'],
+      reply,
+      decision: (leaked && safeDecision === 'accept' ? 'counter' : safeDecision) as NegotiationResult['decision'],
       counterOffer,
       tactic: typeof parsed.tactic === 'string' ? parsed.tactic : 'conversational',
       sentiment: typeof parsed.sentiment === 'string' ? parsed.sentiment : 'neutral',
@@ -1404,6 +1455,8 @@ export async function negotiateStep(
           offTopicCount: conversationAnalysis.offTopicCount,
           concessionCount: conversationAnalysis.concessionCount,
         },
+        leakGuarded: leaked || undefined,
+        leakReason: leaked ? (floorLeaked ? 'floor_reveal' : 'system_prompt_reveal') : undefined,
       },
     }
   } catch (err: any) {
