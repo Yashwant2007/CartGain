@@ -6,6 +6,9 @@ description = "Recover abandoned carts with WhatsApp, Email and SMS — plus AI 
 application_url = "https://cart-gain.com/api/shopify/install"
 embedded = true
 # handle = "cartgain"  # linked via client_id; omitted to avoid branding validation bug
+# Privacy + ToS are surfaced to Shopify reviewers for the protected-customer-data review.
+privacy_policy_url = "https://cart-gain.com/privacy"
+tos_url = "https://cart-gain.com/terms"
 
 [webhooks]
 api_version = "2026-07"

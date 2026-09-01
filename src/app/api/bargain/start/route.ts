@@ -6,6 +6,7 @@ import { currencySymbolFor } from '@/lib/bargain/i18n'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { getBargainGate, recordBargainSessionOp, BARGAIN_SESSIONS_EXHAUSTED } from '@/lib/bargain/gate'
+import { logDataAccess } from '@/lib/data-protection'
 
 export const dynamic = 'force-dynamic'
 
@@ -205,6 +206,21 @@ export async function POST(request: NextRequest) {
       }),
       recordBargainSessionOp(gate.subscriptionId),
     ])
+
+    // Audit-log the creation of a session holding protected customer data
+    // (email/phone). PII in metadata is redacted before it is stored.
+    await logDataAccess({
+      actorType: 'system',
+      action: 'create',
+      resourceType: 'bargain_session',
+      resourceId: bargainSession.id,
+      purpose: 'price_negotiation_processing',
+      metadata: {
+        storeId: data.storeId,
+        customerEmail: data.customerEmail ?? null,
+        customerPhone: data.customerPhone ?? null,
+      },
+    })
 
     return NextResponse.json({
       sessionId: bargainSession.id,

@@ -6,6 +6,7 @@ import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { detectWalkout, extractQuantity, extractPrice } from '@/lib/bargain/text'
 import { uiText, currencySymbolFor } from '@/lib/bargain/i18n'
 import { detectLanguage } from '@/lib/bargain/language'
+import { logDataAccess } from '@/lib/data-protection'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,6 +71,21 @@ export async function POST(request: NextRequest) {
     if (!config || !config.enabled) {
       return NextResponse.json({ message: 'Bargaining disabled' }, { status: 403 })
     }
+
+    // Audit-log the read of the session's protected customer data (email/phone
+    // are consumed when the AI builds the customer context for the reply).
+    await logDataAccess({
+      actorType: 'system',
+      action: 'read',
+      resourceType: 'bargain_session',
+      resourceId: bargainSession.id,
+      purpose: 'price_negotiation_processing',
+      metadata: {
+        storeId: bargainSession.storeId,
+        customerEmail: bargainSession.customerEmail,
+        customerPhone: bargainSession.customerPhone,
+      },
+    })
 
     // Resolve the negotiation language: honor an explicit session/config
     // language; otherwise detect the customer's language from THIS message so

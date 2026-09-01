@@ -115,7 +115,7 @@ const FAQS = [
   },
   {
     q: 'How do you handle customer data & privacy?',
-    a: 'All customer data is encrypted at rest and in transit. We only process the cart-abandonment data needed for recovery, nothing more. No data is shared with third parties, and opt-outs are honored across every channel. Our practices follow India\'s DPDP Act 2023 and GDPR principles.',
+    a: 'We process only the minimum data needed for recovery — the abandoned cart contact details and line items, nothing more. Customer data is encrypted at rest and in transit, retained only as long as needed (cart PII anonymized after 90 days), and never sold or shared for advertising. Customers can opt out on every channel, and AI negotiations offer a "Skip AI" opt-out for automated decision-making. We follow Shopify\'s protected-customer-data practices plus India\'s DPDP Act 2023 and GDPR principles. See our Privacy Policy, DPA, and Security Policy for full details.',
   },
   {
     q: 'What if my platform isn\'t Shopify?',
@@ -414,7 +414,7 @@ export default function HomePage() {
                         </div>
                         <div>
                           <p className="font-semibold text-white text-sm sm:text-base">Compliance built in</p>
-                          <p className="text-blue-200 text-xs sm:text-sm">DPDP Act &amp; GDPR aligned, opt-out honored on every channel — privacy that scales with you.</p>
+                          <p className="text-blue-200 text-xs sm:text-sm">GDPR &amp; DPDP Act aligned, Shopify protected-customer-data ready — consent and opt-out honored on every channel, DPA available.</p>
                         </div>
                       </div>
                       <div className="flex gap-3">
