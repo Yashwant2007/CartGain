@@ -4,7 +4,32 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Lock, ArrowLeft, CheckCircle } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight, ArrowLeft, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react'
+
+function PasswordStrength({ password }: { password: string }) {
+  const checks = [
+    { label: 'At least 8 characters', met: password.length >= 8 },
+    { label: 'Contains a number', met: /\d/.test(password) },
+    { label: 'Contains uppercase', met: /[A-Z]/.test(password) },
+  ]
+  if (!password) return null
+  const passed = checks.filter(c => c.met).length
+  const color = passed === 3 ? 'bg-emerald-500' : passed >= 1 ? 'bg-amber-500' : 'bg-red-500'
+  return (
+    <div className="mt-2 space-y-1">
+      <div className="h-1 rounded-full bg-slate-700 overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-300 ${color}`} style={{ width: `${(passed / 3) * 100}%` }} />
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+        {checks.map(c => (
+          <span key={c.label} className={`text-xs ${c.met ? 'text-emerald-400' : 'text-slate-500'}`}>
+            {c.met ? '✓' : '○'} {c.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function ResetPasswordForm() {
   const router = useRouter()
@@ -14,6 +39,7 @@ export default function ResetPasswordForm() {
 
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -28,41 +54,31 @@ export default function ResetPasswordForm() {
   }, [token, email])
 
   useEffect(() => {
-    return () => {
-      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current)
-    }
+    return () => { if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current) }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters')
-      return
-    }
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
+    if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
+    if (!/[A-Z]/.test(password)) { setError('Password must include an uppercase letter.'); return }
+    if (!/\d/.test(password)) { setError('Password must include a number.'); return }
+    if (password !== confirmPassword) { setError('Passwords do not match.'); return }
 
     setLoading(true)
-
     try {
       const res = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, email, password }),
       })
-
       const data = await res.json()
-
       if (res.ok) {
         setSuccess(true)
-        redirectTimerRef.current = setTimeout(() => router.push('/login'), 3000)
+        redirectTimerRef.current = setTimeout(() => router.push('/login?passwordReset=true'), 3000)
       } else {
-        setError(data.message || 'Failed to reset password')
+        setError(data.message || 'Failed to reset password.')
       }
     } catch {
       setError('Something went wrong. Please try again.')
@@ -71,106 +87,95 @@ export default function ResetPasswordForm() {
     }
   }
 
+  const inputCls = 'w-full py-3 px-4 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 outline-none transition text-sm'
+
   if (!valid) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center p-4">
-        <div className="w-full max-w-md text-center">
-          <div className="bg-slate-800/40 border border-red-700/30 rounded-xl p-8">
-            <h1 className="text-xl font-bold text-white mb-4">Invalid Reset Link</h1>
-            <p className="text-blue-200 mb-6">{error}</p>
-            <Link href="/forgot-password" className="text-cyan-400 hover:text-cyan-300 font-medium">
-              Request a new reset link
-            </Link>
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-[420px] text-center">
+          <Link href="/" className="flex items-center gap-2.5 mb-10 justify-center group">
+            <Image src="/favicon-32x32.png" alt="CartGain" width={32} height={32} className="w-8 h-8 rounded-lg" priority />
+            <span className="text-lg font-bold text-white group-hover:text-blue-200 transition">CartGain</span>
+          </Link>
+          <div className="w-16 h-16 bg-red-600/20 border border-red-500/30 rounded-2xl flex items-center justify-center mx-auto mb-5">
+            <AlertTriangle className="w-8 h-8 text-red-400" />
           </div>
+          <h1 className="text-lg font-semibold text-white mb-2">Invalid reset link</h1>
+          <p className="text-sm text-slate-400 mb-6">{error}</p>
+          <Link href="/forgot-password" className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition">
+            <ArrowLeft className="w-3.5 h-3.5" /> Request a new reset link
+          </Link>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <Link href="/" className="flex items-center gap-2 mb-8 group">
-          <Image
-            src="/favicon-32x32.png"
-            alt="CartGain"
-            width={32}
-            height={32}
-            className="w-8 h-8 rounded-lg flex-shrink-0 group-hover:shadow-lg group-hover:shadow-primary-600/50 transition-all"
-            priority
-          />
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-[420px]">
+        <Link href="/" className="flex items-center gap-2.5 mb-10 group">
+          <Image src="/favicon-32x32.png" alt="CartGain" width={32} height={32} className="w-8 h-8 rounded-lg" priority />
           <span className="text-lg font-bold text-white group-hover:text-blue-200 transition">CartGain</span>
         </Link>
 
         {success ? (
-          <div className="bg-slate-800/40 border border-green-700/30 rounded-xl p-6 text-center">
-            <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-4" />
-            <h2 className="text-lg font-semibold text-white mb-2">Password reset successfully!</h2>
-            <p className="text-sm text-blue-200 mb-6">Redirecting you to sign in...</p>
+          <div className="text-center py-4">
+            <div className="w-16 h-16 bg-emerald-600/20 border border-emerald-500/30 rounded-2xl flex items-center justify-center mx-auto mb-5">
+              <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+            </div>
+            <h2 className="text-lg font-semibold text-white mb-2">Password updated</h2>
+            <p className="text-sm text-slate-400 mb-6">Redirecting you to sign in...</p>
+            <Link href="/login?passwordReset=true" className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition">
+              Continue to sign in <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
         ) : (
           <>
             <div className="mb-8">
-              <h1 className="text-2xl font-bold text-white mb-2">Set new password</h1>
-              <p className="text-sm text-blue-200">Choose a strong password for your account.</p>
+              <div className="w-12 h-12 bg-blue-600/20 border border-blue-500/30 rounded-xl flex items-center justify-center mb-4">
+                <ShieldCheck className="w-6 h-6 text-blue-400" />
+              </div>
+              <h1 className="text-2xl font-bold text-white mb-1.5">Create a new password</h1>
+              <p className="text-sm text-slate-400">Choose a strong password for <span className="text-white">{email}</span>.</p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3">
               {error && (
-                <div className="p-3 bg-red-900/20 border border-red-700/40 rounded-lg">
+                <div className="p-3 bg-red-900/30 border border-red-500/40 rounded-lg flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-red-300">{error}</p>
                 </div>
               )}
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-blue-200 mb-2">New Password</label>
+                <label htmlFor="password" className="block text-xs font-medium text-slate-400 mb-1.5">New password</label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400 pointer-events-none" />
-                  <input
-                    id="password"
-                    type="password"
-                    required
-                    minLength={8}
-                    disabled={loading}
-                    className="input pl-10 w-full bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70"
-                    placeholder="Minimum 8 characters"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
+                  <input id="password" type={showPassword ? 'text' : 'password'} required autoFocus disabled={loading} className={`${inputCls} pr-11`} placeholder="Create a strong password" value={password} onChange={e => setPassword(e.target.value)} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition" tabIndex={-1} aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
+                <PasswordStrength password={password} />
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-blue-200 mb-2">Confirm Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400 pointer-events-none" />
-                  <input
-                    id="confirmPassword"
-                    type="password"
-                    required
-                    disabled={loading}
-                    className="input pl-10 w-full bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70"
-                    placeholder="Re-enter your password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                  />
-                </div>
+                <label htmlFor="confirmPassword" className="block text-xs font-medium text-slate-400 mb-1.5">Confirm password</label>
+                <input id="confirmPassword" type={showPassword ? 'text' : 'password'} required disabled={loading} className={inputCls} placeholder="Re-enter your password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                {confirmPassword && password !== confirmPassword && (
+                  <p className="text-xs text-red-400 mt-1">Passwords do not match</p>
+                )}
               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-all"
-              >
+              <button type="submit" disabled={loading || !password || !confirmPassword} className="w-full py-3 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition active:scale-[0.98] flex items-center justify-center gap-2 min-h-12">
                 {loading ? 'Resetting...' : 'Reset password'}
+                {!loading && <ArrowRight className="w-4 h-4" />}
               </button>
 
-              <p className="text-center text-sm text-blue-300">
-                <Link href="/login" className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300">
-                  <ArrowLeft className="w-3 h-3" />
-                  Back to sign in
+              <div className="text-center pt-2">
+                <Link href="/login" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-white transition">
+                  <ArrowLeft className="w-3.5 h-3.5" /> Back to sign in
                 </Link>
-              </p>
+              </div>
             </form>
           </>
         )}

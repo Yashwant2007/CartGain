@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Mail, ArrowLeft, CheckCircle } from 'lucide-react'
+import { Mail, ArrowRight, ArrowLeft, CheckCircle2, AlertTriangle } from 'lucide-react'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -15,98 +15,92 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
     setError(null)
     setLoading(true)
-
     try {
       const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
       })
-
       if (res.ok) {
         setSent(true)
       } else {
         const data = await res.json()
-        setError(data.message || 'Something went wrong')
+        setError(data.message || 'Something went wrong.')
       }
     } catch {
-      setError('Failed to send reset email. Please try again.')
+      setError('Could not connect. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
+  const inputCls = 'w-full py-3 px-4 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 outline-none transition text-sm'
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <Link href="/" className="flex items-center gap-2 mb-8 group">
-          <Image
-            src="/favicon-32x32.png"
-            alt="CartGain"
-            width={32}
-            height={32}
-            className="w-8 h-8 rounded-lg flex-shrink-0 group-hover:shadow-lg group-hover:shadow-primary-600/50 transition-all"
-            priority
-          />
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-[420px]">
+        <Link href="/" className="flex items-center gap-2.5 mb-10 group">
+          <Image src="/favicon-32x32.png" alt="CartGain" width={32} height={32} className="w-8 h-8 rounded-lg" priority />
           <span className="text-lg font-bold text-white group-hover:text-blue-200 transition">CartGain</span>
         </Link>
 
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white mb-2">Reset your password</h1>
-          <p className="text-sm text-blue-200">Enter your email and we&apos;ll send you a reset link.</p>
+          <h1 className="text-2xl font-bold text-white mb-1.5">Reset your password</h1>
+          <p className="text-sm text-slate-400">Enter the email associated with your account and we&apos;ll send you a reset link.</p>
         </div>
 
         {sent ? (
-          <div className="bg-slate-800/40 border border-green-700/30 rounded-xl p-6 text-center">
-            <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-4" />
+          <div className="text-center py-2">
+            <div className="w-16 h-16 bg-emerald-600/20 border border-emerald-500/30 rounded-2xl flex items-center justify-center mx-auto mb-5">
+              <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+            </div>
             <h2 className="text-lg font-semibold text-white mb-2">Check your inbox</h2>
-            <p className="text-sm text-blue-200 mb-3">If an account exists for {email}, you&apos;ll receive a reset link shortly.</p>
-            <p className="text-xs text-blue-300/70 mb-6">
-              Didn&apos;t see it? Check your <span className="text-blue-100 font-medium">spam / promotions</span> folder — and make sure you&apos;re using the email you signed up with.
+            <p className="text-sm text-slate-400 mb-2">
+              If an account exists for <span className="text-white font-medium">{email}</span>, you&apos;ll receive a reset link shortly.
             </p>
-            <Link href="/login" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium">
+            <p className="text-xs text-slate-600 mb-6">
+              Check your spam or promotions folder if you don&apos;t see it.
+            </p>
+            <Link href="/login" className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition">
+              <ArrowLeft className="w-3.5 h-3.5" />
               Back to sign in
             </Link>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3">
             {error && (
-              <div className="p-3 bg-red-900/20 border border-red-700/40 rounded-lg">
+              <div className="p-3 bg-red-900/30 border border-red-500/40 rounded-lg flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
                 <p className="text-sm text-red-300">{error}</p>
               </div>
             )}
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-blue-200 mb-2">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400 pointer-events-none" />
-                <input
-                  id="email"
-                  type="email"
-                  required
-                  disabled={loading}
-                  className="input pl-10 w-full bg-slate-800/40 border border-blue-700/50 text-white placeholder-blue-400/50 focus:border-blue-500/70"
-                  placeholder="john@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
+              <label htmlFor="email" className="block text-xs font-medium text-slate-400 mb-1.5">Email</label>
+              <input
+                id="email"
+                type="email"
+                required
+                autoFocus
+                disabled={loading}
+                className={inputCls}
+                placeholder="you@company.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+              />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-all"
-            >
+            <button type="submit" disabled={loading || !email.trim()} className="w-full py-3 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition active:scale-[0.98] flex items-center justify-center gap-2 min-h-12">
               {loading ? 'Sending...' : 'Send reset link'}
+              {!loading && <ArrowRight className="w-4 h-4" />}
             </button>
 
-            <p className="text-center text-sm text-blue-300">
-              <Link href="/login" className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300">
-                <ArrowLeft className="w-3 h-3" />
+            <div className="text-center pt-2">
+              <Link href="/login" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-white transition">
+                <ArrowLeft className="w-3.5 h-3.5" />
                 Back to sign in
               </Link>
-            </p>
+            </div>
           </form>
         )}
       </div>
