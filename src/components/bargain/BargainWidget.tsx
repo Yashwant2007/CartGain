@@ -97,6 +97,40 @@ export default function BargainWidget({
   const personaChip = persona ? PERSONA_CHIP[persona] : undefined
   const savings = decision === 'accept' && finalPrice != null ? originalPrice - finalPrice : null
 
+  // Merchant-safe suggested offer chips, derived only from the merchant's own
+  // communicated discount cap. Always 4-5% above the maximum discount so the
+  // floor (never revealed) can never be approached or undershot.
+  let suggestedAmounts: number[] = []
+  if (originalPrice > 0) {
+    const cap = maxDiscount != null && maxDiscount > 0 ? Math.min(maxDiscount, 50) : 20
+    const levels = [Math.min(cap - 3, 11), Math.min(cap - 1, 15)].filter(l => l > 0)
+    suggestedAmounts = levels
+      .filter((l, i, arr) => arr.indexOf(l) === i)
+      .map(l => Math.round(originalPrice * (1 - l / 100)))
+  }
+
+  const [prefersReduced, setPrefersReduced] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const update = () => setPrefersReduced(mq.matches)
+    update()
+    mq.addEventListener?.('change', update)
+    return () => mq.removeEventListener?.('change', update)
+  }, [])
+
+  // Floating panel: close on Escape (and restore focus is handled by the
+  // launcher returning focus on close). Never fires in embedded mode.
+  useEffect(() => {
+    if (isEmbed || !open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closePanel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isEmbed, open])
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -348,7 +382,7 @@ export default function BargainWidget({
 
   return (
     <div
-      className="bargain-widget-root"
+      className={prefersReduced ? 'bargain-widget-root cg-reduced-motion' : 'bargain-widget-root'}
       style={{
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         ...(isEmbed
@@ -980,7 +1014,9 @@ export default function BargainWidget({
                   borderTop: '1px solid #eef2f7',
                   flexWrap: 'wrap',
                 }}>
-                  <QuickChip label={`−10%`} disabled={thinking} onClick={() => quickOffer(() => setInput(`${currencySymbol}${Math.round(originalPrice * 0.9)}`))} />
+                  {suggestedAmounts.map((v) => (
+                    <QuickChip key={v} label={`${currencySymbol}${v.toLocaleString('en-IN')}`} disabled={thinking} onClick={() => quickOffer(() => setInput(`${currencySymbol}${v}`))} />
+                  ))}
                   <QuickChip label={t('bestOffer')} disabled={thinking} onClick={() => quickOffer(() => setInput(t('bestOfferPrompt')))} />
                   <QuickChip label={t('walkout')} disabled={thinking} onClick={() => quickOffer(() => setInput(t('walkoutPrompt')))} />
                 </div>
@@ -1097,6 +1133,8 @@ export default function BargainWidget({
         .bargain-widget-root ::-webkit-scrollbar { width: 6px }
         .bargain-widget-root ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 3px }
         .bargain-widget-root button:focus-visible, .bargain-widget-root a:focus-visible, .bargain-widget-root input:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px }
+        .cg-reduced-motion *, .cg-reduced-motion [style*="animation"] { animation: none !important; transition: none !important }
+        .cg-reduced-motion .cg-attn { box-shadow: none !important; transform: none !important }
       `}</style>
     </div>
   )
