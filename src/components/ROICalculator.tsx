@@ -4,10 +4,45 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { BarChart3, ArrowRight, Lock, TrendingUp, ShoppingCart, Zap } from 'lucide-react'
 
+// Single source of truth mirroring src/lib/payment.ts (PLANS). Keep these in
+// sync whenever billing plan limits change.
 const PLANS = [
-  { name: 'Starter', price: 999, yearlyPrice: 9990, maxCarts: 500, revShare: 3 },
-  { name: 'Growth', price: 2999, yearlyPrice: 29990, maxCarts: 3000, revShare: 2.5, recommended: true },
-  { name: 'Pro', price: 8999, yearlyPrice: 89990, maxCarts: 15000, revShare: 2 },
+  {
+    name: 'Free',
+    price: 0,
+    yearlyPrice: 0,
+    maxCarts: 50,
+    revShare: 0,
+    bargainSessions: 30,
+    bargainDeals: 5,
+  },
+  {
+    name: 'Growth',
+    price: 1499,
+    yearlyPrice: 14990,
+    maxCarts: 750,
+    revShare: 3.5,
+    bargainSessions: 300,
+    bargainDeals: 30,
+    recommended: true,
+  },
+  {
+    name: 'Pro',
+    price: 3999,
+    yearlyPrice: 39990,
+    maxCarts: 3000,
+    revShare: 3,
+    bargainSessions: 1500,
+    bargainDeals: 150,
+  },
+  {
+    name: 'Enterprise',
+    price: 'Custom',
+    maxCarts: Infinity,
+    revShare: 0,
+    bargainSessions: Infinity,
+    bargainDeals: Infinity,
+  },
 ]
 
 export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
@@ -44,23 +79,38 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
   const currentRate = typeof currentRecoveryRate === 'number' ? currentRecoveryRate : 0
   const targetRate = typeof targetRecoveryRate === 'number' ? targetRecoveryRate : 0
 
+  const plan = PLANS[selectedPlan]
+
   const abandonedCarts = Math.round(visitors * 0.7)
+  const lostRevenue = abandonedCarts * cartValue
+  const processedCarts = Math.min(abandonedCarts, plan.maxCarts === Infinity ? abandonedCarts : plan.maxCarts)
+  // Carts CartGain will actually process on this plan — capped by the plan's
+  // monthly cart allowance (Free 50 · Growth 750 · Pro 3,000 · Enterprise unlimited).
   const currentRecovered = Math.round(abandonedCarts * (currentRate / 100))
-  const targetRecovered = Math.round(abandonedCarts * (targetRate / 100))
+  const targetRecovered = Math.round(processedCarts * (targetRate / 100))
   const additionalRecovered = targetRecovered - currentRecovered
 
-  const lostRevenue = abandonedCarts * cartValue
-  const currentRevenue = currentRecovered * cartValue
-  const targetRevenue = targetRecovered * cartValue
-  const additionalRevenue = targetRevenue - currentRevenue
+  const targetRecoveryRevenue = targetRecovered * cartValue
+  const additionalRecoveryRevenue = targetRecoveryRevenue - currentRecovered * cartValue
+  // Bargain: price-sensitive customers won't buy at list price but will accept
+  // a negotiated deal. Contribution is capped by the plan's included bargain
+  // sessions & accepted deals. We assume ~30% of processed carts reach a
+  // bargain session and a realistic ~35% of those close at ~12% below list —
+  // so each accepted deal still nets positive margin for the merchant.
+  const bargainSessions = Math.min(
+    plan.bargainSessions === Infinity ? Math.round(processedCarts * 0.3) : plan.bargainSessions,
+    Math.round(processedCarts * 0.3),
+  )
+  const bargainDeals = Math.min(bargainSessions, plan.bargainDeals === Infinity ? bargainSessions : plan.bargainDeals)
+  const acceptedDeals = Math.round(bargainDeals * 0.35)
+  const bargainAvgDealValue = cartValue * 0.88
+  const bargainRevenue = acceptedDeals * bargainAvgDealValue
 
-  const plan = PLANS[selectedPlan]
-  const subscriptionCost = plan.price
-  const revenueShareCost = Math.round((targetRevenue * plan.revShare) / 100)
+  const subscriptionCost = typeof plan.price === 'number' ? plan.price : 0
+  const revenueShareCost = Math.round((additionalRecoveryRevenue * plan.revShare) / 100)
   const totalMonthlyCost = subscriptionCost + revenueShareCost
-  const netProfit = additionalRevenue - totalMonthlyCost
-  const yearlyNetProfit = netProfit * 12
-  const roi = totalMonthlyCost > 0 ? Math.round((netProfit / totalMonthlyCost) * 100) : 0
+  const netProfit = additionalRecoveryRevenue + bargainRevenue - totalMonthlyCost
+  const roi = totalMonthlyCost > 0 ? Math.round((netProfit / totalMonthlyCost) * 100) : totalMonthlyCost === 0 && netProfit > 0 ? 999 : 0
 
   if (!isLoggedIn && hasUsedFreeCalculation && !showResults) {
     return (
@@ -186,7 +236,7 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
         {/* Plan Selection */}
         <div className="mb-5">
           <label className="block text-xs font-medium text-blue-200/80 mb-2">Select Plan</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {PLANS.map((p, i) => (
               <button
                 key={p.name}
@@ -201,8 +251,12 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
                   <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-cyan-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">Best</span>
                 )}
                 <div className={`text-xs font-bold ${selectedPlan === i ? 'text-blue-300' : 'text-white'}`}>{p.name}</div>
-                <div className="text-sm font-bold text-white mt-0.5">₹{p.price.toLocaleString('en-IN')}</div>
-                <div className="text-[10px] text-blue-300/50">{p.revShare}% rev share</div>
+                <div className="text-sm font-bold text-white mt-0.5">
+                  {typeof p.price === 'number' ? `₹${p.price.toLocaleString('en-IN')}` : p.price}
+                </div>
+                <div className="text-[10px] text-blue-300/50">
+                  {typeof p.maxCarts === 'number' ? `${p.maxCarts.toLocaleString('en-IN')} carts` : 'Unlimited'}
+                </div>
               </button>
             ))}
           </div>
@@ -232,10 +286,10 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
               <div className="bg-slate-700/40 rounded-xl p-3 border border-slate-600/30">
                 <div className="flex items-center gap-1.5 mb-1">
                   <ShoppingCart className="w-3 h-3 text-blue-400" />
-                  <span className="text-[10px] text-blue-300/60">Abandoned</span>
+                  <span className="text-[10px] text-blue-300/60">Carts Processed</span>
                 </div>
-                <p className="text-lg font-bold text-white">{abandonedCarts.toLocaleString('en-IN')}</p>
-                <p className="text-[10px] text-blue-300/40">carts/mo</p>
+                <p className="text-lg font-bold text-white">{processedCarts.toLocaleString('en-IN')}</p>
+                <p className="text-[10px] text-blue-300/40">on {plan.name} · {abandonedCarts.toLocaleString('en-IN')} abandoned/mo</p>
               </div>
               <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
                 <span className="text-[10px] text-red-400/80">Lost Revenue</span>
@@ -246,18 +300,21 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
 
             {/* Revenue Gains */}
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-amber-500/10 rounded-xl p-3 border border-amber-500/20">
-                <span className="text-[10px] text-amber-400/80">Currently Recovering</span>
-                <p className="text-lg font-bold text-amber-400">₹{currentRevenue.toLocaleString('en-IN')}</p>
-                <p className="text-[10px] text-amber-400/40">{currentRecovered.toLocaleString('en-IN')} carts</p>
-              </div>
               <div className="bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/20">
                 <div className="flex items-center gap-1 mb-1">
                   <TrendingUp className="w-3 h-3 text-emerald-400" />
-                  <span className="text-[10px] text-emerald-400/80">With CartGain</span>
+                  <span className="text-[10px] text-emerald-400/80">Recovery Gain</span>
                 </div>
-                <p className="text-lg font-bold text-emerald-400">+₹{additionalRevenue.toLocaleString('en-IN')}</p>
+                <p className="text-lg font-bold text-emerald-400">+₹{additionalRecoveryRevenue.toLocaleString('en-IN')}</p>
                 <p className="text-[10px] text-emerald-400/40">+{additionalRecovered.toLocaleString('en-IN')} carts</p>
+              </div>
+              <div className="bg-blue-500/10 rounded-xl p-3 border border-blue-500/20">
+                <div className="flex items-center gap-1 mb-1">
+                  <Zap className="w-3 h-3 text-blue-400" />
+                  <span className="text-[10px] text-blue-400/80">Bargain Gain</span>
+                </div>
+                <p className="text-lg font-bold text-blue-300">+₹{bargainRevenue.toLocaleString('en-IN')}</p>
+                <p className="text-[10px] text-blue-400/40">{acceptedDeals.toLocaleString('en-IN')} accepted deals</p>
               </div>
             </div>
 
@@ -270,15 +327,16 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
               <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-blue-300/60">{plan.name} subscription</span>
-                  <span className="text-white">₹{subscriptionCost.toLocaleString('en-IN')}/mo</span>
+                  <span className="text-white">{subscriptionCost > 0 ? `₹${subscriptionCost.toLocaleString('en-IN')}/mo` : 'Free'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-blue-300/60">Revenue share ({plan.revShare}%)</span>
-                  <span className="text-white">₹{revenueShareCost.toLocaleString('en-IN')}/mo</span>
+                  <span className="text-blue-300/60">Revenue share
+                    {plan.revShare > 0 ? ` (${plan.revShare}%, capped)` : ''}</span>
+                  <span className="text-white">{revenueShareCost > 0 ? `₹${revenueShareCost.toLocaleString('en-IN')}/mo` : '₹0/mo'}</span>
                 </div>
                 <div className="flex justify-between border-t border-slate-600/30 pt-1.5">
                   <span className="text-blue-200/80 font-medium">Total cost</span>
-                  <span className="text-white font-bold">₹{totalMonthlyCost.toLocaleString('en-IN')}/mo</span>
+                  <span className="text-white font-bold">{totalMonthlyCost > 0 ? `₹${totalMonthlyCost.toLocaleString('en-IN')}/mo` : '₹0/mo'}</span>
                 </div>
               </div>
             </div>
@@ -287,13 +345,13 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
             <div className="bg-gradient-to-r from-blue-600 to-cyan-500 rounded-xl p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-blue-100 text-xs">Net Monthly Profit</p>
+                  <p className="text-blue-100 text-xs">Net Monthly Gain</p>
                   <p className="text-2xl font-bold text-white mt-0.5">₹{netProfit.toLocaleString('en-IN')}</p>
-                  <p className="text-blue-200/70 text-xs">Yearly: ₹{yearlyNetProfit.toLocaleString('en-IN')}</p>
+                  <p className="text-blue-200/70 text-xs">+₹{additionalRecoveryRevenue.toLocaleString('en-IN')} recovery · +₹{bargainRevenue.toLocaleString('en-IN')} bargain</p>
                 </div>
                 <div className="bg-white/20 rounded-xl px-3 py-2 text-center">
                   <p className="text-blue-100 text-[10px]">ROI</p>
-                  <p className="text-xl font-bold text-white">{roi}%</p>
+                  <p className="text-xl font-bold text-white">{roi === 999 ? '∞' : `${roi}%`}</p>
                 </div>
               </div>
             </div>
@@ -307,6 +365,12 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
               <div className="flex justify-between">
                 <span className="text-blue-300/60">Additional carts recovered</span>
                 <span className="text-emerald-400 font-semibold">+{additionalRecovered.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-blue-300/60">Bargain sessions included</span>
+                <span className="text-emerald-400 font-semibold">
+                  {typeof plan.bargainSessions === 'number' ? plan.bargainSessions.toLocaleString('en-IN') : 'Unlimited'}
+                </span>
               </div>
             </div>
 
