@@ -349,103 +349,122 @@ export default function BargainDashboardPage() {
             )
           ) : (
             <>
-              <label className="flex items-center justify-between">
-                <span className="text-blue-100">Enable Bargain for this store</span>
+              {/* Enable toggle */}
+              <div className="flex items-center justify-between p-4 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <div>
+                  <div className="text-blue-100 font-medium">Enable Bargain for this store</div>
+                  <div className="text-xs text-blue-300/60 mt-0.5">
+                    When on, the AI negotiator is available to your customers at checkout on bargainable products.
+                  </div>
+                </div>
                 <input
                   type="checkbox"
                   checked={configForm.enabled ?? false}
                   onChange={e => setConfigForm({ ...configForm, enabled: e.target.checked })}
                   className="w-5 h-5 accent-blue-500"
                 />
-              </label>
-
-              <div>
-                <label className="block text-sm text-blue-200 mb-1">Max attempts per customer</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={configForm.maxAttempts ?? 3}
-                  onChange={e => setConfigForm({ ...configForm, maxAttempts: parseInt(e.target.value) })}
-                  className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                />
               </div>
 
-              <div>
-                <label className="block text-sm text-blue-200 mb-1">AI Persona</label>
-                <select
-                  value={configForm.aiPersona ?? 'friendly_shopkeeper'}
-                  onChange={e => setConfigForm({ ...configForm, aiPersona: e.target.value })}
-                  className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                >
-                  <option value="friendly_shopkeeper">Friendly Shopkeeper</option>
-                  <option value="strict_negotiator">Strict Negotiator</option>
-                  <option value="playful_friend">Playful Friend</option>
-                </select>
+              {/* Group: Conversation behaviour */}
+              <GroupTitle icon={MessageSquare} title="Negotiation" subtitle="How many rounds and how long a session stays open." />
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-blue-200 mb-1">Max attempts per customer</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={configForm.maxAttempts ?? 3}
+                    onChange={e => setConfigForm({ ...configForm, maxAttempts: parseInt(e.target.value) })}
+                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                  />
+                  <p className="text-xs text-blue-300/60 mt-1">Quality offers only — fewer rounds feels premium.</p>
+                </div>
+                <div>
+                  <label className="block text-sm text-blue-200 mb-1">Session timeout (seconds)</label>
+                  <input
+                    type="number"
+                    min={30}
+                    max={3600}
+                    value={configForm.sessionTimeout ?? 300}
+                    onChange={e => setConfigForm({ ...configForm, sessionTimeout: parseInt(e.target.value) })}
+                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                  />
+                  <p className="text-xs text-blue-300/60 mt-1">A timed offer adds gentle urgency without pressure.</p>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm text-blue-200 mb-1">Default language</label>
-                <select
-                  value={configForm.language ?? 'auto'}
-                  onChange={e => setConfigForm({ ...configForm, language: e.target.value })}
-                  className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                >
-                  <option value="auto">Auto · mirror the customer</option>
-                  <option value="en">English</option>
-                  <option value="hinglish">Hinglish</option>
-                  <option value="hi">हिन्दी (Hindi)</option>
-                  <option value="ta">தமிழ் (Tamil)</option>
-                  <option value="te">తెలుగు (Telugu)</option>
-                  <option value="bn">বাংলা (Bengali)</option>
-                  <option value="mr">मराठी (Marathi)</option>
-                  <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
-                </select>
-                <p className="text-xs text-blue-300/60 mt-1">
-                  Auto mirrors whatever language the customer writes in. Pick one to force that language branch.
-                </p>
+              {/* Group: Personality & voice */}
+              <GroupTitle icon={Sparkles} title="Personality" subtitle="The tone your customers experience, in their language." />
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-blue-200 mb-1">AI Persona</label>
+                  <select
+                    value={configForm.aiPersona ?? 'friendly_shopkeeper'}
+                    onChange={e => setConfigForm({ ...configForm, aiPersona: e.target.value })}
+                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                  >
+                    <option value="friendly_shopkeeper">Friendly Shopkeeper</option>
+                    <option value="strict_negotiator">Strict Negotiator</option>
+                    <option value="playful_friend">Playful Friend</option>
+                  </select>
+                  <p className="text-xs text-blue-300/60 mt-1">Strict protects margin, Friendly recovers more, Playful is a balance.</p>
+                </div>
+                <div>
+                  <label className="block text-sm text-blue-200 mb-1">Default language</label>
+                  <select
+                    value={configForm.language ?? 'auto'}
+                    onChange={e => setConfigForm({ ...configForm, language: e.target.value })}
+                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                  >
+                    <option value="auto">Auto · mirror the customer</option>
+                    <option value="en">English</option>
+                    <option value="hinglish">Hinglish</option>
+                    <option value="hi">हिन्दी (Hindi)</option>
+                    <option value="ta">தமிழ் (Tamil)</option>
+                    <option value="te">తెలుగు (Telugu)</option>
+                    <option value="bn">বাংলা (Bengali)</option>
+                    <option value="mr">मराठी (Marathi)</option>
+                    <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
+                  </select>
+                  <p className="text-xs text-blue-300/60 mt-1">
+                    Auto mirrors whatever language the customer writes in. Pick one to force that language branch.
+                  </p>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm text-blue-200 mb-1">AI Model</label>
-                <select
-                  value={configForm.aiModel ?? 'gpt-4o-mini'}
-                  onChange={e => setConfigForm({ ...configForm, aiModel: e.target.value })}
-                  className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                >
-                  <option value="gpt-4o-mini">gpt-4o-mini (cheap, fast)</option>
-                  <option value="gpt-4o">gpt-4o (higher quality)</option>
-                  <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                  <option value="gpt-4.1">gpt-4.1 (best)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm text-blue-200 mb-1">Min Profit % (global fallback)</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.5}
-                  value={configForm.minProfitPercent ?? 20}
-                  onChange={e => setConfigForm({ ...configForm, minProfitPercent: parseFloat(e.target.value) })}
-                  className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                />
-                <p className="text-xs text-blue-300/60 mt-1">
-                  The AI will never agree to a price below this margin of the original.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm text-blue-200 mb-1">Session timeout (seconds)</label>
-                <input
-                  type="number"
-                  min={30}
-                  max={3600}
-                  value={configForm.sessionTimeout ?? 300}
-                  onChange={e => setConfigForm({ ...configForm, sessionTimeout: parseInt(e.target.value) })}
-                  className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                />
+              {/* Group: Margin protection */}
+              <GroupTitle icon={Percent} title="Margin protection" subtitle="Guardrails the AI can never cross — never shown to customers." />
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-blue-200 mb-1">Min Profit % (global fallback)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={configForm.minProfitPercent ?? 20}
+                    onChange={e => setConfigForm({ ...configForm, minProfitPercent: parseFloat(e.target.value) })}
+                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                  />
+                  <p className="text-xs text-blue-300/60 mt-1">
+                    The AI will never agree to a price below this margin of the original.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm text-blue-200 mb-1">AI Model</label>
+                  <select
+                    value={configForm.aiModel ?? 'gpt-4o-mini'}
+                    onChange={e => setConfigForm({ ...configForm, aiModel: e.target.value })}
+                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                  >
+                    <option value="gpt-4o-mini">gpt-4o-mini (cheap, fast)</option>
+                    <option value="gpt-4o">gpt-4o (higher quality)</option>
+                    <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                    <option value="gpt-4.1">gpt-4.1 (best)</option>
+                  </select>
+                  <p className="text-xs text-blue-300/60 mt-1">Higher quality models write more personality; mini is fastest and cheapest.</p>
+                </div>
               </div>
 
               <div className="flex items-center gap-3 pt-2">
@@ -750,6 +769,17 @@ export default function BargainDashboardPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+function GroupTitle({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle: string }) {
+  return (
+    <div className="pt-4">
+      <div className="flex items-center gap-2 text-blue-100 font-semibold">
+        <Icon className="w-4 h-4 text-blue-400" />
+        {title}
+      </div>
+      <p className="text-xs text-blue-300/60 mt-0.5 mb-3">{subtitle}</p>
     </div>
   )
 }
