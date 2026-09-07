@@ -21,6 +21,17 @@ const AI_VARS: Record<string, string> = {
   OPENAI_API_KEY: 'OpenAI API key for AI-powered recovery content',
 }
 
+// Optional fallback for any OpenAI-compatible provider. Only used when the
+// primary OpenAI key is missing/out of credits (Groq by default). Overrides:
+//   AI_FALLBACK_API_KEY  → required to activate the fallback tier
+//   AI_FALLBACK_BASE_URL → default https://api.groq.com/openai/v1
+//   AI_FALLBACK_MODEL    → default llama-3.3-70b-versatile
+export const OPTIONAL_AI_VARS: Record<string, string> = {
+  AI_FALLBACK_API_KEY: 'OpenAI-compatible provider key (fallback when OpenAI is unavailable)',
+  AI_FALLBACK_BASE_URL: 'OpenAI-compatible base URL (default Groq)',
+  AI_FALLBACK_MODEL: 'Fallback model id (default llama-3.3-70b-versatile)',
+}
+
 const MESSAGING_VARS: Record<string, string> = {
   FROM_EMAIL: 'Sender email for transactional emails',
   RESEND_API_KEY: 'Resend API key for email delivery',

@@ -1,24 +1,11 @@
 import OpenAI from 'openai'
 import prisma from '@/lib/db'
 import { checkAbuse } from '@/lib/bargain/abuse'
-import { isQuotaTripped, tripQuotaBreaker, isInsufficientQuotaError } from '@/lib/ai-quota'
-
-// ── OpenAI client (singleton) ──
-
-let client: OpenAI | null = null
+import { getAiClient, handleAiFailure } from '@/lib/ai-client'
 
 // Model for the negotiation agent. Defaults to the full gpt-4o for best
 // negotiation quality; set BARGAIN_MODEL=gpt-4o-mini to cut OpenAI cost.
 const BARGAIN_MODEL = process.env.BARGAIN_MODEL || 'gpt-4o'
-
-function getClient(): OpenAI | null {
-  if (isQuotaTripped()) return null
-  if (client) return client
-  const key = process.env.OPENAI_API_KEY
-  if (!key) return null
-  client = new OpenAI({ apiKey: key, timeout: 15000 })
-  return client
-}
 
 // ── Types ──
 
@@ -1346,11 +1333,13 @@ export async function negotiateStep(
   }
   // ── END ABUSE DETECTION ──
 
-  const ai = getClient()
-  if (!ai) {
+  const resolved = getAiClient()
+  if (!resolved) {
     if (customerOffer != null) return ruleBasedDecision(customerOffer, ctx)
     return { reply: buildOpeningMessage(ctx), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'ai_unavailable', sentiment: 'neutral' }
   }
+  const ai = resolved.client
+  const tier = resolved.tier
 
   // ── CONVERSATION ANALYSIS ──
   const conversationAnalysis = analyzeConversation(history, customerMessage, ctx)
@@ -1462,12 +1451,7 @@ export async function negotiateStep(
       },
     }
   } catch (err: any) {
-    if (isInsufficientQuotaError(err)) {
-      tripQuotaBreaker()
-      console.warn('[BARGAIN] OpenAI quota exhausted — using rule-based negotiation')
-    } else if (err?.status !== 429) {
-      console.error('[BARGAIN_AI_ERROR]', err?.message ?? err)
-    }
+    handleAiFailure(err, 'bargain negotiation', undefined, tier)
     return customerOffer != null
       ? ruleBasedDecision(customerOffer, ctx)
       : { reply: buildOpeningMessage(ctx), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'conversational', sentiment: 'neutral' }

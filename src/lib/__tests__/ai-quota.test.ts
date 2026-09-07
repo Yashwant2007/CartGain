@@ -1,8 +1,8 @@
-import { isQuotaTripped, tripQuotaBreaker, shouldLogQuota, isInsufficientQuotaError, resetQuotaBreakerForTests } from '../ai-quota'
+import { isTierTripped, tripTierBreaker, shouldLogQuota, isInsufficientQuotaError, resetQuotaBreakForTests } from '../ai-quota'
 
-describe('AI quota circuit breaker', () => {
+describe('AI quota circuit breakers', () => {
   beforeEach(() => {
-    resetQuotaBreakerForTests()
+    resetQuotaBreakForTests()
     jest.useFakeTimers()
     jest.setSystemTime(new Date('2026-09-07T10:00:00Z'))
   })
@@ -25,26 +25,34 @@ describe('AI quota circuit breaker', () => {
     })
   })
 
-  describe('tripQuotaBreaker / isQuotaTripped', () => {
-    it('starts untripped', () => {
-      expect(isQuotaTripped()).toBe(false)
+  describe('tripTierBreaker / isTierTripped', () => {
+    it('starts untripped for both tiers', () => {
+      expect(isTierTripped('primary')).toBe(false)
+      expect(isTierTripped('fallback')).toBe(false)
     })
 
-    it('trips for a 15 minute window', () => {
-      tripQuotaBreaker()
-      expect(isQuotaTripped()).toBe(true)
+    it('trips for a 15 minute window and recovers', () => {
+      tripTierBreaker('primary')
+      expect(isTierTripped('primary')).toBe(true)
+      expect(isTierTripped('fallback')).toBe(false)
       jest.setSystemTime(Date.now() + 14 * 60_000)
-      expect(isQuotaTripped()).toBe(true)
+      expect(isTierTripped('primary')).toBe(true)
       jest.setSystemTime(Date.now() + 2 * 60_000)
-      expect(isQuotaTripped()).toBe(false)
+      expect(isTierTripped('primary')).toBe(false)
+    })
+
+    it('keeps the two tiers independent', () => {
+      tripTierBreaker('fallback')
+      expect(isTierTripped('fallback')).toBe(true)
+      expect(isTierTripped('primary')).toBe(false)
     })
 
     it('does not extend the window on repeated trips', () => {
-      tripQuotaBreaker()
+      tripTierBreaker('primary')
       jest.setSystemTime(Date.now() + 10 * 60_000)
-      tripQuotaBreaker()
+      tripTierBreaker('primary')
       jest.setSystemTime(Date.now() + 10 * 60_000)
-      expect(isQuotaTripped()).toBe(false)
+      expect(isTierTripped('primary')).toBe(false)
     })
   })
 

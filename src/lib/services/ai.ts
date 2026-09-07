@@ -1,53 +1,4 @@
-import OpenAI from 'openai'
-import { isQuotaTripped, tripQuotaBreaker, shouldLogQuota, isInsufficientQuotaError } from '@/lib/ai-quota'
-
-let client: OpenAI | null = null
-
-const userCooldowns = new Map<string, number>()
-const MAX_COOLDOWN_MS = 300_000
-const BASE_COOLDOWN_MS = 5_000
-
-function isUserOnCooldown(userKey: string): boolean {
-  const until = userCooldowns.get(userKey)
-  if (!until) return false
-  if (Date.now() < until) return true
-  userCooldowns.delete(userKey)
-  return false
-}
-
-function applyUserCooldown(userKey: string, durationMs = BASE_COOLDOWN_MS): void {
-  const existing = userCooldowns.get(userKey) || 0
-  const next = Date.now() + durationMs
-  userCooldowns.set(userKey, Math.max(existing, next))
-      if (userCooldowns.size > 10000) {
-        const now = Date.now()
-        const toDelete: string[] = []
-        userCooldowns.forEach((v, k) => { if (now >= v) toDelete.push(k) })
-        toDelete.forEach(k => userCooldowns.delete(k))
-      }
-}
-
-function getClient(userKey?: string): OpenAI | null {
-  if (isQuotaTripped()) return null
-  if (userKey && isUserOnCooldown(userKey)) return null
-  if (client) return client
-  const key = process.env.OPENAI_API_KEY
-  if (!key) return null
-  client = new OpenAI({ apiKey: key, timeout: 10000 })
-  return client
-}
-
-function handleAiFailure(err: any, context: string, userKey: string): void {
-  if (isInsufficientQuotaError(err)) {
-    tripQuotaBreaker()
-    applyUserCooldown(userKey, MAX_COOLDOWN_MS)
-    if (shouldLogQuota()) console.warn(`[AI] ${context}: OpenAI quota exhausted — falling back to heuristics`)
-  } else if (err?.status === 429) {
-    applyUserCooldown(userKey, MAX_COOLDOWN_MS)
-  } else {
-    console.error(`[AI] ${context}:`, err)
-  }
-}
+import { getAiClient, handleAiFailure } from '@/lib/ai-client'
 
 export type CartContext = {
   customerName: string
@@ -74,8 +25,10 @@ function buildItemList(ctx: CartContext): string {
 
 export async function generateEmailContent(ctx: CartContext, storeId?: string): Promise<GeneratedContent | null> {
   const userKey = storeId || 'default'
-  const ai = getClient(userKey)
-  if (!ai) return null
+  const resolved = getAiClient(userKey)
+  if (!resolved) return null
+  const ai = resolved.client
+  const tier = resolved.tier
 
   try {
     const res = await ai.chat.completions.create({
@@ -108,15 +61,17 @@ ${ctx.discountCode ? `\nINCLUDE this discount offer prominently: code ${ctx.disc
     const parsed = JSON.parse(res.choices[0]?.message?.content || '{}')
     return { subject: parsed.subject, body: parsed.body }
   } catch (err) {
-    handleAiFailure(err, 'email generation', userKey)
+    handleAiFailure(err, 'email generation', userKey, tier)
     return null
   }
 }
 
 export async function generateSMSContent(ctx: CartContext, storeId?: string): Promise<GeneratedContent | null> {
   const userKey = storeId || 'default'
-  const ai = getClient(userKey)
-  if (!ai) return null
+  const resolved = getAiClient(userKey)
+  if (!resolved) return null
+  const ai = resolved.client
+  const tier = resolved.tier
 
   try {
     const res = await ai.chat.completions.create({
@@ -139,15 +94,17 @@ ${ctx.discountCode ? `\nINCLUDE this discount offer: code ${ctx.discountCode}${c
     const body = res.choices[0]?.message?.content?.trim()
     return body ? { body } : null
   } catch (err) {
-    handleAiFailure(err, 'sms generation', userKey)
+    handleAiFailure(err, 'sms generation', userKey, tier)
     return null
   }
 }
 
 export async function generateWhatsAppContent(ctx: CartContext, step: number = 0, storeId?: string): Promise<GeneratedContent | null> {
   const userKey = storeId || 'default'
-  const ai = getClient(userKey)
-  if (!ai) return null
+  const resolved = getAiClient(userKey)
+  if (!resolved) return null
+  const ai = resolved.client
+  const tier = resolved.tier
 
   const itemsStr = ctx.items.map(i =>
     `• ${i.name}${i.description ? `: ${i.description}` : ''} — ${ctx.currencySymbol}${i.price}`
@@ -267,15 +224,17 @@ CRITICAL: Under 35 words. Graceful finality. Make them feel "I need to do this n
     const body = res.choices[0]?.message?.content?.trim()
     return body ? { body } : null
   } catch (err) {
-    handleAiFailure(err, 'whatsapp generation', userKey)
+    handleAiFailure(err, 'whatsapp generation', userKey, tier)
     return null
   }
 }
 
 export async function generateSubjectLines(ctx: CartContext, count = 3, storeId?: string): Promise<string[]> {
   const userKey = storeId || 'default'
-  const ai = getClient(userKey)
-  if (!ai) return generateFallbackSubjects(ctx, count)
+  const resolved = getAiClient(userKey)
+  if (!resolved) return generateFallbackSubjects(ctx, count)
+  const ai = resolved.client
+  const tier = resolved.tier
 
   try {
     const res = await ai.chat.completions.create({
@@ -299,7 +258,7 @@ export async function generateSubjectLines(ctx: CartContext, count = 3, storeId?
     const lines = Array.isArray(parsed) ? parsed : parsed.subjects || parsed.lines || []
     return lines.slice(0, count)
   } catch (err) {
-    handleAiFailure(err, 'subject lines', userKey)
+    handleAiFailure(err, 'subject lines', userKey, tier)
     return generateFallbackSubjects(ctx, count)
   }
 }
@@ -322,8 +281,10 @@ export async function predictRecoveryProbability(
   storeId?: string
 ): Promise<{ probability: number; factors: string[] }> {
   const userKey = storeId || 'default'
-  const ai = getClient(userKey)
-  if (!ai) return computeProbabilityHeuristic(cartValue, customerHistory, channel)
+  const resolved = getAiClient(userKey)
+  if (!resolved) return computeProbabilityHeuristic(cartValue, customerHistory, channel)
+  const ai = resolved.client
+  const tier = resolved.tier
 
   try {
     const res = await ai.chat.completions.create({
@@ -349,7 +310,7 @@ export async function predictRecoveryProbability(
       factors: parsed.factors || ['Based on historical patterns'],
     }
   } catch (err) {
-    handleAiFailure(err, 'probability prediction', userKey)
+    handleAiFailure(err, 'probability prediction', userKey, tier)
     return computeProbabilityHeuristic(cartValue, customerHistory, channel)
   }
 }
@@ -399,8 +360,10 @@ export async function optimizeDiscount(
   reasoning: string
 }> {
   const userKey = storeId || 'default'
-  const ai = getClient(userKey)
-  if (!ai) return computeDiscountHeuristic(cartValue, customerHistory, storeMargin)
+  const resolved = getAiClient(userKey)
+  if (!resolved) return computeDiscountHeuristic(cartValue, customerHistory, storeMargin)
+  const ai = resolved.client
+  const tier = resolved.tier
 
   try {
     const res = await ai.chat.completions.create({
@@ -428,7 +391,7 @@ export async function optimizeDiscount(
       reasoning: parsed.reasoning || 'Optimized for conversion and margin',
     }
   } catch (err) {
-    handleAiFailure(err, 'discount optimization', userKey)
+    handleAiFailure(err, 'discount optimization', userKey, tier)
     return computeDiscountHeuristic(cartValue, customerHistory, storeMargin)
   }
 }
@@ -455,8 +418,10 @@ export async function detectCustomerIntent(
   storeId?: string
 ): Promise<{ intentType: string; confidence: number; description: string }> {
   const userKey = storeId || 'default'
-  const ai = getClient(userKey)
-  if (!ai) return classifyIntentHeuristic(customer)
+  const resolved = getAiClient(userKey)
+  if (!resolved) return classifyIntentHeuristic(customer)
+  const ai = resolved.client
+  const tier = resolved.tier
 
   try {
     const res = await ai.chat.completions.create({
@@ -490,7 +455,7 @@ Definitions:
       description: parsed.description || '',
     }
   } catch (err) {
-    handleAiFailure(err, 'intent detection', userKey)
+    handleAiFailure(err, 'intent detection', userKey, tier)
     return classifyIntentHeuristic(customer)
   }
 }
@@ -530,10 +495,12 @@ export async function generatePersonalizedDiscount(
   storeId?: string
 ): Promise<PersonalizedDiscount> {
   const userKey = storeId || 'default'
-  const ai = getClient(userKey)
+  const resolved = getAiClient(userKey)
   const firstName = (customerName || 'YOU').split(' ')[0].toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5) || 'YOU'
 
-  if (ai) {
+  if (resolved) {
+    const ai = resolved.client
+    const tier = resolved.tier
     try {
       const res = await ai.chat.completions.create({
         model: 'gpt-4o-mini',
@@ -580,9 +547,9 @@ Rules:
         type: parsed.type || 'percentage',
         confidence: parsed.confidence || 70,
       }
-    } catch (err) {
-    handleAiFailure(err, 'personalized discount', userKey)
-  }
+} catch (err) {
+      handleAiFailure(err, 'personalized discount', userKey, tier)
+    }
   }
 
   const value = cartValue > 10000 ? 0 : cartValue > 5000 ? 10 : customerHistory.totalOrders === 0 ? 15 : 10
@@ -610,8 +577,10 @@ export async function generateRevenueCoachSuggestions(
   storeId?: string
 ): Promise<{ suggestions: Array<{ title: string; description: string; impact: string; type: string; metric?: Record<string, any> }> }> {
   const userKey = storeId || 'default'
-  const ai = getClient(userKey)
-  if (!ai) return generateCoachHeuristic(storeMetrics)
+  const resolved = getAiClient(userKey)
+  if (!resolved) return generateCoachHeuristic(storeMetrics)
+  const ai = resolved.client
+  const tier = resolved.tier
 
   try {
     const res = await ai.chat.completions.create({
@@ -636,7 +605,7 @@ Be specific and data-driven. Reference their actual numbers.`,
     const parsed = JSON.parse(res.choices[0]?.message?.content || '{}')
     return { suggestions: parsed.suggestions || [] }
   } catch (err) {
-    handleAiFailure(err, 'revenue coach', userKey)
+    handleAiFailure(err, 'revenue coach', userKey, tier)
     return generateCoachHeuristic(storeMetrics)
   }
 }
@@ -692,8 +661,10 @@ export async function generateWeeklyReport(
   storeId?: string
 ): Promise<{ title: string; summary: string; insights: any[]; recommendations: any[] } | null> {
   const userKey = storeId || 'default'
-  const ai = getClient(userKey)
-  if (!ai) return generateReportHeuristic(storeMetrics)
+  const resolved = getAiClient(userKey)
+  if (!resolved) return generateReportHeuristic(storeMetrics)
+  const ai = resolved.client
+  const tier = resolved.tier
 
   try {
     const res = await ai.chat.completions.create({
@@ -727,7 +698,7 @@ Focus on actionable insights. Use emojis in titles.`,
       recommendations: parsed.recommendations || [],
     }
   } catch (err) {
-    handleAiFailure(err, 'weekly report', userKey)
+    handleAiFailure(err, 'weekly report', userKey, tier)
     return generateReportHeuristic(storeMetrics)
   }
 }
@@ -767,8 +738,10 @@ export async function generateCampaignSetup(
   discountCode: string
 } | null> {
   const userKey = storeId || 'default'
-  const ai = getClient(userKey)
-  if (!ai) return defaultCampaignSetup(storeInfo)
+  const resolved = getAiClient(userKey)
+  if (!resolved) return defaultCampaignSetup(storeInfo)
+  const ai = resolved.client
+  const tier = resolved.tier
 
   try {
     const res = await ai.chat.completions.create({
@@ -802,7 +775,7 @@ export async function generateCampaignSetup(
       discountCode: parsed.discountCode || 'WELCOME10',
     }
   } catch (err) {
-    handleAiFailure(err, 'campaign setup', userKey)
+    handleAiFailure(err, 'campaign setup', userKey, tier)
     return defaultCampaignSetup(storeInfo)
   }
 }
