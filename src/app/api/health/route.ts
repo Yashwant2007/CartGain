@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { getQueue } from '@/lib/queue'
+import { getAiHealth } from '@/lib/ai-client'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,6 +13,12 @@ interface HealthStatus {
     database: { status: 'ok' | 'error'; latencyMs: number; error?: string }
     redis: { status: 'ok' | 'degraded' | 'error'; latencyMs?: number; error?: string }
     env: { status: 'ok' | 'degraded'; missing: string[] }
+    ai: {
+      status: 'ok' | 'degraded'
+      activeTier: 'primary' | 'fallback' | 'none'
+      primary: { configured: boolean }
+      fallback: { configured: boolean; tripped: boolean; model: string; baseUrl: string }
+    }
     version: string
   }
 }
@@ -81,10 +88,23 @@ export async function GET() {
     }
   }
 
+  const ai = getAiHealth()
+  const aiStatus: HealthStatus['checks']['ai'] = {
+    status: ai.activeTier === 'none' ? 'degraded' : 'ok',
+    activeTier: ai.activeTier,
+    primary: { configured: ai.primary.configured },
+    fallback: {
+      configured: ai.fallback.configured,
+      tripped: ai.fallback.tripped,
+      model: ai.fallback.model,
+      baseUrl: ai.fallback.baseUrl,
+    },
+  }
+
   const overall: HealthStatus['status'] =
     dbStatus.status === 'error' ? 'error' :
     missing.some(k => requiredVars.includes(k)) || redisStatus.status === 'error' ? 'error' :
-    missing.length > 0 || redisStatus.status === 'degraded' ? 'degraded' :
+    missing.length > 0 || redisStatus.status === 'degraded' || aiStatus.status === 'degraded' ? 'degraded' :
     'ok'
 
   const body: HealthStatus = {
@@ -99,6 +119,7 @@ export async function GET() {
         // Never expose WHICH variables are missing — an attacker would learn our stack.
         missing: missing.length > 0 ? ['N'] : [],
       },
+      ai: aiStatus,
       version: '1.0.0',
     },
   }

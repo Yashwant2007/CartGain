@@ -106,21 +106,48 @@ export function getAiClient(userKey?: string): AiResolved | null {
 }
 
 export function handleAiFailure(err: any, context: string, userKey: string | undefined, tier: AiTier): void {
-  if (isInsufficientQuotaError(err)) {
+  if (isInsufficientQuotaError(err) || err?.status === 401) {
     tripTierBreaker(tier)
-    if (userKey) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
     if (shouldLogQuota()) {
+      const reason = isInsufficientQuotaError(err)
+        ? 'credits exhausted'
+        : err?.status === 401
+        ? 'authentication failed (401)'
+        : 'unexpected failure'
       console.warn(
-        `[AI] ${context}: ${tier} tier quota exhausted — ${
+        `[AI] ${context}: ${tier} tier ${reason} — ${
           tier === 'primary' ? 'switching to fallback provider' : 'falling back to heuristics'
         }`
       )
     }
+    if (tier === 'fallback' && userKey) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
   } else if (err?.status === 429) {
     if (userKey) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
   } else {
     console.error(`[AI] ${context}:`, err)
   }
+}
+
+export function getAiHealth() {
+  const primaryConfigured = Boolean(process.env.OPENAI_API_KEY)
+  const fallbackConfigured = Boolean(process.env.AI_FALLBACK_API_KEY)
+  const primaryTripped = isTierTripped('primary')
+  const fallbackTripped = isTierTripped('fallback')
+  return {
+    primary: { configured: primaryConfigured, tripped: primaryTripped },
+    fallback: {
+      configured: fallbackConfigured,
+      tripped: fallbackTripped,
+      baseUrl: process.env.AI_FALLBACK_BASE_URL || DEFAULT_FALLBACK_BASE_URL,
+      model: process.env.AI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL,
+    },
+    activeTier:
+      primaryConfigured && !primaryTripped
+        ? 'primary'
+        : fallbackConfigured && !fallbackTripped
+        ? 'fallback'
+        : 'none',
+  } as const
 }
 
 export function resetAiClientsForTests(): void {
