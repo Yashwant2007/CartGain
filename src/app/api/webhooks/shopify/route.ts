@@ -251,7 +251,7 @@ async function processOrderCreate(data: any, store: any, domain: string) {
   const attributingMessage = await prisma.message.findFirst({
     where: {
       cartId: cart.id,
-      status: 'sent',
+      status: { in: ['sent', 'delivered'] },
       sentAt: { lte: orderCreatedAt, gte: windowStart },
     },
     orderBy: { sentAt: 'desc' },

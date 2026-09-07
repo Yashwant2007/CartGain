@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
-import { generateTotpSecret, generateOtpauthUrl, generateQrCodeUrl } from '@/lib/totp'
+import { generateTotpSecret, generateOtpauthUrl, generateQrCodeDataUrl } from '@/lib/totp'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,14 +18,14 @@ export async function POST() {
 
     const secret = generateTotpSecret()
     const otpauthUrl = generateOtpauthUrl(secret, user.email)
-    const qrCodeUrl = generateQrCodeUrl(secret, user.email)
+    const qrCodeDataUrl = await generateQrCodeDataUrl(secret, user.email)
 
     await prisma.user.update({ where: { id: user.id }, data: { totpSecret: secret } })
 
     return NextResponse.json({
       secret,
       otpauthUrl,
-      qrCodeUrl,
+      qrCodeUrl: qrCodeDataUrl,
     })
   } catch (error) {
     console.error('2FA setup error:', error)

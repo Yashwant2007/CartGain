@@ -551,6 +551,7 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
       const abTag = abTestVariant ? ` [AB:${abTestVariant}]` : ''
       let messageSaved = false
       try {
+        const now = new Date()
         await prisma.message.create({
           data: {
             cartId: cart.id,
@@ -558,7 +559,11 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
             channel: ch,
             content: `Cart recovery message (step ${step + 1}/${maxMessages}) for ${customerName}${abTag}`,
             status: sendSuccess ? 'sent' : 'failed',
-            sentAt: sendSuccess ? new Date() : null,
+            sentAt: sendSuccess ? now : null,
+            // Email & WhatsApp delivery is fire-and-forget — mark as delivered
+            // immediately on successful send so delivery-rate metrics reflect reality.
+            // WhatsApp server-side delivery confirmation can later refine via webhook.
+            deliveredAt: sendSuccess ? now : null,
           },
         })
         messageSaved = true

@@ -91,19 +91,27 @@ async function computeChannelStats(storeId: string, startDate: Date, endDate: Da
 
   return ['sms', 'whatsapp', 'email'].map(channel => {
     const sentRow = channelSent.find((r: any) => r.channel === channel)
+    const sent = Number(sentRow?.sent || 0)
+    const delivered = Number(sentRow?.delivered || 0)
+    const clicked = Number(sentRow?.clicked || 0)
+    const converted = Number(sentRow?.converted || 0)
+    const revenue = revMap.get(channel) || 0
     return {
       channel: channel.charAt(0).toUpperCase() + channel.slice(1),
-      sent: Number(sentRow?.sent || 0),
-      delivered: Number(sentRow?.delivered || 0),
-      clicked: Number(sentRow?.clicked || 0),
-      converted: Number(sentRow?.converted || 0),
-      revenue: revMap.get(channel) || 0,
+      sent,
+      delivered,
+      clicked,
+      converted,
+      revenue,
+      deliveryRate: sent > 0 ? Number(((delivered / sent) * 100).toFixed(1)) : 0,
+      clickRate: sent > 0 ? Number(((clicked / sent) * 100).toFixed(1)) : 0,
+      conversionRate: sent > 0 ? Number(((converted / sent) * 100).toFixed(1)) : 0,
     }
   })
 }
 
 async function computePeriodData(storeId: string, userId: string, startDate: Date, endDate: Date) {
-  const [cartCounts, revenue, messagesSent, analyticsRows, chartData, channelBreakdown] = await Promise.all([
+  const [cartCounts, revenue, messagesSent, messageTotals, chartData, channelBreakdown] = await Promise.all([
     prisma.$transaction([
       prisma.cart.count({
         where: { storeId, abandonedAt: { gte: startDate, lt: endDate } },
@@ -122,21 +130,30 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
         createdAt: { gte: startDate, lt: endDate },
       },
     }),
-    prisma.analytics.findMany({ where: { userId }, select: { messagesDelivered: true, messagesClicked: true } }),
+    prisma.$queryRawUnsafe<Array<{
+      delivered: bigint
+      clicked: bigint
+    }>>(
+      `SELECT
+        COUNT(*) FILTER (WHERE status IN ('delivered', 'sent')) as delivered,
+        COUNT(*) FILTER (WHERE "clickedAt" IS NOT NULL) as clicked
+      FROM "Message"
+      WHERE "campaignId" IN (SELECT id FROM "Campaign" WHERE "storeId" = $1)
+        AND "createdAt" >= $2
+        AND "createdAt" < $3`,
+      storeId,
+      startDate,
+      endDate
+    ),
     computeChartData(storeId, startDate, endDate),
     computeChannelStats(storeId, startDate, endDate),
   ])
 
   const [cartsAbandoned, cartsRecovered] = cartCounts
 
-  const totals = analyticsRows.reduce(
-    (acc: any, row: any) => {
-      acc.messagesDelivered += row.messagesDelivered
-      acc.messagesClicked += row.messagesClicked
-      return acc
-    },
-    { messagesDelivered: 0, messagesClicked: 0 }
-  )
+  const totals = messageTotals[0] || { delivered: BigInt(0), clicked: BigInt(0) }
+  const totalDelivered = Number(totals.delivered)
+  const totalClicked = Number(totals.clicked)
 
   const recoveryRate = cartsAbandoned > 0 ? (cartsRecovered / cartsAbandoned) * 100 : 0
 
@@ -198,8 +215,8 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
       revenueRecovered: revenue._sum.recoveredValue ?? 0,
       netRevenue,
       messagesSent,
-      messagesDelivered: totals.messagesDelivered,
-      messagesClicked: totals.messagesClicked,
+      messagesDelivered: totalDelivered,
+      messagesClicked: totalClicked,
       totalCosts: Number(totalCosts.toFixed(2)),
       roi: Number(roi.toFixed(2)),
       avgOrderValue: cartsRecovered > 0 ? ((revenue._sum.recoveredValue ?? 0) / cartsRecovered) : 0,

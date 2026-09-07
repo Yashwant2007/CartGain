@@ -1,4 +1,5 @@
 import { createHmac, randomBytes } from 'crypto'
+import QRCode from 'qrcode'
 
 const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
 
@@ -57,7 +58,7 @@ export function generateOtpauthUrl(secret: string, email: string, issuer = 'Cart
   return `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(email)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`
 }
 
-export function generateQrCodeUrl(secret: string, email: string, issuer = 'CartGain'): string {
+export async function generateQrCodeDataUrl(secret: string, email: string, issuer = 'CartGain'): Promise<string> {
   const otpauth = generateOtpauthUrl(secret, email, issuer)
-  return `https://chart.googleapis.com/chart?chs=200x200&chld=M|0&cht=qr&chl=${encodeURIComponent(otpauth)}`
+  return QRCode.toDataURL(otpauth, { width: 200, margin: 2, color: { dark: '#000000', light: '#ffffff' } })
 }

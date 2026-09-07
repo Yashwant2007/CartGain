@@ -96,13 +96,17 @@ export default function APIDocsPage() {
                 Authentication
               </h2>
               <p className="text-sm text-blue-300/70 mb-3">
-                All API requests require your API key in the <code className="text-cyan-300 bg-slate-900/60 px-1.5 py-0.5 rounded text-xs font-mono">x-api-key</code> header. Find your API key in{' '}
+                All API requests require your API key sent as a Bearer token in the{' '}<code className="text-cyan-300 bg-slate-900/60 px-1.5 py-0.5 rounded text-xs font-mono">Authorization</code>{' '}
+                header. Keys start with <code className="text-cyan-300 bg-slate-900/60 px-1.5 py-0.5 rounded text-xs font-mono">cg_</code>. Generate a key in{' '}
                 <Link href="/dashboard/settings" className="text-cyan-400 hover:text-cyan-300 underline">Settings &gt; API Keys</Link>.
               </p>
               <div className="bg-slate-900/60 border border-blue-700/40 rounded-lg p-3">
-                <pre className="text-sm text-blue-200 font-mono">curl -H &quot;x-api-key: rf_live_xxxxxxxxxxxxxxxxxxxx&quot; \
+                <pre className="text-sm text-blue-200 font-mono">curl -H &quot;Authorization: Bearer cg_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx&quot; \
   {baseUrl}/api/carts?storeId=your_store_id</pre>
               </div>
+              <p className="text-xs text-blue-300/50 mt-2">
+                Keys have scoped permissions (read / write / admin) and may expire if configured. Revoke keys that are no longer in use.
+              </p>
             </section>
 
             <section>

@@ -35,8 +35,8 @@ export async function GET(
     })
 
     // Calculate message metrics
-    const totalMessagesSent = messages.length
-    const totalMessagesDelivered = messages.filter((m) => m.status !== 'failed' && m.deliveredAt).length
+    const totalMessagesSent = messages.filter((m) => m.status === 'sent' || m.status === 'delivered').length
+    const totalMessagesDelivered = messages.filter((m) => m.status === 'sent' || m.status === 'delivered').length
     const totalMessagesClicked = messages.filter((m) => m.clickedAt).length
     const totalMessagesConverted = messages.filter((m) => m.convertedAt).length
 

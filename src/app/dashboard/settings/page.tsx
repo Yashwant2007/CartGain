@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { Bell, CreditCard, Shield, User, Key, ExternalLink } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 
@@ -539,6 +538,7 @@ function SecuritySettings() {
   const [show2FASetup, setShow2FASetup] = useState(false)
   const [show2FADisable, setShow2FADisable] = useState(false)
   const [qrCodeUrl, setQrCodeUrl] = useState('')
+  const [totpSecret, setTotpSecret] = useState('')
   const [setupCode, setSetupCode] = useState('')
   const [disableCode, setDisableCode] = useState('')
   const [setupStep, setSetupStep] = useState<'loading' | 'showqr' | 'verify'>('loading')
@@ -577,6 +577,7 @@ function SecuritySettings() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to start setup')
       setQrCodeUrl(data.qrCodeUrl)
+      setTotpSecret(data.secret)
       setSetupStep('showqr')
     } catch (error) {
       setTwoFactorError(error instanceof Error ? error.message : 'Failed to start setup')
@@ -733,19 +734,32 @@ function SecuritySettings() {
           onClick={() => { if (setupStep !== 'loading') { setShow2FASetup(false); setTwoFactorError(null) }}}
         >
           <div className="bg-slate-800 border border-cyan-700/50 rounded-xl p-6 max-w-md w-full shadow-2xl shadow-cyan-500/10" onClick={e => e.stopPropagation()}>
-            <h3 id="twofa-setup-modal-title" className="text-xl font-bold text-white mb-4">Set Up Two-Factor Auth</h3>
-            {setupStep === 'loading' && <p className="text-blue-300/80">Generating setup key...</p>}
+            <h3 id="twofa-setup-modal-title" className="text-xl font-bold text-white mb-2">Set Up Two-Factor Auth</h3>
+            {setupStep === 'loading' && <p className="text-blue-300/80 py-4">Generating setup key...</p>}
             {setupStep === 'showqr' && (
               <div className="space-y-4">
-                <p className="text-sm text-blue-300/80">Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.):</p>
+                <p className="text-sm text-blue-300/80">Scan this QR code with your authenticator app (Google Authenticator, Authy, 1Password, etc.):</p>
                 <div className="flex justify-center">
-                  {qrCodeUrl && <Image src={qrCodeUrl} alt="2FA QR Code" width={200} height={200} className="rounded-lg border border-blue-700/30" unoptimized />}
+                  {qrCodeUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={qrCodeUrl} alt="2FA QR Code" width={200} height={200} className="rounded-lg border border-blue-700/30" />
+                  )}
                 </div>
                 <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-3">
-                  <p className="text-xs text-blue-300/60 mb-1">Then enter the 6-digit code from the app:</p>
-                  <div className="flex space-x-2">
-                    <input type="text" maxLength={6} value={setupCode} onChange={(e) => { setSetupCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setTwoFactorError(null) }} placeholder="000000" aria-label="2FA verification code" className="flex-1 px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg font-mono text-lg tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-cyan-400" />
+                  <p className="text-xs text-blue-300/60 mb-1">Can&apos;t scan? Enter this key manually:</p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm text-cyan-300 font-mono break-all flex-1 select-all">{totpSecret}</code>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(totpSecret).catch(() => {}) }}
+                      className="px-2 py-1 text-xs text-blue-300/60 hover:text-cyan-300 border border-blue-700/30 rounded transition-colors shrink-0"
+                    >
+                      Copy
+                    </button>
                   </div>
+                </div>
+                <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-3">
+                  <p className="text-xs text-blue-300/60 mb-1">Then enter the 6-digit verification code from the app:</p>
+                  <input type="text" maxLength={6} value={setupCode} onChange={(e) => { setSetupCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setTwoFactorError(null) }} placeholder="000000" aria-label="2FA verification code" className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg font-mono text-lg tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-cyan-400" autoFocus />
                 </div>
                 {twoFactorError && <p className="text-sm text-red-300/80 bg-red-600/20 border border-red-700/30 rounded-lg p-3">{twoFactorError}</p>}
                 <div className="flex space-x-3">
@@ -819,10 +833,12 @@ function SecuritySettings() {
 }
 
 function APISettings({ store }: { store: StoreSettings | null }) {
-  const [keys, setKeys] = useState<Array<{ id: string; name: string; prefix: string; permissions: string[]; lastUsedAt: string | null; createdAt: string }>>([])
+  const [keys, setKeys] = useState<Array<{ id: string; name: string; prefix: string; permissions: string[]; lastUsedAt: string | null; expiresAt: string | null; createdAt: string }>>([])
   const [loading, setLoading] = useState(true)
   const [showGenerate, setShowGenerate] = useState(false)
   const [newKeyName, setNewKeyName] = useState('')
+  const [newKeyPermissions, setNewKeyPermissions] = useState<string[]>(['read'])
+  const [newKeyExpiresIn, setNewKeyExpiresIn] = useState<'30d' | '90d' | '365d' | 'never'>('never')
   const [generatedKey, setGeneratedKey] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -853,7 +869,6 @@ function APISettings({ store }: { store: StoreSettings | null }) {
     return () => abortLoadKeys.current?.()
   }, [])
 
-  // Close the generate-key modal on Escape (unless a key was just generated)
   useEffect(() => {
     if (!showGenerate) return
     const onKey = (e: KeyboardEvent) => {
@@ -866,7 +881,6 @@ function APISettings({ store }: { store: StoreSettings | null }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [showGenerate, generatedKey])
 
-  // Close the revoke-confirm modal on Escape
   useEffect(() => {
     if (!showRevokeConfirm) return
     const onKey = (e: KeyboardEvent) => {
@@ -876,19 +890,32 @@ function APISettings({ store }: { store: StoreSettings | null }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [showRevokeConfirm])
 
+  const togglePermission = (perm: string) => {
+    setNewKeyPermissions(prev =>
+      prev.includes(perm) ? prev.filter(p => p !== perm) : [...prev, perm]
+    )
+  }
+
   const handleGenerate = async () => {
     if (!newKeyName.trim()) { setError('Enter a name for this key'); return }
+    if (newKeyPermissions.length === 0) { setError('Select at least one permission'); return }
     setError(null); setGenerating(true)
     try {
       const res = await fetch('/api/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newKeyName.trim() }),
+        body: JSON.stringify({
+          name: newKeyName.trim(),
+          permissions: newKeyPermissions,
+          expiresIn: newKeyExpiresIn,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to generate key')
       setGeneratedKey(data.key)
       setNewKeyName('')
+      setNewKeyPermissions(['read'])
+      setNewKeyExpiresIn('never')
       await loadKeys()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate key')
@@ -902,6 +929,15 @@ function APISettings({ store }: { store: StoreSettings | null }) {
       setKeys(keys.filter(k => k.id !== id))
       setShowRevokeConfirm(null)
     } catch {} 
+  }
+
+  const isExpired = (expiresAt: string | null) => expiresAt && new Date(expiresAt) < new Date()
+
+  const formatExpiry = (expiresAt: string | null) => {
+    if (!expiresAt) return 'Never'
+    const d = new Date(expiresAt)
+    if (d < new Date()) return 'Expired'
+    return `Expires ${d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`
   }
 
   return (
@@ -926,14 +962,37 @@ function APISettings({ store }: { store: StoreSettings | null }) {
         ) : (
           <div className="space-y-3">
             {keys.map((key) => (
-              <div key={key.id} className="flex items-center justify-between p-4 bg-slate-700/40 border border-blue-700/30 rounded-lg">
-                <div>
-                  <p className="font-medium text-white text-sm">{key.name}</p>
-                  <p className="text-xs text-blue-300/50 mt-0.5">{key.prefix} · Created {new Date(key.createdAt).toLocaleDateString()}</p>
+              <div key={key.id} className={`p-4 bg-slate-700/40 border rounded-lg ${isExpired(key.expiresAt) ? 'border-amber-600/30 opacity-60' : 'border-blue-700/30'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-white text-sm">{key.name}</p>
+                      {isExpired(key.expiresAt) && (
+                        <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-600/30 text-amber-300 border border-amber-500/40 rounded">Expired</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-blue-300/50 mt-0.5">{key.prefix}</p>
+                  </div>
+                  <button onClick={() => setShowRevokeConfirm(key.id)} className="px-3 py-1.5 text-xs text-red-400 border border-red-600/40 rounded-lg hover:bg-red-600/20 transition-colors shrink-0">
+                    Revoke
+                  </button>
                 </div>
-                <button onClick={() => setShowRevokeConfirm(key.id)} className="px-3 py-1.5 text-xs text-red-400 border border-red-600/40 rounded-lg hover:bg-red-600/20 transition-colors">
-                  Revoke
-                </button>
+                <div className="flex items-center gap-3 mt-2 text-xs text-blue-300/50">
+                  <span>Created {new Date(key.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                  <span>·</span>
+                  <span>{formatExpiry(key.expiresAt)}</span>
+                  <span>·</span>
+                  <span>{key.lastUsedAt ? `Last used ${new Date(key.lastUsedAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}` : 'Never used'}</span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-2">
+                  {key.permissions.map((perm) => (
+                    <span key={perm} className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
+                      perm === 'admin' ? 'bg-red-600/20 text-red-300 border border-red-500/30' :
+                      perm === 'write' ? 'bg-amber-600/20 text-amber-300 border border-amber-500/30' :
+                      'bg-cyan-600/20 text-cyan-300 border border-cyan-500/30'
+                    }`}>{perm}</span>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -953,11 +1012,11 @@ function APISettings({ store }: { store: StoreSettings | null }) {
             {generatedKey ? (
               <div className="space-y-4">
                 <div className="flex items-center space-x-3">
-                  <span className="text-2xl">🔑</span>
+                  <Key className="w-6 h-6 text-cyan-400" />
                   <h3 id="generate-key-modal-title" className="text-lg font-semibold text-white">API Key Generated</h3>
                 </div>
                 <div className="bg-slate-900 border border-amber-500/40 rounded-lg p-4">
-                  <p className="text-xs text-amber-400 font-medium mb-2">⚠️ Copy this key now. You won&apos;t be able to see it again.</p>
+                  <p className="text-xs text-amber-400 font-medium mb-2">Copy this key now. You won&apos;t be able to see it again.</p>
                   <div className="bg-slate-950 border border-blue-700/30 rounded p-3">
                     <code className="text-sm text-cyan-300 break-all">{generatedKey}</code>
                   </div>
@@ -978,6 +1037,49 @@ function APISettings({ store }: { store: StoreSettings | null }) {
                 <div>
                   <label className="block text-sm font-medium text-blue-200 mb-2">Key Name</label>
                   <input type="text" value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} placeholder="e.g. Production, Staging" className="w-full px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400" autoFocus />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-blue-200 mb-2">Permissions</label>
+                  <div className="flex gap-2">
+                    {['read', 'write', 'admin'].map((perm) => (
+                      <button
+                        key={perm}
+                        onClick={() => togglePermission(perm)}
+                        className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${
+                          newKeyPermissions.includes(perm)
+                            ? perm === 'admin' ? 'bg-red-600/30 text-red-300 border-red-500/50' :
+                              perm === 'write' ? 'bg-amber-600/30 text-amber-300 border-amber-500/50' :
+                              'bg-cyan-600/30 text-cyan-300 border-cyan-500/50'
+                            : 'bg-slate-700/30 text-blue-300/50 border-blue-700/30 hover:bg-slate-700/50'
+                        }`}
+                      >
+                        {perm}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-blue-300/40 mt-1.5">
+                    {newKeyPermissions.includes('admin') ? 'Full access to all resources' :
+                     newKeyPermissions.includes('write') ? 'Read and modify resources' :
+                     'Read-only access to resources'}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-blue-200 mb-2">Expiration</label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {(['30d', '90d', '365d', 'never'] as const).map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => setNewKeyExpiresIn(opt)}
+                        className={`px-2 py-1.5 text-xs rounded-lg border transition-all ${
+                          newKeyExpiresIn === opt
+                            ? 'bg-cyan-600/30 text-cyan-300 border-cyan-500/50'
+                            : 'bg-slate-700/30 text-blue-300/50 border-blue-700/30 hover:bg-slate-700/50'
+                        }`}
+                      >
+                        {opt === 'never' ? 'Never' : opt.replace('d', ' days')}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 {error && <p className="text-sm text-red-300/80 bg-red-600/20 border border-red-700/30 rounded-lg p-3">{error}</p>}
                 <div className="flex space-x-3">

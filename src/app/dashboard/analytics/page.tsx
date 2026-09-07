@@ -33,6 +33,9 @@ type PeriodData = {
     clicked: number
     converted: number
     revenue: number
+    deliveryRate: number
+    clickRate: number
+    conversionRate: number
   }>
   insights?: {
     bestChannel: { channel: string; revenue: number; conversionRate: number } | null
@@ -172,6 +175,45 @@ export default function AnalyticsPage() {
         />
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <MetricCard
+          title="Messages Sent"
+          value={(current?.overview.messagesSent ?? 0).toLocaleString('en-IN')}
+          change="+0%"
+          trend="up"
+          icon={<MessageSquare className="w-6 h-6" />}
+          color="primary"
+          loading={isLoading}
+        />
+        <MetricCard
+          title="Messages Delivered"
+          value={(current?.overview.messagesDelivered ?? 0).toLocaleString('en-IN')}
+          change="+0%"
+          trend="up"
+          icon={<MessageSquare className="w-6 h-6" />}
+          color="blue"
+          loading={isLoading}
+        />
+        <MetricCard
+          title="Delivery Rate"
+          value={`${current?.overview.messagesSent ? ((current.overview.messagesDelivered / current.overview.messagesSent) * 100).toFixed(1) : '0'}%`}
+          change="+0%"
+          trend="up"
+          icon={<TrendingUp className="w-6 h-6" />}
+          color="green"
+          loading={isLoading}
+        />
+        <MetricCard
+          title="Click Rate"
+          value={`${current?.overview.messagesSent ? ((current.overview.messagesClicked / current.overview.messagesSent) * 100).toFixed(1) : '0'}%`}
+          change="+0%"
+          trend="up"
+          icon={<TrendingUp className="w-6 h-6" />}
+          color="accent"
+          loading={isLoading}
+        />
+      </div>
+
       {isLoading && (
         <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 text-sm text-blue-300/80">Loading live analytics...</div>
       )}
@@ -213,12 +255,13 @@ export default function AnalyticsPage() {
                     <th className="text-right py-3 px-4 text-sm font-semibold text-blue-300/80">Clicked</th>
                     <th className="text-right py-3 px-4 text-sm font-semibold text-blue-300/80">Converted</th>
                     <th className="text-right py-3 px-4 text-sm font-semibold text-blue-300/80">Revenue</th>
-                    <th className="text-right py-3 px-4 text-sm font-semibold text-blue-300/80">Rate</th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-blue-300/80">Delivery</th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-blue-300/80">Click</th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-blue-300/80">Conv.</th>
                   </tr>
                 </thead>
                 <tbody>
                   {current.channelStats.map((row, i) => {
-                    const conversionRate = row.sent > 0 ? ((row.converted / row.sent) * 100).toFixed(1) : '0.0'
                     return (
                       <tr key={i} className="border-b border-blue-700/20 hover:bg-slate-700/30 transition-colors">
                         <td className="py-3 px-4">
@@ -230,13 +273,13 @@ export default function AnalyticsPage() {
                         <td className="text-right py-3 px-4 text-blue-200">{row.converted.toLocaleString('en-IN')}</td>
                         <td className="text-right py-3 px-4 font-medium text-emerald-300">₹{row.revenue.toLocaleString('en-IN')}</td>
                         <td className="text-right py-3 px-4">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            Number(conversionRate) >= 15 ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/50' :
-                            Number(conversionRate) >= 10 ? 'bg-yellow-600/30 text-yellow-300 border border-yellow-500/50' :
-                            'bg-red-600/30 text-red-300 border border-red-500/50'
-                          }`}>
-                            {conversionRate}%
-                          </span>
+                          <RateBadge value={row.deliveryRate} />
+                        </td>
+                        <td className="text-right py-3 px-4">
+                          <RateBadge value={row.clickRate} />
+                        </td>
+                        <td className="text-right py-3 px-4">
+                          <RateBadge value={row.conversionRate} />
                         </td>
                       </tr>
                     )
@@ -393,5 +436,18 @@ function FunnelStep({ label, value, percentage, color }: {
       </div>
       <p className="text-xs text-blue-300/50 mt-0.5 text-right">{percentage.toFixed(1)}% of abandoned</p>
     </div>
+  )
+}
+
+function RateBadge({ value }: { value: number }) {
+  return (
+    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+      value >= 80 ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/50' :
+      value >= 50 ? 'bg-yellow-600/30 text-yellow-300 border border-yellow-500/50' :
+      value > 0 ? 'bg-red-600/30 text-red-300 border border-red-500/50' :
+      'bg-slate-600/30 text-blue-300/50 border border-slate-500/30'
+    }`}>
+      {value}%
+    </span>
   )
 }

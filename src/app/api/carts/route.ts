@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { cartCreateSchema, validateOrThrow, handleValidationError } from '@/lib/validation'
+import { authenticate, hasPermission } from '@/lib/auth-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,10 +9,9 @@ export async function GET(request: NextRequest) {
   try {
     const storeId = request.nextUrl.searchParams.get('storeId')
 
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    const auth = await authenticate(request)
+    if (!auth.success) {
+      return NextResponse.json({ message: auth.error }, { status: auth.status })
     }
 
     if (!storeId) {
@@ -23,7 +21,7 @@ export async function GET(request: NextRequest) {
     const store = await prisma.store.findFirst({
       where: {
         id: storeId,
-        userId: session.user.id,
+        userId: auth.ctx.userId,
       },
     })
 
@@ -57,15 +55,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const data = validateOrThrow(cartCreateSchema, body)
 
-    const session = await getServerSession(authOptions)
+    const auth = await authenticate(request)
+    if (!auth.success) {
+      return NextResponse.json({ message: auth.error }, { status: auth.status })
+    }
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    if (!hasPermission(auth.ctx, 'write')) {
+      return NextResponse.json({ message: 'Insufficient permissions for this API key' }, { status: 403 })
     }
 
     const store = await prisma.store.findUnique({ where: { id: data.storeId } })
 
-    if (!store || store.userId !== session.user.id) {
+    if (!store || store.userId !== auth.ctx.userId) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404 })
     }
 

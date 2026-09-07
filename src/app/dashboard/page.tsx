@@ -58,6 +58,9 @@ type ChannelStat = {
   delivered: number
   clicked: number
   converted: number
+  deliveryRate: number
+  clickRate: number
+  conversionRate: number
 }
 
 export default function DashboardPage() {
@@ -315,7 +318,7 @@ export default function DashboardPage() {
           ) : channelStats.length > 0 ? (
             <div className="space-y-4">
               {channelStats.map((stat) => (
-                <ChannelBar key={stat.channel} name={stat.channel} sent={stat.sent} delivered={stat.delivered} converted={stat.converted} />
+                <ChannelBar key={stat.channel} name={stat.channel} sent={stat.sent} delivered={stat.delivered} converted={stat.converted} deliveryRate={stat.deliveryRate ?? 0} clickRate={stat.clickRate ?? 0} conversionRate={stat.conversionRate ?? 0} />
               ))}
             </div>
           ) : (
@@ -383,7 +386,7 @@ export default function DashboardPage() {
   )
 }
 
-function ChannelBar({ name, sent, delivered, converted }: { name: string; sent: number; delivered: number; converted: number }) {
+function ChannelBar({ name, sent, delivered, converted, deliveryRate, clickRate, conversionRate }: { name: string; sent: number; delivered: number; converted: number; deliveryRate: number; clickRate: number; conversionRate: number }) {
   const colorMap: Record<string, string> = {
     Sms: 'bg-blue-500',
     Whatsapp: 'bg-green-500',
@@ -392,16 +395,22 @@ function ChannelBar({ name, sent, delivered, converted }: { name: string; sent: 
 
   const channelKey = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
   const barColor = colorMap[channelKey] || 'bg-blue-500'
-  const conversionRate = sent > 0 ? ((converted / sent) * 100).toFixed(1) : '0.0'
 
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         <span className="text-sm font-medium text-white">{channelKey}</span>
-        <span className="text-sm text-blue-300/70">{converted}/{sent} converted ({conversionRate}%)</span>
+        <span className="text-xs text-blue-300/70">
+          {delivered}/{sent} delivered ({deliveryRate}%) · {converted} converted ({conversionRate}%)
+        </span>
       </div>
       <div className="h-2 bg-slate-700/50 rounded-full overflow-hidden border border-blue-700/20">
-        <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${sent > 0 ? (converted / sent) * 100 : 0}%` }} />
+        <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${deliveryRate}%` }} />
+      </div>
+      <div className="flex items-center gap-3 mt-1 text-[10px] text-blue-300/50">
+        <span>Delivery: {deliveryRate}%</span>
+        <span>Click: {clickRate}%</span>
+        <span>Conv: {conversionRate}%</span>
       </div>
     </div>
   )

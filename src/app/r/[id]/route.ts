@@ -24,7 +24,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const message = await prisma.message.findFirst({
       where: {
         cartId,
-        status: 'sent',
+        status: { in: ['sent', 'delivered'] },
         ...(channel ? { channel } : {}),
       },
       orderBy: { sentAt: 'desc' },
