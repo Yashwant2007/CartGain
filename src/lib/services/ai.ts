@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import { isQuotaTripped, tripQuotaBreaker, shouldLogQuota, isInsufficientQuotaError } from '@/lib/ai-quota'
 
 let client: OpenAI | null = null
 
@@ -27,6 +28,7 @@ function applyUserCooldown(userKey: string, durationMs = BASE_COOLDOWN_MS): void
 }
 
 function getClient(userKey?: string): OpenAI | null {
+  if (isQuotaTripped()) return null
   if (userKey && isUserOnCooldown(userKey)) return null
   if (client) return client
   const key = process.env.OPENAI_API_KEY
@@ -35,10 +37,16 @@ function getClient(userKey?: string): OpenAI | null {
   return client
 }
 
-function isQuotaError(err: any): boolean {
-  const status = err?.status || err?.statusCode
-  const code = err?.code || err?.error?.code
-  return status === 429 || status === 402 || code === 'insufficient_quota' || code === 'rate_limit_exceeded'
+function handleAiFailure(err: any, context: string, userKey: string): void {
+  if (isInsufficientQuotaError(err)) {
+    tripQuotaBreaker()
+    applyUserCooldown(userKey, MAX_COOLDOWN_MS)
+    if (shouldLogQuota()) console.warn(`[AI] ${context}: OpenAI quota exhausted — falling back to heuristics`)
+  } else if (err?.status === 429) {
+    applyUserCooldown(userKey, MAX_COOLDOWN_MS)
+  } else {
+    console.error(`[AI] ${context}:`, err)
+  }
 }
 
 export type CartContext = {
@@ -100,8 +108,7 @@ ${ctx.discountCode ? `\nINCLUDE this discount offer prominently: code ${ctx.disc
     const parsed = JSON.parse(res.choices[0]?.message?.content || '{}')
     return { subject: parsed.subject, body: parsed.body }
   } catch (err) {
-    console.error('AI email generation error:', err)
-    if (isQuotaError(err)) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
+    handleAiFailure(err, 'email generation', userKey)
     return null
   }
 }
@@ -132,8 +139,7 @@ ${ctx.discountCode ? `\nINCLUDE this discount offer: code ${ctx.discountCode}${c
     const body = res.choices[0]?.message?.content?.trim()
     return body ? { body } : null
   } catch (err) {
-    console.error('AI SMS generation error:', err)
-    if (isQuotaError(err)) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
+    handleAiFailure(err, 'sms generation', userKey)
     return null
   }
 }
@@ -261,8 +267,7 @@ CRITICAL: Under 35 words. Graceful finality. Make them feel "I need to do this n
     const body = res.choices[0]?.message?.content?.trim()
     return body ? { body } : null
   } catch (err) {
-    console.error('AI WhatsApp generation error:', err)
-    if (isQuotaError(err)) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
+    handleAiFailure(err, 'whatsapp generation', userKey)
     return null
   }
 }
@@ -294,7 +299,7 @@ export async function generateSubjectLines(ctx: CartContext, count = 3, storeId?
     const lines = Array.isArray(parsed) ? parsed : parsed.subjects || parsed.lines || []
     return lines.slice(0, count)
   } catch (err) {
-    console.error('AI subject lines error:', err)
+    handleAiFailure(err, 'subject lines', userKey)
     return generateFallbackSubjects(ctx, count)
   }
 }
@@ -344,7 +349,7 @@ export async function predictRecoveryProbability(
       factors: parsed.factors || ['Based on historical patterns'],
     }
   } catch (err) {
-    console.error('AI probability error:', err)
+    handleAiFailure(err, 'probability prediction', userKey)
     return computeProbabilityHeuristic(cartValue, customerHistory, channel)
   }
 }
@@ -423,7 +428,7 @@ export async function optimizeDiscount(
       reasoning: parsed.reasoning || 'Optimized for conversion and margin',
     }
   } catch (err) {
-    console.error('AI discount error:', err)
+    handleAiFailure(err, 'discount optimization', userKey)
     return computeDiscountHeuristic(cartValue, customerHistory, storeMargin)
   }
 }
@@ -485,7 +490,7 @@ Definitions:
       description: parsed.description || '',
     }
   } catch (err) {
-    console.error('AI intent detection error:', err)
+    handleAiFailure(err, 'intent detection', userKey)
     return classifyIntentHeuristic(customer)
   }
 }
@@ -576,9 +581,8 @@ Rules:
         confidence: parsed.confidence || 70,
       }
     } catch (err) {
-      console.error('AI personalized discount error:', err)
-      if (isQuotaError(err)) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
-    }
+    handleAiFailure(err, 'personalized discount', userKey)
+  }
   }
 
   const value = cartValue > 10000 ? 0 : cartValue > 5000 ? 10 : customerHistory.totalOrders === 0 ? 15 : 10
@@ -632,7 +636,7 @@ Be specific and data-driven. Reference their actual numbers.`,
     const parsed = JSON.parse(res.choices[0]?.message?.content || '{}')
     return { suggestions: parsed.suggestions || [] }
   } catch (err) {
-    console.error('AI coach error:', err)
+    handleAiFailure(err, 'revenue coach', userKey)
     return generateCoachHeuristic(storeMetrics)
   }
 }
@@ -723,7 +727,7 @@ Focus on actionable insights. Use emojis in titles.`,
       recommendations: parsed.recommendations || [],
     }
   } catch (err) {
-    console.error('AI weekly report error:', err)
+    handleAiFailure(err, 'weekly report', userKey)
     return generateReportHeuristic(storeMetrics)
   }
 }
@@ -798,7 +802,7 @@ export async function generateCampaignSetup(
       discountCode: parsed.discountCode || 'WELCOME10',
     }
   } catch (err) {
-    console.error('AI campaign setup error:', err)
+    handleAiFailure(err, 'campaign setup', userKey)
     return defaultCampaignSetup(storeInfo)
   }
 }

@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import prisma from '@/lib/db'
 import { checkAbuse } from '@/lib/bargain/abuse'
+import { isQuotaTripped, tripQuotaBreaker, isInsufficientQuotaError } from '@/lib/ai-quota'
 
 // ── OpenAI client (singleton) ──
 
@@ -11,6 +12,7 @@ let client: OpenAI | null = null
 const BARGAIN_MODEL = process.env.BARGAIN_MODEL || 'gpt-4o'
 
 function getClient(): OpenAI | null {
+  if (isQuotaTripped()) return null
   if (client) return client
   const key = process.env.OPENAI_API_KEY
   if (!key) return null
@@ -1460,7 +1462,12 @@ export async function negotiateStep(
       },
     }
   } catch (err: any) {
-    console.error('[BARGAIN_AI_ERROR]', err?.message ?? err)
+    if (isInsufficientQuotaError(err)) {
+      tripQuotaBreaker()
+      console.warn('[BARGAIN] OpenAI quota exhausted — using rule-based negotiation')
+    } else if (err?.status !== 429) {
+      console.error('[BARGAIN_AI_ERROR]', err?.message ?? err)
+    }
     return customerOffer != null
       ? ruleBasedDecision(customerOffer, ctx)
       : { reply: buildOpeningMessage(ctx), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'conversational', sentiment: 'neutral' }
