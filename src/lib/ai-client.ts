@@ -31,7 +31,11 @@ let primaryClient: OpenAI | null = null
 let fallbackClient: OpenAI | null = null
 
 const DEFAULT_FALLBACK_BASE_URL = 'https://api.groq.com/openai/v1'
-const DEFAULT_FALLBACK_MODEL = 'llama-3.3-70b-versatile'
+// openai/gpt-oss-120b: 131K context (handles the large bargain system prompt),
+// JSON Object Mode (matches our response_format: json_object), strong reasoning
+// (best for negotiation depth), available on Groq free tier. NOTE: the previous
+// default llama-3.3-70b-versatile was deprecated by Groq (shutdown 08/16/26).
+const DEFAULT_FALLBACK_MODEL = 'openai/gpt-oss-120b'
 
 function fallbackModel(): string {
   return process.env.AI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL

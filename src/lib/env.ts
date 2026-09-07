@@ -25,11 +25,11 @@ const AI_VARS: Record<string, string> = {
 // primary OpenAI key is missing/out of credits (Groq by default). Overrides:
 //   AI_FALLBACK_API_KEY  → required to activate the fallback tier
 //   AI_FALLBACK_BASE_URL → default https://api.groq.com/openai/v1
-//   AI_FALLBACK_MODEL    → default llama-3.3-70b-versatile
+//   AI_FALLBACK_MODEL    → default openai/gpt-oss-120b
 export const OPTIONAL_AI_VARS: Record<string, string> = {
   AI_FALLBACK_API_KEY: 'OpenAI-compatible provider key (fallback when OpenAI is unavailable)',
   AI_FALLBACK_BASE_URL: 'OpenAI-compatible base URL (default Groq)',
-  AI_FALLBACK_MODEL: 'Fallback model id (default llama-3.3-70b-versatile)',
+  AI_FALLBACK_MODEL: 'Fallback model id (default openai/gpt-oss-120b)',
 }
 
 const MESSAGING_VARS: Record<string, string> = {
