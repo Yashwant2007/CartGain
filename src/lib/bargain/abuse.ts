@@ -147,10 +147,22 @@ const JAILBREAK_PATTERNS: RegExp[] = [
   // Role manipulation
   /\byou\s+are\s+now\s+(?:a|an|the)\s+(?:ai|bot|unrestricted|unfiltered|uncensored)/i,
   /\b(?:enter|activate|enable)\s+(?:developer|debug|admin|sudo|root|unrestricted)\s+mode/i,
+  // "Print your full instructions" (modifiers between your and instructions)
+  /\b(?:print|output|write|show)\s+(?:me\s+)?your\s+(?:full|entire|complete|whole|basic|exact)?\s*(?:instructions?|rules|system\s+prompt|guidelines?|directives?|config|settings)/i,
   // Encoding/translation tricks to bypass filters
   /\b(?:translate|decode|convert)\s+(?:this|the\s+following|from)\s+(?:base64|rot13|hex|binary)/i,
   // Token manipulation
   /\b(?:token|char|character)\s+(?:smuggling|injection|splitting|manipulation)/i,
+  // ── Multilingual jailbreak (Hindi/Devanagari) ──
+  /(?:निर्देश|नियमों?|प्रॉम्प्ट|सिस्टम)\s*(?:को\s*)?(?:भूल|अनदेखा|इग्नोर|छोड़|बदल)/i,
+  /(?:भूल\s+जाओ|अनदेखा\s+करो|इग्नोर\s+करो).{0,30}(?:निर्देश|नियम|प्रॉम्प्ट)/i,
+  /सिस्टम\s*प्रॉम्प्ट|(?:अपने|अपनी)\s*(?:निर्देश|नियम)/i,
+  // ── Multilingual jailbreak (Spanish) ──
+  /\b(?:ignora|olvida|ignorar|no\s+sigas)\s+(?:tus|sus|todas\s+(?:tus|las))\s+(?:instrucciones|reglas|órdenes|reglas\s+del\s+sistema)/i,
+  /\b(?:prompt|instrucciones)\s*(?:del\s+)?sistema\b/i,
+  // ── Multilingual jailbreak (Arabic) ──
+  /تجاهل\s*(?:التعليمات|الأوامر|كل\s+التعليمات)/i,
+  /(?:اطبع|أظهر|اكتب)\s*(?:النظام|كل\s+التعليمات|البرومبت)/i,
 ]
 
 const PROMPT_INJECTION_PATTERNS: RegExp[] = [
@@ -193,7 +205,32 @@ const EXFILTRATION_PATTERNS: RegExp[] = [
   /\b(?:the\s+merchant|an?\s+admin|your\s+boss|management)\s+(?:told|set|authorized|approved|confirmed|updated|informed|mentioned)/i,
   /\bconfirm\s+(?:this|that|the\s+(?:floor|minimum|price|deal))/i,
   /\b(?:true|confirm|correct)\s*\?\s*[\s\S]*\b(?:floor|minimum|price|deal)/i,
+  // "Repeat everything above this line" — echo-the-context exfiltration
+  /\b(?:repeat|echo|copy|return)\s+(?:everything|all|back|out|me\s+everything)\s+(?:above|before|now|from\s+the\s+top|below)/i,
+  /\b(?:repeat|echo)\s+everything\b/i,
+  // ── Multilingual exfiltration: minimum-price probes ──
+  /(?:न्यूनतम|सबसे\s+कम|घट\s+से\s+घट|कम\s+से\s+कम)\s*(?:कीमत|दाम|रेट|प्राइस)\b/i,
+  /(?:आपकी|अपनी|ती)\s*न्यूनतम/i,
+  /\bprecio\s+m[ií]nimo\b|\bprecio\s+minimo\b|\bl[ií]mite\s+(?:de\s+)?precio\b/i,
+  /(?:السعر\s*الأدنى|الحد\s*الأدنى|أقل\s*سعر\b)/i,
 ]
+
+// ────────────────────────────────────────────────────────────
+// LAYER 4b: OFF-TOPIC EXTREME (non-negotiation chatter)
+// ────────────────────────────────────────────────────────────
+// Repeated or blatant non-negotiation topics (weather, life, news, sports,
+// poems/writing requests) are redirected instead of consuming an attempt.
+
+const OFF_TOPIC_PATTERNS: RegExp[] = [
+  /\b(?:weather|forecast|rain(?:ing)?|sunny|cloudy|windy|humidity|temperature)\b/i,
+  /\b(?:tell\s+me\s+a\s+(?:joke|story|poem|riddle|song)|write\s+me\s+a\s+(?:poem|song|story|essay|letter)|sing\s+me\s+a\s+song)\b/i,
+  /\b(?:meaning|purpose|answer|secret)\s+of\s+life\b/i,
+  /\b(?:today'?s\s+news|breaking\s+news|politics|election|government\s+(?:policy|scheme|news))\b/i,
+  /\b(?:football|cricket|hockey|tennis|cricket\s+match|football\s+match)\s+(?:match|score|team|world\s+cup|players?|results?|highlights?)\b/i,
+]
+
+const OFF_TOPIC_RESPONSE =
+  `I'm happy to chat, but let's focus on the deal! What price would be fair for this item?`
 
 // ────────────────────────────────────────────────────────────
 // LAYER 5: REPETITION & FLOODING
@@ -251,6 +288,26 @@ function levenshteinDistance(a: string, b: string): number {
     }
   }
   return matrix[b.length][a.length]
+}
+
+// Length/gibberish/emoji flooding — a genuine bargain message is short, mostly
+// real characters, and rarely pure emoji. Detects abuse BEFORE it is sanitized
+// (sanitizeInput would collapse "aaa…" into "aa" and hide the flood).
+const EMOJI_OR_SYMBOL = /(?:[\uD83C-\uD83E][\uDC00-\uDFFF]|[\u2190-\u21FF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D\u2B50\u2728\u2764])/g
+
+function detectMessageFlooding(raw: string): { long: boolean; gibberish: boolean; emoji: boolean } {
+  // Long raw input (a real offer is < a few hundred chars)
+  const long = raw.length > 1200
+  // Low character diversity on a very long input = gibberish/stuttering
+  // ("aaaa…", "hjkhjkhjk"). Short stutters collapse fine and stay unflagged.
+  const body = raw.replace(/\s/g, '')
+  const unique = new Set(body.toLocaleLowerCase()).size
+  const gibberish = body.length > 1000 && unique / body.length < 0.05
+  // Pure emoji/symbol spam (4+) with no real words
+  const emojiMatches = raw.match(EMOJI_OR_SYMBOL) ?? []
+  const stripped = raw.replace(EMOJI_OR_SYMBOL, '').replace(/\s/g, '')
+  const emoji = emojiMatches.length >= 4 && stripped.length === 0
+  return { long, gibberish, emoji }
 }
 
 // ────────────────────────────────────────────────────────────
@@ -411,6 +468,35 @@ export function checkAbuse(
         response: null, // AI handles — redirects to negotiation
         consumeAttempt: true,
       }
+    }
+  }
+
+  // ── Layer 4b: Off-topic extreme ──
+  for (const pattern of OFF_TOPIC_PATTERNS) {
+    if (pattern.test(sanitized)) {
+      return {
+        isAbusive: true,
+        severity: 'low',
+        category: 'off_topic_extreme',
+        reason: 'Non-negotiation topic detected',
+        response: OFF_TOPIC_RESPONSE,
+        consumeAttempt: false, // don't waste an attempt on chit-chat
+      }
+    }
+  }
+
+  // ── Layer 4c: Length/gibberish/emoji flooding ──
+  const flood = detectMessageFlooding(message)
+  if (flood.long || flood.gibberish || flood.emoji) {
+    return {
+      isAbusive: true,
+      severity: 'medium',
+      category: 'flooding',
+      reason: flood.gibberish ? 'Gibberish/low-entropy message detected'
+        : flood.emoji ? 'Emoji-only spam detected'
+        : 'Message exceeds reasonable length',
+      response: 'Whoa, let\'s keep messages short and focused. What\'s your offer on this item?',
+      consumeAttempt: false, // don't waste an attempt on spam
     }
   }
 

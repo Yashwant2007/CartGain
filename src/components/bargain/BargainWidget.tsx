@@ -6,6 +6,37 @@ import {
 } from 'lucide-react'
 import { currencySymbolFor, uiText } from '@/lib/bargain/i18n'
 
+// Stable per-device+cart bargain identity. Persists across tabs/refreshes on the
+// same browser (localStorage deviceId seeded on first visit) and is blended with
+// the cart token, so a returning customer keeps their session + remaining
+// attempts instead of starting a fresh one (no attempt resets via new tabs).
+// Best-effort: a brand-new browser/incognito falls back to the server-side
+// anonymous single-active-session-per-product guard.
+const BARGAIN_DEVICE_KEY = 'cg_bargain_device_id'
+// FNV-1a (32-bit) — synchronous, deterministic, good enough as an identity
+// handle (not a secret). Written out to 16 hex chars; the server requires >= 8.
+function fnv1a(str: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i)
+    h = (h * 0x01000193) >>> 0
+  }
+  return h.toString(16).padStart(8, '0')
+}
+function bargainFingerprint(cartRef: string): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    let dev = window.localStorage.getItem(BARGAIN_DEVICE_KEY)
+    if (!dev) {
+      dev = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
+      window.localStorage.setItem(BARGAIN_DEVICE_KEY, dev)
+    }
+    return `${fnv1a(dev)}${fnv1a(`${window.location.host}::${cartRef}`)}`
+  } catch {
+    return null
+  }
+}
+
 type Props = {
   storeId: string
   shopifyProductId: string
@@ -193,6 +224,7 @@ export default function BargainWidget({
           cartToken,
           customerEmail,
           customerPhone,
+          customerFingerprint: bargainFingerprint(cartToken ?? ''),
           language,
         }),
       })

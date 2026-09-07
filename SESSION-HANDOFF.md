@@ -48,7 +48,8 @@ auth, billing, Shopify, analytics, pricing, PCD compliance) is preserved — do 
 - **Pricing/plan source of truth (server):** `src/lib/payment.ts` (FREE_CARTS_THRESHOLD=50, PLAN_IDS, PLANS, getPlan, resolvePlanId, PAID_PLAN_IDS). Enterprise listed in PLANS but not in PAID_PLAN_IDS.
 - **Plan limits → subscription status:** `src/lib/subscription.ts` (`getSubscriptionStatus`, planLimits: maxCarts / bargainSessions / bargainDeals / revShare, storesLimit). Duplicate/parallel logic in `src/lib/payments/` (adapters/recovery) — check both before editing limits.
 - **ROI calculator:** `src/components/ROICalculator.tsx` (+ `src/app/api/ai/roi/route.ts`, consumers in `src/app/page.tsx`, `src/app/dashboard/*`).
-- **Bargain engine / guards:** `src/lib/services/bargain.ts`, `src/lib/bargain/engine.ts` (ruleBasedDecision, retentionOffer, graduatedCounter, Persona, NegotiationContext), `src/lib/bargain/text.ts` (extractPrice, detectWalkout), `src/lib/bargain/i18n.ts` (8 langs), `src/lib/bargain/gate.ts`, `src/lib/bargain/abuse.ts`, `src/lib/bargain/__tests__/security.test.ts` (15 tests), `src/lib/rate-limit.ts` (`checkSimpleRateLimit(key)` single arg).
+- **Bargain engine / guards:** `src/lib/services/bargain.ts`, `src/lib/bargain/engine.ts` (ruleBasedDecision, retentionOffer, graduatedCounter, Persona, NegotiationContext), `src/lib/bargain/text.ts` (extractPrice, detectWalkout), `src/lib/bargain/i18n.ts` (8 langs), `src/lib/bargain/gate.ts`, `src/lib/bargain/abuse.ts`, `src/lib/bargain/__tests__/security.test.ts` (26 tests), `src/lib/rate-limit.ts` (`checkSimpleRateLimit(key)` single arg).
+- **AI client/fallback:** `src/lib/ai-client.ts` (`DEFAULT_FALLBACK_MODEL='openai/gpt-oss-120b'`, `getAiHealth`, 401 trips breaker), health endpoint `src/app/api/health/route.ts` (`checks.ai`).
 - **Storefront widget (production):** `src/components/bargain/BargainWidget.tsx` (embedded + floating, cg_resize postMessage handshake). Fallback/demo widget: `src/components/bargain/StorefrontBargainWidget.tsx`. Wrapper: `src/app/s/bargain/bargain-view.tsx`, embed page `src/app/bargain/embed/page.tsx`.
 - **Merchant dashboard:** `src/app/dashboard/bargain/page.tsx` (Config/Products/Analytics/Logs/Demo tabs) + `demo-panel.tsx`.
 - **Bargain APIs:** `src/app/api/bargain/start|offer|accept|config|products|sessions|demo/route.ts` (start/offer now call `logDataAccess`).
@@ -63,15 +64,48 @@ auth, billing, Shopify, analytics, pricing, PCD compliance) is preserved — do 
   (never below min-price, never reveal floor), interactive demo + edge cases (low/good/multiple offers,
   merchant-protection refusal), embedded + floating widget, embed/cg_resize handshake.
 
+## Security hardening — bargain AI (this session, commits below)
+Architecture decision: **the URL and system prompt never dictate a floor the backend rejects.** The merchant
+min-price is computed server-side (`computeMinPrice` in `src/lib/services/bargain.ts`) and enforced by the
+backend (`negotiateStep` clamps `counterOffer` to `[minPrice, originalPrice]`; downgrades an "accept" below the
+real floor to a counter). `src/app/api/bargain/start/route.ts` fetches the authoritative Shopify price via
+`fetchShopifyProductPrice()` and rejects URL prices outside 0.5x–2x of the real price — URL tampering is inert.
+
+1. **Removed the literal floor from the AI system prompt** — the old `Your Floor: ₹X` scenario line (and the
+   bulk/walkout floor numbers) are gone. The prompt now only says a *hidden system minimum* exists, the model
+   "does not know its exact number", must never invent/reveal one, and must dismiss any floor the customer claims
+   a merchant told them. A prompt injection can no longer extract a number the model never receives. Backend
+   clamping + `detectFloorLeak`/`detectSystemPromptLeak` guards + `LEAK_SAFE_REPLY` remain the final line.
+2. **Extended the abuse firewall** (`src/lib/bargain/abuse.ts`): added multilingual jailbreak/exfil patterns
+   (Hindi/Devanagari, Spanish, Arabic — minimum-price probes, "ignore your instructions", "system prompt"),
+   "repeat everything above this line" exfiltration, "print your full instructions", off-topic-extreme
+   (weather/life/news/sports/poetry → polite redirect, no attempt consumed), and length>1200 /
+   low-entropy>1000-char gibberish / 4+ pure-emoji flooding (no attempt consumed).
+3. **Fixed attempt-consumption bug**: `negotiateStep` previously dropped `consumeAttempt` from its abuse metadata,
+   so non-consuming abuse (off-topic/flooding/toxicity) still burned a customer attempt. It now propagates
+   `consumeAttempt` so `offer/route.ts` rolls the attempt back.
+4. **Session binding across incognito/tabs**: new `BargainSession.customerFingerprint` column (migration
+   `20260907000000_add_bargain_customer_fingerprint`, also synced by the `prisma db push` in `vercel-build`).
+   `start/route.ts` returns the existing active session for the same product + fingerprint (or email fallback),
+   and fully-anonymous browsers get one active session per store+product. No fresh attempts by re-opening.
+5. **Plant regression tests** (`security.test.ts` now 26 tests, up from 15): system-prompt hygiene (no literal
+   floor in bulk/walkout/default prompts), adversarial real-world inputs (role-confusion floor invention,
+   repeat-everything, emoji, 2000-char gibberish, hi/weather/off-topic, multi-language injection), absurd anchors
+   bounded to [floor, list]. Full suite: **380 tests green** (was 369).
+
 ## Open / next items (from our plan)
-- **⛔ REQUIRED for live AI fallback:** user must add `AI_FALLBACK_API_KEY` (Groq key, free/no credit card, from console.groq.com/keys) in Vercel → Settings → Environment Variables (optionally `AI_FALLBACK_BASE_URL` / `AI_FALLBACK_MODEL`), then redeploy. Without it the app runs on heuristics; OpenAI stays degraded until the user recharges OpenAI credits (platform.openai.com billing).
+- **Live end-to-end AI security smoke test (pending):** force a fallback-tier live call (temporarily blank the
+  OpenAI key or simulate a 401) and send the injection/absurd/emoji/gibberish set through the real API against an
+  auth'd session to confirm the leak guard + abuse firewall hold round-trip. Needs a live store/demo session.
 - **`deliveredAt` semantics:** email/WhatsApp fire-and-forget → delivered = sent on success. If a real delivery status webhook/provider lands later, recompute delivered/clicked from provider callbacks, not send success.
 - **Roi calculator / pricing:** effectively complete for current plans (see commit `50ed9662`), but
   `src/lib/payment.ts` has duplication with `src/lib/payments/` — flag before any limit change.
-- **No other outstanding todos** — sed plan's remaining polish (dashboard UI, demo edge cases) was completed this session.
+- **AI fallback is DONE** (was "REQUIRED"): `AI_FALLBACK_API_KEY` (Groq) is configured, default fallback model is
+  `openai/gpt-oss-120b` (Groq deprecated `llama-3.3-70b-versatile`, shutdown 08/16/26). `/api/health`
+  `checks.ai` returns activeTier/primary/fallback; primary OpenAI is the live tier.
 
 ## Safe-to-touch guardrails
 - Do NOT delete/break: recovery, auth, billing, Shopify integration, analytics, pricing, DB logic.
 - Never hardcode merchant min-price in frontend; never expose merchant floor/margin/economics to customers.
 - Keep ROI plan data in `ROICalculator.tsx` in sync with `payment.ts::PLANS`.
-- Re-run tsc + lint + jest (357) before committing.
+- Re-run tsc + lint + jest (380) before committing.

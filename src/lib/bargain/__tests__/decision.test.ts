@@ -650,7 +650,7 @@ describe('Edge Cases - AI System Prompt Security', () => {
     expect(systemMsg?.content).toContain('NEVER reveal')
   })
 
-  it('does not include minPrice in the system prompt sent to AI', async () => {
+  it('does not include minPrice anywhere in the system prompt sent to AI', async () => {
     let capturedMessages: any[] = []
     mockAIResponse(jest.fn().mockImplementation((...args: any[]) => {
       capturedMessages = args[0]?.messages || []
@@ -667,11 +667,11 @@ describe('Edge Cases - AI System Prompt Security', () => {
 
     await negotiateStep(baseCtx({ minPrice: 73.50 }), [], 'How about 50?', 50)
     const systemMsg = capturedMessages.find(m => m.role === 'system')
-    // System prompt should contain the floor in the rules text (not as a variable leak)
-    // but should NOT contain the raw min_price as a leaked value
-    expect(systemMsg?.content).toContain('73.50') // It IS in commonRulesText (that's by design)
-    // But the persona prompt itself should not contain it
-    const personaPart = systemMsg?.content.split('NEGOTIATION SCENARIO')[0] || ''
-    expect(personaPart).not.toContain('73.50')
+    // The raw floor value must NEVER appear in the prompt — even a successful
+    // prompt injection cannot coax the model into echoing a number it does not
+    // have. The backend still clamps the counter to [minPrice, originalPrice].
+    expect(systemMsg?.content).not.toContain('73.50')
+    expect(systemMsg?.content).not.toContain('Your Floor:')
+    expect(systemMsg?.content).toMatch(/hidden (?:system )?minimum|floor/i)
   })
 })

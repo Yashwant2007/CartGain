@@ -335,6 +335,7 @@ model BargainSession {
   variantId         String?
   customerEmail     String?
   customerPhone     String?
+  customerFingerprint String?   // stable per-device/cart hash — prevents resets via incognito/new tabs
   originalPrice     Float
   currentOffer      Float     // latest offer from customer
   finalPrice        Float?    // agreed price (null = no deal)
@@ -356,6 +357,7 @@ model BargainSession {
   @@index([storeId, status])
   @@index([cartToken])
   @@index([customerEmail])
+  @@index([customerFingerprint])
   @@index([status])
   @@index([expiredAt])
 }

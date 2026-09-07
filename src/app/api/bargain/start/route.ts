@@ -95,41 +95,73 @@ export async function POST(request: NextRequest) {
     const now = new Date()
     const expiredAt = new Date(now.getTime() + config.sessionTimeout * 1000)
 
-    // Block duplicate active sessions for same product+email (prevents attempt abuse)
-    if (data.customerEmail) {
-      const existing = await prisma.bargainSession.findFirst({
+    // Block duplicate active sessions for the same product+buyer (prevents attempt
+    // abuse via incognito / new tabs / fresh browsers). The identifier is the
+    // customer fingerprint (stable per-device+cart, see the storefront widget),
+    // falling back to the customer email when no fingerprint is sent. Anonymous
+    // browsers without either still get a per-store+product guard below.
+    const buyerId = data.customerFingerprint || (data.customerEmail ? `email:${data.customerEmail}` : null)
+    const existing = await prisma.bargainSession.findFirst({
+      where: {
+        storeId: data.storeId,
+        shopifyProductId: data.shopifyProductId,
+        status: 'active',
+        expiredAt: { gt: new Date() },
+        ...(data.customerFingerprint
+          ? { customerFingerprint: data.customerFingerprint }
+          : data.customerEmail
+          ? { customerEmail: data.customerEmail }
+          : {}),
+      },
+      orderBy: { startedAt: 'desc' },
+      include: { messages: { orderBy: { createdAt: 'asc' }, take: 1 } },
+    })
+    if (existing) {
+      const existingFloor = await computeMinPrice({
+        storeId: data.storeId,
+        shopifyProductId: existing.shopifyProductId,
+        originalPrice: existing.originalPrice,
+      })
+      return NextResponse.json({
+        sessionId: existing.id,
+        session: existing,
+        openingMessage: existing.messages[0]?.content ?? buildOpeningMessage({
+          storeName: store.name,
+          currencySymbol: currencySymbolFor(store.currency),
+          originalPrice: existing.originalPrice,
+          minPrice: existingFloor.minPrice,
+          attemptsUsed: existing.attemptsUsed,
+          maxAttempts: config.maxAttempts,
+          persona: config.aiPersona as any,
+          language: existing.language || 'auto',
+          customerContext: `Returning to continue an existing session.`,
+        }),
+        expiresAt: existing.expiredAt.toISOString(),
+        attemptsRemaining: Math.max(0, config.maxAttempts - existing.attemptsUsed),
+        maxDiscountPercent: Math.round((1 - existingFloor.minPrice / existing.originalPrice) * 100),
+        existingSession: true,
+      }, { status: 200 })
+    }
+
+    // Last line of defense for fully anonymous buyers (no fingerprint, no email):
+    // never start more than ONE active session per store+product at a time.
+    if (!buyerId) {
+      const anonExisting = await prisma.bargainSession.findFirst({
         where: {
           storeId: data.storeId,
           shopifyProductId: data.shopifyProductId,
-          customerEmail: data.customerEmail,
+          customerFingerprint: null,
+          customerEmail: null,
           status: 'active',
           expiredAt: { gt: new Date() },
         },
-        include: { messages: { orderBy: { createdAt: 'asc' }, take: 1 } },
+        orderBy: { startedAt: 'desc' },
+        select: { id: true },
       })
-      if (existing) {
-        const existingFloor = await computeMinPrice({
-          storeId: data.storeId,
-          shopifyProductId: existing.shopifyProductId,
-          originalPrice: existing.originalPrice,
-        })
+      if (anonExisting) {
         return NextResponse.json({
-          sessionId: existing.id,
-          session: existing,
-          openingMessage: existing.messages[0]?.content ?? buildOpeningMessage({
-            storeName: store.name,
-            currencySymbol: currencySymbolFor(store.currency),
-            originalPrice: existing.originalPrice,
-            minPrice: existingFloor.minPrice,
-            attemptsUsed: existing.attemptsUsed,
-            maxAttempts: config.maxAttempts,
-            persona: config.aiPersona as any,
-            language: existing.language || 'auto',
-            customerContext: `Returning to continue an existing session.`,
-          }),
-          expiresAt: existing.expiredAt.toISOString(),
-          attemptsRemaining: Math.max(0, config.maxAttempts - existing.attemptsUsed),
-          maxDiscountPercent: Math.round((1 - existingFloor.minPrice / existing.originalPrice) * 100),
+          message: 'An active bargaining session already exists for this item. Please continue it.',
+          sessionId: anonExisting.id,
           existingSession: true,
         }, { status: 200 })
       }
@@ -185,6 +217,7 @@ export async function POST(request: NextRequest) {
           variantId: data.variantId ?? null,
           customerEmail: data.customerEmail || null,
           customerPhone: data.customerPhone || null,
+          customerFingerprint: data.customerFingerprint ?? null,
           originalPrice,
           currentOffer: originalPrice,
           attemptsUsed: 0,
