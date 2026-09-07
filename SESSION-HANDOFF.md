@@ -2,7 +2,7 @@
 
 > **How to resume:** just tell me "Have a look at `SESSION-HANDOFF.md`" and I'll read this file to get back on the same page.
 
-Last updated: Fri Sep 04 2026
+Last updated: Mon Sep 07 2026
 
 ## Where we are
 Rebuilding/upgrading the **CartGain AI Bargain System** as a flagship premium conversion feature
@@ -15,10 +15,15 @@ auth, billing, Shopify, analytics, pricing, PCD compliance) is preserved — do 
 - Stack: Next.js (App Router) + NextAuth v4 (JWT) + Prisma + Razorpay.
 - Env files: `.env`, `.env.local` (gitignored). Prod DB not queryable locally (no creds).
 - Deploys: `npx vercel --prod --yes` (aliases to `cart-gain.com`). Local curl sometimes hits transient DNS → 000; verify via deploy output / `vercel ls`.
-- Verification commands: `npx tsc --noEmit`, `npm run lint`, `npx jest` (345 tests green).
+- Verification commands: `npx tsc --noEmit`, `npm run lint`, `npx jest` (357 tests green, was 345).
 - Commit style: lowercase, concise, e.g. `bargain dash: group config settings into ...`.
 
 ## Most recent work (this session) — all committed & deployed
+0. **Dashboard flows completed (2FA QR + API keys + analytics) — commit `11637262`, deployed & HTTP 200**
+   - **2FA QR fixed:** deprecated Google Charts QR generator replaced with server-side `qrcode` pkg — `src/lib/totp.ts::generateQrCodeDataUrl()` returns base64 PNG data URL; `/api/auth/2fa/setup` returns it; Security tab modal shows manual key + Copy button.
+   - **API key management fully functional:** raw key `cg_<hex>`, SHA-256 hashed in DB, shown once. POST `/api/keys` takes `permissions[]` (`read`/`write`/`admin`, default `['read']`) + `expiresIn` (`30d`/`90d`/`365d`/`never`). Settings APISettings tab: permission chips, expiry selector, badges, lastUsedAt, revoke confirm, expired styling. Auth via `Authorization: Bearer cg_...` — `src/lib/api-key-auth.ts`, unified `src/lib/auth-context.ts` (`authenticate`/`hasPermission`/`isSessionAuth`); `/api/carts` GET=read, POST=write. Docs at `src/app/docs/api/page.tsx`.
+   - **Analytics correctness:** overview route queries Message table directly for delivered/clicked (`status IN ('sent','delivered')` + `clickedAt`); channel stats now report `deliveryRate`/`clickRate`/`conversionRate`. Abandoned-cart job sets `deliveredAt` on success (fires EMAIL_COMMENT). Dashboard + analytics pages show message metrics & rate columns (RateBadge: ≥80% green / ≥50% yellow / >0 red / 0 grey). Campaign analytics, `/r/[id]` click tracking, and Shopify webhook attribution all query status IN (`sent`,`delivered`).
+   - Verification: `npx tsc --noEmit`, `npm run lint`, `npx jest` (357 tests — added totp + api-key utils suites).
 1. **Bargain storefront widget polish** (`src/components/bargain/BargainWidget.tsx`) — commit `35b3a088`
    - Merchant-safe suggested amount chips (derived from `maxDiscountPercent` cap, never near floor).
    - Escape-to-close on floating panel. Reduced-motion (`prefers-reduced-motion`) support.
@@ -49,6 +54,8 @@ auth, billing, Shopify, analytics, pricing, PCD compliance) is preserved — do 
   merchant-protection refusal), embedded + floating widget, embed/cg_resize handshake.
 
 ## Open / next items (from our plan)
+- **Docs reference a non-existent endpoint:** `src/app/docs/api/page.tsx` lists `GET /api/carts/stats?storeId=` but no such route exists — verify or implement before pointing merchants at it.
+- **`deliveredAt` semantics:** email/WhatsApp fire-and-forget → delivered = sent on success. If a real delivery status webhook/provider lands later, recompute delivered/clicked from provider callbacks, not send success.
 - **Roi calculator / pricing:** effectively complete for current plans (see commit `50ed9662`), but
   `src/lib/payment.ts` has duplication with `src/lib/payments/` — flag before any limit change.
 - **No other outstanding todos** — sed plan's remaining polish (dashboard UI, demo edge cases) was completed this session.
@@ -57,4 +64,4 @@ auth, billing, Shopify, analytics, pricing, PCD compliance) is preserved — do 
 - Do NOT delete/break: recovery, auth, billing, Shopify integration, analytics, pricing, DB logic.
 - Never hardcode merchant min-price in frontend; never expose merchant floor/margin/economics to customers.
 - Keep ROI plan data in `ROICalculator.tsx` in sync with `payment.ts::PLANS`.
-- Re-run tsc + lint + jest (345) before committing.
+- Re-run tsc + lint + jest (357) before committing.
