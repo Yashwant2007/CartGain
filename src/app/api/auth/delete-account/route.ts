@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { purgeStoreData } from '@/lib/data-deletion'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,34 +30,25 @@ export async function DELETE() {
 
     const stores = await prisma.store.findMany({
       where: { userId },
-      select: { id: true },
+      select: { id: true, domain: true, userId: true },
     })
-    const storeIds = stores.map(s => s.id)
 
-    // Delete bargain-related rows first (tables may not exist — safeDelete catches it)
-    for (const storeId of storeIds) {
-      await sql('BargainMessage', 'id', '000') // Table doesn't exist; just a no-op
-      await sql('BargainMessage', '"sessionId"', storeId) // no-op if table missing
-      await sql('BargainSession', '"storeId"', storeId)
-      await sql('BargainProduct', '"storeId"', storeId)
-      await sql('BargainConfig', '"storeId"', storeId)
-      // Campaign and Analytics tables DO exist
-      await prisma.campaign.deleteMany({ where: { storeId } })
+    // Purge each store fully (all child tables + the store row itself).
+    for (const store of stores) {
+      await purgeStoreData({ id: store.id, domain: store.domain, userId })
     }
 
-    // Delete each store via raw SQL to avoid Prisma's cascade through missing tables
-    for (const storeId of storeIds) {
-      await sql('Store', 'id', storeId)
-    }
-
-    // Delete user-level records
-    await prisma.campaign.deleteMany({ where: { userId } })
-    await prisma.analytics.deleteMany({ where: { userId } })
+    // Delete user-level billing / analytics records.
     await prisma.subscription.deleteMany({ where: { userId } })
+    await prisma.analytics.deleteMany({ where: { userId } })
+    await prisma.apiKey.deleteMany({ where: { userId } })
+    await prisma.invoice.deleteMany({ where: { userId } })
+
+    // Delete user auth/session rows.
     await prisma.session.deleteMany({ where: { userId } })
     await prisma.account.deleteMany({ where: { userId } })
 
-    // Delete user via raw SQL to avoid cascade through Store -> missing tables
+    // Delete the user row last (raw SQL to avoid Prisma cascade through missing tables).
     await sql('User', 'id', userId)
 
     const response = NextResponse.json({ message: 'Account deleted' })

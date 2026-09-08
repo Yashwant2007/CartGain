@@ -19,6 +19,14 @@ auth, billing, Shopify, analytics, pricing, PCD compliance) is preserved — do 
 - Commit style: lowercase, concise, e.g. `bargain dash: group config settings into ...`.
 
 ## Most recent work (this session) — all committed & deployed
+0. **Compliance/security audit & upgrade (Shopify CDP + privacy) — NOT yet committed**
+   - **Shopify lifecycle + GDPR webhooks:** `src/app/api/webhooks/shopify/route.ts` now handles `app/uninstalled`, `shop/redact` (→ `purgeStoreData`), `customers/redact` (→ `redactCustomer`), `customers/data_request` (ack + audit log). Registered by `src/lib/shopify.ts::setupShopifyWebhooks`.
+   - **`src/lib/data-deletion.ts` (new):** `purgeStoreData` (23 store-scoped models via raw SQL — needed because `relationMode="prisma"` skips cascades on raw deletes), `redactCustomer`, `findStoreByDomain` helpers. `delete-account/route.ts` rewritten to purge all store + user tables (was leaving Cart/Message/Customer/RecoveredCart orphaned).
+   - **Scopes minimized to 9 + synced:** `connect/route.ts` + `shopify.app.toml` = `read_checkouts, write_checkouts, read_orders, read_customers, read_products, read_discounts, write_discounts, write_webhooks, read_webhooks` (removed write_orders/write_customers/write_products/etc). Kept `write_checkouts` (pair dependency for abandoned-checkout REST). `shopify.app.toml` webhooks expanded with the 4 lifecycle topics.
+   - **PII log redacted:** `processAbandonedCarts.ts:378` customer-key log now wraps with `redactSensitive` (`@/lib/data-protection`).
+   - **Legal pages made fact-grounded:** DPA (72h breach notice matches `incident-response.md`, honest sub-processor list w/ data-region + not-runtime-configured placeholders, no TLS 1.3/AES-at-rest/24-7-monitoring claims), Security Policy (RLS = 17/33 tables not "all", Cloudflare claims removed, sub-processors aligned w/ DPA), Privacy (GDPR "designed to align", no credit-card-storage claim, OpenAI training claim attributed, WooCommerce claim removed — Shopify only, no marketing claims), and new **Cookie Policy** `/cookies` (Auth.js cookie table) linked in homepage footer.
+   - **Docs:** `SHOPIFY_PROTECTED_DATA_READINESS.md` + `BUSINESS_FACTS_REQUIRING_CONFIRMATION.md` (owner confirmations + lawyer items).
+   - **Verified:** `npx tsc --noEmit` clean, `npx jest` 384 green, `npm run lint` clean.
 0. **AI quota breaker + OpenAI-compatible fallback provider (Groq) — commits `c01acb0a`, `a9fe0a13`, `1c7ee8a3`, deployed & HTTP 200**
    - **Problem:** OpenAI account exhausted credits (`429 insufficient_quota` / `credit_balance_exhausted`). Root cause is billing — must add credits at platform.openai.com billing. User will recharge *"in a while"*.
    - **Quota breaker (`src/lib/ai-quota.ts`):** per-tier circuit breakers `isTierTripped(tier, now)` / `tripTierBreaker(tier, now)` (`AiTier = 'primary' | 'fallback'`, 15-min window); `shouldLogQuota()` logs once per window (no log spam); `isInsufficientQuotaError(err)` (status 402 or `insufficient_quota`). `resetQuotaBreakForTests()`.
@@ -107,6 +115,9 @@ real floor to a counter). `src/app/api/bargain/start/route.ts` fetches the autho
      product-complaint ("this is a scam") now redirect via `off_topic_extreme` **without consuming an attempt**.
 
 ## Open / next items (from our plan)
+- **Compliance work (this session) — NOT yet committed/deployed:** scope + webhook + deletion + legal-page changes above. Commit plus re-run `npx tsc --noEmit` / `npm run lint` / `npx jest` before deploy.
+- **`customers/data_request` export TODO:** webhook acknowledges + audit-logs only; no programmatic export/delivery yet. Decide mechanism before Shopify App Store submission (see `SHOPIFY_PROTECTED_DATA_READINESS.md` §7).
+- **Owner confirmations:** see `BUSINESS_FACTS_REQUIRING_CONFIRMATION.md` (legal entity name/address, grievance officer, sub-processor data regions, backup retention window, transfer safeguards, CDN/bot-protection reality).
 - **Live end-to-end AI security smoke test — DONE (was pending):** `scripts/ai-fallback-smoke.ts` forces the
   fallback tier (blank `OPENAI_API_KEY`) and drives the REAL `openai/gpt-oss-120b` on Groq through `negotiateStep`.
   Verified round-trip: raw probe emitted valid JSON Object Mode, and every injection variant in this session's
@@ -128,4 +139,4 @@ real floor to a counter). `src/app/api/bargain/start/route.ts` fetches the autho
 - Do NOT delete/break: recovery, auth, billing, Shopify integration, analytics, pricing, DB logic.
 - Never hardcode merchant min-price in frontend; never expose merchant floor/margin/economics to customers.
 - Keep ROI plan data in `ROICalculator.tsx` in sync with `payment.ts::PLANS`.
-- Re-run tsc + lint + jest (380) before committing.
+- Re-run tsc + lint + jest (384) before committing.

@@ -1,5 +1,5 @@
 import prisma from '@/lib/db'
-import { logDataAccess } from '@/lib/data-protection'
+import { logDataAccess, redactSensitive } from '@/lib/data-protection'
 import { sendEmail, EmailTemplates } from '@/lib/services/email'
 import { sendSMS, sanitizePhoneNumber } from '@/lib/services/sms'
 import { sendWhatsAppMessage, WhatsAppTemplates } from '@/lib/services/whatsapp'
@@ -375,7 +375,7 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
     const allowedChannels = availableChannels.filter(ch => !channelLimited(ch))
 
     if (limitedChannels.length > 0) {
-      console.log(`📵 Customer ${customerKey}: reached limit for ${limitedChannels.join(', ')} (plan limit: ${JSON.stringify(customerLimits)})`)
+      console.log(`📵 Customer ${redactSensitive(customerKey)}: reached limit for ${limitedChannels.join(', ')} (plan limit: ${JSON.stringify(customerLimits)})`)
     }
 
     const overageEligible = subscription?.overageEnabled

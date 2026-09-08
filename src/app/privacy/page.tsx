@@ -34,7 +34,7 @@ export default function PrivacyPolicyPage() {
                   CartGain (&ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our cart recovery platform for e-commerce businesses.
                 </p>
                 <p className="leading-relaxed mt-4">
-                  We comply with the General Data Protection Regulation (GDPR), India&apos;s Digital Personal Data Protection Act (DPDP Act, 2023), and other applicable data protection laws.
+                  We design our practices to align with the General Data Protection Regulation (GDPR), India&apos;s Digital Personal Data Protection Act (DPDP Act, 2023), and other applicable data protection laws. Merchants remain responsible for their own compliance, including obtaining any customer consent the applicable law requires before sending messages.
                 </p>
               </section>
 
@@ -49,7 +49,7 @@ export default function PrivacyPolicyPage() {
                     <h3 className="text-lg font-semibold text-white mb-3">1. Personal Data</h3>
                     <ul className="list-disc pl-5 space-y-2">
                       <li><strong>Account Information:</strong> Name, email address, phone number, company name, and password when you create an account.</li>
-                      <li><strong>Payment Information:</strong> Credit card details, billing address, and transaction history (processed securely via Razorpay).</li>
+                      <li><strong>Payment Information:</strong> Subscription and invoice records (processed via Razorpay once configured; payment card details are processed by Razorpay and are not stored by CartGain). [[NOT RUNTIME-CONFIGURED]]</li>
                       <li><strong>Communication Data:</strong> Messages you send us via support, chat, or email.</li>
                     </ul>
                   </div>
@@ -66,8 +66,8 @@ export default function PrivacyPolicyPage() {
                   <div>
                     <h3 className="text-lg font-semibold text-white mb-3">3. Automatically Collected Data</h3>
                     <ul className="list-disc pl-5 space-y-2">
-                      <li><strong>Usage Data:</strong> Pages visited, features used, time spent, and interaction patterns.</li>
-                      <li><strong>Device Data:</strong> IP address, browser type, operating system, and device information.</li>
+                      <li><strong>Functional Data:</strong> Basic identifiers needed to run the service (for example, IP address and browser/device details in standard server logs).</li>
+                      <li><strong>Session Data:</strong> Temporary session identifiers to keep you logged in.</li>
                       <li><strong>Cookies:</strong> We use essential cookies for functionality (such as keeping you logged in). We do not run third-party advertising or analytics trackers that profile visitors.</li>
                     </ul>
                   </div>
@@ -83,11 +83,10 @@ export default function PrivacyPolicyPage() {
                 <ul className="list-disc pl-5 space-y-2">
                   <li><strong>Data Minimization:</strong> We collect and process only the minimum personal data required to provide cart recovery value to merchants.</li>
                   <li><strong>Service Delivery:</strong> To provide, maintain, and improve our cart recovery services.</li>
-                  <li><strong>Communication:</strong> To send recovery notifications via WhatsApp, SMS, and email on your behalf.</li>
-                  <li><strong>Analytics:</strong> To track recovery performance and provide insights.</li>
+                  <li><strong>Communication:</strong> To send recovery notifications via WhatsApp, SMS, and email on your behalf (the corresponding providers are configured and activated before these channels go live).</li>
+                  <li><strong>Analytics:</strong> To track recovery performance and provide insights to merchants.</li>
                   <li><strong>Security:</strong> To detect and prevent fraud, unauthorized access, and security incidents.</li>
                   <li><strong>Legal Compliance:</strong> To comply with applicable laws and regulations.</li>
-                  <li><strong>Marketing:</strong> With your consent, to send promotional communications about new features or offers.</li>
                 </ul>
               </section>
 
@@ -111,15 +110,15 @@ export default function PrivacyPolicyPage() {
                 </h2>
                 <p className="mb-4">We share data with the following categories of third parties:</p>
                 <ul className="list-disc pl-5 space-y-2">
-                  <li><strong>E-commerce Platforms:</strong> Shopify, WooCommerce, etc., to sync cart data.</li>
-                  <li><strong>Communication Providers:</strong> WhatsApp Business API, MSG91 (SMS), Resend (Email).</li>
-                  <li><strong>AI Services:</strong> OpenAI (GPT-4o-mini) for AI-powered message generation — customer names and cart product details are processed to generate personalized recovery messages. OpenAI does not use API data for training.</li>
-                  <li><strong>Payment Processors:</strong> Razorpay for secure payment processing.</li>
+                  <li><strong>E-commerce Platform:</strong> Shopify, to sync cart, order, and discount data.</li>
+                  <li><strong>Communication Providers:</strong> WhatsApp Business API, MSG91 (SMS), Resend (Email) — activated as configured.</li>
+                  <li><strong>AI Services:</strong> OpenAI (GPT-4o / GPT-4o-mini) and, as a fallback, Groq (gpt-oss-120b) for AI-powered message generation — customer names and cart product details are processed to generate personalized recovery messages. Per OpenAI&apos;s published API data-usage policy, API inputs and outputs are not used for model training; the same applies to Groq for the OSS model used.</li>
+                  <li><strong>Payment Processors:</strong> Razorpay for subscription billing (once configured).</li>
                   <li><strong>Cloud Infrastructure:</strong> Vercel and Supabase for hosting and database.</li>
                   <li><strong>Legal Authorities:</strong> When required by law or to protect our rights.</li>
                 </ul>
                 <p className="mt-4">
-                  All third parties are bound by data processing agreements and must comply with applicable data protection laws. See our <Link href="/dpa" className="text-cyan-400 hover:underline">Data Processing Agreement</Link> for details.
+                  Where sub-processor agreements are in place, third parties are bound by data processing terms and must comply with applicable data protection laws. CartGain maintains a sub-processor disclosure listing agreement status for each provider. See our <Link href="/dpa" className="text-cyan-400 hover:underline">Data Processing Agreement</Link> for details.
                 </p>
               </section>
 
@@ -129,7 +128,7 @@ export default function PrivacyPolicyPage() {
                   International Data Transfers
                 </h2>
                 <p className="leading-relaxed">
-                  Your data may be transferred to and processed in countries other than your own. We ensure appropriate safeguards are in place, including Standard Contractual Clauses (SCCs) for EU data and compliance with India&apos;s DPDP Act for Indian data.
+                  Your data may be transferred to and processed in countries other than your own. Where personal data is transferred out of your jurisdiction, we rely on available legal bases (such as the EU Standard Contractual Clauses offered by our providers, or the exemptions available under India&apos;s DPDP Act) and we contractually restrict how sub-processors use the data. [[CONFIRM TRANSFER SAFEGUARDS PER PROVIDER]]
                 </p>
               </section>
 
@@ -211,7 +210,7 @@ export default function PrivacyPolicyPage() {
                   Data Security
                 </h2>
                 <p className="leading-relaxed">
-                  We implement industry-standard security measures including encryption in transit (TLS/SSL), encryption at rest, encrypted backups, access controls, regular security reviews, employee training, and access logging for sensitive administrative actions. However, no system is 100% secure, and we cannot guarantee absolute security.
+                  We implement security measures including encryption in transit (TLS/SSL), app-level encryption of sensitive stored values (AES-256-GCM), access controls, rate limiting, audit logging of protected-data access, and provider-managed encryption for data at rest and backups. However, no system is 100% secure, and we cannot guarantee absolute security.
                 </p>
               </section>
 

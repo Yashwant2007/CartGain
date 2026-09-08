@@ -27,14 +27,13 @@ export default function SecurityPolicyPage() {
           <section>
             <h2 className="text-xl font-semibold text-cyan-300 mb-2">Our safeguards</h2>
             <ul className="list-disc pl-5 space-y-1.5">
-              <li>All traffic encrypted in transit (TLS) — HTTPS only, via Cloudflare + Vercel.</li>
+              <li>All traffic encrypted in transit (TLS) — HTTPS only, terminated at the hosting edge (Vercel).</li>
               <li>Customer data encrypted at rest (Supabase managed Postgres; secrets AES-256-GCM).</li>
-              <li>Row-level security (RLS) enabled on all database tables.</li>
+              <li>Row-level security (RLS) enabled on database tables where configured (per the migration history — not all tables), with access additionally controlled by server-side authorization in the application.</li>
               <li>Strict access logging with PII redaction for every protected-data access.</li>
-              <li>Automatic data retention — cart PII anonymized after 90 days; bargain sessions deleted after 90 days; logs deleted after 180 days.</li>
+              <li>Automatic data retention — cart PII anonymized after 90 days; bargain sessions deleted after 90 days; access logs deleted after 180 days; stale verification tokens deleted after 7 days.</li>
               <li>Rate limiting on authentication and public endpoints.</li>
               <li>Secrets stored only in environment variables; never in the repository.</li>
-              <li>Bots blocked at the edge (Bot Fight Mode, AI-bot blocking).</li>
             </ul>
           </section>
 
@@ -114,15 +113,20 @@ export default function SecurityPolicyPage() {
           <section>
             <h2 className="text-xl font-semibold text-cyan-300 mb-2">Sub-processors</h2>
             <ul className="list-disc pl-5 space-y-1.5">
-              <li>Vercel — hosting</li>
-              <li>Supabase — database</li>
-              <li>Cloudflare — CDN/DNS/security</li>
-              <li>Resend / SMTP relay — transactional email</li>
-              <li>OpenAI — AI negotiation model</li>
+              <li>Vercel — application hosting &amp; CDN</li>
+              <li>Supabase (PostgreSQL) — database hosting</li>
+              <li>Upstash (Redis) — job queue &amp; caching</li>
+              <li>OpenAI — AI negotiation model (GPT-4o / GPT-4o-mini)</li>
+              <li>Groq — AI development/fallback inference (gpt-oss-120b)</li>
+              <li>Resend — transactional email (not yet runtime-configured)</li>
+              <li>MSG91 — SMS delivery (not yet runtime-configured)</li>
+              <li>Meta (WhatsApp Cloud API) — WhatsApp delivery (not yet runtime-configured)</li>
+              <li>Razorpay — subscription billing (not yet runtime-configured)</li>
             </ul>
             <p className="text-xs text-slate-400 mt-3">
-              Each sub-processor is covered by an agreement, and data processed by them (e.g.
-              messages sent to the negotiation AI) is purpose-limited and minimized. See the{' '}
+              Data processed by each provider is purpose-limited and minimized (for example, only
+              the negotiation transcript is sent to the AI provider). Sub-processor agreements are
+              being executed as listed in CartGain&apos;s sub-processor disclosure. See the{' '}
               <Link href="/dpa" className="text-cyan-400 underline">Data Processing Agreement</Link> for details.
             </p>
           </section>

@@ -22,18 +22,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Shopify API key not configured' }, { status: 500 })
     }
 
+    // Minimum necessary access. Kept in sync with shopify.app.toml.
+    // - read_customers / read_checkouts / read_orders / read_products: recover
+    //   abandoned carts and read the data needed for recovery + bargain pricing.
+    // - write_checkouts: required alongside read_checkouts for the abandoned
+    //   checkout REST endpoints CartGain uses.
+    // - read_discounts / write_discounts: create and manage recovery discount
+    //   codes (discountCodeBasicCreate).
+    // - write_webhooks / read_webhooks: register/update Shopify webhooks at
+    //   install time (including privacy/redaction topics).
+    // Not requested: write_customers, write_orders, write_products,
+    // write_draft_orders, read_draft_orders, fulfillment scopes — CartGain does
+    // not write customers/orders/products and never uses draft orders.
     const scopes = [
       'read_checkouts',
       'write_checkouts',
       'read_orders',
-      'write_orders',
       'read_customers',
-      'write_customers',
       'read_products',
-      'write_products',
       'read_discounts',
       'write_discounts',
-      'read_merchant_managed_fulfillment_orders',
       'write_webhooks',
       'read_webhooks',
     ].join(',')

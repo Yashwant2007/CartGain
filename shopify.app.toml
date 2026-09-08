@@ -19,12 +19,19 @@ api_version = "2026-07"
   "carts/update",
   "checkouts/create",
   "checkouts/update",
-  "orders/create"
+  "orders/create",
+  "app/uninstalled",
+  "customers/data_request",
+  "customers/redact",
+  "shop/redact"
 ]
 
 [access_scopes]
-# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_checkouts,read_checkouts,read_customers,write_customers,read_discounts,write_discounts,write_draft_orders,read_draft_orders,read_orders,write_orders,read_products,write_products"
+# Minimum necessary access — kept in sync with the runtime OAuth request in
+# src/app/api/shopify/connect/route.ts. CartGain does not write customers,
+# orders, products, or draft orders, so those write scopes are intentionally
+# not requested (see SHOPIFY_PROTECTED_DATA_READINESS.md).
+scopes = "read_checkouts,write_checkouts,read_orders,read_customers,read_products,read_discounts,write_discounts,write_webhooks,read_webhooks"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 

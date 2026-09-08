@@ -3,6 +3,7 @@ import { waitUntil } from '@vercel/functions'
 import prisma from '@/lib/db'
 import { logDataAccess } from '@/lib/data-protection'
 import { verifyShopifyWebhook } from '@/lib/shopify'
+import { purgeStoreData, redactCustomer } from '@/lib/data-deletion'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS, resolvePlanId, getPlan } from '@/lib/payment'
 import { sendAlertOnError } from '@/lib/alerter'
 import { redisSetNX } from '@/lib/redis'
@@ -98,6 +99,18 @@ export async function POST(request: NextRequest) {
       case 'orders/create':
         safeRun('order processing', () => processOrderCreate(data, store, shopDomain))
         break
+      case 'app/uninstalled':
+        safeRun('app uninstall purge', () => handleAppUninstalled(store))
+        break
+      case 'shop/redact':
+        safeRun('shop redact purge', () => handleShopRedact(store))
+        break
+      case 'customers/redact':
+        safeRun('customer redact', () => handleCustomerRedact(data, store, shopDomain))
+        break
+      case 'customers/data_request':
+        safeRun('customer data request', () => handleCustomerDataRequest(data, store, shopDomain))
+        break
       default:
         console.log('Unhandled webhook topic:', topic)
     }
@@ -109,6 +122,60 @@ export async function POST(request: NextRequest) {
   }))
 
   return NextResponse.json({ received: true })
+}
+
+// ── Shopify lifecycle / privacy webhooks ──────────────────────────────
+// These satisfy Shopify's mandatory privacy & app-uninstall webhooks and drive
+// the data deletion obligations described in the Privacy Policy and DPA.
+
+async function handleAppUninstalled(store: any) {
+  console.log(`Shopify app uninstalled for store ${store.domain} (${store.id}) — purging data`)
+  await purgeStoreData({ id: store.id, domain: store.domain, userId: store.userId })
+}
+
+async function handleShopRedact(store: any) {
+  console.log(`Shopify shop/redact for store ${store.domain} (${store.id}) — purging data`)
+  await purgeStoreData({ id: store.id, domain: store.domain, userId: store.userId })
+}
+
+async function handleCustomerRedact(data: any, store: any, shopDomain: string) {
+  // Shopify payload: { shop_id, shop_domain, customer: { id } }
+  const customerId = data?.customer?.id ? String(data.customer.id) : null
+  if (!customerId) {
+    console.log(`customers/redact from ${shopDomain}: no customer id in payload`)
+    return
+  }
+  const result = await redactCustomer(shopDomain, customerId)
+  await logDataAccess({
+    actorType: 'system',
+    action: 'delete',
+    resourceType: 'customer',
+    resourceId: customerId,
+    purpose: 'shopify customers/redact request',
+    actorId: store.userId,
+    metadata: { shopDomain, affected: result.affected },
+  })
+  console.log(`customers/redact for ${shopDomain} customer ${customerId}: ${result.affected} records removed`)
+}
+
+// Shopify asks the app to make a customer's data available to the merchant. We
+// acknowledge the request and record a data-access audit entry. Programmatic
+// delivery of the data to the merchant (e.g. an email/export endpoint) is a
+// documented TODO — see SHOPIFY_PROTECTED_DATA_READINESS.md. We never return the
+// customer data in the webhook response body (Shopify ignores it and it would be
+// logged), and the request itself is acknowledged so Shopify does not retry.
+async function handleCustomerDataRequest(data: any, store: any, shopDomain: string) {
+  const customerId = data?.customer?.id ? String(data.customer.id) : null
+  await logDataAccess({
+    actorType: 'system',
+    action: 'access',
+    resourceType: 'customer',
+    resourceId: customerId || 'unknown',
+    purpose: 'shopify customers/data_request',
+    actorId: store.userId,
+    metadata: { shopDomain, email: data?.customer?.email || null },
+  })
+  console.log(`customers/data_request received for ${shopDomain} customer ${customerId || 'unknown'} (acknowledged)`)
 }
 
 function extractPhone(cart: any): string | null {

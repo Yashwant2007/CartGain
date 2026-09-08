@@ -220,10 +220,18 @@ export async function setupShopifyWebhooks(
   const webhookUrl = `${baseUrl}/api/webhooks/shopify`
 
   const topics = [
+    // Functional data flow
     'carts/update',
     'checkouts/create',
     'checkouts/update',
     'orders/create',
+    // Uninstall / privacy lifecycle — required for Shopify app review and to
+    // honor data deletion obligations when a merchant uninstalls. These let the
+    // app purge the merchant's and their customers' data on schedule.
+    'app/uninstalled',
+    'customers/data_request',
+    'customers/redact',
+    'shop/redact',
   ]
 
   for (const topic of topics) {

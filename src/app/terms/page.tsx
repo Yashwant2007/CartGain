@@ -118,7 +118,7 @@ export default function TermsPage() {
                 <li>We process customer data only for the purpose of providing cart recovery services.</li>
                 <li>We implement industry-standard security measures to protect all data, including encryption, access controls, and logging of sensitive administrative access.</li>
                 <li>We do not sell your customer data to third parties.</li>
-                <li>Upon termination, you may request deletion of your data within 90 days.</li>
+                <li>You may request deletion of your data at any time; store-scoped data is also purged automatically upon account deletion or app uninstall.</li>
                 <li>Before using the Platform, you must accept our Terms of Service, Privacy Policy, and Data Processing Agreement.</li>
                 <li>Our data processing practices are detailed in our <Link href="/dpa" className="text-cyan-400 hover:underline">Data Processing Agreement (DPA)</Link> and <Link href="/privacy" className="text-cyan-400 hover:underline">Privacy Policy</Link>.</li>
               </ul>
@@ -190,7 +190,7 @@ export default function TermsPage() {
               <ul className="list-disc pl-5 space-y-2">
                 <li><strong>By You:</strong> You may cancel your account at any time from your dashboard. The cancellation takes effect at the end of the current billing period.</li>
                 <li><strong>By Us:</strong> We may suspend or terminate your account immediately for violation of these Terms, illegal activity, or non-payment.</li>
-                <li><strong>Effect:</strong> Upon termination, your access to the Platform ceases. We will retain your data for 90 days for backup purposes, after which it will be deleted.</li>
+                <li><strong>Effect:</strong> Upon termination, your access to the Platform ceases. Store-scoped personal data is purged from the application database (including on app uninstall). Copies that may remain in hosting-provider backups are subject to the provider&apos;s backup retention window. You may also request earlier deletion from your dashboard or by contacting support.</li>
                 <li><strong>Survival:</strong> Sections 6 (Compliance), 7 (Data &amp; Privacy), 10 (Liability), 11 (Indemnification), and 14 (Disputes) survive termination.</li>
               </ul>
             </section>

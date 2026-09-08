@@ -31,7 +31,7 @@ export default function DPAPage() {
                 1. Introduction
               </h2>
               <p className="leading-relaxed">
-                This Data Processing Agreement (&ldquo;DPA&rdquo;) forms part of the Terms of Service between CartGain (&ldquo;Processor,&rdquo; &ldquo;we,&rdquo; &ldquo;us&rdquo;) and the merchant (&ldquo;Controller,&rdquo; &ldquo;you&rdquo;) using the CartGain platform. This DPA sets out the terms relating to the processing of personal data by CartGain on behalf of the merchant, in compliance with the General Data Protection Regulation (GDPR), India&apos;s Digital Personal Data Protection Act (DPDP Act, 2023), and other applicable data protection laws.
+                This Data Processing Agreement (&ldquo;DPA&rdquo;) forms part of the Terms of Service between CartGain (&ldquo;Processor,&rdquo; &ldquo;we,&rdquo; &ldquo;us&rdquo;) and the merchant (&ldquo;Controller,&rdquo; &ldquo;you&rdquo;) using the CartGain platform. This DPA sets out the terms relating to the processing of personal data by CartGain on behalf of the merchant, to facilitate compliance with the General Data Protection Regulation (GDPR), India&apos;s Digital Personal Data Protection Act (DPDP Act, 2023), and other applicable data protection laws.
               </p>
             </section>
 
@@ -76,7 +76,7 @@ export default function DPAPage() {
                 </div>
                 <div>
                   <p className="font-semibold text-white">Duration of Processing:</p>
-                  <p>For the duration of the Controller&apos;s active subscription, plus 90 days after termination for backup purposes, after which data is deleted or anonymized.</p>
+                  <p>For the duration of the Controller&apos;s active subscription. Upon uninstall or termination, store-scoped data is purged and the data subject&apos;s personal data is procedurally deleted or anonymized within a reasonable window (backup purging is handled by the hosting provider). [[CONFIRM RETAINED BACKUP WINDOW]]</p>
                 </div>
               </div>
             </section>
@@ -134,42 +134,47 @@ export default function DPAPage() {
                     <tr>
                       <td className="py-3">Supabase (PostgreSQL)</td>
                       <td className="py-3">Database hosting</td>
-                      <td className="py-3">AWS Mumbai, India</td>
+                      <td className="py-3">[[CONFIRM DATA REGION]]</td>
                     </tr>
                     <tr>
                       <td className="py-3">Vercel</td>
                       <td className="py-3">Application hosting &amp; CDN</td>
-                      <td className="py-3">Global (multi-region)</td>
+                      <td className="py-3">Global (multi-region) [[CONFIRM]]</td>
                     </tr>
                     <tr>
                       <td className="py-3">MSG91</td>
                       <td className="py-3">SMS delivery</td>
-                      <td className="py-3">India</td>
+                      <td className="py-3">India [[NOT RUNTIME-CONFIGURED]]</td>
                     </tr>
                     <tr>
                       <td className="py-3">Resend</td>
                       <td className="py-3">Email delivery</td>
-                      <td className="py-3">US / EU</td>
+                      <td className="py-3">US / EU [[NOT RUNTIME-CONFIGURED]]</td>
                     </tr>
                     <tr>
                       <td className="py-3">Meta (WhatsApp Cloud API)</td>
                       <td className="py-3">WhatsApp message delivery</td>
-                      <td className="py-3">Global</td>
+                      <td className="py-3">Global [[NOT RUNTIME-CONFIGURED]]</td>
                     </tr>
                     <tr>
                       <td className="py-3">Razorpay</td>
                       <td className="py-3">Payment processing</td>
-                      <td className="py-3">India</td>
+                      <td className="py-3">India [[NOT RUNTIME-CONFIGURED]]</td>
                     </tr>
                     <tr>
                       <td className="py-3">OpenAI</td>
-                      <td className="py-3">AI-powered message generation (GPT-4o-mini)</td>
-                      <td className="py-3">US / Global</td>
+                      <td className="py-3">AI-powered message generation (GPT-4o / GPT-4o-mini)</td>
+                      <td className="py-3">US [[CONFIRM PROCESSING REGION]]</td>
                     </tr>
                     <tr>
-                      <td className="py-3">Redis (Upstash)</td>
+                      <td className="py-3">Groq</td>
+                      <td className="py-3">AI development/fallback inference (gpt-oss-120b)</td>
+                      <td className="py-3">[[CONFIRM PROCESSING REGION]]</td>
+                    </tr>
+                    <tr>
+                      <td className="py-3">Upstash (Redis)</td>
                       <td className="py-3">Job queue &amp; caching</td>
-                      <td className="py-3">AWS Mumbai, India</td>
+                      <td className="py-3">[[CONFIRM DATA REGION]]</td>
                     </tr>
                   </tbody>
                 </table>
@@ -188,27 +193,27 @@ export default function DPAPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-slate-700/30 rounded-lg p-4">
                   <p className="font-semibold text-white mb-2">Encryption</p>
-                  <p className="text-sm">Data encrypted in transit (TLS 1.3) and at rest (AES-256). API keys stored with encryption.</p>
+                  <p className="text-sm">Data encrypted in transit via TLS. API keys and sensitive tokens stored encrypted in the database (AES-256-GCM). Customer passwords hashed with bcrypt (cost 12).</p>
                 </div>
                 <div className="bg-slate-700/30 rounded-lg p-4">
                   <p className="font-semibold text-white mb-2">Access Control</p>
-                  <p className="text-sm">Role-based access, least-privilege principle, strong staff password requirements, and multi-factor authentication for admin access.</p>
+                  <p className="text-sm">Principle of least privilege, OAuth-based access to store data, access tokens stored encrypted, and audit logging of sensitive data access.</p>
                 </div>
                 <div className="bg-slate-700/30 rounded-lg p-4">
                   <p className="font-semibold text-white mb-2">Monitoring</p>
-                  <p className="text-sm">24/7 system monitoring, intrusion detection, automated threat response, and audit logging for access to sensitive personal data.</p>
+                  <p className="text-sm">Application logging, Shopify webhook signature verification, and audit logging for access to sensitive personal data.</p>
                 </div>
                 <div className="bg-slate-700/30 rounded-lg p-4">
                   <p className="font-semibold text-white mb-2">Backups</p>
-                  <p className="text-sm">Automated daily encrypted backups with 90-day retention. Point-in-time recovery capability.</p>
+                  <p className="text-sm">Backups are managed by the hosting provider; the provider retention window applies to stored backups.</p>
                 </div>
                 <div className="bg-slate-700/30 rounded-lg p-4">
-                  <p className="font-semibold text-white mb-2">Employee Training</p>
-                  <p className="text-sm">Annual security and privacy training for all employees with access to personal data.</p>
+                  <p className="font-semibold text-white mb-2">Employee Access</p>
+                  <p className="text-sm">Personnel with access to personal data are bound by confidentiality obligations. [DETAIL PER INTERNAL POLICY]</p>
                 </div>
                 <div className="bg-slate-700/30 rounded-lg p-4">
                   <p className="font-semibold text-white mb-2">Incident Response</p>
-                  <p className="text-sm">Documented incident response plan with 24-hour breach notification commitment and clear escalation procedures.</p>
+                  <p className="text-sm">Documented incident response plan with a 72-hour merchant notification commitment (see CartGain Incident Response Policy).</p>
                 </div>
               </div>
             </section>
@@ -222,7 +227,7 @@ export default function DPAPage() {
                 In the event of a personal data breach, CartGain will:
               </p>
               <ul className="list-disc pl-5 space-y-2 mt-2">
-                <li>Notify the Controller within 24 hours of becoming aware of the breach.</li>
+                <li>Notify the Controller within 72 hours of becoming aware of a personal data breach (as committed in CartGain&apos;s Incident Response Policy).</li>
                 <li>Provide details of the nature, scope, and potential impact of the breach.</li>
                 <li>Identify affected categories of data and approximate number of data subjects.</li>
                 <li>Outline measures taken to address the breach and prevent recurrence.</li>
@@ -255,11 +260,10 @@ export default function DPAPage() {
                 10. Data Retention &amp; Deletion
               </h2>
               <ul className="list-disc pl-5 space-y-2">
-                <li>Personal data is retained for the duration of the Controller&apos;s active subscription.</li>
-                <li>Upon termination, data is retained for 90 days for backup and recovery purposes.</li>
-                <li>After 90 days, all personal data is securely deleted or anonymized.</li>
+                <li>Personal data is processed for the duration of the Controller&apos;s active subscription.</li>
+                <li>Upon uninstall or account deletion, store-scoped personal data is purged from the application database (see CartGain&apos;s data-deletion procedures).</li>
                 <li>Controllers may request earlier deletion by contacting support.</li>
-                <li>Backup data is automatically purged within the backup retention window.</li>
+                <li>Copies that may remain in hosting-provider backups are purged per the provider&apos;s backup retention window. [[CONFIRM RETAINED BACKUP WINDOW]]</li>
               </ul>
             </section>
 
