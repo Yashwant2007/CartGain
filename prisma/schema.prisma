@@ -285,7 +285,8 @@ model Subscription {
   revenueShareEvents  RevenueShareEvent[]
   bargainRevenueShareEvents BargainRevenueShareEvent[]
 
-  @@index([userId])
+  @@unique([userId])
+  @@index([subscriptionId])
 }
 
 // ── Bargain System Models (AI Negotiation at Checkout) ──
@@ -403,6 +404,20 @@ model Invoice {
   @@index([userId])
   @@index([razorpayOrderId])
   @@index([razorpayPaymentLinkId])
+}
+
+// Idempotency ledger for gateway webhooks. A unique (namespace, entityId)
+// gives durable, DB-backed dedup that survives Redis outages and restarts —
+// the Redis SETNX marker in the webhook handler is the fast path, this is
+// the correctness backstop.
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  namespace   String   // payment, payment_link, subscription
+  entityId    String   // Razorpay entity id (payment id, subscription id, ...)
+  processedAt DateTime @default(now())
+
+  @@unique([namespace, entityId])
+  @@index([namespace, processedAt])
 }
 
 model RevenueShareEvent {

@@ -172,6 +172,10 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
     }
 
     const handler = (e: MessageEvent) => {
+      // Only accept the 'shopify_connected' signal from our own origin — the
+      // OAuth popup runs on cart-gain.com. Without the origin check any page on
+      // the web could trigger a close+reload loop on this tab.
+      if (e.origin !== window.location.origin) return
       if (e.data === 'shopify_connected') {
         setConnectMessage('Shopify store connected successfully!')
         if (popupRef.current) {

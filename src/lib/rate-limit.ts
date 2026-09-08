@@ -20,6 +20,46 @@ function clientIp(headersList: Headers): string {
   return 'unknown'
 }
 
+// ─── In-memory fallback ───────────────────────────────────────────────────────
+// When Redis is down, rate limiting MUST NOT silently fail open, or auth
+// endpoints (login/register/reset) would be unprotected and effectively
+// brute-forceable for the duration of the outage. This per-process map keeps
+// throttling active (best-effort; not shared across serverless instances).
+type MemoryBucket = { count: number; resetAt: number }
+const memoryBuckets = new Map<string, MemoryBucket>()
+const MEMORY_CLEANUP_EVERY = 1_000
+let memoryChecks = 0
+
+function memoryInc(key: string, windowMs: number): number {
+  const now = Date.now()
+  const bucket = memoryBuckets.get(key)
+  if (!bucket || bucket.resetAt <= now) {
+    memoryBuckets.set(key, { count: 1, resetAt: now + windowMs })
+    return 1
+  }
+  bucket.count += 1
+  if (++memoryChecks % MEMORY_CLEANUP_EVERY === 0) {
+    memoryBuckets.forEach((value, key) => {
+      if (value.resetAt <= now) memoryBuckets.delete(key)
+    })
+  }
+  return bucket.count
+}
+
+// Returns the count if Redis is healthy, or null when Redis is unavailable
+// so callers can fall back to the in-memory limiter.
+async function redisCountOrNull(key: string, windowMs: number): Promise<number | null> {
+  try {
+    const count = await redisIncr(key)
+    if (count === 1) {
+      await redisExpire(key, Math.floor(windowMs / 1000))
+    }
+    return count
+  } catch {
+    return null
+  }
+}
+
 export async function checkRateLimit(
   endpoint: string,
   config: RateLimitConfig = {}
@@ -36,10 +76,7 @@ export async function checkRateLimit(
     const ip = clientIp(headersList)
     const key = `ratelimit:${ip}_${endpoint}`
 
-    const count = await redisIncr(key)
-    if (count === 1) {
-      await redisExpire(key, Math.floor(windowMs / 1000))
-    }
+    const count = (await redisCountOrNull(key, windowMs)) ?? memoryInc(key, windowMs)
 
     const remaining = Math.max(0, maxAttempts - count)
     const resetTime = Date.now() + windowMs
@@ -56,6 +93,8 @@ export async function checkRateLimit(
     return { success: true, remaining, resetTime }
   } catch (error) {
     console.error('Rate limit check error:', error)
+    // Never block legitimate traffic due to an unexpected internal error, but
+    // note it so the degradation is visible.
     return { success: true, remaining: 0, resetTime: 0 }
   }
 }
@@ -63,10 +102,7 @@ export async function checkRateLimit(
 export async function checkSimpleRateLimit(key: string): Promise<{ allowed: boolean; retryAfter: number }> {
   const redisKey = `ratelimit:${key}`
 
-  const count = await redisIncr(redisKey)
-  if (count === 1) {
-    await redisExpire(redisKey, SIMPLE_WINDOW_MS / 1000)
-  }
+  const count = (await redisCountOrNull(redisKey, SIMPLE_WINDOW_MS)) ?? memoryInc(redisKey, SIMPLE_WINDOW_MS)
 
   if (count > SIMPLE_MAX_REQUESTS) {
     return { allowed: false, retryAfter: 60 }

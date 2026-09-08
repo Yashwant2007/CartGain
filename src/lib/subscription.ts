@@ -34,7 +34,7 @@ export function planConfigFor(planId: string) {
 
 export async function getSubscriptionStatus(userId: string): Promise<SubscriptionStatus | null> {
   const [subscription, store] = await Promise.all([
-    prisma.subscription.findFirst({ where: { userId } }),
+    prisma.subscription.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } }),
     prisma.store.findFirst({ where: { userId } }),
   ])
 
@@ -93,15 +93,16 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
 }
 
 export async function getSubscription(userId: string) {
-  return prisma.subscription.findFirst({ where: { userId } })
+  return prisma.subscription.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } })
 }
 
 export async function createFreeSubscription(userId: string) {
-  const existing = await getSubscription(userId)
-  if (existing) return existing
-
-  return prisma.subscription.create({
-    data: {
+  // Idempotent upsert on the unique userId — a check-then-create race here
+  // could previously mint duplicate free-subscription rows for one user.
+  return prisma.subscription.upsert({
+    where: { userId },
+    update: {},
+    create: {
       userId,
       customerId: `free_${userId}`,
       plan: 'free',

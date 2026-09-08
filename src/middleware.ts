@@ -44,5 +44,8 @@ export default async function middleware(
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*'],
+  // /setup is the post-signup onboarding step — protect it server-side too so a
+  // logged-out visitor hitting the URL directly is sent to /login instead of a
+  // client-side redirect flicker inside the page.
+  matcher: ['/dashboard/:path*', '/setup'],
 }

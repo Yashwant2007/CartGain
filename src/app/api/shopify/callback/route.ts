@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import crypto from 'crypto'
 import prisma from '@/lib/db'
 import { getAppBaseUrl } from '@/lib/app-base-url'
 import { encrypt } from '@/lib/encryption'
 import { setupShopifyWebhooks } from '@/lib/shopify'
 import { generateCampaignSetup } from '@/lib/services/ai'
+import { verifyOAuthState, verifyShopifyCallbackHmac, isValidShopDomain } from '@/lib/shopify-oauth'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,25 +41,24 @@ export async function GET(req: NextRequest) {
       return redirectWithCleanup('/dashboard/integrations?shopify_error=Missing+state', req.url)
     }
 
+    // Verify Shopify signed the callback: shop, code, timestamp and state are
+    // all covered by the callback HMAC, so a tampered or replayed-elsewhere
+    // callback is rejected before we exchange anything.
+    if (!verifyShopifyCallbackHmac(searchParams)) {
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=Invalid+callback+signature', req.url)
+    }
+
+    if (!isValidShopDomain(shop)) {
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=Invalid+shop+domain', req.url)
+    }
+
     let storeId: string | null = null
     try {
-      const secret = process.env.NEXTAUTH_SECRET
-      const dotIndex = state.lastIndexOf('.')
-      if (!secret || dotIndex === -1) throw new Error('Invalid state format')
-
-      const payload = state.slice(0, dotIndex)
-      const receivedSig = state.slice(dotIndex + 1)
-      const expectedSig = crypto.createHmac('sha256', secret).update(payload).digest('hex')
-
-      const sigValid = crypto.timingSafeEqual(
-        Buffer.from(receivedSig.padEnd(64, '0').slice(0, 64), 'hex'),
-        Buffer.from(expectedSig, 'hex'),
-      )
-      if (!sigValid) throw new Error('Signature mismatch')
-
-      const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString())
+      const decoded = verifyOAuthState(state)
+      if (!decoded || typeof decoded.storeId !== 'string' || !decoded.storeId) {
+        throw new Error('Invalid state')
+      }
       storeId = decoded.storeId
-      if (!storeId || typeof storeId !== 'string') throw new Error('Invalid storeId in state')
     } catch {
       return redirectWithCleanup('/dashboard/integrations?shopify_error=Invalid+state', req.url)
     }

@@ -47,7 +47,45 @@ export async function GET(request: NextRequest) {
     const items = hasMore ? campaigns.slice(0, take) : campaigns
     const nextCursor = hasMore ? items[items.length - 1].id : null
 
-    return NextResponse.json({ campaigns: items, nextCursor, hasMore })
+    // Per-campaign recovery stats for the list cards (real numbers, not the
+    // hardcoded zeros the dashboard used to render). Two aggregate queries:
+    // distinct (campaignId, cartId) message pairs plus recovered carts per store.
+    const statsByCampaign: Record<string, { totalCarts: number; recovered: number; recoveryRate: number; revenue: number }> = {}
+    if (items.length > 0) {
+      const messageRows = await prisma.message.groupBy({
+        by: ['campaignId', 'cartId'],
+        where: { campaignId: { in: items.map((c) => c.id) } },
+      })
+      const recoveredRows = await prisma.recoveredCart.findMany({
+        where: { storeId },
+        select: { cartId: true, recoveredValue: true },
+      })
+      const recoveredByCartId = new Map(recoveredRows.map((r) => [r.cartId, r.recoveredValue]))
+      const cartCounts = new Map<string, number>()
+      const cartRecovered = new Map<string, Set<string>>()
+      const cartRevenue = new Map<string, number>()
+      for (const row of messageRows) {
+        cartCounts.set(row.campaignId, (cartCounts.get(row.campaignId) ?? 0) + 1)
+        const recoveredValue = recoveredByCartId.get(row.cartId)
+        if (recoveredValue !== undefined) {
+          if (!cartRecovered.has(row.campaignId)) cartRecovered.set(row.campaignId, new Set())
+          cartRecovered.get(row.campaignId)!.add(row.cartId)
+          cartRevenue.set(row.campaignId, (cartRevenue.get(row.campaignId) ?? 0) + recoveredValue)
+        }
+      }
+      for (const campaign of items) {
+        const totalCarts = cartCounts.get(campaign.id) ?? 0
+        const recovered = cartRecovered.get(campaign.id)?.size ?? 0
+        statsByCampaign[campaign.id] = {
+          totalCarts,
+          recovered,
+          recoveryRate: totalCarts > 0 ? Math.round((recovered / totalCarts) * 100) : 0,
+          revenue: cartRevenue.get(campaign.id) ?? 0,
+        }
+      }
+    }
+
+    return NextResponse.json({ campaigns: items, nextCursor, hasMore, statsByCampaign })
   } catch (error) {
     console.error('List campaigns error:', error)
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })

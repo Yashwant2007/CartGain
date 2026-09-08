@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import prisma from '@/lib/db'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,9 @@ function verifySessionToken(token: string): { shop: string } | null {
     .digest('base64url')
 
   try {
-    if (!crypto.timingSafeEqual(Buffer.from(sigB64), Buffer.from(expected))) return null
+    const a = Buffer.from(sigB64)
+    const b = Buffer.from(expected)
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString())
     const now = Math.floor(Date.now() / 1000)
     if (typeof payload.exp !== 'number' || payload.exp < now) return null
@@ -42,6 +45,14 @@ function verifySessionToken(token: string): { shop: string } | null {
 // resolve their store without a redirect-based OAuth round trip.
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitResult = await checkRateLimit('shopify-session-token', {
+      maxAttempts: 30,
+      windowMs: 5 * 60 * 1000,
+    })
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ message: 'Too many requests. Please try again later.' }, { status: 429 })
+    }
+
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })

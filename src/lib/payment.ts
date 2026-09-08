@@ -1,5 +1,14 @@
 import crypto from "crypto";
 import { requireEnv } from "./env";
+import {
+  PLAN_IDS,
+  LEGACY_PLAN_MAP,
+  FREE_CARTS_THRESHOLD,
+  PAID_PLAN_IDS,
+  resolvePlanId,
+} from "./plan-constants";
+
+export { PLAN_IDS, FREE_CARTS_THRESHOLD, PAID_PLAN_IDS, resolvePlanId } from "./plan-constants";
 
 let razorpayInstance: any = null;
 
@@ -23,14 +32,34 @@ export function verifyWebhookSignature(body: string, signature: string): boolean
     .update(body)
     .digest("hex");
 
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expected)
-  );
+  const a = Buffer.from(signature);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 }
 
-export const FREE_CARTS_THRESHOLD = 50;
-export const REVENUE_SHARE_PERCENT = 2.5;
+/**
+ * Cancel a merchant's Razorpay subscription server-side. Returns true when the
+ * gateway subscription was cancelled (or when there is nothing to cancel), and
+ * false when the gateway cancel fails so callers can decide whether to keep the
+ * merchant on the paid plan locally.
+ */
+export async function cancelRazorpaySubscription(subscriptionId: string | null | undefined): Promise<boolean> {
+  if (!subscriptionId) return true
+  if (!razorpay) return false
+  try {
+    await razorpay.subscriptions.cancel(subscriptionId)
+    return true
+  } catch (error: any) {
+    // 400 "already cancelled / not in active state" — the merchant won't be
+    // charged anymore, treat as success. Other errors propagate.
+    const status = error?.statusCode || error?.status
+    if (status === 400 || status === 404) return true
+    console.error("Razorpay subscription cancel failed:", error?.message || error)
+    return false
+  }
+}
+
 export const OVERAGE_RATE_PER_MESSAGE = 1; // ₹1 per overage message
 
 // A recovery only counts (and is billed) if WE sent a recovery message that was
@@ -145,33 +174,6 @@ export async function createRazorpaySubscription(planId: string, customerEmail: 
   }
 }
 
-export const PLAN_IDS = {
-  FREE: 'free',
-  GROWTH: 'growth',
-  PRO: 'pro',
-  ENTERPRISE: 'enterprise',
-} as const
-
-// Legacy plan ids that existed before the unified pricing model. New code
-// resolves them to their nearest unified tier so existing subscriptions keep
-// working without a data migration.
-export const LEGACY_PLAN_MAP: Record<string, string> = {
-  starter: PLAN_IDS.GROWTH, // previous Starter (₹999/500 carts) → Growth
-}
-
-export function resolvePlanId(planId: string): string {
-  const normalized = String(planId || '').toLowerCase().trim()
-  // PLANS is keyed by uppercase convenience keys (FREE/GROWTH/PRO), while the
-  // canonical ids, PLAN_IDS and what's stored on Subscription.plan and posted
-  // to the payment API are all lowercase ("growth"). Resolve against the real
-  // `.id` so a paid tier never collapses to free (that used to make
-  // create-subscription return "Invalid plan" and zero out paid billing/gates).
-  const match = Object.values(PLANS).find((p) => p.id === normalized)
-  if (match) return match.id
-  if (normalized in LEGACY_PLAN_MAP) return LEGACY_PLAN_MAP[normalized]
-  return PLAN_IDS.FREE
-}
-
 /**
  * Resolve a plan object from any id/case (e.g. "growth", "GROWTH", legacy
  * "starter"). Used everywhere instead of `PLANS[resolvePlanId(x)]` because
@@ -181,8 +183,6 @@ export function getPlan(planId: string): Plan {
   const id = resolvePlanId(planId)
   return Object.values(PLANS).find((p) => p.id === id) || PLANS.FREE
 }
-
-export const PAID_PLAN_IDS = [PLAN_IDS.GROWTH, PLAN_IDS.PRO]
 
 export const PLANS: Record<string, Plan> = {
   FREE: {

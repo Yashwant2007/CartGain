@@ -24,6 +24,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import StatusBadge from '@/components/dashboard/StatusBadge'
+import { PAID_PLAN_IDS, FREE_CARTS_THRESHOLD } from '@/lib/plan-constants'
 
 function DashboardLayoutInner({
   children,
@@ -55,13 +56,17 @@ function DashboardLayoutInner({
         if (data?.subscription) {
           const sub = data.subscription
           const processed = data.store?.cartsProcessed ?? 0
-          const freeThreshold = 50
-          const PAID_PLAN_IDS = ['growth', 'pro', 'starter']
+          // Resolve legacy ids (starter → growth) so the banner agrees with the
+          // server-side gate instead of a duplicated, drifty hardcode.
+          const plan = typeof sub.plan === 'string'
+            ? (sub.plan === 'starter' ? 'growth' : sub.plan)
+            : 'free'
+          const isFree = !PAID_PLAN_IDS.includes(plan)
           setSubStatus({
-            isFree: !PAID_PLAN_IDS.includes(sub.plan),
-            isExhausted: !PAID_PLAN_IDS.includes(sub.plan) && processed >= freeThreshold,
+            isFree,
+            isExhausted: isFree && processed >= FREE_CARTS_THRESHOLD,
             cartsUsed: processed,
-            cartsRemaining: Math.max(0, freeThreshold - processed),
+            cartsRemaining: Math.max(0, FREE_CARTS_THRESHOLD - processed),
           })
         }
         if (!controller.signal.aborted) setSubLoading(false)

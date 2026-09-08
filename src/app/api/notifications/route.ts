@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { Prisma } from '@prisma/client'
+import { currencySymbolFor } from '@/lib/bargain/i18n'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +48,8 @@ export async function GET() {
       }),
     ])
 
+    const symbol = currencySymbolFor(store.currency)
+
     const notifications: Array<{
       id: string
       type: 'recovery' | 'cart' | 'campaign' | 'milestone'
@@ -61,7 +64,7 @@ export async function GET() {
         id: `recovery-${recovery.id}`,
         type: 'recovery',
         title: 'Cart Recovered!',
-        description: `${recovery.cart?.customerName || 'A customer'}'s cart worth $${(recovery.recoveredValue ?? 0).toFixed(2)} was recovered via ${recovery.channel}.`,
+        description: `${recovery.cart?.customerName || 'A customer'}'s cart worth ${symbol}${(recovery.recoveredValue ?? 0).toFixed(2)} was recovered via ${recovery.channel}.`,
         timestamp: recovery.recoveredAt?.toISOString?.() || new Date().toISOString(),
         icon: '💰',
       })
@@ -76,7 +79,7 @@ export async function GET() {
         id: `cart-${cart.id}`,
         type: 'cart',
         title: 'Cart Abandoned',
-        description: `${cart.customerName || 'A guest'} abandoned a cart worth $${(cart.totalValue ?? 0).toFixed(2)}.`,
+        description: `${cart.customerName || 'A guest'} abandoned a cart worth ${symbol}${(cart.totalValue ?? 0).toFixed(2)}.`,
         timestamp: cart.abandonedAt?.toISOString?.() || new Date().toISOString(),
         icon: '🛒',
       })
@@ -111,22 +114,13 @@ export async function GET() {
     console.error('Notifications error:', error)
     if (error instanceof Prisma.PrismaClientInitializationError) {
       return NextResponse.json(
-        { error: 'Database connection failed', notifications: [] },
+        { error: 'Notifications are temporarily unavailable.', notifications: [] },
         { status: 503 }
       )
     }
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2021') {
-        return NextResponse.json(
-          { error: 'Database tables missing. Run migrations.', notifications: [] },
-          { status: 500 }
-        )
-      }
-      return NextResponse.json(
-        { error: 'Database query failed', notifications: [] },
-        { status: 500 }
-      )
-    }
-    return NextResponse.json({ error: 'Something went wrong', notifications: [] }, { status: 500 })
+    return NextResponse.json(
+      { error: "We couldn't load your recent activity. Please try again.", notifications: [] },
+      { status: 500 }
+    )
   }
 }

@@ -32,6 +32,7 @@ export default function CampaignsPage() {
   const [abTestCampaign, setAbTestCampaign] = useState<Campaign | null>(null)
   const { storeId, loading: resolvingStore, error: storeError } = useResolvedStoreId()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [statsByCampaign, setStatsByCampaign] = useState<Record<string, { totalCarts: number; recovered: number; recoveryRate: number; revenue: number }>>({})
   const [loadingData, setLoadingData] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [currentPlan, setCurrentPlan] = useState<{ id: string; name: string; price: number; maxCampaigns: number; maxMessagesPerCustomer: { email: number; sms: number; whatsapp: number } } | null>(null)
@@ -67,6 +68,7 @@ export default function CampaignsPage() {
         const campaignsData = await campaignsRes.json()
         if (!cancelled) {
           setCampaigns(campaignsData.campaigns || [])
+          setStatsByCampaign(campaignsData.statsByCampaign || {})
         }
 
         if (subRes.ok) {
@@ -200,7 +202,7 @@ const nextPlanName = campaignLimitReached && currentPlan
       {/* Campaigns Grid */}
       <div className="grid gap-6">
         {campaigns.map((campaign) => (
-          <CampaignCard key={campaign.id} campaign={campaign} onOpenABTest={() => setAbTestCampaign(campaign)} />
+          <CampaignCard key={campaign.id} campaign={campaign} onOpenABTest={() => setAbTestCampaign(campaign)} stats={statsByCampaign[campaign.id]} />
         ))}
         {campaigns.length === 0 && !isLoading && !showCreateModal && (
           <OnboardingWizard onStart={() => setShowCreateModal(true)} />
@@ -230,7 +232,14 @@ const nextPlanName = campaignLimitReached && currentPlan
   )
 }
 
-function CampaignCard({ campaign, onOpenABTest }: { campaign: Campaign; onOpenABTest: () => void }) {
+interface CampaignStats {
+  totalCarts?: number
+  recovered?: number
+  recoveryRate?: number
+  revenue?: number
+}
+
+function CampaignCard({ campaign, onOpenABTest, stats }: { campaign: Campaign; onOpenABTest: () => void; stats?: CampaignStats }) {
   const [isActive, setIsActive] = useState(campaign.isActive)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -285,10 +294,10 @@ function CampaignCard({ campaign, onOpenABTest }: { campaign: Campaign; onOpenAB
             ))}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <Stat label="Total Carts" value="0" />
-            <Stat label="Recovered" value="0" />
-            <Stat label="Recovery Rate" value="0%" />
-            <Stat label="Revenue" value="₹0" />
+            <Stat label="Total Carts" value={String(stats?.totalCarts ?? 0)} />
+            <Stat label="Recovered" value={String(stats?.recovered ?? 0)} />
+            <Stat label="Recovery Rate" value={`${stats?.recoveryRate ?? 0}%`} />
+            <Stat label="Revenue" value={`₹${(stats?.revenue ?? 0).toFixed(0)}`} />
           </div>
         </div>
         <div className="flex flex-col items-end space-y-2 ml-4">

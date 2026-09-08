@@ -1,8 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyWebhookSignature, PLANS, resolvePlanId, PAID_PLAN_IDS, getPlan } from "@/lib/payment";
 import prisma from "@/lib/db";
+import { redisSetNX } from "@/lib/redis";
 
 export const dynamic = 'force-dynamic'
+
+// Max time we need to treat a webhook delivery as possibly-redelivered. Razorpay
+// retries deliveries with the same event id within its delivery window (hours),
+// so a 7-day dedup marker is generous and self-expiring.
+const EVENT_DEDUP_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+// Idempotency guard: the FIRST delivery of a gateway event wins; repeat
+// deliveries (authorized+captured for the same payment, or retried webhooks)
+// are acknowledged but not re-processed — so smsCredits and bargain/sms
+// counters can never be applied twice.
+//
+// The DB ledger row (unique namespace+entityId) is the authoritative claim;
+// the Redis SETNX marker is only a fast-path optimization. This survives
+// Redis outages and restarts: while Redis is down, `redisSetNX` returns false
+// (ambiguous), so the ledger decides.
+async function claimEventOnce(namespace: string, entityId: string): Promise<boolean> {
+  try {
+    await redisSetNX(`dedup:webhook:${namespace}:${entityId}`, '1', EVENT_DEDUP_TTL_MS)
+  } catch {
+    // Redis unavailable — the ledger below is authoritative. Do NOT fail open
+    // to processing, or a retried webhook could double-apply credits.
+  }
+
+  try {
+    await prisma.webhookEvent.create({
+      data: { namespace, entityId },
+    })
+    return true
+  } catch (e: any) {
+    if (e?.code === 'P2002') {
+      console.log(`Webhook event already in ledger (${namespace} ${entityId}) — skipping redelivery`)
+      return false
+    }
+    // Ledger write failed for an unexpected reason. Redis (when up) still
+    // holds the marker, so processing once is safe for the dedup window.
+    return true
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +56,23 @@ export async function POST(req: NextRequest) {
     }
 
     const event = JSON.parse(body);
+
+    const dedupKey =
+      event.event === "payment.authorized" || event.event === "payment.captured"
+        ? ["payment", event.payload?.payment?.entity?.id]
+        : event.event === "payment_link.paid"
+        ? ["payment_link", event.payload?.payment_link?.entity?.id]
+        : event.event.startsWith("subscription.")
+        ? ["subscription", event.payload?.subscription?.entity?.id]
+        : null
+
+    if (dedupKey && dedupKey[1]) {
+      const firstDelivery = await claimEventOnce(dedupKey[0], dedupKey[1])
+      if (!firstDelivery) {
+        console.log(`Webhook dedup hit for ${dedupKey[0]} ${dedupKey[1]} — skipping redelivery`)
+        return NextResponse.json({ received: true }, { status: 200 })
+      }
+    }
 
     switch (event.event) {
       case "payment.authorized":

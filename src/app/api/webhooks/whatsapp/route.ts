@@ -11,6 +11,25 @@ function tokensEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(bufA, bufB)
 }
 
+// Meta signs every inbound webhook POST with X-Hub-Signature-256:
+//   sha256=<HMAC-SHA256(rawBody, appSecret)>
+// Everything except the sha256= prefix is the lowercase hex digest.
+// Verify before trusting anything Meta claims to have sent.
+function verifyHubSignature(rawBody: string, signatureHeader: string | null): boolean {
+  if (!signatureHeader) return false
+  const expected = signatureHeader.startsWith('sha256=')
+    ? signatureHeader.slice('sha256='.length)
+    : signatureHeader
+  if (!/^[a-f0-9]{64}$/.test(expected)) return false
+  const appSecret = process.env.WHATSAPP_APP_SECRET
+  if (!appSecret) {
+    console.warn('[WhatsApp Webhook] WHATSAPP_APP_SECRET not configured — cannot verify X-Hub-Signature-256')
+    return false
+  }
+  const actual = crypto.createHmac('sha256', appSecret).update(rawBody, 'utf8').digest('hex')
+  return tokensEqual(actual, expected)
+}
+
 export async function GET(request: NextRequest) {
   try {
     const mode = request.nextUrl.searchParams.get('hub.mode')
@@ -48,7 +67,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: 'rate_limited' }, { status: 429 })
     }
 
-    const body = await request.json()
+    const rawBody = await request.text()
+    const signature = request.headers.get('x-hub-signature-256')
+
+    // Fail-closed: an unsigned/unverifiable inbound message from Meta is rejected.
+    if (!verifyHubSignature(rawBody, signature)) {
+      return NextResponse.json({ status: 'invalid_signature' }, { status: 401 })
+    }
+
+    const body = JSON.parse(rawBody)
 
     const entry = Array.isArray(body?.entry) ? body.entry[0] : null
     const changes = Array.isArray(entry?.changes) ? entry.changes[0] : null

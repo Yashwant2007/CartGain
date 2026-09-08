@@ -9,7 +9,10 @@ export default function ShopifyConnectedPage() {
 
   useEffect(() => {
     if (window.opener) {
-      try { window.opener.postMessage('shopify_connected', '*') } catch {}
+      // The opener is the CartGain dashboard tab — same origin as this page, so
+      // target it explicitly instead of '*' (which leaks the message to any
+      // hosting window, including a malicious one under an opener redirect).
+      try { window.opener.postMessage('shopify_connected', window.location.origin) } catch {}
     }
 
     const t = setTimeout(() => {

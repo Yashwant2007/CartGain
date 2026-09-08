@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import crypto from 'crypto'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getAppBaseUrl } from '@/lib/app-base-url'
 import { shopifyConnectSchema, validateOrThrow, handleValidationError } from '@/lib/validation'
+import { signOAuthState, isValidShopDomain } from '@/lib/shopify-oauth'
+import { checkRateLimit } from '@/lib/rate-limit'
+import prisma from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
+    const rateLimitResult = await checkRateLimit('shopify-connect', {
+      maxAttempts: 10,
+      windowMs: 5 * 60 * 1000,
+    })
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
+    }
+
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -16,6 +26,30 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const { shop, storeId } = validateOrThrow(shopifyConnectSchema, body)
+
+    if (!isValidShopDomain(shop)) {
+      return NextResponse.json({ error: 'Must be a valid .myshopify.com domain' }, { status: 400 })
+    }
+
+    // The state token is signed by us and trusted in the callback, so the store
+    // it references MUST be verified to belong to the signed-in user. Otherwise
+    // a user could pass another merchant's storeId and have the callback
+    // overwrite that store's connection with their own credentials.
+    const store = await prisma.store.findUnique({ where: { id: storeId } })
+    if (!store || store.userId !== session.user.id) {
+      return NextResponse.json({ error: 'Store not found or not owned by the signed-in user' }, { status: 403 })
+    }
+
+    // Refuse to bind a shop that already belongs to another CartGain user — the
+    // Shopify webhook/store lookups are domain-keyed, so a duplicated domain
+    // would silently route events to the wrong account.
+    const existingOwner = await prisma.store.findFirst({
+      where: { domain: shop, userId: { not: session.user.id } },
+      select: { id: true },
+    })
+    if (existingOwner) {
+      return NextResponse.json({ error: 'This Shopify store is already connected to another CartGain account' }, { status: 409 })
+    }
 
     const apiKey = process.env.SHOPIFY_API_KEY
     if (!apiKey) {
@@ -49,14 +83,10 @@ export async function POST(req: NextRequest) {
     const baseUrl = getAppBaseUrl(req)
     const redirectUri = `${baseUrl}/api/shopify/callback`
 
-    const secret = process.env.NEXTAUTH_SECRET
-    if (!secret) {
+    const state = signOAuthState({ storeId, userId: session.user.id })
+    if (!state) {
       return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 })
     }
-
-    const payload = Buffer.from(JSON.stringify({ storeId, userId: session.user.id })).toString('base64url')
-    const sig = crypto.createHmac('sha256', secret).update(payload).digest('hex')
-    const state = `${payload}.${sig}`
 
     const authUrl = new URL(`https://${shop}/admin/oauth/authorize`)
     authUrl.searchParams.set('client_id', apiKey)
