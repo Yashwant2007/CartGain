@@ -2,12 +2,14 @@ import {
   ruleBasedDecision,
   retentionOffer,
   detectFloorLeak,
+  detectPercentFloorLeak,
   detectSystemPromptLeak,
   buildSystemPrompt,
   type NegotiationContext,
 } from '../../services/bargain'
 import { extractPrice } from '../text'
 import { checkAbuse, clearAbuseState } from '../abuse'
+import { assertSessionOwnership } from '../session-bind'
 
 const baseCtx = (over: Partial<NegotiationContext> = {}): NegotiationContext => ({
   storeName: 'Test Store',
@@ -265,5 +267,88 @@ describe('Adversarial real-world inputs (abuse firewall + decision bounds)', () 
         expect(r.counterOffer!).toBeLessThanOrEqual(100)
       }
     }
+  })
+})
+
+// ════════════════════════════════════════════════════════════
+// PERCENT-PHRASED FLOOR REVEAL — "20% off" can mathematically leak
+// the floor just as loudly as naming the rupee amount. The numeric
+// guard can't see percentages, so detectPercentFloorLeak covers it.
+// ════════════════════════════════════════════════════════════
+describe('Percent-phrased floor leak (20% off = hidden floor)', () => {
+  // 1000 list, 800 floor → 20% off lands exactly on the floor
+  it('flags a discount percent that lands exactly on the floor', () => {
+    expect(detectPercentFloorLeak("I can give you 20% off, that's my best.", 800, 1000)).toBe(true)
+    expect(detectPercentFloorLeak("Best I can do is 20 percent.", 800, 1000)).toBe(true)
+    expect(detectPercentFloorLeak('20% off and not a rupee more.', 800, 1000)).toBe(true)
+  })
+
+  it('flags a percent within rounding tolerance of the floor', () => {
+    // 19% → 810 (within 1 of maxDiscount → still the floor in negotiation context)
+    expect(detectPercentFloorLeak('I could stretch to 19% off.', 800, 1000)).toBe(true)
+    expect(detectPercentFloorLeak('No, 21% is my absolute limit.', 800, 1000)).toBe(true)
+  })
+
+  it('leaves smaller-than-floor discounts unflagged', () => {
+    expect(detectPercentFloorLeak('I can do 10% off for you today.', 800, 1000)).toBe(false)
+    expect(detectPercentFloorLeak('15 percent off, take it or leave it.', 800, 1000)).toBe(false)
+  })
+
+  it('returns false when no originalPrice (cannot compute the leak)', () => {
+    expect(detectPercentFloorLeak('20% off.', 800, undefined)).toBe(false)
+  })
+
+  it('returns false when the math is invalid', () => {
+    expect(detectPercentFloorLeak('50% off!', 900, 800)).toBe(false)
+    expect(detectPercentFloorLeak('20% off.', 0, 1000)).toBe(false)
+  })
+})
+
+// ════════════════════════════════════════════════════════════
+// SESSION OWNERSHIP BINDING — a leaked sessionId alone must NOT be
+// enough to drive the session or farm the discount code.
+// ════════════════════════════════════════════════════════════
+describe('Session ownership binding (anti-hijack / anti-farm)', () => {
+  it('matches a session when the caller reproduces the fingerprint', () => {
+    const r = assertSessionOwnership(
+      { customerFingerprint: 'fp12345678', customerEmail: 'a@b.com', cartToken: 'tok' },
+      { customerFingerprint: 'fp12345678' },
+    )
+    expect(r.ok).toBe(true)
+  })
+
+  it('matches when the caller reproduces the email or cart token', () => {
+    expect(assertSessionOwnership(
+      { customerFingerprint: 'fpX', customerEmail: null, cartToken: 'cart-1' },
+      { cartToken: 'cart-1' },
+    ).ok).toBe(true)
+    expect(assertSessionOwnership(
+      { customerFingerprint: null, customerEmail: 'a@b.com', cartToken: null },
+      { customerEmail: 'a@b.com' },
+    ).ok).toBe(true)
+  })
+
+  it('rejects a stranger with only the sessionId (no matching identity)', () => {
+    const r = assertSessionOwnership(
+      { customerFingerprint: 'fp12345678', customerEmail: null, cartToken: null },
+      { customerFingerprint: 'other-fp', customerEmail: null, cartToken: null },
+    )
+    expect(r.ok).toBe(false)
+    expect(r.reason).toBeTruthy()
+  })
+
+  it('rejects no-identity callers against a bound session', () => {
+    const r = assertSessionOwnership(
+      { customerFingerprint: 'fp12345678', customerEmail: null, cartToken: null },
+      {},
+    )
+    expect(r.ok).toBe(false)
+  })
+
+  it('allows legacy / fully-anonymous sessions (nothing stored to verify)', () => {
+    expect(assertSessionOwnership(
+      { customerFingerprint: null, customerEmail: null, cartToken: null },
+      { customerFingerprint: 'whatever' },
+    ).ok).toBe(true)
   })
 })

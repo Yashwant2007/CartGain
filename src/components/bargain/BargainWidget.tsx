@@ -268,6 +268,17 @@ export default function BargainWidget({
     }
   }
 
+  // Caller identity sent with every offer/accept so the server can verify this
+  // browser still holds the session (blocks session hijacking + discount-code
+  // farming via a leaked/guessed sessionId).
+  function buyerIdentity() {
+    return {
+      customerFingerprint: bargainFingerprint(cartToken ?? ''),
+      cartToken: cartToken ?? undefined,
+      customerEmail: customerEmail ?? undefined,
+    }
+  }
+
   async function sendMessage(text?: string) {
     if (!sessionId) return
     const msg = (text ?? input).trim()
@@ -283,7 +294,7 @@ export default function BargainWidget({
       const res = await fetch(`${apiBase}/api/bargain/offer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, message: msg }),
+        body: JSON.stringify({ sessionId, message: msg, ...buyerIdentity() }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -324,7 +335,7 @@ export default function BargainWidget({
         await fetch(`${apiBase}/api/bargain/offer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, message: 'opt-out' }),
+          body: JSON.stringify({ sessionId, message: 'opt-out', ...buyerIdentity() }),
         })
       }
       setSessionEnded(true)
@@ -354,7 +365,7 @@ export default function BargainWidget({
       const res = await fetch(`${apiBase}/api/bargain/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
+        body: JSON.stringify({ sessionId, ...buyerIdentity() }),
       })
       const data = await res.json()
       if (!res.ok) {

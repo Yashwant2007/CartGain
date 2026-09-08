@@ -4,6 +4,7 @@ import { bargainOfferSchema, validateOrThrow, handleValidationError } from '@/li
 import { negotiateStep, ruleBasedDecision, buildOpeningMessage, buildCustomerContext, computeMinPrice, retentionOffer, type NegotiationContext } from '@/lib/services/bargain'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { detectWalkout, extractQuantity, extractPrice } from '@/lib/bargain/text'
+import { assertSessionOwnership } from '@/lib/bargain/session-bind'
 import { uiText, currencySymbolFor } from '@/lib/bargain/i18n'
 import { detectLanguage } from '@/lib/bargain/language'
 import { logDataAccess } from '@/lib/data-protection'
@@ -63,6 +64,19 @@ export async function POST(request: NextRequest) {
         data: { status: 'expired' },
       })
       return NextResponse.json({ message: 'Session expired' }, { status: 410 })
+    }
+
+    // Owner binding — the caller must reproduce at least one of the session's
+    // buyer identities (fingerprint / email / cart token). Blocks session
+    // hijacking: a stranger with a leaked sessionId can no longer read the
+    // transcript, burn attempts, or lock a deal on the real buyer's behalf.
+    const ownership = assertSessionOwnership(bargainSession, {
+      customerFingerprint: data.customerFingerprint,
+      customerEmail: data.customerEmail,
+      cartToken: data.cartToken,
+    })
+    if (!ownership.ok) {
+      return NextResponse.json({ message: ownership.reason }, { status: 403 })
     }
 
     const config = await prisma.bargainConfig.findUnique({

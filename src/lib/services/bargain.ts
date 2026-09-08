@@ -1280,7 +1280,7 @@ neutral, dramatic, professional, friendly, final`
 // Does the reply explicitly name a "floor/minimum" number that matches the
 // real backend floor? (The AI may legitimately make a final offer near the
 // floor, but it must NEVER announce that specific value as "the minimum".)
-export function detectFloorLeak(reply: string, minPrice: number): boolean {
+export function detectFloorLeak(reply: string, minPrice: number, originalPrice?: number): boolean {
   const lower = reply.toLowerCase()
   const leakPhrases = [
     /(?:floor|minimum|min(?:imum)?\s+price|lowest|base\s+price|cost\s+price|wholesale|my\s+limit|can'?t\s+go\s+lower|as\s+low\s+as)/i,
@@ -1292,6 +1292,24 @@ export function detectFloorLeak(reply: string, minPrice: number): boolean {
   return numbers.some(n => {
     const v = parseFloat(n.replace(/,/g, ''))
     return !Number.isNaN(v) && Math.abs(v - minPrice) <= Math.max(1, minPrice * 0.02)
+  })
+}
+
+// Does the reply reveal the floor as a discount percentage rather than an
+// amount? "I can give you 20% off, that's my best" mathematically leaks the
+// floor when 20% off the list price === the hidden minimum. The numeric check
+// above cannot see percentages, so this closes that second vector.
+export function detectPercentFloorLeak(reply: string, minPrice: number, originalPrice?: number): boolean {
+  if (originalPrice == null || originalPrice <= 0 || minPrice <= 0 || minPrice > originalPrice) {
+    return false
+  }
+  const maxDiscount = Math.round(((originalPrice - minPrice) / originalPrice) * 100)
+  if (maxDiscount <= 0) return false
+  const pctMatches = reply.match(/(\d{1,3})\s*(?:%|percent|per\s+cent)/gi)
+  if (!pctMatches) return false
+  return pctMatches.some((m) => {
+    const v = parseInt(m.replace(/[^0-9]/g, ''), 10)
+    return !Number.isNaN(v) && Math.abs(v - maxDiscount) <= 1
   })
 }
 
@@ -1441,8 +1459,9 @@ export async function negotiateStep(
           : buildOpeningMessage(ctx))
 
     const floorLeaked = detectFloorLeak(reply, ctx.minPrice)
+    const percentLeaked = detectPercentFloorLeak(reply, ctx.minPrice, ctx.originalPrice)
     const promptLeaked = detectSystemPromptLeak(reply)
-    const leaked = floorLeaked || promptLeaked
+    const leaked = floorLeaked || percentLeaked || promptLeaked
     if (leaked) {
       reply = (LEAK_SAFE_REPLY[ctx.persona] ?? LEAK_SAFE_REPLY.friendly_shopkeeper)
     }
@@ -1463,7 +1482,7 @@ export async function negotiateStep(
           concessionCount: conversationAnalysis.concessionCount,
         },
         leakGuarded: leaked || undefined,
-        leakReason: leaked ? (floorLeaked ? 'floor_reveal' : 'system_prompt_reveal') : undefined,
+        leakReason: leaked ? (floorLeaked ? 'floor_reveal' : percentLeaked ? 'percent_floor_reveal' : 'system_prompt_reveal') : undefined,
       },
     }
   } catch (err: any) {

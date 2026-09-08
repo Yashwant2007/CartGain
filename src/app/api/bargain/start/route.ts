@@ -98,20 +98,25 @@ export async function POST(request: NextRequest) {
     // Block duplicate active sessions for the same product+buyer (prevents attempt
     // abuse via incognito / new tabs / fresh browsers). The identifier is the
     // customer fingerprint (stable per-device+cart, see the storefront widget),
-    // falling back to the customer email when no fingerprint is sent. Anonymous
-    // browsers without either still get a per-store+product guard below.
+    // the Shopify cart token (stable across browsers for the same shared cart
+    // link — closes the fresh-incognito-on-the-same-discount-link reset), or the
+    // customer email, whichever the caller presents. A returning buyer therefore
+    // always re-joins their existing session instead of minting fresh attempts.
+    // Fully anonymous browsers without any identifier still get the per-store+
+    // product singleton guard below.
     const buyerId = data.customerFingerprint || (data.customerEmail ? `email:${data.customerEmail}` : null)
+    const identityClauses = [
+      ...(data.customerFingerprint ? [{ customerFingerprint: data.customerFingerprint }] : []),
+      ...(data.cartToken ? [{ cartToken: data.cartToken }] : []),
+      ...(data.customerEmail ? [{ customerEmail: data.customerEmail }] : []),
+    ]
     const existing = await prisma.bargainSession.findFirst({
       where: {
         storeId: data.storeId,
         shopifyProductId: data.shopifyProductId,
         status: 'active',
         expiredAt: { gt: new Date() },
-        ...(data.customerFingerprint
-          ? { customerFingerprint: data.customerFingerprint }
-          : data.customerEmail
-          ? { customerEmail: data.customerEmail }
-          : {}),
+        ...(identityClauses.length > 0 ? { OR: identityClauses } : {}),
       },
       orderBy: { startedAt: 'desc' },
       include: { messages: { orderBy: { createdAt: 'asc' }, take: 1 } },

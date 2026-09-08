@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { bargainAcceptSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { assertSessionOwnership } from '@/lib/bargain/session-bind'
 import { getBargainGate, decideDealMode, recordBargainDealOps, BARGAIN_DEALS_EXHAUSTED } from '@/lib/bargain/gate'
 
 export const dynamic = 'force-dynamic'
@@ -27,6 +28,18 @@ export async function POST(request: NextRequest) {
     })
     if (!bargainSession) {
       return NextResponse.json({ message: 'Bargain session not found' }, { status: 404 })
+    }
+
+    // Owner binding — the caller must reproduce at least one of the session's
+    // buyer identities, otherwise discount-code replay would be trivially
+    // farmed by anyone with the sessionId.
+    const ownership = assertSessionOwnership(bargainSession, {
+      customerFingerprint: data.customerFingerprint,
+      customerEmail: data.customerEmail,
+      cartToken: data.cartToken,
+    })
+    if (!ownership.ok) {
+      return NextResponse.json({ message: ownership.reason }, { status: 403 })
     }
 
     // Idempotent replay — already accepted sessions resurface the issued code
