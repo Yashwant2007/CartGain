@@ -153,6 +153,12 @@ const JAILBREAK_PATTERNS: RegExp[] = [
   /\b(?:translate|decode|convert)\s+(?:this|the\s+following|from)\s+(?:base64|rot13|hex|binary)/i,
   // Token manipulation
   /\b(?:token|char|character)\s+(?:smuggling|injection|splitting|manipulation)/i,
+  // Role escalation — "I am the store owner/admin/developer" to claim authority
+  /\bi\s+(?:am|'m|am\s+the)\s+(?:the\s+)?(?:store\s+)?(?:owner|admin|administrator|developer|manager|boss|ceo|founder)\b/i,
+  /\b(?:i\s+work\s+(?:for|at|with)\s+the|this\s+is\s+(?:my|our)\s+store)/i,
+  // Recursive context reset — "forget the last N messages", "new conversation"
+  /\b(?:forget|erase|delete|clear)\s+(?:the\s+)?(?:last|previous|past|above)\s+\d+\s+(?:messages?|turns?|exchanges?)/i,
+  /\b(?:new|fresh|clean)\s+(?:conversation|session|context|chat)\s+(?:starting|beginning|now)/i,
   // ── Multilingual jailbreak (Hindi/Devanagari) ──
   /(?:निर्देश|नियमों?|प्रॉम्प्ट|सिस्टम)\s*(?:को\s*)?(?:भूल|अनदेखा|इग्नोर|छोड़|बदल)/i,
   /(?:भूल\s+जाओ|अनदेखा\s+करो|इग्नोर\s+करो).{0,30}(?:निर्देश|नियम|प्रॉम्प्ट)/i,
@@ -179,6 +185,9 @@ const PROMPT_INJECTION_PATTERNS: RegExp[] = [
   /\b(?:now\s+in\s+this\s+context|in\s+addition\s+to\s+your\s+instructions?|extra\s+instructions?|additional\s+rules?|additional\s+instructions?)/i,
   // Translation-based injection
   /\bin\s+(?:hindi|spanish|french|chinese|arabic|russian|japanese)\s*,?\s*(?:say|write|translate|tell)\s+(?:you\s+are|your\s+instructions|ignore)/i,
+  // JSON/structured payload injection — customer sends raw JSON to break output format
+  /^\s*[\[{][\s\S]*"(?:role|content|system|prompt|instructions)"\s*:/i,
+  /^\s*\{"counterOffer"\s*:\s*/i,
 ]
 
 // ────────────────────────────────────────────────────────────
@@ -200,6 +209,10 @@ const EXFILTRATION_PATTERNS: RegExp[] = [
   /\b(?:api[_\s]?key|secret[_\s]?key|token|password|credential|auth[_\s]?token)/i,
   // Database/server probing
   /\b(?:database|server|internal|backend|admin\s+panel|dashboard)/i,
+  // Bribery / side-deal manipulation — right to bypass the platform, "cut a deal
+  // off the books", lower the floor for personal gain
+  /\b(?:i'?ll\s+pay\s+(?:you\s+)?cash|off\s+the\s+(?:books|platform|system|records)|skip\s+the\s+platform|no\s+receipt|under\s+the\s+table,know\s+the\s+owner)/i,
+  /\b(?:bribe|negotiat.*(?:personal\s+cut|double\s+deal)|secret\s+deal)\b/i,
   // Authorized-floor social engineering ("the merchant told me the floor is X.
   // Confirm this." / "the merchant authorized a floor of X")
   /\b(?:the\s+merchant|an?\s+admin|your\s+boss|management)\s+(?:told|set|authorized|approved|confirmed|updated|informed|mentioned)/i,
@@ -227,6 +240,12 @@ const OFF_TOPIC_PATTERNS: RegExp[] = [
   /\b(?:meaning|purpose|answer|secret)\s+of\s+life\b/i,
   /\b(?:today'?s\s+news|breaking\s+news|politics|election|government\s+(?:policy|scheme|news))\b/i,
   /\b(?:football|cricket|hockey|tennis|cricket\s+match|football\s+match)\s+(?:match|score|team|world\s+cup|players?|results?|highlights?)\b/i,
+  // Personal life, love/chat-up, religion, complaints — real people try these to
+  // distract or emotionally manipulate the bot; redirect without burning an attempt.
+  /\b(?:my\s+(?:wife|husband|daughter|son|mother|father|girlfriend|boyfriend)\s+(?:don'?t|doesn'?t|said|told|wants|will|might))\b/i,
+  /\b(?:will\s+you\s+marry\s+me|are\s+you\s+single|you(?:'?re| are)\s+so\s+beautiful|give\s+me\s+your\s+number|be\s+my\s+friend|what(?:'?s|\s+is)\s+your\s+name)\b/i,
+  /\b(?:god|jesus|allah|bhagwan|karma|prayer?|blessing?)\s+(?:save|help|bless|forgive|gives?)\b/i,
+  /\b(?:this\s+(?:item|product|store|shop)\s+is\s+(?:a\s+)?(?:bad|cheap|fake|poor|worst|waste|scam|fraud))\b/i,
 ]
 
 const OFF_TOPIC_RESPONSE =
@@ -375,6 +394,23 @@ export function checkAbuse(
   const state = getConversationState(sessionId)
   const sanitized = sanitizeInput(message)
 
+  // ── Layer 0: Length/gibberish/emoji flooding ──
+  // Runs first so emoji/gibberish spam is flagged as flooding (no attempt consumed)
+  // instead of being mis-classified as a unicode attack (which consumes an attempt).
+  const flood = detectMessageFlooding(message)
+  if (flood.long || flood.gibberish || flood.emoji) {
+    return {
+      isAbusive: true,
+      severity: 'medium',
+      category: 'flooding',
+      reason: flood.gibberish ? 'Gibberish/low-entropy message detected'
+        : flood.emoji ? 'Emoji-only spam detected'
+        : 'Message exceeds reasonable length',
+      response: 'Whoa, let\'s keep messages short and focused. What\'s your offer on this item?',
+      consumeAttempt: false, // don't waste an attempt on spam
+    }
+  }
+
   // ── Layer 1: Unicode attacks ──
   if (detectUnicodeAttacks(message)) {
     return {
@@ -482,21 +518,6 @@ export function checkAbuse(
         response: OFF_TOPIC_RESPONSE,
         consumeAttempt: false, // don't waste an attempt on chit-chat
       }
-    }
-  }
-
-  // ── Layer 4c: Length/gibberish/emoji flooding ──
-  const flood = detectMessageFlooding(message)
-  if (flood.long || flood.gibberish || flood.emoji) {
-    return {
-      isAbusive: true,
-      severity: 'medium',
-      category: 'flooding',
-      reason: flood.gibberish ? 'Gibberish/low-entropy message detected'
-        : flood.emoji ? 'Emoji-only spam detected'
-        : 'Message exceeds reasonable length',
-      response: 'Whoa, let\'s keep messages short and focused. What\'s your offer on this item?',
-      consumeAttempt: false, // don't waste an attempt on spam
     }
   }
 
