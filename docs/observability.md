@@ -105,9 +105,9 @@ comes from Supabase's managed backups + PITR.
 
 ## 6. Uptime monitoring
 
-Scheduled in the Vercel dashboard: `vercel.json` cron hits `/api/health` every
-15 minutes (failures surface as cron errors). UptimeRobot/Cloudflare health-check
-can poll the same JSON endpoint (expect `200`).
+Scheduled in the Vercel dashboard: `vercel.json` cron hits `/api/health` daily at
+06:00 UTC (Hobby plan caps crons at one per day). UptimeRobot/Cloudflare
+health-check can poll the same JSON endpoint (expect `200`).
 
 Operational checklist (monthly):
 - [ ] `/api/health` green; `release` short-sha matches latest deploy.
