@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
+import { computeMinPrice } from '@/lib/services/bargain'
+import { fetchShopifyProductPrice } from '@/lib/shopify'
+import { buildExecutablePrice, clampOrderPercentForProduct } from '@/lib/financial-safety'
 import { redisIncr, redisExpire } from '@/lib/redis'
 
 export const dynamic = 'force-dynamic'
@@ -51,7 +54,7 @@ export async function POST(request: NextRequest) {
   const headers = corsHeaders(request.headers.get('origin'))
   try {
     const body = await request.json()
-    const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, discountPercent, code, orderLevel } = body
+    const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, discountPercent, code, orderLevel, bulkQuantity } = body
 
     if (!shopDomain || !originalPrice || !finalPrice || !code) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400, headers })
@@ -75,10 +78,69 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify the discount percent matches
-    const calculatedPercent = Math.round((1 - finalPrice / originalPrice) * 100)
-    if (discountPercent && Math.abs(discountPercent - calculatedPercent) > 1) {
-      return NextResponse.json({ message: 'Discount percent mismatch' }, { status: 400, headers })
+    const rawBulk = bulkQuantity != null ? Math.floor(Number(bulkQuantity)) : null
+    const safeBulk = rawBulk != null && Number.isFinite(rawBulk) && rawBulk >= 1 ? rawBulk : null
+
+    // ── FINANCIAL SAFETY ──
+    // This endpoint mints codes purely from client-supplied values (the Checkout
+    // UI Extension cannot carry a bargain session), so the merchant floor must be
+    // enforced HERE, mathematically, from the AUTHORITATIVE current Shopify price.
+    // 1) Re-fetch the price; reject when the client price drifted noticeably.
+    const currentPrice =
+      (await fetchShopifyProductPrice(store, shopifyProductId, variantId || null)) ?? null
+    if (currentPrice == null) {
+      return NextResponse.json({ message: 'Could not verify current product price' }, { status: 503, headers })
+    }
+    const ratio = originalPrice / currentPrice
+    if (ratio < 0.995 || ratio > 1.005) {
+      return NextResponse.json({ message: 'Price mismatch — product price has changed' }, { status: 409, headers })
+    }
+
+    // 2) Floor derived server-side from the merchant's own config/product overrides.
+    const { minPrice } = await computeMinPrice({
+      storeId: store.id,
+      shopifyProductId,
+      originalPrice: currentPrice,
+      bulkQuantity: safeBulk ?? undefined,
+    })
+
+    let calculatedPercent: number
+    let finalPriceSafe: number
+    if (orderLevel) {
+      // An order-level percentage discounts the WHOLE basket (unrelated items
+      // too), so clamp its depth to the featured product's margin floor. This is
+      // what keeps a "₹1 finalPrice" attack from converting into 99%-off-everything.
+      const clientPercent = discountPercent != null
+        ? Number(discountPercent)
+        : 100 - (Number(finalPrice) / currentPrice) * 100
+      const clamped = clampOrderPercentForProduct({
+        originalPrice: currentPrice,
+        floorPrice: minPrice,
+        requestedPercent: clientPercent,
+      })
+      if (!clamped.ok) {
+        return NextResponse.json(
+          { message: `Discount exceeds merchant floor (max ${clamped.maxPercent.toFixed(2)}% off)` },
+          { status: 409, headers }
+        )
+      }
+      calculatedPercent = clamped.percent
+      finalPriceSafe = currentPrice * (1 - clamped.percent / 100)
+    } else {
+      const executable = buildExecutablePrice({
+        originalPrice: currentPrice,
+        finalPrice: Number(finalPrice),
+        floorPrice: minPrice,
+        bulkQuantity: safeBulk,
+      })
+      if (!executable.ok) {
+        return NextResponse.json(
+          { message: 'Price mismatch — discount would breach merchant floor' },
+          { status: 409, headers }
+        )
+      }
+      calculatedPercent = executable.discountPercent
+      finalPriceSafe = executable.finalPrice
     }
 
     // Generate the discount code in Shopify
@@ -86,10 +148,12 @@ export async function POST(request: NextRequest) {
       store,
       shopifyProductId: orderLevel ? null : shopifyProductId,
       variantId: orderLevel ? null : variantId || null,
-      originalPrice,
-      finalPrice,
+      originalPrice: currentPrice,
+      finalPrice: finalPriceSafe,
       discountPercent: calculatedPercent,
       code,
+      bulkQuantity: safeBulk,
+      floorPrice: minPrice,
     })
 
     if (result.status === 'failed') {

@@ -225,6 +225,10 @@ export async function setupShopifyWebhooks(
     'checkouts/create',
     'checkouts/update',
     'orders/create',
+    // Revenue netting — Day 8-10: refunded/cancelled recoveries must be netted
+    // out of recognized revenue (see src/lib/attribution.ts).
+    'orders/cancelled',
+    'refunds/create',
     // Uninstall / privacy lifecycle — required for Shopify app review and to
     // honor data deletion obligations when a merchant uninstalls. These let the
     // app purge the merchant's and their customers' data on schedule.

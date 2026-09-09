@@ -177,7 +177,7 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
       orderBy: { createdAt: 'desc' },
     })
 
-    let cursor: string | undefined
+let cursor: string | undefined
     let cartsProcessedForStore = 0
 
     while (cartsProcessedForStore < MAX_CARTS_PER_STORE) {
@@ -198,26 +198,41 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
 
       if (carts.length === 0) break
 
-      const customerMsgCounts = await getCustomerMessageCounts(store.id, carts)
+      // ── Same-batch customer dedupe ──────────────────────────────────────
+      // The cart-token / checkout-token dual-family rows can represent the SAME
+      // abandonment as two Cart rows for one customer. At most ONE message per
+      // customer per batch, otherwise a recovery cycle can spam the same buyer
+      // twice. Trade-off (documented in docs): two genuinely different carts of
+      // the same customer in one batch get queued to the next cycle.
+      const seenCustomers = new Set<string>()
+      const candidates = carts.filter((cart: any) => {
+        const key = (cart.customerEmail || cart.customerPhone || '').toLowerCase().trim()
+        if (!key) return true
+        if (seenCustomers.has(key)) return false
+        seenCustomers.add(key)
+        return true
+      })
+
+      const customerMsgCounts = await getCustomerMessageCounts(store.id, candidates)
       const cartResults = await Promise.allSettled(
-        carts.map(cart => processSingleCart(cart, {
+        candidates.map(cart => processSingleCart(cart, {
           campaign, store, subscription,
           sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest,
           optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts,
         }))
       )
 
-      for (const result of cartResults) {
-        if (result.status === 'fulfilled') {
-          sent += result.value.sent
-          failed += result.value.failed
+      for (const cartResult of cartResults) {
+        if (cartResult.status === 'fulfilled') {
+          sent += cartResult.value.sent
+          failed += cartResult.value.failed
         } else {
           failed++
-          console.error(`Cart processing error:`, result.reason)
+          console.error(`Cart processing error:`, cartResult.reason)
         }
       }
 
-      cartsProcessedForStore += carts.length
+      cartsProcessedForStore += candidates.length
       cursor = carts[carts.length - 1].id
     }
 

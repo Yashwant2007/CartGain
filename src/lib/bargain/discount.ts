@@ -1,5 +1,6 @@
 import { queryShopifyGraphQL } from '@/lib/shopify-graphql'
 import { getAccessToken } from '@/lib/shopify'
+import { exactPercentOff, toMinorUnits, fromMinorUnits, isAtOrAboveFloor } from '@/lib/financial-safety'
 
 // regenerate types for safety
 type Store = {
@@ -31,6 +32,13 @@ export type GeneratedBargainDiscount = {
  *   `percentage` off the original price, bringing the customer to `finalPrice`.
  * - scope 'order' (default when no product given): applies percentage off the
  *   whole order — used by the Thank-you "next order" bargain.
+ * - CRITICAL — FINANCIAL SAFETY (see src/lib/financial-safety.ts):
+ *   The discount percent is the EXACT percent derived from
+ *   (originalPrice, finalPrice, floorPrice) in integer minor units. It is never
+ *   rounded to an integer (integer rounding could drop the charged price below
+ *   the merchant floor). The `minimumSubtotal` is bound to
+ *   `originalPrice * bulkQuantity` so a bulk-negotiated per-unit price CANNOT be
+ *   applied to a 1-unit purchase below the single-unit floor.
  * - CRITICAL: If customerEmail or cartToken is provided, the code is tagged
  *   with metafields so it can only be used by that specific customer.
  *   Prevents code sharing on Telegram/deals groups.
@@ -45,8 +53,24 @@ export async function generateBargainDiscountCode(opts: {
   code: string
   customerEmail?: string | null
   cartToken?: string | null
+  bulkQuantity?: number | null
+  floorPrice?: number | null
 }): Promise<GeneratedBargainDiscount> {
-  const { store, shopifyProductId, variantId, originalPrice, finalPrice, discountPercent, code, customerEmail, cartToken } = opts
+  const { store, shopifyProductId, variantId, originalPrice, finalPrice, code, customerEmail, cartToken } = opts
+  const bulkQuantity = Math.max(1, Math.floor(opts.bulkQuantity ?? 1))
+
+  // Re-derive the percent and re-verify the floor in minor units — the discount
+  // generator NEVER trusts a rounded percent from the caller.
+  const discountPercent = exactPercentOff(originalPrice, finalPrice)
+  const floorMinor = toMinorUnits(opts.floorPrice ?? 0)
+  if (opts.floorPrice != null && floorMinor > 0) {
+    const chargeMinor = Math.round(toMinorUnits(originalPrice) * (1 - discountPercent / 100))
+    if (!isAtOrAboveFloor(chargeMinor, floorMinor)) {
+      return { code, status: 'failed', error: 'Discount would breach merchant floor' }
+    }
+  }
+  const minimumSubtotal = fromMinorUnits(toMinorUnits(originalPrice) * bulkQuantity)
+
   const scope: 'order' | 'product' | 'variant' = variantId
     ? 'variant'
     : shopifyProductId
@@ -119,9 +143,10 @@ export async function generateBargainDiscountCode(opts: {
       value: {
         percentage: discountPercent,
       },
-      minimumSubtotal: originalPrice,
-      summary: `Auto-generated bargain: ${discountPercent}% off (₹${finalPrice.toFixed(2)} from ₹${originalPrice.toFixed(2)})`,
-      ...(customerEmail ? { customerId: null } : {}), // will set metafields instead
+      // FINANCIAL SAFETY: min subtotal bound to the negotiated quantity so a
+      // bulk-negotiated unit price can't be applied to a smaller basket.
+      minimumSubtotal,
+      summary: `Bargain deal: ${discountPercent}% off (${store.currency} ${finalPrice.toFixed(2)} from ${store.currency} ${originalPrice.toFixed(2)})`,
     },
   }
 

@@ -321,7 +321,12 @@ export async function POST(request: NextRequest) {
       prisma.bargainMessage.create({
         data: {
           sessionId: bargainSession.id, role: 'ai', content: result.reply,
-          offeredPrice: result.counterOffer ?? null,
+          // Financial safety: a pure-chat reply (no AI counter) must NOT
+          // persist `offeredPrice` — otherwise `minPrice` would be written as an
+          // accept-able offer and the customer could lock the floor without the
+          // AI ever offering it. Only real counters (decision counter/accept)
+          // carry an offeredPrice.
+          offeredPrice: result.decision === 'chat' ? null : (result.counterOffer ?? null),
           metadata: { decision: result.decision, tactic: result.tactic, sentiment: result.sentiment, ...(result.metadata ?? {}) } as any,
         },
       }),
@@ -338,7 +343,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       reply: result.reply,
       decision: result.decision,
-      counterOffer: result.counterOffer ?? null,
+      counterOffer: result.decision === 'chat' ? null : (result.counterOffer ?? null),
       attemptsRemaining: effectiveAttemptsRemaining,
       sessionStatus,
       finalPrice: updatedSession.finalPrice,

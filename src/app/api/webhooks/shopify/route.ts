@@ -4,6 +4,7 @@ import prisma from '@/lib/db'
 import { logDataAccess } from '@/lib/data-protection'
 import { verifyShopifyWebhook } from '@/lib/shopify'
 import { purgeStoreData, redactCustomer } from '@/lib/data-deletion'
+import { computeRefundNetting, isMessageAttributable } from '@/lib/attribution'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS, resolvePlanId, getPlan } from '@/lib/payment'
 import { sendAlertOnError } from '@/lib/alerter'
 import { track } from '@/lib/analytics/track'
@@ -110,6 +111,12 @@ export async function POST(request: NextRequest) {
         break
       case 'orders/create':
         safeRun('order processing', () => processOrderCreate(data, store, shopDomain))
+        break
+      case 'orders/cancelled':
+        safeRun('order cancelled netting', () => handleOrderCancelled(data, store, shopDomain))
+        break
+      case 'refunds/create':
+        safeRun('order refund netting', () => handleRefundCreate(data, store, shopDomain))
         break
       case 'app/uninstalled':
         safeRun('app uninstall purge', () => handleAppUninstalled(store))
@@ -293,33 +300,39 @@ async function handleCheckout(data: any, store: any, domain: string) {
 }
 
 async function processOrderCreate(data: any, store: any, domain: string) {
-  const cartToken = data.token || data.cart_token
-  if (!cartToken) return
+  // A Shopify orders/create payload carries BOTH identifiers: `token` is the
+  // checkout token (matches carts recorded from checkouts/create — the same
+  // value we stored as cartId) and `cart_token` is the cart token (matches
+  // carts/update rows). Try the preferred one first, fall back to the other so
+  // one logical abandonment is never missed because it arrived via the other
+  // webhook family. Only ONE Cart row ever matches a single order.
+  const preferredToken = data.token || data.cart_token
+  const fallbackToken = preferredToken === data.token ? (data.cart_token || null) : (data.token || null)
+  let cart = preferredToken
+    ? await prisma.cart.findUnique({
+        where: { storeId_cartId: { storeId: store.id, cartId: preferredToken } },
+      })
+    : null
+  if (!cart && fallbackToken) {
+    cart = await prisma.cart.findUnique({
+      where: { storeId_cartId: { storeId: store.id, cartId: fallbackToken } },
+    })
+  }
+  if (!cart) return
 
   await logDataAccess({
     actorType: 'system',
     action: 'read',
     resourceType: 'order',
-    resourceId: String(data.id || cartToken),
+    resourceId: String(data.id || preferredToken || fallbackToken || ''),
     purpose: 'shopify webhook order attribution',
     actorId: store.userId,
     metadata: {
       shopDomain: domain,
-      cartToken: Boolean(cartToken),
+      cartToken: Boolean(preferredToken),
       totalPrice: data.total_price,
     },
   })
-
-  const cart = await prisma.cart.findUnique({
-    where: {
-      storeId_cartId: {
-        storeId: store.id,
-        cartId: cartToken,
-      },
-    },
-  })
-
-  if (!cart) return
 
   const grossAmount = parseFloat(data.total_price || '0')
   const orderCreatedAt = data.created_at ? new Date(data.created_at) : new Date()
@@ -340,13 +353,20 @@ async function processOrderCreate(data: any, store: any, domain: string) {
   const attributingMessage = await prisma.message.findFirst({
     where: {
       cartId: cart.id,
-      status: { in: ['sent', 'delivered'] },
+      status: { in: ['sent', 'delivered'] as const },
+      // Query a superset window; the canonical eligibility predicate then makes
+      // the final call so the rule lives in ONE place (see attribution.ts).
       sentAt: { lte: orderCreatedAt, gte: windowStart },
     },
     orderBy: { sentAt: 'desc' },
   })
 
-  if (!attributingMessage) {
+  // Canonical attribution gate — same rules as src/lib/attribution.ts.
+  if (!attributingMessage || !isMessageAttributable({
+    messageStatus: attributingMessage.status,
+    sentAt: attributingMessage.sentAt,
+    orderCreatedAt,
+  })) {
     console.log(`Order for cart ${cart.id}: no recovery message in ${ATTRIBUTION_WINDOW_HOURS}h window — converted but NOT credited`)
     return
   }
@@ -388,13 +408,15 @@ async function processOrderCreate(data: any, store: any, domain: string) {
     where: { userId_date: { userId: store.userId, date: today } },
     update: {
       cartsRecovered: { increment: 1 },
-      revenueRecovered: { increment: grossAmount },
+      // Recognized revenue = what the merchant actually collects (net of all
+      // order discounts), not the gross order total (tax/shipping excluded).
+      revenueRecovered: { increment: netAmount },
     },
     create: {
       userId: store.userId,
       date: today,
       cartsRecovered: 1,
-      revenueRecovered: grossAmount,
+      revenueRecovered: netAmount,
     },
   })
 
@@ -435,6 +457,138 @@ interface AccrueParams {
   channel: string
   attributedMessageId: string
   recoveredAt: Date
+}
+
+// ── Refund / cancellation netting ───────────────────────────────────────────
+// A recovery that is later refunded or cancelled is NOT recognized revenue:
+// reporting must never permanently claim it. Recognized revenue is defined as
+//
+//   recognizedNet = max(0, netRevenue − cumulativeRefunded)
+//
+// where cumulativeRefunded is the gross amount returned to the customer
+// (cumulative across refunds/create webhooks and full on orders/cancelled).
+// References: Day 8–10 revenue-engine adversarial testing, findings E3.
+async function applyRefundToRecoveredCart(store: any, shopifyOrderId: string, refundAmount: number, reason: 'refund' | 'cancelled') {
+  const recovered = await prisma.recoveredCart.findUnique({
+    where: { shopifyOrderId },
+    include: { revenueShareEvent: true },
+  })
+  if (!recovered) return
+
+  const { newTotalRefunded, deltaRefunded, recognizedNet, fullyRefunded, analyticsRevenueDelta, analyticsCartsDelta } =
+    computeRefundNetting({
+      recoveredValue: recovered.recoveredValue || 0,
+      netRevenue: recovered.netRevenue || 0,
+      prevTotalRefunded: recovered.totalRefunded || 0,
+      refundAmount,
+      reason,
+    })
+
+  if (deltaRefunded <= 0) {
+    console.log(`Refund webhook for order ${shopifyOrderId}: nothing new to net (already netted)`)
+    return
+  }
+
+  const today = new Date(new Date().toDateString())
+
+  // Revenue-share reversal — only when the event has NOT been invoiced yet.
+  // Invoiced events are frozen (billing has already run); those surface as an
+  // ops alert instead of silently mutating closed books.
+  let revShareDelta = 0
+  const event = recovered.revenueShareEvent
+  if (event && !fullyInvoiced(event)) {
+    const pct = event.revSharePercent || 0
+    const newAmount = (recognizedNet * pct) / 100
+    revShareDelta = Math.max(0, (event.revShareAmount || 0) - newAmount)
+  } else if (event && fullyInvoiced(event) && deltaRefunded > 0) {
+    await sendAlertOnError(
+      `Refund for invoiced revenue share — order ${shopifyOrderId}`,
+      new Error(`RecoveredCart ${recovered.id} refunded ₹${deltaRefunded} but its revenue share event is already invoiced (invoiceId=${event.invoiceId}). Needs manual billing reconciliation.`),
+      { storeDomain: store.domain, orderId: shopifyOrderId }
+    ).catch(() => {})
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.recoveredCart.update({
+      where: { id: recovered.id },
+      data: {
+        netRevenue: recognizedNet,
+        totalRefunded: newTotalRefunded,
+        refundStatus: fullyRefunded ? 'fully_refunded' : 'partially_refunded',
+      },
+    })
+    if (event && revShareDelta > 0) {
+      await tx.revenueShareEvent.update({
+        where: { id: event.id },
+        data: {
+          netAmount: recognizedNet,
+          revShareAmount: (recognizedNet * (event.revSharePercent || 0)) / 100,
+        },
+      })
+      await tx.subscription.update({
+        where: { id: event.subscriptionId },
+        data: { revenueShareAccrued: { decrement: revShareDelta } },
+      })
+    }
+    if (analyticsRevenueDelta > 0) {
+      const dbDate = today
+      const row = await tx.analytics.findUnique({
+        where: { userId_date: { userId: store.userId, date: dbDate } },
+      })
+      if (row) {
+        const nextRevenue = Math.max(0, (row.revenueRecovered || 0) - analyticsRevenueDelta)
+        const nextCarts = fullyRefunded
+          ? Math.max(0, (row.cartsRecovered || 0) + analyticsCartsDelta)
+          : (row.cartsRecovered || 0)
+        await tx.analytics.update({
+          where: { userId_date: { userId: store.userId, date: dbDate } },
+          data: { revenueRecovered: nextRevenue, cartsRecovered: nextCarts },
+        })
+      }
+    }
+  })
+
+  console.log(
+    `Refund netted: order ${shopifyOrderId} ${reason} — ${fullyRefunded ? 'fully' : 'partially'} ` +
+    `(refunded ${newTotalRefunded.toFixed(2)} of ${(recovered.recoveredValue || 0).toFixed(2)}, recognized revenue now ${recognizedNet.toFixed(2)}, revShare reversed ₹${revShareDelta.toFixed(2)})`
+  )
+}
+
+function fullyInvoiced(event: any): boolean {
+  return Boolean(event?.invoiceId)
+}
+
+async function handleOrderCancelled(data: any, store: any, domain: string) {
+  const orderId = data.id ? String(data.id) : data.order_id ? String(data.order_id) : null
+  if (!orderId) {
+    console.log(`orders/cancelled from ${domain}: no order id`)
+    return
+  }
+  await applyRefundToRecoveredCart(store, orderId, 0, 'cancelled')
+}
+
+async function handleRefundCreate(data: any, store: any, domain: string) {
+  const orderId = data.order_id ? String(data.order_id) : data.id ? String(data.id) : null
+  if (!orderId) {
+    console.log(`refunds/create from ${domain}: no order id`)
+    return
+  }
+  const transactions = Array.isArray(data.refund?.transactions) ? data.refund.transactions : Array.isArray(data.transactions) ? data.transactions : []
+  let refundAmount = 0
+  for (const t of transactions) {
+    if (t.status === 'success') {
+      refundAmount += parseFloat(t.amount || '0')
+    }
+  }
+  // Some payloads nest the amount on the refund head itself.
+  if (refundAmount === 0 && data.refund?.amount) {
+    refundAmount = parseFloat(data.refund.amount || '0')
+  }
+  if (refundAmount <= 0) {
+    console.log(`refunds/create from ${domain}: no successful refund amount for order ${orderId}`)
+    return
+  }
+  await applyRefundToRecoveredCart(store, orderId, refundAmount, 'refund')
 }
 
 async function accrueRevenueShare(params: AccrueParams) {

@@ -210,12 +210,19 @@ model RecoveredCart {
   discountAmount  Float     @default(0)
   netRevenue      Float
   shopifyOrderId  String?
+  // Refund netting — recognized revenue is `netRevenue` after cumulative refunds.
+  refundStatus    String    @default("none") // none | partially_refunded | fully_refunded
+  totalRefunded   Float     @default(0)      // cumulative gross refunded across webhooks
 
   store             Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
   cart              Cart               @relation(fields: [cartId], references: [id], onDelete: Cascade, map: "fk_cart")
   revenueShareEvent RevenueShareEvent?
 
   @@index([storeId])
+  // One order = one credit, ever. Guards double-credit when a single Shopify
+  // order payload could be matched against multiple Cart rows (the cart-token
+  // / checkout-token dual-family rows). Postgres allows multiple NULLs.
+  @@unique([shopifyOrderId])
 }
 
 model Analytics {
@@ -340,6 +347,8 @@ model BargainSession {
   originalPrice     Float
   currentOffer      Float     // latest offer from customer
   finalPrice        Float?    // agreed price (null = no deal)
+  bargainFloor      Float?    // merchant floor the deal was checked against at accept (server-derived snapshot)
+  bulkQuantity      Int?      // quantity the discount code is bound to (null = single unit)
   discountCode      String?   // Shopify discount code if accepted
   discountCodeCustomerEmail String?   // email the code was bound to (prevents sharing)
   discountCodeCartToken String?    // cartToken the code was bound to (prevents sharing)
