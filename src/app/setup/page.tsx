@@ -7,6 +7,7 @@ import { Mail, Lock, User, ArrowRight, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Suspense } from 'react'
+import { trackClientEvent } from '@/lib/analytics/client'
 
 export default function SetupPage() {
   return (
@@ -66,7 +67,10 @@ function SetupContent() {
         if ((err as Error).name === 'AbortError') return
         // Show setup form
       }
-      if (!controller.signal.aborted) setChecking(false)
+      if (!controller.signal.aborted) {
+        setChecking(false)
+        trackClientEvent('cartgain_onboarding_started')
+      }
     }
     checkStore()
     return () => controller.abort()
@@ -125,6 +129,7 @@ function SetupContent() {
 
       router.push('/dashboard')
       router.refresh()
+      trackClientEvent('cartgain_onboarding_completed')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {

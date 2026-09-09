@@ -28,7 +28,9 @@ export async function sendSMS({ to, body }: SendSMSOptions): Promise<{
       route: '4',
       country: '91',
     })
-    const res = await fetch(`https://api.msg91.com/api/sendhttp.php?${params}`)
+    const res = await fetch(`https://api.msg91.com/api/sendhttp.php?${params}`, {
+      signal: AbortSignal.timeout(10000),
+    })
     const text = (await res.text()).trim()
 
     // MSG91's legacy sendhttp.php returns HTTP 200 even on failure, with the
@@ -69,7 +71,9 @@ export function formatPhoneNumber(phone: string): string {
 export async function getSMSDeliveryStatus(messageId: string): Promise<string> {
   if (!authKey) return 'unknown'
   try {
-    const res = await fetch(`https://api.msg91.com/api/dlr.php?authkey=${authKey}&message_id=${messageId}`)
+    const res = await fetch(`https://api.msg91.com/api/dlr.php?authkey=${authKey}&message_id=${messageId}`, {
+      signal: AbortSignal.timeout(5000),
+    })
     const data = await res.json()
     return data.status || 'unknown'
   } catch { return 'unknown' }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { getQueue } from '@/lib/queue'
 import { getAiHealth } from '@/lib/ai-client'
+import { currentEnvironment, currentRelease } from '@/lib/observability/version'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,6 +10,8 @@ interface HealthStatus {
   status: 'ok' | 'degraded' | 'error'
   timestamp: string
   uptime: number
+  environment: string
+  release: string
   checks: {
     database: { status: 'ok' | 'error'; latencyMs: number; error?: string }
     redis: { status: 'ok' | 'degraded' | 'error'; latencyMs?: number; error?: string }
@@ -111,6 +114,8 @@ export async function GET() {
     status: overall,
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    environment: currentEnvironment(),
+    release: currentRelease(),
     checks: {
       database: dbStatus,
       redis: redisStatus,

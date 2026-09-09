@@ -3,6 +3,8 @@ import prisma from '@/lib/db'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { sendEmail } from '@/lib/services/email'
 import { createFreeSubscription } from '@/lib/subscription'
+import { track } from '@/lib/analytics/track'
+import { captureError } from '@/lib/observability/logger'
 import {
   signupSchema,
   createErrorResponse,
@@ -162,6 +164,12 @@ export async function POST(request: NextRequest) {
       console.error('Registration: failed to send verification email:', emailResult.error)
     }
 
+    await track({
+      name: 'cartgain_signup_completed',
+      userId: user.id,
+      storeId: user.stores[0]?.id,
+    })
+
     // Return user without password
     const { password: _, ...userWithoutPassword } = user
 
@@ -176,8 +184,15 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     )
   } catch (error) {
-    console.error('Registration error:', error)
-    
+    await captureError({
+      level: 'error',
+      component: 'auth',
+      operation: 'register',
+      error,
+      req: request,
+      persist: true,
+    })
+
     return NextResponse.json(
       createErrorResponse(
         AUTH_ERROR_CODES.SERVER_ERROR,

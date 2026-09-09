@@ -110,6 +110,7 @@ export async function sendWhatsAppMessage({
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10000),
       }
     )
 

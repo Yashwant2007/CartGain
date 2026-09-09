@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyWebhookSignature, PLANS, resolvePlanId, PAID_PLAN_IDS, getPlan } from "@/lib/payment";
 import prisma from "@/lib/db";
 import { redisSetNX } from "@/lib/redis";
+import { track } from "@/lib/analytics/track";
+import { captureError } from "@/lib/observability/logger";
 
 export const dynamic = 'force-dynamic'
 
@@ -116,7 +118,15 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (error) {
-    console.error("Webhook error:", error);
+    await captureError({
+      level: "error",
+      component: "billing",
+      operation: "payments_webhook",
+      error,
+      req,
+      persist: true,
+      statusCode: 500,
+    })
     return NextResponse.json(
       { error: "Webhook processing failed" },
       { status: 500 }
@@ -223,6 +233,12 @@ async function handleSubscriptionActivated(subscription: any) {
       currentPeriodStart: new Date(subscription.current_period_start * 1000),
       currentPeriodEnd: new Date(subscription.current_period_end * 1000),
     },
+  })
+
+  await track({
+    name: "cartgain_subscription_activated",
+    userId: existing.userId,
+    properties: { plan: existing.plan },
   })
 
   console.log(`✅ Subscription ${subId} activated for user ${existing.userId}, plan: ${existing.plan}`)

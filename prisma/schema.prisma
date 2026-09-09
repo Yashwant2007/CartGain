@@ -420,6 +420,57 @@ model WebhookEvent {
   @@index([namespace, processedAt])
 }
 
+// ── Operational observability ─────────────────────────────────────────────────
+// Centralized error log. Every server-side failure worth investigating lands
+// here (plus a structured console line). `signature` is the grouping key so an
+// incident shows once with an affected count instead of thousands of rows.
+// User/store ids are stored WITHOUT relations on purpose: logs must survive a
+// store purge (they are sanitized and contain no customer data).
+model ErrorLog {
+  id          String   @id @default(cuid())
+  level       String   // info | warn | error | critical
+  component   String   // webhook | billing | oauth | dashboard | frontend | ...
+  operation   String   // human-readable operation that failed
+  message     String   @db.Text
+  stack       String?  @db.Text
+  signature   String   // grouping key: component::operation::error-name
+  method      String?
+  path        String?
+  statusCode  Int?
+  traceId     String?
+  release     String?
+  environment String?
+  userId      String?
+  storeId     String?
+  createdAt   DateTime @default(now())
+
+  @@index([signature, createdAt])
+  @@index([level, createdAt])
+  @@index([environment, createdAt])
+  @@index([component, createdAt])
+}
+
+// Product analytics funnel events (cartgain_*). Anonymous-friendly and
+// strictly sanitized — never message contents or customer PII. Mirrors the
+// merchant lifecycle: signup → shopify oauth → onboarding → billing → usage →
+// recovery. User/store ids stored as strings (no relations) so events can be
+// erased for privacy without pulling relational cascades through the funnel.
+model ProductEvent {
+  id          String   @id @default(cuid())
+  name        String   // e.g. cartgain_shopify_oauth_completed
+  environment String   // development | preview | production
+  release     String?
+  userId      String?
+  storeId     String?
+  properties  Json?
+  createdAt   DateTime @default(now())
+
+  @@index([name, createdAt])
+  @@index([userId, createdAt])
+  @@index([storeId, createdAt])
+  @@index([environment, createdAt])
+}
+
 model RevenueShareEvent {
   id                  String    @id @default(cuid())
   subscriptionId      String

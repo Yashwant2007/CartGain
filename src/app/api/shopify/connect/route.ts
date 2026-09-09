@@ -5,6 +5,8 @@ import { getAppBaseUrl } from '@/lib/app-base-url'
 import { shopifyConnectSchema, validateOrThrow, handleValidationError } from '@/lib/validation'
 import { signOAuthState, isValidShopDomain } from '@/lib/shopify-oauth'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { track } from '@/lib/analytics/track'
+import { captureError } from '@/lib/observability/logger'
 import prisma from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -99,6 +101,13 @@ export async function POST(req: NextRequest) {
 
     const response = NextResponse.json({ authUrl: authUrl.toString(), state })
 
+    await track({
+      name: 'cartgain_shopify_connect_started',
+      userId: session.user.id,
+      storeId,
+      properties: { shop },
+    })
+
     const staleCookies = [
       '__Secure-next-auth.session-token',
       '__Secure-next-auth.callback-url',
@@ -116,7 +125,15 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const validationResponse = handleValidationError(error)
     if (validationResponse) return validationResponse
-    console.error('Shopify connect error:', error)
+    await captureError({
+      level: 'error',
+      component: 'oauth',
+      operation: 'shopify_connect',
+      error,
+      req,
+      persist: true,
+      statusCode: 500,
+    })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -8,6 +8,7 @@ import type { CartContext, PersonalizedDiscount } from '@/lib/services/ai'
 import { releaseLock } from '@/lib/job-lock'
 import { redisSetNX, redisIncr, redisGet, redisExpire, getRedis } from '@/lib/redis'
 import { FREE_CARTS_THRESHOLD, PLANS, PAID_PLAN_IDS, resolvePlanId, getPlan } from '@/lib/payment'
+import { track } from '@/lib/analytics/track'
 
 const PAID_PLANS = PAID_PLAN_IDS
 const MAX_STORE_CONCURRENCY = 10
@@ -593,6 +594,17 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
           where: { userId_date: { userId: campaign.userId, date: today } },
           update: { messagesSent: { increment: 1 }, ...channelCounts },
           create: { userId: campaign.userId, date: today, messagesSent: 1, ...channelCounts },
+        })
+        await track({
+          name: 'cartgain_recovery_message_sent',
+          userId: campaign.userId,
+          storeId: store.id,
+          properties: {
+            channel: ch,
+            aiOptimized: campaign.aiOptimized,
+            discountEnabled: campaign.discountEnabled,
+            step,
+          },
         })
         break
       } else {

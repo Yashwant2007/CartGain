@@ -3,6 +3,8 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createRazorpaySubscription, resolvePlanId, getPlan, cancelRazorpaySubscription } from '@/lib/payment'
+import { track } from '@/lib/analytics/track'
+import { captureError } from '@/lib/observability/logger'
 import prisma from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
@@ -81,12 +83,26 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    await track({
+      name: 'cartgain_billing_started',
+      userId: session.user.id,
+      properties: { plan: resolvedPlanId, period: normalizedPeriod },
+    })
+
     return NextResponse.json({
       subscriptionId: result.subscriptionId,
       keyId: process.env.RAZORPAY_KEY_ID,
     })
   } catch (error) {
-    console.error('Create subscription error:', error)
+    await captureError({
+      level: 'error',
+      component: 'billing',
+      operation: 'create_subscription',
+      error,
+      req,
+      persist: true,
+      statusCode: 500,
+    })
     return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 })
   }
 }

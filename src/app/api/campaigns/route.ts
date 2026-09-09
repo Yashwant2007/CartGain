@@ -5,6 +5,8 @@ import prisma from '@/lib/db'
 import { campaignCreateSchema, validateOrThrow, ValidationError, handleValidationError } from '@/lib/validation'
 import { getSubscription } from '@/lib/subscription'
 import { PLANS } from '@/lib/payment'
+import { track } from '@/lib/analytics/track'
+import { captureError } from '@/lib/observability/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -150,6 +152,17 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    await track({
+      name: 'cartgain_campaign_created',
+      userId: session.user.id,
+      storeId: data.storeId,
+      properties: {
+        channels: data.channels,
+        aiOptimized: data.aiOptimized,
+        discountEnabled: data.discountEnabled,
+      },
+    })
+
     return NextResponse.json(
       {
         message: 'Campaign created successfully',
@@ -160,7 +173,15 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const validationResponse = handleValidationError(error)
     if (validationResponse) return validationResponse
-    console.error('Create campaign error:', error)
+    await captureError({
+      level: 'error',
+      component: 'campaigns',
+      operation: 'create_campaign',
+      error,
+      req: request,
+      persist: true,
+      statusCode: 500,
+    })
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })
   }
 }

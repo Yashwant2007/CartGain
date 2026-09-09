@@ -6,6 +6,8 @@ import { verifyShopifyWebhook } from '@/lib/shopify'
 import { purgeStoreData, redactCustomer } from '@/lib/data-deletion'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS, resolvePlanId, getPlan } from '@/lib/payment'
 import { sendAlertOnError } from '@/lib/alerter'
+import { track } from '@/lib/analytics/track'
+import { captureError } from '@/lib/observability/logger'
 import { redisSetNX } from '@/lib/redis'
 
 export const dynamic = 'force-dynamic'
@@ -33,6 +35,16 @@ async function isDuplicateOrder(orderId: string): Promise<boolean> {
 function safeRun(label: string, fn: () => Promise<void>) {
   fn().catch(async (err) => {
     console.error(`Async ${label} error:`, err)
+    try {
+      await captureError({
+        level: 'error',
+        component: 'webhook',
+        operation: `shopify_${label.replace(/\s+/g, '_')}`,
+        error: err,
+        persist: true,
+        statusCode: 500,
+      })
+    } catch {}
     try {
       await sendAlertOnError(label, err instanceof Error ? err : new Error(String(err)))
     } catch {}
@@ -116,6 +128,16 @@ export async function POST(request: NextRequest) {
     }
   })().catch(async (err) => {
     console.error(`Async webhook processing error [${topic}] from ${shopDomain}:`, err)
+    try {
+      await captureError({
+        level: 'error',
+        component: 'webhook',
+        operation: 'shopify_processing',
+        error: err,
+        persist: true,
+        statusCode: 500,
+      })
+    } catch {}
     try {
       await sendAlertOnError('Shopify webhook processing', err instanceof Error ? err : new Error(String(err)), { topic, shopDomain })
     } catch {}
@@ -373,6 +395,18 @@ async function processOrderCreate(data: any, store: any, domain: string) {
       date: today,
       cartsRecovered: 1,
       revenueRecovered: grossAmount,
+    },
+  })
+
+  await track({
+    name: 'cartgain_cart_recovered',
+    userId: store.userId,
+    storeId: store.id,
+    properties: {
+      channel,
+      grossAmount,
+      netAmount,
+      discountUsed,
     },
   })
 

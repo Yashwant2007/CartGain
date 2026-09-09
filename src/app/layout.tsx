@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import Script from 'next/script'
 import './globals.css'
 import Providers from './providers'
+import { ClientErrorBoundary } from './components/ClientErrorBoundary'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -167,7 +168,9 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
-        <Providers>{children}</Providers>
+        <ClientErrorBoundary>
+          <Providers>{children}</Providers>
+        </ClientErrorBoundary>
       </body>
     </html>
   )

@@ -5,6 +5,8 @@ import { encrypt } from '@/lib/encryption'
 import { setupShopifyWebhooks } from '@/lib/shopify'
 import { generateCampaignSetup } from '@/lib/services/ai'
 import { verifyOAuthState, verifyShopifyCallbackHmac, isValidShopDomain } from '@/lib/shopify-oauth'
+import { track } from '@/lib/analytics/track'
+import { captureError } from '@/lib/observability/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -115,11 +117,24 @@ export async function GET(req: NextRequest) {
       })
     }
 
+    await track({
+      name: 'cartgain_shopify_oauth_completed',
+      storeId: storeId,
+      properties: { shop },
+    })
+
     try {
       const baseUrl = getAppBaseUrl(req)
       await setupShopifyWebhooks(shop, accessToken, baseUrl)
     } catch (webhookError) {
-      console.error('Failed to set up Shopify webhooks:', webhookError)
+      await captureError({
+        level: 'error',
+        component: 'webhook',
+        operation: 'setup_shopify_webhooks',
+        error: webhookError,
+        req,
+        persist: true,
+      })
     }
 
     try {
@@ -182,12 +197,27 @@ export async function GET(req: NextRequest) {
         console.log(`✅ Bargain enabled automatically for store ${targetStore.id}`)
       }
     } catch (campaignError) {
-      console.error('Failed to auto-create campaign:', campaignError)
+      await captureError({
+        level: 'error',
+        component: 'dashboard',
+        operation: 'auto_create_campaign',
+        error: campaignError,
+        req,
+        persist: true,
+      })
     }
 
     return redirectWithCleanup('/shopify-connected', req.url)
   } catch (error) {
-    console.error('Shopify callback error:', error)
+    await captureError({
+      level: 'error',
+      component: 'oauth',
+      operation: 'shopify_callback',
+      error,
+      req,
+      persist: true,
+      statusCode: 500,
+    })
     return redirectWithCleanup('/dashboard/integrations?shopify_error=Callback+processing+failed', req.url)
   }
 }
