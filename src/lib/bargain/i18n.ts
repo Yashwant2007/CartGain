@@ -64,6 +64,8 @@ export type UiKey =
   | 'greatDeal'
   | 'dealWarmClose'
   | 'dealRejected'
+  | 'tabChat'
+  | 'tabDeal'
 
 const I18N: Record<UiLang, Record<UiKey, string>> = {
   en: {
@@ -106,6 +108,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     greatDeal: 'You got a great deal',
     dealWarmClose: 'It was a pleasure bargaining with you — thank you for being a valued customer. Apply your code and enjoy!',
     dealRejected: 'Looks like we couldn\u2019t quite reach a deal this time. The listed price still stands — and the door is always open. Come back anytime! 😊',
+    tabChat: 'Chat',
+    tabDeal: 'Deal',
   },
   hinglish: {
     farewell_friendly: 'Theek hai dost, door hamesha khula hai. Agar mann badle toh bata dena. Dhyaan rakhna! 👋',
@@ -147,6 +151,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     greatDeal: 'Aapko badiya deal mili!',
     dealWarmClose: 'Aapke saath mol-bhav karke bahut acha laga — dhanyavaad! Code lagao aur mazaa lo!',
     dealRejected: 'Lagta hai is baar deal nahi ban saki. List price wahi rahegi — aur darwaza hamesha khula hai. Phir aaiye! 😊',
+    tabChat: 'Baatchit',
+    tabDeal: 'Deal',
   },
   hi: {
     farewell_friendly: 'समझ गया दोस्त, दरवाज़ा हमेशा खुला है। अगर मन बदले तो बता देना। ध्यान रखना! 👋',
@@ -188,6 +194,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     greatDeal: 'आपको कमाल की डील मिली!',
     dealWarmClose: 'आपसे भाव-ताव करके बहुत अच्छा लगा — धन्यवाद! कोड लगाइए और आनंद लीजिए!',
     dealRejected: 'लगता है इस बार डील नहीं बन सकी। सूचीबद्ध कीमत वही रहेगी — और दरवाज़ा हमेशा खुला है। फिर आइए! 😊',
+    tabChat: 'बातचीत',
+    tabDeal: 'डील',
   },
   ta: {
     farewell_friendly: 'புரிந்தது நண்பரே, கதவு எப்போதும் திறந்தே உள்ளது. மனம் மாறினால் சொல்லுங்கள். பார்த்துக்கொள்ளுங்கள்! 👋',
@@ -229,6 +237,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     greatDeal: 'பெரிய டீல் கிடைத்தது!',
     dealWarmClose: 'உங்களுடன் பேரம் பேசியது மகிழ்ச்சி — நன்றி! குறியீட்டை பயன்படுத்தி மகிழுங்கள்!',
     dealRejected: 'இந்த முறை ஒப்பந்தம் ஏற்படவில்லை. பட்டியலிட்ட விலை அப்படியே இருக்கும் — வாசல் எப்போதும் திறந்தே உள்ளது. மீண்டும் வாருங்கள்! 😊',
+    tabChat: 'அரட்டை',
+    tabDeal: 'ஒப்பந்தம்',
   },
   te: {
     farewell_friendly: 'అర్థమైంది స్నేహితుడా, తలుపు ఎప్పుడూ తెరిచే ఉంది. మనసు మారితే చెప్పండి. జాగ్రత్త! 👋',
@@ -270,6 +280,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     greatDeal: 'మీకు గొప్ప డీల్ వచ్చింది!',
     dealWarmClose: 'మీతో బేరమాడటం ఆనందంగా ఉంది — ధన్యవాదాలు! కోడ్ వాడి ఆనందించండి!',
     dealRejected: 'ఈసారి డీల్ జరగలేదు. జాబితా ధర అలాగే ఉంటుంది — తలుపు ఎప్పుడూ తెరిచే ఉంటుంది. మళ్లీ రండి! 😊',
+    tabChat: 'చాట్',
+    tabDeal: 'డీల్',
   },
   bn: {
     farewell_friendly: 'বুঝেছি বন্ধু, দরজা সবসময় খোলা। মন বদলালে জানিয়ে দিও। ভালো থেকো! 👋',
@@ -311,6 +323,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     greatDeal: 'আপনি দুর্দান্ত ডিল পেয়েছেন!',
     dealWarmClose: 'আপনার সঙ্গে দরদাম করে খুব ভালো লাগল — ধন্যবাদ! কোড লাগিয়ে উপভোগ করুন!',
     dealRejected: 'এবারের মতো ডিল হয়নি। তালিকাভুক্ত দামই থাকবে — আর দরজা সবসময় খোলা। আবার আসুন! 😊',
+    tabChat: 'আলাপ',
+    tabDeal: 'ডিল',
   },
   mr: {
     farewell_friendly: 'समजलो मित्रा, दार नेहमी उघडे आहे. मन बदललं तर सांग. काळजी घ्या! 👋',
@@ -352,6 +366,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     greatDeal: 'तुम्हाला छान डील मिळाली!',
     dealWarmClose: 'तुमच्याशी मोलभाव करून आनंद झाला — धन्यवाद! कोड लावा आणि आनंद घ्या!',
     dealRejected: 'यावेळी डील जमली नाही. सूचीबद्ध किंमत कायम राहील — आणि दरवाजा नेहमी खुला आहे. पुन्हा या! 😊',
+    tabChat: 'गप्पा',
+    tabDeal: 'डील',
   },
   gu: {
     farewell_friendly: 'સમજ્યો મિત્ર, દરવાજો હંમેશા ખુલ્લો છે. મન બદલાય તો કહેજે. કાળજી રાખજો! 👋',
@@ -393,6 +409,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     greatDeal: 'તમને સરસ ડીલ મળી!',
     dealWarmClose: 'તમારી સાથે ભાવ મોલ કરીને આનંદ થયો — આભાર! કોડ લગાવો અને આનંદ લો!',
     dealRejected: 'આ વખતે ડીલ ન બની. યાદીમાં ભાવ એ જ રહેશે — અને બારણું હંમેશા ખુલ્લું છે. ફરી આવો! 😊',
+    tabChat: 'ચેટ',
+    tabDeal: 'ડીલ',
   },
   pa: {
     farewell_friendly: 'ਸਮਝ ਗਿਆ ਮਿੱਤਰਾ, ਦਰਵਾਜ਼ਾ ਹਮੇਸ਼ਾ ਖੁੱਲ੍ਹਾ ਹੈ। ਮਨ ਬਦਲੇ ਤਾਂ ਦੱਸ ਦੇਣਾ। ਖ਼ਿਆਲ ਰੱਖੀਂ! 👋',
@@ -434,6 +452,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     greatDeal: 'ਤੁਹਾਨੂੰ ਵਧੀਆ ਡੀਲ ਮਿਲੀ!',
     dealWarmClose: 'ਤੁਹਾਡੇ ਨਾਲ ਭਾਅ ਮੁੱਲ ਕਰਕੇ ਚੰਗਾ ਲੱਗਾ — ਧੰਨਵਾਦ! ਕੋਡ ਲਗਾਓ ਅਤੇ ਅਨੰਦ ਲਓ!',
     dealRejected: 'ਇਸ ਵਾਰ ਡੀਲ ਨਹੀਂ ਬਣੀ। ਲਿਸਟਡ ਕੀਮਤ ਉਹੀ ਰਹੇਗੀ — ਅਤੇ ਦਰਵਾਜ਼ਾ ਹਮੇਸ਼ਾ ਖੁੱਲ੍ਹਾ ਹੈ। ਫਿਰ ਆਓ! 😊',
+    tabChat: 'ਗੱਲਬਾਤ',
+    tabDeal: 'ਡੀਲ',
   },
 }
 

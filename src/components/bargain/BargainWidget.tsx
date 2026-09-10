@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   X, Send, MessageCircle, Sparkles, Loader2, CheckCircle2, Clock, Tag, Zap, ShieldCheck, ChevronRight, BadgePercent, TrendingDown,
 } from 'lucide-react'
@@ -118,6 +118,7 @@ export default function BargainWidget({
   const [copied, setCopied] = useState(false)
   const [maxDiscount, setMaxDiscount] = useState<number | null>(null)
   const [returning, setReturning] = useState(false)
+  const [activeTab, setActiveTab] = useState<'chat' | 'info'>('chat')
 
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -437,7 +438,7 @@ export default function BargainWidget({
               border: '1px solid #e0e7ff',
               boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 12px 32px rgba(79,70,229,0.10)',
               overflow: 'hidden',
-              height: open ? 760 : 'auto',
+              height: open ? 920 : 'auto',
             }
           : {}),
       }}
@@ -483,13 +484,13 @@ export default function BargainWidget({
             <img
               src={image}
               alt=""
-              width={64}
-              height={64}
-              style={{ width: 64, height: 64, borderRadius: 12, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
+              width={60}
+              height={60}
+              style={{ width: 60, height: 60, borderRadius: 12, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
             />
           ) : (
-            <div style={{ width: 64, height: 64, borderRadius: 12, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <BadgePercent size={28} style={{ color: '#6366f1' }} />
+            <div style={{ width: 60, height: 60, borderRadius: 12, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <BadgePercent size={26} style={{ color: '#6366f1' }} />
             </div>
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -626,32 +627,50 @@ export default function BargainWidget({
         >
           {/* Header */}
           <div style={{
-            padding: '18px 20px',
+            padding: '16px 20px 0',
             borderBottom: '1px solid #eef2f7',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
             background: 'linear-gradient(180deg, #ffffff, #fafbff)',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-              <div style={{
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 2px 8px rgba(99,102,241,0.35)',
-                flexShrink: 0,
-              }}>
-                <MessageCircle size={21} style={{ color: '#ffffff' }} />
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 16, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {t('dealTitle')}
-                  {returning && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                <div style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 13,
+                  background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(99,102,241,0.35)',
+                  flexShrink: 0,
+                  position: 'relative',
+                }}>
+                  <MessageCircle size={22} style={{ color: '#ffffff' }} />
+                  <span style={{
+                    position: 'absolute', bottom: -2, right: -2, width: 14, height: 14,
+                    background: '#22c55e', border: '2px solid #ffffff', borderRadius: '50%',
+                  }} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 800, fontSize: 16, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {t('dealTitle')}
+                    {personaChip && (
+                      <span style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: '#4f46e5',
+                        background: '#eef2ff',
+                        border: '1px solid #e0e7ff',
+                        borderRadius: 999,
+                        padding: '2px 10px',
+                        whiteSpace: 'nowrap',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}>
+                        {personaChip.emoji} {personaChip.label}
+                      </span>
+                    )}
                     <span style={{
                       fontSize: 10.5,
                       fontWeight: 800,
@@ -665,53 +684,73 @@ export default function BargainWidget({
                       alignItems: 'center',
                       gap: 4,
                     }}>
-                      👋 {t('welcomeBack')}
+                      <ShieldCheck size={11} /> AI-Powered
                     </span>
-                  )}
-                  {personaChip && (
-                    <span style={{
-                      fontSize: 10.5,
-                      fontWeight: 600,
-                      color: '#4f46e5',
-                      background: '#eef2ff',
-                      border: '1px solid #e0e7ff',
-                      borderRadius: 999,
-                      padding: '2px 8px',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {personaChip.emoji} {personaChip.label}
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: 13, color: '#64748b', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {productTitle ? productTitle : 'Product'} · <span style={{ fontWeight: 700, color: '#0f172a' }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: '#64748b', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {productTitle ? productTitle : 'Product'} · <span style={{ fontWeight: 700, color: '#0f172a' }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
+              <button
+                onClick={closePanel}
+                aria-label="Close"
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 10,
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  width: 36,
+                  height: 36,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.15s ease',
+                  outline: 'none',
+                  flexShrink: 0,
+                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#6366f1' }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#e2e8f0' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#334155' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b' }}
+              >
+                <X size={18} />
+              </button>
             </div>
-            <button
-              onClick={closePanel}
-              aria-label="Close"
-              style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: 10,
-                color: '#64748b',
-                cursor: 'pointer',
-                width: 34,
-                height: 34,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.15s ease',
-                outline: 'none',
-              }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#6366f1' }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#e2e8f0' }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#334155' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b' }}
-            >
-              <X size={18} />
-            </button>
+
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
+              {([
+                { key: 'chat', label: t('tabChat'), icon: <MessageCircle size={14} /> },
+                { key: 'info', label: t('tabDeal'), icon: <Tag size={14} /> },
+              ] as const).map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  aria-pressed={activeTab === tab.key}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '9px 16px',
+                    background: activeTab === tab.key ? '#eef2ff' : 'transparent',
+                    color: activeTab === tab.key ? '#4f46e5' : '#64748b',
+                    border: 'none',
+                    borderBottom: activeTab === tab.key ? '2px solid #6366f1' : '2px solid transparent',
+                    borderRadius: '8px 8px 0 0',
+                    fontSize: 13.5,
+                    fontWeight: activeTab === tab.key ? 700 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    outline: 'none',
+                    flexShrink: 0,
+                  }}
+                >
+                  {tab.icon} {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Privacy / AI notice strip */}
@@ -786,6 +825,21 @@ export default function BargainWidget({
             gap: 14,
             background: 'linear-gradient(180deg, #f8faff, #ffffff)',
           }}>
+            {activeTab !== 'chat' ? (
+              <DealInfoPanel
+                t={t}
+                currencySymbol={currencySymbol}
+                originalPrice={originalPrice}
+                finalPrice={finalPrice}
+                decision={decision}
+                discountCode={discountCode}
+                attemptsRemaining={attemptsRemaining}
+                maxDiscount={maxDiscount}
+                productTitle={productTitle}
+                sessEnded={sessionEnded}
+              />
+            ) : (
+            <>
             {messages.length === 0 && (
               <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, padding: '48px 0' }}>
                 <Loader2 size={20} className="spin" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 10px' }} />
@@ -1043,6 +1097,8 @@ export default function BargainWidget({
                 {error}
               </div>
             )}
+            </>
+            )}
           </div>
 
           {/* Composer */}
@@ -1188,6 +1244,100 @@ function startedComposer(sessionEnded: boolean, decision: 'idle' | 'counter' | '
   // or rejected — the accept bar takes over for the 'accept' state.
   if (decision === 'accept') return false
   return true
+}
+
+// Deal details tab — a professional, at-a-glance summary of the negotiation in a
+// single frame. Mirrors the merchant's own pricing levers without ever revealing
+// the hidden floor.
+function DealInfoPanel({ t, currencySymbol, originalPrice, finalPrice, decision, discountCode, attemptsRemaining, maxDiscount, productTitle, sessEnded }: {
+  t: (key: Parameters<typeof uiText>[1], vars?: Record<string, string | number>) => string
+  currencySymbol: string
+  originalPrice: number
+  finalPrice: number | null
+  decision: 'idle' | 'counter' | 'accept' | 'reject'
+  discountCode: string | null
+  attemptsRemaining: number | null
+  maxDiscount: number | null
+  productTitle?: string
+  sessEnded: boolean
+}) {
+  const savings = decision === 'accept' && finalPrice != null ? originalPrice - finalPrice : null
+  const discountPct = finalPrice != null && finalPrice > 0 ? Math.round((1 - finalPrice / originalPrice) * 100) : null
+  const rows: { label: string; value: ReactNode; tint?: 'green' | 'indigo' | 'neutral' }[] = [
+    {
+      label: 'Listed price',
+      value: <span style={{ fontWeight: 800 }}>{currencySymbol}{originalPrice.toFixed(2)}</span>,
+    },
+    decision === 'accept' && finalPrice != null
+      ? {
+          label: 'Deal price',
+          value: <span style={{ fontWeight: 800, color: '#15803d' }}>{currencySymbol}{finalPrice.toFixed(2)}{discountPct != null ? ` (−${discountPct}%)` : ''}</span>,
+          tint: 'green' as const,
+        }
+      : {
+          label: 'Savings you\u2019re negotiating',
+          value: <span style={{ fontWeight: 700, color: '#4f46e5' }}>Up to {maxDiscount != null && maxDiscount > 0 ? `${maxDiscount}%` : 'the max available'} off</span>,
+          tint: 'indigo' as const,
+        },
+    {
+      label: 'How it works',
+      value: 'Chat with the AI shopkeeper, agree on a price, then get a personal discount code you apply at checkout.',
+      tint: 'neutral',
+    },
+    decision === 'accept' && discountCode
+      ? {
+          label: 'Your code',
+          value: <span style={{ fontWeight: 800, letterSpacing: 0.5, color: '#4f46e5' }}>{discountCode}</span>,
+          tint: 'indigo' as const,
+        }
+      : ({
+          label: 'Attempts left',
+          value: attemptsRemaining != null ? `${attemptsRemaining}` : 'Starting...',
+          tint: attemptsRemaining != null && attemptsRemaining <= 1 ? 'green' : 'neutral',
+        } as { label: string; value: ReactNode; tint?: 'green' | 'indigo' | 'neutral' }),
+  ].filter(Boolean) as { label: string; value: ReactNode; tint?: 'green' | 'indigo' | 'neutral' }[]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 4 }}>
+        <div style={{
+          width: 42, height: 42, borderRadius: 12, flexShrink: 0,
+          background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Tag size={20} style={{ color: '#4f46e5' }} />
+        </div>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 15, color: '#0f172a' }}>Deal details</div>
+          <div style={{ fontSize: 12.5, color: '#64748b' }}>{productTitle ? productTitle : 'This item'}</div>
+        </div>
+      </div>
+
+      {rows.map((r, i) => (
+        <div key={i} style={{
+          background: r.tint === 'green' ? 'linear-gradient(135deg,#f0fdf4,#ecfdf5)' : r.tint === 'indigo' ? '#f8faff' : '#fafbfc',
+          border: r.tint === 'green' ? '1px solid #bbf7d0' : r.tint === 'indigo' ? '1px solid #e0e7ff' : '1px solid #eef2f7',
+          borderRadius: 12,
+          padding: '12px 14px',
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: '#94a3b8', marginBottom: 3 }}>
+            {r.label}
+          </div>
+          <div style={{ fontSize: 14.5, color: '#334155', lineHeight: 1.5 }}>{r.value}</div>
+        </div>
+      ))}
+
+      {!sessEnded && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          fontSize: 12.5, color: '#64748b', padding: '4px 2px',
+        }}>
+          <ShieldCheck size={14} style={{ color: '#16a34a', flexShrink: 0 }} />
+          Price is guaranteed while you negotiate — it resets if you leave and come back.
+        </div>
+      )}
+    </div>
+  )
 }
 
 function QuickChip({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
