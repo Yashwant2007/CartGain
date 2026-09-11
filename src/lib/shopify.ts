@@ -327,6 +327,55 @@ export async function fetchShopifyProductPrice(
   }
 }
 
+// List Shopify products (catalog picker) using the Admin REST API. Returns raw
+// product objects (id, title, handle, status, variants incl. prices, image).
+export async function fetchShopifyProducts(
+  store: { id: string; domain: string; apiKey: string | null; shopifyRefreshToken: string | null; shopifyTokenExpiresAt: Date | null },
+  opts: { limit?: number; pageInfo?: string | null; query?: string | null } = {},
+): Promise<{ products: any[]; nextCursor: string | null; prevCursor: string | null; error: string | null }> {
+  const accessToken = await getAccessToken(store)
+  if (!accessToken) {
+    return { products: [], nextCursor: null, prevCursor: null, error: 'Could not reach Shopify. Reconnect the store from Integrations.' }
+  }
+
+  const limit = Math.min(opts.limit ?? 25, 250)
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (opts.pageInfo) params.set('page_info', opts.pageInfo)
+  if (opts.query) params.set('query', opts.query)
+
+  const url = `https://${store.domain}/admin/api/2026-04/products.json?${params.toString()}`
+  try {
+    const res = await fetch(url, {
+      headers: { 'X-Shopify-Access-Token': accessToken },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (res.status === 401) {
+      return { products: [], nextCursor: null, prevCursor: null, error: 'Store token unauthorized. Reconnect the store from Integrations.' }
+    }
+    if (!res.ok) {
+      return { products: [], nextCursor: null, prevCursor: null, error: `Shopify returned HTTP ${res.status}` }
+    }
+    const data = await res.json()
+    const products = data.products || []
+    let nextCursor: string | null = null
+    let prevCursor: string | null = null
+    const linkHeader = res.headers.get('link')
+    if (linkHeader) {
+      for (const part of linkHeader.split(',')) {
+        const match = part.trim().match(/<[^>]*page_info=([^&>]*)>;\s*rel="(\w+)"/)
+        if (match) {
+          const cursor = match[1]
+          const rel = match[2]
+          try { const dec = decodeURIComponent(cursor); if (rel === 'next') nextCursor = dec; else if (rel === 'previous') prevCursor = dec } catch { /* ignore */ }
+        }
+      }
+    }
+    return { products, nextCursor, prevCursor, error: null }
+  } catch (err: any) {
+    return { products: [], nextCursor: null, prevCursor: null, error: err?.name === 'TimeoutError' ? 'Shopify took too long to respond. Try again.' : 'Could not list products from Shopify.' }
+  }
+}
+
 export async function syncAbandonedCheckouts(store: any): Promise<number> {
   const accessToken = await getAccessToken(store)
   if (!accessToken) {
