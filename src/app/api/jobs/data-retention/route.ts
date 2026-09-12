@@ -10,12 +10,14 @@ export const maxDuration = 60
 // - Bargain sessions + messages: deleted 90 days after start (transient negotiation data)
 // - Data access logs: deleted after 180 days
 // - Verification tokens: deleted 7 days after expiry
+// - Customer data exports: deleted after 180 days
 // Opt-out records are KEPT indefinitely — they are consent records, not processed data.
 
 const CART_RETENTION_DAYS = 90
 const BARGAIN_RETENTION_DAYS = 90
 const LOG_RETENTION_DAYS = 180
 const TOKEN_RETENTION_DAYS = 7
+const EXPORT_RETENTION_DAYS = 180 // customer data exports deleted after 180 days
 
 export async function POST(request: NextRequest) {
   const authError = await requireJobAuth(request)
@@ -27,6 +29,7 @@ export async function POST(request: NextRequest) {
     const bargainCutoff = new Date(now.getTime() - BARGAIN_RETENTION_DAYS * 24 * 60 * 60 * 1000)
     const logCutoff = new Date(now.getTime() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000)
     const tokenCutoff = new Date(now.getTime() - TOKEN_RETENTION_DAYS * 24 * 60 * 60 * 1000)
+    const exportCutoff = new Date(now.getTime() - EXPORT_RETENTION_DAYS * 24 * 60 * 60 * 1000)
 
     // 1. Anonymize old carts (keep the row for billing/analytics integrity,
     //    remove all PII so the data can no longer identify a person).
@@ -58,6 +61,11 @@ export async function POST(request: NextRequest) {
       where: { expires: { lt: tokenCutoff } },
     })
 
+    // 5. Delete old customer data exports (contain customer PII).
+    const exports = await prisma.customerDataExport.deleteMany({
+      where: { createdAt: { lt: exportCutoff } },
+    })
+
     return NextResponse.json({
       message: 'Data retention applied',
       status: 'ok',
@@ -65,11 +73,13 @@ export async function POST(request: NextRequest) {
       deletedBargainSessions: bargainSessions.count,
       deletedAccessLogs: logs.count,
       deletedVerificationTokens: tokens.count,
+      deletedCustomerDataExports: exports.count,
       policy: {
         cartPIIAnonymizedAfterDays: CART_RETENTION_DAYS,
         bargainSessionsDeletedAfterDays: BARGAIN_RETENTION_DAYS,
         accessLogsDeletedAfterDays: LOG_RETENTION_DAYS,
         verificationTokensDeletedAfterDays: TOKEN_RETENTION_DAYS,
+        customerDataExportsDeletedAfterDays: EXPORT_RETENTION_DAYS,
       },
     })
   } catch (error) {

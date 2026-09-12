@@ -84,6 +84,23 @@ model DataAccessLog {
   @@index([purpose, createdAt])
 }
 
+model CustomerDataExport {
+  id                String   @id @default(cuid())
+  storeId           String
+  shopifyCustomerId String?
+  email             String?
+  payload           Json     @default("{}")
+  status            String   @default("ready") // ready, delivered, failed
+  requestedAt       DateTime @default(now())
+  createdAt         DateTime @default(now())
+
+  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@index([storeId, status])
+  @@index([shopifyCustomerId])
+}
+
 model Store {
   id              String    @id @default(cuid())
   userId          String
@@ -116,6 +133,7 @@ model Store {
   bargainConfig       BargainConfig?
   bargainProducts     BargainProduct[]
   bargainSessions     BargainSession[]
+  customerDataExports CustomerDataExport[]
 
   @@unique([userId, domain])
   @@index([userId])

@@ -4,6 +4,12 @@ import prisma from '@/lib/db'
 import { logDataAccess } from '@/lib/data-protection'
 import { verifyShopifyWebhook } from '@/lib/shopify'
 import { purgeStoreData, redactCustomer } from '@/lib/data-deletion'
+import {
+  collectCustomerData,
+  createCustomerDataExport,
+  deliverCustomerDataExportToMerchant,
+  normalizeCustomerId,
+} from '@/lib/data-export'
 import { computeRefundNetting, isMessageAttributable } from '@/lib/attribution'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS, resolvePlanId, getPlan } from '@/lib/payment'
 import { sendAlertOnError } from '@/lib/alerter'
@@ -187,24 +193,81 @@ async function handleCustomerRedact(data: any, store: any, shopDomain: string) {
   console.log(`customers/redact for ${shopDomain} customer ${customerId}: ${result.affected} records removed`)
 }
 
-// Shopify asks the app to make a customer's data available to the merchant. We
-// acknowledge the request and record a data-access audit entry. Programmatic
-// delivery of the data to the merchant (e.g. an email/export endpoint) is a
-// documented TODO — see SHOPIFY_PROTECTED_DATA_READINESS.md. We never return the
-// customer data in the webhook response body (Shopify ignores it and it would be
-// logged), and the request itself is acknowledged so Shopify does not retry.
+// Shopify asks the app to make a customer's data available to the merchant
+// (customers/data_request). The payload carries the customer id AND email.
+// Full implementation of the CDP obligation:
+//   1. collect every record we hold on that customer,
+//   2. persist it as a CustomerDataExport row (merchant can download from
+//      /dashboard/data),
+//   3. best-effort email the store owner a copy,
+//   4. audit-log the access.
+// We never return the customer data in the webhook response body (Shopify
+// ignores it and it would be logged); the request is acknowledged so Shopify
+// does not retry.
 async function handleCustomerDataRequest(data: any, store: any, shopDomain: string) {
-  const customerId = data?.customer?.id ? String(data.customer.id) : null
-  await logDataAccess({
-    actorType: 'system',
-    action: 'access',
-    resourceType: 'customer',
-    resourceId: customerId || 'unknown',
-    purpose: 'shopify customers/data_request',
-    actorId: store.userId,
-    metadata: { shopDomain, email: data?.customer?.email || null },
-  })
-  console.log(`customers/data_request received for ${shopDomain} customer ${customerId || 'unknown'} (acknowledged)`)
+  const customerId = normalizeCustomerId(data?.customer?.id)
+  const email = data?.customer?.email || null
+
+  try {
+    const payload = await collectCustomerData({
+      storeId: store.id,
+      shopifyCustomerId: customerId,
+      email,
+    })
+
+    const exportRow = await createCustomerDataExport({
+      storeId: store.id,
+      shopifyCustomerId: customerId,
+      email,
+      payload,
+    })
+
+    const owner = store.userId
+      ? await prisma.user.findUnique({ where: { id: store.userId }, select: { email: true } })
+      : null
+    const delivery = await deliverCustomerDataExportToMerchant({
+      storeId: store.id,
+      storeDomain: shopDomain,
+      ownerEmail: owner?.email || null,
+      exportId: exportRow.id,
+      shopifyCustomerId: customerId,
+      email,
+    })
+
+    await logDataAccess({
+      actorType: 'system',
+      action: 'access',
+      resourceType: 'customer_data_export',
+      resourceId: exportRow.id,
+      purpose: 'shopify customers/data_request',
+      actorId: store.userId,
+      metadata: {
+        shopDomain,
+        email: email || null,
+        recordsIncluded: (payload as any)?.counts || null,
+        deliverySent: delivery.sent,
+        deliveryMessage: delivery.sent ? undefined : (delivery.message || null),
+      },
+    })
+
+    console.log(
+      `customers/data_request for ${shopDomain} customer ${customerId || 'unknown'}: export ${exportRow.id} ` +
+      `(${JSON.stringify((payload as any)?.counts || {})}) ${delivery.sent ? 'emailed to merchant' : `delivery: ${delivery.message}`}`
+    )
+  } catch (err) {
+    console.error(`customers/data_request processing failed for ${shopDomain}:`, err)
+    // Still audit that the request was received even if the export failed —
+    // Shopify must not retry forever because we had a transient error.
+    await logDataAccess({
+      actorType: 'system',
+      action: 'access',
+      resourceType: 'customer',
+      resourceId: customerId || 'unknown',
+      purpose: 'shopify customers/data_request (export failed)',
+      actorId: store.userId,
+      metadata: { shopDomain, email: email || null, error: err instanceof Error ? err.message : String(err) },
+    })
+  }
 }
 
 function extractPhone(cart: any): string | null {

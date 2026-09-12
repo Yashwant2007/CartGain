@@ -6,8 +6,8 @@ requirements and the protected-customer-data review. Every claim maps to code or
 to an explicit `[REQUIRES CONFIRMATION]` item. No claim is asserted without
 evidence in this repository.
 
-> Status: **code-level review complete.** Blockers / confirmations listed at the
-> bottom of this file must be resolved before submission.
+> Status: **all CDP code requirements implemented.** Config/verification items
+> listed at the bottom of this file remain before submission.
 
 ## 1. Data we store on customers (from the schema audit)
 
@@ -50,7 +50,7 @@ required lifecycle topics via `src/lib/shopify.ts::setupShopifyWebhooks`:
 |---|---|---|
 | `shop/redact` | `purgeStoreData(store)` | Deletes all store-scoped customer data (23 models) |
 | `customers/redact` | `redactCustomer(shop, id, email)` | Deletes Cart / Message / RecoveredCart / Customer / CustomerInsight + customer bargain sessions |
-| `customers/data_request` | acknowledge + audit log | Logs the request via `logDataAccess`; full export delivered to merchant (see TODO below) |
+| `customers/data_request` | collect + persist + email | Builds a full JSON export of the customer's data (`src/lib/data-export.ts` → `collectCustomerData`), persists it as a `CustomerDataExport` row, emails the store owner a copy (best-effort), and audit-logs it. The merchant can re-download it from `/dashboard/data`. |
 | `app/uninstalled` | `purgeStoreData(store)` | Full store data purge on uninstall |
 
 All handlers run `logDataAccess` for the audit trail. `src/lib/data-deletion.ts`
@@ -65,7 +65,8 @@ is the single source of truth for store/customer deletion.
 - Merchants can disable individual customer suppression from the dashboard.
 - Retention job (`src/app/api/jobs/data-retention/route.ts`): cart PII
   anonymized after **90 days**, bargain sessions deleted after **90 days**,
-  access logs deleted after **180 days**, stale tokens after **7 days**.
+  access logs deleted after **180 days**, customer data exports deleted after
+  **180 days**, stale tokens after **7 days**.
 
 ## 5. App scope minimization (done)
 
@@ -98,15 +99,14 @@ read_webhooks` — synchronized in `shopify.app.toml`.
 - [x] Minimal OAuth scopes (9), no `read_all_orders`
 - [x] No fake testimonials / inflated metrics in marketing (verified scan)
 
-### Blockers / must-fix or confirm before submission
+### Resolved / remaining items
 
-1. **`customers/data_request` export delivery TODO** — the webhook acknowledges
-   + audit-logs the request, but there is no automated email/export mechanism
-   yet to deliver a machine-readable copy to the merchant. The Shopify guidance
-   expects a response; today's handler returns success promptly without leaking
-   customer data in the response body. Decide: implement programmatic delivery
-   or document manual fulfillment from the dashboard before launch.
-2. **RLS coverage** — only 17/33 tables have row-level security. Since the app
+1. ✅ **`customers/data_request` export delivery** — implemented: `collectCustomerData`
+   gathers carts + messages + attribution + customer profile/insights + bargain
+   sessions/transcripts + opt-outs; persisted as `CustomerDataExport`; emailed to
+   the store owner; downloadable from `/dashboard/data` (API:
+   `GET /api/data-protection`, `GET /api/data-protection/export`).
+2. **RLS coverage** — only a fraction of tables have row-level security. Since the app
    accesses Supabase only through the Prisma client (server-side auth), this is
    not a functional blocker, but disclose accurately (corrected in Security
    Policy). Consider enabling RLS on all tables as a defense-in-depth follow-up.

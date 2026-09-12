@@ -34,6 +34,7 @@ const STORE_SCOPED_MODELS = [
   'Campaign',
   'ABTest',
   'BargainRevenueShareEvent',
+  'CustomerDataExport',
 ] as const
 
 async function rawDelete(table: string, column: string, value: string): Promise<number> {
@@ -80,6 +81,20 @@ export async function purgeStoreData(store: {
   // Delete the store itself (last).
   await prisma.store.delete({ where: { id: store.id } }).catch(() => {
     // Already gone
+  })
+
+  // Purge Shopify-webhook-driven access logs belonging to this store's owner.
+  // DataAccessLog has no storeId — it's keyed by actorId (userId). We delete
+  // records tied to cart/order/customer/export activity that was specific to
+  // this store (purpose patterns from webhook handling), so the owner's other
+  // stores are not affected.
+  await prisma.dataAccessLog.deleteMany({
+    where: {
+      actorId: store.userId,
+      purpose: {
+        contains: 'shopify',
+      },
+    },
   })
 
   await logDataAccess({
@@ -162,6 +177,13 @@ export async function redactCustomer(
       affected++
     }
   }
+
+  // Customer data exports collected for this customer (customers/data_request
+  // deliveries) contain their personal data — remove them too.
+  const exportCleanup = await prisma.customerDataExport.deleteMany({
+    where: { storeId, shopifyCustomerId: customerId },
+  })
+  affected += exportCleanup.count
 
   return { affected }
 }

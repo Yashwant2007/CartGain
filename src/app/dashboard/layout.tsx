@@ -22,6 +22,7 @@ import {
   BrainCircuit,
   ShoppingCart,
   Sparkles,
+  ShieldCheck,
 } from 'lucide-react'
 import StatusBadge from '@/components/dashboard/StatusBadge'
 import { PAID_PLAN_IDS, FREE_CARTS_THRESHOLD } from '@/lib/plan-constants'
@@ -100,6 +101,7 @@ function DashboardLayoutInner({
     { name: 'AI Insights', href: '/dashboard/ai', icon: BrainCircuit },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
     { name: 'Integrations', href: '/dashboard/integrations', icon: Plug },
+    { name: 'Data & Privacy', href: '/dashboard/data', icon: ShieldCheck },
     { name: 'Subscription', href: '/dashboard/subscription', icon: CreditCard },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },
   ]
