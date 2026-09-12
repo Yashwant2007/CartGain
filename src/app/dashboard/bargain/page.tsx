@@ -18,6 +18,9 @@ import {
   RotateCcw,
   PlayCircle,
   Link2,
+  Target,
+  Timer,
+  Gauge,
 } from 'lucide-react'
 import { DemoPanel } from './demo-panel'
 import { ProductCatalogPanel } from './product-catalog'
@@ -32,6 +35,36 @@ type BargainConfig = {
   language: string
   minProfitPercent: number
   sessionTimeout: number
+  goalEnabled: boolean
+  goalType: string
+  goalTarget: number
+  goalStartTime: string | null
+  goalEndTime: string | null
+  goalTimezone: string | null
+  dynamicStrategyEnabled: boolean
+  campaignName: string | null
+  campaignMessage: string | null
+  campaignStart: string | null
+  campaignEnd: string | null
+}
+
+type GoalStatus = {
+  enabled: boolean
+  windowState: string
+  goalType: string
+  targetValue: number
+  achievedValue: number
+  orderCount: number
+  businessDate: string
+  timezone: string
+  progressPercent: number
+  elapsedPercent: number
+  strategy: string
+  mode: string
+  startsAtISO: string | null
+  closesAtISO: string | null
+  campaignName: string | null
+  campaignMessage: string | null
 }
 
 type BargainSession = {
@@ -67,7 +100,7 @@ type Summary = {
   }>
 }
 
-type Tab = 'config' | 'products' | 'analytics' | 'logs' | 'demo'
+type Tab = 'config' | 'products' | 'analytics' | 'logs' | 'demo' | 'goals'
 
 export default function BargainDashboardPage() {
   const router = useRouter()
@@ -91,6 +124,28 @@ export default function BargainDashboardPage() {
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [messagesError, setMessagesError] = useState<string | null>(null)
   const abortRef = useRef<(() => void)[]>([])
+
+  const [goalStatus, setGoalStatus] = useState<GoalStatus | null>(null)
+
+  async function fetchGoalStatus() {
+    if (!storeId) return
+    try {
+      const res = await fetch(`/api/bargain/goals/status?storeId=${storeId}`)
+      if (!res.ok) return
+      const data = await res.json()
+      setGoalStatus(data.status ?? null)
+    } catch {
+      // Non-fatal — the goals tab shows an empty state.
+    }
+  }
+
+  useEffect(() => {
+    if (!storeId || tab !== 'goals') return
+    void fetchGoalStatus()
+    const id = setInterval(fetchGoalStatus, 30_000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, tab])
 
   useEffect(() => {
     if (!storeError) return
@@ -212,6 +267,7 @@ void fetchConfig()
     { id: 'demo', label: 'Live Demo', icon: PlayCircle },
     { id: 'products', label: 'Products', icon: ListChecks },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'goals', label: 'Daily Goal', icon: Target },
     { id: 'logs', label: 'Conversation Logs', icon: MessageSquare },
   ]
 
@@ -395,6 +451,173 @@ void fetchConfig()
                   <p className="text-xs text-blue-300/60 mt-1">Higher quality models write more personality; mini is fastest and cheapest.</p>
                 </div>
               </div>
+
+              {/* Group: Daily goal & strategy */}
+              <GroupTitle
+                icon={Target}
+                title="AI Salesperson · Daily Goal"
+                subtitle="Set a real daily target. CartGain paces the negotiation toward it — always inside your margin floor."
+              />
+              <div className="flex items-center justify-between p-4 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <div>
+                  <div className="text-blue-100 font-medium">Enable daily goal</div>
+                  <div className="text-xs text-blue-300/60 mt-0.5">
+                    When on, negotiation intensity follows your progress automatically. Customers never see this.
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={configForm.goalEnabled ?? false}
+                  onChange={e => setConfigForm({ ...configForm, goalEnabled: e.target.checked })}
+                  className="w-5 h-5 accent-blue-500"
+                />
+              </div>
+
+              {configForm.goalEnabled && (
+                <div className="space-y-4">
+                  <div className="grid sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm text-blue-200 mb-1">Goal measures</label>
+                      <select
+                        value={configForm.goalType ?? 'orders'}
+                        onChange={e => setConfigForm({ ...configForm, goalType: e.target.value })}
+                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                      >
+                        <option value="orders">Orders placed</option>
+                        <option value="revenue">Revenue (₹)</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm text-blue-200 mb-1">Daily target</label>
+                      <input
+                        type="number"
+                        min={1}
+                        step={configForm.goalType === 'revenue' ? 100 : 1}
+                        value={configForm.goalTarget ?? 10}
+                        onChange={e => setConfigForm({ ...configForm, goalTarget: parseFloat(e.target.value) })}
+                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                      />
+                      <p className="text-xs text-blue-300/60 mt-1">
+                        {configForm.goalType === 'revenue'
+                          ? 'Target revenue (order net) to recognize by the end of the window.'
+                          : 'Number of confirmed orders to recognize by the end of the window.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-blue-200 mb-1">Window starts</label>
+                      <input
+                        type="datetime-local"
+                        value={toLocalDateTimeInput(configForm.goalStartTime ?? null)}
+                        onChange={e => setConfigForm({ ...configForm, goalStartTime: fromLocalDateTimeInput(e.target.value) })}
+                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                      />
+                      <p className="text-xs text-blue-300/60 mt-1">Set the time in your browser; shown in your store timezone.</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-blue-200 mb-1">Window ends</label>
+                      <input
+                        type="datetime-local"
+                        value={toLocalDateTimeInput(configForm.goalEndTime ?? null)}
+                        onChange={e => setConfigForm({ ...configForm, goalEndTime: fromLocalDateTimeInput(e.target.value) })}
+                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                      />
+                      <p className="text-xs text-blue-300/60 mt-1">Orders placed during this window count toward the goal.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-blue-200 mb-1">Store timezone</label>
+                      <select
+                        value={configForm.goalTimezone ?? 'Asia/Kolkata'}
+                        onChange={e => setConfigForm({ ...configForm, goalTimezone: e.target.value })}
+                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                      >
+                        <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                        <option value="Asia/Karachi">Asia/Karachi (PKT)</option>
+                        <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+                        <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
+                        <option value="Asia/Dhaka">Asia/Dhaka (BST)</option>
+                        <option value="Africa/Nairobi">Africa/Nairobi (EAT)</option>
+                        <option value="Europe/London">Europe/London (GMT/BST)</option>
+                        <option value="America/New_York">America/New_York (EST/EDT)</option>
+                        <option value="America/Los_Angeles">America/Los_Angeles (PST/PDT)</option>
+                        <option value="UTC">UTC</option>
+                      </select>
+                      <p className="text-xs text-blue-300/60 mt-1">Used to bucket the day and display the window.</p>
+                    </div>
+                    <div className="flex items-end">
+                      <label className="block text-sm text-blue-200 mb-1">
+                        <span className="block">Auto dynamic strategy</span>
+                        <span className="block text-xs text-blue-300/60 mt-1 font-normal">
+                          Let CartGain switch between Conservative / Normal / Aggressive / Closing based on your progress.
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={configForm.dynamicStrategyEnabled ?? false}
+                          onChange={e => setConfigForm({ ...configForm, dynamicStrategyEnabled: e.target.checked })}
+                          className="mt-2 w-5 h-5 accent-blue-500"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-blue-200 mb-1">Campaign name (optional)</label>
+                      <input
+                        type="text"
+                        maxLength={60}
+                        value={configForm.campaignName ?? ''}
+                        onChange={e => setConfigForm({ ...configForm, campaignName: e.target.value || null })}
+                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                        placeholder="e.g. Diwali sale"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-blue-200 mb-1">Campaign message (optional)</label>
+                      <input
+                        type="text"
+                        maxLength={250}
+                        value={configForm.campaignMessage ?? ''}
+                        onChange={e => setConfigForm({ ...configForm, campaignMessage: e.target.value || null })}
+                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                        placeholder="Only truthful context you want the AI to reference"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-blue-200 mb-1">Campaign starts</label>
+                      <input
+                        type="datetime-local"
+                        value={toLocalDateTimeInput(configForm.campaignStart ?? null)}
+                        onChange={e => setConfigForm({ ...configForm, campaignStart: fromLocalDateTimeInput(e.target.value) })}
+                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                      />
+                      <p className="text-xs text-blue-300/60 mt-1">Leave empty to run for the whole goal window.</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-blue-200 mb-1">Campaign ends</label>
+                      <input
+                        type="datetime-local"
+                        value={toLocalDateTimeInput(configForm.campaignEnd ?? null)}
+                        onChange={e => setConfigForm({ ...configForm, campaignEnd: fromLocalDateTimeInput(e.target.value) })}
+                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                      />
+                      <p className="text-xs text-blue-300/60 mt-1">The AI only references the campaign while it is live.</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setTab('goals')}
+                    className="inline-flex items-center gap-1.5 text-xs text-blue-300/70 hover:text-blue-200 transition"
+                  >
+                    <Gauge className="w-3.5 h-3.5" /> View live goal progress →
+                  </button>
+                </div>
+              )}
 
               <div className="flex items-center gap-3 pt-2">
                 <button
@@ -604,9 +827,173 @@ void fetchConfig()
           </div>
         </div>
       )}
+
+      {/* Daily Goal tab */}
+      {tab === 'goals' && (
+        <div className="space-y-5">
+          {!goalStatus ? (
+            <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl p-6 text-blue-300/60 text-sm">
+              No goal data yet. Open the Config tab, enable a daily goal and pick a window.
+            </div>
+          ) : !goalStatus.enabled ? (
+            <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl p-6 text-blue-300/60 text-sm">
+              The daily goal is currently disabled. Enable it in the Config tab to see live progress here.
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl p-4">
+                  <div className="flex items-center mb-2">
+                    <Target className="w-5 h-5 mr-2 text-blue-300" />
+                    <span className="text-xs text-blue-300/70">Daily {goalStatus.goalType}</span>
+                  </div>
+                  <div className="text-2xl font-bold text-white">
+                    {goalStatus.goalType === 'revenue'
+                      ? `₹${goalStatus.achievedValue.toLocaleString('en-IN')}`
+                      : goalStatus.orderCount}
+                  </div>
+                  <div className="text-xs text-blue-300/60 mt-1">
+                    of {goalStatus.goalType === 'revenue'
+                      ? `₹${goalStatus.targetValue.toLocaleString('en-IN')}`
+                      : goalStatus.targetValue}{' '}
+                    target
+                  </div>
+                </div>
+                <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl p-4">
+                  <div className="flex items-center mb-2">
+                    <TrendingUp className="w-5 h-5 mr-2 text-emerald-300" />
+                    <span className="text-xs text-blue-300/70">Progress</span>
+                  </div>
+                  <div className="text-2xl font-bold text-white">{goalStatus.progressPercent.toFixed(0)}%</div>
+                  <div className="text-xs text-blue-300/60 mt-1">of target reached</div>
+                </div>
+                <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl p-4">
+                  <div className="flex items-center mb-2">
+                    <Gauge className="w-5 h-5 mr-2 text-blue-300" />
+                    <span className="text-xs text-blue-300/70">Strategy</span>
+                  </div>
+                  <div className="text-xl font-bold text-white">{goalStatus.strategy}</div>
+                  <div className="text-xs text-blue-300/60 mt-1">
+                    {goalStatus.mode.charAt(0).toUpperCase() + goalStatus.mode.slice(1)} pace
+                  </div>
+                </div>
+                <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl p-4">
+                  <div className="flex items-center mb-2">
+                    <Timer className="w-5 h-5 mr-2 text-amber-300" />
+                    <span className="text-xs text-blue-300/70">Window</span>
+                  </div>
+                  <div className="text-xl font-bold text-white">{goalStatus.elapsedPercent.toFixed(0)}%</div>
+                  <div className="text-xs text-blue-300/60 mt-1">elapsed · <GoalStatusPill status={goalStatus.windowState} /></div>
+                </div>
+                <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl p-4">
+                  <div className="flex items-center mb-2">
+                    <TrendingUp className="w-5 h-5 mr-2 text-amber-300" />
+                    <span className="text-xs text-blue-300/70">Remaining</span>
+                  </div>
+                  <div className="text-xl font-bold text-white">
+                    {goalStatus.goalType === 'revenue'
+                      ? `₹${Math.max(0, goalStatus.targetValue - goalStatus.achievedValue).toLocaleString('en-IN')}`
+                      : Math.max(0, goalStatus.targetValue - goalStatus.orderCount)}
+                  </div>
+                  <div className="text-xs text-blue-300/60 mt-1">still needed to reach target</div>
+                </div>
+                <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl p-4">
+                  <div className="flex items-center mb-2">
+                    <Timer className="w-5 h-5 mr-2 text-emerald-300" />
+                    <span className="text-xs text-blue-300/70">Time Remaining</span>
+                  </div>
+                  <div className="text-xl font-bold text-white">{formatTimeRemaining(goalStatus.closesAtISO)}</div>
+                  <div className="text-xs text-blue-300/60 mt-1">until the window closes</div>
+                </div>
+              </div>
+
+              <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-blue-100 font-semibold">
+                    {goalStatus.goalType === 'revenue' ? 'Revenue recognized' : 'Confirmed orders'} — {goalStatus.businessDate}
+                  </span>
+                </div>
+                <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      goalStatus.progressPercent >= 100
+                        ? 'bg-emerald-500'
+                        : goalStatus.mode === 'behind'
+                        ? 'bg-amber-500'
+                        : 'bg-blue-500'
+                    }`}
+                    style={{ width: `${Math.min(100, goalStatus.progressPercent)}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between mt-2 text-xs text-blue-300/60">
+                  <span>
+                    {goalStatus.startsAtISO ? new Date(goalStatus.startsAtISO).toLocaleString() : '—'}
+                  </span>
+                  <span>
+                    {goalStatus.closesAtISO ? new Date(goalStatus.closesAtISO).toLocaleString() : '—'}
+                  </span>
+                </div>
+                <p className="text-xs text-blue-300/60 mt-2">
+                  Timezone: {goalStatus.timezone} · Only confirmed bargain orders (not refunded) count · Strategy and pacing
+                  are merchant-only — customers never see them.
+                </p>
+              </div>
+
+              {(goalStatus.campaignName || goalStatus.campaignMessage) && (
+                <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl p-4 text-sm text-blue-100">
+                  <span className="text-blue-300/70 font-medium">Campaign:</span>{' '}
+                  {goalStatus.campaignName ?? 'Untitled'}{' '}
+                  {goalStatus.campaignMessage && <span className="text-blue-300/60">- {goalStatus.campaignMessage}</span>}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
+// Convert an ISO timestamp to a <input type="datetime-local"> value (browser-local).
+function toLocalDateTimeInput(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// Convert a datetime-local value back to ISO (or null to clear).
+function fromLocalDateTimeInput(v: string): string | null {
+  if (!v) return null
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
+
+// "4h 32m" style countdown to the window close (client clock), else '—'.
+function formatTimeRemaining(iso: string | null): string {
+  if (!iso) return '—'
+  const end = new Date(iso).getTime()
+  if (Number.isNaN(end)) return '—'
+  const ms = Math.max(0, end - Date.now())
+  const totalMinutes = Math.floor(ms / 60_000)
+  const h = Math.floor(totalMinutes / 60)
+  const m = totalMinutes % 60
+  if (h <= 0 && m <= 0) return 'Closed'
+  if (h <= 0) return `${m}m`
+  return `${h}h ${m}m`
+}
+
+function GoalStatusPill({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    active: { label: 'Active now', cls: 'bg-emerald-900/40 text-emerald-300' },
+    not_started: { label: 'Not started', cls: 'bg-slate-800 text-slate-300' },
+    ended: { label: 'Window ended', cls: 'bg-slate-800 text-slate-300' },
+    disabled: { label: 'Disabled', cls: 'bg-slate-800 text-slate-300' },
+  }
+  const m = map[status] ?? { label: status, cls: 'bg-slate-800 text-slate-300' }
+  return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${m.cls}`}>{m.label}</span>
+}
+
 function GroupTitle({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle: string }) {
   return (
     <div className="pt-4">

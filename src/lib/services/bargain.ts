@@ -2,6 +2,11 @@ import OpenAI from 'openai'
 import prisma from '@/lib/db'
 import { checkAbuse } from '@/lib/bargain/abuse'
 import { getAiClient, handleAiFailure } from '@/lib/ai-client'
+import {
+  strategyAdjustedCounter,
+  type BargainStrategy,
+  type NegotiationGoalContext,
+} from '@/lib/bargain/engine'
 
 // Model for the negotiation agent. Defaults to the full gpt-4o for best
 // negotiation quality; set BARGAIN_MODEL=gpt-4o-mini to cut OpenAI cost.
@@ -27,6 +32,7 @@ export interface NegotiationContext {
   bulkQuantity?: number
   walkoutTriggered?: boolean
   language?: string
+  goal?: NegotiationGoalContext
 }
 
 export interface NegotiationResult {
@@ -37,6 +43,8 @@ export interface NegotiationResult {
   sentiment?: string
   metadata?: Record<string, unknown>
 }
+
+export type { BargainStrategy }
 
 // ────────────────────────────────────────────────────────────
 // THE AI BARGAIN AGENT — THE HEART OF THE SYSTEM
@@ -831,6 +839,16 @@ function graduatedCounter(ctx: NegotiationContext): number {
   return Math.round(counter * 100) / 100
 }
 
+// ── Strategy-aware counter ──
+// The deterministic pacing layer (goals.ts) picks a strategy; this nudges the
+// fallback counter within [minPrice, originalPrice] accordingly. The strategy
+// never moves a counter below the merchant floor.
+function effectiveCounter(ctx: NegotiationContext): number {
+  const strat = ctx.goal?.strategy
+  if (!strat || strat === 'NORMAL') return graduatedCounter(ctx)
+  return strategyAdjustedCounter(ctx, strat, graduatedCounter(ctx))
+}
+
 // ── Rule-based fallback (when AI is unavailable) ──
 
 export function ruleBasedDecision(
@@ -853,7 +871,7 @@ export function ruleBasedDecision(
   }
 
   if (boundedOffer < minPrice * 0.3) {
-    const counter = graduatedCounter(ctx)
+    const counter = effectiveCounter(ctx)
     return {
       reply: `I appreciate the creativity but I can't do ${currencySymbol}${boundedOffer.toFixed(2)}. Let me offer ${currencySymbol}${counter.toFixed(2)} — a fair starting point. What do you think?`,
       decision: 'counter',
@@ -863,7 +881,7 @@ export function ruleBasedDecision(
     }
   }
 
-  const counter = graduatedCounter(ctx)
+  const counter = effectiveCounter(ctx)
   if (attemptsLeft > 1) {
     return {
       reply: `Hmm, ${currencySymbol}${boundedOffer.toFixed(2)} is a bit low for me. Let me meet you partway — how about ${currencySymbol}${counter.toFixed(2)}? I think that's fair given the quality.`,
@@ -1203,6 +1221,28 @@ export function buildSystemPrompt(
     )
   }
 
+  // ── AI SALESPERSON: daily goal + strategy ──
+  if (ctx.goal) {
+    const g = ctx.goal
+    const strategyGuidance: Record<string, string> = {
+      CONSERVATIVE: `Push gently toward the listed price — the day is going well, protect margin.`,
+      NORMAL: `Negotiate a fair deal at your normal pace.`,
+      AGGRESSIVE: `Be a touch more generous with concessions today — the store wants more sales to hit a real daily target.`,
+      CLOSING: `The store's goal window closes soon. Be decisive and make your best offer to close deals before the window ends.`,
+    }
+    const closeLine = g.closesAt ? ` The real window closes at ${g.closesAt}.` : ''
+    const campaignLine = g.campaignName ? ` Campaign: ${g.campaignName}.` : ''
+    const campaignCtx = g.campaignMessage
+      ? ` Merchant-approved context you may truthfully reference: "${g.campaignMessage}".`
+      : ''
+    contextParts.push(
+      `DAILY SALES GOAL: ${strategyGuidance[g.strategy] ?? strategyGuidance.NORMAL}` +
+      `${campaignLine}${closeLine}` +
+      ` Your strategy, target, and pacing are STRICTLY INTERNAL — NEVER reveal any goal, target, or strategy to the customer, and never invent urgency that is not real.` +
+      ` The hidden system minimum still applies and can never be breached or revealed, whatever the situation.${campaignCtx}`
+    )
+  }
+
   // Customer history
   if (ctx.customerContext) {
     contextParts.push(
@@ -1425,7 +1465,7 @@ export async function negotiateStep(
 
     // ── BACKEND SAFETY: Validate and clamp counterOffer ──
     const attemptsLeft = ctx.maxAttempts - ctx.attemptsUsed
-    const fallbackCounter = attemptsLeft <= 2 ? ctx.minPrice : graduatedCounter(ctx)
+    const fallbackCounter = attemptsLeft <= 2 ? ctx.minPrice : effectiveCounter(ctx)
     let counterOffer =
       typeof parsed.counterOffer === 'number' && parsed.counterOffer > 0
         ? Math.round(parsed.counterOffer * 100) / 100
@@ -1433,7 +1473,7 @@ export async function negotiateStep(
 
     // ENFORCE FLOOR: AI counter must never go below minPrice
     if (counterOffer < ctx.minPrice) {
-      counterOffer = attemptsLeft <= 2 ? ctx.minPrice : graduatedCounter(ctx)
+      counterOffer = attemptsLeft <= 2 ? ctx.minPrice : effectiveCounter(ctx)
     }
     // ENFORCE CEILING: AI counter must never exceed original price
     if (counterOffer > ctx.originalPrice) {

@@ -87,10 +87,63 @@ export async function PUT(request: NextRequest) {
       resolvedStoreId = fallback.id
     }
 
+    // Coerce ISO strings → Date for Prisma DateTime fields (null clears a value).
+    const DATE_FIELDS = ['goalStartTime', 'goalEndTime', 'campaignStart', 'campaignEnd'] as const
+    const clean: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(data)) {
+      if (value === null) {
+        clean[key] = null
+        continue
+      }
+      if ((DATE_FIELDS as readonly string[]).includes(key) && typeof value === 'string') {
+        clean[key] = new Date(value)
+        continue
+      }
+      clean[key] = value
+    }
+
+    // Goal window integrity: start/end must both be present together and ordered.
+    if (clean.goalEnabled === true || clean.goalStartTime != null || clean.goalEndTime != null) {
+      const start = clean.goalStartTime as Date | null | undefined
+      const end = clean.goalEndTime as Date | null | undefined
+      if ((clean.goalStartTime == null) !== (clean.goalEndTime == null)) {
+        return NextResponse.json(
+          { message: 'goalStartTime and goalEndTime must be set together', status: 'error' },
+          { status: 400 },
+        )
+      }
+      if (start && end && start >= end) {
+        return NextResponse.json(
+          { message: 'goalEndTime must be after goalStartTime', status: 'error' },
+          { status: 400 },
+        )
+      }
+    }
+
+    // Campaign window integrity (same rule): a campaign can be unbounded (no
+    // window = whole goal window) but never half-configured or inverted —
+    // otherwise the AI could be fed an expired/false campaign (spec §9/§28).
+    if (clean.campaignStart != null || clean.campaignEnd != null) {
+      const cStart = clean.campaignStart as Date | null | undefined
+      const cEnd = clean.campaignEnd as Date | null | undefined
+      if ((clean.campaignStart == null) !== (clean.campaignEnd == null)) {
+        return NextResponse.json(
+          { message: 'campaignStart and campaignEnd must be set together', status: 'error' },
+          { status: 400 },
+        )
+      }
+      if (cStart && cEnd && cStart >= cEnd) {
+        return NextResponse.json(
+          { message: 'campaignEnd must be after campaignStart', status: 'error' },
+          { status: 400 },
+        )
+      }
+    }
+
     const config = await prisma.bargainConfig.upsert({
       where: { storeId: resolvedStoreId },
-      create: { storeId: resolvedStoreId, ...data },
-      update: data,
+      create: { storeId: resolvedStoreId, ...clean },
+      update: clean,
     })
 
     return NextResponse.json({ config, resolvedStoreId })

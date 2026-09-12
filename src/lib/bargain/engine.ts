@@ -7,6 +7,22 @@ export type Persona = 'friendly_shopkeeper' | 'strict_negotiator' | 'playful_fri
 export const SUPPORTED_LANGUAGES = ['auto', 'en', 'hinglish', 'hi', 'ta', 'te', 'bn', 'mr', 'gu', 'kn', 'ml', 'pa', 'or'] as const
 export type BargainLanguage = (typeof SUPPORTED_LANGUAGES)[number]
 
+// ── AI Salesperson: dynamic strategy ─────────────────────────────────────────
+// Strategy is chosen by the deterministic pacing layer (src/lib/bargain/goals.ts)
+// and only ever nudges behaviour WITHIN the merchant's absolute floor. The
+// floor itself is non-negotiable and enforced by the backend, never here.
+export type BargainStrategy = 'CONSERVATIVE' | 'NORMAL' | 'AGGRESSIVE' | 'CLOSING'
+export type GoalMode = 'ahead' | 'on_track' | 'behind' | 'idle'
+
+export interface NegotiationGoalContext {
+  strategy: BargainStrategy
+  mode: GoalMode
+  goalType: 'orders' | 'revenue'
+  closesAt?: string // ISO instant the real goal window closes (truthful urgency)
+  campaignName?: string
+  campaignMessage?: string
+}
+
 export interface NegotiationContext {
   storeName: string
   currencySymbol: string
@@ -20,6 +36,7 @@ export interface NegotiationContext {
   bulkQuantity?: number
   walkoutTriggered?: boolean
   language?: string
+  goal?: NegotiationGoalContext
 }
 
 export interface NegotiationResult {
@@ -38,6 +55,55 @@ export function graduatedCounter(ctx: NegotiationContext): number {
   const priceRange = originalPrice - minPrice
   const counter = originalPrice - priceRange * progress
   return Math.round(counter * 100) / 100
+}
+
+// ── Strategy-aware counter ──
+// Shifts a base counter within [minPrice, originalPrice] according to the
+// deterministically-chosen strategy. CONSERVATIVE keeps the price higher
+// (protect margin when the daily goal is ahead); AGGRESSIVE/CLOSING push lower
+// (close more deals when behind near the window end). The strategy NEVER moves a
+// counter below the absolute merchant floor.
+export function strategyAdjustedCounter(
+  ctx: NegotiationContext,
+  strategy: BargainStrategy,
+  base?: number,
+): number {
+  const { originalPrice, minPrice } = ctx
+  const range = originalPrice - minPrice
+  const start = base ?? graduatedCounter(ctx)
+  if (range <= 0) return minPrice
+
+  let adjusted = start
+  switch (strategy) {
+    case 'CONSERVATIVE':
+      adjusted = start + range * 0.25
+      break
+    case 'AGGRESSIVE':
+      adjusted = start - range * 0.12
+      break
+    case 'CLOSING':
+      adjusted = start - range * 0.3
+      break
+    case 'NORMAL':
+      break
+  }
+
+  return Math.round(Math.min(originalPrice, Math.max(minPrice, adjusted)) * 100) / 100
+}
+
+// ── Deterministic final safety validator ──
+// The last line of defence shared by every path that turns a suggested price
+// into an offer: clamp to [minPrice, originalPrice] and round to 2dp. Strategy
+// or AI may suggest anything; this decides what is actually offered.
+export function clampOfferToSafety(opts: {
+  originalPrice: number
+  minPrice: number
+  suggested: number
+}): number {
+  const { originalPrice, minPrice, suggested } = opts
+  if (!Number.isFinite(suggested) || suggested < 0) return minPrice
+  const rounded = Math.round(suggested * 100) / 100
+  return Math.min(originalPrice, Math.max(minPrice, rounded))
 }
 
 // ── Bulk-volume floor factor (deeper per-unit floor for larger orders) ──

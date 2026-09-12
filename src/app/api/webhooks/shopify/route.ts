@@ -11,6 +11,7 @@ import {
   normalizeCustomerId,
 } from '@/lib/data-export'
 import { computeRefundNetting, isMessageAttributable } from '@/lib/attribution'
+import { attributeBargainGoal, netBargainGoalRefund } from '@/lib/bargain/goals'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS, resolvePlanId, getPlan } from '@/lib/payment'
 import { sendAlertOnError } from '@/lib/alerter'
 import { track } from '@/lib/analytics/track'
@@ -405,6 +406,25 @@ async function processOrderCreate(data: any, store: any, domain: string) {
   const netAmount = Math.max(0, grossAmount - discountAmount)
   const discountUsed = discountAmount > 0
 
+  // ── AI Salesperson: attribute confirmed bargain orders to the daily goal ──
+  // Idempotent per shopifyOrderId; never blocks cart recovery if it fails.
+  try {
+    await attributeBargainGoal({
+      store: { id: store.id, timezone: store.timezone },
+      shopifyOrderId: shopifyOrderId ?? '',
+      orderAmount: netAmount,
+      orderCreatedAt,
+      email: data.email ?? null,
+      cartToken: data.cart_token ?? null,
+      checkoutToken: data.token ?? null,
+      appliedCodes: Array.isArray(data.discount_codes)
+        ? data.discount_codes.map((dc: any) => (dc && dc.code) || null).filter(Boolean)
+        : [],
+    })
+  } catch (err) {
+    console.error('[BARGAIN_GOAL_ATTRIBUTE]', err)
+  }
+
   if (!cart.convertedAt) {
     await prisma.cart.update({
       where: { id: cart.id },
@@ -628,6 +648,12 @@ async function handleOrderCancelled(data: any, store: any, domain: string) {
     return
   }
   await applyRefundToRecoveredCart(store, orderId, 0, 'cancelled')
+  await netBargainGoalRefund({
+    storeId: store.id,
+    shopifyOrderId: orderId,
+    refundAmount: 0,
+    fullyRefunded: true,
+  })
 }
 
 async function handleRefundCreate(data: any, store: any, domain: string) {
@@ -652,6 +678,12 @@ async function handleRefundCreate(data: any, store: any, domain: string) {
     return
   }
   await applyRefundToRecoveredCart(store, orderId, refundAmount, 'refund')
+  await netBargainGoalRefund({
+    storeId: store.id,
+    shopifyOrderId: orderId,
+    refundAmount,
+    fullyRefunded: false,
+  })
 }
 
 async function accrueRevenueShare(params: AccrueParams) {

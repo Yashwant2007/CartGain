@@ -18,6 +18,18 @@ export const bargainConfigUpsertSchema = z.object({
   language: z.string().min(0).max(12).optional(),
   minProfitPercent: z.number().min(0).max(100).optional(),
   sessionTimeout: z.number().int().min(30).max(3600).optional(),
+  // ── AI Salesperson: daily goal + dynamic strategy ──
+  goalEnabled: z.boolean().optional(),
+  goalType: z.enum(['orders', 'revenue']).optional(),
+  goalTarget: z.number().positive().max(1_000_000).optional(),
+  goalStartTime: z.string().datetime().nullable().optional(),
+  goalEndTime: z.string().datetime().nullable().optional(),
+  goalTimezone: z.string().min(1).max(64).nullable().optional(),
+  dynamicStrategyEnabled: z.boolean().optional(),
+  campaignName: z.string().max(60).nullable().optional(),
+  campaignStart: z.string().datetime().nullable().optional(),
+  campaignEnd: z.string().datetime().nullable().optional(),
+  campaignMessage: z.string().max(250).nullable().optional(),
 })
 
 export type BargainConfigUpsertInput = z.infer<typeof bargainConfigUpsertSchema>

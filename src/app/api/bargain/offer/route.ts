@@ -8,6 +8,8 @@ import { assertSessionOwnership } from '@/lib/bargain/session-bind'
 import { uiText, currencySymbolFor } from '@/lib/bargain/i18n'
 import { detectLanguage } from '@/lib/bargain/language'
 import { logDataAccess } from '@/lib/data-protection'
+import { clampOfferToSafety } from '@/lib/bargain/engine'
+import { buildGoalContextForNegotiation } from '@/lib/bargain/goals'
 
 export const dynamic = 'force-dynamic'
 
@@ -205,6 +207,7 @@ export async function POST(request: NextRequest) {
       walkoutTriggered: isWalkout,
       language: lang,
       customerContext: await buildCustomerContext(bargainSession.storeId, bargainSession.customerEmail),
+      goal: await buildGoalContextForNegotiation(config, bargainSession.store.timezone, new Date()),
     }
 
     const history = bargainSession.messages
@@ -255,7 +258,13 @@ export async function POST(request: NextRequest) {
 
       // First walkout → retention offer (one meaningful extra concession)
       const retentionResult = await negotiateStep(ctx, history, data.message, customerOffer ?? undefined, bargainSession.id)
-      const retentionPrice = retentionResult.counterOffer ?? retentionOffer(ctx, lastCounter).counterOffer ?? minPrice
+      // Deterministic final safety validator: whatever the negotiation produced,
+      // the price actually offered is clamped into [minPrice, originalPrice].
+      const retentionPrice = clampOfferToSafety({
+        originalPrice: bargainSession.originalPrice,
+        minPrice,
+        suggested: retentionResult.counterOffer ?? retentionOffer(ctx, lastCounter).counterOffer ?? minPrice,
+      })
       const retentionReply = retentionResult.reply || retentionOffer(ctx, lastCounter).reply
 
       await prisma.$transaction([
@@ -310,6 +319,17 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Deterministic final safety validator — the offer the customer is actually
+    // shown is always within [minPrice, originalPrice] regardless of AI output.
+    const safeCounter =
+      result.decision === 'chat' || result.counterOffer == null
+        ? null
+        : clampOfferToSafety({
+            originalPrice: bargainSession.originalPrice,
+            minPrice,
+            suggested: result.counterOffer,
+          })
+
     const [customerMsg, aiMsg, updatedSession] = await prisma.$transaction([
       prisma.bargainMessage.create({
         data: {
@@ -326,7 +346,7 @@ export async function POST(request: NextRequest) {
           // accept-able offer and the customer could lock the floor without the
           // AI ever offering it. Only real counters (decision counter/accept)
           // carry an offeredPrice.
-          offeredPrice: result.decision === 'chat' ? null : (result.counterOffer ?? null),
+          offeredPrice: safeCounter,
           metadata: { decision: result.decision, tactic: result.tactic, sentiment: result.sentiment, ...(result.metadata ?? {}) } as any,
         },
       }),
@@ -335,7 +355,7 @@ export async function POST(request: NextRequest) {
         data: {
           currentOffer: customerOffer ?? bargainSession.currentOffer,
           status: sessionStatus,
-          finalPrice: result.decision === 'accept' ? (result.counterOffer ?? customerOffer ?? bargainSession.currentOffer) : null,
+          finalPrice: result.decision === 'accept' ? (safeCounter ?? customerOffer ?? bargainSession.currentOffer) : null,
         },
       }),
     ])
@@ -343,7 +363,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       reply: result.reply,
       decision: result.decision,
-      counterOffer: result.decision === 'chat' ? null : (result.counterOffer ?? null),
+      counterOffer: safeCounter,
       attemptsRemaining: effectiveAttemptsRemaining,
       sessionStatus,
       finalPrice: updatedSession.finalPrice,

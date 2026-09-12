@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { bargainStartSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerContext, SUPPORTED_LANGUAGES, type NegotiationContext } from '@/lib/services/bargain'
 import { currencySymbolFor } from '@/lib/bargain/i18n'
+import { buildGoalContextForNegotiation } from '@/lib/bargain/goals'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { getBargainGate, recordBargainSessionOp, BARGAIN_SESSIONS_EXHAUSTED } from '@/lib/bargain/gate'
@@ -193,12 +194,18 @@ export async function POST(request: NextRequest) {
       customerContext,
     }
 
-    // Pull optional product title from override
+    // Optional product title from override
     const product = await prisma.bargainProduct.findUnique({
       where: { storeId_shopifyProductId: { storeId: data.storeId, shopifyProductId: data.shopifyProductId } },
       select: { productTitle: true },
     })
     if (product?.productTitle) ctx.productTitle = product.productTitle
+
+    // Attach the daily-goal context so the OPENING message is also strategy-aware
+    // (truthful campaign/urgency lines only — the strategy itself never reaches
+    // the customer). Same context the offer step uses for every later turn.
+    const goalCtx = await buildGoalContextForNegotiation(config, store.timezone, new Date())
+    if (goalCtx) ctx.goal = goalCtx
 
     // Try AI opening message, fall back to deterministic
     let openingReply = buildOpeningMessage(ctx)

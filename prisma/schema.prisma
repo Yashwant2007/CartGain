@@ -134,6 +134,8 @@ model Store {
   bargainProducts     BargainProduct[]
   bargainSessions     BargainSession[]
   customerDataExports CustomerDataExport[]
+  bargainDailyGoals        BargainDailyGoal[]
+  bargainDailyGoalIncrements BargainDailyGoalIncrement[]
 
   @@unique([userId, domain])
   @@index([userId])
@@ -326,6 +328,18 @@ model BargainConfig {
   language         String   @default("auto") // auto, en, hinglish, hi, ta, te, bn, mr, gu, kn, ml, pa, or
   minProfitPercent Float    @default(20)  // global fallback floor (% margin to protect)
   sessionTimeout   Int      @default(300) // seconds
+  // ── AI Salesperson: daily goal + dynamic strategy ──
+  goalEnabled      Boolean  @default(false)
+  goalType         String   @default("orders") // orders | revenue
+  goalTarget       Float    @default(10)
+  goalStartTime    DateTime?  // goal window open (absolute instant; shown in merchant tz)
+  goalEndTime      DateTime?  // goal window close (absolute instant)
+  goalTimezone     String?    // IANA tz for business-day bucketing; falls back to store.timezone
+  dynamicStrategyEnabled Boolean @default(false) // auto-pacing (CONSERVATIVE/NORMAL/AGGRESSIVE/CLOSING) — OFF unless merchant opts in
+  campaignName     String?
+  campaignStart    DateTime?
+  campaignEnd      DateTime?
+  campaignMessage  String? // merchant-written, truthful context the AI may truthfully reference
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -403,6 +417,53 @@ model BargainMessage {
 
   @@index([sessionId])
   @@index([createdAt])
+}
+
+// ── AI Salesperson: daily goal ledger ────────────────────────────────────────
+// Materialized per-merchant per-business-day goal row. The business day is the
+// merchant's local calendar day (YYYY-MM-DD in `goalTimezone`), derived from the
+// ORDER creation time so late-arriving webhooks net into the right day.
+// `achievedValue`/`orderCount` are maintained by upsert-on-attribution and
+// recomputed-from-ledger on refunds — the BargainDailyGoalIncrement ledger is
+// the single source of truth (one row per shopifyOrderId = idempotency guard).
+model BargainDailyGoal {
+  id            String   @id @default(cuid())
+  storeId       String
+  businessDate  String   // merchant-local calendar day, YYYY-MM-DD
+  goalType      String   // snapshot of config at day creation: orders | revenue
+  targetValue   Float    // snapshot of config at day creation
+  achievedValue Float    @default(0) // recognized net (revenue) or confirmed orders
+  orderCount    Int      @default(0) // confirmed (not fully refunded) orders
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  store    Store                     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  increments BargainDailyGoalIncrement[]
+
+  @@unique([storeId, businessDate])
+  @@index([storeId])
+}
+
+// Idempotency ledger for goal attribution. One row per shopifyOrderId — the
+// unique constraint makes duplicate orders/create webhooks a no-op (mirrors the
+// RecoveredCart.shopifyOrderId / RevenueShareEvent.cartId guard). `refundedAmount`
+// backs refund/cancellation netting: an order's recognized contribution to the
+// goal is max(0, orderAmount − refundedAmount).
+model BargainDailyGoalIncrement {
+  id             String   @id @default(cuid())
+  storeId        String
+  businessDate   String   // must match the BargainDailyGoal row's business day
+  shopifyOrderId String   @unique
+  goalType       String   // snapshot of the type at attribution: orders | revenue
+  orderAmount    Float    // recognized net revenue at attribution
+  refundedAmount Float    @default(0)
+  createdAt      DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  goal BargainDailyGoal @relation(fields: [storeId, businessDate], references: [storeId, businessDate], onDelete: Cascade)
+
+  @@unique([storeId, shopifyOrderId])
+  @@index([storeId, businessDate])
 }
 
 model Invoice {
