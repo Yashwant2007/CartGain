@@ -1430,7 +1430,7 @@ export default function BargainWidget({
         .cg-reduced-motion *, .cg-reduced-motion [style*="animation"] { animation: none !important; transition: none !important }
         .cg-reduced-motion .cg-attn { box-shadow: none !important; transform: none !important }
         .bargain-widget-root .cg-fab { position: fixed; bottom: 24px; right: 24px; z-index: 99998 }
-        .bargain-widget-root .cg-panel-fixed { position: fixed; top: 0; right: 0; bottom: 0; left: auto; width: 100%; max-width: 540px; border-radius: 18px 0 0 18px; box-shadow: -10px 0 48px rgba(15,23,42,0.18); z-index: 99999 }
+        .bargain-widget-root .cg-panel-fixed { position: fixed; top: 0; right: 0; bottom: 0; left: auto; width: 100%; max-width: 400px; border-radius: 18px 0 0 18px; box-shadow: -10px 0 48px rgba(15,23,42,0.18); z-index: 99999 }
         @media (max-width: 680px) {
           .bargain-widget-root .cg-fab { left: 16px; right: 16px; bottom: 16px; width: auto; justify-content: center }
           .bargain-widget-root .cg-panel-fixed { top: auto; bottom: 0; left: 0; width: 100%; max-width: none; height: min(88dvh, 780px); border-radius: 18px 18px 0 0; box-shadow: 0 -10px 40px rgba(15,23,42,0.28) }
