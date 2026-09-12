@@ -22,8 +22,10 @@ jobs:
           ENC_FILENAME="${FILENAME}.gpg"
 
           # Dump using official Postgres 17 Docker image (matches Supabase server version)
+          # NOTE: use single quotes so the host shell never expands the secret into
+          # the script; the container's sh expands $DIRECT_URL from -e instead.
           docker run --rm -e DIRECT_URL postgres:17 \
-            sh -c "pg_dump --dbname=\"$DIRECT_URL\" | gzip" > "/tmp/${FILENAME}"
+            sh -c 'pg_dump --dbname="$DIRECT_URL" | gzip' > "/tmp/${FILENAME}"
 
           # Encrypt (gpg -c creates FILENAME.gpg in the same directory)
           gpg --batch --no-tty --yes --pinentry-mode loopback \

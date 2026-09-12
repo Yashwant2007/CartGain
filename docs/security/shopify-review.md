@@ -5,3 +5,9 @@ RecoverFlow uses merchant and customer data only to deliver abandoned-cart recov
 
 ## 255-character version
 RecoverFlow minimizes data use, isolates test and production systems, logs sensitive access, redacts alerts/logs, encrypts backups, and runs restore tests. We prohibit unmanaged exports and document these controls in our DPA, privacy, backup, and DLP policies.
+
+## Why the app requests `write_checkouts` (questionnaire answer)
+CartGain requests `write_checkouts` alongside `read_checkouts` for two reasons:
+1. Shopify's abandoned-checkout REST endpoints (`GET /admin/api/*/abandoned_checkouts.json`) are documented for the checkouts resource, whose scopes are granted as the read/write pair — the read of shipping/billing address needed to detect and recover abandoned carts requires the checkout scope set.
+2. The app's optional AI price-negotiation feature matches the storefront customer's `email` against prior bargain sessions (read-only) so returning visitors get a personalized, lower counter-offer. We never mutate a checkout; `write_checkouts` authorizes the scope set, and no cart is changed server-side.
+We persist only email/phone/name (no addresses) and never use `write_checkouts` to alter checkout contents.
