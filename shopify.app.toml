@@ -11,7 +11,9 @@ privacy_policy_url = "https://cart-gain.com/privacy"
 tos_url = "https://cart-gain.com/terms"
 
 [webhooks]
-api_version = "2026-07"
+# Kept in sync with src/lib/shopify.ts (setupShopifyWebhooks) — the topics below
+# must match the runtime list exactly so every install gets identical webhooks.
+api_version = "2026-04"
 
   [[webhooks.subscriptions]]
   uri = "/api/webhooks/shopify"
@@ -20,6 +22,10 @@ api_version = "2026-07"
   "checkouts/create",
   "checkouts/update",
   "orders/create",
+  # Revenue netting — Day 8-10: refunded/cancelled recoveries are netted out of
+  # recognized revenue (see src/lib/attribution.ts).
+  "orders/cancelled",
+  "refunds/create",
   "app/uninstalled",
   "customers/data_request",
   "customers/redact",
