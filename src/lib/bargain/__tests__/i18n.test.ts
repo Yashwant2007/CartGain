@@ -59,6 +59,8 @@ describe('uiText', () => {
       'connecting', 'assistant', 'notice', 'offered', 'typeOffer',
       'sessionEnded', 'acceptDeal', 'dealComplete', 'youSaved', 'newPrice',
       'copy', 'codeApply', 'optOutMsg',
+      'offersRemaining', 'sendOffer', 'addToCart', 'offerEnded',
+      'checking', 'tryAgain',
     ] as const
     // Keys guaranteed translated in every supported language (Hinglish reuses
     // some English loanwords like "copy"/"AI-powered", so those are excluded).
@@ -68,6 +70,7 @@ describe('uiText', () => {
       'terminal_expired', 'terminal_abandoned', 'opt_out',
       'negotiate', 'dealTitle', 'skip', 'attemptsLeft', 'typeOffer',
       'acceptDeal', 'youSaved', 'newPrice', 'optOutMsg',
+      'offersRemaining', 'sendOffer', 'addToCart', 'offerEnded', 'checking', 'tryAgain',
     ] as const
     for (const lang of I18N_LANGS) {
       for (const key of allKeys) {

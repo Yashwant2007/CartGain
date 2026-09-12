@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  X, Send, MessageCircle, Sparkles, Loader2, CheckCircle2, Clock, Tag, Zap, ShieldCheck, ChevronRight, BadgePercent, TrendingDown,
+  X, Send, MessageCircle, Sparkles, Loader2, CheckCircle2, Clock, Tag, Zap, ShieldCheck, ArrowRight, BadgePercent, TrendingDown,
 } from 'lucide-react'
 import { currencySymbolFor, uiText } from '@/lib/bargain/i18n'
 
@@ -118,9 +118,11 @@ export default function BargainWidget({
   const [copied, setCopied] = useState(false)
   const [maxDiscount, setMaxDiscount] = useState<number | null>(null)
   const [returning, setReturning] = useState(false)
+  const [endedReason, setEndedReason] = useState<'accepted' | 'rejected' | 'expired' | 'abandoned' | 'optout' | null>(null)
   const [activeTab, setActiveTab] = useState<'chat' | 'info'>('chat')
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  const launcherRef = useRef<HTMLButtonElement>(null)
 
   const currencySymbol = currencySymbolFor(currency)
   const t = (key: Parameters<typeof uiText>[1], vars?: Record<string, string | number>) => uiText(language, key, vars)
@@ -142,6 +144,13 @@ export default function BargainWidget({
   }
 
   const [prefersReduced, setPrefersReduced] = useState(false)
+
+  // Live numeric draft parsed from the offer field — drives the CTA label so
+  // the customer always sees the exact "₹X" they are about to send.
+  const draftAmount = (() => {
+    const n = parseFloat(input.replace(/[^\d.]/g, ''))
+    return Number.isFinite(n) && n > 0 ? n : null
+  })()
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -252,7 +261,11 @@ export default function BargainWidget({
           createdAt: m.createdAt,
         }))
         setMessages(restored)
-        if (data.session.status !== 'active') setSessionEnded(true)
+        if (data.session.status !== 'active') {
+          setSessionEnded(true)
+          if (data.session.status === 'expired') setEndedReason('expired')
+          if (data.session.status === 'rejected') setDecision('reject')
+        }
       } else {
         const aiMsg: Message = {
           id: 'opening',
@@ -263,7 +276,7 @@ export default function BargainWidget({
         setMessages([aiMsg])
       }
     } catch (err: any) {
-      setError(err.message ?? 'Failed to start')
+      setError(errorCopy(err))
     } finally {
       setLoading(false)
     }
@@ -278,6 +291,17 @@ export default function BargainWidget({
       cartToken: cartToken ?? undefined,
       customerEmail: customerEmail ?? undefined,
     }
+  }
+
+  // Network hiccups get a warm, generic copy; server-sent messages (a too-low
+  // price, a real expiry, …) are kept verbatim so customers never get a canned
+  // reply that contradicts reality.
+  function errorCopy(err: any): string {
+    const msg = err?.message
+    if (!msg || /failed to fetch|networkerror|load failed|typeerror|timeout|abort/i.test(String(msg))) {
+      return t('tryAgain')
+    }
+    return String(msg)
   }
 
   async function sendMessage(text?: string) {
@@ -299,8 +323,20 @@ export default function BargainWidget({
       })
       const data = await res.json()
       if (!res.ok) {
+        if (res.status === 410) {
+          // Session expired while the customer was typing — terminal, but
+          // calm: no retry, just point them back to the listed price.
+          setSessionEnded(true)
+          setEndedReason('expired')
+          setMessages(prev => [...prev, {
+            id: `s-${Date.now()}`, role: 'system' as const, content: t('terminal_expired'),
+            offeredPrice: null, createdAt: new Date().toISOString(),
+          }])
+          return
+        }
         if (data.terminal) {
           setSessionEnded(true)
+          if (data.status) setEndedReason(data.status)
           setMessages(prev => [...prev, {
             id: `s-${Date.now()}`, role: 'system', content: data.message ?? 'Session ended.',
             offeredPrice: null, createdAt: new Date().toISOString(),
@@ -323,7 +359,7 @@ export default function BargainWidget({
       }
       if (data.finalPrice != null) setFinalPrice(data.finalPrice)
     } catch (err: any) {
-      setError(err.message ?? 'Failed to send')
+      setError(errorCopy(err))
     } finally {
       setLoading(false)
     }
@@ -340,6 +376,7 @@ export default function BargainWidget({
         })
       }
       setSessionEnded(true)
+      setEndedReason('optout')
       setMessages(prev => [
         ...prev,
         {
@@ -393,7 +430,7 @@ export default function BargainWidget({
       setDecision('accept')
       setSessionEnded(true)
     } catch (err: any) {
-      setError(err.message ?? 'Could not complete the deal')
+      setError(errorCopy(err))
     } finally {
       setLoading(false)
     }
@@ -408,6 +445,9 @@ export default function BargainWidget({
 
   function closePanel() {
     setOpen(false)
+    // Keyboard users: hand focus back to the launcher when the panel closes so
+    // the next tab-stop lands somewhere predictable in the theme.
+    window.setTimeout(() => launcherRef.current?.focus(), 0)
   }
 
   function copyCode() {
@@ -447,13 +487,16 @@ export default function BargainWidget({
         <button
           onClick={openPanel}
           type="button"
+          ref={launcherRef}
+          aria-haspopup="dialog"
+          aria-expanded={open}
           aria-label="Bargain for a better price"
           style={{
             width: '100%',
             display: 'flex',
             alignItems: 'center',
-            gap: 14,
-            padding: '16px 18px',
+            gap: 12,
+            padding: '12px 14px',
             background: 'linear-gradient(135deg, #ffffff 0%, #fafbff 100%)',
             border: '1px solid #e0e7ff',
             cursor: 'pointer',
@@ -480,83 +523,78 @@ export default function BargainWidget({
             flexShrink: 0,
           }} />
           {image ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={image}
               alt=""
-              width={60}
-              height={60}
-              style={{ width: 60, height: 60, borderRadius: 12, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
+              width={48}
+              height={48}
+              style={{ width: 48, height: 48, borderRadius: 10, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
             />
           ) : (
-            <div style={{ width: 60, height: 60, borderRadius: 12, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <BadgePercent size={26} style={{ color: '#6366f1' }} />
+            <div style={{ width: 48, height: 48, borderRadius: 10, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <BadgePercent size={20} style={{ color: '#6366f1' }} />
             </div>
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <div style={{ fontWeight: 800, fontSize: 16, color: '#0f172a', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}>
+              <div style={{ fontWeight: 800, fontSize: 15, color: '#0f172a', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
                 {productTitle ? productTitle : 'This item'}
               </div>
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: 4,
                 background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', color: '#15803d',
-                border: '1px solid #bbf7d0', borderRadius: 999, padding: '2px 9px',
-                fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap',
+                border: '1px solid #bbf7d0', borderRadius: 999, padding: '2px 8px',
+                fontSize: 10.5, fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0,
               }}>
                 <TrendingDown size={11} />
                 {maxDiscount != null && maxDiscount > 0 ? `Up to ${maxDiscount}% off` : t('saveNow')}
               </span>
             </div>
-            <div style={{ fontSize: 14, color: '#334155', marginTop: 3, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 16 }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
-              <span style={{ color: '#cbd5e1', fontSize: 12 }}>·</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <Zap size={12} style={{ color: '#4f46e5' }} />
-                <span style={{ fontSize: 12.5, color: '#6366f1', fontWeight: 600 }}>
+            <div style={{ fontSize: 13, color: '#334155', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
+              <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 15 }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
+              <span style={{ color: '#cbd5e1', fontSize: 11 }}>·</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <Zap size={12} style={{ color: '#4f46e5', flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: '#6366f1', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {isEmbed && mode === 'cart' ? t('discountHint') : t('triggerSub')}
                 </span>
               </span>
             </div>
-            {personaChip && (
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
-                {personaChip.emoji} {personaChip.label} negotiator
-              </div>
-            )}
           </div>
-          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-            <span
-              style={{
-                background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                color: '#ffffff',
-                fontWeight: 800,
-                fontSize: 14,
-                padding: '12px 20px',
-                borderRadius: 999,
-                border: 'none',
-                boxShadow: '0 4px 16px rgba(79,70,229,0.45)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 7,
-                whiteSpace: 'nowrap',
-                animation: 'cgAttnPulse 2.4s infinite',
-              }}
-            >
-              <Sparkles size={15} />
-              {t('negotiate')}
-            </span>
-            <ChevronRight size={18} style={{ color: '#94a3b8', flexShrink: 0, marginLeft: 10 }} />
-          </div>
+          <span
+            style={{
+              background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+              color: '#ffffff',
+              fontWeight: 800,
+              fontSize: 13.5,
+              padding: '11px 16px',
+              borderRadius: 999,
+              border: 'none',
+              boxShadow: '0 4px 16px rgba(79,70,229,0.45)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              animation: 'cgAttnPulse 2.4s infinite',
+            }}
+          >
+            <Sparkles size={15} />
+            {t('negotiate')}
+            <ArrowRight size={15} />
+          </span>
         </button>
       ) : (
         /* Floating trigger button — catchy, attention-grabbing launcher */
         <button
           onClick={openPanel}
+          ref={launcherRef}
+          aria-haspopup="dialog"
+          aria-expanded={open}
           aria-label="Bargain for a better price"
+          className="cg-fab"
           style={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
             background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
             color: '#ffffff',
             padding: '16px 24px',
@@ -570,7 +608,6 @@ export default function BargainWidget({
             cursor: 'pointer',
             boxShadow: '0 10px 30px rgba(79,70,229,0.5), 0 2px 8px rgba(0,0,0,0.14)',
             transition: 'all 0.2s ease',
-            zIndex: 99998,
             animation: 'cgAttnFloat 3s ease-in-out infinite',
           }}
           onMouseEnter={(e) => {
@@ -606,23 +643,28 @@ export default function BargainWidget({
         <div
           role="dialog"
           aria-label="Price negotiation"
+          className={isEmbed ? undefined : 'cg-panel-fixed'}
           style={{
-            position: isEmbed ? 'absolute' : 'fixed',
-            top: 0,
-            right: 0,
-            left: isEmbed ? 0 : undefined,
-            bottom: 0,
-            width: '100%',
-            maxWidth: isEmbed ? 'none' : 540,
             background: '#ffffff',
             color: '#1e293b',
-            boxShadow: isEmbed ? 'none' : '-10px 0 48px rgba(15,23,42,0.18)',
-            borderRadius: isEmbed ? 0 : '18px 0 0 18px',
-            zIndex: 99999,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
             animation: 'cgPanelIn 0.22s ease-out',
+            ...(isEmbed
+              ? {
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  left: 0,
+                  bottom: 0,
+                  width: '100%',
+                  maxWidth: 'none' as const,
+                  boxShadow: 'none',
+                  borderRadius: 0,
+                  zIndex: 99999,
+                }
+              : {}),
           }}
         >
           {/* Header */}
@@ -695,6 +737,7 @@ export default function BargainWidget({
               <button
                 onClick={closePanel}
                 aria-label="Close"
+                autoFocus
                 style={{
                   background: '#f8fafc',
                   border: '1px solid #e2e8f0',
@@ -802,7 +845,7 @@ export default function BargainWidget({
                     fontSize: 11,
                     fontWeight: 700,
                   }}>
-                    {t('attemptsLeft', { n: attemptsRemaining })}
+                    {t('offersRemaining', { n: attemptsRemaining })}
                   </span>
                 </span>
               )}
@@ -815,16 +858,77 @@ export default function BargainWidget({
             </div>
           )}
 
-          {/* Messages */}
-          <div ref={scrollRef} style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '20px 20px 12px',
+          {/* Product context — what we are negotiating, in one glance */}
+          <div style={{
+            padding: '10px 20px',
             display: 'flex',
-            flexDirection: 'column',
-            gap: 14,
-            background: 'linear-gradient(180deg, #f8faff, #ffffff)',
+            alignItems: 'center',
+            gap: 10,
+            background: 'linear-gradient(180deg, #fafbff, #ffffff)',
+            borderBottom: '1px solid #eef2f7',
           }}>
+            {typeof image === 'string' && image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={image}
+                alt=""
+                width={40}
+                height={40}
+                style={{ width: 40, height: 40, borderRadius: 9, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
+              />
+            ) : (
+              <div style={{ width: 40, height: 40, borderRadius: 9, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <BadgePercent size={18} style={{ color: '#6366f1' }} />
+              </div>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {productTitle ? productTitle : 'This item'}
+              </div>
+              <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 1 }}>
+                Listed price{' '}
+                <span style={{ fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
+                  {currencySymbol}{originalPrice.toFixed(2)}
+                </span>
+              </div>
+            </div>
+            {maxDiscount != null && maxDiscount > 0 ? (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', color: '#15803d',
+                border: '1px solid #bbf7d0', borderRadius: 999, padding: '3px 10px',
+                fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap',
+              }}>
+                <TrendingDown size={12} />
+                Up to {maxDiscount}% off
+              </span>
+            ) : (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                background: '#eef2ff', color: '#4f46e5', border: '1px solid #e0e7ff',
+                borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+              }}>
+                <Zap size={12} />
+                {t('saveNow')}
+              </span>
+            )}
+          </div>
+          <div
+            ref={scrollRef}
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions"
+            aria-label="Price negotiation conversation"
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '20px 20px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14,
+              background: 'linear-gradient(180deg, #f8faff, #ffffff)',
+            }}
+          >
             {activeTab !== 'chat' ? (
               <DealInfoPanel
                 t={t}
@@ -923,12 +1027,13 @@ export default function BargainWidget({
                   borderRadius: '16px 16px 16px 4px',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 4,
+                  gap: 8,
                   boxShadow: '0 1px 3px rgba(15,23,42,0.05)',
                 }}>
                   <span className="cg-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#6366f1' }} />
                   <span className="cg-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#6366f1', animationDelay: '0.15s' }} />
                   <span className="cg-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#6366f1', animationDelay: '0.3s' }} />
+                  <span style={{ fontSize: 13, color: '#64748b', marginLeft: 4 }}>{t('checking')}</span>
                 </div>
               </div>
             )}
@@ -972,10 +1077,10 @@ export default function BargainWidget({
                     {t('youSaved', { x: `${currencySymbol}${savings.toFixed(2)}` })}
                   </div>
                 )}
-                <div style={{ fontSize: 14, color: '#475569', marginBottom: 14 }}>
-                  {t('newPrice')}{' '}
-                  <span style={{ textDecoration: 'line-through', color: '#cbd5e1', marginRight: 6 }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
-                  <span style={{ fontWeight: 800, color: '#15803d', fontSize: 20 }}>{currencySymbol}{finalPrice.toFixed(2)}</span>
+                <div style={{ fontSize: 15, color: '#475569', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ textDecoration: 'line-through', color: '#cbd5e1', fontWeight: 600 }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
+                  <ArrowRight size={16} style={{ color: '#94a3b8' }} />
+                  <span style={{ fontWeight: 800, color: '#15803d', fontSize: 21 }}>{currencySymbol}{finalPrice.toFixed(2)}</span>
                 </div>
                 <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12, lineHeight: 1.5 }}>
                   {t('dealWarmClose', { persona: personaChip?.label ?? 'friendly' })}
@@ -1036,6 +1141,39 @@ export default function BargainWidget({
                 animation: 'cgMsgIn 0.25s ease-out',
               }}>
                 {t('dealRejected')}
+              </div>
+            )}
+
+            {/* Expired — offer window closed, calm + no reactivation */}
+            {sessionEnded && endedReason === 'expired' && (
+              <div style={{
+                padding: '16px 18px',
+                fontSize: 13.5,
+                color: '#475569',
+                background: 'linear-gradient(180deg, #f8fafc, #f1f5f9)',
+                borderRadius: 14,
+                border: '1px solid #e2e8f0',
+                textAlign: 'center',
+                lineHeight: 1.6,
+                animation: 'cgMsgIn 0.25s ease-out',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 600, color: '#334155', marginBottom: 2 }}>
+                  <Clock size={14} style={{ color: '#94a3b8' }} />
+                  {t('offerEnded')}
+                </div>
+                {linkout && (
+                  <a
+                    href={linkout}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10,
+                      background: 'linear-gradient(135deg,#6366f1,#4f46e5)', color: '#ffffff',
+                      padding: '11px 22px', borderRadius: 999, fontWeight: 800, fontSize: 13.5,
+                      textDecoration: 'none', boxShadow: '0 3px 12px rgba(79,70,229,0.35)', outline: 'none',
+                    }}
+                  >
+                    {t('skip')}
+                  </a>
+                )}
               </div>
             )}
 
@@ -1114,7 +1252,7 @@ export default function BargainWidget({
                   flexWrap: 'wrap',
                 }}>
                   {suggestedAmounts.map((v) => (
-                    <QuickChip key={v} label={`${currencySymbol}${v.toLocaleString('en-IN')}`} disabled={thinking} onClick={() => quickOffer(() => setInput(`${currencySymbol}${v}`))} />
+                    <QuickChip key={v} label={`${currencySymbol}${v.toLocaleString('en-IN')}`} disabled={thinking} onClick={() => quickOffer(() => setInput(String(v)))} />
                   ))}
                   <QuickChip label={t('bestOffer')} disabled={thinking} onClick={() => quickOffer(() => setInput(t('bestOfferPrompt')))} />
                   <QuickChip label={t('walkout')} disabled={thinking} onClick={() => quickOffer(() => setInput(t('walkoutPrompt')))} />
@@ -1124,96 +1262,153 @@ export default function BargainWidget({
                 padding: '12px 16px 16px',
                 background: '#ffffff',
                 display: 'flex',
+                flexDirection: 'column',
                 gap: 8,
               }}>
-                <input
-                  type="text"
-                  placeholder={sessionEnded ? t('sessionEnded') : t('typeOffer')}
-                  aria-label="Type your offer"
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  disabled={loading || sessionEnded}
-                  autoComplete="off"
-                  style={{
-                    flex: 1,
-                    padding: '14px 16px',
-                    borderRadius: 12,
-                    border: '1px solid #e2e8f0',
-                    background: '#f8fafc',
-                    color: '#0f172a',
-                    fontSize: 16,
-                    outline: 'none',
-                    transition: 'border-color 0.15s ease',
-                    opacity: sessionEnded ? 0.55 : 1,
-                  }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.background = '#ffffff' }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc' }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && !sessionEnded) void sendMessage()
-                  }}
-                />
+                {/* ₹-prefixed numeric field (numeric keyboard on mobile) */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  borderRadius: 14,
+                  border: '1px solid #e2e8f0',
+                  background: '#f8fafc',
+                  paddingLeft: 16,
+                  transition: 'border-color 0.15s ease',
+                  opacity: sessionEnded ? 0.55 : 1,
+                }}>
+                  <span style={{ fontWeight: 800, color: '#4f46e5', fontSize: 16, marginRight: 2, flexShrink: 0 }}>
+                    {currencySymbol}
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    pattern="[0-9]*[.,]?[0-9]*"
+                    placeholder={t('typeOffer')}
+                    aria-label={t('typeOffer')}
+                    value={input}
+                    onChange={e => {
+                      const sanitized = e.target.value
+                        .replace(/[^\d.]/g, '')
+                        .replace(/(\..*)\./g, '$1')
+                        .slice(0, 12)
+                      setInput(sanitized)
+                    }}
+                    disabled={loading || sessionEnded}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      padding: '14px 16px 14px 2px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: '#0f172a',
+                      fontSize: 18,
+                      fontWeight: 700,
+                      fontVariantNumeric: 'tabular-nums',
+                      outline: 'none',
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !sessionEnded) void sendMessage()
+                    }}
+                  />
+                </div>
+                {/* Primary CTA — the strongest element in the composer */}
                 <button
                   onClick={() => sendMessage()}
                   disabled={loading || !input.trim() || sessionEnded}
-                  aria-label="Send"
+                  aria-label={t('sendOffer')}
                   style={{
+                    width: '100%',
                     background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
                     color: '#ffffff',
                     border: 'none',
-                    borderRadius: 12,
-                    padding: '0 18px',
+                    borderRadius: 14,
+                    padding: '13px',
+                    minHeight: 52,
                     cursor: 'pointer',
-                    minWidth: 50,
-                    minHeight: 50,
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    gap: 8,
+                    fontSize: 15.5,
+                    fontWeight: 800,
                     opacity: (loading || !input.trim() || sessionEnded) ? 0.5 : 1,
-                    boxShadow: '0 2px 10px rgba(79,70,229,0.35)',
+                    boxShadow: '0 4px 16px rgba(79,70,229,0.4)',
                     transition: 'all 0.15s ease',
                     outline: 'none',
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #4f46e5, #4338ca)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(135deg, #6366f1, #4f46e5)' }}
                 >
-                  {loading ? <Loader2 size={18} className="spin" style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={18} />}
+                  {loading
+                    ? <Loader2 size={18} className="spin" style={{ animation: 'spin 1s linear infinite' }} />
+                    : <Send size={17} />}
+                  {draftAmount != null
+                    ? `${t('sendOffer')} · ${currencySymbol}${draftAmount.toFixed(2)}`
+                    : t('sendOffer')}
                 </button>
               </div>
             </>
           )}
 
-          {/* Accept bar */}
+          {/* Accept bar — the money moment: lock the deal in, then hand off to the cart */}
           {decision === 'accept' && (
             <div style={{ padding: '10px 16px 14px', background: '#ffffff', borderTop: '1px solid #eef2f7' }}>
-              <button
-                onClick={acceptDeal}
-                disabled={loading || !!discountCode}
-                style={{
-                  width: '100%',
-                  padding: '14px',
-                  background: discountCode ? 'linear-gradient(135deg, #22c55e, #16a34a)' : '#ffffff',
-                  color: discountCode ? '#ffffff' : '#16a34a',
-                  border: discountCode ? 'none' : '2px solid #16a34a',
-                  borderRadius: 12,
-                  cursor: 'pointer',
-                  fontWeight: 800,
-                  fontSize: 16,
-                  opacity: (loading || !!discountCode) ? 0.85 : 1,
-                  boxShadow: '0 3px 12px rgba(22,163,74,0.3)',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  outline: 'none',
-                }}
-              >
-                {discountCode ? (
-                  <><CheckCircle2 size={18} /> {t('dealComplete')}</>
-                ) : (
-                  <>{t('acceptDeal')} · {currencySymbol}{finalPrice?.toFixed(2)}</>
-                )}
-              </button>
+              {discountCode && linkout ? (
+                <a
+                  href={linkout}
+                  style={{
+                    width: '100%',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    padding: '14px',
+                    background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                    color: '#ffffff',
+                    borderRadius: 14,
+                    cursor: 'pointer',
+                    fontWeight: 800,
+                    fontSize: 16,
+                    textDecoration: 'none',
+                    boxShadow: '0 4px 18px rgba(79,70,229,0.45)',
+                    transition: 'all 0.2s ease',
+                    outline: 'none',
+                  }}
+                >
+                  {t('addToCart')} <ArrowRight size={18} />
+                </a>
+              ) : (
+                <button
+                  onClick={acceptDeal}
+                  disabled={loading || !!discountCode}
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    background: discountCode ? 'linear-gradient(135deg, #22c55e, #16a34a)' : '#ffffff',
+                    color: discountCode ? '#ffffff' : '#16a34a',
+                    border: discountCode ? 'none' : '2px solid #16a34a',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    fontWeight: 800,
+                    fontSize: 16,
+                    opacity: (loading || !!discountCode) ? 0.85 : 1,
+                    boxShadow: '0 3px 12px rgba(22,163,74,0.3)',
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    outline: 'none',
+                  }}
+                >
+                  {discountCode ? (
+                    <><CheckCircle2 size={18} /> {t('dealComplete')}</>
+                  ) : (
+                    <>{t('acceptDeal')} · {currencySymbol}{finalPrice?.toFixed(2)}</>
+                  )}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1234,15 +1429,23 @@ export default function BargainWidget({
         .bargain-widget-root button:focus-visible, .bargain-widget-root a:focus-visible, .bargain-widget-root input:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px }
         .cg-reduced-motion *, .cg-reduced-motion [style*="animation"] { animation: none !important; transition: none !important }
         .cg-reduced-motion .cg-attn { box-shadow: none !important; transform: none !important }
+        .bargain-widget-root .cg-fab { position: fixed; bottom: 24px; right: 24px; z-index: 99998 }
+        .bargain-widget-root .cg-panel-fixed { position: fixed; top: 0; right: 0; bottom: 0; left: auto; width: 100%; max-width: 540px; border-radius: 18px 0 0 18px; box-shadow: -10px 0 48px rgba(15,23,42,0.18); z-index: 99999 }
+        @media (max-width: 680px) {
+          .bargain-widget-root .cg-fab { left: 16px; right: 16px; bottom: 16px; width: auto; justify-content: center }
+          .bargain-widget-root .cg-panel-fixed { top: auto; bottom: 0; left: 0; width: 100%; max-width: none; height: min(88dvh, 780px); border-radius: 18px 18px 0 0; box-shadow: 0 -10px 40px rgba(15,23,42,0.28) }
+        }
       `}</style>
     </div>
   )
 }
 
 function startedComposer(sessionEnded: boolean, decision: 'idle' | 'counter' | 'accept' | 'reject'): boolean {
-  // Keep the composer hidden once a deal is concluded with a code (accepted)
-  // or rejected — the accept bar takes over for the 'accept' state.
+  // Hide the composer once a deal is concluded (accepted / rejected / expired /
+  // opted-out) — terminal states get their own calm action (Add to Cart or
+  // buy-at-full-price) instead of a dead input.
   if (decision === 'accept') return false
+  if (sessionEnded) return false
   return true
 }
 

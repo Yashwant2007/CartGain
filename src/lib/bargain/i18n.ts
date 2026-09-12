@@ -66,6 +66,12 @@ export type UiKey =
   | 'dealRejected'
   | 'tabChat'
   | 'tabDeal'
+  | 'offersRemaining'
+  | 'sendOffer'
+  | 'addToCart'
+  | 'offerEnded'
+  | 'checking'
+  | 'tryAgain'
 
 const I18N: Record<UiLang, Record<UiKey, string>> = {
   en: {
@@ -108,6 +114,12 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     greatDeal: 'You got a great deal',
     dealWarmClose: 'It was a pleasure bargaining with you — thank you for being a valued customer. Apply your code and enjoy!',
     dealRejected: 'Looks like we couldn\u2019t quite reach a deal this time. The listed price still stands — and the door is always open. Come back anytime! 😊',
+    offersRemaining: '{n} offers remaining',
+    sendOffer: 'Send offer',
+    addToCart: 'Add to Cart',
+    offerEnded: 'This offer window has ended.',
+    checking: 'Let me check what I can do…',
+    tryAgain: 'Sorry, I couldn\u2019t check that right now. Let\u2019s try again.',
     tabChat: 'Chat',
     tabDeal: 'Deal',
   },
@@ -153,6 +165,12 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     dealRejected: 'Lagta hai is baar deal nahi ban saki. List price wahi rahegi — aur darwaza hamesha khula hai. Phir aaiye! 😊',
     tabChat: 'Baatchit',
     tabDeal: 'Deal',
+    offersRemaining: '{n} offers baaki',
+    sendOffer: 'Offer bhejo',
+    addToCart: 'Cart mein jodo',
+    offerEnded: 'Yeh offer window khatam ho gayi hai.',
+    checking: 'Chalo dekhte hain kya kar sakta hoon…',
+    tryAgain: 'Maaf karna, abhi check nahi kar paya. Phir try karein.',
   },
   hi: {
     farewell_friendly: 'समझ गया दोस्त, दरवाज़ा हमेशा खुला है। अगर मन बदले तो बता देना। ध्यान रखना! 👋',
@@ -196,6 +214,12 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     dealRejected: 'लगता है इस बार डील नहीं बन सकी। सूचीबद्ध कीमत वही रहेगी — और दरवाज़ा हमेशा खुला है। फिर आइए! 😊',
     tabChat: 'बातचीत',
     tabDeal: 'डील',
+    offersRemaining: '{n} ऑफ़र बाकी',
+    sendOffer: 'ऑफ़र भेजें',
+    addToCart: 'कार्ट में जोड़ें',
+    offerEnded: 'यह ऑफ़र विंडो समाप्त हो गई है।',
+    checking: 'देखता हूँ क्या कर सकता हूँ…',
+    tryAgain: 'क्षमा करें, अभी जाँच नहीं कर सका। फिर से कोशिश करें।',
   },
   ta: {
     farewell_friendly: 'புரிந்தது நண்பரே, கதவு எப்போதும் திறந்தே உள்ளது. மனம் மாறினால் சொல்லுங்கள். பார்த்துக்கொள்ளுங்கள்! 👋',
@@ -239,6 +263,12 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     dealRejected: 'இந்த முறை ஒப்பந்தம் ஏற்படவில்லை. பட்டியலிட்ட விலை அப்படியே இருக்கும் — வாசல் எப்போதும் திறந்தே உள்ளது. மீண்டும் வாருங்கள்! 😊',
     tabChat: 'அரட்டை',
     tabDeal: 'ஒப்பந்தம்',
+    offersRemaining: '{n} சலுகைகள் மீதம்',
+    sendOffer: 'ஆஃபரை அனுப்பு',
+    addToCart: 'கார்ட்டில் சேர்',
+    offerEnded: 'இந்த சலுகை காலம் முடிந்துவிட்டது.',
+    checking: 'என்ன செய்ய முடியும் என்று பார்க்கிறேன்…',
+    tryAgain: 'மன்னிக்கவும், இப்போது சரிபார்க்க முடியவில்லை. மீண்டும் முயற்சிப்போம்.',
   },
   te: {
     farewell_friendly: 'అర్థమైంది స్నేహితుడా, తలుపు ఎప్పుడూ తెరిచే ఉంది. మనసు మారితే చెప్పండి. జాగ్రత్త! 👋',
@@ -282,6 +312,12 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     dealRejected: 'ఈసారి డీల్ జరగలేదు. జాబితా ధర అలాగే ఉంటుంది — తలుపు ఎప్పుడూ తెరిచే ఉంటుంది. మళ్లీ రండి! 😊',
     tabChat: 'చాట్',
     tabDeal: 'డీల్',
+    offersRemaining: '{n} ఆఫర్లు మిగిలి ఉన్నాయి',
+    sendOffer: 'ఆఫర్ పంపండి',
+    addToCart: 'కార్ట్లో చేర్చండి',
+    offerEnded: 'ఈ ఆఫర్ విండో ముగిసింది.',
+    checking: 'ఏం చేయగలనో చూద్దాం…',
+    tryAgain: 'క్షమించండి, ఇప్పుడు తనిఖీ చేయలేకపోయాను. మళ్ళీ ప్రయత్నిద్దాం.',
   },
   bn: {
     farewell_friendly: 'বুঝেছি বন্ধু, দরজা সবসময় খোলা। মন বদলালে জানিয়ে দিও। ভালো থেকো! 👋',
@@ -325,6 +361,12 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     dealRejected: 'এবারের মতো ডিল হয়নি। তালিকাভুক্ত দামই থাকবে — আর দরজা সবসময় খোলা। আবার আসুন! 😊',
     tabChat: 'আলাপ',
     tabDeal: 'ডিল',
+    offersRemaining: '{n}টি অফার বাকি',
+    sendOffer: 'অফার পাঠান',
+    addToCart: 'কার্টে যোগ করুন',
+    offerEnded: 'এই অফার উইন্ডো শেষ হয়ে গেছে।',
+    checking: 'আমি কী করতে পারি দেখছি…',
+    tryAgain: 'দুঃখিত, এখনই চেক করতে পারিনি। আবার চেষ্টা করা যাক।',
   },
   mr: {
     farewell_friendly: 'समजलो मित्रा, दार नेहमी उघडे आहे. मन बदललं तर सांग. काळजी घ्या! 👋',
@@ -368,6 +410,12 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     dealRejected: 'यावेळी डील जमली नाही. सूचीबद्ध किंमत कायम राहील — आणि दरवाजा नेहमी खुला आहे. पुन्हा या! 😊',
     tabChat: 'गप्पा',
     tabDeal: 'डील',
+    offersRemaining: '{n} ऑफर शिल्लक',
+    sendOffer: 'ऑफर पाठवा',
+    addToCart: 'कार्टमध्ये घाला',
+    offerEnded: 'ही ऑफर विंडो संपली आहे.',
+    checking: 'काय करू शकतो ते पाहतो…',
+    tryAgain: 'क्षमस्व, आत्ता तपासू शकलो नाही. पुन्हा प्रयत्न करूया.',
   },
   gu: {
     farewell_friendly: 'સમજ્યો મિત્ર, દરવાજો હંમેશા ખુલ્લો છે. મન બદલાય તો કહેજે. કાળજી રાખજો! 👋',
@@ -411,6 +459,12 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     dealRejected: 'આ વખતે ડીલ ન બની. યાદીમાં ભાવ એ જ રહેશે — અને બારણું હંમેશા ખુલ્લું છે. ફરી આવો! 😊',
     tabChat: 'ચેટ',
     tabDeal: 'ડીલ',
+    offersRemaining: '{n} ઑફર બાકી',
+    sendOffer: 'ઑફર મોકલો',
+    addToCart: 'કાર્ટમાં ઉમેરો',
+    offerEnded: 'આ ઑફર વિન્ડો સમાપ્ત થાય છે.',
+    checking: 'શું કરી શકું તે જોઉં છું…',
+    tryAgain: 'માફ કરશો, હમણાં ચકાસી શક્યા નહીં. ફરી પ્રયત્ન કરીએ.',
   },
   pa: {
     farewell_friendly: 'ਸਮਝ ਗਿਆ ਮਿੱਤਰਾ, ਦਰਵਾਜ਼ਾ ਹਮੇਸ਼ਾ ਖੁੱਲ੍ਹਾ ਹੈ। ਮਨ ਬਦਲੇ ਤਾਂ ਦੱਸ ਦੇਣਾ। ਖ਼ਿਆਲ ਰੱਖੀਂ! 👋',
@@ -454,6 +508,12 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     dealRejected: 'ਇਸ ਵਾਰ ਡੀਲ ਨਹੀਂ ਬਣੀ। ਲਿਸਟਡ ਕੀਮਤ ਉਹੀ ਰਹੇਗੀ — ਅਤੇ ਦਰਵਾਜ਼ਾ ਹਮੇਸ਼ਾ ਖੁੱਲ੍ਹਾ ਹੈ। ਫਿਰ ਆਓ! 😊',
     tabChat: 'ਗੱਲਬਾਤ',
     tabDeal: 'ਡੀਲ',
+    offersRemaining: '{n} ਆਫਰ ਬਾਕੀ',
+    sendOffer: 'ਆਫਰ ਭੇਜੋ',
+    addToCart: 'ਕਾਰਟ ਵਿੱਚ ਜੋੜੋ',
+    offerEnded: 'ਇਹ ਆਫਰ ਵਿੰਡੋ ਖਤਮ ਹੋ ਗਈ ਹੈ।',
+    checking: 'ਦੇਖਦਾ ਹਾਂ ਕੀ ਕਰ ਸਕਦਾ ਹਾਂ…',
+    tryAgain: 'ਮਾਫ਼ ਕਰਨਾ, ਹੁਣੇ ਚੈੱਕ ਨਹੀਂ ਕਰ ਸਕਿਆ। ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੀਏ।',
   },
 }
 
