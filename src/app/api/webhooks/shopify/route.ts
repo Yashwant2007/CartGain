@@ -175,13 +175,17 @@ async function handleShopRedact(store: any) {
 }
 
 async function handleCustomerRedact(data: any, store: any, shopDomain: string) {
-  // Shopify payload: { shop_id, shop_domain, customer: { id } }
+  // Shopify payload: { shop_id, shop_domain, customer: { id } }. The id may be
+  // bare ("12345") or a gid ("gid://shopify/Customer/12345") depending on API
+  // version — normalize before matching stored rows.
   const customerId = data?.customer?.id ? String(data.customer.id) : null
   if (!customerId) {
     console.log(`customers/redact from ${shopDomain}: no customer id in payload`)
     return
   }
-  const result = await redactCustomer(shopDomain, customerId)
+  const customerIdNorm = normalizeCustomerId(customerId)
+  const matchId = customerIdNorm || customerId
+  const result = await redactCustomer(shopDomain, matchId)
   await logDataAccess({
     actorType: 'system',
     action: 'delete',
@@ -301,6 +305,7 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
   if (!data.id || !data.token) return
 
   const cart = data
+  const customerId = data.customer?.id ? String(data.customer.id) : null
   const customerPhone = extractPhone(cart)
   const customerName = extractName(cart)
   const customerEmail = cart.email || null
@@ -329,6 +334,7 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
     update: {
       items: normalizeShopifyItems(cart),
       totalValue: cart.total_price ? parseFloat(cart.total_price) : 0,
+      ...(customerId ? { customerId } : {}),
       ...(customerEmail ? { customerEmail } : {}),
       ...(customerPhone ? { customerPhone } : {}),
       ...(customerName ? { customerName } : {}),
@@ -339,6 +345,7 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
       cartId: cart.token,
       items: normalizeShopifyItems(cart),
       totalValue: cart.total_price ? parseFloat(cart.total_price) : 0,
+      customerId,
       customerEmail,
       customerPhone,
       customerName,
@@ -383,6 +390,17 @@ async function processOrderCreate(data: any, store: any, domain: string) {
     })
   }
   if (!cart) return
+
+  // Backfill the customer id (raw or gid) on orders/create — carts recorded by
+  // older webhooks/sync runs may predate the customerId column. Ensures
+  // customers/redact can locate every cart even for legacy rows.
+  const orderCustomerId = data.customer?.id ? String(data.customer.id) : null
+  if (orderCustomerId && !cart.customerId) {
+    await prisma.cart.update({
+      where: { id: cart.id },
+      data: { customerId: normalizeCustomerId(orderCustomerId) || orderCustomerId },
+    }).catch(() => {})
+  }
 
   await logDataAccess({
     actorType: 'system',

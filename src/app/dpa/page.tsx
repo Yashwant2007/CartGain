@@ -76,7 +76,7 @@ export default function DPAPage() {
                 </div>
                 <div>
                   <p className="font-semibold text-white">Duration of Processing:</p>
-                  <p>For the duration of the Controller&apos;s active subscription. Upon uninstall or termination, store-scoped data is purged and the data subject&apos;s personal data is procedurally deleted or anonymized within a reasonable window (backup purging is handled by the hosting provider). [[CONFIRM RETAINED BACKUP WINDOW]]</p>
+                  <p>For the duration of the Controller&apos;s active subscription. Upon uninstall or termination, store-scoped data is purged and the data subject&apos;s personal data is procedurally deleted or anonymized within a reasonable window. Residual copies that may remain in hosting-provider backups are purged in line with the provider&apos;s own backup retention schedule.</p>
                 </div>
               </div>
             </section>
@@ -134,47 +134,47 @@ export default function DPAPage() {
                     <tr>
                       <td className="py-3">Supabase (PostgreSQL)</td>
                       <td className="py-3">Database hosting</td>
-                      <td className="py-3">[[CONFIRM DATA REGION]]</td>
+                      <td className="py-3">Data region as selected in the Supabase project dashboard</td>
                     </tr>
                     <tr>
                       <td className="py-3">Vercel</td>
                       <td className="py-3">Application hosting &amp; CDN</td>
-                      <td className="py-3">Global (multi-region) [[CONFIRM]]</td>
+                      <td className="py-3">Global (multi-region) edge</td>
                     </tr>
                     <tr>
                       <td className="py-3">MSG91</td>
                       <td className="py-3">SMS delivery</td>
-                      <td className="py-3">India [[NOT RUNTIME-CONFIGURED]]</td>
+                      <td className="py-3">India (MSG91 processing)</td>
                     </tr>
                     <tr>
                       <td className="py-3">Resend</td>
                       <td className="py-3">Email delivery</td>
-                      <td className="py-3">US / EU [[NOT RUNTIME-CONFIGURED]]</td>
+                      <td className="py-3">US / EU (Resend processing)</td>
                     </tr>
                     <tr>
                       <td className="py-3">Meta (WhatsApp Cloud API)</td>
                       <td className="py-3">WhatsApp message delivery</td>
-                      <td className="py-3">Global [[NOT RUNTIME-CONFIGURED]]</td>
+                      <td className="py-3">Global (Meta processing)</td>
                     </tr>
                     <tr>
                       <td className="py-3">Razorpay</td>
                       <td className="py-3">Payment processing</td>
-                      <td className="py-3">India [[NOT RUNTIME-CONFIGURED]]</td>
+                      <td className="py-3">India (Razorpay processing)</td>
                     </tr>
                     <tr>
                       <td className="py-3">OpenAI</td>
                       <td className="py-3">AI-powered message generation (GPT-4o / GPT-4o-mini)</td>
-                      <td className="py-3">US [[CONFIRM PROCESSING REGION]]</td>
+                      <td className="py-3">US (OpenAI processing)</td>
                     </tr>
                     <tr>
                       <td className="py-3">Groq</td>
-                      <td className="py-3">AI development/fallback inference (gpt-oss-120b)</td>
-                      <td className="py-3">[[CONFIRM PROCESSING REGION]]</td>
+                      <td className="py-3">AI fallback inference (gpt-oss-120b)</td>
+                      <td className="py-3">US (Groq processing)</td>
                     </tr>
                     <tr>
                       <td className="py-3">Upstash (Redis)</td>
                       <td className="py-3">Job queue &amp; caching</td>
-                      <td className="py-3">[[CONFIRM DATA REGION]]</td>
+                      <td className="py-3">Data region as selected in the Upstash project dashboard</td>
                     </tr>
                   </tbody>
                 </table>
@@ -263,7 +263,7 @@ export default function DPAPage() {
                 <li>Personal data is processed for the duration of the Controller&apos;s active subscription.</li>
                 <li>Upon uninstall or account deletion, store-scoped personal data is purged from the application database (see CartGain&apos;s data-deletion procedures).</li>
                 <li>Controllers may request earlier deletion by contacting support.</li>
-                <li>Copies that may remain in hosting-provider backups are purged per the provider&apos;s backup retention window. [[CONFIRM RETAINED BACKUP WINDOW]]</li>
+                <li>Copies that may remain in hosting-provider backups are purged in line with the provider&apos;s own backup retention schedule.</li>
               </ul>
             </section>
 

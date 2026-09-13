@@ -11,6 +11,31 @@ import { logDataAccess } from '@/lib/data-protection'
 
 export const dynamic = 'force-dynamic'
 
+// Public-face presentation of a BargainSession. The storefront widget only needs
+// the conversation + price state; email/phone/fingerprint, the merchant floor,
+// and discount codes are never sent to an unauthenticated browser.
+function publicSession(s: any) {
+  return {
+    id: s.id,
+    shopifyProductId: s.shopifyProductId,
+    originalPrice: s.originalPrice,
+    currentOffer: s.currentOffer,
+    finalPrice: s.finalPrice,
+    status: s.status,
+    attemptsUsed: s.attemptsUsed,
+    language: s.language,
+    startedAt: s.startedAt,
+    expiresAt: s.expiredAt,
+    messages: (Array.isArray(s.messages) ? s.messages : []).map((m: any) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      offeredPrice: m.offeredPrice ?? null,
+      createdAt: m.createdAt,
+    })),
+  }
+}
+
 // POST /api/bargain/start — open a new bargain session (no auth — storefront)
 export async function POST(request: NextRequest) {
   try {
@@ -130,7 +155,7 @@ export async function POST(request: NextRequest) {
       })
       return NextResponse.json({
         sessionId: existing.id,
-        session: existing,
+        session: publicSession(existing),
         openingMessage: existing.messages[0]?.content ?? buildOpeningMessage({
           storeName: store.name,
           currencySymbol: currencySymbolFor(store.currency),
@@ -269,7 +294,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       sessionId: bargainSession.id,
-      session: bargainSession,
+      session: publicSession(bargainSession),
       openingMessage: openingReply,
       expiresAt: expiredAt.toISOString(),
       attemptsRemaining: config.maxAttempts,

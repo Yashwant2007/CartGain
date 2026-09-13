@@ -556,7 +556,7 @@ export default function BargainWidget({
               <span style={{ color: '#cbd5e1', fontSize: 11 }}>·</span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 <Zap size={12} style={{ color: '#4f46e5', flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: '#6366f1', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <span style={{ fontSize: 12, color: '#4338ca', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {isEmbed && mode === 'cart' ? t('discountHint') : t('triggerSub')}
                 </span>
               </span>
@@ -1553,13 +1553,14 @@ function QuickChip({ label, onClick, disabled }: { label: string; onClick: () =>
         border: '1px solid #e2e8f0',
         color: '#475569',
         borderRadius: 999,
-        padding: '6px 13px',
-        fontSize: 12.5,
+        padding: '10px 16px',
+        fontSize: 13,
         fontWeight: 600,
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.5 : 1,
         transition: 'all 0.15s ease',
         outline: 'none',
+        minHeight: 44,
       }}
       onMouseEnter={(e) => { e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.borderColor = '#c7d2fe'; e.currentTarget.style.color = '#4338ca' }}
       onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#475569' }}

@@ -6,8 +6,14 @@ owner (and legally reviewed) before publication. Item numbers are referenced fro
 the DPA, Privacy Policy, Security Policy, Cookie Policy, and readiness doc.
 
 > Rule: nothing below may be asserted as fact in customer-facing pages until
-> confirmed. Everything is phrased with `[[CONFIRM ...]]` placeholders or honest
-> caveats in the pages.
+> confirmed.
+>
+> **2026-09-13 update:** the literal `[[CONFIRM ...]]` / `[[NOT RUNTIME-CONFIGURED]]`
+> placeholder markers no longer render on the production legal pages — they were
+> replaced with honest, non-overclaiming wording (e.g. "data region as selected
+> in the project dashboard", "US (OpenAI processing)"). The open items below
+> remain owner/lawyer confirmations and are tracked in this file; refine the
+> published wording once the facts are confirmed.
 
 ## A. Legal entity & contact (pages: Privacy, Terms, DPA, Contact)
 

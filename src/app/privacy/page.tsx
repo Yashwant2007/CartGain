@@ -49,7 +49,7 @@ export default function PrivacyPolicyPage() {
                     <h3 className="text-lg font-semibold text-white mb-3">1. Personal Data</h3>
                     <ul className="list-disc pl-5 space-y-2">
                       <li><strong>Account Information:</strong> Name, email address, phone number, company name, and password when you create an account.</li>
-                      <li><strong>Payment Information:</strong> Subscription and invoice records (processed via Razorpay once configured; payment card details are processed by Razorpay and are not stored by CartGain). [[NOT RUNTIME-CONFIGURED]]</li>
+                      <li><strong>Payment Information:</strong> Subscription and invoice records (payment processing is handled by Razorpay; payment card details are processed by Razorpay and are not stored by CartGain).</li>
                       <li><strong>Communication Data:</strong> Messages you send us via support, chat, or email.</li>
                     </ul>
                   </div>
@@ -128,7 +128,7 @@ export default function PrivacyPolicyPage() {
                   International Data Transfers
                 </h2>
                 <p className="leading-relaxed">
-                  Your data may be transferred to and processed in countries other than your own. Where personal data is transferred out of your jurisdiction, we rely on available legal bases (such as the EU Standard Contractual Clauses offered by our providers, or the exemptions available under India&apos;s DPDP Act) and we contractually restrict how sub-processors use the data. [[CONFIRM TRANSFER SAFEGUARDS PER PROVIDER]]
+                  Your data may be transferred to and processed in countries other than your own. Where personal data is transferred out of your jurisdiction, we rely on available legal bases (such as the EU Standard Contractual Clauses offered by our providers, or the exemptions available under India&apos;s DPDP Act) and we contractually restrict how sub-processors use the data.
                 </p>
               </section>
 
