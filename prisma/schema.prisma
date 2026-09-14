@@ -286,6 +286,13 @@ model Subscription {
   userId          String
   customerId      String    // Razorpay/Stripe customer ID
   subscriptionId  String?   // Razorpay/Stripe subscription ID
+  // Which billing provider owns this subscription. "razorpay" is the direct /
+  // custom-app track; "shopify" is the App Store track, where Shopify is the
+  // merchant of record and charges the shop (App Store policy 3.0.5).
+  provider        String    @default("razorpay")
+  shopDomain      String?   // Shopify shop that owns a provider="shopify" subscription
+  shopifySubscriptionId String? @unique // Shopify AppSubscription gid (gid://shopify/AppSubscription/…)
+  shopifyLineItemId     String? // usage line item gid, used for revenue-share usage charges
   plan            String    // free, starter, pro, enterprise
   status          String    @default("active")
   currentPeriodStart DateTime

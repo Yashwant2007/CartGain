@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { cancelRazorpaySubscription } from '@/lib/payment'
+import { resolveShopifyStoreForUser, downgradeSubscriptionToFree } from '@/lib/shopify-billing/service'
+import { cancelShopifySubscription } from '@/lib/shopify-billing/subscriptions'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,9 +30,22 @@ export async function POST() {
 
     // Cancel at the gateway FIRST so the merchant stops being billed. Only if
     // the gateway confirms (or there is nothing to cancel) do we downgrade the
-    // local plan. Otherwise the app would claim "free" while Razorpay keeps
+    // local plan. Otherwise the app would claim "free" while the gateway keeps
     // charging — the worst possible outcome for the merchant.
-    const gatewayCancelled = await cancelRazorpaySubscription(subscription.subscriptionId)
+    let gatewayCancelled: boolean
+    if (subscription.provider === 'shopify' && subscription.shopifySubscriptionId) {
+      const store = await resolveShopifyStoreForUser(session.user.id)
+      if (!store) {
+        return NextResponse.json(
+          { error: 'Could not reach your connected Shopify store. Please reconnect it and try again.' },
+          { status: 502 },
+        )
+      }
+      gatewayCancelled = await cancelShopifySubscription(store, subscription.shopifySubscriptionId)
+    } else {
+      gatewayCancelled = await cancelRazorpaySubscription(subscription.subscriptionId)
+    }
+
     if (!gatewayCancelled) {
       return NextResponse.json(
         { error: "We couldn't cancel your subscription at the payment gateway. Please try again or contact support." },
@@ -38,21 +53,9 @@ export async function POST() {
       )
     }
 
-    await prisma.subscription.update({
-      where: { id: subscription.id },
-      data: {
-        plan: 'free',
-        status: 'active',
-        subscriptionId: null,
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        smsCredits: 0,
-        smsCreditsUsed: 0,
-        cartsUsedInPeriod: 0,
-        bargainSessionsUsed: 0,
-        bargainDealsUsed: 0,
-      },
-    })
+    // Shared downgrade keeps plan/status/period/meters consistent with the
+    // webhook-driven rollback path — two implementations = drift.
+    await downgradeSubscriptionToFree(subscription.id)
 
     return NextResponse.json({ success: true, message: 'Downgraded to free plan' })
   } catch (error) {

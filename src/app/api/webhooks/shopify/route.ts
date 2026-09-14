@@ -12,6 +12,8 @@ import {
 } from '@/lib/data-export'
 import { computeRefundNetting, isMessageAttributable } from '@/lib/attribution'
 import { attributeBargainGoal, netBargainGoalRefund } from '@/lib/bargain/goals'
+import { reconcileShopifySubscription, downgradeSubscriptionToFree } from '@/lib/shopify-billing/service'
+import { mapShopifyStatus } from '@/lib/shopify-billing/subscriptions'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS, resolvePlanId, getPlan } from '@/lib/payment'
 import { sendAlertOnError } from '@/lib/alerter'
 import { track } from '@/lib/analytics/track'
@@ -136,6 +138,9 @@ export async function POST(request: NextRequest) {
         break
       case 'customers/data_request':
         safeRun('customer data request', () => handleCustomerDataRequest(data, store, shopDomain))
+        break
+      case 'app_subscriptions/update':
+        safeRun('app subscription update', () => handleAppSubscriptionUpdate(data, store, shopDomain))
         break
       default:
         console.log('Unhandled webhook topic:', topic)
@@ -273,6 +278,70 @@ async function handleCustomerDataRequest(data: any, store: any, shopDomain: stri
       metadata: { shopDomain, email: email || null, error: err instanceof Error ? err.message : String(err) },
     })
   }
+}
+
+// ── Billing lifecycle ─────────────────────────────────────────────────
+// app_subscriptions/update fires when the merchant approves, declines, or
+// cancels the app subscription from their Shopify admin. The payload carries
+// the AppSubscription gid + a raw status; we normalize it onto the local
+// Subscription row so all existing plan gating keeps working unchanged.
+// Idempotent: re-applying the same status is a no-op.
+async function handleAppSubscriptionUpdate(data: any, store: any, shopDomain: string) {
+  const sub = data?.app_subscription || data
+  const gid = sub?.admin_graphql_api_id || data?.admin_graphql_api_id || null
+  const rawStatus = sub?.status || data?.status || null
+
+  if (!gid) {
+    console.log(`app_subscriptions/update from ${shopDomain}: no subscription id in payload`)
+    return
+  }
+
+  let local = await prisma.subscription.findFirst({ where: { shopifySubscriptionId: gid } })
+  if (!local) {
+    // Fall back to this shop owner's most recent Shopify-provider subscription
+    // (covers a race where the webhook beats the local pending write).
+    local = await prisma.subscription.findFirst({
+      where: { userId: store.userId, provider: 'shopify' },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+  if (!local) {
+    console.log(`app_subscriptions/update: no local subscription for ${gid} / shop ${shopDomain} — skipping`)
+    return
+  }
+
+  const normalized = mapShopifyStatus(rawStatus)
+
+  // Cancelled / declined / expired: the merchant is no longer paying through
+  // Shopify. Downgrade to free at once so paid quotas and overage can't keep
+  // flowing while no one is billed. 'pending' (approved in Shopify admin, not
+  // yet from our side) and 'paused' (frozen shop) keep the plan but the bargain
+  // gate already treats non-active rows as free as defense-in-depth.
+  if (normalized === 'cancelled') {
+    await downgradeSubscriptionToFree(local.id)
+    console.log(`app_subscriptions/update ${gid} for ${shopDomain}: ${rawStatus} → downgraded to free`)
+    return
+  }
+
+  await prisma.subscription.update({
+    where: { id: local.id },
+    data: {
+      provider: 'shopify',
+      status: normalized,
+      shopDomain,
+      shopifySubscriptionId: gid,
+    },
+  })
+
+  // On activation, enrich with the authoritative period end + usage line item
+  // so revenue-share charges have a target. Best-effort — status is already set.
+  if (normalized === 'active') {
+    await reconcileShopifySubscription(store).catch((err) => {
+      console.error(`app_subscriptions/update reconcile failed for ${shopDomain}:`, err)
+    })
+  }
+
+  console.log(`app_subscriptions/update ${gid} for ${shopDomain}: ${rawStatus} → ${normalized}`)
 }
 
 function extractPhone(cart: any): string | null {

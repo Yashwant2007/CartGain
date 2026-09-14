@@ -236,6 +236,9 @@ export async function setupShopifyWebhooks(
     'customers/data_request',
     'customers/redact',
     'shop/redact',
+    // Billing lifecycle — activates/cancels/expires the shop's app subscription
+    // when the merchant approves, declines, or cancels from their Shopify admin.
+    'app_subscriptions/update',
   ]
 
   for (const topic of topics) {

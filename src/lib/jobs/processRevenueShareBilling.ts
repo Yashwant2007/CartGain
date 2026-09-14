@@ -1,6 +1,9 @@
 import prisma from '@/lib/db'
 import { razorpay, OVERAGE_RATE_PER_MESSAGE, getPlan } from '@/lib/payment'
 import { sendEmail } from '@/lib/services/email'
+import { resolveShopifyStoreForUser, reconcileShopifySubscription } from '@/lib/shopify-billing/service'
+import { recordShopifyUsage } from '@/lib/shopify-billing/subscriptions'
+import { resolveUsageCap, normalizeCurrency } from '@/lib/shopify-billing/plans'
 
 export interface BillingResult {
   processed: number
@@ -106,11 +109,59 @@ export async function processRevenueShareBilling(): Promise<BillingResult> {
         },
       })
 
-      // Create Razorpay payment link (non-fatal — invoice exists regardless)
+      // Settle the invoice at the provider.
+      //  - Shopify track: record a capped usage charge on the subscription. The
+      //    merchant pre-approved the cap, so we can never overcharge; any amount
+      //    beyond the cap is written off (logged) rather than silently billed.
+      //  - Razorpay track: create a payment link for the merchant to pay.
       let paymentLinkUrl: string | undefined
       let paymentLinkId: string | undefined
+      let usageRecordId: string | undefined
+      let settledViaShopify = false
 
-      if (razorpay) {
+      if (subscription.provider === 'shopify') {
+        const shopifyStore = await resolveShopifyStoreForUser(subscription.userId)
+        const currency = normalizeCurrency(shopifyStore?.currency)
+
+        if (!shopifyStore || !currency) {
+          console.error(`Shopify billing unavailable for sub ${subscription.id} (currency ${shopifyStore?.currency}) — invoice left pending`)
+        } else {
+          let lineItemId = subscription.shopifyLineItemId
+          if (!lineItemId) {
+            await reconcileShopifySubscription(shopifyStore).catch(() => {})
+            const refreshed = await prisma.subscription.findUnique({
+              where: { id: subscription.id },
+              select: { shopifyLineItemId: true },
+            })
+            lineItemId = refreshed?.shopifyLineItemId ?? null
+          }
+
+          const cap = resolveUsageCap(subscription.plan, currency)
+          const chargeAmount = cap && cap > 0 ? Math.min(invoiceAmount, cap) : invoiceAmount
+          if (cap && cap > 0 && invoiceAmount > cap) {
+            console.warn(`Shopify usage cap ${cap} < invoice ${invoiceAmount} for sub ${subscription.id} — billing capped, remainder written off`)
+          }
+
+          if (!lineItemId) {
+            console.error(`No Shopify usage line item for sub ${subscription.id} — invoice left pending`)
+          } else {
+            const usage = await recordShopifyUsage({
+              store: shopifyStore,
+              lineItemId,
+              amount: chargeAmount,
+              currency,
+              description,
+              idempotencyKey: `cartgain-invoice-${invoice.id}`,
+            })
+            if (usage.ok) {
+              usageRecordId = usage.usageRecordId
+              settledViaShopify = true
+            } else {
+              console.error(`Shopify usage charge failed for invoice ${invoice.id}: ${usage.error}`)
+            }
+          }
+        }
+      } else if (razorpay) {
         try {
           const link = await razorpay.paymentLink.create({
             amount: Math.round(invoiceAmount * 100), // paise
@@ -169,12 +220,47 @@ export async function processRevenueShareBilling(): Promise<BillingResult> {
         }),
       ])
 
+      // Advance the billing period so limit meters (carts, bargain sessions,
+      // deals) apply to a FRESH window. Without this the local currentPeriodEnd
+      // stays in the past, getCartsUsedForStore's `sentAt <= currentPeriodEnd`
+      // filter starts excluding new sends, and maxCarts silently stops being
+      // enforced — the plan limit would lapse for paid merchants.
+      // The next advance is derived from the period that was just billed
+      // (30 vs 365 days) and clamps to "now" so an overdue sweep starts the new
+      // window today rather than in the past.
+      if (subscription.currentPeriodStart) {
+        const periodDays = Math.min(
+          366,
+          Math.max(28, Math.round((subscription.currentPeriodEnd.getTime() - subscription.currentPeriodStart.getTime()) / 86400000)),
+        )
+        const nextStart = new Date(Math.max(subscription.currentPeriodEnd.getTime(), Date.now()))
+        const nextEnd = new Date(nextStart.getTime() + periodDays * 86400000)
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: { currentPeriodStart: nextStart, currentPeriodEnd: nextEnd },
+        })
+      }
+
       if (paymentLinkId) {
         await prisma.invoice.update({
           where: { id: invoice.id },
           data: {
             razorpayPaymentLinkId: paymentLinkId,
             paymentLinkUrl,
+          },
+        })
+      }
+
+      // Shopify already collected this charge via the usage record — mark the
+      // ledger invoice paid so merchants see a settled record, not a phantom due.
+      if (settledViaShopify) {
+        await prisma.invoice.update({
+          where: { id: invoice.id },
+          data: {
+            status: 'paid',
+            paidAt: new Date(),
+            paidVia: 'shopify',
+            paymentRef: usageRecordId || null,
           },
         })
       }

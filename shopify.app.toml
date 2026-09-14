@@ -29,7 +29,8 @@ api_version = "2026-04"
   "app/uninstalled",
   "customers/data_request",
   "customers/redact",
-  "shop/redact"
+  "shop/redact",
+  "app_subscriptions/update"
 ]
 
 [access_scopes]

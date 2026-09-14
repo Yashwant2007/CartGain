@@ -52,9 +52,16 @@ export async function getBargainGate(storeId: string): Promise<BargainGate> {
     })
   }
 
-  const planId = resolvePlanId(subscription.plan)
-  const plan = getPlan(subscription.plan) || PLANS.FREE
-  const isPaid = (PAID_PLAN_IDS as readonly string[]).includes(planId)
+  // Only an ACTIVE subscription earns paid-plan quotas and overage. A row that
+  // is pending (not yet paid), cancelled (merchant ended it at the gateway or
+  // in Shopify admin), frozen, or expired falls back to the free-plan limits —
+  // so a cancelled merchant can never keep farming paid deal overage they won't
+  // be billed for. The billing sweep only invoices active subscriptions, so this
+  // closing of the gate is what prevents the leak.
+  const isActive = subscription.status === 'active'
+  const planId = resolvePlanId(isActive ? subscription.plan : 'free')
+  const plan = getPlan(isActive ? subscription.plan : 'free') || PLANS.FREE
+  const isPaid = isActive && (PAID_PLAN_IDS as readonly string[]).includes(planId)
 
   // Overage is the plan's default behaviour for paid tiers ("40 deals included,
   // then ₹25/deal"). The DB flag still disables it for merchants who opted out

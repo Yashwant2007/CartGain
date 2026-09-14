@@ -8,6 +8,8 @@ type SubscriptionData = {
   id: string
   plan: string
   status: string
+  provider?: string
+  shopDomain?: string | null
   smsCredits: number
   smsCreditsUsed: number
   revenueShareAccrued: number
@@ -17,6 +19,14 @@ type SubscriptionData = {
   cartsLimit: number
   overageEnabled: boolean
   overageMessages: number
+}
+
+type BillingInfo = {
+  provider: 'shopify' | 'razorpay'
+  shopifyAvailable: boolean
+  shopifyCurrency: string | null
+  shopifyUnavailableReason: string | null
+  shopDomain: string | null
 }
 
 type StoreData = {
@@ -46,6 +56,7 @@ export default function SubscriptionPage() {
   const [loading, setLoading] = useState(true)
   const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly')
   const [razorpayLoaded, setRazorpayLoaded] = useState(false)
+  const [billingInfo, setBillingInfo] = useState<BillingInfo | null>(null)
   const [processing, setProcessing] = useState<string | null>(null)
   const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null)
   const [monthlyRecoveredRevenue, setMonthlyRecoveredRevenue] = useState(0)
@@ -75,6 +86,7 @@ export default function SubscriptionPage() {
         setStore(subData.store)
         setInvoices(subData.invoices || [])
         setActiveCampaigns(subData.meta?.activeCampaigns ?? 0)
+        setBillingInfo(subData.billing ?? null)
       }
 
       if (overviewRes.ok) {
@@ -185,7 +197,6 @@ export default function SubscriptionPage() {
   }
 
   const handlePurchase = async (planKey: PlanKey) => {
-    if (!razorpayLoaded) return
     setProcessing(planKey)
 
     try {
@@ -200,6 +211,19 @@ export default function SubscriptionPage() {
 
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create subscription')
+
+      // Shopify track: Shopify hosts the approval page and handles the charge.
+      // We must break out of the Shopify-admin iframe and send the top window
+      // there; on return the ?billing=success reconcile syncs the local plan.
+      if (data.provider === 'shopify') {
+        if (!data.confirmationUrl) throw new Error('Shopify did not return a confirmation URL.')
+        const top = (window.top || window) as Window
+        top.location.href = data.confirmationUrl
+        return
+      }
+
+      // Razorpay / direct track (unchanged)
+      if (!razorpayLoaded) throw new Error('Checkout is still loading. Please try again in a moment.')
       if (!data.keyId || !data.subscriptionId) {
         throw new Error('Checkout is not configured on this deployment (missing payment key).')
       }
@@ -719,6 +743,25 @@ export default function SubscriptionPage() {
             </button>
           </div>
         </div>
+
+        {billingInfo && (
+          <div className="mb-6 text-xs text-blue-300/70 flex items-center gap-2">
+            <Shield size={14} />
+            {billingInfo.provider === 'shopify' ? (
+              <span>
+                Billing is handled securely by Shopify{billingInfo.shopDomain ? ` for ${billingInfo.shopDomain}` : ''}.
+                Charges appear on your Shopify invoice.
+              </span>
+            ) : (
+              <span>
+                {billingInfo.shopifyAvailable
+                  ? 'Billing is handled securely by Razorpay (UPI / cards).'
+                  : billingInfo.shopifyUnavailableReason ||
+                    'Billing is handled securely by Razorpay (UPI / cards).'}
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {Object.values(PLANS).filter(p => p.id !== 'enterprise').map((plan) => {
