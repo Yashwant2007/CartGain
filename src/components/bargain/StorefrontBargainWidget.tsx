@@ -26,9 +26,9 @@ const ENGINE_TO_LOCAL: Record<string, 'friendly' | 'strict' | 'playful'> = {
 }
 
 const PERSONA_DISPLAY: Record<string, string> = {
-  friendly: '😊 Alex — Friendly',
-  strict: '📊 Morgan — Strict',
-  playful: '😏 Riley — Playful',
+  friendly: '😊 Friendly',
+  strict: '📊 Strict',
+  playful: '😏 Playful',
 }
 
 function money(currency: string, n: number): string {
@@ -42,8 +42,6 @@ type Props = {
   line: Line
   checkoutUrl: string
   language?: string
-  // Merchant-controlled (single source of truth). When omitted the widget
-  // falls back to whatever persona the server enforces for the store.
   persona?: string
   maxAttempts?: number
   minProfitPercent?: number
@@ -125,7 +123,6 @@ export default function StorefrontBargainWidget({
     setError(null)
   }
 
-  // Local fallback helpers
   const extractPrice = (text: string): number | null => {
     const patterns = [
       /(?:₹|INR|Rs\.?|USD|\$|€|£|¥)\s*(\d+(?:\.\d{1,2})?)/i,
@@ -158,6 +155,7 @@ export default function StorefrontBargainWidget({
     const counter = originalPrice - (originalPrice - minPrice) * progress
     return Math.round(counter * 100) / 100
   }
+
   const PersonaOpenings: Record<string, (item: string, price: number, fmt: (n: number) => string) => string> = {
     friendly: (item, price, f) =>
       `Hey! Welcome 👋 I see you're interested in ${item}. It's listed at ${f(price)}. I'd love to help you get a good deal — what price were you thinking? You've got ${maxAttempts} attempts to bargain with me.`,
@@ -202,6 +200,7 @@ export default function StorefrontBargainWidget({
     strict: 'Understood. This negotiation is closed.',
     playful: 'Aw, really? 😅 No hard feelings! Come back anytime 🙌',
   }
+
   const handleSend = async () => {
     if (!input.trim() || loading) return
     const userText = input.trim()
@@ -247,8 +246,6 @@ export default function StorefrontBargainWidget({
         throw new Error(data.error || data.message || 'API error')
       }
 
-      // Sync to whatever persona the server enforced for this store — the
-      // merchant's config is the single source of truth.
       if (data.persona && ENGINE_TO_LOCAL[data.persona]) {
         setPersona(ENGINE_TO_LOCAL[data.persona])
       }
@@ -270,7 +267,6 @@ export default function StorefrontBargainWidget({
       }
     } catch (err: any) {
       console.warn('[StorefrontBargain] API failed, using local fallback:', err.message)
-      // Local fallback logic
       const userText = input.trim()
       const offer = extractPrice(userText)
       const isWalkout = detectWalkout(userText)
@@ -375,18 +371,32 @@ export default function StorefrontBargainWidget({
     'bg-indigo-600 text-white hover:bg-indigo-700 disabled:cursor-not-allowed'
   const ghostCls =
     'px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200'
+
   return (
-    <div ref={rootRef} className="w-full bg-white text-gray-900 rounded-xl shadow-lg border border-gray-200" data-cg-bargain-widget>
+    <div
+      ref={rootRef}
+      className="w-full bg-white text-gray-900 rounded-xl shadow-lg border border-gray-200"
+      data-cg-bargain-widget
+      role="region"
+      aria-label="Price negotiation"
+    >
       {step === 'intro' && (
-        <div className="space-y-3 p-4">
+        <div className="p-4 space-y-3">
           <div className="flex items-start gap-3">
             {!isCart && line.image ? (
-              <Image src={line.image} alt="" width={48} height={48} className="w-12 h-12 rounded-lg object-cover" unoptimized />
+              <Image
+                src={line.image}
+                alt=""
+                width={48}
+                height={48}
+                className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                unoptimized
+              />
             ) : (
-              <div className="w-12 h-12 rounded-lg bg-indigo-100 flex items-center justify-center text-lg">🛒</div>
+              <div className="w-12 h-12 rounded-lg bg-indigo-100 flex items-center justify-center text-lg flex-shrink-0">🛒</div>
             )}
-            <div className="min-w-0">
-              <p className="font-semibold text-gray-900 text-sm truncate">{title}</p>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-gray-900 text-sm truncate" title={line.kind === 'item' ? line.title : ''}>{title}</p>
               <p className="text-gray-500 text-xs mt-0.5">Listed: {money(currency, originalPrice)}</p>
               {isCart && <p className="text-gray-500 text-xs mt-0.5">Negotiate the whole cart total</p>}
             </div>
@@ -394,24 +404,29 @@ export default function StorefrontBargainWidget({
 
           <p className="text-xs leading-relaxed text-gray-600">{PersonaOpenings[persona](title, originalPrice, (n) => money(currency, n))}</p>
 
-          <p className="text-[11px] text-indigo-600 bg-indigo-50 rounded-md px-3 py-1.5">
+          <div className="text-[11px] text-indigo-600 bg-indigo-50 rounded-md px-3 py-1.5">
             This store runs: <span className="font-semibold">{PERSONA_DISPLAY[persona]}</span>
-          </p>
+          </div>
 
-          <button type="button" className={buttonCls} onClick={() => setStep('chat')}>
-            Start Bargaining
+          <button
+            type="button"
+            className={buttonCls + ' w-full'}
+            onClick={() => setStep('chat')}
+            aria-label="Start price negotiation"
+          >
+            ✨ Negotiate Price
           </button>
         </div>
       )}
 
       {step === 'chat' && (
-        <div className="space-y-3 p-4">
+        <div className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-gray-500">Attempts left: {maxAttempts - attempts}/{maxAttempts}</p>
             <p className="text-xs text-indigo-500 font-medium">{PERSONA_DISPLAY[persona]}</p>
           </div>
 
-          <div className="space-y-2 max-h-56 overflow-y-auto">
+          <div className="space-y-2 max-h-56 overflow-y-auto" role="log" aria-live="polite" aria-label="Negotiation conversation">
             {messages.map((msg, idx) => (
               <div
                 key={idx}
@@ -438,8 +453,15 @@ export default function StorefrontBargainWidget({
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               placeholder='e.g. "₹400" or "I will think about it"'
               className="flex-1 bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-indigo-500"
+              aria-label="Your offer or message"
             />
-            <button type="button" className={buttonCls} onClick={handleSend} disabled={!input.trim() || loading}>
+            <button
+              type="button"
+              className={buttonCls}
+              onClick={handleSend}
+              disabled={!input.trim() || loading}
+              aria-label={loading ? 'Sending...' : 'Send offer'}
+            >
               {loading ? '…' : 'Send'}
             </button>
           </div>
@@ -447,7 +469,7 @@ export default function StorefrontBargainWidget({
       )}
 
       {step === 'deal' && finalPrice != null && (
-        <div className="space-y-3 p-4 text-center">
+        <div className="p-4 space-y-3 text-center">
           <p className="text-emerald-600 font-semibold text-sm">Deal Accepted! 🎉</p>
           <div>
             <p className="text-gray-900 font-bold text-lg">
@@ -464,7 +486,12 @@ export default function StorefrontBargainWidget({
               <code className="text-indigo-600 font-mono font-bold text-sm tracking-wider bg-indigo-100 rounded-lg px-3 py-1">
                 {discountCode}
               </code>
-              <button type="button" className={`${ghostCls} text-xs`} onClick={copyCode}>
+              <button
+                type="button"
+                className={`${ghostCls} text-xs`}
+                onClick={copyCode}
+                aria-label={copied ? 'Copied to clipboard' : 'Copy discount code'}
+              >
                 {copied ? 'Copied ✓' : 'Copy'}
               </button>
             </div>
@@ -475,7 +502,7 @@ export default function StorefrontBargainWidget({
           {codeSaved ? (
             <p className="text-xs text-emerald-600">Code is ready — copy it and apply at checkout.</p>
           ) : (
-            <button type="button" className={buttonCls} onClick={saveDeal} disabled={loading}>
+            <button type="button" className={buttonCls + ' w-full'} onClick={saveDeal} disabled={loading}>
               {loading ? 'Creating code…' : 'Create My Discount Code'}
             </button>
           )}
@@ -492,7 +519,7 @@ export default function StorefrontBargainWidget({
       )}
 
       {step === 'rejected' && (
-        <div className="space-y-3 p-4 text-center">
+        <div className="p-4 space-y-3 text-center">
           <p className="text-red-500 font-semibold text-sm">Negotiation Ended</p>
           <p className="text-xs text-gray-500">Attempts exhausted. No deal this time.</p>
           <div className="flex justify-center gap-2">

@@ -496,67 +496,54 @@ export default function BargainWidget({
             display: 'flex',
             alignItems: 'center',
             gap: 12,
-            padding: '12px 14px',
+            padding: '10px 12px',
             background: 'linear-gradient(135deg, #ffffff 0%, #fafbff 100%)',
             border: '1px solid #e0e7ff',
             cursor: 'pointer',
             textAlign: 'left',
-            borderRadius: 16,
+            borderRadius: 14,
             position: 'relative',
             overflow: 'hidden',
           }}
         >
-          {/* Indigo accent spine + attention pulse */}
           <span className="cg-attn" style={{
             position: 'absolute',
             inset: 0,
             pointerEvents: 'none',
-            borderRadius: 16,
+            borderRadius: 14,
             boxShadow: '0 0 0 0 rgba(99,102,241,0.35)',
             animation: 'cgAttnPulse 2.4s infinite',
           }} />
           <div style={{
             alignSelf: 'stretch',
-            width: 4,
-            borderRadius: 4,
+            width: 3,
+            borderRadius: 3,
             background: 'linear-gradient(180deg, #818cf8, #4f46e5)',
             flexShrink: 0,
           }} />
           {image ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={image}
               alt=""
-              width={48}
-              height={48}
-              style={{ width: 48, height: 48, borderRadius: 10, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
+              width={40}
+              height={40}
+              style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
             />
           ) : (
-            <div style={{ width: 48, height: 48, borderRadius: 10, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <BadgePercent size={20} style={{ color: '#6366f1' }} />
+            <div style={{ width: 40, height: 40, borderRadius: 8, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <BadgePercent size={18} style={{ color: '#6366f1' }} />
             </div>
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}>
-              <div style={{ fontWeight: 800, fontSize: 15, color: '#0f172a', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-                {productTitle ? productTitle : 'This item'}
-              </div>
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', color: '#15803d',
-                border: '1px solid #bbf7d0', borderRadius: 999, padding: '2px 8px',
-                fontSize: 10.5, fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0,
-              }}>
-                <TrendingDown size={11} />
-                {maxDiscount != null && maxDiscount > 0 ? `Up to ${maxDiscount}% off` : t('saveNow')}
-              </span>
+            <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minWidth: 0 }}>
+              {productTitle ? productTitle : 'This item'}
             </div>
-            <div style={{ fontSize: 13, color: '#334155', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
-              <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 15 }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
-              <span style={{ color: '#cbd5e1', fontSize: 11 }}>·</span>
+            <div style={{ fontSize: 12.5, color: '#334155', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
+              <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 16 }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
+              <span style={{ color: '#cbd5e1', fontSize: 10 }}>·</span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                <Zap size={12} style={{ color: '#4f46e5', flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: '#4338ca', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <Zap size={11} style={{ color: '#4f46e5', flexShrink: 0 }} />
+                <span style={{ fontSize: 11.5, color: '#4338ca', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {isEmbed && mode === 'cart' ? t('discountHint') : t('triggerSub')}
                 </span>
               </span>
@@ -567,26 +554,25 @@ export default function BargainWidget({
               background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
               color: '#ffffff',
               fontWeight: 800,
-              fontSize: 13.5,
-              padding: '11px 16px',
+              fontSize: 13,
+              padding: '10px 14px',
               borderRadius: 999,
               border: 'none',
-              boxShadow: '0 4px 16px rgba(79,70,229,0.45)',
+              boxShadow: '0 4px 14px rgba(79,70,229,0.4)',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 5,
               whiteSpace: 'nowrap',
               flexShrink: 0,
               animation: 'cgAttnPulse 2.4s infinite',
             }}
           >
-            <Sparkles size={15} />
+            <Sparkles size={14} />
             {t('negotiate')}
-            <ArrowRight size={15} />
+            <ArrowRight size={14} />
           </span>
         </button>
       ) : (
-        /* Floating trigger button — catchy, attention-grabbing launcher */
         <button
           onClick={openPanel}
           ref={launcherRef}
@@ -597,41 +583,41 @@ export default function BargainWidget({
           style={{
             background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
             color: '#ffffff',
-            padding: '16px 24px',
+            padding: '14px 20px',
             borderRadius: 999,
             border: '1px solid rgba(255,255,255,0.25)',
             fontWeight: 800,
-            fontSize: 15,
+            fontSize: 14.5,
             display: 'inline-flex',
             alignItems: 'center',
             gap: 10,
             cursor: 'pointer',
-            boxShadow: '0 10px 30px rgba(79,70,229,0.5), 0 2px 8px rgba(0,0,0,0.14)',
+            boxShadow: '0 8px 24px rgba(79,70,229,0.45), 0 2px 6px rgba(0,0,0,0.12)',
             transition: 'all 0.2s ease',
             animation: 'cgAttnFloat 3s ease-in-out infinite',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = 'linear-gradient(135deg, #4f46e5, #4338ca)'
-            e.currentTarget.style.boxShadow = '0 12px 38px rgba(79,70,229,0.6), 0 2px 8px rgba(0,0,0,0.16)'
-            e.currentTarget.style.transform = 'scale(1.05)'
+            e.currentTarget.style.boxShadow = '0 10px 32px rgba(79,70,229,0.55), 0 2px 6px rgba(0,0,0,0.14)'
+            e.currentTarget.style.transform = 'scale(1.03)'
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = 'linear-gradient(135deg, #6366f1, #4f46e5)'
-            e.currentTarget.style.boxShadow = '0 10px 30px rgba(79,70,229,0.5), 0 2px 8px rgba(0,0,0,0.14)'
+            e.currentTarget.style.boxShadow = '0 8px 24px rgba(79,70,229,0.45), 0 2px 6px rgba(0,0,0,0.12)'
             e.currentTarget.style.transform = 'scale(1)'
           }}
         >
           <span style={{ position: 'relative', display: 'inline-flex' }}>
-            <Sparkles size={20} />
+            <Sparkles size={18} />
             <span style={{
-              position: 'absolute', top: -6, right: -8, width: 10, height: 10,
+              position: 'absolute', top: -5, right: -7, width: 9, height: 9,
               background: '#34d399', border: '2px solid #4f46e5', borderRadius: '50%',
             }} />
           </span>
           <span>{t('negotiate')}</span>
           <span style={{
-            background: 'rgba(255,255,255,0.22)', border: '1px solid rgba(255,255,255,0.35)',
-            padding: '3px 10px', borderRadius: 999, fontSize: 12, fontWeight: 800,
+            background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)',
+            padding: '2px 9px', borderRadius: 999, fontSize: 11.5, fontWeight: 800,
           }}>
             {maxDiscount != null && maxDiscount > 0 ? `Up to ${maxDiscount}% off` : t('saveNow')}
           </span>
@@ -669,42 +655,37 @@ export default function BargainWidget({
         >
           {/* Header */}
           <div style={{
-            padding: '16px 20px 0',
+            padding: '14px 16px 0',
             borderBottom: '1px solid #eef2f7',
             background: 'linear-gradient(180deg, #ffffff, #fafbff)',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                 <div style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 13,
+                  width: 42,
+                  height: 42,
+                  borderRadius: 11,
                   background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: '0 2px 8px rgba(99,102,241,0.35)',
+                  boxShadow: '0 2px 6px rgba(99,102,241,0.3)',
                   flexShrink: 0,
-                  position: 'relative',
                 }}>
-                  <MessageCircle size={22} style={{ color: '#ffffff' }} />
-                  <span style={{
-                    position: 'absolute', bottom: -2, right: -2, width: 14, height: 14,
-                    background: '#22c55e', border: '2px solid #ffffff', borderRadius: '50%',
-                  }} />
+                  <MessageCircle size={20} style={{ color: '#ffffff' }} />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, fontSize: 16, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ fontWeight: 800, fontSize: 15.5, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
                     {t('dealTitle')}
                     {personaChip && (
                       <span style={{
-                        fontSize: 11,
+                        fontSize: 10.5,
                         fontWeight: 700,
                         color: '#4f46e5',
                         background: '#eef2ff',
                         border: '1px solid #e0e7ff',
                         borderRadius: 999,
-                        padding: '2px 10px',
+                        padding: '2px 9px',
                         whiteSpace: 'nowrap',
                         display: 'inline-flex',
                         alignItems: 'center',
@@ -714,22 +695,22 @@ export default function BargainWidget({
                       </span>
                     )}
                     <span style={{
-                      fontSize: 10.5,
-                      fontWeight: 800,
-                      color: '#15803d',
-                      background: '#f0fdf4',
-                      border: '1px solid #bbf7d0',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: '#4f46e5',
+                      background: '#eef2ff',
+                      border: '1px solid #e0e7ff',
                       borderRadius: 999,
-                      padding: '2px 8px',
+                      padding: '1px 7px',
                       whiteSpace: 'nowrap',
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: 4,
+                      gap: 3,
                     }}>
-                      <ShieldCheck size={11} /> AI-Powered
+                      <ShieldCheck size={10} /> AI-powered
                     </span>
                   </div>
-                  <div style={{ fontSize: 13, color: '#64748b', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: 12.5, color: '#64748b', marginTop: 1.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {productTitle ? productTitle : 'Product'} · <span style={{ fontWeight: 700, color: '#0f172a' }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
                   </div>
                 </div>
@@ -741,11 +722,11 @@ export default function BargainWidget({
                 style={{
                   background: '#f8fafc',
                   border: '1px solid #e2e8f0',
-                  borderRadius: 10,
+                  borderRadius: 9,
                   color: '#64748b',
                   cursor: 'pointer',
-                  width: 36,
-                  height: 36,
+                  width: 34,
+                  height: 34,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -758,15 +739,15 @@ export default function BargainWidget({
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#334155' }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b' }}
               >
-                <X size={18} />
+                <X size={17} />
               </button>
             </div>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
+            <div style={{ display: 'flex', gap: 3, marginTop: 10 }}>
               {([
-                { key: 'chat', label: t('tabChat'), icon: <MessageCircle size={14} /> },
-                { key: 'info', label: t('tabDeal'), icon: <Tag size={14} /> },
+                { key: 'chat', label: t('tabChat'), icon: <MessageCircle size={13} /> },
+                { key: 'info', label: t('tabDeal'), icon: <Tag size={13} /> },
               ] as const).map(tab => (
                 <button
                   key={tab.key}
@@ -775,14 +756,14 @@ export default function BargainWidget({
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 6,
-                    padding: '9px 16px',
+                    gap: 5,
+                    padding: '8px 14px',
                     background: activeTab === tab.key ? '#eef2ff' : 'transparent',
                     color: activeTab === tab.key ? '#4f46e5' : '#64748b',
                     border: 'none',
                     borderBottom: activeTab === tab.key ? '2px solid #6366f1' : '2px solid transparent',
-                    borderRadius: '8px 8px 0 0',
-                    fontSize: 13.5,
+                    borderRadius: '7px 7px 0 0',
+                    fontSize: 13,
                     fontWeight: activeTab === tab.key ? 700 : 500,
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
@@ -796,10 +777,10 @@ export default function BargainWidget({
             </div>
           </div>
 
-          {/* Privacy / AI notice strip */}
+          {/* Skip / AI notice strip - visually secondary */}
           <div style={{
-            padding: '8px 20px',
-            fontSize: 11,
+            padding: '7px 16px',
+            fontSize: 10.5,
             color: '#94a3b8',
             background: '#fafbfc',
             borderBottom: '1px solid #eef2f7',
@@ -809,8 +790,8 @@ export default function BargainWidget({
             flexWrap: 'wrap',
             justifyContent: 'space-between',
           }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <ShieldCheck size={12} style={{ color: '#94a3b8' }} />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <ShieldCheck size={11} style={{ color: '#94a3b8' }} />
               {t('aiPowered')}
             </span>
             <a
@@ -825,8 +806,8 @@ export default function BargainWidget({
           {/* Attempts + timer */}
           {(attemptsRemaining != null || timeLeft != null) && !sessionEnded && (
             <div style={{
-              padding: '8px 20px',
-              fontSize: 12,
+              padding: '6px 16px',
+              fontSize: 11.5,
               color: '#64748b',
               background: '#ffffff',
               borderBottom: '1px solid #eef2f7',
@@ -836,13 +817,13 @@ export default function BargainWidget({
               gap: 10,
             }}>
               {attemptsRemaining != null && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                   <span style={{
                     background: attemptsRemaining <= 1 ? '#fef2f2' : '#f0fdf4',
                     color: attemptsRemaining <= 1 ? '#dc2626' : '#16a34a',
-                    padding: '2px 9px',
+                    padding: '2px 8px',
                     borderRadius: 999,
-                    fontSize: 11,
+                    fontSize: 10.5,
                     fontWeight: 700,
                   }}>
                     {t('offersRemaining', { n: attemptsRemaining })}
@@ -850,8 +831,8 @@ export default function BargainWidget({
                 </span>
               )}
               {timeLeft != null && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>
-                  <Clock size={12} />
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>
+                  <Clock size={11} />
                   {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
                 </span>
               )}
@@ -860,32 +841,31 @@ export default function BargainWidget({
 
           {/* Product context — what we are negotiating, in one glance */}
           <div style={{
-            padding: '10px 20px',
+            padding: '8px 16px',
             display: 'flex',
             alignItems: 'center',
-            gap: 10,
+            gap: 9,
             background: 'linear-gradient(180deg, #fafbff, #ffffff)',
             borderBottom: '1px solid #eef2f7',
           }}>
             {typeof image === 'string' && image ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={image}
                 alt=""
-                width={40}
-                height={40}
-                style={{ width: 40, height: 40, borderRadius: 9, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
+                width={36}
+                height={36}
+                style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
               />
             ) : (
-              <div style={{ width: 40, height: 40, borderRadius: 9, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <BadgePercent size={18} style={{ color: '#6366f1' }} />
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <BadgePercent size={16} style={{ color: '#6366f1' }} />
               </div>
             )}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontWeight: 700, fontSize: 12.5, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {productTitle ? productTitle : 'This item'}
               </div>
-              <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 1 }}>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
                 Listed price{' '}
                 <span style={{ fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
                   {currencySymbol}{originalPrice.toFixed(2)}
@@ -894,21 +874,21 @@ export default function BargainWidget({
             </div>
             {maxDiscount != null && maxDiscount > 0 ? (
               <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
                 background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', color: '#15803d',
-                border: '1px solid #bbf7d0', borderRadius: 999, padding: '3px 10px',
-                fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap',
+                border: '1px solid #bbf7d0', borderRadius: 999, padding: '2px 9px',
+                fontSize: 10.5, fontWeight: 800, whiteSpace: 'nowrap',
               }}>
-                <TrendingDown size={12} />
+                <TrendingDown size={11} />
                 Up to {maxDiscount}% off
               </span>
             ) : (
               <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
                 background: '#eef2ff', color: '#4f46e5', border: '1px solid #e0e7ff',
-                borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+                borderRadius: 999, padding: '2px 9px', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap',
               }}>
-                <Zap size={12} />
+                <Zap size={11} />
                 {t('saveNow')}
               </span>
             )}
@@ -1244,10 +1224,10 @@ export default function BargainWidget({
             <>
               {!sessionEnded && (
                 <div style={{
-                  padding: '8px 20px 0',
+                  padding: '6px 16px 0',
                   background: '#ffffff',
                   display: 'flex',
-                  gap: 6,
+                  gap: 5,
                   borderTop: '1px solid #eef2f7',
                   flexWrap: 'wrap',
                 }}>
@@ -1259,24 +1239,24 @@ export default function BargainWidget({
                 </div>
               )}
               <div style={{
-                padding: '12px 16px 16px',
+                padding: '10px 16px 14px',
                 background: '#ffffff',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 8,
+                gap: 7,
               }}>
                 {/* ₹-prefixed numeric field (numeric keyboard on mobile) */}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  borderRadius: 14,
+                  borderRadius: 12,
                   border: '1px solid #e2e8f0',
                   background: '#f8fafc',
-                  paddingLeft: 16,
+                  paddingLeft: 14,
                   transition: 'border-color 0.15s ease',
                   opacity: sessionEnded ? 0.55 : 1,
                 }}>
-                  <span style={{ fontWeight: 800, color: '#4f46e5', fontSize: 16, marginRight: 2, flexShrink: 0 }}>
+                  <span style={{ fontWeight: 800, color: '#4f46e5', fontSize: 15, marginRight: 2, flexShrink: 0 }}>
                     {currencySymbol}
                   </span>
                   <input
@@ -1298,11 +1278,11 @@ export default function BargainWidget({
                     style={{
                       flex: 1,
                       minWidth: 0,
-                      padding: '14px 16px 14px 2px',
+                      padding: '13px 14px 13px 2px',
                       border: 'none',
                       background: 'transparent',
                       color: '#0f172a',
-                      fontSize: 18,
+                      fontSize: 17,
                       fontWeight: 700,
                       fontVariantNumeric: 'tabular-nums',
                       outline: 'none',
@@ -1322,18 +1302,18 @@ export default function BargainWidget({
                     background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
                     color: '#ffffff',
                     border: 'none',
-                    borderRadius: 14,
-                    padding: '13px',
-                    minHeight: 52,
+                    borderRadius: 12,
+                    padding: '12px',
+                    minHeight: 50,
                     cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 8,
-                    fontSize: 15.5,
+                    gap: 7,
+                    fontSize: 15,
                     fontWeight: 800,
                     opacity: (loading || !input.trim() || sessionEnded) ? 0.5 : 1,
-                    boxShadow: '0 4px 16px rgba(79,70,229,0.4)',
+                    boxShadow: '0 3px 12px rgba(79,70,229,0.35)',
                     transition: 'all 0.15s ease',
                     outline: 'none',
                   }}
@@ -1353,7 +1333,7 @@ export default function BargainWidget({
 
           {/* Accept bar — the money moment: lock the deal in, then hand off to the cart */}
           {decision === 'accept' && (
-            <div style={{ padding: '10px 16px 14px', background: '#ffffff', borderTop: '1px solid #eef2f7' }}>
+            <div style={{ padding: '8px 16px 12px', background: '#ffffff', borderTop: '1px solid #eef2f7' }}>
               {discountCode && linkout ? (
                 <a
                   href={linkout}
@@ -1362,21 +1342,21 @@ export default function BargainWidget({
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 8,
-                    padding: '14px',
+                    gap: 7,
+                    padding: '13px',
                     background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
                     color: '#ffffff',
-                    borderRadius: 14,
+                    borderRadius: 12,
                     cursor: 'pointer',
                     fontWeight: 800,
-                    fontSize: 16,
+                    fontSize: 15,
                     textDecoration: 'none',
-                    boxShadow: '0 4px 18px rgba(79,70,229,0.45)',
+                    boxShadow: '0 3px 14px rgba(79,70,229,0.4)',
                     transition: 'all 0.2s ease',
                     outline: 'none',
                   }}
                 >
-                  {t('addToCart')} <ArrowRight size={18} />
+                  {t('addToCart')} <ArrowRight size={16} />
                 </a>
               ) : (
                 <button
@@ -1384,26 +1364,26 @@ export default function BargainWidget({
                   disabled={loading || !!discountCode}
                   style={{
                     width: '100%',
-                    padding: '14px',
+                    padding: '13px',
                     background: discountCode ? 'linear-gradient(135deg, #22c55e, #16a34a)' : '#ffffff',
                     color: discountCode ? '#ffffff' : '#16a34a',
                     border: discountCode ? 'none' : '2px solid #16a34a',
-                    borderRadius: 12,
+                    borderRadius: 11,
                     cursor: 'pointer',
                     fontWeight: 800,
-                    fontSize: 16,
+                    fontSize: 15,
                     opacity: (loading || !!discountCode) ? 0.85 : 1,
-                    boxShadow: '0 3px 12px rgba(22,163,74,0.3)',
+                    boxShadow: '0 3px 10px rgba(22,163,74,0.25)',
                     transition: 'all 0.2s ease',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 8,
+                    gap: 7,
                     outline: 'none',
                   }}
                 >
                   {discountCode ? (
-                    <><CheckCircle2 size={18} /> {t('dealComplete')}</>
+                    <><CheckCircle2 size={17} /> {t('dealComplete')}</>
                   ) : (
                     <>{t('acceptDeal')} · {currencySymbol}{finalPrice?.toFixed(2)}</>
                   )}
@@ -1430,10 +1410,23 @@ export default function BargainWidget({
         .cg-reduced-motion *, .cg-reduced-motion [style*="animation"] { animation: none !important; transition: none !important }
         .cg-reduced-motion .cg-attn { box-shadow: none !important; transform: none !important }
         .bargain-widget-root .cg-fab { position: fixed; bottom: 24px; right: 24px; z-index: 99998 }
-        .bargain-widget-root .cg-panel-fixed { position: fixed; top: 0; right: 0; bottom: 0; left: auto; width: 100%; max-width: 400px; border-radius: 18px 0 0 18px; box-shadow: -10px 0 48px rgba(15,23,42,0.18); z-index: 99999 }
+        .bargain-widget-root .cg-panel-fixed { position: fixed; top: 0; right: 0; bottom: 0; left: auto; width: 100%; max-width: 420px; border-radius: 16px 0 0 16px; box-shadow: -10px 0 48px rgba(15,23,42,0.18); z-index: 99999 }
         @media (max-width: 680px) {
-          .bargain-widget-root .cg-fab { left: 16px; right: 16px; bottom: 16px; width: auto; justify-content: center }
-          .bargain-widget-root .cg-panel-fixed { top: auto; bottom: 0; left: 0; width: 100%; max-width: none; height: min(88dvh, 780px); border-radius: 18px 18px 0 0; box-shadow: 0 -10px 40px rgba(15,23,42,0.28) }
+          .bargain-widget-root .cg-fab { left: 16px; right: 16px; bottom: 16px; width: auto; justify-content: center; padding: 14px 20px; }
+          .bargain-widget-root .cg-panel-fixed { top: auto; bottom: 0; left: 0; width: 100%; max-width: none; height: min(90dvh, 820px); border-radius: 16px 16px 0 0; box-shadow: 0 -10px 40px rgba(15,23,42,0.28) }
+        }
+        /* Ensure composer stays visible above keyboard on mobile */
+        @media (max-width: 680px) {
+          .bargain-widget-root .cg-panel-fixed:has(input:focus) {
+            height: auto;
+            max-height: 90vh;
+          }
+        }
+        /* Safe area inset support for notched devices */
+        @supports (padding: max(0px)) {
+          .bargain-widget-root .cg-panel-fixed {
+            padding-bottom: max(16px, env(safe-area-inset-bottom));
+          }
         }
       `}</style>
     </div>
@@ -1501,18 +1494,18 @@ function DealInfoPanel({ t, currencySymbol, originalPrice, finalPrice, decision,
   ].filter(Boolean) as { label: string; value: ReactNode; tint?: 'green' | 'indigo' | 'neutral' }[]
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 4 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 3 }}>
         <div style={{
-          width: 42, height: 42, borderRadius: 12, flexShrink: 0,
+          width: 38, height: 38, borderRadius: 10, flexShrink: 0,
           background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <Tag size={20} style={{ color: '#4f46e5' }} />
+          <Tag size={18} style={{ color: '#4f46e5' }} />
         </div>
         <div>
-          <div style={{ fontWeight: 800, fontSize: 15, color: '#0f172a' }}>Deal details</div>
-          <div style={{ fontSize: 12.5, color: '#64748b' }}>{productTitle ? productTitle : 'This item'}</div>
+          <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a' }}>Deal details</div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>{productTitle ? productTitle : 'This item'}</div>
         </div>
       </div>
 
@@ -1520,22 +1513,22 @@ function DealInfoPanel({ t, currencySymbol, originalPrice, finalPrice, decision,
         <div key={i} style={{
           background: r.tint === 'green' ? 'linear-gradient(135deg,#f0fdf4,#ecfdf5)' : r.tint === 'indigo' ? '#f8faff' : '#fafbfc',
           border: r.tint === 'green' ? '1px solid #bbf7d0' : r.tint === 'indigo' ? '1px solid #e0e7ff' : '1px solid #eef2f7',
-          borderRadius: 12,
-          padding: '12px 14px',
+          borderRadius: 10,
+          padding: '10px 12px',
         }}>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: '#94a3b8', marginBottom: 3 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: '#94a3b8', marginBottom: 2 }}>
             {r.label}
           </div>
-          <div style={{ fontSize: 14.5, color: '#334155', lineHeight: 1.5 }}>{r.value}</div>
+          <div style={{ fontSize: 13.5, color: '#334155', lineHeight: 1.5 }}>{r.value}</div>
         </div>
       ))}
 
       {!sessEnded && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          fontSize: 12.5, color: '#64748b', padding: '4px 2px',
+          display: 'flex', alignItems: 'center', gap: 7,
+          fontSize: 12, color: '#64748b', padding: '3px 1px',
         }}>
-          <ShieldCheck size={14} style={{ color: '#16a34a', flexShrink: 0 }} />
+          <ShieldCheck size={13} style={{ color: '#16a34a', flexShrink: 0 }} />
           Price is guaranteed while you negotiate — it resets if you leave and come back.
         </div>
       )}
@@ -1553,14 +1546,14 @@ function QuickChip({ label, onClick, disabled }: { label: string; onClick: () =>
         border: '1px solid #e2e8f0',
         color: '#475569',
         borderRadius: 999,
-        padding: '10px 16px',
-        fontSize: 13,
+        padding: '9px 14px',
+        fontSize: 12.5,
         fontWeight: 600,
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.5 : 1,
         transition: 'all 0.15s ease',
         outline: 'none',
-        minHeight: 44,
+        minHeight: 42,
       }}
       onMouseEnter={(e) => { e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.borderColor = '#c7d2fe'; e.currentTarget.style.color = '#4338ca' }}
       onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#475569' }}
