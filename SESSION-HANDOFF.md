@@ -11,7 +11,7 @@ auth, billing, Shopify, analytics, pricing, PCD compliance) is preserved — do 
 
 - **Branch:** `master` — all work committed, pushed, and deployed to **https://cart-gain.com** (HTTP 200).
 
-## Website review fixes (this session) — NOT yet committed
+## Website review fixes (this session) — committed
 Reviewer feedback pass: SMS removed entirely from the product + copy (WhatsApp + Email only), bargain
 limit copy clarified on pricing, homepage slimmed, founding-member urgency added.
 - **SMS removal:** `src/lib/services/sms.ts` deleted. `channel`/`campaignChannel` are now `['email','whatsapp']`
@@ -136,7 +136,7 @@ real floor to a counter). `src/app/api/bargain/start/route.ts` fetches the autho
      product-complaint ("this is a scam") now redirect via `off_topic_extreme` **without consuming an attempt**.
 
 ## Open / next items (from our plan)
-- **Website review fixes (this session) — NOT yet committed/deployed:** SMS removal + homepage/pricing copy
+- **Website review fixes (this session) — committed; deploy pending:** SMS removal + homepage/pricing copy
   changes above. Re-run `npx tsc --noEmit` / `npm run lint` / `npx jest` (539) before commit + deploy.
 - **Social proof / testimonials (owner task):** add a real founder-testimonial section when user provides quotes —
   no fabricated testimonials. Place on homepage + subscribe page (`subscribe=True`).
