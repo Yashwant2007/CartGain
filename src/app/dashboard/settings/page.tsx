@@ -516,7 +516,7 @@ function BillingSettings() {
       <CreditCard className="w-12 h-12 text-cyan-400 mx-auto mb-4" />
       <h2 className="text-lg font-semibold text-white mb-2">Billing &amp; Subscription</h2>
       <p className="text-sm text-blue-300/80 mb-6">
-        Manage your subscription plan, SMS credits, and payment history on the dedicated subscription page.
+        Manage your subscription plan and payment history on the dedicated subscription page.
       </p>
       <Link
         href="/dashboard/subscription"

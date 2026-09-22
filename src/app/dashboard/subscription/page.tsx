@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { Check, Shield, Percent, Zap, FileText, Download, ToggleLeft, Mail, Smartphone, MessageSquare } from 'lucide-react'
+import { Check, Shield, Percent, Zap, FileText, Download, ToggleLeft, Mail, MessageSquare } from 'lucide-react'
 import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/payment'
 
 type SubscriptionData = {
@@ -10,8 +10,6 @@ type SubscriptionData = {
   status: string
   provider?: string
   shopDomain?: string | null
-  smsCredits: number
-  smsCreditsUsed: number
   revenueShareAccrued: number
   revenueSharePaid: number
   currentPeriodEnd: string
@@ -416,16 +414,11 @@ export default function SubscriptionPage() {
             {/* Per-customer message limits */}
             <div>
               <p className="text-xs text-blue-300/80 font-medium mb-2">Per-customer message limits</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="bg-slate-800/50 rounded-lg p-3 text-center">
                   <Mail className="w-4 h-4 text-blue-400 mx-auto mb-1" />
                   <p className="text-xs text-blue-300/60">Email</p>
                   <p className="text-sm font-semibold text-white">{currentPlan.maxMessagesPerCustomer.email === Infinity ? '∞' : currentPlan.maxMessagesPerCustomer.email}</p>
-                </div>
-                <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-                  <Smartphone className="w-4 h-4 text-green-400 mx-auto mb-1" />
-                  <p className="text-xs text-blue-300/60">SMS</p>
-                  <p className="text-sm font-semibold text-white">{currentPlan.maxMessagesPerCustomer.sms === Infinity ? '∞' : currentPlan.maxMessagesPerCustomer.sms}</p>
                 </div>
                 <div className="bg-slate-800/50 rounded-lg p-3 text-center">
                   <MessageSquare className="w-4 h-4 text-emerald-400 mx-auto mb-1" />

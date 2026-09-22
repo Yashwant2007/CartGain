@@ -66,39 +66,6 @@ ${ctx.discountCode ? `\nINCLUDE this discount offer prominently: code ${ctx.disc
   }
 }
 
-export async function generateSMSContent(ctx: CartContext, storeId?: string): Promise<GeneratedContent | null> {
-  const userKey = storeId || 'default'
-  const resolved = getAiClient(userKey)
-  if (!resolved) return null
-  const ai = resolved.client
-  const tier = resolved.tier
-
-  try {
-    const res = await ai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `Write a short SMS (max 140 chars) for abandoned cart recovery. Warm and urgent. 1-2 lines. Include one emoji. Do NOT include the URL — it will be appended. Return ONLY the message text, no JSON, no quotes.
-${ctx.discountCode ? `\nINCLUDE this discount offer: code ${ctx.discountCode}${ctx.discountValue ? ` for ${ctx.discountValue}${ctx.discountType === 'percentage' ? '%' : ''} off` : ''}. Keep it short!` : ''}`,
-        },
-        {
-          role: 'user',
-          content: `Name: ${ctx.customerName}\nStore: ${ctx.storeName}\nItems: ${ctx.items.map(i => i.name).join(', ')}\nTotal: ${ctx.currencySymbol}${ctx.total.toFixed(2)}`,
-        },
-      ],
-      max_tokens: 80,
-      temperature: 0.8,
-    })
-
-    const body = res.choices[0]?.message?.content?.trim()
-    return body ? { body } : null
-  } catch (err) {
-    handleAiFailure(err, 'sms generation', userKey, tier)
-    return null
-  }
-}
-
 export async function generateWhatsAppContent(ctx: CartContext, step: number = 0, storeId?: string): Promise<GeneratedContent | null> {
   const userKey = storeId || 'default'
   const resolved = getAiClient(userKey)
@@ -341,7 +308,7 @@ function computeProbabilityHeuristic(
     factors.push('Cart value above average')
   }
 
-  const channelBoost: Record<string, number> = { email: 5, whatsapp: 10, sms: 8 }
+  const channelBoost: Record<string, number> = { email: 5, whatsapp: 10 }
   prob += channelBoost[channel] || 0
   factors.push(`${channel} channel`)
 
@@ -621,7 +588,7 @@ export function generateCoachHeuristic(storeMetrics: {
     s.push({ title: 'Increase recovery rate', description: `Your recovery rate is ${storeMetrics.recoveryRate.toFixed(1)}%. Add a follow-up message 24h after the first to capture late converters.`, impact: 'high', type: 'timing' })
   }
   if (storeMetrics.channelsUsed.length < 2) {
-    s.push({ title: 'Add another channel', description: `You're only using ${storeMetrics.channelsUsed.join(', ')}. Adding WhatsApp or SMS can reach customers who don't check email.`, impact: 'high', type: 'channel' })
+    s.push({ title: 'Add another channel', description: `You're only using ${storeMetrics.channelsUsed.join(', ')}. Adding WhatsApp can reach customers who don't check email.`, impact: 'high', type: 'channel' })
   }
   if (!storeMetrics.aiOptimized) {
     s.push({ title: 'Enable AI optimization', description: 'AI-generated messages have 35% higher conversion rates. Toggle AI optimization on your campaign settings.', impact: 'high', type: 'content' })
@@ -845,9 +812,8 @@ export function simulateRecovery(
     additionalRevenue: Math.round(additionalRevenue),
     estimatedMessages: Math.round(currentMetrics.monthlyAbandonedCarts * (recRate / 100) * 2.5),
     channelBreakdown: [
-      { channel: 'email', recoveryRate: recRate * 0.4, revenue: Math.round(projectedRevenue * 0.4) },
-      { channel: 'whatsapp', recoveryRate: recRate * 0.35, revenue: Math.round(projectedRevenue * 0.35) },
-      { channel: 'sms', recoveryRate: recRate * 0.25, revenue: Math.round(projectedRevenue * 0.25) },
+      { channel: 'email', recoveryRate: recRate * 0.5, revenue: Math.round(projectedRevenue * 0.5) },
+      { channel: 'whatsapp', recoveryRate: recRate * 0.5, revenue: Math.round(projectedRevenue * 0.5) },
     ],
   }
 }
@@ -891,7 +857,6 @@ export const INDUSTRY_BENCHMARKS = {
   recoveryByChannel: {
     email: { average: 6, topPerformers: 15 },
     whatsapp: { average: 12, topPerformers: 28 },
-    sms: { average: 9, topPerformers: 20 },
   },
   avgOrderValue: { average: 1250, topPerformers: 3500 },
   messagesPerRecovery: { average: 2.5, topPerformers: 1.5 },

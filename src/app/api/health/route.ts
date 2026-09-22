@@ -43,8 +43,6 @@ export async function GET() {
   const optionalVars = [
     'WHATSAPP_BUSINESS_TOKEN',
     'WHATSAPP_PHONE_NUMBER_ID',
-    'MSG91_AUTH_KEY',
-    'MSG91_SENDER_ID',
     'JOB_SECRET',
     'ALERT_EMAIL',
   ]

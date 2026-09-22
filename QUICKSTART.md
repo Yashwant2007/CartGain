@@ -34,10 +34,6 @@ RAZORPAY_KEY_ID="rzp_test_..."
 RAZORPAY_KEY_SECRET="..."
 RAZORPAY_WEBHOOK_SECRET="..."
 
-# MSG91 (free SMS for testing)
-MSG91_AUTH_KEY="your_msg91_auth_key"
-MSG91_SENDER_ID="CARTGN"
-
 # Resend (Email - free 100k/mo)
 RESEND_API_KEY="re_..."
 FROM_EMAIL="noreply@cart-gain.com"
@@ -46,7 +42,6 @@ FROM_NAME="CartGain"
 
 **Quick setup for free services**:
 - **Database**: [Supabase](https://supabase.com) → New project → Connection string
-- **MSG91**: [MSG91](https://msg91.com) → Sign up → API Keys
 - **Resend**: [Resend](https://resend.com) → Sign up → API Keys
 - **Razorpay**: [Razorpay](https://razorpay.com) → Settings → API Keys (test mode)
 
@@ -98,7 +93,7 @@ You'll be redirected to the dashboard.
 1. Go to Dashboard → Campaigns
 2. Click "New Campaign"
 3. Name: "Test Recovery"
-4. Select channels: SMS, Email
+4. Select channels: WhatsApp, Email
 5. Set delay: 15 minutes
 6. Enable AI optimization
 7. Click "Create Campaign"
@@ -160,7 +155,6 @@ PORT=3001 npm run dev
 
 ### Immediate (Today)
 - [ ] Complete all environment variables
-- [ ] Set up MSG91 for SMS testing
 - [ ] Configure Razorpay for payments
 - [ ] Read LAUNCH_GUIDE.md
 
@@ -187,7 +181,6 @@ All these services have free tiers perfect for development:
 | **Vercel** | Unlimited deployments | vercel.com |
 | **Supabase** | 500MB database | supabase.com |
 | **Upstash** | 10k commands/day | upstash.com |
-| **MSG91** | Free credits for testing | msg91.com |
 | **Resend** | 100k emails/month free | resend.com |
 | **Razorpay** | Test mode (free) | razorpay.com |
 
@@ -230,7 +223,7 @@ openssl rand -base64 32  # Generate secret key
 ✅ User authentication (email + Google OAuth)  
 ✅ Dashboard with analytics  
 ✅ Campaign builder with 5-step wizard  
-✅ Multi-channel messaging (SMS, WhatsApp, Email, Push)  
+✅ Multi-channel messaging (WhatsApp, Email)  
 ✅ Shopify webhook integration  
 ✅ Razorpay payment integration  
 ✅ Settings pages  

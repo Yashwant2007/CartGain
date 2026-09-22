@@ -242,7 +242,7 @@ export default function DashboardPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              { step: 1, title: 'Connect channels', desc: 'WhatsApp, SMS & email', href: '/dashboard/integrations' },
+              { step: 1, title: 'Connect channels', desc: 'WhatsApp & email', href: '/dashboard/integrations' },
               { step: 2, title: 'Create a campaign', desc: 'Automated recovery flow', href: '/dashboard/campaigns' },
               { step: 3, title: 'Enable AI Bargain', desc: 'Negotiate price at checkout', href: '/dashboard/bargain' },
               { step: 4, title: 'Watch it work', desc: 'Recovery starts instantly', href: '/dashboard/carts' },
@@ -388,7 +388,6 @@ export default function DashboardPage() {
 
 function ChannelBar({ name, sent, delivered, converted, deliveryRate, clickRate, conversionRate }: { name: string; sent: number; delivered: number; converted: number; deliveryRate: number; clickRate: number; conversionRate: number }) {
   const colorMap: Record<string, string> = {
-    Sms: 'bg-blue-500',
     Whatsapp: 'bg-green-500',
     Email: 'bg-purple-500',
   }
@@ -418,13 +417,11 @@ function ChannelBar({ name, sent, delivered, converted, deliveryRate, clickRate,
 
 function ChannelBadge({ channel }: { channel: string }) {
   const badges: Record<string, string> = {
-    sms: 'bg-blue-600/30 text-blue-300 border border-blue-500/50',
     whatsapp: 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/50',
     email: 'bg-purple-600/30 text-purple-300 border border-purple-500/50',
   }
 
   const icons: Record<string, React.ReactNode> = {
-    sms: <MessageSquare className="w-3 h-3 mr-1" />,
     whatsapp: <MessageSquare className="w-3 h-3 mr-1" />,
     email: <Mail className="w-3 h-3 mr-1" />,
   }

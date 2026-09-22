@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
         const prevRevenue = await prisma.recoveredCart.aggregate({ where: { storeId: store.id, recoveredAt: { gte: twoWeeksAgo, lt: weekAgo } }, _sum: { netRevenue: true } })
 
         const channelBreakdown = await Promise.all(
-          ['email', 'sms', 'whatsapp'].map(async (channel) => {
+          ['email', 'whatsapp'].map(async (channel) => {
             const sent = await prisma.message.count({ where: { cart: { storeId: store.id }, channel, sentAt: { gte: weekAgo } } })
             const rec = await prisma.recoveredCart.count({ where: { storeId: store.id, channel, recoveredAt: { gte: weekAgo } } })
             const chRevenue = await prisma.recoveredCart.aggregate({ where: { storeId: store.id, channel, recoveredAt: { gte: weekAgo } }, _sum: { netRevenue: true } })

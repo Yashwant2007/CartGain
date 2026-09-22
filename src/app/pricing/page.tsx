@@ -96,6 +96,10 @@ export default function PricingPage() {
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="text-center mb-4">
+            <div className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-cyan-100 bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-cyan-500/15 border border-cyan-400/30 rounded-full px-4 py-1.5 mb-5">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+              Founding member rates: first 100 stores keep today&apos;s prices for life
+            </div>
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">Pricing that grows with you</h1>
             <p className="text-lg text-blue-300/80 max-w-2xl mx-auto">
               Start free with {FREE_CARTS_THRESHOLD} recovered carts. Scale with AI bargaining, multi-channel
@@ -186,12 +190,13 @@ export default function PricingPage() {
                       icon={<Handshake className="w-4 h-4 text-emerald-400" />}
                       label="Bargain sessions"
                       value={isEnterprise ? 'Unlimited' : fmt(plan.bargainSessions)}
+                      hint="pause when exhausted — resumes on your next cycle"
                     />
                     <MeterRow
                       icon={<Handshake className="w-4 h-4 text-emerald-400" />}
                       label="Accepted deals"
                       value={isEnterprise ? 'Unlimited' : fmt(plan.bargainDeals)}
-                      hint={plan.bargainOverageDealPrice > 0 ? `then ${fmtCurrency(plan.bargainOverageDealPrice)}/extra` : plan.id === 'free' ? 'hard cap' : undefined}
+                      hint={plan.bargainOverageDealPrice > 0 ? `then ${fmtCurrency(plan.bargainOverageDealPrice)}/extra deal` : plan.id === 'free' ? 'no overage — hard cap' : undefined}
                     />
                     <MeterRow
                       icon={<MessageSquare className="w-4 h-4 text-blue-400" />}

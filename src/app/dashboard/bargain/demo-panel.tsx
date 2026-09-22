@@ -393,7 +393,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
         )}
         {ended === 'abandoned' && (
           <div className="px-4 py-4 bg-amber-900/20 border-t border-amber-700/40 text-sm text-amber-200">
-            Session abandoned. On a real store this triggers the WhatsApp / Email / SMS recovery sequence.
+            Session abandoned. On a real store this triggers the WhatsApp / Email recovery sequence.
           </div>
         )}
         {aiError && !ended && (

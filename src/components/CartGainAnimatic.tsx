@@ -160,18 +160,18 @@ export default function CartGainAnimatic() {
             </div>
           </div>
 
-          {/* Scene 2: SMS Recovery $89 */}
+          {/* Scene 2: WhatsApp Recovery ₹89 */}
           <div className={`${styles.scene} ${currentScene === 1 ? styles.active : ''}`} id="s2">
             <div className={styles.s2Bg}></div>
-            <div className={styles.smsCard}>
-              <div className={styles.smsHeader}>
-                <div className={styles.smsIcon}>CG</div>
+            <div className={styles.waCard}>
+              <div className={styles.waHeader}>
+                <div className={styles.waIcon}>CG</div>
                 <div>
-                  <div className={styles.smsFrom}>CartGain Recovery</div>
+                  <div className={styles.waFrom}>CartGain on WhatsApp</div>
                   <div style={{ fontSize: '9px', color: '#4a7090' }}>Today 2:34 PM</div>
                 </div>
               </div>
-              <div className={styles.smsBubble}>
+              <div className={styles.waBubble}>
                 Hey! You left something behind 👋<br />
                 <strong>Complete your ₹89.00 order</strong> and get it shipped today.<br />
                 <br />→{' '}
@@ -179,7 +179,7 @@ export default function CartGainAnimatic() {
                   shop.example.com/cart
                 </span>
               </div>
-              <div className={styles.smsCta}>TAP TO COMPLETE ORDER</div>
+              <div className={styles.waCta}>TAP TO COMPLETE ORDER</div>
             </div>
             <div className={styles.recoveryCard}>
               <div className={styles.rcAmount}>+₹89</div>

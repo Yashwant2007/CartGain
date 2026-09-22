@@ -35,7 +35,7 @@ export default function CampaignsPage() {
   const [statsByCampaign, setStatsByCampaign] = useState<Record<string, { totalCarts: number; recovered: number; recoveryRate: number; revenue: number }>>({})
   const [loadingData, setLoadingData] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [currentPlan, setCurrentPlan] = useState<{ id: string; name: string; price: number; maxCampaigns: number; maxMessagesPerCustomer: { email: number; sms: number; whatsapp: number } } | null>(null)
+  const [currentPlan, setCurrentPlan] = useState<{ id: string; name: string; price: number; maxCampaigns: number; maxMessagesPerCustomer: { email: number; whatsapp: number } } | null>(null)
   const [activeCampaignCount, setActiveCampaignCount] = useState(0)
 
   // Check for auth errors from useResolvedStoreId
@@ -355,7 +355,6 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function ChannelIcon({ channel }: { channel: string }) {
   const config: Record<string, { bg: string; color: string; label: string }> = {
-    sms: { bg: 'bg-blue-600/20', color: 'text-blue-300', label: 'SMS' },
     whatsapp: { bg: 'bg-emerald-600/20', color: 'text-emerald-300', label: 'WhatsApp' },
     email: { bg: 'bg-purple-600/20', color: 'text-purple-300', label: 'Email' },
   }
@@ -412,7 +411,7 @@ function OnboardingWizard({ onStart }: { onStart: () => void }) {
               <div className="bg-slate-700/40 border border-blue-700/30 rounded-xl p-4 text-center hover:border-cyan-500/40 transition-all">
                 <div className="text-2xl mb-2">📧</div>
                 <h3 className="text-sm font-semibold text-white mb-1">Multi-Channel</h3>
-                <p className="text-xs text-blue-300/60">Email, WhatsApp, SMS <span className="text-amber-400/80">(coming soon)</span></p>
+                <p className="text-xs text-blue-300/60">Email &amp; WhatsApp</p>
               </div>
               <div className="bg-slate-700/40 border border-blue-700/30 rounded-xl p-4 text-center hover:border-cyan-500/40 transition-all">
                 <div className="text-2xl mb-2">🤖</div>
@@ -657,8 +656,8 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
                     <div>
                       <label className="block text-xs font-medium text-blue-200 mb-1.5">Channels</label>
                       <div className="flex flex-wrap gap-1.5">
-                        {['email', 'whatsapp', 'sms'].map((ch) => (
-                          <button key={ch} onClick={() => { if (ch === 'sms') return; setForm({ ...form, channelsA: form.channelsA.includes(ch) ? form.channelsA.filter(c => c !== ch) : [...form.channelsA, ch] }); }} className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${form.channelsA.includes(ch) ? 'bg-cyan-600/40 border-cyan-400/60 text-cyan-200' : 'bg-slate-700/50 border-blue-700/50 text-blue-300/60 hover:text-blue-200'} ${ch === 'sms' ? 'opacity-60 cursor-not-allowed' : ''}`}>{ch}{ch === 'sms' ? <span className="ml-1.5 text-[10px] text-amber-400/80">(coming soon)</span> : ''}</button>
+                        {['email', 'whatsapp'].map((ch) => (
+                          <button key={ch} onClick={() => setForm({ ...form, channelsA: form.channelsA.includes(ch) ? form.channelsA.filter(c => c !== ch) : [...form.channelsA, ch] })} className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${form.channelsA.includes(ch) ? 'bg-cyan-600/40 border-cyan-400/60 text-cyan-200' : 'bg-slate-700/50 border-blue-700/50 text-blue-300/60 hover:text-blue-200'}`}>{ch}</button>
                         ))}
                       </div>
                     </div>
@@ -691,8 +690,8 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
                     <div>
                       <label className="block text-xs font-medium text-blue-200 mb-1.5">Channels</label>
                       <div className="flex flex-wrap gap-1.5">
-                        {['email', 'whatsapp', 'sms'].map((ch) => (
-                          <button key={ch} onClick={() => { if (ch === 'sms') return; setForm({ ...form, channelsB: form.channelsB.includes(ch) ? form.channelsB.filter(c => c !== ch) : [...form.channelsB, ch] }); }} className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${form.channelsB.includes(ch) ? 'bg-purple-600/40 border-purple-400/60 text-purple-200' : 'bg-slate-700/50 border-blue-700/50 text-blue-300/60 hover:text-blue-200'} ${ch === 'sms' ? 'opacity-60 cursor-not-allowed' : ''}`}>{ch}{ch === 'sms' ? <span className="ml-1.5 text-[10px] text-amber-400/80">(coming soon)</span> : ''}</button>
+                        {['email', 'whatsapp'].map((ch) => (
+                          <button key={ch} onClick={() => setForm({ ...form, channelsB: form.channelsB.includes(ch) ? form.channelsB.filter(c => c !== ch) : [...form.channelsB, ch] })} className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${form.channelsB.includes(ch) ? 'bg-purple-600/40 border-purple-400/60 text-purple-200' : 'bg-slate-700/50 border-blue-700/50 text-blue-300/60 hover:text-blue-200'}`}>{ch}</button>
                         ))}
                       </div>
                     </div>
@@ -780,7 +779,7 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
 function CreateCampaignModal({ onClose, onCreate, plan }: {
   onClose: () => void
   onCreate: (config: CreateCampaignConfig) => void
-  plan: { name: string; maxCampaigns: number; maxMessagesPerCustomer: { email: number; sms: number; whatsapp: number } } | null
+  plan: { name: string; maxCampaigns: number; maxMessagesPerCustomer: { email: number; whatsapp: number } } | null
 }) {
   const [step, setStep] = useState(1)
   const [error, setError] = useState<string | null>(null)
@@ -884,12 +883,10 @@ function CreateCampaignModal({ onClose, onCreate, plan }: {
             <div className="space-y-4">
               <p className="text-sm text-blue-300/80 mb-4">Select channels for your recovery sequence</p>
               <div className="grid grid-cols-2 gap-4">
-                {['whatsapp', 'email', 'sms'].map((channel) => (
+                {['whatsapp', 'email'].map((channel) => (
                   <label
                     key={channel}
                     className={`flex items-center p-4 border rounded-lg cursor-pointer transition-all ${
-                      channel === 'sms' ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
-                    } ${
                       config.channels.includes(channel)
                         ? 'border-cyan-400/60 bg-cyan-600/20 hover:bg-cyan-600/30'
                         : 'border-blue-700/40 bg-slate-700/20 hover:bg-slate-700/40'
@@ -899,7 +896,6 @@ function CreateCampaignModal({ onClose, onCreate, plan }: {
                       type="checkbox"
                       checked={config.channels.includes(channel)}
                       onChange={(e) => {
-                        if (channel === 'sms') return;
                         if (e.target.checked) {
                           setConfig({ ...config, channels: [...config.channels, channel] })
                         } else {
@@ -910,7 +906,7 @@ function CreateCampaignModal({ onClose, onCreate, plan }: {
                     />
                     <span className={`ml-3 capitalize font-medium transition-colors ${
                       config.channels.includes(channel) ? 'text-cyan-300' : 'text-blue-300'
-                    }`}>{channel}{channel === 'sms' ? <span className="ml-1.5 text-[10px] text-amber-400/80">(coming soon)</span> : ''}</span>
+                    }`}>{channel}</span>
                   </label>
                 ))}
               </div>
@@ -1016,10 +1012,9 @@ function CreateCampaignModal({ onClose, onCreate, plan }: {
                         <p className="font-medium text-blue-200 mb-1">{plan.name} plan — per-customer limits:</p>
                         <div className="flex gap-3">
                           <span>Email: <strong className="text-white">{plan.maxMessagesPerCustomer.email === Infinity ? '∞' : plan.maxMessagesPerCustomer.email}</strong></span>
-                          <span>SMS: <strong className="text-white">{plan.maxMessagesPerCustomer.sms === Infinity ? '∞' : plan.maxMessagesPerCustomer.sms}</strong></span>
                           <span>WhatsApp: <strong className="text-white">{plan.maxMessagesPerCustomer.whatsapp === Infinity ? '∞' : plan.maxMessagesPerCustomer.whatsapp}</strong></span>
                         </div>
-                        {totalMessages > Math.min(plan.maxMessagesPerCustomer.email, plan.maxMessagesPerCustomer.sms, plan.maxMessagesPerCustomer.whatsapp) && (
+                        {totalMessages > Math.min(plan.maxMessagesPerCustomer.email, plan.maxMessagesPerCustomer.whatsapp) && (
                           <p className="text-amber-400 mt-2">
                             Your sequence ({totalMessages} messages) may exceed your plan&apos;s per-customer limit. Go to <a href="/dashboard/subscription" className="underline">Subscription</a> to enable overage billing so excess messages are still sent.
                           </p>

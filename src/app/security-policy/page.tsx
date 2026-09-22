@@ -119,7 +119,6 @@ export default function SecurityPolicyPage() {
               <li>OpenAI — AI negotiation model (GPT-4o / GPT-4o-mini)</li>
               <li>Groq — AI development/fallback inference (gpt-oss-120b)</li>
               <li>Resend — transactional email (not yet runtime-configured)</li>
-              <li>MSG91 — SMS delivery (not yet runtime-configured)</li>
               <li>Meta (WhatsApp Cloud API) — WhatsApp delivery (not yet runtime-configured)</li>
               <li>Razorpay — subscription billing (not yet runtime-configured)</li>
             </ul>

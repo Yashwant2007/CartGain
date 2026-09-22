@@ -32,7 +32,7 @@ type IntegrationStatus = {
 }
 
 type CredentialModal = {
-  type: 'woocommerce' | 'magento' | 'bigcommerce' | 'custom' | 'msg91' | 'whatsapp' | 'resend' | 'onesignal'
+  type: 'woocommerce' | 'magento' | 'bigcommerce' | 'custom' | 'whatsapp' | 'resend' | 'onesignal'
   name: string
   icon: string
 } | null
@@ -266,7 +266,6 @@ export default function IntegrationsPage() {
   }
 
   const messagingActions: Record<string, { onConnect: () => void }> = {
-    msg91: { onConnect: () => setCredentialModal({ type: 'msg91', name: 'MSG91 SMS', icon: '💬' }) },
     whatsapp: { onConnect: () => setCredentialModal({ type: 'whatsapp', name: 'WhatsApp Business', icon: '📱' }) },
     resend: { onConnect: () => setCredentialModal({ type: 'resend', name: 'Resend', icon: '📧' }) },
     onesignal: { onConnect: () => setCredentialModal({ type: 'onesignal', name: 'OneSignal', icon: '🔔' }) },
@@ -599,15 +598,6 @@ const CREDENTIAL_FORMS: Record<string, {
     ],
     docUrl: '/dashboard/integrations',
   },
-  msg91: {
-    title: 'MSG91 SMS Configuration',
-    description: 'MSG91 is configured via environment variables. Add these to your Vercel project dashboard.',
-    fields: [
-      { key: 'MSG91_AUTH_KEY', label: 'MSG91_AUTH_KEY', placeholder: 'your_msg91_auth_key' },
-      { key: 'MSG91_SENDER_ID', label: 'MSG91_SENDER_ID', placeholder: 'CARTGN' },
-    ],
-    docUrl: 'https://docs.msg91.com/',
-  },
   whatsapp: {
     title: 'WhatsApp Business Configuration',
     description: 'WhatsApp Business API is configured via environment variables. Add these to your Vercel project dashboard.',
@@ -661,7 +651,7 @@ function CredentialModalComponent({
 
   if (!modal) return null
   const form = CREDENTIAL_FORMS[modal.type]
-  const isMessaging = ['msg91', 'whatsapp', 'resend', 'onesignal'].includes(modal.type)
+  const isMessaging = ['whatsapp', 'resend', 'onesignal'].includes(modal.type)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

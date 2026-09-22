@@ -427,7 +427,7 @@ export default function SignUpPage() {
         <div className="max-w-md text-white">
           <h2 className="text-3xl lg:text-4xl font-bold mb-8">Everything You Need</h2>
           <div className="space-y-6">
-            <BenefitItem text="Multi-channel recovery (SMS, WhatsApp, Email)" />
+            <BenefitItem text="Multi-channel recovery (WhatsApp &amp; Email)" />
             <BenefitItem text="AI-optimized send times" />
             <BenefitItem text="Real-time analytics" />
             <BenefitItem text="One-click integrations" />

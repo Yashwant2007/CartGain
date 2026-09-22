@@ -77,14 +77,6 @@ export async function GET() {
       ],
       messagingServices: [
         {
-          id: 'msg91',
-          name: 'MSG91 SMS',
-          description: 'Send transactional SMS via MSG91',
-          icon: '💬',
-          connected: Boolean(process.env.MSG91_AUTH_KEY),
-          status: process.env.MSG91_AUTH_KEY ? 'active' : 'disconnected',
-        },
-        {
           id: 'whatsapp',
           name: 'WhatsApp Business',
           description: 'WhatsApp messages via Meta Business API',

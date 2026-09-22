@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
           userId: user.id,
           name: 'Test Recovery Campaign',
           isActive: true,
-          channels: ['whatsapp', 'sms', 'email'],
+          channels: ['whatsapp', 'email'],
           sendDelay: 15,
         },
       })

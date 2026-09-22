@@ -403,7 +403,6 @@ export default function AnalyticsPage() {
 
 function ChannelBadge({ channel }: { channel: string }) {
   const colors: Record<string, string> = {
-    SMS: 'bg-blue-500/20 text-blue-300 border border-blue-500/40',
     WhatsApp: 'bg-green-500/20 text-green-300 border border-green-500/40',
     Email: 'bg-purple-500/20 text-purple-300 border border-purple-500/40',
     Push: 'bg-orange-500/20 text-orange-300 border border-orange-500/40',

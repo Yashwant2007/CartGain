@@ -5,7 +5,6 @@ import prisma from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-const SMS_RATE = 0.85
 const WHATSAPP_RATE = 0.86
 const EMAIL_RATE = 0
 const BATCH_SIZE = 500
@@ -89,7 +88,7 @@ async function computeChannelStats(storeId: string, startDate: Date, endDate: Da
     revMap.set(r.channel.toLowerCase(), Number(r.revenue))
   }
 
-  return ['sms', 'whatsapp', 'email'].map(channel => {
+  return ['whatsapp', 'email'].map(channel => {
     const sentRow = channelSent.find((r: any) => r.channel === channel)
     const sent = Number(sentRow?.sent || 0)
     const delivered = Number(sentRow?.delivered || 0)
@@ -158,11 +157,10 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
   const recoveryRate = cartsAbandoned > 0 ? (cartsRecovered / cartsAbandoned) * 100 : 0
 
   const costs = {
-    sms: (channelBreakdown.find((c: any) => c.channel === 'Sms')?.sent ?? 0) * SMS_RATE,
     whatsapp: (channelBreakdown.find((c: any) => c.channel === 'Whatsapp')?.sent ?? 0) * WHATSAPP_RATE,
     email: (channelBreakdown.find((c: any) => c.channel === 'Email')?.sent ?? 0) * EMAIL_RATE,
   }
-  const totalCosts = costs.sms + costs.whatsapp + costs.email
+  const totalCosts = costs.whatsapp + costs.email
   const netRevenue = (revenue._sum.netRevenue ?? 0)
   const roi = totalCosts > 0 ? ((netRevenue - totalCosts) / totalCosts) * 100 : 0
 
@@ -201,7 +199,7 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
     tips.push('Great recovery rate! Consider increasing send limits to capture even more revenue.')
   }
   if (channelBreakdown.filter((c: any) => c.sent > 0).length === 1) {
-    tips.push('You\'re only using one channel. Adding SMS or WhatsApp can increase recovery by up to 40%.')
+    tips.push('You\'re only using one channel. Adding WhatsApp can increase recovery by up to 40%.')
   }
   if (avgConversionTime !== null && avgConversionTime > 48) {
     tips.push(`Average conversion takes ${avgConversionTime.toFixed(1)} hours. Consider reducing follow-up delays for faster recovery.`)

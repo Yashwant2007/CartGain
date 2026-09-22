@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     let channelBreakdown: Array<{ channel: string; sent: number; recovered: number; revenue: number }> = []
     try {
       channelBreakdown = await Promise.all(
-        ['email', 'sms', 'whatsapp'].map(async (channel) => {
+        ['email', 'whatsapp'].map(async (channel) => {
           const [sent, recovered, chRevenue] = await prisma.$transaction([
             prisma.message.count({ where: { cart: { storeId }, channel, sentAt: { gte: weekAgo } } }),
             prisma.recoveredCart.count({ where: { storeId, channel, recoveredAt: { gte: weekAgo } } }),

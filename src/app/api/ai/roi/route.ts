@@ -42,15 +42,13 @@ export async function GET(request: NextRequest) {
       select: { channel: true, status: true }
     })
 
-    const smsCount = messages.filter((m: any) => m.channel === 'sms').length
     const whatsappCount = messages.filter((m: any) => m.channel === 'whatsapp').length
     const emailCount = messages.filter((m: any) => m.channel === 'email').length
 
-    const SMS_RATE = 0.85
     const WHATSAPP_RATE = 0.86
     const EMAIL_RATE = 0
 
-    const totalCost = (smsCount * SMS_RATE) + (whatsappCount * WHATSAPP_RATE) + (emailCount * EMAIL_RATE)
+    const totalCost = (whatsappCount * WHATSAPP_RATE) + (emailCount * EMAIL_RATE)
 
     const subscription = await prisma.subscription.findFirst({
       where: { userId: session.user.id, status: 'active' },
@@ -77,7 +75,7 @@ export async function GET(request: NextRequest) {
       },
       netProfit: Math.round(netProfit * 100) / 100,
       roiMultiple: Math.round(roiMultiple * 10) / 10,
-      messagesSent: { sms: smsCount, whatsapp: whatsappCount, email: emailCount, total: messages.length },
+      messagesSent: { whatsapp: whatsappCount, email: emailCount, total: messages.length },
       plan,
     }, { status: 200 })
   } catch (error) {

@@ -73,7 +73,6 @@ export interface EstimatedRecovery {
 
 export interface PerChannelLimits {
   email: number
-  sms: number
   whatsapp: number
 }
 
@@ -192,7 +191,7 @@ export const PLANS: Record<string, Plan> = {
     yearlyPrice: 0,
     maxCarts: FREE_CARTS_THRESHOLD,
     maxCampaigns: 1,
-    maxMessagesPerCustomer: { email: 3, sms: 3, whatsapp: 3 },
+    maxMessagesPerCustomer: { email: 3, whatsapp: 3 },
     revSharePercent: 0,
     revShareCap: 0,
     bargainSessions: 30,
@@ -202,7 +201,7 @@ export const PLANS: Record<string, Plan> = {
     storesLimit: 1,
     estimatedRecovery: { min: 0, max: 25000 },
     features: [
-      "All channels: SMS, WhatsApp, Email",
+      "All channels: WhatsApp & Email",
       "AI-powered recovery optimization",
       "Cart recovery: up to 50 recovered carts — completely free",
       "Bargain: up to 30 negotiation sessions & 5 accepted deals",
@@ -218,7 +217,7 @@ export const PLANS: Record<string, Plan> = {
     yearlyPrice: 14990,
     maxCarts: 750,
     maxCampaigns: 5,
-    maxMessagesPerCustomer: { email: 10, sms: 10, whatsapp: 10 },
+    maxMessagesPerCustomer: { email: 10, whatsapp: 10 },
     revSharePercent: 3.5,
     revShareCap: 5000,
     bargainSessions: 300,
@@ -230,7 +229,7 @@ export const PLANS: Record<string, Plan> = {
     features: [
       "Everything in Free, plus:",
       "Cart recovery: up to 750 recovered carts",
-      "Bargain: 300 sessions & 30 accepted deals, then ₹25/extra deal",
+      "Bargain: 300 sessions & 30 accepted deals included — sessions pause when exhausted, extra accepted deals ₹25 each",
       "No CartGain branding",
       "All AI personas + automatic language detection",
       "Per-product price floors & margin guides",
@@ -246,7 +245,7 @@ export const PLANS: Record<string, Plan> = {
     yearlyPrice: 39990,
     maxCarts: 3000,
     maxCampaigns: 20,
-    maxMessagesPerCustomer: { email: 20, sms: 20, whatsapp: 20 },
+    maxMessagesPerCustomer: { email: 20, whatsapp: 20 },
     revSharePercent: 3,
     revShareCap: 10000,
     bargainSessions: 1500,
@@ -258,7 +257,7 @@ export const PLANS: Record<string, Plan> = {
     features: [
       "Everything in Growth, plus:",
       "Cart recovery: up to 3,000 recovered carts",
-      "Bargain: 1,500 sessions & 150 accepted deals, then ₹15/extra deal",
+      "Bargain: 1,500 sessions & 150 accepted deals included — sessions pause when exhausted, extra accepted deals ₹15 each",
       "A/B persona testing + margin simulator",
       "Custom widget branding & colors",
       "Up to 20 active campaigns · unlimited stores",
@@ -273,7 +272,7 @@ export const PLANS: Record<string, Plan> = {
     yearlyPrice: 0,
     maxCarts: Infinity,
     maxCampaigns: Infinity,
-    maxMessagesPerCustomer: { email: Infinity, sms: Infinity, whatsapp: Infinity },
+    maxMessagesPerCustomer: { email: Infinity, whatsapp: Infinity },
     revSharePercent: 0,
     revShareCap: 0,
     bargainSessions: Infinity,

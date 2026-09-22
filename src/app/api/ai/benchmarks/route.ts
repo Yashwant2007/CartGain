@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const recovered = await prisma.recoveredCart.count({ where: { storeId, recoveredAt: { gte: thirtyDaysAgo } } })
     const recoveryRate = abandoned > 0 ? (recovered / abandoned) * 100 : 0
 
-    const channels = ['email', 'sms', 'whatsapp']
+    const channels = ['email', 'whatsapp']
     const storeChannelData: Record<string, { sent: number; recovered: number }> = {}
 
     for (const ch of channels) {

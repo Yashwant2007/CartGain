@@ -1,7 +1,6 @@
 import prisma from '@/lib/db'
 import { defaultScorer } from './scorer'
 import { generateSecureToken } from '@/lib/links'
-import { sendSMS } from '@/lib/services/sms'
 import { sendWhatsAppMessage } from '@/lib/services/whatsapp'
 import { sendEmail } from '@/lib/services/email'
 import { getMerchantConfig, parseWeights, parseThresholds } from './config'
@@ -98,7 +97,7 @@ async function sendNudge(params: NudgeParams): Promise<void> {
   const resumeUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/r/cod-confirm/${token}`
   const prepaidUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/r/cod-to-prepaid/${token}`
 
-  const channels = customer.phone ? ['whatsapp', 'sms'] : ['email']
+  const channels = customer.phone ? ['whatsapp'] : ['email']
 
   for (const channel of channels) {
     let sent = false
@@ -109,13 +108,6 @@ async function sendNudge(params: NudgeParams): Promise<void> {
         ? `Hi! Your COD order has a high RTO risk. Switch to prepaid & save ₹${incentive}! Convert here: ${prepaidUrl}`
         : `Hi! Your COD order needs confirmation. Confirm here: ${resumeUrl}`
       const result = await sendWhatsAppMessage({ to: customer.phone, content: msg })
-      sent = result.success
-      messageId = result.messageId
-    } else if (channel === 'sms' && customer.phone) {
-      const msg = incentive > 0
-        ? `Switch to prepaid & save ₹${incentive}! Click: ${prepaidUrl} - CartGain`
-        : `Confirm your COD order: ${resumeUrl} - CartGain`
-      const result = await sendSMS({ to: customer.phone, body: msg })
       sent = result.success
       messageId = result.messageId
     } else if (channel === 'email' && customer.email) {

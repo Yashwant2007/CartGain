@@ -72,7 +72,7 @@ export default function DPAPage() {
                 </div>
                 <div>
                   <p className="font-semibold text-white">Nature and Purpose of Processing:</p>
-                  <p>Automated sending of cart recovery notifications via email, SMS, and WhatsApp to encourage customers to complete their purchases.</p>
+                  <p>Automated sending of cart recovery notifications via email, WhatsApp, and push-style web alerts to encourage customers to complete their purchases.</p>
                 </div>
                 <div>
                   <p className="font-semibold text-white">Duration of Processing:</p>
@@ -108,7 +108,7 @@ export default function DPAPage() {
               <ul className="list-disc pl-5 space-y-2">
                 <li>Ensure they have a lawful basis for processing customer data (e.g., consent, legitimate interest).</li>
                 <li>Provide clear privacy notices to customers about how their data is used.</li>
-                <li>Obtain necessary consents for SMS and WhatsApp messaging as required by applicable laws.</li>
+                <li>Obtain necessary consents for WhatsApp and email messaging as required by applicable laws.</li>
                 <li>Ensure the accuracy and relevance of personal data provided to CartGain.</li>
                 <li>Respond to data subject requests and notify CartGain of any such requests.</li>
                 <li>Cooperate with CartGain in the event of a data breach investigation.</li>
@@ -140,11 +140,6 @@ export default function DPAPage() {
                       <td className="py-3">Vercel</td>
                       <td className="py-3">Application hosting &amp; CDN</td>
                       <td className="py-3">Global (multi-region) edge</td>
-                    </tr>
-                    <tr>
-                      <td className="py-3">MSG91</td>
-                      <td className="py-3">SMS delivery</td>
-                      <td className="py-3">India (MSG91 processing)</td>
                     </tr>
                     <tr>
                       <td className="py-3">Resend</td>

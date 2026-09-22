@@ -14,7 +14,7 @@ function makeGate(overrides: Partial<BargainGate> = {}): BargainGate {
       yearlyPrice: 14990,
       maxCarts: 750,
       maxCampaigns: 5,
-      maxMessagesPerCustomer: { email: 10, sms: 10, whatsapp: 10 },
+      maxMessagesPerCustomer: { email: 10, whatsapp: 10 },
       features: [],
       revSharePercent: 3.5,
       revShareCap: 5000,

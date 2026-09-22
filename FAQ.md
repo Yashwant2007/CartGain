@@ -105,7 +105,7 @@ Here's exactly how it works:
 
 1. A customer adds products to cart on your Shopify store, then leaves
 2. CartGain detects it instantly
-3. Within minutes, we send them a personalized reminder via email, SMS, and WhatsApp — whichever channel converts best
+3. Within minutes, we send them a personalized reminder via email and WhatsApp — whichever channel converts best
 4. They click the link, return to their cart, and complete the purchase
 
 The result: You recover ~15-25% of sales you were otherwise losing to thin air.
@@ -115,7 +115,7 @@ You pay ₹2,999/month (Growth plan).
 
 Your net gain: ₹67,000-1,14,000/month.
 
-Setup takes 5 minutes. Click "Install" → connect WhatsApp/SMS → done. We handle everything from there — the AI writes the messages, the cron runs every 5 minutes, the analytics show you exactly what's working.
+Setup takes 5 minutes. Click "Install" → connect WhatsApp → done. We handle everything from there — the AI writes the messages, the cron runs every 5 minutes, the analytics show you exactly what's working.
 
 You don't need a marketing team. You don't need to write a single email. You don't need to know any of the tech — the Shopify Partners app, OAuth, webhooks, cron jobs — that's all invisible to you.
 

@@ -41,14 +41,14 @@
 @keyframes fadeUp{from{opacity:0;transform:translate(-50%,16px)}to{opacity:1;transform:translate(-50%,0)}}
 
 .s2-bg{position:absolute;inset:0;background:#060e1c}
-.sms-card{width:clamp(180px,55%,280px);background:#0d1f38;border-radius:12px;border:1px solid #1e3a5f;padding:14px;animation:slideIn 0.6s both}
-.sms-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.sms-icon{width:28px;height:28px;background:#10B981;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:700;flex-shrink:0}
-.sms-from{font-size:11px;color:#10B981;font-weight:600}
-.sms-time{font-size:10px;color:#4a7090;margin-left:auto}
-.sms-bubble{background:#1a3050;border-radius:10px;padding:8px 10px;font-size:clamp(9px,2vw,13px);color:#c8dff0;line-height:1.5}
-.sms-bubble strong{color:#fff}
-.sms-cta{margin-top:8px;background:#10B981;border-radius:8px;padding:6px;text-align:center;font-size:11px;color:#fff;font-weight:600;animation:tapEffect 1s 1.2s both}
+.wa-card{width:clamp(180px,55%,280px);background:#0d1f38;border-radius:12px;border:1px solid #1e3a5f;padding:14px;animation:slideIn 0.6s both}
+.wa-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.wa-icon{width:28px;height:28px;background:#10B981;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:700;flex-shrink:0}
+.wa-from{font-size:11px;color:#10B981;font-weight:600}
+.wa-time{font-size:10px;color:#4a7090;margin-left:auto}
+.wa-bubble{background:#1a3050;border-radius:10px;padding:8px 10px;font-size:clamp(9px,2vw,13px);color:#c8dff0;line-height:1.5}
+.wa-bubble strong{color:#fff}
+.wa-cta{margin-top:8px;background:#10B981;border-radius:8px;padding:6px;text-align:center;font-size:11px;color:#fff;font-weight:600;animation:tapEffect 1s 1.2s both}
 .recovery-card{position:absolute;top:50%;right:8%;transform:translateY(-50%);background:#0d1f38;border-radius:10px;border:1px solid #10B981;padding:12px 16px;text-align:center;animation:popIn 0.5s 1.8s both;min-width:80px}
 .rc-amount{font-size:clamp(18px,4vw,28px);color:#10B981;font-weight:600}
 .rc-label{font-size:10px;color:#7ea8c9;margin-top:2px}
@@ -119,7 +119,7 @@
 @keyframes glowPulse{0%,100%{opacity:.4}50%{opacity:1}}
 </style>
 
-<h2 class="sr-only">CartGain video animatic — 6 scenes showing abandoned cart SMS recovery for Shopify, 23 seconds total</h2>
+<h2 class="sr-only">CartGain video animatic — 6 scenes showing abandoned cart WhatsApp recovery for Shopify, 23 seconds total</h2>
 
 <div class="wrap">
   <div class="screen" id="screen">
@@ -130,7 +130,7 @@
         <div class="phone"><div class="notif-dot"></div><div class="phone-screen"><div class="notif-bar"><div class="nb-title">CartGain</div><div class="nb-msg">Your cart is waiting...</div></div></div></div>
         <div class="phone"><div class="notif-dot"></div><div class="phone-screen"><div class="notif-bar"><div class="nb-title">Store</div><div class="nb-msg">Complete your order</div></div></div></div>
         <div class="phone"><div class="notif-dot"></div><div class="phone-screen"><div class="notif-bar"><div class="nb-title">CartGain</div><div class="nb-msg">Don't miss out!</div></div></div></div>
-        <div class="phone"><div class="notif-dot"></div><div class="phone-screen"><div class="notif-bar"><div class="nb-title">SMS</div><div class="nb-msg">Your cart expires soon</div></div></div></div>
+        <div class="phone"><div class="notif-dot"></div><div class="phone-screen"><div class="notif-bar"><div class="nb-title">WhatsApp</div><div class="nb-msg">Your cart expires soon</div></div></div></div>
         <div class="phone"><div class="notif-dot"></div><div class="phone-screen"><div class="notif-bar"><div class="nb-title">CartGain</div><div class="nb-msg">Still interested?</div></div></div></div>
         <div class="phone"><div class="notif-dot"></div><div class="phone-screen"><div class="notif-bar"><div class="nb-title">Store</div><div class="nb-msg">$89 order waiting</div></div></div></div>
       </div>
@@ -142,14 +142,14 @@
 
     <div class="scene" id="s2">
       <div class="s2-bg"></div>
-      <div class="sms-card">
-        <div class="sms-header">
-          <div class="sms-icon">CG</div>
-          <div><div class="sms-from">CartGain Recovery</div><div style="font-size:9px;color:#4a7090">Today 2:34 PM</div></div>
-          <div class="sms-time"></div>
+      <div class="wa-card">
+        <div class="wa-header">
+          <div class="wa-icon">CG</div>
+          <div><div class="wa-from">CartGain Recovery</div><div style="font-size:9px;color:#4a7090">Today 2:34 PM</div></div>
+          <div class="wa-time"></div>
         </div>
-        <div class="sms-bubble">Hey! You left something behind 👋<br><strong>Complete your $89.00 order</strong> and get it shipped today.<br><br>→ <span style="color:#10B981;text-decoration:underline">shop.example.com/cart/abc</span></div>
-        <div class="sms-cta">TAP TO COMPLETE ORDER</div>
+        <div class="wa-bubble">Hey! You left something behind 👋<br><strong>Complete your $89.00 order</strong> and get it shipped today.<br><br>→ <span style="color:#10B981;text-decoration:underline">shop.example.com/cart/abc</span></div>
+        <div class="wa-cta">TAP TO COMPLETE ORDER</div>
       </div>
       <div class="recovery-card">
         <div class="rc-amount">+$89</div>

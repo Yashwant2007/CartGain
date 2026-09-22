@@ -2,7 +2,7 @@
 
 > **How to resume:** just tell me "Have a look at `SESSION-HANDOFF.md`" and I'll read this file to get back on the same page.
 
-Last updated: Mon Sep 07 2026
+Last updated: Tue Sep 22 2026
 
 ## Where we are
 Rebuilding/upgrading the **CartGain AI Bargain System** as a flagship premium conversion feature
@@ -11,11 +11,32 @@ auth, billing, Shopify, analytics, pricing, PCD compliance) is preserved — do 
 
 - **Branch:** `master` — all work committed, pushed, and deployed to **https://cart-gain.com** (HTTP 200).
 
+## Website review fixes (this session) — NOT yet committed
+Reviewer feedback pass: SMS removed entirely from the product + copy (WhatsApp + Email only), bargain
+limit copy clarified on pricing, homepage slimmed, founding-member urgency added.
+- **SMS removal:** `src/lib/services/sms.ts` deleted. `channel`/`campaignChannel` are now `['email','whatsapp']`
+  only (`validation.ts`); `mobileNumber`→`phone` handling unchanged. All senders, MSG91 integration UI,
+  channel cards, plan features, AI advice, analytics, benchmarks, demo/signup/animation copy, JSON-LD,
+  legal pages (dpa/privacy/terms/security-policy), `.env`/`.env.example`, `FAQ.md`, `QUICKSTART.md` updated.
+  `DashboardPreview.tsx` + `CartGainAnimatic.tsx`/`.css` + `public/*animatic*.html` SMS scenes → WhatsApp.
+- **Billing/schema SMSP credits left intact deliberately** (no migration): Prisma `smsCredits` fields,
+  `api/payments/webhook/route.ts`, `api/subscription/route.ts`, `src/lib/shopify-billing/service.ts`,
+  `src/lib/subscription.ts`, `processRevenueShareBilling`/`api/invoices` `notify: { sms: false }`, webhook tests.
+- **Pricing page:** bargain-sessions MeterRow hint "pause when exhausted — resumes on your next cycle";
+  accepted-deals hint "then ₹25/extra deal" / Free "no overage — hard cap". Pricing numbers unchanged (user decision).
+- **Homepage slimmed:** full `#bargain` section (capability pillars, personas, 18 scenarios) moved to new
+  **`src/app/bargain/page.tsx`** deep-dive; homepage keeps a compact teaser + preview linking to `/bargain`.
+- **Urgency:** founding-member pill "first 100 stores lock today's rates for life" on homepage hero + pricing header.
+- **Social proof / testimonials:** DEFERRED by user — do NOT build/fabricate; add real ones later (see open items).
+- **Verified:** `npx tsc --noEmit` clean, `npx jest` 539 green, `npm run lint` (only pre-existing `<img>` warnings).
+- **Leftover archive note:** `LAUNCH_GUIDE.md` still references SMS/MSG91 — it's a dated launch-plan doc, not site copy
+  (e.g. pricing/cost claims there are historical). Update only if it gets reused.
+
 ## Repo facts / working conventions
 - Stack: Next.js (App Router) + NextAuth v4 (JWT) + Prisma + Razorpay.
 - Env files: `.env`, `.env.local` (gitignored). Prod DB not queryable locally (no creds).
 - Deploys: `npx vercel --prod --yes` (aliases to `cart-gain.com`). Local curl sometimes hits transient DNS → 000; verify via deploy output / `vercel ls`.
-- Verification commands: `npx tsc --noEmit`, `npm run lint`, `npx jest` (357 tests green, was 345).
+- Verification commands: `npx tsc --noEmit`, `npm run lint`, `npx jest` (539 tests green).
 - Commit style: lowercase, concise, e.g. `bargain dash: group config settings into ...`.
 
 ## Most recent work (this session) — all committed & deployed
@@ -115,6 +136,10 @@ real floor to a counter). `src/app/api/bargain/start/route.ts` fetches the autho
      product-complaint ("this is a scam") now redirect via `off_topic_extreme` **without consuming an attempt**.
 
 ## Open / next items (from our plan)
+- **Website review fixes (this session) — NOT yet committed/deployed:** SMS removal + homepage/pricing copy
+  changes above. Re-run `npx tsc --noEmit` / `npm run lint` / `npx jest` (539) before commit + deploy.
+- **Social proof / testimonials (owner task):** add a real founder-testimonial section when user provides quotes —
+  no fabricated testimonials. Place on homepage + subscribe page (`subscribe=True`).
 - **Compliance work (this session) — NOT yet committed/deployed:** scope + webhook + deletion + legal-page changes above. Commit plus re-run `npx tsc --noEmit` / `npm run lint` / `npx jest` before deploy.
 - **`customers/data_request` export TODO:** webhook acknowledges + audit-logs only; no programmatic export/delivery yet. Decide mechanism before Shopify App Store submission (see `SHOPIFY_PROTECTED_DATA_READINESS.md` §7).
 - **Owner confirmations:** see `BUSINESS_FACTS_REQUIRING_CONFIRMATION.md` (legal entity name/address, grievance officer, sub-processor data regions, backup retention window, transfer safeguards, CDN/bot-protection reality).
@@ -139,4 +164,4 @@ real floor to a counter). `src/app/api/bargain/start/route.ts` fetches the autho
 - Do NOT delete/break: recovery, auth, billing, Shopify integration, analytics, pricing, DB logic.
 - Never hardcode merchant min-price in frontend; never expose merchant floor/margin/economics to customers.
 - Keep ROI plan data in `ROICalculator.tsx` in sync with `payment.ts::PLANS`.
-- Re-run tsc + lint + jest (384) before committing.
+- Re-run tsc + lint + jest (539) before committing.

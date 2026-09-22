@@ -1,4 +1,4 @@
-import { FileText, Shield, CreditCard, Smartphone, AlertTriangle, Scale, Mail, Ban, Lock, RefreshCw } from 'lucide-react'
+import { FileText, Shield, CreditCard, MessageSquare, AlertTriangle, Scale, Mail, Ban, Lock, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 
 export const metadata = {
@@ -41,7 +41,7 @@ export default function TermsPage() {
                 2. Description of Service
               </h2>
               <p className="leading-relaxed">
-                CartGain provides an automated abandoned cart recovery platform that helps e-commerce businesses recover lost sales through multi-channel communication (email, SMS, WhatsApp). The Platform integrates with e-commerce platforms such as Shopify to detect abandoned carts and send recovery messages on behalf of the merchant.
+                CartGain provides an automated abandoned cart recovery platform that helps e-commerce businesses recover lost sales through multi-channel communication (email, WhatsApp). The Platform integrates with e-commerce platforms such as Shopify to detect abandoned carts and send recovery messages on behalf of the merchant.
               </p>
             </section>
 
@@ -90,18 +90,17 @@ export default function TermsPage() {
 
             <section>
               <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
-                <Smartphone className="w-6 h-6 text-cyan-400" />
-                6. SMS, WhatsApp &amp; Email Compliance
+                <MessageSquare className="w-6 h-6 text-cyan-400" />
+                6. WhatsApp &amp; Email Compliance
               </h2>
               <p className="leading-relaxed mb-4">
-                CartGain sends recovery messages via email, SMS, and WhatsApp on behalf of merchants. By using these channels, you agree to:
+                CartGain sends recovery messages via email and WhatsApp on behalf of merchants. By using these channels, you agree to:
               </p>
               <ul className="list-disc pl-5 space-y-2">
-                <li><strong>Consent:</strong> You have obtained explicit, verifiable consent from your customers before sending them SMS or WhatsApp messages. Consent must be documented and maintained for compliance purposes.</li>
-                <li><strong>TCPA Compliance (US):</strong> You comply with the Telephone Consumer Protection Act, including maintaining opt-in records, honoring opt-out requests within 24 hours, and not sending messages to numbers on the National Do Not Call Registry.</li>
-                <li><strong>TRAI Compliance (India):</strong> You comply with Telecom Regulatory Authority of India regulations, including DLT registration for SMS headers and content templates where applicable.</li>
+                <li><strong>Consent:</strong> You have obtained explicit, verifiable consent from your customers before sending them WhatsApp or email messages. Consent must be documented and maintained for compliance purposes.</li>
+                <li><strong>TCPA Compliance (US):</strong> You comply with the Telephone Consumer Protection Act, including maintaining opt-in records and honoring opt-out requests promptly.</li>
                 <li><strong>GDPR Compliance (EU):</strong> You have a lawful basis for processing customer data and have provided clear privacy notices to your customers.</li>
-                <li><strong>Opt-Out:</strong> All SMS and WhatsApp messages include a clear, working opt-out mechanism (e.g., &ldquo;Reply STOP to unsubscribe&rdquo;). You must honor opt-out requests immediately.</li>
+                <li><strong>Opt-Out:</strong> All WhatsApp and email messages include a clear, working opt-out mechanism (e.g., an unsubscribe link or WhatsApp opt-out). You must honor opt-out requests immediately.</li>
                 <li><strong>Message Frequency:</strong> You will not send excessive messages. CartGain&apos;s default settings include reasonable frequency limits.</li>
                 <li><strong>Indemnification:</strong> You agree to indemnify and hold CartGain harmless from any claims, damages, or fines arising from your non-compliance with messaging regulations.</li>
               </ul>

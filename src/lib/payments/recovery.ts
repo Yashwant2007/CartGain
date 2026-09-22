@@ -1,7 +1,6 @@
 import prisma from '@/lib/db'
 import { classifyFailure } from './failure-classifier'
 import { generateSecureToken } from '@/lib/links'
-import { sendSMS } from '@/lib/services/sms'
 import { sendWhatsAppMessage } from '@/lib/services/whatsapp'
 import { sendEmail } from '@/lib/services/email'
 import { getMerchantConfig } from '@/lib/rto/config'
@@ -54,9 +53,9 @@ export async function handlePaymentFailure(
   const token = generateSecureToken(`${attempt.id}:${event.orderRef}`)
   const resumeUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/r/resume-payment/${token}`
 
-  const channels = config.paymentChannelPriority.length > 0
+  const channels = (config.paymentChannelPriority.length > 0
     ? config.paymentChannelPriority
-    : customerContact?.phone ? ['whatsapp', 'sms'] : ['email']
+    : customerContact?.phone ? ['whatsapp'] : ['email']).filter((c: string) => c !== 'sms')
 
   const customerFriendlyMessages: Record<string, string> = {
     bank_downtime: 'Your bank was temporarily unavailable. Please try again — your cart is saved!',
@@ -73,14 +72,9 @@ export async function handlePaymentFailure(
     const message = customerFriendlyMessages[category] || customerFriendlyMessages.unknown
     const finalMsg = `${message} ${resumeUrl}`
 
-    if ((channel === 'whatsapp' || channel === 'sms') && customerContact?.phone) {
-      if (channel === 'whatsapp') {
-        const result = await sendWhatsAppMessage({ to: customerContact.phone, content: finalMsg })
-        sent = result.success
-      } else {
-        const result = await sendSMS({ to: customerContact.phone, body: finalMsg })
-        sent = result.success
-      }
+    if (channel === 'whatsapp' && customerContact?.phone) {
+      const result = await sendWhatsAppMessage({ to: customerContact.phone, content: finalMsg })
+      sent = result.success
     } else if (channel === 'email' && customerContact?.email) {
       const result = await sendEmail({
         to: customerContact.email,

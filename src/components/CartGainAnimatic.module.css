@@ -244,7 +244,7 @@
   background: #060e1c;
 }
 
-.smsCard {
+.waCard {
   width: clamp(180px, 55%, 280px);
   background: #0d1f38;
   border-radius: 12px;
@@ -253,14 +253,14 @@
   animation: slideIn 0.6s both;
 }
 
-.smsHeader {
+.waHeader {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
 }
 
-.smsIcon {
+.waIcon {
   width: 28px;
   height: 28px;
   background: #10B981;
@@ -274,19 +274,19 @@
   flex-shrink: 0;
 }
 
-.smsFrom {
+.waFrom {
   font-size: 11px;
   color: #10B981;
   font-weight: 600;
 }
 
-.smsTime {
+.waTime {
   font-size: 10px;
   color: #4a7090;
   margin-left: auto;
 }
 
-.smsBubble {
+.waBubble {
   background: #1a3050;
   border-radius: 10px;
   padding: 8px 10px;
@@ -295,11 +295,11 @@
   line-height: 1.5;
 }
 
-.smsBubble strong {
+.waBubble strong {
   color: #fff;
 }
 
-.smsCta {
+.waCta {
   margin-top: 8px;
   background: #10B981;
   border-radius: 8px;

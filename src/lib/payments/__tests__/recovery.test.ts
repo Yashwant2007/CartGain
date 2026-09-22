@@ -31,10 +31,6 @@ jest.mock('@/lib/db', () => ({
   },
 }))
 
-jest.mock('@/lib/services/sms', () => ({
-  sendSMS: jest.fn(),
-}))
-
 jest.mock('@/lib/services/whatsapp', () => ({
   sendWhatsAppMessage: jest.fn(),
 }))
@@ -53,7 +49,6 @@ jest.mock('@/lib/links', () => ({
 }))
 
 import prisma from '@/lib/db'
-import { sendSMS } from '@/lib/services/sms'
 import { sendWhatsAppMessage } from '@/lib/services/whatsapp'
 import { sendEmail } from '@/lib/services/email'
 import { handlePaymentFailure, markPaymentRecovered, getPendingRetries } from '@/lib/payments/recovery'
@@ -214,7 +209,6 @@ describe('Payment Recovery', () => {
 
       expect(sendEmail).toHaveBeenCalled()
       expect(sendWhatsAppMessage).not.toHaveBeenCalled()
-      expect(sendSMS).not.toHaveBeenCalled()
     })
   })
 

@@ -28,10 +28,6 @@ jest.mock('@/lib/db', () => ({
   },
 }))
 
-jest.mock('@/lib/services/sms', () => ({
-  sendSMS: jest.fn(),
-}))
-
 jest.mock('@/lib/services/whatsapp', () => ({
   sendWhatsAppMessage: jest.fn(),
 }))
@@ -46,7 +42,6 @@ jest.mock('@/lib/data-protection', () => ({
 }))
 
 import prisma from '@/lib/db'
-import { sendSMS } from '@/lib/services/sms'
 import { sendWhatsAppMessage } from '@/lib/services/whatsapp'
 import { sendEmail } from '@/lib/services/email'
 import {
@@ -139,7 +134,6 @@ describe('Nudge Flow', () => {
       mockPrisma.dataAccessLog.create.mockResolvedValue({} as never)
 
       ;(sendWhatsAppMessage as jest.Mock).mockResolvedValue({ success: true, messageId: 'wamid_1' })
-      ;(sendSMS as jest.Mock).mockResolvedValue({ success: false })
 
       await scoreAndNudgeOrder({
         ...baseParams,

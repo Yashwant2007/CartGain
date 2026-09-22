@@ -132,7 +132,6 @@ export default function RootLayout({
                 { '@type': 'ServiceChannel', serviceName: 'WhatsApp Recovery', 'availabilityRestriction': '24/7' },
                 { '@type': 'ServiceChannel', serviceName: 'AI Price Negotiation', 'availabilityRestriction': '24/7' },
                 { '@type': 'ServiceChannel', serviceName: 'Email Recovery', 'availabilityRestriction': '24/7' },
-                { '@type': 'ServiceChannel', serviceName: 'SMS Recovery', 'availabilityRestriction': 'Coming soon' },
               ],
             }),
           }}
@@ -151,7 +150,7 @@ export default function RootLayout({
                   name: 'Why not just use email for cart recovery?',
                   acceptedAnswer: {
                     '@type': 'Answer',
-                    text: 'Email alone only recovers 3-5% of abandoned carts. WhatsApp (85% open rate) + SMS (45% CTR) + Email creates multiple touchpoints. Industry benchmarks show 18-25% recovery with multi-channel vs 3-5% with email alone.',
+                    text: 'Email alone only recovers 3-5% of abandoned carts. WhatsApp (85% open rate) + Email creates multiple touchpoints. Industry benchmarks show 18-25% recovery with multi-channel vs 3-5% with email alone.',
                   },
                 },
                 {

@@ -54,7 +54,7 @@ async function createTestCarts() {
           userId: user.id,
           name: 'Test Recovery Campaign',
           isActive: true,
-          channels: ['whatsapp', 'sms', 'email'],
+          channels: ['whatsapp', 'email'],
           sendDelay: 15,
         },
       })

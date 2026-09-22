@@ -83,7 +83,7 @@ export default function PrivacyPolicyPage() {
                 <ul className="list-disc pl-5 space-y-2">
                   <li><strong>Data Minimization:</strong> We collect and process only the minimum personal data required to provide cart recovery value to merchants.</li>
                   <li><strong>Service Delivery:</strong> To provide, maintain, and improve our cart recovery services.</li>
-                  <li><strong>Communication:</strong> To send recovery notifications via WhatsApp, SMS, and email on your behalf (the corresponding providers are configured and activated before these channels go live).</li>
+                  <li><strong>Communication:</strong> To send recovery notifications via WhatsApp and email on your behalf (the corresponding providers are configured and activated before these channels go live).</li>
                   <li><strong>Analytics:</strong> To track recovery performance and provide insights to merchants.</li>
                   <li><strong>Security:</strong> To detect and prevent fraud, unauthorized access, and security incidents.</li>
                   <li><strong>Legal Compliance:</strong> To comply with applicable laws and regulations.</li>
@@ -111,7 +111,7 @@ export default function PrivacyPolicyPage() {
                 <p className="mb-4">We share data with the following categories of third parties:</p>
                 <ul className="list-disc pl-5 space-y-2">
                   <li><strong>E-commerce Platform:</strong> Shopify, to sync cart, order, and discount data.</li>
-                  <li><strong>Communication Providers:</strong> WhatsApp Business API, MSG91 (SMS), Resend (Email) — activated as configured.</li>
+                  <li><strong>Communication Providers:</strong> WhatsApp Business API and Resend (Email) — activated as configured.</li>
                   <li><strong>AI Services:</strong> OpenAI (GPT-4o / GPT-4o-mini) and, as a fallback, Groq (gpt-oss-120b) for AI-powered message generation — customer names and cart product details are processed to generate personalized recovery messages. Per OpenAI&apos;s published API data-usage policy, API inputs and outputs are not used for model training; the same applies to Groq for the OSS model used.</li>
                   <li><strong>Payment Processors:</strong> Razorpay for subscription billing (once configured).</li>
                   <li><strong>Cloud Infrastructure:</strong> Vercel and Supabase for hosting and database.</li>
@@ -190,16 +190,16 @@ export default function PrivacyPolicyPage() {
               <section>
                 <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
                   <Phone className="w-6 h-6 text-cyan-400" />
-                  SMS and WhatsApp Communications (TCPA Compliance)
+                  WhatsApp &amp; Email Communications (Compliance)
                 </h2>
                 <div className="bg-blue-900/30 border border-blue-700/40 rounded-lg p-6">
                   <p className="font-semibold text-white mb-3">By using CartGain, you agree to the following:</p>
                   <ul className="list-disc pl-5 space-y-2">
-                    <li><strong>Consent:</strong> You confirm that you have obtained explicit consent from your customers to receive SMS and WhatsApp messages on your behalf.</li>
-                    <li><strong>Opt-out:</strong> All messages include clear instructions to opt-out (e.g., &ldquo;Reply STOP to unsubscribe&rdquo;).</li>
+                    <li><strong>Consent:</strong> You confirm that you have obtained explicit consent from your customers to receive WhatsApp and email messages on your behalf.</li>
+                    <li><strong>Opt-out:</strong> All messages include clear instructions to opt-out (e.g., an unsubscribe link or WhatsApp opt-out).</li>
                     <li><strong>Message Frequency:</strong> Messages are sent based on cart abandonment events, not exceeding reasonable frequency.</li>
                     <li><strong>Message &amp; Data Rates:</strong> Standard messaging and data rates may apply to recipients.</li>
-                    <li><strong>Support:</strong> For help, recipients can reply &ldquo;HELP&rdquo; or contact your support team.</li>
+                    <li><strong>Support:</strong> For help, recipients can contact your support team.</li>
                   </ul>
                 </div>
               </section>

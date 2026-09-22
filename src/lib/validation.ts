@@ -18,7 +18,7 @@ export type { SignupInput, LoginInput, ForgotPasswordInput, ResetPasswordInput }
 
 // ── Campaign schemas ──
 
-export const campaignChannelSchema = z.enum(['email', 'whatsapp', 'sms'])
+export const campaignChannelSchema = z.enum(['email', 'whatsapp'])
 
 export const campaignCreateSchema = z.object({
   storeId: nonEmptyString('storeId'),

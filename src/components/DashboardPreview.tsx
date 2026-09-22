@@ -1,13 +1,12 @@
-import { TrendingUp, ShoppingCart, Percent, Handshake, MessageSquare, Mail, Smartphone } from 'lucide-react'
+import { TrendingUp, ShoppingCart, Percent, Handshake, MessageSquare, Mail } from 'lucide-react'
 
 const DAILY = [38, 52, 61, 74, 87, 104, 121]
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const MAX = Math.max(...DAILY)
 
 const CHANNELS = [
-  { icon: MessageSquare, label: 'WhatsApp', value: 58, live: true, tone: 'text-emerald-300' },
-  { icon: Mail, label: 'Email', value: 34, live: true, tone: 'text-blue-300' },
-  { icon: Smartphone, label: 'SMS', value: 8, live: false, tone: 'text-amber-300' },
+  { icon: MessageSquare, label: 'WhatsApp', value: 62, live: true, tone: 'text-emerald-300' },
+  { icon: Mail, label: 'Email', value: 38, live: true, tone: 'text-blue-300' },
 ]
 
 const STATS = [

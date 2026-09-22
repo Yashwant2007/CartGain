@@ -225,7 +225,7 @@ function RecoverySimulator({ storeId }: { storeId: string | null }) {
   }, [storeId, improvements])
 
   const options = [
-    { key: 'addChannel', label: 'Add Another Channel', desc: 'Use 2+ channels (email, SMS, WhatsApp)' },
+    { key: 'addChannel', label: 'Add Another Channel', desc: 'Use 2+ channels (email, WhatsApp)' },
     { key: 'enableAI', label: 'Enable AI Content', desc: 'AI-generated personalized messages' },
     { key: 'addDiscount', label: 'Add Discount Offers', desc: 'Incentivize with small discounts' },
     { key: 'improveTiming', label: 'Optimize Send Timing', desc: 'Send within 15 min of abandonment' },

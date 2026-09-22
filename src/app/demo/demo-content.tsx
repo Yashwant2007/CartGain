@@ -657,8 +657,8 @@ export default function DemoContent() {
         <div className="mt-16 bg-gradient-to-br from-blue-900/30 to-purple-900/20 border border-blue-700/30 rounded-xl p-6 sm:p-8">
           <h2 className="text-xl sm:text-2xl font-bold mb-3">Bargaining is just the start.</h2>
           <p className="text-blue-200/70 text-sm sm:text-base mb-4 max-w-3xl">
-            When a bargain session is abandoned, CartGain&apos;s WhatsApp + Email + SMS recovery sequence picks it up — with the
-            missed-deal context surfaced in every message. One platform, three touch-points, one recovered cart.
+            When a bargain session is abandoned, CartGain&apos;s WhatsApp + Email recovery sequence picks it up — with the
+            missed-deal context surfaced in every message. One platform, two touch-points, one recovered cart.
           </p>
           <div className="flex flex-col sm:flex-row gap-3">
             <Link

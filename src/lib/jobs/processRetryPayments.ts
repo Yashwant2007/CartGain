@@ -2,7 +2,6 @@ import prisma from '@/lib/db'
 import { getPendingRetries, markPaymentRecovered } from '@/lib/payments/recovery'
 import { getMerchantConfig } from '@/lib/rto/config'
 import { generateSecureToken } from '@/lib/links'
-import { sendSMS } from '@/lib/services/sms'
 import { sendWhatsAppMessage } from '@/lib/services/whatsapp'
 import { sendEmail } from '@/lib/services/email'
 import { acquireLock, releaseLock } from '@/lib/job-lock'
@@ -56,9 +55,9 @@ export async function processRetryPayments(): Promise<RetryResult> {
       const token = generateSecureToken(`${campaign.attempt.id}:retry:${campaign.retryCount + 1}`)
       const resumeUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/r/resume-payment/${token}`
 
-      const channels = config.paymentChannelPriority.length > 0
+      const channels = (config.paymentChannelPriority.length > 0
         ? config.paymentChannelPriority
-        : ['whatsapp', 'sms']
+        : ['whatsapp']).filter((c: string) => c !== 'sms')
 
       const category = campaign.attempt.failureCategory as FailureCategory
       const customerFriendlyMessages: Record<string, string> = {
@@ -78,7 +77,7 @@ export async function processRetryPayments(): Promise<RetryResult> {
         const message = customerFriendlyMessages[category] || customerFriendlyMessages.unknown
         const finalMsg = `${message} ${resumeUrl}`
 
-        if (channel === 'whatsapp' || channel === 'sms') {
+        if (channel === 'whatsapp') {
           const store = await prisma.store.findUnique({ where: { id: campaign.attempt.merchantId } })
           if (!store) continue
 
@@ -89,13 +88,8 @@ export async function processRetryPayments(): Promise<RetryResult> {
           const phone = cart?.customerPhone
           if (!phone) continue
 
-          if (channel === 'whatsapp') {
-            const result = await sendWhatsAppMessage({ to: phone, content: finalMsg })
-            sent = result.success
-          } else {
-            const result = await sendSMS({ to: phone, body: finalMsg })
-            sent = result.success
-          }
+          const result = await sendWhatsAppMessage({ to: phone, content: finalMsg })
+          sent = result.success
         } else if (channel === 'email') {
           const store = await prisma.store.findUnique({ where: { id: campaign.attempt.merchantId } })
           if (!store) continue

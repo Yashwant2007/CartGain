@@ -170,7 +170,7 @@ export default function EditCampaignPage() {
     )
   }
 
-  const channels = ['sms', 'whatsapp', 'email']
+  const channels = ['whatsapp', 'email']
 
   return (
     <div className="space-y-6">
@@ -210,7 +210,7 @@ export default function EditCampaignPage() {
         {/* Channels */}
         <div>
           <label className="block text-sm font-medium text-blue-300 mb-3">Channels</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {channels.map((channel) => (
               <button
                 key={channel}

@@ -1,9 +1,9 @@
 import prisma from '@/lib/db'
 import { logDataAccess, redactSensitive } from '@/lib/data-protection'
 import { sendEmail, EmailTemplates } from '@/lib/services/email'
-import { sendSMS, sanitizePhoneNumber } from '@/lib/services/sms'
+import { sanitizePhoneNumber } from '@/lib/utils'
 import { sendWhatsAppMessage, WhatsAppTemplates } from '@/lib/services/whatsapp'
-import { generateEmailContent, generateSMSContent, generateWhatsAppContent, generatePersonalizedDiscount } from '@/lib/services/ai'
+import { generateEmailContent, generateWhatsAppContent, generatePersonalizedDiscount } from '@/lib/services/ai'
 import type { CartContext, PersonalizedDiscount } from '@/lib/services/ai'
 import { releaseLock } from '@/lib/job-lock'
 import { redisSetNX, redisIncr, redisGet, redisExpire, getRedis } from '@/lib/redis'
@@ -165,7 +165,7 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
       : PLANS.FREE
     const customerLimits = planConfig.maxMessagesPerCustomer
 
-    const channels = campaign.channels.length > 0 ? campaign.channels : ['whatsapp', 'sms', 'email']
+    const channels = (campaign.channels.length > 0 ? campaign.channels : ['whatsapp', 'email']).filter((c: string) => c !== 'sms')
     let sendDelayMs = campaign.sendDelay * 60 * 1000
     let followUpDelayMs = campaign.followUpDelay * 60 * 1000
     let maxMessages = Math.min(channels.length, campaign.maxFollowUps + 1)
@@ -242,7 +242,7 @@ let cursor: string | undefined
   }
 }
 
-type CustomerMsgCounts = Map<string, { email: number; sms: number; whatsapp: number }>
+type CustomerMsgCounts = Map<string, { email: number; whatsapp: number }>
 
 type CartConfig = {
   campaign: any
@@ -256,7 +256,7 @@ type CartConfig = {
   abTest: any
   optedOutEmails: Set<string>
   optedOutPhones: Set<string>
-  customerLimits: { email: number; sms: number; whatsapp: number }
+  customerLimits: { email: number; whatsapp: number }
   customerMsgCounts: CustomerMsgCounts
 }
 
@@ -294,14 +294,13 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     },
   })
 
-  const counts = new Map<string, { email: number; sms: number; whatsapp: number }>()
+  const counts = new Map<string, { email: number; whatsapp: number }>()
   for (const msg of messages) {
     const key = (msg.cart.customerEmail || msg.cart.customerPhone || '').toLowerCase().trim()
     if (!key) continue
-    if (!counts.has(key)) counts.set(key, { email: 0, sms: 0, whatsapp: 0 })
+    if (!counts.has(key)) counts.set(key, { email: 0, whatsapp: 0 })
     const entry = counts.get(key)!
     if (msg.channel === 'email') entry.email++
-    else if (msg.channel === 'sms') entry.sms++
     else if (msg.channel === 'whatsapp') entry.whatsapp++
   }
   return counts
@@ -364,7 +363,7 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
     const availableChannels = channelOrder.filter(c => {
       if (cart.messages.some((m: any) => m.channel === c)) return false
       if (c === 'email') return Boolean(cart.customerEmail)
-      if (c === 'sms' || c === 'whatsapp') return Boolean(cart.customerPhone)
+      if (c === 'whatsapp') return Boolean(cart.customerPhone)
       return false
     })
 
@@ -510,21 +509,6 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
             break
           }
 
-          case 'sms': {
-            let smsBody: string
-            if (campaign.aiOptimized) {
-              const ai = await generateSMSContent(cartCtx, store.id)
-              smsBody = ai ? `${ai.body}\n\n${cartUrl}` : fallbackSMSText(customerName, store.name, formatProductList(cartItems), formattedTotal, cartUrl, discountCode, discountValue, discountType)
-            } else {
-              smsBody = fallbackSMSText(customerName, store.name, formatProductList(cartItems), formattedTotal, cartUrl, discountCode, discountValue, discountType)
-            }
-            const phoneNumber = sanitizePhoneNumber(cart.customerPhone!)
-            const smsResult = await sendSMS({ to: phoneNumber, body: smsBody })
-            sendSuccess = smsResult.success
-            if (!sendSuccess) error = smsResult.error || 'Unknown error'
-            break
-          }
-
           case 'whatsapp': {
             const firstImage = getFirstProductImage(cartItems)
             const templateStep = Math.min(step, 2)
@@ -601,7 +585,6 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
         }
         const today = new Date(new Date().toDateString())
         const channelCounts = {
-          smsCount: ch === 'sms' ? 1 : 0,
           whatsappCount: ch === 'whatsapp' ? 1 : 0,
           emailCount: ch === 'email' ? 1 : 0,
         }
@@ -697,20 +680,6 @@ export async function processAbandonedCarts(
     console.error('Fatal error in processAbandonedCarts:', err)
     return { processedCarts: processedCount, messagesSent, messagesFailed, nextCursor, storesProcessed }
   }
-}
-
-function fallbackSMSText(customerName: string, storeName: string, productList: string, formattedTotal: string, cartUrl: string, discountCode?: string, discountValue?: number, discountType?: string): string {
-  const discountLine = discountCode
-    ? `Use code ${discountCode}${discountValue ? ` for ${discountValue}${discountType === 'percentage' ? '%' : ''} off` : ''}!`
-    : ''
-  return [
-    `${customerName}, your picks from ${storeName} are waiting ✨`,
-    `${productList} — ${formattedTotal}`,
-    discountLine ? discountLine : null,
-    `👇 Complete checkout:`,
-    cartUrl,
-    `Reply STOP to unsubscribe`,
-  ].filter(Boolean).join('\n')
 }
 
 function fallbackBodyContent(
