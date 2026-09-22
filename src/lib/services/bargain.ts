@@ -678,9 +678,9 @@ const LANGUAGE_NATIVES: Record<string, string> = {
   or: 'Odia (ଓଡ଼ିଆ)',
 }
 
-function buildLanguageGuidance(language?: string): string {
+function buildLanguageGuidance(language: string | undefined, currencySymbol: string): string {
   const lang = (language || 'auto').toLowerCase()
-  const cur = '[[CUR]]'
+  const cur = currencySymbol
 
   if (lang === 'auto') {
     return `LANGUAGE: SPEAK THE CUSTOMER'S LANGUAGE, ALWAYS. Reply in the exact same language as the customer's MOST RECENT message — that is the #1 rule of this conversation, more important than anything else in this prompt. If they write in Hinglish, reply in Hinglish. If they write in Tamil, reply in Tamil. If they switch language mid-conversation, switch with them immediately. A reply in the customer's language converts; a reply in another language makes them think the shopkeeper is mechanical and drives the deal away. On Indian stores, Hinglish (Roman-script Hindi mixed naturally with English) is the most common — use it when the customer does. Tamil, Telugu, Bengali, Marathi, Gujarati, Punjabi, Kannada, Malayalam and Odia should be answered in kind. Always keep numbers in standard digits and the currency symbol (${cur}) intact.`
@@ -1260,7 +1260,7 @@ export function buildSystemPrompt(
     ? `\n\nSPECIAL CONTEXT:\n${contextParts.join('\n\n')}\n`
     : ''
 
-  const languageGuidance = buildLanguageGuidance(ctx.language)
+  const languageGuidance = buildLanguageGuidance(ctx.language, currencySymbol)
 
   return `${persona}
 
@@ -1493,7 +1493,7 @@ export async function negotiateStep(
     // Compute the reply, then run the LEAK GUARD: any injection that got the model
     // to name the floor or echo its instructions is scrubbed before it is shown.
     let reply = typeof parsed.reply === 'string' && parsed.reply.trim().length > 0
-      ? parsed.reply.trim()
+      ? parsed.reply.trim().replace(/\[\[CUR\]\]/g, ctx.currencySymbol)
       : (customerOffer != null
           ? ruleBasedDecision(customerOffer, ctx).reply
           : buildOpeningMessage(ctx))
@@ -1527,6 +1527,16 @@ export async function negotiateStep(
     }
   } catch (err: any) {
     handleAiFailure(err, 'bargain negotiation', undefined, tier)
+    // Fail over THIS SAME request to the next provider tier. The handler above
+    // trips the breaker of the failed tier, so a fresh resolve now yields the
+    // fallback provider — a single primary outage must never drop a real
+    // conversation into heuristics mid-message. Recursion is bounded: the retry
+    // runs on a different tier, and if that tier also fails, its own catch has
+    // no third tier to offer and returns the rule-based fallback.
+    const retried = getAiClient()
+    if (retried && retried.tier !== tier) {
+      return negotiateStep(ctx, history, customerMessage, customerOffer, sessionId)
+    }
     return customerOffer != null
       ? ruleBasedDecision(customerOffer, ctx)
       : { reply: buildOpeningMessage(ctx), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'conversational', sentiment: 'neutral' }
