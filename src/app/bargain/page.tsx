@@ -57,6 +57,7 @@ const SCENARIOS = [
   'Comparison shoppers ("Amazon has it cheaper")',
   'Price haggling ("can you do better?")',
   'Emotional appeals (student, birthday, budget)',
+  'Budget can\'t stretch — verified in-budget alternatives shown',
   'Walkout threats & retention saves',
   'Chatting hesitation — indecisive buyers',
   '"My manager / partner" excuses',
@@ -187,6 +188,64 @@ export default function BargainPage() {
                   features={cap.features}
                 />
               ))}
+            </div>
+
+            {/* Recommendations / alternatives layer */}
+            <div className="relative rounded-3xl overflow-hidden border border-cyan-500/25 bg-gradient-to-br from-slate-900 via-blue-950/70 to-slate-900 p-8 sm:p-12 my-12 shadow-xl shadow-cyan-500/5">
+              <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-cyan-500/10 rounded-full blur-3xl"></div>
+              <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-start">
+                <div>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/40 text-cyan-300 text-xs font-semibold uppercase tracking-wider mb-5">
+                    <Sparkles className="w-3.5 h-3.5" /> Win the sale even when the floor holds
+                  </span>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">
+                    Can&apos;t meet the budget? The agent suggests the win instead.
+                  </h2>
+                  <p className="text-blue-100 mb-6 max-w-xl">
+                    When a shopper&apos;s budget can&apos;t reach your floor — or a lowball risks losing the
+                    sale — the negotiator surfaces verified alternatives from your live Shopify
+                    catalog, right inside the chat.
+                  </p>
+                  <ul className="space-y-3">
+                    {[
+                      'Ranked by budget fit first — in-budget picks lead, over-budget picks are clearly labelled',
+                      'Uses real catalog data: image, price, stock, sale pricing. No made-up inventory, no unpriced guesses',
+                      'Your floor on the current product is never breached or revealed to win the sale',
+                      'Lives behind an optional merchant toggle — you decide when suggestions appear',
+                      'Show-everything analytics: every budget detected, suggestion shown, and recommendation clicked',
+                    ].map((item) => (
+                      <li key={item} className="flex items-start gap-2.5 text-blue-100">
+                        <CheckCircle2 className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="rounded-2xl border border-blue-700/40 bg-slate-900/80 backdrop-blur-sm p-6 shadow-xl">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-blue-300/70 mb-4">Budget Rescue Preview</div>
+                  <div className="space-y-3">
+                    <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-500">
+                      <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm text-white">I really want this serum but everything extra is too much. I can only stretch to ₹900.</div>
+                    </div>
+                    <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ animationDelay: '250ms' }}>
+                      <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-slate-700/70 px-4 py-3 text-sm text-blue-100">I can&apos;t go below ₹1,250 on this one — but for ₹900 I&apos;d point you at the starter kit instead. Same glow, within your budget, and it&apos;s on sale today.</div>
+                    </div>
+                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ animationDelay: '500ms' }}>
+                      <div className="rounded-xl border border-cyan-500/30 bg-slate-800/60 p-3 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500/30 to-blue-500/30 border border-cyan-500/20 flex-shrink-0"></div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] uppercase tracking-wide text-cyan-300/80 mb-0.5">Alternative · within budget</div>
+                          <div className="text-sm font-semibold text-white truncate">Vitamin C Starter Kit</div>
+                          <div className="text-xs text-blue-200">₹899 <span className="line-through text-blue-300/50">₹1,099</span> <span className="text-emerald-400">On sale</span></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-5 pt-4 border-t border-blue-700/30 text-xs text-blue-300/60">
+                    Alternatives are ranked by budget fit and built from verified Shopify catalog data only.
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Personas */}

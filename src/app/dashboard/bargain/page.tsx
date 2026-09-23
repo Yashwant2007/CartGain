@@ -421,7 +421,7 @@ void fetchConfig()
                     />
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-blue-200">Recommend complements</span>
+                    <span className="text-sm text-blue-200">Recommend complements <span className="text-xs text-blue-300/50">· next phase</span></span>
                     <input
                       type="checkbox"
                       checked={configForm.complementRecommendationsEnabled ?? true}
@@ -430,7 +430,10 @@ void fetchConfig()
                     />
                   </div>
                   <p className="text-xs text-blue-300/60 mt-1">
-                    Recommendations use verified catalog data only. Toggle per-group as you prefer.
+                    When both master + alternative toggles are on, the agent suggests matching
+                    products from your verified catalog when a shopper&apos;s budget can&apos;t reach your
+                    floor (or a lowball risks the sale). Cards rank by budget fit; over-budget picks
+                    are clearly labelled. Complement suggestions ship with the next phase.
                   </p>
                 </div>
                 <div>
