@@ -12,6 +12,8 @@ import { clampOfferToSafety } from '@/lib/bargain/engine'
 import { buildGoalContextForNegotiation } from '@/lib/bargain/goals'
 import { analyzeIntent } from '@/lib/bargain/intent'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
+import { searchRecommendations, recommendationReason, type RecommendationCard, type RecommendationReason, type RecommendationContext } from '@/lib/bargain/recommendations'
+import { fetchShopifyProducts } from '@/lib/shopify'
 import { track } from '@/lib/analytics/track'
 
 export const dynamic = 'force-dynamic'
@@ -388,6 +390,82 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // ── PRODUCT RECOMMENDATION LAYER ──
+    // When the store enables it AND this turn reads as a recovery signal (an
+    // explicit ask for alternatives, product discovery, a budget that sits under
+    // the floor, or a lowball), attach REAL, verified catalog cards to the reply.
+    // Cards are built server-side from Shopify and sanitized so no merchant
+    // financial secret (floor / margin / max discount) ever reaches the customer.
+    let recommendations: RecommendationCard[] | null = null
+    let recoReason: RecommendationReason | null = null
+    const recoEnabled =
+      config.recommendationsEnabled === true &&
+      config.alternativeRecommendationsEnabled === true
+
+    if (intentAnalysis.budget != null) {
+      await track({
+        name: 'cartgain_budget_detected',
+        storeId: bargainSession.storeId,
+        properties: {
+          budget: intentAnalysis.budget,
+          budgetType: intentAnalysis.budgetType ?? undefined,
+          aboveFloor: intentAnalysis.budget >= minPrice,
+        },
+      })
+    }
+    if (intentAnalysis.need != null) {
+      await track({
+        name: 'cartgain_need_detected',
+        storeId: bargainSession.storeId,
+        properties: { need: intentAnalysis.need },
+      })
+    }
+
+    if (recoEnabled) {
+      const budget = intentAnalysis.budget ?? null
+      recoReason = recommendationReason(
+        intentAnalysis.intent,
+        (result.metadata as any)?.recommendationsRequested === true,
+        budget,
+        customerOffer,
+        minPrice,
+      )
+      if (recoReason) {
+        const outcome = await searchRecommendations(
+          {
+            store: bargainSession.store,
+            shopifyProductId: bargainSession.shopifyProductId,
+            currency: bargainSession.store.currency,
+            budget,
+            need: intentAnalysis.need ?? null,
+          },
+          fetchShopifyProducts,
+          bargainSession.originalPrice,
+        )
+        recommendations = outcome.cards.length > 0 ? outcome.cards : null
+        if (recommendations) {
+          await track({
+            name: 'cartgain_recommendation_requested',
+            storeId: bargainSession.storeId,
+            properties: {
+              reason: recoReason,
+              budget: budget ?? undefined,
+              need: intentAnalysis.need ?? undefined,
+            },
+          })
+          await track({
+            name: 'cartgain_recommendation_shown',
+            storeId: bargainSession.storeId,
+            properties: {
+              count: recommendations.length,
+              reason: recoReason,
+              truncated: outcome.truncated,
+            },
+          })
+        }
+      }
+    }
+
     const [customerMsg, aiMsg, updatedSession] = await prisma.$transaction([
       prisma.bargainMessage.create({
         data: {
@@ -426,6 +504,16 @@ export async function POST(request: NextRequest) {
       finalPrice: updatedSession.finalPrice,
       sessionId: bargainSession.id,
       ...(isAbuseNoConsume ? { abuseDetected: true, abuseCategory: (result.metadata as any)?.category } : {}),
+      ...(recommendations && recoReason
+        ? {
+            recommendations,
+            recommendationContext: {
+              budget: intentAnalysis.budget ?? null,
+              need: intentAnalysis.need ?? null,
+              reason: recoReason,
+            } satisfies RecommendationContext,
+          }
+        : {}),
     })
   } catch (error) {
     const validationResponse = handleValidationError(error)

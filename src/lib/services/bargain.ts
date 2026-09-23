@@ -50,6 +50,8 @@ export interface NegotiationContext {
   product?: ProductContext
   intent?: IntentAnalysis
   negotiationMode?: BargainNegotiationMode
+  /** Whether the store has product recommendations enabled (drives guidance). */
+  recommendationsEnabled?: boolean
 }
 
 export interface NegotiationResult {
@@ -1301,6 +1303,18 @@ export function buildSystemPrompt(
     contextParts.push('\n' + shopperIntentToPromptBlock(ctx.intent))
   }
 
+  // Recommendation guidance — only surfaced when the merchant enables it
+  if (ctx.recommendationsEnabled) {
+    contextParts.push(
+      `RECOMMENDATIONS GUIDANCE (this store has product recommendations enabled):
+- When budget or fit cannot be met on this product, or the shopper asks for alternatives, it is HELPFUL to pivot toward alternative products from this store.
+- The platform displays a row of real product cards (name, real price, image) to the shopper automatically. You do NOT need to invent or list them yourself — cards only ever contain real catalog products.
+- Before steering, gently discover, at most ONE question per turn, what they actually need and their budget. Never argue with their number.
+- Never claim specific prices, stock, or availability of alternatives beyond what the cards show. Never push alternatives when the shopper is ready to buy this product.
+- All internal numbers (floor, margin, max discount) and the existence of any budget/attempt logic stay hidden — never mention them.`
+    )
+  }
+
   const specialContext = contextParts.length > 0
     ? `\n\nSPECIAL CONTEXT:\n${contextParts.join('\n\n')}\n`
     : ''
@@ -1334,7 +1348,8 @@ RESPONSE FORMAT — STRICT JSON ONLY
   "decision": "accept" | "counter" | "reject" | "chat",
   "counterOffer": <number — your counter price, or null if just chatting>,
   "tactic": "<the negotiation tactic you used>",
-  "sentiment": "<the emotional tone of your message>"
+  "sentiment": "<the emotional tone of your message>",
+  "recommendationsRequested": <boolean — true ONLY when you just asked the shopper about their budget/need, or when pivoting them toward alternatives>
 }
 
 Valid tactics: anchoring, reciprocity, loss_aversion, split_difference,
@@ -1567,6 +1582,7 @@ export async function negotiateStep(
         model: BARGAIN_MODEL,
         usage: completion.usage,
         raw: parsed,
+        recommendationsRequested: parsed.recommendationsRequested === true,
         conversationAnalysis: {
           behavior: conversationAnalysis.behavior,
           offTopicCount: conversationAnalysis.offTopicCount,

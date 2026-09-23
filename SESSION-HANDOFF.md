@@ -2,7 +2,32 @@
 
 > **How to resume:** just tell me "Have a look at `SESSION-HANDOFF.md`" and I'll read this file to get back on the same page.
 
-Last updated: Tue Sep 22 2026
+Last updated: Wed Sep 23 2026
+
+## Recent cycles (brief — details in `IMPLEMENTATION-REPORT.md`)
+- **AI Product Recommendations (this session) — code complete, not yet committed.** New deterministic
+  recommendation layer for the bargain widget. See `IMPLEMENTATION-REPORT.md` (or the report you receive with the
+  commit) for the full files-changed/API/tests manifest. Summary: structured budget+need extraction in
+  `src/lib/bargain/intent.ts` (`budget/budgetType/need` fields, `extractBudget`/`extractNeed`, new intents
+  `RECOMMENDATION_REQUEST`/`PRODUCT_DISCOVERY`); new engine `src/lib/bargain/recommendations.ts`
+  (normalize/rank/sanitize + `searchRecommendations`, pure + injected fetcher); offer route returns
+  `recommendations` + `recommendationContext` cards when recovery signals fire (explicit ask, discovery, budget
+  under floor, lowball <45% of floor) and the store toggles are on; new events `cartgain_budget_detected`,
+  `cartgain_need_detected`, `cartgain_recommendation_requested/shown`, `cartgain_recommendation_clicked`,
+  `cartgain_recommended_product_added`; new write-only endpoint
+  `/api/bargain/recommend/event`; widget renders cards (image/price/sale/over-budget badges, View + Add-to-cart
+  via `/cart/add.js` with product-page fallback) + "Show alternatives" chip; 9 languages extended;
+  `recommendationsEnabled`+`alternativeRecommendationsEnabled` from `BargainConfig` now actually gate runtime.
+  Verified: `npx tsc --noEmit` clean, `npx jest` **605 green** (was 576), `npm run lint` clean (2 pre-existing
+  `<img>` warnings). NO schema migration (reuses the 3 existing `recommendations*` toggles).
+- **Transformation cycle (previous session) — committed & pushed (`32643968..5b5b57ee`, `ed43e749`, `fceed6c0`,
+  `915e98a2`):** product intelligence, intent/objection classifier, offer-validation reason codes, prompt
+  architecture (PRODUCT CONTEXT / SHOPPER INTENT / NEGOTIATION MODE), recommendation toggles in config+dashboard,
+  widget `whatIncluded` chip, website copy fixes, `IMPLEMENTATION-REPORT.md`.
+- **Secrecy hardening (`915e98a2`, pushed):** never expose floor / max discount / attempt budgets / system
+  instructions. `quotedFloor()` keeps every quoted counter strictly above the hidden floor; `maxDiscountPercent`
+  removed from customer-facing responses/widget; attempt-count copy removed from prompts + fallbacks; neutral
+  checkout-accept copy. Subject to test-pinned invariants.
 
 ## Where we are
 Rebuilding/upgrading the **CartGain AI Bargain System** as a flagship premium conversion feature
@@ -164,4 +189,4 @@ real floor to a counter). `src/app/api/bargain/start/route.ts` fetches the autho
 - Do NOT delete/break: recovery, auth, billing, Shopify integration, analytics, pricing, DB logic.
 - Never hardcode merchant min-price in frontend; never expose merchant floor/margin/economics to customers.
 - Keep ROI plan data in `ROICalculator.tsx` in sync with `payment.ts::PLANS`.
-- Re-run tsc + lint + jest (539) before committing.
+- Re-run tsc + lint + jest (605) before committing.

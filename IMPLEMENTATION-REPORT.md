@@ -201,3 +201,96 @@ Verified line-by-line, no code gaps found in the pre-existing execution paths:
    gather real intent/objection distribution from the new events before
    attempting the full AI eval suite.
 5. Update `SESSION-HANDOFF.md` with this cycle’s state.
+---
+
+# ADDENDUM — AI PRODUCT RECOMMENDATION LAYER
+## (spec: production bargain engine + AI product recommendation system)
+
+Completed this cycle on top of the transformation above. Verified: 605 tests
+green (was 576), `tsc` clean, `lint` clean (2 pre-existing `<img>` warnings).
+
+## A1. WHAT WAS BUILT
+- **Structured budget + need extraction** (`src/lib/bargain/intent.ts`): new
+  `IntentAnalysis` fields `budget` / `budgetType` (`maximum|approximate|minimum`)
+  / `need`, new deterministic helpers `extractBudget` / `extractNeed`, and two
+  new intents `RECOMMENDATION_REQUEST` / `PRODUCT_DISCOVERY`. The classifier
+  stays pure/deterministic — the LLM is told the result, never decides it.
+- **Recommendation engine** (`src/lib/bargain/recommendations.ts`, new):
+  `normalizeRecoCandidate`, `scoreRecoCandidate`, `rankRecommendations`,
+  `searchRecommendations` (injected fetcher, fully unit-testable), and
+  `recommendationReason` (recovery-trigger decision). Pure ranking by budget-fit
+  → availability → need-token match → on-sale → deterministic tiebreak.
+- **POST /api/bargain/offer** now attaches `recommendations[]` +
+  `recommendationContext` (budget/need/reason) to the reply when the store has
+  `recommendationsEnabled` + `alternativeRecommendationsEnabled` AND the turn is
+  a recovery signal: explicit alternative ask, product discovery, stated budget
+  below the floor, or a lowball (offer < 45% of the floor). Cards are built
+  server-side from Shopify and sanitized (never contain minPrice / maxDiscount /
+  floor / margin).
+- **POST /api/bargain/recommend/event** (new, write-only): validates session
+  ownership then records `clicked` / `added` analytics.
+- **Widget** (`BargainWidget.tsx`): renders recommendation cards (image, price,
+  compare-at strike-through, Sale / Above-budget / unpublished badges, View +
+  Add-to-cart; add-to-cart posts to `/cart/add.js` with product-page fallback),
+  plus a "Show alternatives" quick chip. Fully mobile-first and keyboard-usable.
+- **ML/analytics** (new events, all fire-and-forget server-side):
+  `cartgain_budget_detected`, `cartgain_need_detected`,
+  `cartgain_recommendation_requested`, `cartgain_recommendation_shown`,
+  `cartgain_recommendation_clicked`, `cartgain_recommended_product_added`.
+
+## A2. FILES CHANGED / CREATED
+- **New:** `src/lib/bargain/recommendations.ts`; `src/app/api/bargain/recommend/event/route.ts`;
+  `src/lib/bargain/__tests__/recommendations.test.ts`.
+- **Edited:** `src/lib/bargain/intent.ts` (+tests), `src/lib/services/bargain.ts`
+  (RECOMMENDATIONS GUIDANCE block + `recommendationsRequested` JSON contract +
+  metadata), `src/lib/bargain/i18n.ts` (5 new keys × 9 languages),
+  `src/lib/validation/bargain.ts` (`bargainRecommendEventSchema`),
+  `src/app/api/bargain/offer/route.ts` (reco layer + events),
+  `src/components/bargain/BargainWidget.tsx` (cards + chip + interactions),
+  `IMPLEMENTATION-REPORT.md`, `SESSION-HANDOFF.md`.
+
+## A3. DB / SCHEMA CHANGES
+None. The layer reuses the three existing `BargainConfig` booleans
+(`recommendationsEnabled`, `alternativeRecommendationsEnabled`,
+`complementRecommendationsEnabled`) — now actually enforced at runtime for the
+first time. No migration, no Vercel `db push` requirement for this phase.
+
+## A4. API CHANGES / ENDPOINTS
+- `POST /api/bargain/offer` — additive response fields `recommendations[]` and
+  `recommendationContext` (sent only when triggered; never on ordinary turns).
+- `POST /api/bargain/recommend/event` — new write-only analytics endpoint
+  (body: `sessionId, action ('clicked'|'added'), productId, variantId?`, plus
+  buyer-identity bind fields; 404 unknown session, 403 ownership mismatch).
+- No auth/env/Shopify-admin-config changes required.
+
+## A5. TESTS ADDED (29)
+- `recommendations.test.ts`: normalization (draft/archive rejection, variant
+  pick, price-less drop), scoring (budget-first, need boost), ranking
+  (exclusion, budget order, limit/truncation, determinism), search sanitization
+  (no financial secrets serialized, productUrl, over-budget labeling, empty
+  catalog resilience), and trigger logic (requested/discovery/budget/lowball/
+  quiet-normal).
+- `intent.test.ts`: two new intents, structured budget parsing (symbol/prefix/
+  "under N"/thousands separators), need extraction + stopword pruning.
+- **Requires manual verification:** none unit-testable fast; the live Shopify
+  catalog fetch + `/cart/add.js` add-to-cart path need a live store (see §A7).
+
+## A6. OPENAI / AI NOTES
+- `recommendationsRequested` was added to the strict-JSON contract; parsed
+  tolerantly and surfaced in `NegotiationResult.metadata`. The RECOMMENDATIONS
+  GUIDANCE prompt block appears only when the store toggles are on.
+- Primary OpenAI tier still unverified (invalid local `OPENAI_API_KEY`); all
+  real AI traffic continues on the Groq fallback.
+
+## A7. MANUAL TASKS FOR THE OWNER
+1. Provide a valid `OPENAI_API_KEY` (`.env` + Vercel env vars) and re-run the
+   forced-failover smoke test so the primary tier is exercised.
+2. Run `npx vercel --prod --yes` to deploy (applies any pending schema).
+3. On a live store: enable `Recommendations` + `Alternative recommendations` in
+   the dashboard, open the widget, tap "Show alternatives", and confirm cards,
+   View product, Add to cart, and the new events in analytics.
+4. If add-to-cart must work off-storefront (non-shopify domain embedding), wire
+   a cart handler or keep the current product-page fallback.
+5. Set `recommendationsEnabled` intentionally: the complement-recommendations
+   toggle is currently NOT consumed (only master + alternative are enforced);
+   if cross-sell (complement) tiers are wanted, that is the stated next step.

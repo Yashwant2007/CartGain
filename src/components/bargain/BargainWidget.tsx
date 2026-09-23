@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   X, Send, MessageCircle, Sparkles, Loader2, CheckCircle2, Clock, Tag, Zap, ShieldCheck, ArrowRight, BadgePercent,
 } from 'lucide-react'
-import { currencySymbolFor, uiText } from '@/lib/bargain/i18n'
+import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 
 // Stable per-device+cart bargain identity. Persists across tabs/refreshes on the
 // same browser (localStorage deviceId seeded on first visit) and is blended with
@@ -81,6 +81,24 @@ type Session = {
   expiresAt?: string
 }
 
+// Sanitized recommendation card, built server-side from the store's real
+// Shopify catalog. Never contains merchant financial secrets (floor / margin /
+// max discount) — only facts Shopify already exposes on the storefront.
+type Recommendation = {
+  productId: string
+  variantId: string
+  title: string
+  price: number
+  compareAtPrice?: number | null
+  currency: string
+  imageUrl: string | null
+  productUrl: string | null
+  available: boolean
+  onSale: boolean
+  budgetFit: 'under' | 'over' | 'unknown'
+  tags: string[]
+}
+
 export default function BargainWidget({
   storeId,
   shopifyProductId,
@@ -117,6 +135,7 @@ export default function BargainWidget({
   const [returning, setReturning] = useState(false)
   const [endedReason, setEndedReason] = useState<'accepted' | 'rejected' | 'expired' | 'abandoned' | 'optout' | null>(null)
   const [activeTab, setActiveTab] = useState<'chat' | 'info'>('chat')
+  const [recommendations, setRecommendations] = useState<Recommendation[] | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const launcherRef = useRef<HTMLButtonElement>(null)
@@ -353,11 +372,65 @@ export default function BargainWidget({
         setDecision(data.decision)
       }
       if (data.finalPrice != null) setFinalPrice(data.finalPrice)
+      if (Array.isArray(data.recommendations) && data.recommendations.length > 0) {
+        setRecommendations(data.recommendations)
+      }
     } catch (err: any) {
       setError(errorCopy(err))
     } finally {
       setLoading(false)
     }
+  }
+
+  // Shopper interacted with a recommendation card — record it server-side. This
+  // is write-only analytics; the server never returns card data from it.
+  async function fireRecoEvent(action: 'clicked' | 'added', card: Recommendation) {
+    if (!sessionId) return
+    try {
+      await fetch(`${apiBase}/api/bargain/recommend/event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          action,
+          productId: card.productId,
+          variantId: card.variantId,
+          ...buyerIdentity(),
+        }),
+      })
+    } catch {
+      // analytics are best-effort — never interrupt the shopper flow
+    }
+  }
+
+  // Add a recommended product to the storefront cart (only works when the
+  // widget runs on the Shopify storefront origin). Falls back to the product
+  // page so the flow never dead-ends.
+  async function addRecoToCart(card: Recommendation) {
+    if (!card.available) return
+    fireRecoEvent('added', card)
+    if (typeof window === 'undefined' || !card.variantId) {
+      if (card.productUrl) window.open(card.productUrl, '_blank', 'noopener')
+      return
+    }
+    try {
+      const res = await fetch(`${window.location.origin}/cart/add.js`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ id: card.variantId, quantity: 1 }),
+      })
+      if (res.ok) {
+        window.location.assign(`${window.location.origin}/cart`)
+        return
+      }
+    } catch {
+      // fall through to the product page
+    }
+    if (card.productUrl) window.location.assign(card.productUrl)
   }
 
   async function optOutOfAI() {
@@ -959,6 +1032,27 @@ export default function BargainWidget({
               </div>
             ))}
 
+            {/* Product recommendation cards (server-verified alternatives) */}
+            {recommendations && recommendations.length > 0 && (
+              <div style={{ alignSelf: 'flex-start', width: '100%', animation: 'cgMsgIn 0.2s ease-out' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: '#6366f1', margin: '10px 6px 8px' }}>
+                  ✨ {t('alternativesTitle')}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {recommendations.map(card => (
+                    <RecoCard
+                      key={card.productId}
+                      card={card}
+                      currencySymbol={currencySymbolFor(card.currency)}
+                      t={t}
+                      onView={(c) => fireRecoEvent('clicked', c)}
+                      onAdd={addRecoToCart}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* AI thinking indicator */}
             {thinking && (
               <div style={{ alignSelf: 'flex-start', animation: 'cgMsgIn 0.18s ease-out' }}>
@@ -1201,6 +1295,7 @@ export default function BargainWidget({
                   ))}
                   <QuickChip label={t('bestOffer')} disabled={thinking} onClick={() => quickOffer(() => setInput(t('bestOfferPrompt')))} />
                   <QuickChip label={t('whatIncluded')} disabled={thinking} onClick={() => quickOffer(() => setInput(t('whatIncludedPrompt')))} />
+                  <QuickChip label={t('alternativesPrompt')} disabled={thinking} onClick={() => quickOffer(() => setInput(t('alternativesPrompt')))} />
                   <QuickChip label={t('walkout')} disabled={thinking} onClick={() => quickOffer(() => setInput(t('walkoutPrompt')))} />
                 </div>
               )}
@@ -1524,5 +1619,123 @@ function QuickChip({ label, onClick, disabled }: { label: string; onClick: () =>
     >
       {label}
     </button>
+  )
+}
+
+function RecoBadge({ bg, fg, children }: { bg: string; fg: string; children: ReactNode }) {
+  return (
+    <span style={{
+      background: bg,
+      color: fg,
+      fontSize: 10.5,
+      fontWeight: 700,
+      borderRadius: 999,
+      padding: '2px 8px',
+    }}>
+      {children}
+    </span>
+  )
+}
+
+function RecoCard({
+  card,
+  currencySymbol: sym,
+  t,
+  onView,
+  onAdd,
+}: {
+  card: Recommendation
+  currencySymbol: string
+  t: (key: UiKey, vars?: Record<string, string | number>) => string
+  onView: (card: Recommendation) => void
+  onAdd: (card: Recommendation) => void
+}) {
+  const fmt = (n: number) => `${sym}${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+  return (
+    <div style={{
+      display: 'flex',
+      gap: 10,
+      padding: 10,
+      background: '#fafbff',
+      border: '1px solid #e2e8f0',
+      borderRadius: 14,
+      alignItems: 'flex-start',
+    }}>
+      {card.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={card.imageUrl}
+          alt={card.title}
+          loading="lazy"
+          style={{ width: 62, height: 62, borderRadius: 10, objectFit: 'cover', background: '#eef2ff', flexShrink: 0 }}
+        />
+      ) : (
+        <div style={{
+          width: 62, height: 62, borderRadius: 10, background: '#eef2ff', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+        }}>
+          🛍️
+        </div>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontWeight: 700, fontSize: 13.5, color: '#1e293b', lineHeight: 1.35,
+          display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden',
+        }}>
+          {card.title}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 800, fontSize: 15, color: '#15803d' }}>{fmt(card.price)}</span>
+          {card.compareAtPrice != null && card.compareAtPrice > card.price && (
+            <span style={{ fontSize: 12.5, color: '#94a3b8', textDecoration: 'line-through' }}>{fmt(card.compareAtPrice)}</span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 5, marginTop: 4, flexWrap: 'wrap' }}>
+          {card.onSale && <RecoBadge bg="#dcfce7" fg="#166534">{t('onSale')}</RecoBadge>}
+          {card.budgetFit === 'over' && <RecoBadge bg="#fef3c7" fg="#b45309">{t('overBudget')}</RecoBadge>}
+          {!card.available && <RecoBadge bg="#fff1f2" fg="#be123c">{t('notice')}</RecoBadge>}
+        </div>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          <a
+            href={card.productUrl ?? '#'}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => onView(card)}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #c7d2fe',
+              color: '#4338ca',
+              borderRadius: 9,
+              padding: '7px 12px',
+              fontSize: 12.5,
+              fontWeight: 700,
+              textDecoration: 'none',
+              outline: 'none',
+            }}
+          >
+            {t('viewProduct')}
+          </a>
+          <button
+            type="button"
+            onClick={() => onAdd(card)}
+            disabled={!card.available}
+            style={{
+              background: 'linear-gradient(135deg,#6366f1,#4f46e5)',
+              border: 'none',
+              color: '#ffffff',
+              borderRadius: 9,
+              padding: '7px 12px',
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: card.available ? 'pointer' : 'default',
+              opacity: card.available ? 1 : 0.5,
+              outline: 'none',
+            }}
+          >
+            {t('addToCart')}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
