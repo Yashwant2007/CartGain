@@ -330,6 +330,111 @@ export async function fetchShopifyProductPrice(
   }
 }
 
+export interface ShopifyProductDetail {
+  id: string
+  title: string
+  handle?: string | null
+  vendor?: string | null
+  product_type?: string | null
+  tags?: string
+  status?: string | null
+  body_html?: string | null
+  body_plain?: string | null
+  image?: { src?: string | null } | null
+  variants?: Array<{
+    id: string
+    title?: string | null
+    price?: string | number | null
+    compare_at_price?: string | number | null
+    available?: boolean
+    inventory_quantity?: number | null
+    inventory_policy?: string | null
+    option1?: string | null
+    option2?: string | null
+    option3?: string | null
+  }>
+}
+
+// Fetch one product's full catalog record for the AI Salesperson product
+// context. Mirrors fetchShopifyProductPrice's auth + REST shape but returns the
+// whole normalized record (description, variants, tags, availability) instead
+// of just the price. `available` is derived from the REST inventory fields:
+// explicit only when Shopify tells us the quantity, and never assumed true.
+export async function fetchShopifyProductDetail(
+  store: { id: string; domain: string; apiKey: string | null; shopifyRefreshToken: string | null; shopifyTokenExpiresAt: Date | null },
+  shopifyProductId: string,
+): Promise<ShopifyProductDetail | null> {
+  const accessToken = await getAccessToken(store)
+  if (!accessToken) return null
+
+  const productId = shopifyProductId.replace(/^gid:\/\/shopify\/Product\//, '')
+  const url = `https://${store.domain}/admin/api/2026-04/products/${productId}.json`
+
+  try {
+    const res = await fetch(url, {
+      headers: { 'X-Shopify-Access-Token': accessToken },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const product = data.product
+    if (!product) return null
+
+    const rawVariants = Array.isArray(product.variants) ? product.variants : []
+    const priceTag = rawVariants.find((v: any) => v?.price != null)?.price
+    const plainPrice = priceTag != null ? parseFloat(String(priceTag)) : null
+
+    const variants = rawVariants.map((v: any) => {
+      const quantity: number | null = v?.inventory_quantity != null ? Number(v.inventory_quantity) : null
+      const policy = v?.inventory_policy ?? null
+      const available =
+        quantity != null
+          ? policy === 'continue'
+            ? true
+            : quantity > 0
+          : null
+      return {
+        id: String(v.id),
+        title: v?.title ?? 'Default',
+        price: v?.price ?? priceTag ?? null,
+        compare_at_price: v?.compare_at_price ?? null,
+        available: available === true,
+        inventory_quantity: v?.inventory_quantity ?? null,
+        inventory_policy: policy,
+        option1: v?.option1 ?? null,
+        option2: v?.option2 ?? null,
+        option3: v?.option3 ?? null,
+      }
+    })
+
+    return {
+      id: String(product.id),
+      title: product.title ?? '',
+      handle: product.handle ?? null,
+      vendor: product.vendor ?? null,
+      product_type: product.product_type ?? null,
+      tags: product.tags ?? '',
+      status: product.status ?? null,
+      body_html: product.body_html ?? null,
+      body_plain: stripHtmlBody(product.body_html ?? null),
+      image: product.image?.src ? { src: product.image.src } : null,
+      variants,
+    }
+  } catch {
+    return null
+  }
+}
+
+function stripHtmlBody(html: string | null): string | null {
+  if (!html) return null
+  return html
+    .replace(/<br\s*\/?\s*>/gi, ' ')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 // List Shopify products (catalog picker) using the Admin REST API. Returns raw
 // product objects (id, title, handle, status, variants incl. prices, image).
 export async function fetchShopifyProducts(

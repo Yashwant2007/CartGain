@@ -9,7 +9,7 @@ const CAPABILITIES = [
   {
     icon: <MessageSquare className="w-6 h-6 sm:w-7 sm:h-7 text-cyan-400" />,
     title: 'Real-World Negotiation Psychology',
-    description: 'The AI is trained on how real humans haggle — not canned discount scripts.',
+    description: 'The AI negotiates like an experienced shopkeeper — not canned discount scripts.',
     features: [
       'Anchoring, reciprocity, loss aversion & scarcity',
       'Concession patterns that signal your floor without revealing it',
@@ -116,8 +116,8 @@ export default function BargainPage() {
                   </p>
                   <ul className="space-y-3 mb-8">
                     {[
-                      'Not a chatbot — a trained negotiation agent with real-world psychology running on OpenAI',
-                      'Reads 15+ customer behavioral patterns and adapts its strategy mid-conversation',
+                      'Not a chatbot — an AI negotiation agent with real-world negotiation psychology',
+                      'Reads a dozen customer behavioral patterns (from lowball openers to walkout threats) and adapts its strategy mid-conversation',
                       'You set the floor price — the AI cannot sell below it, enforced at the engine level',
                       '3 distinct shopkeeper personas, each with a consistent negotiation style',
                       'Has Indian-market psychology built in — round figures, festivals, UPI/cash leverage',

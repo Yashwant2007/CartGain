@@ -10,6 +10,9 @@ export {
 
 // ── Bargain config (merchant) ──
 
+export const CLAIM_ITEM = z.string().trim().min(1, 'Claim cannot be empty').max(200, 'Claim is too long (max 200 chars)')
+export const CLAIM_LIST = z.array(CLAIM_ITEM).max(50).default([])
+
 export const bargainConfigUpsertSchema = z.object({
   enabled: z.boolean().optional(),
   maxAttempts: z.number().int().min(1).max(10).optional(),
@@ -30,6 +33,13 @@ export const bargainConfigUpsertSchema = z.object({
   campaignStart: z.string().datetime().nullable().optional(),
   campaignEnd: z.string().datetime().nullable().optional(),
   campaignMessage: z.string().max(250).nullable().optional(),
+  // ── AI Salesperson: negotiation mode + product intelligence ──
+  negotiationMode: z.enum(['conservative', 'balanced', 'flexible']).optional(),
+  approvedSellingPoints: CLAIM_LIST.optional(),
+  disallowedClaims: CLAIM_LIST.optional(),
+  recommendationsEnabled: z.boolean().optional(),
+  alternativeRecommendationsEnabled: z.boolean().optional(),
+  complementRecommendationsEnabled: z.boolean().optional(),
 })
 
 export type BargainConfigUpsertInput = z.infer<typeof bargainConfigUpsertSchema>
@@ -44,6 +54,8 @@ export const bargainProductUpsertSchema = z.object({
   minProfitPercent: z.number().min(0).max(100).optional(),
   maxDiscountPercent: z.number().int().min(0).max(100).optional(),
   isBargainable: z.boolean().optional(),
+  approvedSellingPoints: CLAIM_LIST.optional(),
+  disallowedClaims: CLAIM_LIST.optional(),
 })
 
 export type BargainProductUpsertInput = z.infer<typeof bargainProductUpsertSchema>

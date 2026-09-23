@@ -347,6 +347,13 @@ model BargainConfig {
   campaignStart    DateTime?
   campaignEnd      DateTime?
   campaignMessage  String? // merchant-written, truthful context the AI may truthfully reference
+  // ── AI Salesperson: merchant-controlled negotiation + product intelligence ──
+  negotiationMode  String   @default("balanced") // conservative | balanced | flexible — merchant's chosen bargain temperament
+  approvedSellingPoints String[] @default([]) // merchant-vetted claims the AI may use ("machine-washable", "7-day replacement")
+  disallowedClaims      String[] @default([]) // claims NEVER passed to the AI (unverified review/medical/beauty claims)
+  recommendationsEnabled            Boolean @default(true) // master toggle for cross-sell suggestions
+  alternativeRecommendationsEnabled Boolean @default(true) // "also consider" suggestions
+  complementRecommendationsEnabled  Boolean @default(true) // "you may also need" suggestions
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -365,6 +372,8 @@ model BargainProduct {
   minProfitPercent  Float?   // overrides global
   maxDiscountPercent Int?    // e.g. 30 means never discount more than 30% off
   isBargainable     Boolean  @default(true)
+  approvedSellingPoints String[] @default([]) // per-product merchant-vetted selling points
+  disallowedClaims      String[] @default([]) // per-product claims never passed to the AI
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

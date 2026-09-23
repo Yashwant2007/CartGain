@@ -55,6 +55,8 @@ export type UiKey =
   | 'bestOfferPrompt'
   | 'walkout'
   | 'walkoutPrompt'
+  | 'whatIncluded'
+  | 'whatIncludedPrompt'
   | 'optOutMsg'
   | 'triggerLabel'
   | 'triggerSub'
@@ -105,6 +107,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     bestOfferPrompt: "That's too high — what's your best offer?",
     walkout: 'Walk out',
     walkoutPrompt: "I'll have to walk if that's the final price.",
+    whatIncluded: "What's included?",
+    whatIncludedPrompt: 'What all is included in this price?',
     optOutMsg: 'No problem — you can buy at the regular price below. You opted out of AI pricing.',
     triggerLabel: 'Negotiate Price',
     triggerSub: 'Looks a bit steep? Ask for a better price.',
@@ -154,6 +158,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     bestOfferPrompt: 'Yeh zyada hai — aapka best offer kya hoga?',
     walkout: 'Walk out',
     walkoutPrompt: 'Agar yehi final price hai toh main chala jaunga.',
+    whatIncluded: 'Isme kya kya included hai?',
+    whatIncludedPrompt: 'Is price mein kya kya milta hai?',
     optOutMsg: 'Koi baat nahi — aap regular price par buy kar sakte ho. Aapne AI pricing se opt-out kiya.',
     triggerLabel: 'Bhaw Bolo',
     triggerSub: 'Bhaw thoda zyada lag raha hai? Better price maango.',
@@ -203,6 +209,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     bestOfferPrompt: 'यह बहुत ज़्यादा है — आपका सबसे अच्छा भाव क्या होगा?',
     walkout: 'चले जाओ',
     walkoutPrompt: 'अगर यही अंतिम कीमत है तो मैं चला जाऊँगा।',
+    whatIncluded: 'क्या-क्या शामिल है?',
+    whatIncludedPrompt: 'इस कीमत में क्या-क्या मिलता है?',
     optOutMsg: 'कोई बात नहीं — आप नियमित कीमत पर खरीद सकते हैं। आपने AI मूल्य-निर्धारण से ऑप्ट-आउट किया।',
     triggerLabel: 'भाव मोल करें',
     triggerSub: 'कीमत थोड़ी ज़्यादा लग रही है? बेहतर कीमत माँगें।',
@@ -252,6 +260,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     bestOfferPrompt: 'இது அதிகம் — உங்கள் சிறந்த ஆஃபர் என்ன?',
     walkout: 'வெளியேறு',
     walkoutPrompt: 'இதுவே இறுதி விலை என்றால் நான் சென்று விடுவேன்.',
+    whatIncluded: 'என்னென்ன சேர்க்கப்பட்டுள்ளது?',
+    whatIncludedPrompt: 'இந்த விலையில் என்னென்ன கிடைக்கும்?',
     optOutMsg: 'பரவாயில்லை — நீங்கள் நியம விலையில் வாங்கலாம். AI விலையிலிருந்து விலகியுள்ளீர்கள்.',
     triggerLabel: 'விலை பேசுங்கள்',
     triggerSub: 'விலை கொஞ்சம் அதிகமாக இருக்கிறதா? சிறந்த விலை கேளுங்கள்.',
@@ -301,6 +311,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     bestOfferPrompt: 'ఇది చాలా ఎక్కువ — మీ ఉత్తమ ఆఫర్ ఏమిటి?',
     walkout: 'వెళ్లిపో',
     walkoutPrompt: 'ఇదే చివరి ధర అయితే నేను వెళ్లిపోతాను.',
+    whatIncluded: 'ఏమేమి చేర్చబడ్డాయి?',
+    whatIncludedPrompt: 'ఈ ధరలో ఏమేమి లభిస్తాయి?',
     optOutMsg: 'ఫర్వాలేదు — మీరు నిర్ణీత ధరకు కొనవచ్చు. మీరు AI ధర నుండి తప్పుకున్నారు.',
     triggerLabel: 'ధర చర్చించండి',
     triggerSub: 'ధర కొంచెం ఎక్కువగా ఉందా? మెరుగైన ధర అడగండి.',
@@ -350,6 +362,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     bestOfferPrompt: 'এটা বেশি — আপনার সেরা অফার কী?',
     walkout: 'চলে যান',
     walkoutPrompt: 'এটাই যদি সর্বশেষ দাম হয়, আমি চলে যাব।',
+    whatIncluded: 'কী কী অন্তর্ভুক্ত?',
+    whatIncludedPrompt: 'এই দামে কী কী পাওয়া যায়?',
     optOutMsg: 'সমস্যা নেই — আপনি নিয়মিত দামে কিনতে পারেন। আপনি AI মূল্যধারণ থেকে অপ্ট-আউট করেছেন।',
     triggerLabel: 'দরদাম করুন',
     triggerSub: 'দাম একটু বেশি মনে হচ্ছে? ভালো দাম চান।',
@@ -399,6 +413,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     bestOfferPrompt: 'हे जास्त आहे — तुमचा सर्वोत्तम ऑफर काय?',
     walkout: 'निघून जा',
     walkoutPrompt: 'हीच अंतिम किंमत असेल तर मी निघून जाईन.',
+    whatIncluded: 'काय-काय समाविष्ट आहे?',
+    whatIncludedPrompt: 'या किंमतीत काय-काय मिळते?',
     optOutMsg: 'हरकत नाही — तुम्ही नियमित किमतीत खरेदी करू शकता. तुम्ही AI किंमतीतून बाहेर पडलात.',
     triggerLabel: 'भाव मोल करा',
     triggerSub: 'किंमत थोडी जास्त वाटते आहे? चांगली किंमत विचारा.',
@@ -448,6 +464,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     bestOfferPrompt: 'આ વધુ છે — તમારી શ્રેષ્ઠ ઓફર શું છે?',
     walkout: 'જતાં રહો',
     walkoutPrompt: 'આ જ અંતિમ કિંમત હોય તો હું જતો રહીશ.',
+    whatIncluded: 'શું-શું સામેલ છે?',
+    whatIncludedPrompt: 'આ કિંમતમાં શું-શું મળે છે?',
     optOutMsg: 'કોઈ સમસ્યા નહીં — તમે નિયમિત કિંમતે ખરીદી શકો છો. તમે AI કિંમત-નિર્ધારણમાંથી બહાર નીકળ્યા છો.',
     triggerLabel: 'ભાવ મોલ કરો',
     triggerSub: 'કિંમત થોડી વધારે લાગે છે? વધુ સારી કિંમત પૂછો.',
@@ -497,6 +515,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     bestOfferPrompt: 'ਇਹ ਬਹੁਤ ਜ਼ਿਆਦਾ ਹੈ — ਤੁਹਾਡਾ ਸਭ ਤੋਂ ਵਧੀਆ ਆਫਰ ਕੀ ਹੈ?',
     walkout: 'ਚੱਲੇ ਜਾਓ',
     walkoutPrompt: 'ਜੇ ਇਹੀ ਆਖਰੀ ਕੀਮਤ ਹੈ ਤਾਂ ਮੈਂ ਚੱਲਾ ਜਾਵਾਂਗਾ।',
+    whatIncluded: 'ਕੀ-ਕੀ ਸ਼ਾਮਲ ਹੈ?',
+    whatIncludedPrompt: 'ਇਸ ਕੀਮਤ ਵਿੱਚ ਕੀ-ਕੀ ਮਿਲਦਾ ਹੈ?',
     optOutMsg: 'ਕੋਈ ਗੱਲ ਨਹੀਂ — ਤੁਸੀਂ ਰੈਗੂਲਰ ਕੀਮਤ ’ਤੇ ਖਰੀਦ ਸਕਦੇ ਹੋ। ਤੁਸੀਂ AI ਕੀਮਤ-ਨਿਰਧਾਰਨ ਤੋਂ ਬਾਹਰ ਹੋ ਗਏ।',
     triggerLabel: 'ਭਾਅ ਮੁੱਲ ਕਰੋ',
     triggerSub: 'ਕੀਮਤ ਥੋੜ੍ਹੀ ਵੱਧ ਲੱਗ ਰਹੀ ਹੈ? ਵਧੀਆ ਕੀਮਤ ਮੰਗੋ।',

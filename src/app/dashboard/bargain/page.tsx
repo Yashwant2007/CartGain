@@ -46,6 +46,12 @@ type BargainConfig = {
   campaignMessage: string | null
   campaignStart: string | null
   campaignEnd: string | null
+  negotiationMode: string
+  approvedSellingPoints: string[]
+  disallowedClaims: string[]
+  recommendationsEnabled: boolean
+  alternativeRecommendationsEnabled: boolean
+  complementRecommendationsEnabled: boolean
 }
 
 type GoalStatus = {
@@ -370,6 +376,96 @@ void fetchConfig()
                     className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
                   />
                   <p className="text-xs text-blue-300/60 mt-1">A timed offer adds gentle urgency without pressure.</p>
+                </div>
+              </div>
+
+              {/* Group: AI Salesperson — negotiation mode + product knowledge */}
+              <GroupTitle
+                icon={Sparkles}
+                title="AI Selling & Product Knowledge"
+                subtitle="Merchant-controlled: the negotiating temperament, the claims the AI may use, the claims it must never repeat, and cross-sell behaviour."
+              />
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-blue-200 mb-1">Negotiation mode</label>
+                  <select
+                    value={configForm.negotiationMode ?? 'balanced'}
+                    onChange={e => setConfigForm({ ...configForm, negotiationMode: e.target.value })}
+                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                  >
+                    <option value="conservative">Conservative · protect margin</option>
+                    <option value="balanced">Balanced · fair deals (default)</option>
+                    <option value="flexible">Flexible · closing-focused</option>
+                  </select>
+                  <p className="text-xs text-blue-300/60 mt-1">
+                    Sets how hard the AI pushes toward the listed price. The hidden margin floor always holds.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-blue-200">Cross-sell suggestions</span>
+                    <input
+                      type="checkbox"
+                      checked={configForm.recommendationsEnabled ?? true}
+                      onChange={e => setConfigForm({ ...configForm, recommendationsEnabled: e.target.checked })}
+                      className="w-5 h-5 accent-blue-500"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-blue-200">Recommend similar alternatives</span>
+                    <input
+                      type="checkbox"
+                      checked={configForm.alternativeRecommendationsEnabled ?? true}
+                      onChange={e => setConfigForm({ ...configForm, alternativeRecommendationsEnabled: e.target.checked })}
+                      className="w-5 h-5 accent-blue-500"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-blue-200">Recommend complements</span>
+                    <input
+                      type="checkbox"
+                      checked={configForm.complementRecommendationsEnabled ?? true}
+                      onChange={e => setConfigForm({ ...configForm, complementRecommendationsEnabled: e.target.checked })}
+                      className="w-5 h-5 accent-blue-500"
+                    />
+                  </div>
+                  <p className="text-xs text-blue-300/60 mt-1">
+                    Recommendations use verified catalog data only. Toggle per-group as you prefer.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm text-blue-200 mb-1">Approved selling points (one per line)</label>
+                  <textarea
+                    rows={4}
+                    value={(configForm.approvedSellingPoints ?? []).join('\n')}
+                    onChange={e =>
+                      setConfigForm({
+                        ...configForm,
+                        approvedSellingPoints: e.target.value.split('\n').map(s => s.trim()).filter(Boolean),
+                      })}
+                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                    placeholder={'machine-washable\n7-day replacement warranty'}
+                  />
+                  <p className="text-xs text-blue-300/60 mt-1">
+                    Only these merchant-vetted claims reach the AI. It may mention them when relevant.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm text-blue-200 mb-1">Claims the AI must never repeat (one per line)</label>
+                  <textarea
+                    rows={4}
+                    value={(configForm.disallowedClaims ?? []).join('\n')}
+                    onChange={e =>
+                      setConfigForm({
+                        ...configForm,
+                        disallowedClaims: e.target.value.split('\n').map(s => s.trim()).filter(Boolean),
+                      })}
+                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                    placeholder={'cures skin problems\nworld #1 brand'}
+                  />
+                  <p className="text-xs text-blue-300/60 mt-1">
+                    These phrases are scrubbed from product context so the AI never repeats unverified claims.
+                  </p>
                 </div>
               </div>
 

@@ -6,8 +6,9 @@ import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { assertSessionOwnership } from '@/lib/bargain/session-bind'
 import { getBargainGate, decideDealMode, recordBargainDealOps, BARGAIN_DEALS_EXHAUSTED } from '@/lib/bargain/gate'
 import { computeMinPrice } from '@/lib/services/bargain'
-import { fetchShopifyProductPrice } from '@/lib/shopify'
+import { fetchShopifyProductPrice, fetchShopifyProductDetail } from '@/lib/shopify'
 import { buildExecutablePrice } from '@/lib/financial-safety'
+import { validateOffer } from '@/lib/bargain/offer-validation'
 
 export const dynamic = 'force-dynamic'
 
@@ -124,12 +125,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'No agreed final price' }, { status: 400 })
     }
 
-    // ── FINANCIAL SAFETY: re-derive the floor at the AUTHORITATIVE, CURRENT
-    // Shopify price (not the stale start-time snapshot). If the merchant raised
-    // the price, the floor moved up; a stale agreement that now clears nothing
-    // is rejected instead of charged at a loss. If Shopify is unreachable we
-    // fall back to the snapshot originalPrice (same as start/offer).
+    // ── OFFER VALIDATION (machine reason codes) ──
+    // Re-derive the floor at the AUTHORITATIVE, CURRENT Shopify price (not the
+    // stale start-time snapshot). If the merchant raised the price, the floor
+    // moved up; a stale agreement that now clears nothing is rejected instead of
+    // charged at a loss. If Shopify is unreachable we fall back to the snapshot
+    // originalPrice (same as start/offer).
+    const currentDetail = await fetchShopifyProductDetail(bargainSession.store, bargainSession.shopifyProductId)
+    const matchedVariant = currentDetail?.variants?.find(v =>
+      bargainSession.variantId
+        ? v.id === bargainSession.variantId.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
+        : true,
+    )
     const currentPrice =
+      (matchedVariant?.price != null ? Number(matchedVariant.price) : null) ??
       (await fetchShopifyProductPrice(bargainSession.store, bargainSession.shopifyProductId, bargainSession.variantId ?? null)) ??
       bargainSession.originalPrice
     const { minPrice } = await computeMinPrice({
@@ -138,6 +147,30 @@ export async function POST(request: NextRequest) {
       originalPrice: currentPrice,
       bulkQuantity: offerBulkQuantity ?? undefined,
     })
+
+    // Availability checks come from the live catalog record (never assumed):
+    // null means "unknown/unverifiable" and does NOT block — only an explicit
+    // false does. A non-'active' status (draft/archived) blocks the accept.
+    const effectiveVariantId = bargainSession.variantId?.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
+    const variantAvailable = !currentDetail || !effectiveVariantId
+      ? null
+      : currentDetail.variants?.find(v => v.id === effectiveVariantId)?.available ?? null
+    const productAvailable = !currentDetail ? null : currentDetail.status === 'active' || currentDetail.status == null
+
+    const validation = validateOffer({
+      requestedPrice: finalPrice,
+      originalPrice: currentPrice,
+      floorPrice: minPrice,
+      variantAvailable,
+      productAvailable,
+    })
+    if (!validation.ok) {
+      return NextResponse.json({
+        message: validation.message ?? 'Cannot accept this purchase right now.',
+        reason: validation.reason,
+        code: `OFFER_REJECTED_${validation.reason}`,
+      }, { status: 409 })
+    }
 
     const executable = buildExecutablePrice({
       originalPrice: currentPrice,

@@ -10,6 +10,9 @@ import { detectLanguage } from '@/lib/bargain/language'
 import { logDataAccess } from '@/lib/data-protection'
 import { clampOfferToSafety } from '@/lib/bargain/engine'
 import { buildGoalContextForNegotiation } from '@/lib/bargain/goals'
+import { analyzeIntent } from '@/lib/bargain/intent'
+import { buildProductContext } from '@/lib/bargain/product-fetcher'
+import { track } from '@/lib/analytics/track'
 
 export const dynamic = 'force-dynamic'
 
@@ -152,6 +155,26 @@ export async function POST(request: NextRequest) {
       return p?.productTitle ?? undefined
     })()
 
+    // Product intelligence — verified catalog facts the AI is allowed to cite.
+    // Deliberately layered AFTER control-flow (walkout/attempts) so the hot path
+    // only pays for it when the AI actually speaks. Never returns null: when
+    // Shopify is unreachable it degrades to a fetchFailed context that forbids
+    // the AI from inventing product facts.
+    const productCtx = await buildProductContext({
+      store: bargainSession.store,
+      storeId: bargainSession.storeId,
+      shopifyProductId: bargainSession.shopifyProductId,
+      variantId: bargainSession.variantId ?? null,
+      currency: bargainSession.store.currency,
+      baseUrl: `https://${bargainSession.store.domain}`,
+      fallbackTitle: productTitle ?? null,
+    })
+
+    // Deterministic shopper-intent classification of the current message. Cheap,
+    // predictable, and merchant-controlled — the LLM is told about it, it never
+    // decides it.
+    const intentAnalysis = analyzeIntent(data.message)
+
     // Atomic attempt claim — prevents race conditions from concurrent requests
     const claimResult = await prisma.bargainSession.updateMany({
       where: {
@@ -208,6 +231,9 @@ export async function POST(request: NextRequest) {
       language: lang,
       customerContext: await buildCustomerContext(bargainSession.storeId, bargainSession.customerEmail),
       goal: await buildGoalContextForNegotiation(config, bargainSession.store.timezone, new Date()),
+      product: productCtx,
+      intent: intentAnalysis,
+      negotiationMode: (config.negotiationMode as NegotiationContext['negotiationMode']) ?? 'balanced',
     }
 
     const history = bargainSession.messages
@@ -329,6 +355,38 @@ export async function POST(request: NextRequest) {
             minPrice,
             suggested: result.counterOffer,
           })
+
+    // Funnel analytics (prod-only; fire-and-forget inserts, never customer
+    // message content). Record the deterministic intent/objection signals and
+    // any below-floor offers so the merchant sees negotiation behavior.
+    if (intentAnalysis.intent !== 'UNKNOWN' && intentAnalysis.intent !== 'GENERIC_CHAT') {
+      await track({
+        name: 'cartgain_intent_detected',
+        storeId: bargainSession.storeId,
+        properties: { intent: intentAnalysis.intent },
+      })
+    }
+    if (intentAnalysis.objection) {
+      await track({
+        name: 'cartgain_objection_detected',
+        storeId: bargainSession.storeId,
+        properties: { objection: intentAnalysis.objection },
+      })
+    }
+    if (intentAnalysis.intent === 'PRODUCT_QUESTION') {
+      await track({
+        name: 'cartgain_product_question',
+        storeId: bargainSession.storeId,
+        properties: { hasVerifiedContext: productCtx.fetchFailed === false && productCtx.description.length > 0 },
+      })
+    }
+    if (customerOffer != null && customerOffer < minPrice) {
+      await track({
+        name: 'cartgain_offer_below_floor',
+        storeId: bargainSession.storeId,
+        properties: {},
+      })
+    }
 
     const [customerMsg, aiMsg, updatedSession] = await prisma.$transaction([
       prisma.bargainMessage.create({

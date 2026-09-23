@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
 import { computeMinPrice } from '@/lib/services/bargain'
-import { fetchShopifyProductPrice } from '@/lib/shopify'
+import { fetchShopifyProductPrice, fetchShopifyProductDetail } from '@/lib/shopify'
 import { buildExecutablePrice, clampOrderPercentForProduct } from '@/lib/financial-safety'
+import { validateOffer } from '@/lib/bargain/offer-validation'
 import { redisIncr, redisExpire } from '@/lib/redis'
 
 export const dynamic = 'force-dynamic'
@@ -103,6 +104,28 @@ export async function POST(request: NextRequest) {
       originalPrice: currentPrice,
       bulkQuantity: safeBulk ?? undefined,
     })
+
+    // 2b) Live availability + machine reason codes. Only an explicit false from
+    // Shopify blocks (null = unverifiable = don't block).
+    const currentDetail = await fetchShopifyProductDetail(store, shopifyProductId)
+    const effectiveVariantId = variantId?.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
+    const variantAvailable = !currentDetail || !effectiveVariantId
+      ? null
+      : currentDetail.variants?.find(v => v.id === effectiveVariantId)?.available ?? null
+    const productAvailable = !currentDetail ? null : currentDetail.status === 'active' || currentDetail.status == null
+    const validation = validateOffer({
+      requestedPrice: Number(finalPrice),
+      originalPrice: currentPrice,
+      floorPrice: minPrice,
+      variantAvailable,
+      productAvailable,
+    })
+    if (!validation.ok) {
+      return NextResponse.json(
+        { message: validation.message ?? 'Cannot accept this purchase right now.', reason: validation.reason, code: `OFFER_REJECTED_${validation.reason}` },
+        { status: 409, headers }
+      )
+    }
 
     let calculatedPercent: number
     let finalPriceSafe: number

@@ -110,7 +110,7 @@ const VALUE_STRIP = [
 const FAQS = [
   {
     q: 'Why not just use email for cart recovery?',
-    a: 'Email alone typically recovers 3-5% of abandoned carts. CartGain layers WhatsApp (industry-average ~85% open rate) on top, plus a live AI negotiator that settles price objections a static email cannot. Multi-channel recovery is benchmarked at 18-25%.',
+    a: 'Email alone typically recovers 3-5% of abandoned carts. CartGain layers WhatsApp (~85% industry-average open rate) on top, plus a live AI negotiator that settles price objections a static email cannot. Results vary by category and checkout flow — our trailing multi-channel average is ~8.5%, with top stores at ~22%.',
   },
   {
     q: 'How do you handle customer data & privacy?',
@@ -314,7 +314,7 @@ export default function HomePage() {
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 flex-shrink-0" />
-                <span><strong>18-25%</strong> multi-channel recovery benchmark</span>
+                <span><strong>~8.5%</strong> average multi-channel recovery (top ~22%)</span>
               </div>
             </div>
 
@@ -353,14 +353,14 @@ export default function HomePage() {
                   You&apos;re Leaving <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-orange-600">₹50L+</span> on the Table
                 </h2>
                 <p className="text-lg sm:text-xl text-blue-100 mb-8">
-                  Every week, your customers add products to their cart, then leave without buying. That&apos;s not a problem with your product — it&apos;s a <strong>recovery problem</strong>. And most of it starts with one word: <strong>price</strong>.
+                  Take a D2C brand doing ₹2-5 Cr a year (illustrative example): every week its customers add products to their cart, then leave without buying. That&apos;s not a problem with the product — it&apos;s a <strong>recovery problem</strong>. And most of it starts with one word: <strong>price</strong>.
                 </p>
                 <ul className="space-y-4">
                   <li className="flex gap-3">
                     <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-primary-600 flex-shrink-0 mt-1" />
                     <div>
-                      <p className="font-semibold text-white text-sm sm:text-base">30% Abandonment Rate</p>
-                      <p className="text-blue-200 text-xs sm:text-sm">Standard for D2C skincare</p>
+                      <p className="font-semibold text-white text-sm sm:text-base">30% Average Abandonment Rate</p>
+                      <p className="text-blue-200 text-xs sm:text-sm">Industry average for D2C — varies by store and category</p>
                     </div>
                   </li>
                   <li className="flex gap-3">
@@ -430,8 +430,8 @@ export default function HomePage() {
                           <BarChart3 className="w-4 h-4 text-cyan-400" />
                         </div>
                         <div>
-                          <p className="font-semibold text-white text-sm sm:text-base">18–25% recovery benchmark</p>
-                          <p className="text-blue-200 text-xs sm:text-sm">Engineered results, not promises — versus 3–5% for email-only recovery stacks.</p>
+                          <p className="font-semibold text-white text-sm sm:text-base">~8.5% average multi-channel recovery</p>
+                          <p className="text-blue-200 text-xs sm:text-sm">Top stores reach ~22%; versus 3–5% for email-only recovery stacks.</p>
                         </div>
                       </div>
                       <div className="flex gap-3">

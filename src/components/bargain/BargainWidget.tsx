@@ -1235,6 +1235,7 @@ export default function BargainWidget({
                     <QuickChip key={v} label={`${currencySymbol}${v.toLocaleString('en-IN')}`} disabled={thinking} onClick={() => quickOffer(() => setInput(String(v)))} />
                   ))}
                   <QuickChip label={t('bestOffer')} disabled={thinking} onClick={() => quickOffer(() => setInput(t('bestOfferPrompt')))} />
+                  <QuickChip label={t('whatIncluded')} disabled={thinking} onClick={() => quickOffer(() => setInput(t('whatIncludedPrompt')))} />
                   <QuickChip label={t('walkout')} disabled={thinking} onClick={() => quickOffer(() => setInput(t('walkoutPrompt')))} />
                 </div>
               )}

@@ -7,6 +7,8 @@ import {
   type BargainStrategy,
   type NegotiationGoalContext,
 } from '@/lib/bargain/engine'
+import { productContextToPromptBlock, type ProductContext } from '@/lib/bargain/product-context'
+import { shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
 
 // Model for the negotiation agent. Defaults to the full gpt-4o for best
 // negotiation quality; set BARGAIN_MODEL=gpt-4o-mini to cut OpenAI cost.
@@ -18,6 +20,18 @@ export type Persona = 'friendly_shopkeeper' | 'strict_negotiator' | 'playful_fri
 
 export const SUPPORTED_LANGUAGES = ['auto', 'en', 'hinglish', 'hi', 'ta', 'te', 'bn', 'mr', 'gu', 'kn', 'ml', 'pa', 'or'] as const
 export type BargainLanguage = (typeof SUPPORTED_LANGUAGES)[number]
+
+export const NEGOTIATION_MODES = ['conservative', 'balanced', 'flexible'] as const
+export type BargainNegotiationMode = (typeof NEGOTIATION_MODES)[number]
+
+const NEGOTIATION_MODE_GUIDANCE: Record<BargainNegotiationMode, string> = {
+  conservative:
+    'NEGOTIATION MODE: conservative. Protect margin — anchor near the listed price, concede slowly and only in small steps, and hold firm unless the shopper is close to the listed price. The hidden system minimum still applies.',
+  balanced:
+    'NEGOTIATION MODE: balanced. Negotiate fairly — anchor near the listed price, concede in reasonable steps when the shopper makes a genuine offer, and close when the deal is good. The hidden system minimum still applies.',
+  flexible:
+    'NEGOTIATION MODE: flexible. Prefer closing the deal — be open to steeper concessions and move faster when the shopper engages; still never breach the hidden system minimum or reveal it.',
+}
 
 export interface NegotiationContext {
   storeName: string
@@ -33,6 +47,9 @@ export interface NegotiationContext {
   walkoutTriggered?: boolean
   language?: string
   goal?: NegotiationGoalContext
+  product?: ProductContext
+  intent?: IntentAnalysis
+  negotiationMode?: BargainNegotiationMode
 }
 
 export interface NegotiationResult {
@@ -1254,6 +1271,21 @@ export function buildSystemPrompt(
   // Behavioral strategy
   if (behaviorHint) {
     contextParts.push(behaviorHint)
+  }
+
+  // Merchant-chosen negotiation temperament (overrides persona's default pace)
+  if (ctx.negotiationMode) {
+    contextParts.push(NEGOTIATION_MODE_GUIDANCE[ctx.negotiationMode] ?? NEGOTIATION_MODE_GUIDANCE.balanced)
+  }
+
+  // Verified product intelligence — the ONLY product facts the model may cite
+  if (ctx.product) {
+    contextParts.push('\n' + productContextToPromptBlock(ctx.product, currencySymbol))
+  }
+
+  // Deterministic shopper-intent classification for the current message
+  if (ctx.intent) {
+    contextParts.push('\n' + shopperIntentToPromptBlock(ctx.intent))
   }
 
   const specialContext = contextParts.length > 0
