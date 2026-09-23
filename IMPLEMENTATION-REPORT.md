@@ -1,0 +1,203 @@
+# CartGain — Conversational Commerce + AI Negotiation Transformation
+## IMPLEMENTATION REPORT
+
+Scope: the 47-section transformation spec. Rule 0 (research first) was followed:
+line-by-line audits of every existing path were completed before any change, and
+every claim below is either code-verifiable or explicitly flagged as a gap.
+
+---
+
+## 1. EXECUTIVE SUMMARY
+CartGain already shipped a working AI bargain engine (floor-protected, abuse-
+firewalled, multilingual, goal-paced, coupon-minting). This cycle upgraded the
+**sales-intelligence layer**: the AI now negotiates with *verified product
+knowledge* and *determinetic shopper-intent awareness* instead of a bare title,
+the merchant gets explicit control over what the AI may and may not claim, every
+rejection carries a **machine-readable reason code**, and the marketing site
+dropped its unverifiable benchmark claims. 20+ files changed, +37 tests, no
+regressions (576 tests green), tsc + lint clean.
+
+## 2. SCOPE & OBJECTIVES (per spec)
+- §2, §4, §5 (conversational commerce, product context): give the AI real,
+  verified product facts so it can sell, not just discount.
+- §3/§6/§7 (intent, objection, recommendation): deterministic intent & objection
+  classification; recommendation scaffolding + merchant toggles.
+- §9/§10/§13 (offer validation, truth branding, prompt structure): stable reason
+  codes, verified-facts-only prompt sections, disallowed-claim scrubbing.
+- §20-§28 (merchant controls, safety, campaign truthfulness): negotiation mode,
+  selling-point lists, campaign-liveness rules.
+- §12/§13 (provider layers, prompt architecture): sectioned system prompt kept
+  fully compatible with the OpenAI→Groq failover tier.
+- §31-§46 (storefront, dashboard, events, honesty): scope-scrunched widget
+  improvements, dashboard controls, funnel events, copy corrections.
+
+## 3. CURRENT-STATE AUDIT (what already existed)
+Verified line-by-line, no code gaps found in the pre-existing execution paths:
+- Floor protection: numeric floor never enters the prompt; `negotiateStep`
+  clamps counters; accept re-derives the floor from the LIVE Shopify price.
+- Leak guards (`detectFloorLeak`, `detectPercentFloorLeak`,
+  `detectSystemPromptLeak`) + injection-safe `LEAK_SAFE_REPLY`.
+- Abuse firewall, DPDP opt-out, session-ownership binding, idempotent accept
+  with CAS claim, deal-plan gate, coupon minting (incl. order-level percent
+  clamp in `checkout-accept`).
+- Goal pacing, dynamic strategy, campaign windows, multilingual chrome
+  (9 UI languages) and server-language mirroring.
+- Live provider failover: primary→fallback within the SAME request (commit
+  `32643968`, fixed earlier this session), plus `[[CUR]]` placeholder leak fix.
+- Smoke-verified: `scripts/ai-fallback-smoke.ts` 15/15 forced-Groq checks passed
+  (injections blocked, floor never leaked).
+
+## 4. WHAT WAS BUILT THIS CYCLE
+1. **Product intelligence** — `src/lib/bargain/product-context.ts` (pure core):
+   - `normalizeProduct` → `ProductContext` with `descriptionSource` and tags
+     `SHOPIFY_VERIFIED` / `MERCHANT_PROVIDED` / `CARTGAIN_DERIVED`;
+   - `stripDisallowedClaims` scrubs every merchant-disallowed phrase from text
+     the model sees (case-insensitive, phrase-aware);
+   - variant-aware `inventoryStatus` (`in_stock/limited/out_of_stock/unknown`;
+     unknown is NEVER presented as stock);
+   - token-bounded prompt block + “fetch failed ⇒ do not invent facts” mode;
+   - short-TTL Redis cache (store-scoped) with staleness detection and a
+     `dataVersion` fingerprint. `src/lib/bargain/product-fetcher.ts` binds it to
+     Prisma + Shopify; `shopify.fetchShopifyProductDetail` returns the full
+     catalog record (description, variants, tags, availability, image).
+2. **Intent & objection classifier** — `src/lib/bargain/intent.ts`:
+   deterministic `PRICE_ONLY / BUDGET_CONSTRAINT / PRODUCT_MISMATCH /
+   COMPARISON / PRODUCT_QUESTION / PURCHASE_READY / WALKOUT / VALUE_UNCLEAR /
+   GENERIC_CHAT` + `ShopperObjection` and a short prompt block.
+3. **Offer validation** — `src/lib/bargain/offer-validation.ts`:
+   `validateOffer()` returns stable reason codes —
+   `OFFER_ACCEPTED`, `INVALID_PRICE`, `BELOW_FLOOR_REJECTED`,
+   `NEGOTIATION_LIMIT_REACHED`, `VARIANT_UNAVAILABLE`, `PRODUCT_UNAVAILABLE`,
+   `CAMPAIGN_EXPIRED`, `COUPON_STACKING_BLOCKED`. Wired into **accept** and
+   **checkout-accept**; rejections now return `reason` + `OFFER_REJECTED_*`
+   codes at HTTP 409 alongside the pre-existing floor/budget guards (which were
+   NOT removed).
+4. **Prompt architecture (extended, not rewritten)** — `buildSystemPrompt`
+   gained dedicated, labeled sections: `PRODUCT CONTEXT`, `SHOPPER INTENT`,
+   `NEGOTIATION MODE` (conservative/balanced/flexible), merged into the existing
+   SPECIAL CONTEXT block so all leak guards and the failover tier stay intact.
+5. **Schema + merchant controls** — `BargainConfig`: `negotiationMode`,
+   `approvedSellingPoints[]`, `disallowedClaims[]`, `recommendationsEnabled`,
+   `alternativeRecommendationsEnabled`, `complementRecommendationsEnabled`;
+   `BargainProduct`: `approvedSellingPoints[]`, `disallowedClaims[]`.
+   Prisma client regenerated; zod schemas extended. Dashboard config tab now
+   edits mode, claim lists (one-per-line) and recommendation toggles.
+6. **Storefront** — new "What's included?" quick-action chip (9 UI languages)
+   that now gets an honest answer because the AI has verified product context.
+7. **Analytics events** — `cartgain_intent_detected`,
+   `cartgain_objection_detected`, `cartgain_product_question`,
+   `cartgain_offer_below_floor` (prod-only, PII-free). A full recommendation
+   engine was NOT built — only the merchant toggles (see §10).
+
+## 5. SPEC-SECTION MAPPING (D: done, P: partial, X: deferred)
+- §1-§5 product/context conversational sales… D (product context delivered)
+- §3 shopper intent/objection **D** (deterministic classifier)
+- §6 recommendation engine **X** (toggles shipped; engine deferred)
+- §8 reference-driven escalation … D (protected for eval; see §10)
+- §9 offer validation reason codes **D**
+- §10 truth/verified-facts policy **D**
+- §11 language/currency… D (pre-existing) + D (`whatIncluded` chip)
+- §12 cross-provider layers **P** (failover D; prompt-sectioned D; per-provider
+  eval harness deferred)
+- §13 prompt structure **D**
+- §14-§19 safety/floor/injection/abuse… D (all pre-existing, re-tested)
+- §20-§24 negotiation mode + merchant controls **D**
+- §25-§28 campaign truthfulness, disallowed claims **D**
+- §29-§30 GDPR/DPDP/consent… D (pre-existing)
+- §31-§35 storefront/dashboard UX **P** (config UI D; full dashboard rewrite X)
+- §40-§44 pricing/plans P (pre-existing; unchanged per your instruction)
+- §42 don’t overengineer D (incremental, small modules)
+- §46 demo/eval … **P** (demo panel pre-existing; multi-vertical scenarios X;
+  full AI eval-suite execution X
+- §47 12-section report **D** (this document)
+
+## 6. KEY FILES
+- `src/lib/bargain/product-context.ts` — pure normalization, scrubbing, prompt block, cache.
+- `src/lib/bargain/product-fetcher.ts` — server assembly (Prisma+BargainProduct+BargainConfig+Shopify).
+- `src/lib/shopify.ts` — `fetchShopifyProductDetail` (new).
+- `src/lib/bargain/intent.ts`, `src/lib/bargain/offer-validation.ts` — new pure modules.
+- `src/lib/services/bargain.ts` — `NegotiationContext.product/intent/negotiationMode`; prompt sections.
+- `src/app/api/bargain/offer/route.ts` — assembles product+intent+mode, fires funnel events.
+- `src/app/api/bargain/accept/route.ts`, `.../checkout-accept/route.ts` — `validateOffer` gate.
+- `prisma/schema.prisma`, `src/lib/validation/bargain.ts` — new fields.
+- `src/app/dashboard/bargain/page.tsx`, `src/components/bargain/BargainWidget.tsx`,
+  `src/lib/bargain/i18n.ts` — UI + chip + strings.
+- `src/app/page.tsx`, `src/app/bargain/page.tsx` — copy corrections.
+- `src/lib/bargain/__tests__/{product-context,intent,offer-validation}.test.ts` — +37 tests.
+
+## 7. VERIFICATION
+- `npx tsc --noEmit` — clean.
+- `npx jest` — 43 suites, **576/576 passed** (up from 539; +37 new).
+- `npm run lint` — 0 errors; only 2 pre-existing `<img>` warnings
+  (`BargainWidget.tsx:525,852`), unchanged.
+- GB: `scripts/ai-fallback-smoke.ts` — 15/15 passes (forced Groq tier).
+- Git: committed `5b5b57ee` and pushed to `origin/master`
+  (`32643968..5b5b57ee`).
+
+## 8. MERCHANT CONTROLS & CONFIG
+- **Negotiation mode**: Conservative / Balanced / Flexible (dashboard select;
+  default Balanced; floor always enforced regardless of mode).
+- **Approved selling points** (global + per-product): the ONLY claims the AI may
+  volunteer; rendered `[MERCHANT_PROVIDED]`.
+- **Disallowed claims** (global + per-product): scrubbed from product context so
+  the AI cannot echo them (e.g. unverified medical/beauty claims).
+- **Recommendation toggles**: master + alternatives + complements (controls
+  readiness for the deferred engine).
+- All new fields: `prisma generate` done locally; DB columns are applied by
+  **Vercel’s `vercel-build` (`prisma db push --accept-data-loss`)** on the next
+  production deploy — columns will NOT exist locally/on preview until then.
+- Zod schemas reject >50 claims, >200-char claims, invalid modes.
+
+## 9. EDGE CASES & SAFETY
+- Below-floor AI counter: clamped + downgraded accept (pre-existing, re-tested).
+- Disallowed-claim phrase partial-match: scrubbed, description stays readable.
+- Shopify unreachable: `fetchFailed` context forbids the AI from inventing any
+  product fact; prices still fall back to the session snapshot for acceptance
+  rules (pre-existing behavior preserved).
+- Variant sold out / product draft: accept now returns
+  `OFFER_REJECTED_VARIANT_UNAVAILABLE` / `_PRODUCT_UNAVAILABLE` (only explicit
+  Shopify facts block; unknown never blocks).
+- Campaign window closed at accept time → `OFFER_REJECTED_CAMPAIGN_EXPIRED`.
+- Coupon-stacking mention with stacking disabled → `COUPON_STACKING_BLOCKED`
+  (gate present; widget-level enforcement is a follow-up, see §10).
+- Demo-mode/walkout/second-chance paths untouched; cache keys are
+  store-scoped; events carry no message content or PII.
+
+## 10. KNOWN GAPS & DEFERRED ITEMS (honest)
+1. **Recommendation engine** — only toggles shipped; no Shopify collection-based
+   cross-sell/alternative/complement fetch+rank yet (§6).
+2. **Coupon-stacking enforcement** — the block reason code exists server-side;
+   detecting “I have another code” mid-conversation and routing it through
+   `validateOffer` at the offer step is not yet wired.
+3. **Full dashboard rewrite** — config tab edited in place; the broader spec
+   dashboard redesign is deferred.
+4. **Multi-vertical demo scenarios** and **full AI evaluation-suite execution**
+   were not run this cycle (no live OpenAI key, see §11; mock-based evals are
+   allowed by spec but were intentionally not fabricated here).
+5. **Local DB sync** — `prisma db push` could not validate locally because the
+   local Dotenv DB credentials are stale/blanked in `.env.local` by design; the
+   additive migration depends on the Vercel build step.
+6. **Prompt-architecture report** (spec §13 full token/cost audit) not yet done;
+   sections added incrementally instead of splitting the single prompt file.
+
+## 11. OPERATIONAL NOTES
+- **OpenAI key is currently invalid (401)** — all real AI traffic rides the
+  Groq fallback (`gpt-oss-120b`). A valid `OPENAI_API_KEY` is needed in `.env`
+  AND Vercel before the primary tier does any work.
+- **Deploy pending**: the schema + code are pushed to `master`; the Vercel prod
+  deploy (`vercel-build`: `prisma db push` → `generate` → `next build`) has NOT
+  been run this session and is required to apply DB columns.
+- No secrets, keys, or customer PII are in the diff; `.env*` remain untracked.
+- The before/after recovery-rate copy change is sourced from CartGain’s own
+  trailing averages (avg ~8.5%, top ~22%); no fabricated testimonials.
+
+## 12. RECOMMENDATIONS & NEXT STEPS
+1. Provide a valid `OPENAI_API_KEY`; re-run the forced-failover smoke test so
+   the primary tier is truly exercised.
+2. Run `npx vercel --prod --yes` to apply the schema and ship the changes.
+3. Next feature pass: collection-based recommendation engine wired to the
+   shipped toggles, then coupon-stacking detection at the offer step.
+4. Stand up a small live-store evaluation run (per §46) against a test store to
+   gather real intent/objection distribution from the new events before
+   attempting the full AI eval suite.
+5. Update `SESSION-HANDOFF.md` with this cycle’s state.
