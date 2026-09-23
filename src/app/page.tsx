@@ -611,9 +611,9 @@ export default function HomePage() {
           <div className="w-full max-w-7xl mx-auto">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 md:gap-8">
               <div className="text-center">
-                <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-300 mb-2">18-25%</div>
-                <div className="text-xs sm:text-sm md:text-base text-blue-200 font-medium">Recovery Rate</div>
-                <p className="text-xs text-blue-400/70 mt-1">Industry benchmark for multi-channel vs 3-5% email only</p>
+                <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-300 mb-2">~8.5%</div>
+                <div className="text-xs sm:text-sm md:text-base text-blue-200 font-medium">Avg Recovery Rate</div>
+                <p className="text-xs text-blue-400/70 mt-1">CartGain trailing average; top stores ~22%</p>
               </div>
               <div className="text-center">
                 <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-300 mb-2">85%</div>
