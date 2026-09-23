@@ -192,8 +192,8 @@ This is the most common customer phrase. Handle it with nuance:
 First time: Make a TINY concession (2-3%). Show you're flexible.
 Second time: Make an even TINYER concession (1-2%). "I've already
 stretched twice — each time I'm closer to my limit."
-Third time: Hold firm. "That's genuinely my floor. I can't go
-further without losing money on this."
+Third time: Hold firm. "That's the best I can do on this one — I'm
+already stretching for you."
 The pattern of DECREASING concessions signals your floor without
 you ever stating it.
 
@@ -431,10 +431,11 @@ Use it when: customer is close to accepting but needs a final push.
 PART 5: STRICT BOUNDARIES — WHAT YOU NEVER DO
 ══════════════════════════════════════════════════════════════
 
-1. NEVER reveal the floor price as a number. You don't say
+1. NEVER reveal the floor price as a number, and NEVER state that a price is
+   "the minimum", "the lowest I can go", or "my final offer". You don't say
    "the minimum is [[CUR]]X" or "I can go as low as [[CUR]]X."
-   Instead: "That's genuinely my floor" or "I can't go lower without
-   losing money."
+   Instead: "That's the best I can do on this one" or "I'm already stretching
+   for you."
 
 2. NEVER accept below the floor — the backend enforces this as a
    safety net, but you should never even attempt it.
@@ -722,36 +723,36 @@ function buildLanguageGuidance(language: string | undefined, currencySymbol: str
 // ── Opening messages (used when AI is unavailable) ──
 
 export function buildOpeningMessage(ctx: NegotiationContext): string {
-  const { originalPrice, currencySymbol, maxAttempts, productTitle, customerContext, language } = ctx
+  const { originalPrice, currencySymbol, productTitle, customerContext, language } = ctx
   const item = productTitle ? `this ${productTitle}` : 'this'
   const welcomeBack = customerContext ? ' Welcome back!' : ''
   const price = `${currencySymbol}${originalPrice.toFixed(2)}`
 
   if (language === 'hinglish') {
     const opening: Record<Persona, string> = {
-      playful_friend: `Arré arre! 👋 Aap ${productTitle ?? 'yeh item'} dekh rahe ho? Kamaal hai! Listed hai ${price} — par yeh to bas shuruwat hai 😏 ${maxAttempts} mauke hain mujhe patane ke. Bolo, aapka best rate kya hai?${welcomeBack}`,
-      strict_negotiator: `${productTitle ?? 'Is item'} mein interest ke liye dhanyavaad.${welcomeBack} Current price hai ${price}. ${maxAttempts} baat-cheet ke andar reasonable offer sunne ke liye taiyar hoon. Aapke mann mein kitna price hai?`,
-      friendly_shopkeeper: `Arré welcome! 👋${welcomeBack} Main dekha ${productTitle ?? 'yeh item'} aapko pasand aaya. Thik hai, iska price ${price} hai — par hum bina jhagda ke achha deal kar sakte hain. ${maxAttempts} mauke milenge. Aap apna rate batao?`,
+      playful_friend: `Arré arre! 👋 Aap ${productTitle ?? 'yeh item'} dekh rahe ho? Kamaal hai! Listed hai ${price} — par yeh to bas shuruwat hai 😏 Bolo, aapka best rate kya hai?${welcomeBack}`,
+      strict_negotiator: `${productTitle ?? 'Is item'} mein interest ke liye dhanyavaad.${welcomeBack} Current price hai ${price}. Aapke mann mein kitna price hai?`,
+      friendly_shopkeeper: `Arré welcome! 👋${welcomeBack} Main dekha ${productTitle ?? 'yeh item'} aapko pasand aaya. Thik hai, iska price ${price} hai — par hum bina jhagda ke achha deal kar sakte hain. Aap apna rate batao?`,
     }
     return opening[ctx.persona] ?? opening.friendly_shopkeeper
   }
 
   if (language === 'hi') {
     const opening: Record<Persona, string> = {
-      playful_friend: `अरे अरे! 👋 आप ${productTitle ?? 'ये आइटम'} देख रहे हैं — शानदार चुनाव! लिस्टेड कीमत है ${price}। पर ये तो बस शुरुआत है 😏 आपके पास ${maxAttempts} मौके हैं। चलिए, देखते हैं आप कितना अच्छा सौदा कर पाते हैं!${welcomeBack}`,
-      strict_negotiator: `${productTitle ?? 'इस आइटम'} में रुचि दिखाने के लिए धन्यवाद${welcomeBack}। वर्तमान कीमत ${price} है। ${maxAttempts} आदान-प्रदान के भीतर मैं उचित प्रस्ताव स्वीकार कर सकता हूँ। आपका प्रस्ताव क्या है?`,
-      friendly_shopkeeper: `नमस्ते! 👋${welcomeBack} आपको ${productTitle ?? 'ये आइटम'} पसंद आया, ये बहुत अच्छा है। कीमत है ${price}। मैं आपकी मदद करना चाहता हूँ — आप क्या कीमत सोच रहे हैं? बातचीत के लिए आपके पास ${maxAttempts} मौके हैं।`,
+      playful_friend: `अरे अरे! 👋 आप ${productTitle ?? 'ये आइटम'} देख रहे हैं — शानदार चुनाव! लिस्टेड कीमत है ${price}। पर ये तो बस शुरुआत है 😏 चलिए, देखते हैं आप कितना अच्छा सौदा कर पाते हैं!${welcomeBack}`,
+      strict_negotiator: `${productTitle ?? 'इस आइटम'} में रुचि दिखाने के लिए धन्यवाद${welcomeBack}। वर्तमान कीमत ${price} है। आपका प्रस्ताव क्या है?`,
+      friendly_shopkeeper: `नमस्ते! 👋${welcomeBack} आपको ${productTitle ?? 'ये आइटम'} पसंद आया, ये बहुत अच्छा है। कीमत है ${price}। आप क्या कीमत सोच रहे हैं?`,
     }
     return opening[ctx.persona] ?? opening.friendly_shopkeeper
   }
 
   if (ctx.persona === 'playful_friend') {
-    return `${welcomeBack} Hey hey! 👋 I see you're checking out ${item} — great taste! Listed at ${price}, but let's be honest, that's just the sticker price 😏 You've got ${maxAttempts} shots to negotiate a better deal. What's your move?`
+    return `${welcomeBack} Hey hey! 👋 I see you're checking out ${item} — great taste! Listed at ${price}, but let's be honest, that's just the sticker price 😏 What's your move?`
   }
   if (ctx.persona === 'strict_negotiator') {
-    return `Thank you for your interest in ${item}.${welcomeBack} Listed price: ${price}. I'm open to reasonable offers within ${maxAttempts} exchanges. What did you have in mind?`
+    return `Thank you for your interest in ${item}.${welcomeBack} Listed price: ${price}. I'm open to a fair offer. What did you have in mind?`
   }
-  return `Hey! Welcome${welcomeBack ? ' So good to see you again!' : ''} I see you're eyeing ${item} — great choice. It's at ${price} right now. I'd love to work out a deal for you. What price were you thinking? You've got ${maxAttempts} attempts to bargain with you.`
+  return `Hey! Welcome${welcomeBack ? ' So good to see you again!' : ''} I see you're eyeing ${item} — great choice. It's at ${price} right now. I'd love to work out a deal for you. What price were you thinking?`
 }
 
 // ── Build customer history context from past sessions ──
@@ -868,6 +869,17 @@ function effectiveCounter(ctx: NegotiationContext): number {
 
 // ── Rule-based fallback (when AI is unavailable) ──
 
+// The lowest price the AI is ever allowed to QUOTE. It always sits strictly
+// above the hidden acceptance floor (minPrice) so no quoted counter, retention
+// price or "best" figure can pin the merchant's true minimum or the maximum
+// discount allowed. minPrice remains the internal accept threshold — a shopper's
+// OWN offer at/above the floor is still honoured — but the AI never volunteers
+// floor-level money itself.
+export function quotedFloor(ctx: Pick<NegotiationContext, 'minPrice' | 'originalPrice'>): number {
+  const cushion = Math.max(1, Math.round(ctx.minPrice * 0.01 * 100) / 100)
+  return Math.min(ctx.originalPrice, Math.round((ctx.minPrice + cushion) * 100) / 100)
+}
+
 export function ruleBasedDecision(
   offer: number,
   ctx: NegotiationContext
@@ -909,10 +921,11 @@ export function ruleBasedDecision(
     }
   }
 
+  const quote = quotedFloor(ctx)
   return {
-    reply: `Alright, I've done my best. This is my final offer: ${currencySymbol}${minPrice.toFixed(2)}. It's the lowest I can go. Take it or leave it — but I really hope you take it!`,
+    reply: `Alright, I've done my best today. I can do ${currencySymbol}${quote.toFixed(2)} — if that works for you, hit Accept and I'll sort out your code right away.`,
     decision: 'counter',
-    counterOffer: minPrice,
+    counterOffer: quote,
     tactic: 'final_offer',
     sentiment: 'final',
   }
@@ -927,15 +940,15 @@ export function retentionOffer(
   const { minPrice, originalPrice, currencySymbol, persona } = ctx
   const last = lastCounter ?? originalPrice
   const step = Math.max(Math.round((originalPrice - minPrice) * 0.08 * 100) / 100, 1)
-  const price = Math.max(minPrice, Math.round((last - step) * 100) / 100)
+  const price = Math.max(quotedFloor(ctx), Math.round((last - step) * 100) / 100)
 
   let reply: string
   if (persona === 'strict_negotiator') {
-    reply = `One moment. Given the circumstances, I am prepared to make a one-time adjustment to ${currencySymbol}${price.toFixed(2)}. Beyond that, my offer stands. Your decision.`
+    reply = `One moment. For this order I can stretch to ${currencySymbol}${price.toFixed(2)}. Your call.`
   } else if (persona === 'playful_friend') {
-    reply = `WAIT WAIT WAIT! Okay, you drive a hard bargain. FINAL final offer: ${currencySymbol}${price.toFixed(2)}. I'm risking my job for this. Deal?`
+    reply = `WAIT WAIT WAIT! Okay, you drive a hard bargain! For you, today — ${currencySymbol}${price.toFixed(2)}. Deal?`
   } else {
-    reply = `Wait, friend — before you go! For you, I can do ${currencySymbol}${price.toFixed(2)}. That's me stretching every rupee. Please stay — I really want this to work for you.`
+    reply = `Wait, friend — before you go! For you, I can do ${currencySymbol}${price.toFixed(2)} today. Please stay — I really want this to work for you.`
   }
 
   return {
@@ -1355,7 +1368,7 @@ neutral, dramatic, professional, friendly, final`
 export function detectFloorLeak(reply: string, minPrice: number, originalPrice?: number): boolean {
   const lower = reply.toLowerCase()
   const leakPhrases = [
-    /(?:floor|minimum|min(?:imum)?\s+price|lowest|base\s+price|cost\s+price|wholesale|my\s+limit|can'?t\s+go\s+lower|as\s+low\s+as)/i,
+    /(?:floor|minimum|min(?:imum)?\s+price|lowest|base\s+price|cost\s+price|wholesale|my\s+limit|can'?t\s+go\s+lower|as\s+low\s+as|best\s+i\s+can\s+do)/i,
     /(?:reveal|disclose|report|share|print)\s+(?:the\s+)?(?:floor|minimum|min\s+price|my\s+(?:floor|base|limit))/i,
     /(?:the\s+merchant\s+(?:told|set)|authorized\s+floor)/i,
   ]
@@ -1497,15 +1510,17 @@ export async function negotiateStep(
 
     // ── BACKEND SAFETY: Validate and clamp counterOffer ──
     const attemptsLeft = ctx.maxAttempts - ctx.attemptsUsed
-    const fallbackCounter = attemptsLeft <= 2 ? ctx.minPrice : effectiveCounter(ctx)
+    // When the budget is nearly spent the fallback closes near the quoted floor
+    // (see quotedFloor) — never AT minPrice, so the hidden floor stays hidden.
+    const fallbackCounter = attemptsLeft <= 2 ? quotedFloor(ctx) : effectiveCounter(ctx)
     let counterOffer =
       typeof parsed.counterOffer === 'number' && parsed.counterOffer > 0
         ? Math.round(parsed.counterOffer * 100) / 100
         : fallbackCounter
 
-    // ENFORCE FLOOR: AI counter must never go below minPrice
+    // ENFORCE FLOOR: AI counter must never go below minPrice (bumped above it)
     if (counterOffer < ctx.minPrice) {
-      counterOffer = attemptsLeft <= 2 ? ctx.minPrice : effectiveCounter(ctx)
+      counterOffer = attemptsLeft <= 2 ? quotedFloor(ctx) : effectiveCounter(ctx)
     }
     // ENFORCE CEILING: AI counter must never exceed original price
     if (counterOffer > ctx.originalPrice) {
@@ -1514,6 +1529,10 @@ export async function negotiateStep(
     // ENFORCE MINIMUM: at least 1% of original or 1 currency unit
     if (counterOffer < Math.max(1, ctx.originalPrice * 0.01)) {
       counterOffer = Math.max(1, ctx.originalPrice * 0.01)
+    }
+    // NEVER quote the hidden floor itself — keep a price above it.
+    if (counterOffer <= ctx.minPrice) {
+      counterOffer = quotedFloor(ctx)
     }
 
     // SAFETY: If AI claims "accept" but customer offer < floor, downgrade to counter

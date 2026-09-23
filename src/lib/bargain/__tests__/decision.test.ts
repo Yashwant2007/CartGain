@@ -85,12 +85,12 @@ describe('ruleBasedDecision', () => {
     expect(result.tactic).toBe('meet_partway')
   })
 
-  it('gives the final floor offer on the last attempt', () => {
+  it('gives a final counter above the hidden floor on the last attempt', () => {
     const ctx = baseCtx({ attemptsUsed: 2 })
     const result = ruleBasedDecision(50, ctx)
     expect(result.decision).toBe('counter')
     expect(result.tactic).toBe('final_offer')
-    expect(result.counterOffer).toBe(80)
+    expect(result.counterOffer).toBeGreaterThan(80)
   })
 })
 
@@ -108,15 +108,15 @@ describe('retentionOffer', () => {
     expect(result.counterOffer).toBe(98.4)
   })
 
-  it('respects the floor when the last counter is near it', () => {
+  it('respects the floor when the last counter is near it (quotes above it)', () => {
     const result = retentionOffer(baseCtx(), 81)
-    expect(result.counterOffer).toBe(80)
+    expect(result.counterOffer).toBeGreaterThan(80)
   })
 
   it('adapts tone per persona', () => {
     expect(retentionOffer(baseCtx({ persona: 'friendly_shopkeeper' }), 90).reply).toContain('friend')
-    expect(retentionOffer(baseCtx({ persona: 'strict_negotiator' }), 90).reply).toContain('adjustment')
-    expect(retentionOffer(baseCtx({ persona: 'playful_friend' }), 90).reply).toContain('FINAL')
+    expect(retentionOffer(baseCtx({ persona: 'strict_negotiator' }), 90).reply).toContain('stretch')
+    expect(retentionOffer(baseCtx({ persona: 'playful_friend' }), 90).reply).toContain('WAIT')
   })
 })
 
@@ -272,12 +272,12 @@ describe('negotiateStep (AI available — safety overrides)', () => {
     expect(result.counterOffer).toBeLessThan(100)
   })
 
-  it('forces the floor on the final attempts when AI counter is below it', async () => {
+  it('keeps the quoted counter above the hidden floor on final attempts', async () => {
     mockAIResponse(jest.fn().mockResolvedValue({
       choices: [{ message: { content: JSON.stringify({ reply: 'How about 60?', decision: 'counter', counterOffer: 60, tactic: 'trial', sentiment: 'neutral' }) } }],
     }))
     const result = await negotiateStep(baseCtx({ attemptsUsed: 2 }), [], 'I can pay 50', 50)
-    expect(result.counterOffer).toBe(80)
+    expect(result.counterOffer).toBeGreaterThan(80)
   })
 
   it('falls back to rules when the AI response is not valid JSON', async () => {
@@ -388,11 +388,11 @@ describe('Edge Cases - Minimum Price Protection', () => {
     expect(midOfferResult.counterOffer!).toBeGreaterThanOrEqual(80)
   })
 
-  it('final offer tactic always returns the floor price', () => {
+  it('final offer tactic quotes above the hidden floor (never reveals it)', () => {
     const ctx = baseCtx({ attemptsUsed: 2, maxAttempts: 3, minPrice: 80 })
     const result = ruleBasedDecision(30, ctx)
     expect(result.tactic).toBe('final_offer')
-    expect(result.counterOffer).toBe(80)
+    expect(result.counterOffer).toBeGreaterThan(80)
   })
 })
 
@@ -415,7 +415,7 @@ describe('Edge Cases - Prompt Injection & Security', () => {
     expect(result.decision).toBe('counter')
   })
 
-  it('AI returns counterOffer below floor on last attempt → forced to floor', async () => {
+  it('AI returns counterOffer below floor on last attempt → quoted above the floor', async () => {
     mockAIResponse(jest.fn().mockResolvedValue({
       choices: [{ message: { content: JSON.stringify({
         reply: 'Okay ₹50',
@@ -426,7 +426,7 @@ describe('Edge Cases - Prompt Injection & Security', () => {
       }) }}],
     }))
     const result = await negotiateStep(baseCtx({ attemptsUsed: 2 }), [], '₹50 final', 50)
-    expect(result.counterOffer).toBe(80)
+    expect(result.counterOffer).toBeGreaterThan(80)
   })
 
   it('AI returns negative counterOffer → backend floors it', async () => {
@@ -552,7 +552,7 @@ describe('Edge Cases - Persona Consistency', () => {
 
   it('strict persona uses professional language in retention', () => {
     const result = retentionOffer(baseCtx({ persona: 'strict_negotiator' }), 90)
-    expect(result.reply.toLowerCase()).toMatch(/adjustment|decision|offer/)
+    expect(result.reply.toLowerCase()).toMatch(/stretch|your call/)
   })
 
   it('playful persona uses fun language in retention', () => {
@@ -589,16 +589,16 @@ describe('Edge Cases - Graduated Counter', () => {
     expect(result.counterOffer).toBeLessThan(100)
   })
 
-  it('last attempt counter equals floor', () => {
+  it('last attempt counter quotes above the floor', () => {
     const ctx = baseCtx({ attemptsUsed: 2, maxAttempts: 3 })
     const result = ruleBasedDecision(50, ctx)
-    expect(result.counterOffer).toBe(80)
+    expect(result.counterOffer).toBeGreaterThan(80)
   })
 
-  it('single max attempt immediately gives floor on reject', () => {
+  it('single max attempt immediately gives a counter above the floor on reject', () => {
     const ctx = baseCtx({ attemptsUsed: 0, maxAttempts: 1 })
     const result = ruleBasedDecision(50, ctx)
-    expect(result.counterOffer).toBe(80)
+    expect(result.counterOffer).toBeGreaterThan(80)
     expect(result.tactic).toBe('final_offer')
   })
 })

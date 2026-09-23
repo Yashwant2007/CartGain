@@ -47,10 +47,10 @@ describe('ruleBasedDecision', () => {
     expect(r.counterOffer).toBeGreaterThan(800)
   })
 
-  it('gives the floor price on the final attempt', () => {
+  it('quotes above the hidden floor on the final attempt', () => {
     const r = ruleBasedDecision(500, baseCtx({ attemptsUsed: 2, maxAttempts: 3 }))
     expect(r.decision).toBe('counter')
-    expect(r.counterOffer).toBe(800)
+    expect(r.counterOffer).toBeGreaterThan(800)
     expect(r.tactic).toBe('final_offer')
   })
 
@@ -60,7 +60,7 @@ describe('ruleBasedDecision', () => {
     const r3 = ruleBasedDecision(700, baseCtx({ attemptsUsed: 2, maxAttempts: 3 }))
     expect(r1.counterOffer).toBeGreaterThan(r2.counterOffer!)
     expect(r2.counterOffer).toBeGreaterThan(r3.counterOffer!)
-    expect(r3.counterOffer).toBe(800) // last attempt = floor
+    expect(r3.counterOffer).toBeGreaterThan(800) // quoted above the hidden floor
   })
 })
 
@@ -84,9 +84,9 @@ describe('retentionOffer', () => {
     expect(r.counterOffer).toBeGreaterThanOrEqual(900)
   })
 
-  it('clamps to floor when last counter is already at floor', () => {
+  it('clamps to just above the floor when last counter is already at floor', () => {
     const r = retentionOffer(baseCtx({ originalPrice: 1000, minPrice: 800 }), 800)
-    expect(r.counterOffer).toBe(800)
+    expect(r.counterOffer).toBeGreaterThan(800)
   })
 
   it('uses persona-specific language', () => {
@@ -95,8 +95,8 @@ describe('retentionOffer', () => {
     const playful = retentionOffer(baseCtx({ persona: 'playful_friend' }), 950)
 
     expect(friendly.reply.toLowerCase()).toContain('friend')
-    expect(strict.reply).toMatch(/one[- ]time adjustment|stand|prepared/i)
-    expect(playful.reply.toLowerCase()).toContain('risk')
+    expect(strict.reply).toMatch(/stretch|your call/i)
+    expect(playful.reply.toLowerCase()).toContain('wait')
     // Strict negotiator: no emojis, no "friend"
     expect(strict.reply).not.toContain('friend')
   })
@@ -143,21 +143,22 @@ describe('buildOpeningMessage', () => {
     const strict = buildOpeningMessage(baseCtx({ persona: 'strict_negotiator' }))
     const playful = buildOpeningMessage(baseCtx({ persona: 'playful_friend' }))
 
-    // Friendly: warm, mentions attempts to bargain
+    // Friendly: warm, invites a rate
     expect(friendly.toLowerCase()).toContain('deal')
     // Strict: professional, no exclamation storms
-    expect(strict).toMatch(/reasonable offers|what price|within \d+ exchanges/i)
+    expect(strict).toMatch(/fair offer|what price/i)
     expect(strict).not.toContain('😏')
     // Playful: emoji + cheeky tone
     expect(playful).toContain('😏')
   })
 
-  it('includes original price and max attempts in every persona', () => {
+  it('shows the listed price but never the attempt budget in every persona', () => {
     const cases = ['friendly_shopkeeper', 'strict_negotiator', 'playful_friend'] as const
     for (const persona of cases) {
       const msg = buildOpeningMessage(baseCtx({ persona, maxAttempts: 4, originalPrice: 1299 }))
       expect(msg).toContain('₹1299.00')
-      expect(msg).toContain('4')
+      expect(msg).not.toMatch(/\d+\s*(?:attempts?|shots?|mauke|exchanges?|mau\w*)/i)
+      expect(msg).not.toContain('4')
     }
   })
 

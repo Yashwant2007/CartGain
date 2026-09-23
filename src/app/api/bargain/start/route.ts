@@ -168,8 +168,6 @@ export async function POST(request: NextRequest) {
           customerContext: `Returning to continue an existing session.`,
         }),
         expiresAt: existing.expiredAt.toISOString(),
-        attemptsRemaining: Math.max(0, config.maxAttempts - existing.attemptsUsed),
-        maxDiscountPercent: Math.round((1 - existingFloor.minPrice / existing.originalPrice) * 100),
         existingSession: true,
       }, { status: 200 })
     }
@@ -297,8 +295,6 @@ export async function POST(request: NextRequest) {
       session: publicSession(bargainSession),
       openingMessage: openingReply,
       expiresAt: expiredAt.toISOString(),
-      attemptsRemaining: config.maxAttempts,
-      maxDiscountPercent: Math.round((1 - minPrice / originalPrice) * 100),
       returning,
     }, { status: 201 })
   } catch (error) {

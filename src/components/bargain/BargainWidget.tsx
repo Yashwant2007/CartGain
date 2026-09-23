@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  X, Send, MessageCircle, Sparkles, Loader2, CheckCircle2, Clock, Tag, Zap, ShieldCheck, ArrowRight, BadgePercent, TrendingDown,
+  X, Send, MessageCircle, Sparkles, Loader2, CheckCircle2, Clock, Tag, Zap, ShieldCheck, ArrowRight, BadgePercent,
 } from 'lucide-react'
 import { currencySymbolFor, uiText } from '@/lib/bargain/i18n'
 
@@ -76,7 +76,6 @@ type Message = {
 type Session = {
   sessionId: string
   status: string
-  attemptsRemaining?: number
   finalPrice?: number | null
   discountCode?: string | null
   expiresAt?: string
@@ -109,14 +108,12 @@ export default function BargainWidget({
   const [limit, setLimit] = useState<{ code: string; planId?: string; upgradeUrl?: string } | null>(null)
   const [decision, setDecision] = useState<'idle' | 'counter' | 'accept' | 'reject'>('idle')
   const [sessionEnded, setSessionEnded] = useState(false)
-  const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null)
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [discountCode, setDiscountCode] = useState<string | null>(null)
   const [shopifyStatus, setShopifyStatus] = useState<'created' | 'pending' | 'failed' | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
   const [timeLeft, setTimeLeft] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
-  const [maxDiscount, setMaxDiscount] = useState<number | null>(null)
   const [returning, setReturning] = useState(false)
   const [endedReason, setEndedReason] = useState<'accepted' | 'rejected' | 'expired' | 'abandoned' | 'optout' | null>(null)
   const [activeTab, setActiveTab] = useState<'chat' | 'info'>('chat')
@@ -131,12 +128,13 @@ export default function BargainWidget({
   const personaChip = persona ? PERSONA_CHIP[persona] : undefined
   const savings = decision === 'accept' && finalPrice != null ? originalPrice - finalPrice : null
 
-  // Merchant-safe suggested offer chips, derived only from the merchant's own
-  // communicated discount cap. Always 4-5% above the maximum discount so the
-  // floor (never revealed) can never be approached or undershot.
+  // Merchant-safe suggested offer chips, derived only from a conservative,
+  // hard-coded discount cap that sits well above any real floor — the floor is
+  // never communicated to the browser, so it can never be approached or
+  // undershot by a suggestion.
   let suggestedAmounts: number[] = []
   if (originalPrice > 0) {
-    const cap = maxDiscount != null && maxDiscount > 0 ? Math.min(maxDiscount, 50) : 20
+    const cap = 20
     const levels = [Math.min(cap - 3, 11), Math.min(cap - 1, 15)].filter(l => l > 0)
     suggestedAmounts = levels
       .filter((l, i, arr) => arr.indexOf(l) === i)
@@ -216,7 +214,7 @@ export default function BargainWidget({
     if (!isEmbed) return
     const t = setTimeout(announceHeight, 40)
     return () => clearTimeout(t)
-  }, [isEmbed, announceHeight, open, messages, decision, discountCode, attemptsRemaining, loading, sessionEnded, copied])
+  }, [isEmbed, announceHeight, open, messages, decision, discountCode, loading, sessionEnded, copied])
 
   async function startSession() {
     setLoading(true)
@@ -248,9 +246,7 @@ export default function BargainWidget({
         throw new Error(data.message ?? 'Could not start bargaining')
       }
       setSessionId(data.sessionId)
-      setAttemptsRemaining(data.attemptsRemaining ?? null)
       setExpiresAt(data.expiresAt ?? null)
-      if (data.maxDiscountPercent != null) setMaxDiscount(data.maxDiscountPercent)
       if (data.returning) setReturning(true)
       if (data.existingSession && data.session?.messages?.length) {
         const restored: Message[] = data.session.messages.map((m: any) => ({
@@ -353,7 +349,6 @@ export default function BargainWidget({
           offeredPrice: data.counterOffer ?? null, createdAt: new Date().toISOString(),
         },
       ])
-      setAttemptsRemaining(data.attemptsRemaining ?? null)
       if (data.decision === 'accept' || data.decision === 'reject') {
         setDecision(data.decision)
       }
@@ -619,7 +614,7 @@ export default function BargainWidget({
             background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)',
             padding: '2px 9px', borderRadius: 999, fontSize: 11.5, fontWeight: 800,
           }}>
-            {maxDiscount != null && maxDiscount > 0 ? `Up to ${maxDiscount}% off` : t('saveNow')}
+            {t('saveNow')}
           </span>
         </button>
       )}
@@ -803,8 +798,8 @@ export default function BargainWidget({
             </a>
           </div>
 
-          {/* Attempts + timer */}
-          {(attemptsRemaining != null || timeLeft != null) && !sessionEnded && (
+          {/* Timer */}
+          {timeLeft != null && !sessionEnded && (
             <div style={{
               padding: '6px 16px',
               fontSize: 11.5,
@@ -816,26 +811,10 @@ export default function BargainWidget({
               alignItems: 'center',
               gap: 10,
             }}>
-              {attemptsRemaining != null && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{
-                    background: attemptsRemaining <= 1 ? '#fef2f2' : '#f0fdf4',
-                    color: attemptsRemaining <= 1 ? '#dc2626' : '#16a34a',
-                    padding: '2px 8px',
-                    borderRadius: 999,
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                  }}>
-                    {t('offersRemaining', { n: attemptsRemaining })}
-                  </span>
-                </span>
-              )}
-              {timeLeft != null && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>
-                  <Clock size={11} />
-                  {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
-                </span>
-              )}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>
+                <Clock size={11} />
+                {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+              </span>
             </div>
           )}
 
@@ -872,18 +851,7 @@ export default function BargainWidget({
                 </span>
               </div>
             </div>
-            {maxDiscount != null && maxDiscount > 0 ? (
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
-                background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', color: '#15803d',
-                border: '1px solid #bbf7d0', borderRadius: 999, padding: '2px 9px',
-                fontSize: 10.5, fontWeight: 800, whiteSpace: 'nowrap',
-              }}>
-                <TrendingDown size={11} />
-                Up to {maxDiscount}% off
-              </span>
-            ) : (
-              <span style={{
+            <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
                 background: '#eef2ff', color: '#4f46e5', border: '1px solid #e0e7ff',
                 borderRadius: 999, padding: '2px 9px', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap',
@@ -891,8 +859,7 @@ export default function BargainWidget({
                 <Zap size={11} />
                 {t('saveNow')}
               </span>
-            )}
-          </div>
+            </div>
           <div
             ref={scrollRef}
             role="log"
@@ -917,8 +884,6 @@ export default function BargainWidget({
                 finalPrice={finalPrice}
                 decision={decision}
                 discountCode={discountCode}
-                attemptsRemaining={attemptsRemaining}
-                maxDiscount={maxDiscount}
                 productTitle={productTitle}
                 sessEnded={sessionEnded}
               />
@@ -1446,15 +1411,13 @@ function startedComposer(sessionEnded: boolean, decision: 'idle' | 'counter' | '
 // Deal details tab — a professional, at-a-glance summary of the negotiation in a
 // single frame. Mirrors the merchant's own pricing levers without ever revealing
 // the hidden floor.
-function DealInfoPanel({ t, currencySymbol, originalPrice, finalPrice, decision, discountCode, attemptsRemaining, maxDiscount, productTitle, sessEnded }: {
+function DealInfoPanel({ t, currencySymbol, originalPrice, finalPrice, decision, discountCode, productTitle, sessEnded }: {
   t: (key: Parameters<typeof uiText>[1], vars?: Record<string, string | number>) => string
   currencySymbol: string
   originalPrice: number
   finalPrice: number | null
   decision: 'idle' | 'counter' | 'accept' | 'reject'
   discountCode: string | null
-  attemptsRemaining: number | null
-  maxDiscount: number | null
   productTitle?: string
   sessEnded: boolean
 }) {
@@ -1472,8 +1435,8 @@ function DealInfoPanel({ t, currencySymbol, originalPrice, finalPrice, decision,
           tint: 'green' as const,
         }
       : {
-          label: 'Savings you\u2019re negotiating',
-          value: <span style={{ fontWeight: 700, color: '#4f46e5' }}>Up to {maxDiscount != null && maxDiscount > 0 ? `${maxDiscount}%` : 'the max available'} off</span>,
+          label: 'Try your luck',
+          value: <span style={{ fontWeight: 700, color: '#4f46e5' }}>name a price that feels fair and I\u2019ll consider it</span>,
           tint: 'indigo' as const,
         },
     {
@@ -1488,9 +1451,9 @@ function DealInfoPanel({ t, currencySymbol, originalPrice, finalPrice, decision,
           tint: 'indigo' as const,
         }
       : ({
-          label: 'Attempts left',
-          value: attemptsRemaining != null ? `${attemptsRemaining}` : 'Starting...',
-          tint: attemptsRemaining != null && attemptsRemaining <= 1 ? 'green' : 'neutral',
+          label: 'Good to know',
+          value: 'No rush — the offer window stays open all session. Agree on a price and your personal code is issued.',
+          tint: 'neutral',
         } as { label: string; value: ReactNode; tint?: 'green' | 'indigo' | 'neutral' }),
   ].filter(Boolean) as { label: string; value: ReactNode; tint?: 'green' | 'indigo' | 'neutral' }[]
 

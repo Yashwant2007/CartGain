@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainOfferSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
-import { negotiateStep, ruleBasedDecision, buildOpeningMessage, buildCustomerContext, computeMinPrice, retentionOffer, type NegotiationContext } from '@/lib/services/bargain'
+import { negotiateStep, ruleBasedDecision, buildOpeningMessage, buildCustomerContext, computeMinPrice, retentionOffer, quotedFloor, type NegotiationContext } from '@/lib/services/bargain'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { detectWalkout, extractQuantity, extractPrice } from '@/lib/bargain/text'
 import { assertSessionOwnership } from '@/lib/bargain/session-bind'
@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
           data: { status: 'rejected', currentOffer: customerOffer ?? bargainSession.currentOffer },
         }),
       ])
-      return NextResponse.json({ reply: rejectReply, decision: 'reject', attemptsRemaining: 0, sessionStatus: 'rejected' })
+      return NextResponse.json({ reply: rejectReply, decision: 'reject', sessionStatus: 'rejected' })
     }
 
     const ctx: NegotiationContext = {
@@ -276,7 +276,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           reply: farewell,
           decision: 'reject',
-          attemptsRemaining,
           sessionStatus: 'abandoned',
           terminal: true,
         })
@@ -289,7 +288,10 @@ export async function POST(request: NextRequest) {
       const retentionPrice = clampOfferToSafety({
         originalPrice: bargainSession.originalPrice,
         minPrice,
-        suggested: retentionResult.counterOffer ?? retentionOffer(ctx, lastCounter).counterOffer ?? minPrice,
+        suggested:
+          retentionResult.counterOffer ??
+          retentionOffer(ctx, lastCounter).counterOffer ??
+          quotedFloor({ minPrice, originalPrice: bargainSession.originalPrice }),
       })
       const retentionReply = retentionResult.reply || retentionOffer(ctx, lastCounter).reply
 
@@ -317,7 +319,6 @@ export async function POST(request: NextRequest) {
         reply: retentionReply,
         decision: 'counter',
         counterOffer: retentionPrice,
-        attemptsRemaining,
         sessionStatus: 'active',
         sessionId: bargainSession.id,
       })
@@ -336,7 +337,6 @@ export async function POST(request: NextRequest) {
 
     // Roll back the attempt if abuse doesn't consume it
     const effectiveAttemptsUsed = isAbuseNoConsume ? attemptsUsed - 1 : attemptsUsed
-    const effectiveAttemptsRemaining = Math.max(0, config.maxAttempts - effectiveAttemptsUsed)
 
     if (isAbuseNoConsume) {
       await prisma.bargainSession.update({
@@ -422,7 +422,6 @@ export async function POST(request: NextRequest) {
       reply: result.reply,
       decision: result.decision,
       counterOffer: safeCounter,
-      attemptsRemaining: effectiveAttemptsRemaining,
       sessionStatus,
       finalPrice: updatedSession.finalPrice,
       sessionId: bargainSession.id,

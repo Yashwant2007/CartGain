@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
       })
       if (!clamped.ok) {
         return NextResponse.json(
-          { message: `Discount exceeds merchant floor (max ${clamped.maxPercent.toFixed(2)}% off)` },
+          { message: 'That discount is beyond what I can offer — please choose a smaller one.' },
           { status: 409, headers }
         )
       }
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
       })
       if (!executable.ok) {
         return NextResponse.json(
-          { message: 'Price mismatch — discount would breach merchant floor' },
+          { message: 'Price mismatch — please refresh the page and renegotiate.' },
           { status: 409, headers }
         )
       }
