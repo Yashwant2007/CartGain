@@ -301,7 +301,7 @@ first time. No migration, no Vercel `db push` requirement for this phase.
 Cycle covering the 47-section bargain-engine hardening / AI salesperson /
 recommendation spec, line-by-line. Verified: **631 tests green** (was 605),
 `tsc` clean, `lint` clean (2 pre-existing `<img>` warnings). Shipped commit
-`???` is pushed; a new Vercel prod deploy is required for the schema column.
+`bf407ad3` is pushed; a new Vercel prod deploy is required for the schema column.
 
 ## B1. Architecture found (audit result)
 - Server-first enforcement stack already in place and re-verified: real floor
