@@ -9,6 +9,7 @@ import { uiText, currencySymbolFor } from '@/lib/bargain/i18n'
 import { detectLanguage } from '@/lib/bargain/language'
 import { logDataAccess } from '@/lib/data-protection'
 import { clampOfferToSafety } from '@/lib/bargain/engine'
+import { detectCouponMention, detectMultiProductRequest } from '@/lib/bargain/policy'
 import { buildGoalContextForNegotiation } from '@/lib/bargain/goals'
 import { analyzeIntent } from '@/lib/bargain/intent'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
@@ -23,6 +24,12 @@ export const dynamic = 'force-dynamic'
 function detectedLang(sessionOrConfig: string | null | undefined, customerMessage: string): string {
   if (sessionOrConfig && sessionOrConfig !== 'auto') return sessionOrConfig
   return detectLanguage(customerMessage) ?? 'auto'
+}
+
+// Recommendations are surfaced only when BOTH the master toggle and the
+// "alternatives" sub-toggle are on (server-side guard; never client-side).
+function recoEnabledForMessages(config: Partial<{ recommendationsEnabled: boolean | null; alternativeRecommendationsEnabled: boolean | null }>): boolean {
+  return config.recommendationsEnabled === true && config.alternativeRecommendationsEnabled === true
 }
 // POST /api/bargain/offer — customer sends a message, AI responds
 export async function POST(request: NextRequest) {
@@ -92,6 +99,12 @@ export async function POST(request: NextRequest) {
     if (!config || !config.enabled) {
       return NextResponse.json({ message: 'Bargaining disabled' }, { status: 403 })
     }
+
+    // §24 Coupon-stacking detection — deterministic classifier on the customer's
+    // own words. Never trusted to the AI. `couponsAllowed` defaults to false so
+    // a missing/invalid config row fails CLOSED (no stacking).
+    const couponMentioned = detectCouponMention(data.message)
+    const couponsAllowed = config.couponStackingEnabled === true
 
     // Audit-log the read of the session's protected customer data (email/phone
     // are consumed when the AI builds the customer context for the reply).
@@ -177,6 +190,80 @@ export async function POST(request: NextRequest) {
     // decides it.
     const intentAnalysis = analyzeIntent(data.message)
 
+    // ── §27 MULTI-PRODUCT / BUNDLE GUARD ──
+    // The negotiation model is strictly single-product (bulk = same SKU). A
+    // request for DISTINCT products ("serum and moisturizer together", "bundle
+    // deal") must NEVER reach the AI pricing engine — otherwise the LLM could
+    // invent a combined bundle price. Intercept deterministically BEFORE the
+    // attempt claim (an informational redirect does not burn a negotiation
+    // attempt) and keep the session open on THIS product. Falls back to cards
+    // for budget-fit alternatives when reco is enabled.
+    const bundleRequested = detectMultiProductRequest(data.message)
+    if (bundleRequested) {
+      let bundleReco: RecommendationCard[] | null = null
+      if (recoEnabledForMessages(config) && intentAnalysis.budget != null) {
+        try {
+          const outcome = await searchRecommendations(
+            {
+              store: bargainSession.store,
+              shopifyProductId: bargainSession.shopifyProductId,
+              currency: bargainSession.store.currency,
+              budget: intentAnalysis.budget,
+              need: intentAnalysis.need ?? null,
+            },
+            fetchShopifyProducts,
+            bargainSession.originalPrice,
+          )
+          bundleReco = outcome.cards.length > 0 ? outcome.cards : null
+        } catch (e) {
+          bundleReco = null
+        }
+      }
+      const reply = couponMentioned
+        ? uiText(lang, 'bundle_coupon_redirect')
+        : uiText(lang, 'bundle_redirect')
+
+      await prisma.$transaction([
+        prisma.bargainMessage.create({
+          data: {
+            sessionId: bargainSession.id, role: 'customer', content: data.message,
+            offeredPrice: customerOffer ?? null,
+            metadata: { bundleRequested: true, couponMentioned: couponMentioned || undefined } as any,
+          },
+        }),
+        prisma.bargainMessage.create({
+          data: {
+            sessionId: bargainSession.id, role: 'ai', content: reply,
+            metadata: {
+              decision: 'chat', tactic: 'bundle_redirect',
+              policy: 'multi_product_not_supported', bundleRequested: true,
+            } as any,
+          },
+        }),
+      ])
+      await track({
+        name: 'cartgain_bundle_requested',
+        storeId: bargainSession.storeId,
+        properties: { budget: intentAnalysis.budget ?? undefined },
+      })
+      return NextResponse.json({
+        reply,
+        decision: 'chat',
+        sessionStatus: 'active',
+        sessionId: bargainSession.id,
+        ...(bundleReco
+          ? {
+              recommendations: bundleReco,
+              recommendationContext: {
+                budget: intentAnalysis.budget ?? null,
+                need: intentAnalysis.need ?? null,
+                reason: 'alternative' as RecommendationReason,
+              } satisfies RecommendationContext,
+            }
+          : {}),
+      })
+    }
+
     // Atomic attempt claim — prevents race conditions from concurrent requests
     const claimResult = await prisma.bargainSession.updateMany({
       where: {
@@ -236,6 +323,8 @@ export async function POST(request: NextRequest) {
       product: productCtx,
       intent: intentAnalysis,
       negotiationMode: (config.negotiationMode as NegotiationContext['negotiationMode']) ?? 'balanced',
+      couponsAllowed,
+      recommendationsEnabled: recoEnabledForMessages(config),
     }
 
     const history = bargainSession.messages
@@ -389,6 +478,43 @@ export async function POST(request: NextRequest) {
         properties: {},
       })
     }
+    // §36 funnel analytics — every priced turn + the negotiation round counter.
+    if (customerOffer != null) {
+      await track({
+        name: 'cartgain_customer_offer',
+        storeId: bargainSession.storeId,
+        properties: { aboveFloor: customerOffer >= minPrice },
+      })
+      await track({
+        name: 'cartgain_negotiation_round',
+        storeId: bargainSession.storeId,
+        properties: { round: attemptsUsed, remaining: attemptsRemaining },
+      })
+    }
+    // §24 — a coupon mention when stacking is disabled is a policy-relevant
+    // signal worth seeing, even though the offer itself stays live (the ACCEPT
+    // layer enforces the block).
+    if (couponMentioned && !couponsAllowed) {
+      await track({
+        name: 'cartgain_coupon_stack_attempt_detected',
+        storeId: bargainSession.storeId,
+        properties: {},
+      })
+    }
+    // §36 — terminal negotiation outcomes from THIS turn.
+    if (result.decision === 'accept') {
+      await track({
+        name: 'cartgain_offer_approved',
+        storeId: bargainSession.storeId,
+        properties: {},
+      })
+    } else if (result.decision === 'reject') {
+      await track({
+        name: 'cartgain_offer_rejected',
+        storeId: bargainSession.storeId,
+        properties: { reason: (result.metadata as any)?.reason ?? 'ai_rejected' },
+      })
+    }
 
     // ── PRODUCT RECOMMENDATION LAYER ──
     // When the store enables it AND this turn reads as a recovery signal (an
@@ -398,9 +524,7 @@ export async function POST(request: NextRequest) {
     // financial secret (floor / margin / max discount) ever reaches the customer.
     let recommendations: RecommendationCard[] | null = null
     let recoReason: RecommendationReason | null = null
-    const recoEnabled =
-      config.recommendationsEnabled === true &&
-      config.alternativeRecommendationsEnabled === true
+    const recoEnabled = recoEnabledForMessages(config)
 
     if (intentAnalysis.budget != null) {
       await track({
@@ -471,7 +595,10 @@ export async function POST(request: NextRequest) {
         data: {
           sessionId: bargainSession.id, role: 'customer', content: data.message,
           offeredPrice: customerOffer ?? null,
-          metadata: bulkQuantity ? { bulkQuantity } as any : undefined,
+          metadata: {
+            ...(bulkQuantity ? { bulkQuantity } : {}),
+            ...(couponMentioned ? { couponMentioned: true } : {}),
+          } as any,
         },
       }),
       prisma.bargainMessage.create({

@@ -52,6 +52,7 @@ type BargainConfig = {
   recommendationsEnabled: boolean
   alternativeRecommendationsEnabled: boolean
   complementRecommendationsEnabled: boolean
+  couponStackingEnabled: boolean
 }
 
 type GoalStatus = {
@@ -549,6 +550,20 @@ void fetchConfig()
                   </select>
                   <p className="text-xs text-blue-300/60 mt-1">Higher quality models write more personality; mini is fastest and cheapest.</p>
                 </div>
+              </div>
+              <div className="mt-4 flex items-center justify-between p-4 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <div>
+                  <div className="text-blue-100 font-medium">Coupon stacking</div>
+                  <div className="text-xs text-blue-300/60 mt-0.5">
+                    When off, the bargain discount code can never be combined with another coupon or promo code — enforced automatically at accept, even if the AI ever mentions one.
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={configForm.couponStackingEnabled ?? false}
+                  onChange={e => setConfigForm({ ...configForm, couponStackingEnabled: e.target.checked })}
+                  className="w-5 h-5 accent-blue-500"
+                />
               </div>
 
               {/* Group: Daily goal & strategy */}

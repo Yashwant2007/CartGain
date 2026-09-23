@@ -5,9 +5,23 @@
 Last updated: Wed Sep 23 2026
 
 ## Recent cycles (brief — details in `IMPLEMENTATION-REPORT.md`)
-- **AI Product Recommendations (this session) — code complete, not yet committed.** New deterministic
-  recommendation layer for the bargain widget. See `IMPLEMENTATION-REPORT.md` (or the report you receive with the
-  commit) for the full files-changed/API/tests manifest. Summary: structured budget+need extraction in
+- **47-section hardening audit (latest) — code complete, committed, pushed; redeploy pending.** Full
+  audit of the bargain engine against the hardening/salesperson/reco spec, plus three real gaps CLOSED:
+  (1) coupon-stacking enforcement — new `BargainConfig.couponStackingEnabled` (default false), deterministic
+  `detectCouponMention` → transcript scan at accept → `OFFER_REJECTED_COUPON_STACKING_BLOCKED` (was an
+  unreachable code); (2) campaign window enforcement — `bargainCampaignStatus` now gates accept +
+  checkout-accept so `OFFER_REJECTED_CAMPAIGN_EXPIRED` fires on a closed window; (3) bundle guard — multi-
+  product requests are intercepted BEFORE the AI pricing engine (deterministic i18n redirect, no attempt
+  consumed, no LLM-invented bundle price). New pure module `src/lib/bargain/policy.ts` (+ tests).
+  Prompt gained `PROMO POLICY` + `BUNDLE REQUEST` blocks (floor-free). New events: `bargain_opened`,
+  `customer_offer`, `negotiation_round`, `offer_approved`, `offer_rejected`,
+  `coupon_stack_attempt_detected`, `bundle_requested`, `checkout_started`, `purchase_completed`.
+  New tests: `policy.test.ts` + `adversarial.test.ts`. Verified: tsc clean, lint clean, **631 tests green**
+  (was 605). Full §47 20-item report in `IMPLEMENTATION-REPORT.md` Addendum B. Needs `npx vercel --prod --yes`
+  to apply the new column (db push in vercel-build). Deployed revision remains commit `5470d6ce`.
+- **AI Product Recommendations (this session) — committed + pushed + deployed (`a71c209b`).** New deterministic
+  recommendation layer for the bargain widget. See `IMPLEMENTATION-REPORT.md` Addendum A for the full
+  files-changed/API/tests manifest. Summary: structured budget+need extraction in
   `src/lib/bargain/intent.ts` (`budget/budgetType/need` fields, `extractBudget`/`extractNeed`, new intents
   `RECOMMENDATION_REQUEST`/`PRODUCT_DISCOVERY`); new engine `src/lib/bargain/recommendations.ts`
   (normalize/rank/sanitize + `searchRecommendations`, pure + injected fetcher); offer route returns
@@ -189,4 +203,4 @@ real floor to a counter). `src/app/api/bargain/start/route.ts` fetches the autho
 - Do NOT delete/break: recovery, auth, billing, Shopify integration, analytics, pricing, DB logic.
 - Never hardcode merchant min-price in frontend; never expose merchant floor/margin/economics to customers.
 - Keep ROI plan data in `ROICalculator.tsx` in sync with `payment.ts::PLANS`.
-- Re-run tsc + lint + jest (605) before committing.
+- Re-run tsc + lint + jest (631) before committing.

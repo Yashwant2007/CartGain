@@ -40,6 +40,7 @@ export const bargainConfigUpsertSchema = z.object({
   recommendationsEnabled: z.boolean().optional(),
   alternativeRecommendationsEnabled: z.boolean().optional(),
   complementRecommendationsEnabled: z.boolean().optional(),
+  couponStackingEnabled: z.boolean().optional(),
 })
 
 export type BargainConfigUpsertInput = z.infer<typeof bargainConfigUpsertSchema>

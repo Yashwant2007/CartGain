@@ -412,7 +412,9 @@ export async function attributeBargainGoal(params: {
   }
 
   // Spec §33 — log the attribution and, when this order crosses the target,
-  // the completion. Fire-and-forget (never blocks or throws on the hot path).
+  // the completion. §36 — a purchase completed via a bargain code. Fire-and-
+  // forget (never blocks or throws on the hot path).
+  await track({ name: 'cartgain_purchase_completed', storeId: store.id, properties: {} })
   await track({
     name: 'cartgain_bargain_sale_attributed',
     storeId: store.id,

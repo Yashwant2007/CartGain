@@ -5,6 +5,8 @@ import { computeMinPrice } from '@/lib/services/bargain'
 import { fetchShopifyProductPrice, fetchShopifyProductDetail } from '@/lib/shopify'
 import { buildExecutablePrice, clampOrderPercentForProduct } from '@/lib/financial-safety'
 import { validateOffer } from '@/lib/bargain/offer-validation'
+import { bargainCampaignStatus } from '@/lib/bargain/policy'
+import { track } from '@/lib/analytics/track'
 import { redisIncr, redisExpire } from '@/lib/redis'
 
 export const dynamic = 'force-dynamic'
@@ -113,12 +115,22 @@ export async function POST(request: NextRequest) {
       ? null
       : currentDetail.variants?.find(v => v.id === effectiveVariantId)?.available ?? null
     const productAvailable = !currentDetail ? null : currentDetail.status === 'active' || currentDetail.status == null
+    // §25 Campaign lifecycle: a checkout-stage code must not be minted once the
+    // campaign window closed. Fails closed (blocks) only when the window is
+    // configured AND outside it — no window means always active.
+    const config = await prisma.bargainConfig.findUnique({
+      where: { storeId: store.id },
+      select: { campaignStart: true, campaignEnd: true },
+    })
+    const campaignActive = bargainCampaignStatus(config, new Date()) === 'active'
+
     const validation = validateOffer({
       requestedPrice: Number(finalPrice),
       originalPrice: currentPrice,
       floorPrice: minPrice,
       variantAvailable,
       productAvailable,
+      campaignActive,
     })
     if (!validation.ok) {
       return NextResponse.json(
@@ -182,6 +194,15 @@ export async function POST(request: NextRequest) {
     if (result.status === 'failed') {
       return NextResponse.json({ message: result.error || 'Failed to create discount code' }, { status: 500, headers })
     }
+
+    // §36 funnel analytics — checkout-stage deal accepted (mini-cart/embedded
+    // apps accept earlier via /api/bargain/accept; this event covers storefront
+    // checkout origins). Fire-and-forget.
+    await track({
+      name: 'cartgain_checkout_started',
+      storeId: store.id,
+      properties: { orderLevel: orderLevel === true },
+    })
 
     return NextResponse.json({
       success: true,

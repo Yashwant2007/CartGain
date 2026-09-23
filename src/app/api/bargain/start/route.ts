@@ -8,6 +8,7 @@ import { fetchShopifyProductPrice } from '@/lib/shopify'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { getBargainGate, recordBargainSessionOp, BARGAIN_SESSIONS_EXHAUSTED } from '@/lib/bargain/gate'
 import { logDataAccess } from '@/lib/data-protection'
+import { track } from '@/lib/analytics/track'
 
 export const dynamic = 'force-dynamic'
 
@@ -288,6 +289,13 @@ export async function POST(request: NextRequest) {
         customerEmail: data.customerEmail ?? null,
         customerPhone: data.customerPhone ?? null,
       },
+    })
+
+    // §36 funnel analytics — a bargain session opened (no customer PII).
+    await track({
+      name: 'cartgain_bargain_opened',
+      storeId: data.storeId,
+      properties: { returning: returning === true },
     })
 
     return NextResponse.json({

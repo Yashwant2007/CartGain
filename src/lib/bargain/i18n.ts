@@ -79,6 +79,8 @@ export type UiKey =
   | 'offerEnded'
   | 'checking'
   | 'tryAgain'
+  | 'bundle_redirect'
+  | 'bundle_coupon_redirect'
 
 const I18N: Record<UiLang, Record<UiKey, string>> = {
   en: {
@@ -134,6 +136,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offerEnded: 'This offer window has ended.',
     checking: 'Let me check what I can do…',
     tryAgain: 'Sorry, I couldn\u2019t check that right now. Let\u2019s try again.',
+    bundle_redirect: "Happy to! Since each item is priced on its own, let me find the best per-item deal for you. I'll show you alternatives you can bargain individually — this one's deal stays open while you check.",
+    bundle_coupon_redirect: "Great news — I can't combine that with another coupon, but I'll show you the best per-item price instead.",
     tabChat: 'Chat',
     tabDeal: 'Deal',
   },
@@ -192,6 +196,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offerEnded: 'Yeh offer window khatam ho gayi hai.',
     checking: 'Chalo dekhte hain kya kar sakta hoon…',
     tryAgain: 'Maaf karna, abhi check nahi kar paya. Phir try karein.',
+    bundle_redirect: 'Koi baat nahi! Har item ki apni alag deal hoti hai. Main aapko har item ke liye best offer dhoond kar dikha deta hoon — alternatives mukhtalif prices par bargain kar sakte hain. Is item ki deal bhi khuli rahegi.',
+    bundle_coupon_redirect: "Acchi khabar — main doosre coupon ke saath combine nahi kar sakta, lekin best per-item price zaroor dikhata hoon."
   },
   hi: {
     farewell_friendly: 'समझ गया दोस्त, दरवाज़ा हमेशा खुला है। अगर मन बदले तो बता देना। ध्यान रखना! 👋',
@@ -248,6 +254,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offerEnded: 'यह ऑफ़र विंडो समाप्त हो गई है।',
     checking: 'देखता हूँ क्या कर सकता हूँ…',
     tryAgain: 'क्षमा करें, अभी जाँच नहीं कर सका। फिर से कोशिश करें।',
+    bundle_redirect: 'कोई बात नहीं! हर वस्तु की अपनी अलग डील होती है। मैं हर वस्तु के लिए सबसे अच्छा ऑफ़र दिखाता हूँ — आप विकल्पों को अलग-अलग कीमतों पर मोल-भाव कर सकते हैं। इस वस्तु की डील भी खुली रहेगी।',
+    bundle_coupon_redirect: 'अच्छी खबर — मैं इसे दूसरे कूपन के साथ जोड़ नहीं सकता, लेकिन सबसे अच्छी प्रति-वस्तु कीमत ज़रूर दिखाऊँगा।'
   },
   ta: {
     farewell_friendly: 'புரிந்தது நண்பரே, கதவு எப்போதும் திறந்தே உள்ளது. மனம் மாறினால் சொல்லுங்கள். பார்த்துக்கொள்ளுங்கள்! 👋',
@@ -304,6 +312,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offerEnded: 'இந்த சலுகை காலம் முடிந்துவிட்டது.',
     checking: 'என்ன செய்ய முடியும் என்று பார்க்கிறேன்…',
     tryAgain: 'மன்னிக்கவும், இப்போது சரிபார்க்க முடியவில்லை. மீண்டும் முயற்சிப்போம்.',
+    bundle_redirect: 'பரவாயில்லை! ஒவ்வொரு பொருளுக்கும் அதன் சொந்த விலைப்பேச்சு உள்ளது. ஒவ்வொன்றுக்கும் சிறந்த ஒப்பந்தத்தைக் காட்டுகிறேன் — மாற்றுகளைத் தனியாகப் பேரம் பேசலாம். இந்தப் பொருளின் ஒப்பந்தம் திறந்தே இருக்கும்.',
+    bundle_coupon_redirect: 'நல்ல செய்தி — மற்றொரு கூப்பனுடன் இதை இணைக்க முடியாது, ஆனால் சிறந்த பொருள் விலையைக் காட்டுகிறேன்.'
   },
   te: {
     farewell_friendly: 'అర్థమైంది స్నేహితుడా, తలుపు ఎప్పుడూ తెరిచే ఉంది. మనసు మారితే చెప్పండి. జాగ్రత్త! 👋',
@@ -360,6 +370,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offerEnded: 'ఈ ఆఫర్ విండో ముగిసింది.',
     checking: 'ఏం చేయగలనో చూద్దాం…',
     tryAgain: 'క్షమించండి, ఇప్పుడు తనిఖీ చేయలేకపోయాను. మళ్ళీ ప్రయత్నిద్దాం.',
+    bundle_redirect: 'పర్వాలేదు! ప్రతి వస్తువుకి దాని స్వంత ఒప్పందం ఉంటుంది. ప్రతిదానికి ఉత్తమ ఒప్పందం చూపిస్తాను — ప్రత్యామ్నాయాలను విడివిడిగా బేరమాడవచ్చు. ఈ వస్తువు ఒప్పందం తెరిచి ఉంటుంది.',
+    bundle_coupon_redirect: 'మంచి వార్త — దీనిని మరో కూపన్తో కలపలేను, కానీ ఉత్తమ వస్తువు ధరనే చూపిస్తాను.'
   },
   bn: {
     farewell_friendly: 'বুঝেছি বন্ধু, দরজা সবসময় খোলা। মন বদলালে জানিয়ে দিও। ভালো থেকো! 👋',
@@ -416,6 +428,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offerEnded: 'এই অফার উইন্ডো শেষ হয়ে গেছে।',
     checking: 'আমি কী করতে পারি দেখছি…',
     tryAgain: 'দুঃখিত, এখনই চেক করতে পারিনি। আবার চেষ্টা করা যাক।',
+    bundle_redirect: 'কোনো সমস্যা নেই! প্রতিটি পণ্যের নিজস্ব আলাদা ডিল থাকে। প্রতিটির জন্য সেরা অফার দেখাই — বিকল্পগুলো আলাদাভাবে দরদাম করতে পারবেন। এই পণ্যটির ডিল খোলাই থাকবে।',
+    bundle_coupon_redirect: 'ভালো খবর — আমি এটা অন্য কুপন-এর সাথে যোগ করতে পারব না, তবে সেরা পণ্যভিত্তিক দাম দেখাব।'
   },
   mr: {
     farewell_friendly: 'समजलो मित्रा, दार नेहमी उघडे आहे. मन बदललं तर सांग. काळजी घ्या! 👋',
@@ -472,6 +486,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offerEnded: 'ही ऑफर विंडो संपली आहे.',
     checking: 'काय करू शकतो ते पाहतो…',
     tryAgain: 'क्षमस्व, आत्ता तपासू शकलो नाही. पुन्हा प्रयत्न करूया.',
+    bundle_redirect: 'हरकत नाही! प्रत्येक वस्तूची स्वतंत्र डील असते. प्रत्येकासाठी सर्वोत्तम ऑफर दाखवतो — पर्यायांशी वेगवेगळ्या किमतीत सौदेबाजी करू शकता. या वस्तूची डील उघडी राहील.',
+    bundle_coupon_redirect: 'चांगली बातमी — मी दुसऱ्या कूपनसह हे जोडू शकत नाही, पण सर्वोत्तम प्रति-वस्तू किंमत नक्की दाखवतो.'
   },
   gu: {
     farewell_friendly: 'સમજ્યો મિત્ર, દરવાજો હંમેશા ખુલ્લો છે. મન બદલાય તો કહેજે. કાળજી રાખજો! 👋',
@@ -528,6 +544,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offerEnded: 'આ ઑફર વિન્ડો સમાપ્ત થાય છે.',
     checking: 'શું કરી શકું તે જોઉં છું…',
     tryAgain: 'માફ કરશો, હમણાં ચકાસી શક્યા નહીં. ફરી પ્રયત્ન કરીએ.',
+    bundle_redirect: 'કોઈ વાંધો નહીં! દરેક વસ્તુની પોતાની અલગ ડીલ હોય છે. દરેક માટે શ્રેષ્ઠ ઓફર બતાવું છું — વિકલ્પો સાથે અલગ-અલગ કિંમતે મોલભાવ કરી શકો છો. આ વસ્તુની ડીલ ખુલ્લી જ રહેશે.',
+    bundle_coupon_redirect: 'સારા સમાચાર — હું આને બીજા કૂપન સાથે જોડી શકતો નથી, પણ શ્રેષ્ઠ પ્રતિ-વસ્તુ કિંમત જરૂર બતાવીશ.'
   },
   pa: {
     farewell_friendly: 'ਸਮਝ ਗਿਆ ਮਿੱਤਰਾ, ਦਰਵਾਜ਼ਾ ਹਮੇਸ਼ਾ ਖੁੱਲ੍ਹਾ ਹੈ। ਮਨ ਬਦਲੇ ਤਾਂ ਦੱਸ ਦੇਣਾ। ਖ਼ਿਆਲ ਰੱਖੀਂ! 👋',
@@ -584,6 +602,8 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offerEnded: 'ਇਹ ਆਫਰ ਵਿੰਡੋ ਖਤਮ ਹੋ ਗਈ ਹੈ।',
     checking: 'ਦੇਖਦਾ ਹਾਂ ਕੀ ਕਰ ਸਕਦਾ ਹਾਂ…',
     tryAgain: 'ਮਾਫ਼ ਕਰਨਾ, ਹੁਣੇ ਚੈੱਕ ਨਹੀਂ ਕਰ ਸਕਿਆ। ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੀਏ।',
+    bundle_redirect: 'ਕੋਈ ਗੱਲ ਨਹੀਂ! ਹਰ ਚੀਜ਼ ਦੀ ਆਪਣੀ ਵੱਖਰੀ ਡੀਲ ਹੁੰਦੀ ਹੈ। ਹਰੇਕ ਲਈ ਸਭ ਤੋਂ ਵਧੀਆ ਆਫਰ ਦਿਖਾਉਂਦਾ ਹਾਂ — ਵਿਕਲਪਾਂ ਨਾਲ ਵੱਖ-ਵੱਖ ਕੀਮਤ ’ਤੇ ਮੋਲਭਾਵ ਕਰ ਸਕਦੇ ਹੋ। ਇਸ ਚੀਜ਼ ਦੀ ਡੀਲ ਖੁੱਲ੍ਹੀ ਰਹੇਗੀ।',
+    bundle_coupon_redirect: 'ਚੰਗੀ ਖ਼ਬਰ — ਮੈਂ ਇਸ ਨੂੰ ਦੂਜੇ ਕੂਪਨ ਨਾਲ ਜੋੜ ਨਹੀਂ ਸਕਦਾ, ਪਰ ਸਭ ਤੋਂ ਵਧੀਆ ਪ੍ਰਤੀ-ਚੀਜ਼ ਕੀਮਤ ਜ਼ਰੂਰ ਦਿਖਾਵਾਂਗਾ।'
   },
 }
 

@@ -9,6 +9,8 @@ import { computeMinPrice } from '@/lib/services/bargain'
 import { fetchShopifyProductPrice, fetchShopifyProductDetail } from '@/lib/shopify'
 import { buildExecutablePrice } from '@/lib/financial-safety'
 import { validateOffer } from '@/lib/bargain/offer-validation'
+import { bargainCampaignStatus, couponMentionedInMessages } from '@/lib/bargain/policy'
+import { track } from '@/lib/analytics/track'
 
 export const dynamic = 'force-dynamic'
 
@@ -157,20 +159,58 @@ export async function POST(request: NextRequest) {
       : currentDetail.variants?.find(v => v.id === effectiveVariantId)?.available ?? null
     const productAvailable = !currentDetail ? null : currentDetail.status === 'active' || currentDetail.status == null
 
+    // ── MERCHANT POLICY GATES (deterministic, independent of the AI) ──
+    // §25 Campaign lifecycle: an offer must not be accepted once the campaign
+    // window closed — `campaignStart/campaignEnd` are validated on write (they
+    // are set together and ordered).
+    const config = await prisma.bargainConfig.findUnique({
+      where: { storeId: bargainSession.storeId },
+      select: { campaignStart: true, campaignEnd: true, couponStackingEnabled: true },
+    })
+    const campaignActive = bargainCampaignStatus(config, new Date()) === 'active'
+
+    // §24 Coupon stacking: if the customer ever mentioned another coupon/promo
+    // during this session and the merchant disabled stacking, the accept is
+    // blocked with a machine reason code. Scans the recent customer transcript
+    // (metadata from the offer pipeline is bonus; the transcript is authoritative).
+    const recentCustomerMessages = await prisma.bargainMessage.findMany({
+      where: { sessionId: bargainSession.id, role: 'customer' },
+      orderBy: { createdAt: 'desc' },
+      take: 25,
+      select: { content: true, metadata: true },
+    })
+    const couponMentioned =
+      couponMentionedInMessages(recentCustomerMessages) ||
+      recentCustomerMessages.some((m) => (m.metadata as any)?.couponMentioned === true)
+    const couponsAllowed = config?.couponStackingEnabled === true
+
     const validation = validateOffer({
       requestedPrice: finalPrice,
       originalPrice: currentPrice,
       floorPrice: minPrice,
       variantAvailable,
       productAvailable,
+      campaignActive,
+      couponMentioned,
+      couponsAllowed,
     })
     if (!validation.ok) {
+      await track({
+        name: 'cartgain_offer_rejected',
+        storeId: bargainSession.storeId,
+        properties: { reason: validation.reason },
+      })
       return NextResponse.json({
         message: validation.message ?? 'Cannot accept this purchase right now.',
         reason: validation.reason,
         code: `OFFER_REJECTED_${validation.reason}`,
       }, { status: 409 })
     }
+    await track({
+      name: 'cartgain_offer_approved',
+      storeId: bargainSession.storeId,
+      properties: { bulkQuantity: offerBulkQuantity ?? undefined },
+    })
 
     const executable = buildExecutablePrice({
       originalPrice: currentPrice,

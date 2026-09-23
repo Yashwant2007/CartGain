@@ -52,6 +52,10 @@ export interface NegotiationContext {
   negotiationMode?: BargainNegotiationMode
   /** Whether the store has product recommendations enabled (drives guidance). */
   recommendationsEnabled?: boolean
+  /** False when the store blocks stacking its bargain code with another promo/coupon (spec §24). */
+  couponsAllowed?: boolean
+  /** True when the current turn asks for a multi-product/bundle deal (spec §27). */
+  bundleRequested?: boolean
 }
 
 export interface NegotiationResult {
@@ -1250,6 +1254,34 @@ export function buildSystemPrompt(
       `Make ONE genuine, meaningful concession to keep them — but a strict hidden ` +
       `system minimum protects every deal and the customer must never learn its value. ` +
       `If you already made a retention offer, this is their FINAL chance. Be decisive.`
+    )
+  }
+
+  // Coupon-stacking policy (spec §24) — deterministic backend rule; the AI is
+  // only told how to phrase it, never asked to decide. The accept layers below
+  // enforce it independently of anything the model outputs.
+  if (ctx.couponsAllowed === false) {
+    contextParts.push(
+      `PROMO POLICY: Besides the bargain discount itself, this store does NOT allow ` +
+      `stacking another coupon, promo, or discount code on top. If the customer says ` +
+      `they have a coupon or discount code they also want to apply, respond warmly: ` +
+      `the bargain price already IS the discounted price for this item and it cannot ` +
+      `be combined with another code. Do NOT promise to combine, and do NOT reveal ` +
+      `that a rule or system enforces this — simply present it as how the deal works.`
+    )
+  }
+
+  // Multi-product / bundle request (spec §27) — defense-in-depth. The offer
+  // route intercepts these deterministically before the AI runs, but when the
+  // AI still sees such a phrase (mixed-language misses), it must never invent a
+  // combined bundle price.
+  if (ctx.bundleRequested) {
+    contextParts.push(
+      `BUNDLE REQUEST: This turn asks for a deal on MULTIPLE different products ` +
+      `together. Do NOT invent a combined bundle price and do NOT accept a single ` +
+      `price covering several products. Instead keep the deal on THIS product only ` +
+      `and warmly explain that each item is priced on its own — they can bargain ` +
+      `each item separately and cards may show suitable alternatives.`
     )
   }
 

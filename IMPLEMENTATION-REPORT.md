@@ -294,3 +294,158 @@ first time. No migration, no Vercel `db push` requirement for this phase.
 5. Set `recommendationsEnabled` intentionally: the complement-recommendations
    toggle is currently NOT consumed (only master + alternative are enforced);
    if cross-sell (complement) tiers are wanted, that is the stated next step.
+---
+
+# ADDENDUM B — §47 FINAL REPORT: HARDENING & ENFORCEMENT AUDIT
+
+Cycle covering the 47-section bargain-engine hardening / AI salesperson /
+recommendation spec, line-by-line. Verified: **631 tests green** (was 605),
+`tsc` clean, `lint` clean (2 pre-existing `<img>` warnings). Shipped commit
+`???` is pushed; a new Vercel prod deploy is required for the schema column.
+
+## B1. Architecture found (audit result)
+- Server-first enforcement stack already in place and re-verified: real floor
+  only in the DB; `negotiateStep` clamps; accept/checkout-accept re-derive the
+  floor from the **live** Shopify price and run `validateOffer` +
+  `buildExecutablePrice` before minting any code; config/catalog/sessions/goals
+  endpoints are NextAuth + store-ownership gated; leak guards scrub floor /
+  percent-floor / system-prompt extraction; abuse firewall, DPDP opt-out,
+  session-ownership binding, idempotent CAS accepts, deal-plan gate.
+
+## B2. Architecture after this cycle
+- New deterministic **policy layer** (`src/lib/bargain/policy.ts`) — pure, cheap
+  classifiers the backend enforces on top of the LLM, never decided by it:
+  coupon-stacking detection (§24), campaign-window status (§25), multi-product
+  bundle detection (§27). The offer route now intercepts bundle requests before
+  the AI pricing engine; accept/checkout-accept gate on coupon + campaign.
+
+## B3. LLM provider + failover
+- Primary: OpenAI (gpt-4o-mini/4o/4.1-mini/4.1, merchant-selectable). Failover:
+  Groq `gpt-oss-120b` in the SAME request. `OPENAI_API_KEY` still invalid (401) —
+  primary tier remains unverified; all real traffic rides Groq.
+
+## B4. Prompt architecture + safety
+- Sectioned `buildSystemPrompt` (persona, language, scenario, SPECIAL CONTEXT,
+  mastery, strict-JSON contract). No literal floor anywhere. This cycle added
+  labeled `PROMO POLICY` (§24) and `BUNDLE REQUEST` (§27) blocks (both floor-free,
+  asserted by tests), plus `recommendationsRequested` and intent blocks from the
+  reco cycle. All leak guards and the failover tier remain intact.
+
+## B5. LLM tool / pricing "function" inventory
+- No plugin-style tools. The single authority is `negotiateStep` → backend
+  clamps (`clampOfferToSafety`) → `validateOffer` (8 machine reason codes) →
+  `buildExecutablePrice` (minor-unit, percentage-encoded) → discount-code mint
+  (customer-bound, `minimumSubtotal = originalPrice × quantity`). The AI may only
+  speak; it can never price outside those bounds.
+
+## B6. Product / price grounding
+- Shopify Admin REST (`fetchShopifyProductDetail`) → `product-context.ts` →
+  `SHOPIFY_VERIFIED / MERCHANT_PROVIDED / CARTGAIN_DERIVED` tags,
+  disallowed-claim scrubbing, token-bounded prompt block, store-scoped TTL cache.
+  Prices always re-fetched at accept; 0.5% drift check on checkout-accept.
+
+## B7. Negotiation flow
+- `start` (opening + minimal public payload, no floor) → `offer`
+  (bulk/walkout/abuse/bundle→intent→reco→negotiateStep→clamp→persist→events) →
+  `accept` or `checkout-accept` (revalidate price + availability + campaign +
+  coupon → `buildExecutablePrice` → CAS claim → mint code → meter goals).
+
+## B8. Reference-document grounding
+- Merchant-vetted `approvedSellingPoints` / `disallowedClaims` (global +
+  per-product) bound what the AI may claim; campaign/goal context is injected
+  only when the window is actually live (`goalActiveAt`). No unverifiable claims
+  are fed to the model.
+
+## B9. Recommendation flow
+- Recovery-signal triggers (alternative ask / discovery / budget under floor /
+  lowball) → budget+need extraction → `searchRecommendations` (ranked,
+  sanitized cards) → attached to reply + `recommend/event` write-only analytics.
+  Bundle redirects also surface budget-fit cards. Complement-toggle NOT consumed.
+
+## B10. Schema & DB
+- `BargainConfig` gained **`couponStackingEnabled Boolean @default(false)`**
+  (§24). Prisma client regenerated locally. Column lands via Vercel
+  `prisma db push --accept-data-loss` (safe additive `NOT NULL DEFAULT false`).
+
+## B11. API surface (this cycle)
+- `offer`: bundle intercept (`bundle_requested` metadata, i18n redirect), coupon
+  metadata, ctx wiring (`couponsAllowed`, `recommendationsEnabled`).
+- `accept`: campaign + coupon transcript gates feed `validateOffer`.
+- `checkout-accept`: campaign gate; `checkout_started` event.
+- `start`: `bargain_opened` event. `config` PUT: `couponStackingEnabled`.
+
+## B12. Analytics events (all fire-and-forget, PII-free)
+- New: `cartgain_bargain_opened`, `cartgain_customer_offer`,
+  `cartgain_negotiation_round`, `cartgain_offer_approved`,
+  `cartgain_offer_rejected`, `cartgain_coupon_stack_attempt_detected`,
+  `cartgain_bundle_requested`, `cartgain_checkout_started`,
+  `cartgain_purchase_completed`.
+- Existing now confirmed live-path wired (§37 order attribution matches
+  `shopifyOrderId` + discount code → `cartgain_bargain_sale_attributed`),
+  plus intent/objection/budget/need/reco events.
+
+## B13. Security findings (this audit)
+- Realized gap → closed: `COUPON_STACKING_BLOCKED` existed but was **unreachable**
+  (flags never passed at accept) — now enforced from the customer transcript at
+  accept, failing closed when stacking is off.
+- Realized gap → closed: `CAMPAIGN_EXPIRED` existed but was never fed a live
+  window state at accept — `bargainCampaignStatus` now gates both apply routes.
+- §27: multi-product requests could, in principle, be priced as a bundle by the
+  LLM — now deterministically intercepted (no AI bundle price can ever be minted).
+- No customer endpoint can move the floor: price/floor always server-derived.
+
+## B14. Files changed / created
+- **New:** `src/lib/bargain/policy.ts`; `src/lib/bargain/__tests__/policy.test.ts`;
+  `src/lib/bargain/__tests__/adversarial.test.ts`.
+- **Edited:** `prisma/schema.prisma`, `src/lib/validation/bargain.ts`,
+  `src/lib/services/bargain.ts` (ctx + prompt policy blocks),
+  `src/lib/bargain/i18n.ts` (+2 keys × 9 langs), `src/lib/bargain/goals.ts`
+  (`purchase_completed`), `src/app/api/bargain/{offer,accept,checkout-accept,start}/route.ts`,
+  `src/app/dashboard/bargain/page.tsx` (council-toggle section),
+  `IMPLEMENTATION-REPORT.md`, `SESSION-HANDOFF.md`.
+
+## B15. Tests
+- **631 passed / 46 suites** (was 605). New `policy.test.ts` (coupon/bundle/
+  campaign classifiers + edge cases) and `adversarial.test.ts` (accept-gate
+  coupling with `buildExecutablePrice`, hostile prices, campaign/coupon
+  interplay, clamp bounds, leak-guard integrity, cross-module classifier
+  consistency). Existing security/abuse/offer-validation suites untouched-green.
+
+## B16. Env vars (unchanged)
+- `OPENAI_API_KEY` (invalid — Groq fallback covers production),
+  `GROQ_API_KEY`, `DATABASE_URL`, `REDIS_URL`, `NEXTAUTH_SECRET/URL`,
+  `SHOPIFY_CLIENT_ID/SECRET`, `NEXT_PUBLIC_SITE_URL`.
+
+## B17. Shopify admin configuration (unchanged, owner-managed)
+- App scopes, webhooks (orders/paid), checkout UI extension already connected.
+  The bargain discount codes are minted via Admin REST at accept-time.
+
+## B18. Migrations
+- One additive column (`couponStackingEnabled`, default false). No breaking
+  change; applied by the Vercel build (`prisma db push`). No data backfill needed.
+
+## B19. Manual tasks for the owner
+1. Add a valid `OPENAI_API_KEY` (`.env`/Vercel) and re-run
+   `scripts/ai-fallback-smoke.ts` to exercise the primary tier.
+2. Run `npx vercel --prod --yes` to apply the schema + ship this cycle.
+3. Live-store smoke (§A7): recommendations toggles, "Show alternatives",
+   add-to-cart, coupon-stack attempt → expect `OFFER_REJECTED_COUPON_STACKING_BLOCKED` at accept.
+4. If multi-item "bundle" deals are a real product the store sells, build a
+   structured per-item session model (currently redirected deterministically).
+
+## B20. Risks / limitations (honest)
+- Complements toggle still informational (`next phase` on the dashboard).
+- Bundle deals are redirected, not quoted (single-product negotiation model).
+- Primary OpenAI tier never exercised; Groq output quality is the shipped reality.
+- Coupon detection is heuristic (word + code-like token) — a customer who never
+  names a code and who stacks manually at checkout is outside the engine's view
+  (Shopify-side order-discount stacking itself is Shopify's domain).
+- Local `prisma db push` impossible (blanked `.env.local` by design) — DB changes
+  apply only via Vercel build.
+
+---
+
+**TEST COMMANDS**
+- `npx tsc --noEmit`, `npx jest`, `npm run lint`
+  (expect: clean / 631 passed / 0 errors + 2 pre-existing `<img>` warnings)
+- Smoke: `npx tsx scripts/ai-fallback-smoke.ts` (14/15 passes on Groq; see script)

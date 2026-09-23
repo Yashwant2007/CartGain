@@ -354,6 +354,7 @@ model BargainConfig {
   recommendationsEnabled            Boolean @default(true) // master toggle for cross-sell suggestions
   alternativeRecommendationsEnabled Boolean @default(true) // "also consider" suggestions
   complementRecommendationsEnabled  Boolean @default(true) // "you may also need" suggestions
+  couponStackingEnabled             Boolean @default(false) // OFF: bargain discount code can never stack with a merchant promo/coupon code (spec §24)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
