@@ -22,7 +22,7 @@ describe('Accept-time gates hold (validateOffer + buildExecutablePrice)', () => 
     const v = validateOffer(PRICE)
     expect(v.reason).toBe('OFFER_ACCEPTED')
     const e = buildExecutablePrice({ originalPrice: 1000, finalPrice: 850, floorPrice: 800 })
-    expect(e.ok).toBe(true)
+    if (!e.ok) throw new Error(`expected ok: ${e.reason}`)
     expect(e.finalPrice).toBeGreaterThanOrEqual(800)
     expect(e.discountPercent).toBeLessThanOrEqual(20)
   })
@@ -54,7 +54,7 @@ describe('Accept-time gates hold (validateOffer + buildExecutablePrice)', () => 
     expect(buildExecutablePrice({ originalPrice: 1000, finalPrice: 799.99, floorPrice: 800 }).ok).toBe(false)
     // Even exact-floor round-trips stay at/above the floor.
     const e = buildExecutablePrice({ originalPrice: 1000, finalPrice: 800, floorPrice: 800 })
-    expect(e.ok).toBe(true)
+    if (!e.ok) throw new Error(`expected ok: ${e.reason}`)
     expect(e.finalPrice).toBeGreaterThanOrEqual(800)
   })
 
