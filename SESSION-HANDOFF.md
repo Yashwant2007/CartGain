@@ -2,11 +2,25 @@
 
 > **How to resume:** just tell me "Have a look at `SESSION-HANDOFF.md`" and I'll read this file to get back on the same page.
 
-Last updated: Wed Sep 23 2026
+Last updated: Thu Sep 24 2026
 
 ## Recent cycles (brief — details in `IMPLEMENTATION-REPORT.md`)
-- **47-section hardening audit (latest) — code complete, committed, pushed; redeploy pending.** Full
-  audit of the bargain engine against the hardening/salesperson/reco spec, plus three real gaps CLOSED:
+- **Bargain chat interface overhaul (latest) — code complete, verified; commit+deploy pending.**
+  Full production rewrite of `src/components/bargain/BargainWidget.tsx` to the 26-section
+  conversational-commerce spec: explicit phases (launcher → panel → terminal states), product
+  context card, labeled offer tags (YOU OFFERED / COUNTER OFFER / FINAL OFFER), quick-chip offers
+  derived only from listed price + live counter, counter-accept bar, accepted-deal hero +
+  Add-to-Cart, terminal StateCards (rejected/expired/abandoned/plan-limit/unavailable), in-flight
+  `busyRef` + `lastFailedRef` retry, single `role="status"` live-region announcer, focus mgmt,
+  body-scroll lock (floating only), Escape-to-close (floating), reduced-motion, `88svh→88lvh→88dvh`
+  bottom sheet + safe-area, `cartgain-bargain` scoped CSS, z-index FAB 9998/panel 9999/embed 99999.
+  Backend stays sole financial authority: `offer` now returns server-computed `floorReached`
+  (`tactic==='final_offer'`, boolean-only, never the amount) driving the FINAL OFFER frame; +
+  14 i18n keys × 9 languages. `StorefrontBargainWidget.tsx` demo surface untouched by design.
+  Verified: tsc clean, jest **631 green**, lint clean. See IMPLEMENTATION-REPORT.md Addendum C.
+  Needs commit + `npx vercel --prod --yes`.
+- **47-section hardening audit (previous) — code complete, committed, pushed; redeploy pending.**
+  Full audit of the bargain engine against the hardening/salesperson/reco spec, plus three real gaps CLOSED:
   (1) coupon-stacking enforcement — new `BargainConfig.couponStackingEnabled` (default false), deterministic
   `detectCouponMention` → transcript scan at accept → `OFFER_REJECTED_COUPON_STACKING_BLOCKED` (was an
   unreachable code); (2) campaign window enforcement — `bargainCampaignStatus` now gates accept +
@@ -175,6 +189,10 @@ real floor to a counter). `src/app/api/bargain/start/route.ts` fetches the autho
      product-complaint ("this is a scam") now redirect via `off_topic_extreme` **without consuming an attempt**.
 
 ## Open / next items (from our plan)
+- **Bargain chat interface overhaul (this session) — verified; commit + deploy pending:** rewrite of
+  `BargainWidget.tsx` + `floorReached` + 14 i18n keys. Re-ran tsc/jest/lint (631 green). Commit lowercase,
+  push, then `npx vercel --prod --yes`. Manual Shopify-side checks (embedded + floating, quick chips,
+  accept→code, console at 320–1440px, FINAL OFFER only at last counter) per Addendum C6.
 - **Website review fixes (this session) — committed; deploy pending:** SMS removal + homepage/pricing copy
   changes above. Re-run `npx tsc --noEmit` / `npm run lint` / `npx jest` (539) before commit + deploy.
 - **Social proof / testimonials (owner task):** add a real founder-testimonial section when user provides quotes —

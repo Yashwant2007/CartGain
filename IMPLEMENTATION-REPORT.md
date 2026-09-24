@@ -449,3 +449,99 @@ recommendation spec, line-by-line. Verified: **631 tests green** (was 605),
 - `npx tsc --noEmit`, `npx jest`, `npm run lint`
   (expect: clean / 631 passed / 0 errors + 2 pre-existing `<img>` warnings)
 - Smoke: `npx tsx scripts/ai-fallback-smoke.ts` (14/15 passes on Groq; see script)
+
+---
+
+# ADDENDUM C — §26 BARGAIN CHAT INTERFACE OVERHAUL
+
+Full production rewrite of the storefront bargain widget to the 26-section
+conversational-commerce spec. Verified: **631 tests green** (unchanged, no
+regressions), `tsc` clean, `lint` clean (0 warnings). Files:
+`src/components/bargain/BargainWidget.tsx` (full rewrite),
+`src/lib/bargain/i18n.ts` (+14 keys × 9 languages),
+`src/app/api/bargain/offer/route.ts` (+`floorReached` boolean).
+
+## C1. What was built (vs. the old widget)
+The old `BargainWidget` was a max-width 420px drawer with no explicit states,
+no minimize, a bare red error alert, a 34px close target, no in-flight guard,
+always-scroll-to-bottom, and no focus management or body-scroll lock. The new
+widget is a phased negotiation chat:
+- **Derived `phase` rendering**: launcher → panel (chat/info) → terminal states,
+  each with its own calm action instead of a dead input.
+- **Header**: product thumb + title + "Bargain with us" + listed price +
+  44px minimize / close targets (`bargainTitle`/`makeOfferSub`/`minimise` keys).
+- **Product context card** at top of conversation (image/title/listed price,
+  "Whole cart" badge in cart mode) — storefront facts only, never merchant data.
+- **Emphasized offer tags** in bubbles: `YOU OFFERED` / `COUNTER OFFER` /
+  `FINAL OFFER` (`youOffered`/`counterOffer`/`finalOffer` keys) so the exchange
+  scans at a glance; FINAL OFFER tag is driven by the backend's
+  `floorReached` flag.
+- **Quick offer chips** derived ONLY from the listed price (11%/15% off) and the
+  server's live counter — never computed, never near a floor; they prefill the
+  input only.
+- **Counter accept bar**: server-issued last counter + big "Accept offer ₹X"
+  button (`acceptOffer`).
+- **Accepted-deal hero**: gradient celebration card, `Add to Cart` (linkout) /
+  discount-code copy row, `savings` line when known.
+- **Terminal StateCards**: accepted / rejected (`dealRejected`) / expired
+  (`terminal_expired`) / abandoned (`terminal_abandoned`) / plan-limit / product
+  unavailable / other backend rejections — each with retry or buy-at-full-price.
+- **In-flight guard** `busyRef` blocks double submits; `lastFailedRef` lets
+  "Try again" replay exactly the last failed call (`start`/`offer`/`accept`).
+- **A11y**: single visually-hidden `role="status"` live region announcer,
+  `dialog`/`aria-modal`/focus-on-open (skipped for coarse pointers + embedded),
+  Escape closes the floating panel, body-scroll lock + focus return only for the
+  floating mode, `prefers-reduced-motion` kills all animation.
+- **Responsive**: bottom-sheet height `88svh → 88lvh → 88dvh` fallback chain +
+  safe-area insets; floating FAB (9998) / panel (9999) / embed (99999) z-index
+  scale; all styles scoped under `.cartgain-bargain` (Shopify-theme-safe); the
+  embedded mode keeps the `cg_resize` postMessage handshake for iframe height.
+
+## C2. `floorReached` — backend-only signal (§10)
+`POST /api/bargain/offer` now returns `floorReached: boolean`, computed
+server-side as `result.tactic === 'final_offer'` (both the rule-based and AI
+paths produce that tactic at their last allowed price). The value is
+**boolean-only**: the client can neither compute it nor see any floor amount,
+and cannot alter it. It powers the `FINAL OFFER` tag + a subtle "This is my best
+price" frame so the customer gets honest closure — the backend remains the sole
+financial authority; the floor/max-discount never reaches the browser.
+
+## C3. Files changed / created
+- **Rewrite:** `src/components/bargain/BargainWidget.tsx` (default export +
+  Props unchanged; `embedded`, floating, and `/bargain/embed` modes preserved).
+- **Edited:** `src/lib/bargain/i18n.ts` — `UiKey` union + all 9 dicts gained
+  `bargainTitle, makeOffer, makeOfferSub, youOffered, counterOffer, finalOffer,
+  acceptOffer, yourFinalPrice, startNew, checkOfferError, expiredSession,
+  negotiationEnded, privateNote, minimise` (real localized copy, no placeholders).
+- **Edited:** `src/app/api/bargain/offer/route.ts` — additive `floorReached`
+  field on success.
+- **Untouched (by design, per §24/scope):** `StorefrontBargainWidget.tsx` +
+  `/s/bargain` demo surface (demo-only, one-use demo claim).
+
+## C4. API contract (unchanged surface, one additive field)
+- `start` → `{ sessionId, expiresAt, returning, session, existingSession,
+  openingMessage }` (sessions are only reused while ACTIVE; terminal ⇒ new
+  session, so "Start new negotiation" = reset local state + call start).
+- `offer` success → `{ reply, decision, counterOffer, sessionStatus, finalPrice,
+  sessionId, recommendations?, floorReached }`; errors 404 / 410 (expired) /
+  403 / 409 `{ message, terminal, status }` / 429 too-fast (`terminal:false`).
+- `accept` 200 → `{ finalPrice, discountPercent, discountCode, shopifyStatus,
+  currency, expiresAt, message }`; 402 plan limit; 409 `{ message, reason,
+  code: 'OFFER_REJECTED_<REASON>' }`; 500 code-create-failed.
+
+## C5. Tests
+- No new unit tests (state-machine surface; logic remains server-side).
+- Verified: `npx tsc --noEmit` clean; `npx jest` **631 passed / 46 suites**
+  (unchanged — widget rewrite is additive); `npm run lint` clean.
+
+## C6. Manual tasks for the owner (unchanged/added)
+1. Live-store smoke on a real Shopify store, both modes: embedded iframe
+   (`/bargain/embed`) and floating FAB from the cart page — open/close/minimize,
+   quick chips, counter bar, accept → discount code, and confirm no console
+   errors at 1440 / 1280 / 768 / 390 / 320 px.
+2. Confirm `FINAL OFFER` tag appears only at the last counter (tactic
+   `final_offer`) and that no floor amount can ever be observed in the network
+   tab.
+3. Re-run `npx vercel --prod --yes` to ship (no schema change this cycle).
+4. Owner Shopify-side checks: `/cart/add.js` add-to-cart path and
+   discount-code application at checkout.

@@ -81,6 +81,20 @@ export type UiKey =
   | 'tryAgain'
   | 'bundle_redirect'
   | 'bundle_coupon_redirect'
+  | 'bargainTitle'
+  | 'makeOffer'
+  | 'makeOfferSub'
+  | 'youOffered'
+  | 'counterOffer'
+  | 'finalOffer'
+  | 'acceptOffer'
+  | 'yourFinalPrice'
+  | 'startNew'
+  | 'checkOfferError'
+  | 'expiredSession'
+  | 'negotiationEnded'
+  | 'privateNote'
+  | 'minimise'
 
 const I18N: Record<UiLang, Record<UiKey, string>> = {
   en: {
@@ -138,6 +152,20 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     tryAgain: 'Sorry, I couldn\u2019t check that right now. Let\u2019s try again.',
     bundle_redirect: "Happy to! Since each item is priced on its own, let me find the best per-item deal for you. I'll show you alternatives you can bargain individually — this one's deal stays open while you check.",
     bundle_coupon_redirect: "Great news — I can't combine that with another coupon, but I'll show you the best per-item price instead.",
+    bargainTitle: 'Bargain with us',
+    makeOffer: 'Make offer',
+    makeOfferSub: 'Make an offer for this product',
+    youOffered: 'You offered',
+    counterOffer: 'Counter offer',
+    finalOffer: 'Final offer',
+    acceptOffer: 'Accept offer',
+    yourFinalPrice: 'Your final price',
+    startNew: 'Start new negotiation',
+    checkOfferError: 'Something went wrong while checking your offer.',
+    expiredSession: 'This offer session has expired.',
+    negotiationEnded: 'This negotiation has ended.',
+    privateNote: 'Private · No spam · Your price is held while you chat',
+    minimise: 'Minimise chat',
     tabChat: 'Chat',
     tabDeal: 'Deal',
   },
@@ -197,7 +225,21 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     checking: 'Chalo dekhte hain kya kar sakta hoon…',
     tryAgain: 'Maaf karna, abhi check nahi kar paya. Phir try karein.',
     bundle_redirect: 'Koi baat nahi! Har item ki apni alag deal hoti hai. Main aapko har item ke liye best offer dhoond kar dikha deta hoon — alternatives mukhtalif prices par bargain kar sakte hain. Is item ki deal bhi khuli rahegi.',
-    bundle_coupon_redirect: "Acchi khabar — main doosre coupon ke saath combine nahi kar sakta, lekin best per-item price zaroor dikhata hoon."
+    bundle_coupon_redirect: "Acchi khabar — main doosre coupon ke saath combine nahi kar sakta, lekin best per-item price zaroor dikhata hoon.",
+    bargainTitle: 'Hamse moal bhaav karein',
+    makeOffer: 'Offer karein',
+    makeOfferSub: 'Is product ke liye offer karein',
+    youOffered: 'Aapka offer',
+    counterOffer: 'Counter offer',
+    finalOffer: 'Final offer',
+    acceptOffer: 'Offer sweekar karein',
+    yourFinalPrice: 'Aapki final price',
+    startNew: 'Nayi negotiation shuru karein',
+    checkOfferError: 'Sorry, aapka offer check karte waqt kuch galat ho gaya.',
+    expiredSession: 'Ye offer session expire ho gaya hai.',
+    negotiationEnded: 'Ye negotiation khatam ho gayi hai.',
+    privateNote: 'Private · Koi spam nahi · Aapki price chat ke dauran hold rehti hai',
+    minimise: 'Chat chhota karein',
   },
   hi: {
     farewell_friendly: 'समझ गया दोस्त, दरवाज़ा हमेशा खुला है। अगर मन बदले तो बता देना। ध्यान रखना! 👋',
@@ -255,7 +297,21 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     checking: 'देखता हूँ क्या कर सकता हूँ…',
     tryAgain: 'क्षमा करें, अभी जाँच नहीं कर सका। फिर से कोशिश करें।',
     bundle_redirect: 'कोई बात नहीं! हर वस्तु की अपनी अलग डील होती है। मैं हर वस्तु के लिए सबसे अच्छा ऑफ़र दिखाता हूँ — आप विकल्पों को अलग-अलग कीमतों पर मोल-भाव कर सकते हैं। इस वस्तु की डील भी खुली रहेगी।',
-    bundle_coupon_redirect: 'अच्छी खबर — मैं इसे दूसरे कूपन के साथ जोड़ नहीं सकता, लेकिन सबसे अच्छी प्रति-वस्तु कीमत ज़रूर दिखाऊँगा।'
+    bundle_coupon_redirect: 'अच्छी खबर — मैं इसे दूसरे कूपन के साथ जोड़ नहीं सकता, लेकिन सबसे अच्छी प्रति-वस्तु कीमत ज़रूर दिखाऊँगा।',
+    bargainTitle: 'हमसे मोलभाव करें',
+    makeOffer: 'ऑफ़र करें',
+    makeOfferSub: 'इस उत्पाद के लिए ऑफ़र दें',
+    youOffered: 'आपका ऑफ़र',
+    counterOffer: 'जवाबी ऑफ़र',
+    finalOffer: 'आख़िरी ऑफ़र',
+    acceptOffer: 'ऑफ़र स्वीकारें',
+    yourFinalPrice: 'आपकी अंतिम कीमत',
+    startNew: 'नई बातचीत शुरू करें',
+    checkOfferError: 'आपके ऑफ़र की जाँच में कुछ गड़बड़ हो गई।',
+    expiredSession: 'यह ऑफ़र सत्र समाप्त हो गया है।',
+    negotiationEnded: 'यह मोलभाव समाप्त हो गया है।',
+    privateNote: 'निजी · कोई स्पैम नहीं · चैट के दौरान आपकी कीमत सुरक्षित रहती है',
+    minimise: 'चैट छोटा करें',
   },
   ta: {
     farewell_friendly: 'புரிந்தது நண்பரே, கதவு எப்போதும் திறந்தே உள்ளது. மனம் மாறினால் சொல்லுங்கள். பார்த்துக்கொள்ளுங்கள்! 👋',
@@ -313,7 +369,21 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     checking: 'என்ன செய்ய முடியும் என்று பார்க்கிறேன்…',
     tryAgain: 'மன்னிக்கவும், இப்போது சரிபார்க்க முடியவில்லை. மீண்டும் முயற்சிப்போம்.',
     bundle_redirect: 'பரவாயில்லை! ஒவ்வொரு பொருளுக்கும் அதன் சொந்த விலைப்பேச்சு உள்ளது. ஒவ்வொன்றுக்கும் சிறந்த ஒப்பந்தத்தைக் காட்டுகிறேன் — மாற்றுகளைத் தனியாகப் பேரம் பேசலாம். இந்தப் பொருளின் ஒப்பந்தம் திறந்தே இருக்கும்.',
-    bundle_coupon_redirect: 'நல்ல செய்தி — மற்றொரு கூப்பனுடன் இதை இணைக்க முடியாது, ஆனால் சிறந்த பொருள் விலையைக் காட்டுகிறேன்.'
+    bundle_coupon_redirect: 'நல்ல செய்தி — மற்றொரு கூப்பனுடன் இதை இணைக்க முடியாது, ஆனால் சிறந்த பொருள் விலையைக் காட்டுகிறேன்.',
+    bargainTitle: 'எங்களுடன் பேரம் பேசுங்கள்',
+    makeOffer: 'சலுகை வழங்கு',
+    makeOfferSub: 'இந்த தயாரிப்புக்கு சலுகை வழங்குங்கள்',
+    youOffered: 'உங்கள் சலுகை',
+    counterOffer: 'எதிர்ச்சலுகை',
+    finalOffer: 'இறுதிச்சலுகை',
+    acceptOffer: 'சலுகையை ஏற்கவும்',
+    yourFinalPrice: 'உங்கள் இறுதி விலை',
+    startNew: 'புதிய பேரம் தொடங்கு',
+    checkOfferError: 'உங்கள் சலுகையை சரிபார்க்கும்போது ஏதோ தவறு ஏற்பட்டது.',
+    expiredSession: 'இந்த சலுகை அமர்வு முடிவடைந்தது.',
+    negotiationEnded: 'இந்த பேரம் முடிவடைந்தது.',
+    privateNote: 'தனிப்பட்ட · ஸ்பேம் இல்லை · பேசிக் கொண்டிருக்கும்போது உங்கள் விலை பாதுகாக்கப்படுகிறது',
+    minimise: 'அரட்டையை சுருக்கவும்',
   },
   te: {
     farewell_friendly: 'అర్థమైంది స్నేహితుడా, తలుపు ఎప్పుడూ తెరిచే ఉంది. మనసు మారితే చెప్పండి. జాగ్రత్త! 👋',
@@ -371,7 +441,21 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     checking: 'ఏం చేయగలనో చూద్దాం…',
     tryAgain: 'క్షమించండి, ఇప్పుడు తనిఖీ చేయలేకపోయాను. మళ్ళీ ప్రయత్నిద్దాం.',
     bundle_redirect: 'పర్వాలేదు! ప్రతి వస్తువుకి దాని స్వంత ఒప్పందం ఉంటుంది. ప్రతిదానికి ఉత్తమ ఒప్పందం చూపిస్తాను — ప్రత్యామ్నాయాలను విడివిడిగా బేరమాడవచ్చు. ఈ వస్తువు ఒప్పందం తెరిచి ఉంటుంది.',
-    bundle_coupon_redirect: 'మంచి వార్త — దీనిని మరో కూపన్తో కలపలేను, కానీ ఉత్తమ వస్తువు ధరనే చూపిస్తాను.'
+    bundle_coupon_redirect: 'మంచి వార్త — దీనిని మరో కూపన్తో కలపలేను, కానీ ఉత్తమ వస్తువు ధరనే చూపిస్తాను.',
+    bargainTitle: 'మాతో బేరం చేయండి',
+    makeOffer: 'ఆఫర్ ఇవ్వండి',
+    makeOfferSub: 'ఈ ఉత్పత్తికి ఆఫర్ ఇవ్వండి',
+    youOffered: 'మీ ఆఫర్',
+    counterOffer: 'ప్రతిఆఫర్',
+    finalOffer: 'చివరి ఆఫర్',
+    acceptOffer: 'ఆఫర్ అంగీకరించండి',
+    yourFinalPrice: 'మీ తుది ధర',
+    startNew: 'కొత్త చర్చ ప్రారంభించండి',
+    checkOfferError: 'మీ ఆఫర్ తనిఖీ చేస్తుండగా ఏదో తప్పు జరిగింది.',
+    expiredSession: 'ఈ ఆఫర్ సెషన్ గడువు ముగిసింది.',
+    negotiationEnded: 'ఈ బేరం ముగిసింది.',
+    privateNote: 'వ్యక్తిగతం · స్పామ్ లేదు · మీరు మాట్లాడుతున్నప్పుడు మీ ధర సురక్షితం',
+    minimise: 'చాట్ చిన్నది చేయండి',
   },
   bn: {
     farewell_friendly: 'বুঝেছি বন্ধু, দরজা সবসময় খোলা। মন বদলালে জানিয়ে দিও। ভালো থেকো! 👋',
@@ -429,7 +513,21 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     checking: 'আমি কী করতে পারি দেখছি…',
     tryAgain: 'দুঃখিত, এখনই চেক করতে পারিনি। আবার চেষ্টা করা যাক।',
     bundle_redirect: 'কোনো সমস্যা নেই! প্রতিটি পণ্যের নিজস্ব আলাদা ডিল থাকে। প্রতিটির জন্য সেরা অফার দেখাই — বিকল্পগুলো আলাদাভাবে দরদাম করতে পারবেন। এই পণ্যটির ডিল খোলাই থাকবে।',
-    bundle_coupon_redirect: 'ভালো খবর — আমি এটা অন্য কুপন-এর সাথে যোগ করতে পারব না, তবে সেরা পণ্যভিত্তিক দাম দেখাব।'
+    bundle_coupon_redirect: 'ভালো খবর — আমি এটা অন্য কুপন-এর সাথে যোগ করতে পারব না, তবে সেরা পণ্যভিত্তিক দাম দেখাব।',
+    bargainTitle: 'আমাদের সঙ্গে দরদাম করুন',
+    makeOffer: 'অফার করুন',
+    makeOfferSub: 'এই পণ্যটির জন্য অফার করুন',
+    youOffered: 'আপনার অফার',
+    counterOffer: 'পাল্টা অফার',
+    finalOffer: 'সর্বশেষ অফার',
+    acceptOffer: 'অফার গ্রহণ করুন',
+    yourFinalPrice: 'আপনার চূড়ান্ত দাম',
+    startNew: 'নতুন দরকষাকষি শুরু করুন',
+    checkOfferError: 'আপনার অফার যাচাই করতে গিয়ে কিছু ভুল হয়েছে।',
+    expiredSession: 'এই অফার সেশন শেষ হয়ে গেছে।',
+    negotiationEnded: 'এই দরকষাকষি শেষ হয়েছে।',
+    privateNote: 'ব্যক্তিগত · কোনো স্প্যাম নয় · আপনি চ্যাট করার সময় আপনার দাম সুরক্ষিত থাকে',
+    minimise: 'চ্যাট ছোট করুন',
   },
   mr: {
     farewell_friendly: 'समजलो मित्रा, दार नेहमी उघडे आहे. मन बदललं तर सांग. काळजी घ्या! 👋',
@@ -487,7 +585,21 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     checking: 'काय करू शकतो ते पाहतो…',
     tryAgain: 'क्षमस्व, आत्ता तपासू शकलो नाही. पुन्हा प्रयत्न करूया.',
     bundle_redirect: 'हरकत नाही! प्रत्येक वस्तूची स्वतंत्र डील असते. प्रत्येकासाठी सर्वोत्तम ऑफर दाखवतो — पर्यायांशी वेगवेगळ्या किमतीत सौदेबाजी करू शकता. या वस्तूची डील उघडी राहील.',
-    bundle_coupon_redirect: 'चांगली बातमी — मी दुसऱ्या कूपनसह हे जोडू शकत नाही, पण सर्वोत्तम प्रति-वस्तू किंमत नक्की दाखवतो.'
+    bundle_coupon_redirect: 'चांगली बातमी — मी दुसऱ्या कूपनसह हे जोडू शकत नाही, पण सर्वोत्तम प्रति-वस्तू किंमत नक्की दाखवतो.',
+    bargainTitle: 'आमच्याशी वाटाघाट करा',
+    makeOffer: 'ऑफर करा',
+    makeOfferSub: 'या उत्पादनासाठी ऑफर द्या',
+    youOffered: 'तुमचा ऑफर',
+    counterOffer: 'प्रत्युत्तर ऑफर',
+    finalOffer: 'अंतिम ऑफर',
+    acceptOffer: 'ऑफर मान्य करा',
+    yourFinalPrice: 'तुमची अंतिम किंमत',
+    startNew: 'नवीन वाटाघाट सुरू करा',
+    checkOfferError: 'तुमचा ऑफर तपासताना काहीतरी चूक झाली.',
+    expiredSession: 'हा ऑफर सत्र संपला आहे.',
+    negotiationEnded: 'ही वाटाघाट संपली आहे.',
+    privateNote: 'खाजगी · स्पॅम नाही · तुम्ही चॅट करत असताना तुमची किंमत राखून ठेवली जाते',
+    minimise: 'चॅट लहान करा',
   },
   gu: {
     farewell_friendly: 'સમજ્યો મિત્ર, દરવાજો હંમેશા ખુલ્લો છે. મન બદલાય તો કહેજે. કાળજી રાખજો! 👋',
@@ -545,7 +657,21 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     checking: 'શું કરી શકું તે જોઉં છું…',
     tryAgain: 'માફ કરશો, હમણાં ચકાસી શક્યા નહીં. ફરી પ્રયત્ન કરીએ.',
     bundle_redirect: 'કોઈ વાંધો નહીં! દરેક વસ્તુની પોતાની અલગ ડીલ હોય છે. દરેક માટે શ્રેષ્ઠ ઓફર બતાવું છું — વિકલ્પો સાથે અલગ-અલગ કિંમતે મોલભાવ કરી શકો છો. આ વસ્તુની ડીલ ખુલ્લી જ રહેશે.',
-    bundle_coupon_redirect: 'સારા સમાચાર — હું આને બીજા કૂપન સાથે જોડી શકતો નથી, પણ શ્રેષ્ઠ પ્રતિ-વસ્તુ કિંમત જરૂર બતાવીશ.'
+    bundle_coupon_redirect: 'સારા સમાચાર — હું આને બીજા કૂપન સાથે જોડી શકતો નથી, પણ શ્રેષ્ઠ પ્રતિ-વસ્તુ કિંમત જરૂર બતાવીશ.',
+    bargainTitle: 'અમારી સાથે સોદાબાજી કરો',
+    makeOffer: 'ઑફર કરો',
+    makeOfferSub: 'આ ઉત્પાદન માટે ઑફર આપો',
+    youOffered: 'તમારો ઑફર',
+    counterOffer: 'જવાબી ઑફર',
+    finalOffer: 'અંતિમ ઑફર',
+    acceptOffer: 'ઑફર સ્વીકારો',
+    yourFinalPrice: 'તમારી અંતિમ કિંમત',
+    startNew: 'નવી સોદાબાજી શરૂ કરો',
+    checkOfferError: 'તમારો ઑફર તપાસતી વખતે કંઈક ખોટું થયું.',
+    expiredSession: 'આ ઑફર સત્ર સમાપ્ત થઈ ગયું છે.',
+    negotiationEnded: 'આ સોદાબાજી સમાપ્ત થઈ ગઈ છે.',
+    privateNote: 'ખાનગી · કોઈ સ્પામ નહીં · તમે ચેટ કરો ત્યારે તમારી કિંમત જળવાઈ રહે છે',
+    minimise: 'ચેટ નાની કરો',
   },
   pa: {
     farewell_friendly: 'ਸਮਝ ਗਿਆ ਮਿੱਤਰਾ, ਦਰਵਾਜ਼ਾ ਹਮੇਸ਼ਾ ਖੁੱਲ੍ਹਾ ਹੈ। ਮਨ ਬਦਲੇ ਤਾਂ ਦੱਸ ਦੇਣਾ। ਖ਼ਿਆਲ ਰੱਖੀਂ! 👋',
@@ -603,7 +729,21 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     checking: 'ਦੇਖਦਾ ਹਾਂ ਕੀ ਕਰ ਸਕਦਾ ਹਾਂ…',
     tryAgain: 'ਮਾਫ਼ ਕਰਨਾ, ਹੁਣੇ ਚੈੱਕ ਨਹੀਂ ਕਰ ਸਕਿਆ। ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੀਏ।',
     bundle_redirect: 'ਕੋਈ ਗੱਲ ਨਹੀਂ! ਹਰ ਚੀਜ਼ ਦੀ ਆਪਣੀ ਵੱਖਰੀ ਡੀਲ ਹੁੰਦੀ ਹੈ। ਹਰੇਕ ਲਈ ਸਭ ਤੋਂ ਵਧੀਆ ਆਫਰ ਦਿਖਾਉਂਦਾ ਹਾਂ — ਵਿਕਲਪਾਂ ਨਾਲ ਵੱਖ-ਵੱਖ ਕੀਮਤ ’ਤੇ ਮੋਲਭਾਵ ਕਰ ਸਕਦੇ ਹੋ। ਇਸ ਚੀਜ਼ ਦੀ ਡੀਲ ਖੁੱਲ੍ਹੀ ਰਹੇਗੀ।',
-    bundle_coupon_redirect: 'ਚੰਗੀ ਖ਼ਬਰ — ਮੈਂ ਇਸ ਨੂੰ ਦੂਜੇ ਕੂਪਨ ਨਾਲ ਜੋੜ ਨਹੀਂ ਸਕਦਾ, ਪਰ ਸਭ ਤੋਂ ਵਧੀਆ ਪ੍ਰਤੀ-ਚੀਜ਼ ਕੀਮਤ ਜ਼ਰੂਰ ਦਿਖਾਵਾਂਗਾ।'
+    bundle_coupon_redirect: 'ਚੰਗੀ ਖ਼ਬਰ — ਮੈਂ ਇਸ ਨੂੰ ਦੂਜੇ ਕੂਪਨ ਨਾਲ ਜੋੜ ਨਹੀਂ ਸਕਦਾ, ਪਰ ਸਭ ਤੋਂ ਵਧੀਆ ਪ੍ਰਤੀ-ਚੀਜ਼ ਕੀਮਤ ਜ਼ਰੂਰ ਦਿਖਾਵਾਂਗਾ।',
+    bargainTitle: 'ਸਾਡੇ ਨਾਲ ਗੱਲਬਾਤ ਕਰੋ',
+    makeOffer: 'ਆਫਰ ਕਰੋ',
+    makeOfferSub: 'ਇਸ ਉਤਪਾਦ ਲਈ ਆਫਰ ਦਿਓ',
+    youOffered: 'ਤੁਹਾਡਾ ਆਫਰ',
+    counterOffer: 'ਜਵਾਬੀ ਆਫਰ',
+    finalOffer: 'ਆਖਰੀ ਆਫਰ',
+    acceptOffer: 'ਆਫਰ ਸਵੀਕਾਰ ਕਰੋ',
+    yourFinalPrice: 'ਤੁਹਾਡੀ ਅੰਤਿਮ ਕੀਮਤ',
+    startNew: 'ਨਵੀਂ ਗੱਲਬਾਤ ਸ਼ੁਰੂ ਕਰੋ',
+    checkOfferError: 'ਤੁਹਾਡੇ ਆਫਰ ਦੀ ਜਾਂਚ ਕਰਦਿਆਂ ਕੁਝ ਗਲਤ ਹੋ ਗਿਆ।',
+    expiredSession: 'ਇਹ ਆਫਰ ਸੈਸ਼ਨ ਖਤਮ ਹੋ ਗਿਆ ਹੈ।',
+    negotiationEnded: 'ਇਹ ਗੱਲਬਾਤ ਖਤਮ ਹੋ ਗਈ ਹੈ।',
+    privateNote: 'ਨਿੱਜੀ · ਕੋਈ ਸਪੈਮ ਨਹੀਂ · ਜਦੋਂ ਤੁਸੀਂ ਚੈਟ ਕਰਦੇ ਹੋ ਤੁਹਾਡੀ ਕੀਮਤ ਸੁਰੱਖਿਅਤ ਰਹਿੰਦੀ ਹੈ',
+    minimise: 'ਚੈਟ ਛੋਟੀ ਕਰੋ',
   },
 }
 

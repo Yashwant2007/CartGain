@@ -630,6 +630,11 @@ export async function POST(request: NextRequest) {
       sessionStatus,
       finalPrice: updatedSession.finalPrice,
       sessionId: bargainSession.id,
+      // §10 floor-reached: backend-determined, boolean-only. Tells the UI the
+      // AI just presented its best (= last) price so the customer gets a
+      // "Final offer" frame. NEVER carries the floor amount itself; the client
+      // cannot compute or alter it.
+      floorReached: result.tactic === 'final_offer',
       ...(isAbuseNoConsume ? { abuseDetected: true, abuseCategory: (result.metadata as any)?.category } : {}),
       ...(recommendations && recoReason
         ? {
