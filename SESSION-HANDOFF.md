@@ -2,10 +2,24 @@
 
 > **How to resume:** just tell me "Have a look at `SESSION-HANDOFF.md`" and I'll read this file to get back on the same page.
 
-Last updated: Thu Sep 24 2026
+Last updated: Fri Sep 25 2026
 
 ## Recent cycles (brief — details in `IMPLEMENTATION-REPORT.md`)
-- **Bargain chat interface overhaul (latest) — code complete, verified; commit+deploy pending.**
+- **Shopify App Store automated review fixes (latest) — code complete, verified; commit+deploy pending.**
+  Root cause: fresh App Store installs died — `install/route.ts` redirected to the `/signup` login wall
+  (fails "Immediately authenticates after install"), OAuth state only existed via a session-bound
+  `/api/shopify/connect` (fresh installs hit callback "Invalid state"), and compliance webhooks were only
+  registered after a dashboard-driven connect (real installs never registered them). Fix = auto-provision:
+  `install/route.ts` now HMAC-verifies then **immediately 302s to Shopify OAuth** (short-circuit → `/dashboard`
+  when already authed+connected so re-opens don't re-OAuth); `callback/route.ts` detects install-origin state
+  (no storeId) and auto-provisions User (owner email from online-token `associated_user`) + Store (by domain,
+  refuses hijack) + free `createFreeSubscription`, registers webhooks, **mints the `next-auth.session-token`
+  cookie server-side** (Partitioned/CHIPS-matched, `encode` from `next-auth/jwt`) and lands the merchant in
+  `/dashboard` embedded. `SHOPIFY_OAUTH_SCOPES` + `buildShopifyOAuthUrl` extracted to `src/lib/shopify-oauth.ts`
+  (used by both connect + install). TLS + HMAC-webhook checks were already green.
+  Verified: tsc clean, jest **631 green**, lint clean. See IMPLEMENTATION-REPORT.md Addendum D.
+  Needs commit + `npx vercel --prod --yes`; live-store E2E is owner-side.
+- **Bargain chat interface overhaul — committed `7ca4ba53`, pushed, deployed, prod HTTP 200 (DONE).**
   Full production rewrite of `src/components/bargain/BargainWidget.tsx` to the 26-section
   conversational-commerce spec: explicit phases (launcher → panel → terminal states), product
   context card, labeled offer tags (YOU OFFERED / COUNTER OFFER / FINAL OFFER), quick-chip offers
@@ -17,8 +31,6 @@ Last updated: Thu Sep 24 2026
   Backend stays sole financial authority: `offer` now returns server-computed `floorReached`
   (`tactic==='final_offer'`, boolean-only, never the amount) driving the FINAL OFFER frame; +
   14 i18n keys × 9 languages. `StorefrontBargainWidget.tsx` demo surface untouched by design.
-  Verified: tsc clean, jest **631 green**, lint clean. See IMPLEMENTATION-REPORT.md Addendum C.
-  Needs commit + `npx vercel --prod --yes`.
 - **47-section hardening audit (previous) — code complete, committed, pushed; redeploy pending.**
   Full audit of the bargain engine against the hardening/salesperson/reco spec, plus three real gaps CLOSED:
   (1) coupon-stacking enforcement — new `BargainConfig.couponStackingEnabled` (default false), deterministic
@@ -189,10 +201,14 @@ real floor to a counter). `src/app/api/bargain/start/route.ts` fetches the autho
      product-complaint ("this is a scam") now redirect via `off_topic_extreme` **without consuming an attempt**.
 
 ## Open / next items (from our plan)
-- **Bargain chat interface overhaul (this session) — verified; commit + deploy pending:** rewrite of
-  `BargainWidget.tsx` + `floorReached` + 14 i18n keys. Re-ran tsc/jest/lint (631 green). Commit lowercase,
-  push, then `npx vercel --prod --yes`. Manual Shopify-side checks (embedded + floating, quick chips,
-  accept→code, console at 320–1440px, FINAL OFFER only at last counter) per Addendum C6.
+- **Shopify App Store automated review (this session) — code complete, verified; commit + deploy pending.**
+  Auto-provision install flow done (Addendum D). After deploy: live-store test install on the owner's partner
+  test store to confirm all 6 automated checks (immediate OAuth redirect, post-auth app-UI redirect,
+  compliance webhooks registered at install, HMAC webhook signature, TLS). `customers/data_request` export is
+  still ack-only (see SHOPIFY_PROTECTED_DATA_READINESS.md §7) — flag before App Store submission.
+- **Bargain chat interface overhaul — DONE (committed `7ca4ba53`, pushed, deployed, prod HTTP 200).**
+  Manual Shopify-side checks still recommended per Addendum C6 (embedded + floating, quick chips,
+  accept→code, console at 320–1440px, FINAL OFFER only at last counter).
 - **Website review fixes (this session) — committed; deploy pending:** SMS removal + homepage/pricing copy
   changes above. Re-run `npx tsc --noEmit` / `npm run lint` / `npx jest` (539) before commit + deploy.
 - **Social proof / testimonials (owner task):** add a real founder-testimonial section when user provides quotes —

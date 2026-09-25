@@ -5,6 +5,8 @@ import { encrypt } from '@/lib/encryption'
 import { setupShopifyWebhooks } from '@/lib/shopify'
 import { generateCampaignSetup } from '@/lib/services/ai'
 import { verifyOAuthState, verifyShopifyCallbackHmac, isValidShopDomain } from '@/lib/shopify-oauth'
+import { createFreeSubscription } from '@/lib/subscription'
+import { encode } from 'next-auth/jwt'
 import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
 
@@ -17,6 +19,11 @@ const STALE_COOKIE_NAMES = [
   '__Secure-next-auth.pkce.code_verifier',
 ]
 
+// The live session cookie set by NextAuth (see src/lib/auth.ts cookies config).
+// Must match exactly, including the Partitioned (CHIPS) attribute so the
+// session survives inside Shopify's cross-site admin iframe.
+const SESSION_COOKIE_NAME = 'next-auth.session-token'
+
 function redirectWithCleanup(path: string, baseUrl: string): NextResponse {
   const res = NextResponse.redirect(new URL(path, baseUrl))
   for (const name of STALE_COOKIE_NAMES) {
@@ -28,7 +35,43 @@ function redirectWithCleanup(path: string, baseUrl: string): NextResponse {
   return res
 }
 
+async function mintSessionCookie(
+  res: NextResponse,
+  payload: {
+    sub: string
+    email: string
+    name?: string | null
+    storeId: string
+    requirePassword: boolean
+  }
+): Promise<void> {
+  const secret = process.env.NEXTAUTH_SECRET
+  if (!secret) throw new Error('NEXTAUTH_SECRET not configured')
+
+  const sessionToken = await encode({
+    token: {
+      sub: payload.sub,
+      id: payload.sub,
+      email: payload.email,
+      name: payload.name ?? undefined,
+      storeId: payload.storeId,
+      requirePassword: payload.requirePassword,
+    },
+    secret,
+    maxAge: 30 * 24 * 60 * 60, // matches session.maxAge in src/lib/auth.ts
+  })
+
+  // Build the Set-Cookie by hand to guarantee the Partitioned attribute; the
+  // NextResponse cookies API types don't expose it consistently across versions.
+  res.headers.append(
+    'Set-Cookie',
+    `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionToken)}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=${30 * 24 * 60 * 60}`
+  )
+}
+
 export async function GET(req: NextRequest) {
+  const baseUrl = getAppBaseUrl(req)
+
   try {
     const { searchParams } = new URL(req.url)
     const shop = searchParams.get('shop')
@@ -36,40 +79,52 @@ export async function GET(req: NextRequest) {
     const state = searchParams.get('state')
 
     if (!shop || !code) {
-      return redirectWithCleanup('/dashboard/integrations?shopify_error=Missing+parameters', req.url)
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=Missing+parameters', baseUrl)
     }
 
     if (!state) {
-      return redirectWithCleanup('/dashboard/integrations?shopify_error=Missing+state', req.url)
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=Missing+state', baseUrl)
     }
 
     // Verify Shopify signed the callback: shop, code, timestamp and state are
     // all covered by the callback HMAC, so a tampered or replayed-elsewhere
     // callback is rejected before we exchange anything.
     if (!verifyShopifyCallbackHmac(searchParams)) {
-      return redirectWithCleanup('/dashboard/integrations?shopify_error=Invalid+callback+signature', req.url)
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=Invalid+callback+signature', baseUrl)
     }
 
     if (!isValidShopDomain(shop)) {
-      return redirectWithCleanup('/dashboard/integrations?shopify_error=Invalid+shop+domain', req.url)
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=Invalid+shop+domain', baseUrl)
     }
 
+    // The signed state tells us which flow we're in:
+    //  - storeId present → dashboard-driven "connect" (merchant already logged
+    //    in, store already exists).
+    //  - no storeId → install-origin (App Install button) → auto-provision the
+    //    User + Store + free Subscription from the shop owner and log them in.
     let storeId: string | null = null
+    let installOrigin = false
+    let embedHost: string | null = null
     try {
       const decoded = verifyOAuthState(state)
-      if (!decoded || typeof decoded.storeId !== 'string' || !decoded.storeId) {
+      if (!decoded) {
         throw new Error('Invalid state')
       }
-      storeId = decoded.storeId
+      if (typeof decoded.storeId === 'string' && decoded.storeId) {
+        storeId = decoded.storeId
+      } else {
+        installOrigin = true
+        embedHost = typeof decoded.host === 'string' ? decoded.host : null
+      }
     } catch {
-      return redirectWithCleanup('/dashboard/integrations?shopify_error=Invalid+state', req.url)
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=Invalid+state', baseUrl)
     }
 
     const apiKey = process.env.SHOPIFY_API_KEY
     const apiSecret = process.env.SHOPIFY_API_SECRET
 
     if (!apiKey || !apiSecret) {
-      return redirectWithCleanup('/dashboard/integrations?shopify_error=Shopify+not+configured', req.url)
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=Shopify+not+configured', baseUrl)
     }
 
     const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
@@ -85,14 +140,14 @@ export async function GET(req: NextRequest) {
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
       console.error('Shopify token exchange failed:', errorText)
-      return redirectWithCleanup('/dashboard/integrations?shopify_error=Token+exchange+failed', req.url)
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=Token+exchange+failed', baseUrl)
     }
 
     const tokenData = await tokenResponse.json()
     const accessToken = tokenData.access_token
 
     if (!accessToken) {
-      return redirectWithCleanup('/dashboard/integrations?shopify_error=No+access+token+received', req.url)
+      return redirectWithCleanup('/dashboard/integrations?shopify_error=No+access+token+received', baseUrl)
     }
 
     const tokenExpiresAt = tokenData.expires_in
@@ -101,6 +156,63 @@ export async function GET(req: NextRequest) {
 
     if (tokenData.refresh_token || tokenData.expires_in) {
       console.log(`Shopify token for ${shop}${tokenData.expires_in ? ` expires in ${tokenData.expires_in}s` : ''}${tokenData.refresh_token ? ', refresh token provided' : ''}`)
+    }
+
+    // ── Install-origin auto-provision ──
+    // For online (per-user) tokens the token response includes the authorizing
+    // staff member. Use their email as the CartGain account email; the store
+    // owner installing the app becomes the account owner.
+    let provisionedUserId: string | null = null
+    if (installOrigin) {
+      const associatedUser = tokenData.associated_user as
+        | { email?: string; first_name?: string; last_name?: string }
+        | undefined
+      const ownerEmail = associatedUser?.email?.toLowerCase().trim()
+      const ownerName =
+        [associatedUser?.first_name, associatedUser?.last_name].filter(Boolean).join(' ').trim() ||
+        shop.replace('.myshopify.com', '')
+
+      if (!ownerEmail) {
+        return redirectWithCleanup('/dashboard/integrations?shopify_error=Owner+email+not+available', baseUrl)
+      }
+
+      let user = await prisma.user.findUnique({ where: { email: ownerEmail } })
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            email: ownerEmail,
+            name: ownerName,
+          },
+        })
+      }
+      provisionedUserId = user.id
+
+      // Don't hijack a shop that's already connected to a different CartGain
+      // account (webhook/store lookups are domain-keyed).
+      const existingStore = await prisma.store.findFirst({ where: { domain: shop } })
+      if (existingStore && existingStore.userId !== user.id) {
+        return redirectWithCleanup('/dashboard/integrations?shopify_error=Store+already+linked+to+another+account', baseUrl)
+      }
+
+      const store = existingStore
+        ? await prisma.store.update({
+            where: { id: existingStore.id },
+            data: { userId: user.id },
+          })
+        : await prisma.store.create({
+            data: {
+              userId: user.id,
+              name: ownerName,
+              platform: 'shopify',
+              domain: shop,
+              currency: 'USD',
+              timezone: 'UTC',
+            },
+          })
+      storeId = store.id
+
+      // Every auto-provisioned account gets a free subscription (idempotent).
+      await createFreeSubscription(user.id)
     }
 
     if (storeId) {
@@ -120,11 +232,11 @@ export async function GET(req: NextRequest) {
     await track({
       name: 'cartgain_shopify_oauth_completed',
       storeId: storeId,
+      userId: provisionedUserId ?? undefined,
       properties: { shop },
     })
 
     try {
-      const baseUrl = getAppBaseUrl(req)
       await setupShopifyWebhooks(shop, accessToken, baseUrl)
     } catch (webhookError) {
       await captureError({
@@ -207,7 +319,41 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    return redirectWithCleanup('/shopify-connected', req.url)
+    // ── Landing ──
+    if (installOrigin) {
+      // Auto-provisioned install: mint the CartGain session so the merchant is
+      // logged straight in, then land them in the embedded app UI (dashboard).
+      const user = provisionedUserId
+        ? await prisma.user.findUnique({ where: { id: provisionedUserId } })
+        : null
+      const store = storeId ? await prisma.store.findUnique({ where: { id: storeId } }) : null
+
+      if (!user || !store) {
+        return redirectWithCleanup('/login?error=Provisioning+incomplete', baseUrl)
+      }
+
+      const target = new URL('/dashboard', baseUrl)
+      if (embedHost) target.searchParams.set('host', embedHost)
+      target.searchParams.set('shop', shop)
+      target.searchParams.set('shopify_connected', 'true')
+
+      const res = redirectWithCleanup(target.pathname + target.search, baseUrl)
+      try {
+        await mintSessionCookie(res, {
+          sub: user.id,
+          email: user.email,
+          name: user.name,
+          storeId: store.id,
+          requirePassword: !user.password,
+        })
+      } catch (sessionError) {
+        console.error('Failed to mint session cookie:', sessionError)
+        return redirectWithCleanup('/login?error=Session+failed', baseUrl)
+      }
+      return res
+    }
+
+    return redirectWithCleanup('/shopify-connected', baseUrl)
   } catch (error) {
     await captureError({
       level: 'error',
@@ -218,6 +364,6 @@ export async function GET(req: NextRequest) {
       persist: true,
       statusCode: 500,
     })
-    return redirectWithCleanup('/dashboard/integrations?shopify_error=Callback+processing+failed', req.url)
+    return redirectWithCleanup('/dashboard/integrations?shopify_error=Callback+processing+failed', baseUrl)
   }
 }

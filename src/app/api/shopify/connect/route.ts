@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getAppBaseUrl } from '@/lib/app-base-url'
 import { shopifyConnectSchema, validateOrThrow, handleValidationError } from '@/lib/validation'
-import { signOAuthState, isValidShopDomain } from '@/lib/shopify-oauth'
+import { signOAuthState, isValidShopDomain, buildShopifyOAuthUrl } from '@/lib/shopify-oauth'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
@@ -58,30 +58,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Shopify API key not configured' }, { status: 500 })
     }
 
-    // Minimum necessary access. Kept in sync with shopify.app.toml.
-    // - read_customers / read_checkouts / read_orders / read_products: recover
-    //   abandoned carts and read the data needed for recovery + bargain pricing.
-    // - write_checkouts: required alongside read_checkouts for the abandoned
-    //   checkout REST endpoints CartGain uses.
-    // - read_discounts / write_discounts: create and manage recovery discount
-    //   codes (discountCodeBasicCreate).
-    // - write_webhooks / read_webhooks: register/update Shopify webhooks at
-    //   install time (including privacy/redaction topics).
-    // Not requested: write_customers, write_orders, write_products,
-    // write_draft_orders, read_draft_orders, fulfillment scopes — CartGain does
-    // not write customers/orders/products and never uses draft orders.
-    const scopes = [
-      'read_checkouts',
-      'write_checkouts',
-      'read_orders',
-      'read_customers',
-      'read_products',
-      'read_discounts',
-      'write_discounts',
-      'write_webhooks',
-      'read_webhooks',
-    ].join(',')
-
     const baseUrl = getAppBaseUrl(req)
     const redirectUri = `${baseUrl}/api/shopify/callback`
 
@@ -90,14 +66,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 })
     }
 
-    const authUrl = new URL(`https://${shop}/admin/oauth/authorize`)
-    authUrl.searchParams.set('client_id', apiKey)
-    authUrl.searchParams.set('scope', scopes)
-    authUrl.searchParams.set('redirect_uri', redirectUri)
-    authUrl.searchParams.set('state', state)
-    // Request expiring online tokens (Shopify deprecated non-expiring offline tokens).
-    // Online tokens include expires_in + refresh_token — we store both in the callback.
-    authUrl.searchParams.append('grant_options[]', 'per-user')
+    const authUrl = buildShopifyOAuthUrl({ shop, state, redirectUri })
 
     const response = NextResponse.json({ authUrl: authUrl.toString(), state })
 

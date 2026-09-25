@@ -545,3 +545,110 @@ financial authority; the floor/max-discount never reaches the browser.
 3. Re-run `npx vercel --prod --yes` to ship (no schema change this cycle).
 4. Owner Shopify-side checks: `/cart/add.js` add-to-cart path and
    discount-code application at checkout.
+
+---
+
+# ADDENDUM D — SHOPIFY APP STORE AUTOMATED REVIEW FIXES (AUTO-PROVISION INSTALL)
+
+## D1. Problem — why the automated checks failed
+The Shopify App Store review runs automated checks on the App URL
+(`/api/shopify/install`, configured in `shopify.app.toml`). Four were failing /
+unverifiable:
+
+1. **"Immediately authenticates after install"** — `install/route.ts` verified
+   HMAC then redirected to `/signup?shop=…&next=/dashboard/integrations`, a
+   CartGain login wall. Shopify's checker never saw an immediate redirect to
+   `…/admin/oauth/authorize`, so it could not observe the app authenticate.
+2. **"Immediately redirects to app UI after authentication"** — OAuth state was
+   only ever signed by authenticated dashboard users via
+   `/api/shopify/connect` (state = `{ storeId, userId }`), so a fresh App Store
+   install reached `callback/route.ts` and died at "Invalid state" — the flow
+   could never complete into the app UI without a pre-existing CartGain account.
+3. **"Provides mandatory compliance webhooks"** — `setupShopifyWebhooks` only
+   ran inside the dashboard-driven callback path, so a real App Store install
+   never registered `app/uninstalled`, `customers/data_request`,
+   `customers/redact`, `shop/redact`.
+4. **"Verifies webhooks with HMAC signatures"** and **"Uses a valid TLS
+   certificate"** were already satisfied (`verifyShopifyWebhook` +
+   timingSafeEqual, tested; Vercel TLS).
+
+Root cause for 1–3 is the same architectural decision: the old flow required a
+pre-existing CartGain account + store before Shopify OAuth could run.
+
+## D2. Fix — auto-provision accounts from the shop owner
+Decision (owner-approved): install → Shopify OAuth immediately → create
+User + Store + free Subscription from the shop owner, auto-login via a minted
+NextAuth session cookie, land in the embedded app UI. The dashboard-driven
+"connect" flow is untouched and still works.
+
+### `src/lib/shopify-oauth.ts`
+- Extracted the trimmed scope list to `SHOPIFY_OAUTH_SCOPES` and
+  `buildShopifyOAuthUrl({ shop, state, redirectUri })` (client_id, scope,
+  redirect_uri, state, `grant_options[]=per-user`). Single source of truth —
+  previously the scope list lived inline in `connect/route.ts`.
+
+### `src/app/api/shopify/install/route.ts` (rewritten)
+- HMAC verified (unchanged, fail-closed).
+- **Immediately redirects to Shopify OAuth** (`buildShopifyOAuthUrl`) with a
+  signed state `{ shop, host, embedded }` — deliberately **no storeId**, which
+  marks the callback as install-origin vs. dashboard-connect.
+- Short-circuit: if a live NextAuth session exists AND the shop is already
+  connected to that user (re-open of an installed app in the admin iframe),
+  redirect straight to `/dashboard` instead of re-running OAuth (avoids the
+  re-auth loop while keeping HMAC re-validation).
+- Still sets the short-lived `shopify_install_shop` cookie (kept for the
+  integrations-page auto-fill path).
+
+### `src/app/api/shopify/callback/route.ts`
+- State decode now branches: `storeId` present → original connect flow
+  (unchanged); **no storeId** → install-origin auto-provision.
+- After token exchange, for install-origin state:
+  - Resolves the shop owner from `tokenData.associated_user` (online/per-user
+    tokens return `email` + names).
+  - Finds-or-creates the `User` (#  password null — auto-provisioned) and the
+    `Store` (by domain; refuses to hijack a store already owned by a different
+    CartGain account — webhook lookups are domain-keyed).
+  - Calls `createFreeSubscription(user.id)` (idempotent upsert).
+- Shared tail unchanged: store token/refresh-token storage
+  (`encrypt`), `setupShopifyWebhooks` (now runs for real installs → fixes the
+  compliance-webhook check), auto-campaign + `bargainConfig.enabled` onboarding,
+  `track` event.
+- Install-origin landing: **mints the NextAuth session cookie server-side**
+  (`encode` from `next-auth/jwt`, `maxAge` 30d, cookie `next-auth.session-token`
+  with `HttpOnly; Secure; SameSite=None; Partitioned` — matches
+  `src/lib/auth.ts` cookie config so it survives Shopify's cross-site iframe
+  under CHIPS) and redirects to `/dashboard?shop=…&host=…&shopify_connected=true`.
+  This satisfies "immediately redirects to app UI after authentication" by
+  placing the merchant directly in the authenticated embedded dashboard with no
+  login step.
+
+## D3. Files changed
+- `src/app/api/shopify/install/route.ts` — immediate OAuth redirect (+
+  already-authed short-circuit); removed `/signup` login wall.
+- `src/app/api/shopify/callback/route.ts` — install-origin auto-provision,
+  session-cookie minting, embedded-dashboard landing.
+- `src/app/api/shopify/connect/route.ts` — refactored to use
+  `SHOPIFY_OAUTH_SCOPES` / `buildShopifyOAuthUrl` (behavior identical).
+- `src/lib/shopify-oauth.ts` — shared scopes + OAuth URL builder.
+
+## D4. Tests / verification
+- `npx tsc --noEmit` clean.
+- `npx jest` **631 passed / 46 suites** (no regressions; existing
+  HMAC/signature + app-base-url suites green).
+- `npm run lint` clean.
+
+## D5. Manual tasks for the owner (Shopify-side)
+1. Deploy (`npx vercel --prod --yes`).
+2. On the Shopify partner **test store**: run a brand-new install from the app
+   listing and confirm the 6 automated-check statuses — immediate OAuth prompt,
+   post-auth landing in the embedded dashboard (logged in, no signup wall), and
+   the 4 compliance webhooks listed under Partner Dashboard → Apps → your app →
+   Configuration → Webhooks after install.
+3. Confirm the already-connected merchant flow still works from
+   `/dashboard/integrations` (popup connect → `/shopify-connected` → integrations
+   page), and that re-opening an installed app does NOT re-trigger OAuth.
+4. Re-install/upgrade path: uninstall then reinstall on the same store should
+   attach to the same CartGain user (domain lookup), not duplicate.
+5. Confirm `customers/data_request` webhook ack+audit behavior
+   (see `SHOPIFY_PROTECTED_DATA_READINESS.md` §7 — ack-only today; programmatic
+   export is a pre-submission open item).

@@ -1,6 +1,52 @@
 import crypto from 'crypto'
 
 /**
+ * Minimum necessary access — kept in sync with shopify.app.toml.
+ * - read_customers / read_checkouts / read_orders / read_products: recover
+ *   abandoned carts and read the data needed for recovery + bargain pricing.
+ * - write_checkouts: required alongside read_checkouts for the abandoned
+ *   checkout REST endpoints CartGain uses.
+ * - read_discounts / write_discounts: create and manage recovery discount
+ *   codes (discountCodeBasicCreate).
+ * - write_webhooks / read_webhooks: register/update Shopify webhooks at
+ *   install time (including privacy/redaction topics).
+ * Not requested: write_customers, write_orders, write_products,
+ * write_draft_orders, read_draft_orders, fulfillment scopes — CartGain does
+ * not write customers/orders/products and never uses draft orders.
+ */
+export const SHOPIFY_OAUTH_SCOPES = [
+  'read_checkouts',
+  'write_checkouts',
+  'read_orders',
+  'read_customers',
+  'read_products',
+  'read_discounts',
+  'write_discounts',
+  'write_webhooks',
+  'read_webhooks',
+].join(',')
+
+export function buildShopifyOAuthUrl(opts: {
+  shop: string
+  state: string
+  redirectUri: string
+}): string {
+  const apiKey = process.env.SHOPIFY_API_KEY
+  if (!apiKey) throw new Error('SHOPIFY_API_KEY not configured')
+
+  const authUrl = new URL(`https://${opts.shop}/admin/oauth/authorize`)
+  authUrl.searchParams.set('client_id', apiKey)
+  authUrl.searchParams.set('scope', SHOPIFY_OAUTH_SCOPES)
+  authUrl.searchParams.set('redirect_uri', opts.redirectUri)
+  authUrl.searchParams.set('state', opts.state)
+  // Request expiring online tokens (Shopify deprecated non-expiring offline
+  // tokens). Online tokens include expires_in + refresh_token + the
+  // associated_user (owner) identity — we store all three in the callback.
+  authUrl.searchParams.append('grant_options[]', 'per-user')
+  return authUrl.toString()
+}
+
+/**
  * Shopify OAuth + callback verification helpers.
  *
  * The OAuth state is a signed token (payload.sig) whose HMAC secret used to be
