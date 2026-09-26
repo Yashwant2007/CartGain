@@ -964,150 +964,114 @@ export default function BargainWidget({
             borderBottom: '1px solid #eef2f7',
             background: 'linear-gradient(180deg, #ffffff, #fafbff)',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
-              <ProductThumb image={image} title={productTitle} size={44} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <ProductThumb image={image} title={productTitle} size={40} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 800, fontSize: 15, color: '#0f172a' }}>{t('bargainTitle')}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                  <span style={{ fontWeight: 800, fontSize: 14.5, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {t('bargainTitle')}
+                  </span>
                   {personaChip && (
                     <span style={{
-                      fontSize: 10.5,
-                      fontWeight: 700,
-                      color: '#4f46e5',
-                      background: '#eef2ff',
-                      border: '1px solid #e0e7ff',
-                      borderRadius: 999,
-                      padding: '2px 9px',
-                      whiteSpace: 'nowrap',
+                      fontSize: 10.5, fontWeight: 700, color: '#4f46e5',
+                      background: '#eef2ff', border: '1px solid #e0e7ff',
+                      borderRadius: 999, padding: '1px 8px', whiteSpace: 'nowrap', flexShrink: 0,
                     }}>
                       {personaChip.emoji} {personaChip.label}
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 1.5, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 4, background: '#34d399', flexShrink: 0, boxShadow: '0 0 0 3px rgba(52,211,153,0.16)' }} />
+                <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 1.5, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 4, background: '#34d399', flexShrink: 0 }} />
                   <span style={{ fontWeight: 700, color: '#059669', flexShrink: 0 }}>{t('online')}</span>
                   <span style={{ color: '#cbd5e1', flexShrink: 0 }}>·</span>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('bargainTitle')} — AI Bargain Assistant</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 1 }}>
+                    {productTitle ? productTitle : 'This item'}
+                  </span>
                 </div>
               </div>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                background: '#eef2ff', color: '#4f46e5', border: '1px solid #e0e7ff',
+                borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+              }}>
+                <Zap size={11} />
+                {currencySymbol}{originalPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+              </span>
               {!isEmbed && (
-                <button
-                  onClick={() => setMinimised(true)}
-                  aria-label={t('minimise')}
-                  className="cg-icon-btn"
-                  style={{ width: 44, height: 44, borderRadius: 11 }}
-                >
-                  <Minimize2 size={17} />
+                <button onClick={() => setMinimised(true)} aria-label={t('minimise')} className="cg-icon-btn" style={{ width: 40, height: 40, borderRadius: 11 }}>
+                  <Minimize2 size={16} />
                 </button>
               )}
               <button
                 onClick={closePanel}
                 aria-label="Close"
                 className="cg-icon-btn"
-                style={{ width: 44, height: 44, borderRadius: 11 }}
+                style={{ width: 40, height: 40, borderRadius: 11 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#334155' }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b' }}
               >
-                <X size={18} />
+                <X size={17} />
               </button>
             </div>
 
-            {/* Product price line inside header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 2px 0', minWidth: 0 }}>
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
-                background: '#eef2ff', color: '#4f46e5', border: '1px solid #e0e7ff',
-                borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-              }}>
-                <Zap size={11} />
-                {currencySymbol}{originalPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-              </span>
-              <span style={{ fontSize: 11, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                {productTitle ? productTitle : 'This item'}
-              </span>
-            </div>
-
-            {/* Tabs */}
-            <div style={{ display: 'flex', gap: 3, marginTop: 8 }}>
-              {([
-                { key: 'chat', label: t('tabChat'), icon: <MessageCircle size={13} /> },
-                { key: 'info', label: t('tabDeal'), icon: <Tag size={13} /> },
-              ] as const).map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  aria-pressed={activeTab === tab.key}
-                  className="cg-tab"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    padding: '9px 14px',
-                    background: activeTab === tab.key ? '#eef2ff' : 'transparent',
-                    color: activeTab === tab.key ? '#4f46e5' : '#64748b',
-                    border: 'none',
-                    borderBottom: activeTab === tab.key ? '2px solid #6366f1' : '2px solid transparent',
-                    borderRadius: '7px 7px 0 0',
-                    fontSize: 13,
-                    fontWeight: activeTab === tab.key ? 700 : 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    outline: 'none',
-                    flexShrink: 0,
-                  }}
+            {/* Tabs + status/trust/timer in ONE slim row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 10 }}>
+              <div style={{ display: 'flex', gap: 2 }}>
+                {([
+                  { key: 'chat', label: t('tabChat'), icon: <MessageCircle size={13} /> },
+                  { key: 'info', label: t('tabDeal'), icon: <Tag size={13} /> },
+                ] as const).map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    aria-pressed={activeTab === tab.key}
+                    className="cg-tab"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      padding: '8px 12px',
+                      background: activeTab === tab.key ? '#eef2ff' : 'transparent',
+                      color: activeTab === tab.key ? '#4f46e5' : '#64748b',
+                      border: '1px solid transparent',
+                      borderColor: activeTab === tab.key ? '#e0e7ff' : 'transparent',
+                      borderRadius: 10,
+                      fontSize: 12.5,
+                      fontWeight: activeTab === tab.key ? 700 : 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      outline: 'none',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {tab.icon} {tab.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ flex: 1 }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, paddingLeft: 8 }}>
+                {timeLeft != null && !sessionEnded && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#64748b', fontSize: 11.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    <Clock size={11} style={{ color: '#94a3b8' }} />
+                    <span>{t('expiresIn', { n: Math.floor(timeLeft / 60) + ':' + String(timeLeft % 60).padStart(2, '0') })}</span>
+                  </span>
+                )}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#64748b', fontSize: 11, minWidth: 0 }}>
+                  <ShieldCheck size={12} style={{ color: '#94a3b8', flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('privateNote')}</span>
+                </span>
+                <a
+                  href={linkout ? `${linkout}?ai_opt_out=1` : undefined}
+                  onClick={linkout ? undefined : (e) => { e.preventDefault(); void optOutOfAI() }}
+                  className="cg-link"
+                  style={{ color: '#6366f1', textDecoration: 'none', fontWeight: 600, cursor: 'pointer', outline: 'none', fontSize: 11.5, flexShrink: 0 }}
                 >
-                  {tab.icon} {tab.label}
-                </button>
-              ))}
+                  {t('skip')}
+                </a>
+              </div>
             </div>
           </div>
-
-          {/* Trust strip + opt-out */}
-          <div style={{
-            padding: '7px 15px',
-            fontSize: 11,
-            color: '#64748b',
-            background: '#fafbfc',
-            borderBottom: '1px solid #eef2f7',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            flexWrap: 'wrap',
-            justifyContent: 'space-between',
-          }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <ShieldCheck size={12} style={{ color: '#94a3b8' }} />
-              {t('privateNote')}
-            </span>
-            <a
-              href={linkout ? `${linkout}?ai_opt_out=1` : undefined}
-              onClick={linkout ? undefined : (e) => { e.preventDefault(); void optOutOfAI() }}
-              className="cg-link"
-              style={{ color: '#6366f1', textDecoration: 'none', fontWeight: 600, cursor: 'pointer', outline: 'none', fontSize: 11.5 }}
-            >
-              {t('skip')}
-            </a>
-          </div>
-
-          {/* Timer */}
-          {timeLeft != null && !sessionEnded && (
-            <div style={{
-              padding: '5px 16px',
-              fontSize: 11,
-              color: '#64748b',
-              background: '#ffffff',
-              borderBottom: '1px solid #eef2f7',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}>
-              <Clock size={11} style={{ color: '#94a3b8' }} />
-              <span style={{ fontVariantNumeric: 'tabular-nums', color: '#64748b' }}>
-                {t('expiresIn', { n: Math.floor(timeLeft / 60) + ':' + String(timeLeft % 60).padStart(2, '0') })}
-              </span>
-            </div>
-          )}
 
           {/* ── Conversation ── */}
           <div
@@ -1162,8 +1126,13 @@ export default function BargainWidget({
                 )}
 
                 {messages.length === 0 && (
-                  <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13.5, padding: '44px 0' }}>
-                    <Loader2 size={22} className="spin" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+                  <div style={{
+                    alignSelf: 'center', margin: 'auto 0', textAlign: 'center',
+                    color: '#64748b', fontSize: 13, padding: '26px 28px',
+                    background: '#ffffff', border: '1px solid #eef2f7', borderRadius: 16,
+                    boxShadow: '0 1px 3px rgba(15,23,42,0.04)', maxWidth: 300,
+                  }}>
+                    <Loader2 size={22} className="spin" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 14px', color: '#6366f1' }} />
                     {t('connecting')}
                   </div>
                 )}
@@ -1174,6 +1143,7 @@ export default function BargainWidget({
                     m={m}
                     t={t}
                     currencySymbol={currencySymbol}
+                    personaChip={personaChip}
                     isFinal={floorReached && idx === messages.length - 1 && m.offeredPrice != null}
                   />
                 ))}
@@ -1182,7 +1152,7 @@ export default function BargainWidget({
                 {recommendations && recommendations.length > 0 && (
                   <div style={{ alignSelf: 'flex-start', width: '100%', animation: 'cgMsgIn 0.2s ease-out' }}>
                     <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: '#6366f1', margin: '10px 6px 8px' }}>
-                      ✨ {t('alternativesTitle')}
+                      {t('alternativesTitle')}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {recommendations.map(card => (
@@ -1202,9 +1172,16 @@ export default function BargainWidget({
                 {/* AI thinking indicator */}
                 {thinking && (
                   <div style={{ alignSelf: 'flex-start', animation: 'cgMsgIn 0.18s ease-out' }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#8b5cf6', marginBottom: 5, paddingLeft: 6 }}>
-                      {t('aiPowered')}
-                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 3, paddingLeft: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{
+                    width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+                    background: 'linear-gradient(135deg,#818cf8,#4f46e5)', color: '#ffffff',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{ fontSize: 10, lineHeight: 1 }}>{personaChip ? personaChip.emoji : '🤝'}</span>
+                  </span>
+                  {personaChip ? personaChip.label : t('assistant')}
+                </div>
                     <div style={{
                       background: '#ffffff',
                       border: '1px solid #e9e4f9',
@@ -1485,7 +1462,7 @@ export default function BargainWidget({
             <>
               {!sessionEnded && quickOffers.length > 0 && (
                 <div style={{
-                  padding: '10px 14px 0',
+                  padding: '8px 14px 0',
                   background: '#ffffff',
                   display: 'flex',
                   gap: 6,
@@ -1516,7 +1493,7 @@ export default function BargainWidget({
               )}
 
               <div style={{
-                padding: '10px 14px 14px',
+                padding: '8px 14px 12px',
                 background: '#ffffff',
                 display: 'flex',
                 flexDirection: 'column',
@@ -1524,12 +1501,12 @@ export default function BargainWidget({
               }}>
                 {/* Message / offer composer — free text is a real chat message;
                     a number anywhere in it is treated as the negotiation offer. */}
-                <div style={{
+                <div className="cg-composer" style={{
                   display: 'flex',
                   alignItems: 'center',
                   borderRadius: 13,
                   border: '1px solid #e2e8f0',
-                  background: '#f8fafc',
+                  background: '#f6f8fb',
                   padding: '0 6px 0 14px',
                   transition: 'border-color 0.15s ease',
                   opacity: sessionEnded ? 0.55 : 1,
@@ -1658,6 +1635,11 @@ export default function BargainWidget({
         .cartgain-bargain button:focus-visible,
         .cartgain-bargain a:focus-visible,
         .cartgain-bargain input:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px }
+        .cartgain-bargain .cg-composer:focus-within {
+          border-color: #a5b4fc;
+          box-shadow: 0 0 0 3px rgba(99,102,241,0.14);
+          background: #ffffff;
+        }
 
         .cg-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0 }
 
@@ -1851,10 +1833,11 @@ function ProductContextCard({ image, title, currencySymbol, price, mode }: {
 // One chat bubble. Offers within a message are visually emphasized and labeled
 // (YOU OFFERED / COUNTER OFFER / FINAL OFFER) so the negotiation scans at a
 // glance.
-function MessageBubble({ m, t, currencySymbol, isFinal }: {
+function MessageBubble({ m, t, currencySymbol, personaChip, isFinal }: {
   m: Message
   t: (key: UiKey, vars?: Record<string, string | number>) => string
   currencySymbol: string
+  personaChip?: { label: string; emoji: string }
   isFinal: boolean
 }) {
   const isCustomer = m.role === 'customer'
@@ -1870,24 +1853,36 @@ function MessageBubble({ m, t, currencySymbol, isFinal }: {
     <div
       style={{
         alignSelf: isCustomer ? 'flex-end' : 'flex-start',
-        maxWidth: '88%',
+        maxWidth: isCustomer ? '86%' : '84%',
         animation: 'cgMsgIn 0.18s ease-out',
       }}
     >
       {!isCustomer && (
         <div style={{
-          fontSize: 10.5,
+          fontSize: 12,
           fontWeight: 700,
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-          color: m.role === 'ai' ? '#8b5cf6' : '#94a3b8',
-          marginBottom: 5,
-          paddingLeft: 6,
+          color: '#334155',
+          marginBottom: 3,
+          paddingLeft: 2,
           display: 'flex',
           alignItems: 'center',
-          gap: 5,
+          gap: 6,
         }}>
-          <span>💬 {m.role === 'ai' ? (t('assistant')) : t('notice')}</span>
+          <span style={{
+            width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+            background: m.role === 'ai' ? 'linear-gradient(135deg,#818cf8,#4f46e5)' : '#e2e8f0',
+            color: m.role === 'ai' ? '#ffffff' : '#475569',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <span style={{ fontSize: 10, lineHeight: 1 }}>
+              {m.role === 'ai' ? (personaChip ? personaChip.emoji : '🤝') : 'ℹ'}
+            </span>
+          </span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>
+            {m.role === 'ai'
+              ? (personaChip ? personaChip.label : t('assistant'))
+              : t('notice')}
+          </span>
         </div>
       )}
       <div
@@ -1896,15 +1891,15 @@ function MessageBubble({ m, t, currencySymbol, isFinal }: {
             isCustomer
               ? 'linear-gradient(135deg, #6366f1, #4f46e5)'
               : m.role === 'system'
-              ? '#eef2ff'
+              ? '#f8fafc'
               : '#ffffff',
-          color: isCustomer ? '#ffffff' : m.role === 'system' ? '#4338ca' : '#334155',
-          padding: '11px 15px',
+          color: isCustomer ? '#ffffff' : m.role === 'system' ? '#334155' : '#334155',
+          padding: '11px 14px',
           borderRadius: isCustomer ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
           fontSize: 14.5,
           lineHeight: 1.55,
-          border: m.role !== 'customer' ? '1px solid #e2e8f0' : 'none',
-          boxShadow: m.role !== 'customer' ? '0 1px 3px rgba(15,23,42,0.05)' : '0 2px 8px rgba(79,70,229,0.18)',
+          border: m.role !== 'customer' ? '1px solid #e3e8f0' : 'none',
+          boxShadow: m.role !== 'customer' ? '0 1px 4px rgba(15,23,42,0.07)' : '0 2px 10px rgba(79,70,229,0.22)',
           wordBreak: 'break-word',
         }}
       >
@@ -2076,21 +2071,21 @@ function QuickChip({ label, onClick, disabled }: { label: string; onClick: () =>
       disabled={disabled}
       type="button"
       style={{
-        background: '#f8fafc',
-        border: '1px solid #e2e8f0',
-        color: '#475569',
+        background: '#eef2ff',
+        border: '1px solid #c7d2fe',
+        color: '#4338ca',
         borderRadius: 999,
-        padding: '10px 16px',
+        padding: '9px 16px',
         fontSize: 13,
         fontWeight: 700,
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.5 : 1,
         transition: 'all 0.15s ease',
         outline: 'none',
-        minHeight: 44,
+        minHeight: 42,
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.borderColor = '#c7d2fe'; e.currentTarget.style.color = '#4338ca' }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#475569' }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = '#4f46e5'; e.currentTarget.style.borderColor = '#4f46e5'; e.currentTarget.style.color = '#ffffff' }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.borderColor = '#c7d2fe'; e.currentTarget.style.color = '#4338ca' }}
     >
       {label}
     </button>
