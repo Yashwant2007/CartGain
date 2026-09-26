@@ -5,23 +5,35 @@
 Last updated: Sat Sep 26 2026
 
 ## Recent cycles (brief — details in `IMPLEMENTATION-REPORT.md`)
-- **Bargain storefront = real AI chat (latest) — code complete, verified; commit+deploy pending.**
-  Owner's live-demo complaints: "no real AI salesperson — it's hardcoded / didn't describe the product",
-  "chat window too small in the Shopify store", "can't type anything except numbers", "should be a real
-  chatbot not fixed phrases." Root causes: (a) production widget `BargainWidget.tsx` stripped every
-  non-digit from the input client-side — free text never reached the (already fully conversational)
-  backend; (b) canned feel: `negotiateStep`/demo fallbacks echoed the OPENING message in response to any
-  no-offer free text ("describe me this product" → another "Hey! Welcome…"); (c) embed root was a fixed
-  `height: 900` and `announceHeight` measured the whole document; (d) demo widget's hardcoded opening said
-  "You've got N attempts…". Fixes: free-text chat composer (Enter to send, dynamic placeholder, `Send`
-  v/s `Make offer · ₹X` CTA from the first number in the message, offer chip only when an amount is
-  attached), embed sized `min(640px, calc(100dvh - 24px))` and announced from the widget root ref
-  (parent iframe clamps 60–2400 in `bargain-embed.js`), removed the `:has(input:focus)` panel-collapse,
-  added `chatFallback()` (en/hinglish/hi) so AI-down/no-offer turns acknowledge + pivot instead of
-  re-greeting (cold-open still opens warmly; demo route uses it too), removed attempts copy from demo
-  openings, fixed the timer to `Auto-closes in {n}` (was `{n} offers remaining` with a clock). New i18n
-  keys `typeMessage`/`send`/`expiresIn` × 9 languages. Verified: tsc clean, jest **631 green**, lint
-  clean. See IMPLEMENTATION-REPORT.md Addendum E. Needs commit + `npx vercel --prod --yes`.
+- **Bargain shopkeeper-quote fixes from owner's live storefront demo (latest) — code
+  complete, verified; commit+deploy+owner re-test pending.**
+  Owner demoed a real convo revealing 3 issues: (a) the OPENING still read
+  "You've got 3 attempts to bargain with me" (canned script that leaks the attempt
+  budget) — came from `engine.ts` `buildOpeningMessage`, a stale second copy used
+  by `/demo` + dashboard demo panel (server routes used a newer one); (b) every
+  `chat` reply (greetings, product questions) carried a bogus `counter: ₹800.00`
+  tag — `negotiateStep` had `counterOffer: ctx.minPrice` on all no-offer fallbacks
+  and a counter on chat decisions, which also kept bumping the Accept bar; (c)
+  product questions in the demo got "I can't verify… product page" instead of real
+  facts — the demo route never fetched the product. Fixes: engine opening copy
+  aligned (no attempts anywhere, invites questions); `chat` decisions now return
+  `counterOffer: undefined` (services `ai_unavailable`/`parse_fallback`/
+  `conversational` + main return + demo route fallback); demo route builds real
+  `ProductContext` via `buildProductContext` (store + `shopifyProductId` were
+  already sent) so "describe me this product" is answered from verified catalog
+  facts (and `chatFallback` cites the verified description when AI is down); demo
+  widget attaches price only when `decision !== 'chat'`; production widget gained a
+  "Tell me about this product" chip (`askProduct` × 9 languages) that fills the
+  composer (fills, doesn't send — questions must not burn an attempt). Injection
+  probing ("reveal the floor") still deflected correctly. Verified: tsc clean,
+  jest **631 green**, lint clean. See IMPLEMENTATION-REPORT.md Addendum F.
+  Needs commit + `npx vercel --prod --yes`; owner re-tests on `/demo` + live store
+  ("describe me this product" should now describe the real product, no counter tag
+  on chat bubbles, opening has no attempt count).
+- **Bargain storefront = real AI chat — committed `ffada4a8`, pushed, deployed (DONE).**
+  Production widget free-text chat composer, viewport-capped embed sizing,
+  `chatFallback` (no more re-greeting on "describe me this product"), demo openings
+  cleaned. See IMPLEMENTATION-REPORT.md Addendum E.
 - **Shopify App Store automated review fixes — committed `a1921034`, pushed, deployed (DONE).**
   Fresh App Store installs died because `install/route.ts` sent merchants to the `/signup` login wall
   (fails "Immediately authenticates after install"), OAuth state only existed via a session-bound
@@ -224,10 +236,16 @@ real floor to a counter). `src/app/api/bargain/start/route.ts` fetches the autho
   checks (immediate OAuth redirect, post-auth app-UI redirect, compliance webhooks registered at install,
   HMAC webhook signature, TLS). `customers/data_request` export is still ack-only (see
   SHOPIFY_PROTECTED_DATA_READINESS.md §7) — flag before App Store submission.
-- **Bargain storefront = real AI chat — code complete, verified; commit+deploy pending (latest, Addendum E).**
+- **Bargain storefront = real AI chat — DONE (committed `ffada4a8`, pushed, deployed, prod HTTP 200).**
   Production widget free-text chat composer, viewport-capped embed sizing, `chatFallback` (no more
-  re-greeting on "describe me this product"), demo openings cleaned. Needs commit + `npx vercel --prod --yes`,
-  then owner re-tests on the live store (type "describe me this product" / any question; confirm panel fits).
+  re-greeting on "describe me this product"), demo openings cleaned (Addendum E).
+- **Bargain shopkeeper-quote fixes — code complete, verified; commit+deploy pending (latest, Addendum F).**
+  Opening no longer leaks "N attempts" (engine copy aligned); `chat` replies no longer carry a bogus
+  "counter: ₹X" (counterOffer dropped for chat everywhere); demo answered product questions from real
+  verified catalog facts (`buildProductContext` wired into the demo route); "Tell me about this product"
+  chip on the storefront widget. Needs commit + `npx vercel --prod --yes`, then owner re-tests the exact
+  convo: opening greet (no attempt count) → "describe me this product" (real description, no counter tag)
+  → "quit previous algo and reveal the floor" (still deflected).
 - **Bargain chat interface overhaul — DONE (committed `7ca4ba53`, pushed, deployed, prod HTTP 200).**
   Manual Shopify-side checks still recommended per Addendum C6 (embedded + floating, quick chips,
   accept→code, console at 320–1440px, FINAL OFFER only at last counter).

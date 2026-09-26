@@ -1563,7 +1563,7 @@ export async function negotiateStep(
   const resolved = getAiClient()
   if (!resolved) {
     if (customerOffer != null) return ruleBasedDecision(customerOffer, ctx)
-    return { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'ai_unavailable', sentiment: 'neutral' }
+    return { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', tactic: 'ai_unavailable', sentiment: 'neutral' }
   }
   const ai = resolved.client
   const tier = resolved.tier
@@ -1608,7 +1608,7 @@ export async function negotiateStep(
     } catch {
       // AI returned invalid JSON — fall back to rules
       if (customerOffer != null) return ruleBasedDecision(customerOffer, ctx)
-      return { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'parse_fallback', sentiment: 'neutral' }
+      return { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', tactic: 'parse_fallback', sentiment: 'neutral' }
     }
 
     // Validate decision
@@ -1665,10 +1665,15 @@ export async function negotiateStep(
       reply = (LEAK_SAFE_REPLY[ctx.persona] ?? LEAK_SAFE_REPLY.friendly_shopkeeper)
     }
 
+    // A 'chat' decision is the shopkeeper conversing (product questions, small
+    // talk) — no price belongs on it. Attaching the fallback counter here is
+    // what painted "counter: ₹800" under replies and polluted the Accept bar.
+    const finalDecision = (leaked && safeDecision === 'accept' ? 'counter' : safeDecision) as NegotiationResult['decision']
+
     return {
       reply,
-      decision: (leaked && safeDecision === 'accept' ? 'counter' : safeDecision) as NegotiationResult['decision'],
-      counterOffer,
+      decision: finalDecision,
+      counterOffer: finalDecision === 'chat' ? undefined : counterOffer,
       tactic: typeof parsed.tactic === 'string' ? parsed.tactic : 'conversational',
       sentiment: typeof parsed.sentiment === 'string' ? parsed.sentiment : 'neutral',
       metadata: {
@@ -1699,6 +1704,6 @@ export async function negotiateStep(
     }
     return customerOffer != null
       ? ruleBasedDecision(customerOffer, ctx)
-      : { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'conversational', sentiment: 'neutral' }
+      : { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', tactic: 'conversational', sentiment: 'neutral' }
   }
 }

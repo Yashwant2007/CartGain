@@ -693,6 +693,16 @@ export default function BargainWidget({
     inputRef.current?.focus()
   }
 
+  // "Tell me about this product" — fills the composer with a real question
+  // (chat, not an attempt-costing offer) for the customer to send. Keeps the
+  // AI's product-question intent even when the backend AI is down.
+  function fillChat(text: string) {
+    if (sessionEnded || thinking || busyRef.current) return
+    setInput(text)
+    setError(null)
+    inputRef.current?.focus()
+  }
+
   function openPanel() {
     setOpen(true)
     setMinimised(false)
@@ -1430,6 +1440,9 @@ export default function BargainWidget({
                   borderTop: !sessionEnded && decision !== 'accept' && lastCounter != null ? 'none' : '1px solid #eef2f7',
                   flexWrap: 'wrap',
                 }}>
+                  {!sessionEnded && productTitle && decision !== 'accept' && (
+                    <QuickChip key="ask" label={t('askProduct')} disabled={thinking || !!busyRef.current} onClick={() => fillChat(t('askProduct'))} />
+                  )}
                   {quickOffers.map((v) => (
                     <QuickChip key={v} label={`${currencySymbol}${v.toLocaleString('en-IN')}`} disabled={thinking || !!busyRef.current} onClick={() => fillOffer(v)} />
                   ))}

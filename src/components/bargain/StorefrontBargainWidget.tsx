@@ -253,7 +253,12 @@ export default function StorefrontBargainWidget({
       const nextAttempt = attempts + 1
       const exhausted = nextAttempt >= maxAttempts
 
-      setMessages((prev) => [...prev, { role: 'ai', content: data.reply, price: data.counterOffer }])
+      // 'chat' replies (product questions, greetings) carry no price — only a
+      // real counter/accept lands a "Counter: ₹X" tag on the bubble.
+      const priceTag = data.decision !== 'chat' && typeof data.counterOffer === 'number'
+        ? data.counterOffer
+        : undefined
+      setMessages((prev) => [...prev, { role: 'ai', content: data.reply, price: priceTag }])
       setAttempts(nextAttempt)
 
       if (data.decision === 'accept') {

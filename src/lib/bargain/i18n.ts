@@ -45,6 +45,7 @@ export type UiKey =
   | 'offered'
   | 'typeOffer'
   | 'typeMessage'
+  | 'askProduct'
   | 'sessionEnded'
   | 'acceptDeal'
   | 'dealComplete'
@@ -121,6 +122,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offered: 'Offered:',
     typeOffer: 'Type your offer...',
     typeMessage: 'Ask about this product or make an offer…',
+    askProduct: 'Tell me about this product',
     sessionEnded: 'Session ended',
     acceptDeal: 'Accept & Get Code',
     dealComplete: '✓ Deal Complete',
@@ -196,6 +198,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offered: 'Offer:',
     typeOffer: 'Apni bhaw likho...',
     typeMessage: 'Is product ke baare mein poochho ya offer bhejo…',
+    askProduct: 'Is product ke baare mein batao',
     sessionEnded: 'Session khatam',
     acceptDeal: 'Deal Accept karo & Code Lo',
     dealComplete: '✓ Deal Complete',
@@ -271,6 +274,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offered: 'ऑफ़र:',
     typeOffer: 'अपना भाव लिखें...',
     typeMessage: 'इस उत्पाद के बारे में पूछें या ऑफ़र भेजें…',
+    askProduct: 'इस उत्पाद के बारे में बताइए',
     sessionEnded: 'सेशन समाप्त',
     acceptDeal: 'सौदा स्वीकारें और कोड पाएँ',
     dealComplete: '✓ सौदा पूर्ण',
@@ -346,6 +350,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offered: 'ஆஃபர்:',
     typeOffer: 'உங்கள் விலையை எழுதுங்கள்...',
     typeMessage: 'இந்த தயாரிப்பைப் பற்றிக் கேளுங்கள் அல்லது சலுகை அனுப்புங்கள்…',
+    askProduct: 'இந்த தயாரிப்பைப் பற்றி சொல்லுங்கள்',
     sessionEnded: 'அமர்வு முடிந்தது',
     acceptDeal: 'ஒப்பந்தத்தை ஏற்று குறியீடு பெறுக',
     dealComplete: '✓ ஒப்பந்தம் முடிந்தது',
@@ -421,6 +426,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offered: 'ఆఫర్:',
     typeOffer: 'మీ ధరను టైప్ చేయండి...',
     typeMessage: 'ఈ ఉత్పత్తి గురించి అడగండి లేదా ఆఫర్ పంపండి…',
+    askProduct: 'ఈ ఉత్పత్తి గురించి చెప్పండి',
     sessionEnded: 'సెషన్ ముగిసింది',
     acceptDeal: 'ఒప్పందం ఆమోదించి కోడ్ పొందండి',
     dealComplete: '✓ ఒప్పందం పూర్తయింది',
@@ -496,6 +502,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offered: 'অফার:',
     typeOffer: 'আপনার দাম লিখুন...',
     typeMessage: 'এই পণ্য সম্পর্কে জিজ্ঞাসা করুন বা অফার পাঠান…',
+    askProduct: 'এই পণ্য সম্পর্কে বলুন',
     sessionEnded: 'সেশন শেষ',
     acceptDeal: 'দর মেনে কোড নিন',
     dealComplete: '✓ দর চূড়ান্ত',
@@ -571,6 +578,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offered: 'ऑफर:',
     typeOffer: 'तुमचा भाव लिहा...',
     typeMessage: 'या उत्पादाबद्दल विचारा किंवा ऑफर पाठवा…',
+    askProduct: 'या उत्पादाबद्दल सांगा',
     sessionEnded: 'सत्र संपले',
     acceptDeal: 'सौदा स्वीकारा आणि कोड मिळवा',
     dealComplete: '✓ सौदा पूर्ण',
@@ -646,6 +654,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offered: 'ઓફર:',
     typeOffer: 'તમારો ભાવ લખો...',
     typeMessage: 'આ ઉત્પાદન વિશે પૂછો અથવા ઑફર મોકલો…',
+    askProduct: 'આ ઉત્પાદન વિશે જણાવો',
     sessionEnded: 'સત્ર સમાપ્ત',
     acceptDeal: 'સોદો સ્વીકારો અને કોડ મેળવો',
     dealComplete: '✓ સોદો પૂર્ણ',
@@ -721,6 +730,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     offered: 'ਆਫਰ:',
     typeOffer: 'ਆਪਣਾ ਭਾਅ ਲਿਖੋ...',
     typeMessage: 'ਇਸ ਉਤਪਾਦ ਬਾਰੇ ਪੁੱਛੋ ਜਾਂ ਆਫਰ ਭੇਜੋ…',
+    askProduct: 'ਇਸ ਉਤਪਾਦ ਬਾਰੇ ਦੱਸੋ',
     sessionEnded: 'ਸੈਸ਼ਨ ਖ਼ਤਮ',
     acceptDeal: 'ਸੌਦਾ ਸਵੀਕਾਰ ਕਰੋ ਅਤੇ ਕੋਡ ਲਵੋ',
     dealComplete: '✓ ਸੌਦਾ ਪੂਰਾ',

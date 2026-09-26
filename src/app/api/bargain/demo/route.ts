@@ -13,6 +13,7 @@ import {
   type NegotiationResult,
 } from '@/lib/services/bargain'
 import { detectLanguage } from '@/lib/bargain/language'
+import { buildProductContext } from '@/lib/bargain/product-fetcher'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,20 +29,34 @@ const VALID_PERSONAS: Persona[] = ['friendly_shopkeeper', 'strict_negotiator', '
 // of truth: a storefront caller that does not pass an explicit persona — or
 // passes personaSource: 'store' — is always pinned to the merchant's saved
 // BargainConfig persona, so customers can never pick (or game) the mode.
-async function resolveMerchantPersona(userId: string): Promise<Persona> {
+// Also returns the merchant's store so the demo can quote real catalog facts.
+async function resolveMerchantPersona(userId: string): Promise<{ persona: Persona; store: {
+  id: string; domain: string; currency: string; apiKey: string | null
+  shopifyRefreshToken: string | null; shopifyTokenExpiresAt: Date | null
+} | null }> {
   const store = await prisma.store.findFirst({
     where: { userId },
     orderBy: { createdAt: 'asc' },
   })
-  if (!store) return 'friendly_shopkeeper'
+  if (!store) return { persona: 'friendly_shopkeeper', store: null }
   const config = await prisma.bargainConfig.upsert({
     where: { storeId: store.id },
     create: { storeId: store.id },
     update: {},
   })
-  return VALID_PERSONAS.includes(config.aiPersona as Persona)
-    ? (config.aiPersona as Persona)
-    : 'friendly_shopkeeper'
+  return {
+    persona: VALID_PERSONAS.includes(config.aiPersona as Persona)
+      ? (config.aiPersona as Persona)
+      : 'friendly_shopkeeper',
+    store: {
+      id: store.id,
+      domain: store.domain,
+      currency: store.currency ?? 'INR',
+      apiKey: store.apiKey,
+      shopifyRefreshToken: store.shopifyRefreshToken,
+      shopifyTokenExpiresAt: store.shopifyTokenExpiresAt,
+    },
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -76,14 +91,10 @@ export async function POST(request: NextRequest) {
     // Persona authority: 'store' (storefront preview + real embed) always uses
     // the merchant's config. Marketing /demo may pass an explicit persona to
     // compare versions. Anything else falls back to the merchant's config too.
-    let persona: Persona = 'friendly_shopkeeper'
-    if (body.personaSource === 'store') {
-      persona = await resolveMerchantPersona(session.user.id)
-    } else if (VALID_PERSONAS.includes(body.persona)) {
-      persona = body.persona
-    } else {
-      persona = await resolveMerchantPersona(session.user.id)
-    }
+    const merchant = await resolveMerchantPersona(session.user.id)
+    const persona: Persona = VALID_PERSONAS.includes(body.persona) && body.personaSource !== 'store'
+      ? body.persona
+      : merchant.persona
     const language = typeof body.language === 'string' && (SUPPORTED_LANGUAGES as readonly string[]).includes(body.language.toLowerCase())
       ? body.language.toLowerCase()
       : 'auto'
@@ -125,13 +136,37 @@ export async function POST(request: NextRequest) {
       customerContext: 'Sequential guided product demo on the CartGain site.',
     }
 
+    // Real catalog facts for item demos: when the merchant's store + a real
+    // Shopify product id are available, quote verified facts (description,
+    // vendor, stock) so "describe me this product" is answered from the actual
+    // product — not a canned "can't verify" brush-off. Failures degrade to the
+    // existing verified-details fallback instead of erroring the turn.
+    const shopifyProductId = typeof body.shopifyProductId === 'string' && body.shopifyProductId
+      ? body.shopifyProductId
+      : null
+    if (merchant.store && shopifyProductId) {
+      try {
+        ctx.product = await buildProductContext({
+          store: merchant.store,
+          storeId: merchant.store.id,
+          shopifyProductId,
+          variantId: typeof body.variantId === 'string' ? body.variantId : undefined,
+          currency: merchant.store.currency ?? 'INR',
+          baseUrl: `https://${merchant.store.domain}`,
+          fallbackTitle: productTitle ?? null,
+        })
+      } catch (err: any) {
+        console.warn('[BARGAIN_DEMO] product-context fetch failed, using verified-details fallback', err?.message ?? err)
+      }
+    }
+
     let result: NegotiationResult
     try {
       result = await negotiateStep(ctx, history, message, offer ?? undefined, `demo_${session.user.id}`)
     } catch {
       result = offer != null
         ? ruleBasedDecision(offer, ctx)
-        : { reply: chatFallback(message, ctx, history.length), decision: 'chat', counterOffer: minPrice, tactic: 'demo_fallback', sentiment: 'neutral' }
+        : { reply: chatFallback(message, ctx, history.length), decision: 'chat', tactic: 'demo_fallback', sentiment: 'neutral' }
     }
 
     return NextResponse.json({

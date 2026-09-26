@@ -115,37 +115,41 @@ export function bulkFloorFactor(quantity: number): number {
 }
 
 // ── Default opening message (persona-aware, language-aware) ──
+// A real shopkeeper never counts chances aloud — the attempt budget stays an
+// internal mechanic. The welcome names the price and explicitly invites BOTH a
+// number and product questions ("ask me anything"), so the bot reads as an
+// interactive salesperson, not a fixed script.
 export function buildOpeningMessage(ctx: NegotiationContext): string {
-  const { originalPrice, currencySymbol, maxAttempts, productTitle, customerContext, language } = ctx
+  const { originalPrice, currencySymbol, productTitle, customerContext, language } = ctx
   const item = productTitle ? `this ${productTitle}` : 'this'
   const warmup = customerContext ? ' Welcome back! 🙌' : ''
   const price = `${currencySymbol}${originalPrice.toFixed(2)}`
 
   if (language === 'hinglish') {
     const opening: Record<Persona, string> = {
-      playful_friend: `Arré arre! 👋 Aap ${productTitle ?? 'yeh item'} dekh rahe ho? Kamaal hai! Listed hai ${price} — par yeh to bas shuruwat hai 😏 ${maxAttempts} mauke hain mujhe patane ke. Bolo, aapka best rate kya hai?${warmup}`,
-      strict_negotiator: `${productTitle ?? 'Is item'} mein interest ke liye dhanyavaad.${warmup} Current price hai ${price}. ${maxAttempts} baat-cheet ke andar reasonable offer sunne ke liye taiyar hoon. Aapke mann mein kitna price hai?`,
-      friendly_shopkeeper: `Arré welcome! 👋${warmup} Main dekha ${productTitle ?? 'yeh item'} aapko pasand aaya. Thik hai, iska price ${price} hai — par hum bina jhagda ke achha deal kar sakte hain. ${maxAttempts} mauke milenge. Aap apna rate batao?`,
+      playful_friend: `Arré arre! 👋 Aap ${productTitle ?? 'yeh item'} dekh rahe ho? Kamaal hai! Listed hai ${price} — par yeh to bas shuruwat hai 😏 Bolo, aapka best rate kya hai — ya kuch poochhna ho toh poochh lo!${warmup}`,
+      strict_negotiator: `${productTitle ?? 'Is item'} mein interest ke liye dhanyavaad.${warmup} Current price hai ${price}. Reasonable offer sunne ke liye taiyar hoon. Aapke mann mein kitna price hai?`,
+      friendly_shopkeeper: `Arré welcome! 👋${warmup} Main dekha ${productTitle ?? 'yeh item'} aapko pasand aaya. Iska price ${price} hai — par hum achha deal kar sakte hain. Aap apna rate batao, ya iske baare mein kuch bhi poochh lo!`,
     }
     return opening[ctx.persona] ?? opening.friendly_shopkeeper
   }
 
   if (language === 'hi') {
     const opening: Record<Persona, string> = {
-      playful_friend: `अरे अरे! 👋 आप ${productTitle ?? 'ये आइटम'} देख रहे हैं — शानदार चुनाव! लिस्टेड कीमत है ${price}। पर ये तो बस शुरुआत है 😏 आपके पास ${maxAttempts} मौके हैं। चलिए, देखते हैं आप कितना अच्छा सौदा कर पाते हैं!`,
-      strict_negotiator: `${productTitle ?? 'इस आइटम'} में रुचि दिखाने के लिए धन्यवाद${warmup}। वर्तमान कीमत ${price} है। ${maxAttempts} आदान-प्रदान के भीतर मैं उचित प्रस्ताव स्वीकार कर सकता हूँ। आपका प्रस्ताव क्या है?`,
-      friendly_shopkeeper: `नमस्ते! 👋${warmup} आपको ${productTitle ?? 'ये आइटम'} पसंद आया, ये बहुत अच्छा है। कीमत है ${price}। मैं आपकी मदद करना चाहता हूँ — आप क्या कीमत सोच रहे हैं? बातचीत के लिए आपके पास ${maxAttempts} मौके हैं।`,
+      playful_friend: `अरे अरे! 👋 आप ${productTitle ?? 'ये आइटम'} देख रहे हैं — शानदार चुनाव! लिस्टेड कीमत है ${price}। पर ये तो बस शुरुआत है 😏 बताइए, आप कितनी कीमत सोच रहे हैं? या कुछ पूछना हो तो पूछिए!${warmup}`,
+      strict_negotiator: `${productTitle ?? 'इस आइटम'} में रुचि दिखाने के लिए धन्यवाद${warmup}। वर्तमान कीमत ${price} है। आपका प्रस्ताव क्या है?`,
+      friendly_shopkeeper: `नमस्ते! 👋${warmup} आपको ${productTitle ?? 'ये आइटम'} पसंद आया, ये बहुत अच्छा है। कीमत है ${price}। आप क्या कीमत सोच रहे हैं? या इसके बारे में कुछ पूछना हो तो पूछिए!`,
     }
     return opening[ctx.persona] ?? opening.friendly_shopkeeper
   }
 
   if (ctx.persona === 'playful_friend') {
-    return `${warmup} Hey hey! 👋 I see you're checking out ${item} — nice choice! Listed at ${price}, but hey, that's just the starting point 😏 You've got ${maxAttempts} chances to charm me into a better deal. What's your move?`
+    return `${warmup} Hey hey! 👋 I see you're checking out ${item} — nice choice! Listed at ${price}, and it's yours for the right price 😏 What's your move — name a number, or ask me anything about it?`
   }
   if (ctx.persona === 'strict_negotiator') {
-    return `Thank you for your interest in ${item}.${warmup} The current price is ${price}. I'm open to reasonable offers within ${maxAttempts} exchanges. What price were you considering?`
+    return `Thank you for your interest in ${item}.${warmup} The current price is ${price}. I'm open to a reasonable offer — what price did you have in mind?`
   }
-  return `Hey! Welcome 👋${customerContext ? ' So good to see you again!' : ''} I see you're interested in ${item}. It's listed at ${price}. I'd love to help you get a good deal — what price were you thinking? You've got ${maxAttempts} attempts to bargain with me.`
+  return `Hey! Welcome 👋${warmup} I see you're interested in ${item}. It's listed at ${price}. I'd love to help you get a good deal — what price were you thinking? And if you have any questions about it, just ask!`
 }
 
 // ── Rule-based decision (no AI) ──
