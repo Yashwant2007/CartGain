@@ -23,6 +23,15 @@ export function detectWalkout(text: string): boolean {
     /\b(?:bye|goodbye|good\s+bye)\b/i,
     /(?:eff|screw)\s+this|give\s+up/i,
     /too\s+expensive,?\s+(?:i'?m|i)\s+(?:leaving|going|out)/i,
+    // Quit-family wording. Treated as WALKOUT (→ retention, not termination):
+    // a single "I quit…" must NOT end the session — see negotiation-state.ts
+    // walkoutOutcome() for the deterministic retain/abandon decision. Tightened
+    // so harmless "quit your day job" / "the app keeps quitting on me" /
+    // "quit asking" sentences never fire a false walkout.
+    /^\s*i(?:'?m| am)\s+quit(?:ting|ted)?/i,
+    /quit(?:ting|ted)?\s+(?:trying|bargaining|negotiating)/i,
+    /(?:quit|stop)\s+(?:this\s+|the\s+)?(?:offer|deal|price|negotiation|bargain)/i,
+    /quitting(?!\s+on\b)/i,
   ]
   if (strong.some(r => r.test(t))) return true
 

@@ -10,6 +10,7 @@ import { detectLanguage } from '@/lib/bargain/language'
 import { logDataAccess } from '@/lib/data-protection'
 import { clampOfferToSafety } from '@/lib/bargain/engine'
 import { detectCouponMention, detectMultiProductRequest } from '@/lib/bargain/policy'
+import { walkoutOutcome } from '@/lib/bargain/negotiation-state'
 import { buildGoalContextForNegotiation } from '@/lib/bargain/goals'
 import { analyzeIntent } from '@/lib/bargain/intent'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
@@ -341,7 +342,7 @@ export async function POST(request: NextRequest) {
       const lastCounter = [...bargainSession.messages].reverse()
         .find((m: any) => m.role === 'ai' && m.offeredPrice != null)?.offeredPrice ?? null
 
-      if (hadRetention || attemptsRemaining <= 0) {
+      if (walkoutOutcome({ hadRetention, attemptsRemaining }) === 'abandon') {
         // Second walkout OR no attempts left → close the session (abandoned)
         const farewellReplies: Record<string, string> = {
           friendly_shopkeeper: uiText(lang, 'farewell_friendly'),
