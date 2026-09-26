@@ -151,6 +151,21 @@ export default function BargainWidget({
   const [recommendations, setRecommendations] = useState<Recommendation[] | null>(null)
   const [atBottom, setAtBottom] = useState(true)
   const [announcer, setAnnouncer] = useState('')
+  // Embed mode: a FIXED panel height. Never calc(100dvh — the iframe has no
+  // viewport height of its own (theme blocks start it at 180–220px), and our
+  // height is what the parent uses to size the iframe, so dvh is circular and
+  // collapses the window to ~180px. A fixed height is announced via cg_resize
+  // and the parent grows the iframe to match; width-based breakpoints are safe
+  // (width is set by the parent column, not by us).
+  const [panelHeight, setPanelHeight] = useState(isEmbed ? 600 : 0)
+
+  useEffect(() => {
+    if (!isEmbed) return
+    const compute = () => setPanelHeight(window.innerWidth <= 480 ? 520 : 600)
+    compute()
+    window.addEventListener('resize', compute)
+    return () => window.removeEventListener('resize', compute)
+  }, [isEmbed])
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const launcherRef = useRef<HTMLButtonElement>(null)
@@ -333,7 +348,7 @@ export default function BargainWidget({
     if (!isEmbed) return
     const tt = setTimeout(announceHeight, 40)
     return () => clearTimeout(tt)
-  }, [isEmbed, announceHeight, open, minimised, messages, decision, discountCode, loading, sessionEnded, copied, floorReached, rejection])
+  }, [isEmbed, announceHeight, open, minimised, panelHeight, messages, decision, discountCode, loading, sessionEnded, copied, floorReached, rejection])
 
   // ── Session lifecycle (backend remains authoritative) ──────────────────
 
@@ -758,9 +773,9 @@ export default function BargainWidget({
               border: '1px solid #e0e7ff',
               boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 12px 32px rgba(79,70,229,0.10)',
               overflow: 'hidden',
-              // A proper chat window that never overflows the device — the
-              // parent iframe (bargain-embed.js) clamps to 60–2400px.
-              height: open && !minimised ? 'min(680px, calc(100dvh - 12px))' : 'auto',
+              // A proper chat window the parent iframe grows to match via cg_resize
+              // (bargain.js / bargain-embed.js clamp 60–2400px).
+              height: open && !minimised ? panelHeight : 'auto',
             }
           : {}),
       }}

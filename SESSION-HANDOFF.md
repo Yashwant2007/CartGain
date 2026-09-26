@@ -5,16 +5,21 @@
 Last updated: Sat Sep 26 2026
 
 ## Recent cycles (brief — details in `IMPLEMENTATION-REPORT.md`)
-- **Owner's demo-convo + storefront embed fixes — code complete, verified; commit+deploy pending (NEW, Addendum H).**
+- **Owner's demo-convo + storefront embed fixes — code complete, verified; commit+deploy pending (Addendum H).**
   Analysed pasted convo ("DEAL! 🎉 ₹785.95 … tell me about this product" → "nice try — I don't quote specs
   from memory"). Fixes: (1) deal-state awareness — `NegotiationContext.dealAccepted`/`acceptedPrice`;
-  `chatFallback` now confirms a locked deal instead of re-quoting price/renegotiating; AI prompt gained a DEAL
-  STATE rule; demo clients (`/demo`, dashboard demo-panel) signal acceptance. (2) unverified product answers
-  are honest, never cagey, and use catalog micro-facts (type/vendor/stock) when a store lacks a description.
-  (3) storefront embed is now a proper chat: opens FULL by default (launcher → close only), replies ALWAYS
-  auto-scroll into view (2.5s reading-grace), brand accent top edge, "Online" badge + persona chip header,
-  taller window (`min(680px, calc(100dvh - 12px))`), visible slim scrollbar, redundant product card hidden
-  in embed. Verified: tsc clean, jest **636 green** (3 new tests), lint clean. Needs commit + `npx vercel --prod --yes`.
+  `chatFallback` now confirms a locked deal instead of re-quoting price/renegotiating; AI prompt gained a
+  DEAL STATE rule; demo clients (`/demo`, dashboard demo-panel) signal acceptance. (2) unverified product
+  answers are honest, never cagey, and use catalog micro-facts (type/vendor/stock) when a store lacks a
+  description. (3) storefront embed is now a proper chat: opens FULL by default (launcher → close only),
+  replies ALWAYS auto-scroll into view (2.5s reading-grace), brand accent top edge, "Online" badge + persona
+  chip header, visible slim scrollbar, redundant product card hidden in embed.
+  **H5 sizing correction (the real "too small" root cause):** the iframe has NO real viewport height (blocks
+  start it at 180–220px and the parent sizes it ONLY from our announced height), so the old
+  `min(680px, calc(100dvh - 12px))` was circular and pinned the window at ~180px. Embed height is now a
+  FIXED `600px` / `520px` (≤480px columns) independent of the iframe viewport; `cg_resize` grows the iframe
+  to it and it stays stable. Floating panel keeps 88dvh (main document — correct there).
+  Verified: tsc clean, jest **636 green**, lint clean. Needs commit + `npx vercel --prod --yes`.
 - **Personas talk like their names + chat-first behaviour — committed `1bfce5ad`, pushed, deployed (DONE).**
   `ruleBasedDecision` and `chatFallback` are persona-true across accept/lowball/counter/final and
   product-Q/greeting/thanks/ack replies (Morgan: measured, full stops, no emoji; Riley: dramatic;

@@ -914,3 +914,21 @@ complaints (H2).
 - `npx jest` **636 passed / 46 suites** (3 new tests: post-deal confirmation,
   non-cagey unverified answers, description-less micro-facts).
 - `npm run lint` clean.
+
+### H5. Follow-up: fix the embed height that was actually collapsing
+
+The "still too small" report had a concrete root cause the earlier sizing missed.
+The theme-side controllers (`bargain.js` / `bargain-embed.js`) size the iframe
+**only** from the widget's announced height (`cg_resize`, clamped 60–2400), and
+every Shopify block (`product-bargain.liquid` 180px, `bargain-embed.liquid`
+200px, `cart-bargain.liquid` 220px) starts the iframe at a small fixed height.
+The old embed CSS `min(640/680px, calc(100dvh - 12px))` used the iframe's OWN
+viewport — so `100dvh` was ~180px, the widget computed ~170px, announced it, and
+the parent kept the iframe at ~180px. Circular → permanent tiny window.
+
+Fix: the embed panel now uses a **fixed height independent of the iframe viewport**
+(`600px`, `520px` on ≤480px-wide columns, driven by `window.innerWidth` which is
+safe — the parent sets the width, we don't). `cg_resize` then grows the iframe to
+exactly that and it stays stable (no circularity). The floating panel keeps its
+`88dvh` bottom-sheet behavior (it lives in the main document, so dvh is correct
+there). Fixed in `BargainWidget.tsx` (`panelHeight` state + match/resize effect).
