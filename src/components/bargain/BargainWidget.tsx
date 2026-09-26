@@ -350,6 +350,18 @@ export default function BargainWidget({
     return () => clearTimeout(tt)
   }, [isEmbed, announceHeight, open, minimised, panelHeight, messages, decision, discountCode, loading, sessionEnded, copied, floorReached, rejection])
 
+  // Keep re-announcing while the embed is open. The merchant theme's controller
+  // only sizes the iframe from our cg_resize messages — a one-shot announce can
+  // be lost if the controller attaches late or the first messages race ahead of
+  // it. A steady heartbeat guarantees the frame converges to the real panel
+  // height instead of staying stuck at the block's initial 180–220px.
+  useEffect(() => {
+    if (!isEmbed || !open || minimised) return
+    const iv = setInterval(announceHeight, 700)
+    announceHeight()
+    return () => clearInterval(iv)
+  }, [isEmbed, open, minimised, announceHeight])
+
   // ── Session lifecycle (backend remains authoritative) ──────────────────
 
   async function startSession() {

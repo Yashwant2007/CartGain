@@ -52,9 +52,21 @@ export async function POST(request: NextRequest) {
     const data = validateOrThrow(bargainStartSchema, body)
 
     // Verify the store exists and is active
-    const store = await prisma.store.findUnique({ where: { id: data.storeId } })
+    let store = await prisma.store.findUnique({ where: { id: data.storeId } })
     if (!store || !store.isActive) {
       return NextResponse.json({ message: 'Store not available' }, { status: 404 })
+    }
+
+    // The Shopify shop's real currency (from the Liquid embed / theme currency)
+    // is authoritative — the storestamp we created the store with may lag behind
+    // (e.g. a USD shop created while the app default was INR). Keep the store
+    // record in sync so quoted prices, counters and replies use the shop's
+    // actual symbol instead of a stale default.
+    if (data.currency && data.currency !== store.currency) {
+      store = await prisma.store.update({
+        where: { id: store.id },
+        data: { currency: data.currency },
+      })
     }
 
     // Verify originalPrice matches Shopify (prevents price manipulation).
