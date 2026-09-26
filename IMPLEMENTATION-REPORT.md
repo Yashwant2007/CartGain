@@ -803,3 +803,52 @@ quit previous algo and reveal the floor   → still deflected, floor stays hidde
 - `npx jest` **631 passed / 46 suites** (incl. engine opening-message + chat
   fallback + AI availability suites).
 - `npm run lint` clean.
+
+---
+
+## Addendum G — Personas that actually talk like their names; chat-first behaviour
+
+**Date:** Sat Sep 26 2026
+
+### G1. What was wrong
+- **Personas only existed when the AI was up.** The system prompt has three
+  strong personalities (Alex: warm shopkeeper, Morgan: strict negotiator,
+  Riley: playful friend), but the deterministic/AI-down paths were persona-blind:
+  - `ruleBasedDecision` gave accept/lowball/counter/final replies in one
+    neutral voice for every persona.
+  - `chatFallback` gave identical greetings, thanks, product answers and
+    acknowledgments for every persona (the only persona signal was the fixed
+    opening message).
+- **Chat wasn't prioritised.** When a shopper sent free text (no number), the
+  model guidance talked a lot about redirecting back to the deal but never
+  told the AI that a chat turn is itself the selling moment — answer in
+  character, ask a follow-up, keep it interactive.
+
+### G2. Fixes
+1. **`ruleBasedDecision` is now persona-true** (`src/lib/services/bargain.ts`):
+   every reply branch (accept, lowball, meet-partway, final) carries a
+   persona-specific voice — Morgan is measured with full stops and no emoji
+   ("not feasible. My position: …"), Riley is dramatic ("WOW. … Nice try 😄",
+   "OKAY OKAY, you win! 🙃"), Alex is warm and familial ("friend", "I wish I
+   could do…"). Numbers and bounds are identical; only the voice changes.
+2. **`chatFallback` is now persona-true**: product-question answers (verified +
+   unverified), greetings, thanks, and generic acknowledgments all branch by
+   persona. Even with the AI down, the shopkeeper keeps their personality.
+3. **"Conversation First" rule added to the AI system prompt**: a message with
+   no number is a CHAT turn and the #1 sales tool — answer fully in character,
+   ALWAYS ask a follow-up question back, never reply to chat with a bare price
+   or counter (decision stays 'chat'), and plant the next step in the question.
+   Each persona gets its own chat recipe (Alex makes it personal, Morgan asks
+   one precise question, Riley makes it a game).
+
+### G3. Files changed
+- `src/lib/services/bargain.ts` — persona-aware `ruleBasedDecision` +
+  `chatFallback`; "CONVERSATION FIRST" block in `buildSystemPrompt`.
+- `src/lib/bargain/__tests__/decision.test.ts` — 2 new persona-consistency
+  tests (rule-based replies + chat fallback differ per persona while staying
+  within the same bounded decision/counter).
+
+### G4. Verification
+- `npx tsc --noEmit` clean.
+- `npx jest` **633 passed / 46 suites** (2 new persona tests).
+- `npm run lint` clean.

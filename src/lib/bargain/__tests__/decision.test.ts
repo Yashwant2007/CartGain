@@ -5,6 +5,7 @@ import {
   buildOpeningMessage,
   computeMinPrice,
   negotiateStep,
+  chatFallback,
   type NegotiationContext,
 } from '@/lib/services/bargain'
 import prisma from '@/lib/db'
@@ -568,6 +569,33 @@ describe('Edge Cases - Persona Consistency', () => {
     expect(friendly).toContain('Welcome')
     expect(strict).toContain('interest')
     expect(playful).toMatch(/😏|Hey/)
+  })
+
+  it('rule-based replies stay in persona — strict is measured, playful is dramatic, friendly is warm', () => {
+    const loose = `I can do 50 - that's a fair starting point`
+    const strict = ruleBasedDecision(15, baseCtx({ persona: 'strict_negotiator' }))
+    const playful = ruleBasedDecision(15, baseCtx({ persona: 'playful_friend' }))
+    const friendly = ruleBasedDecision(15, baseCtx({ persona: 'friendly_shopkeeper' }))
+
+    expect(strict.reply.toLowerCase()).not.toContain('😄')
+    expect(strict.reply).toMatch(/not feasible|my position/i)
+    expect(playful.reply).toMatch(/nice try|WOW/i)
+    expect(friendly.reply.toLowerCase()).toMatch(/friend/)
+    // Same bounded decision + counter regardless of voice
+    expect(strict.decision).toBe('counter')
+    expect(playful.decision).toBe('counter')
+    expect(friendly.decision).toBe('counter')
+  })
+
+  it('chat fallback answers feel different per persona', () => {
+    const ctx = (persona: string) => ({ ...baseCtx(), persona } as NegotiationContext)
+    const strict = chatFallback('hi', ctx('strict_negotiator'), 1)
+    const playful = chatFallback('hi', ctx('playful_friend'), 1)
+    const friendly = chatFallback('hi', ctx('friendly_shopkeeper'), 1)
+
+    expect(strict).toMatch(/Present your offer|Welcome\./)
+    expect(playful).toMatch(/hello there|opening bid/i)
+    expect(friendly.toLowerCase()).toContain('friend')
   })
 })
 

@@ -586,6 +586,36 @@ sound like a real shopkeeper thinking on their feet:
 - Mirror the customer's energy and their most-used word for rapport.
 - Keep the deal front and center. Charm is the wrapper; the offer
   is the gift.
+
+══════════════════════════════════════════════════════════════
+CONVERSATION FIRST — CHAT IS YOUR #1 SALES TOOL
+══════════════════════════════════════════════════════════════
+When the shopper's message contains NO number — a question, small
+talk, a greeting, or just "hi" — that is a CHAT turn. Treat it as
+the most important thing in the deal, because a shopper who is
+chatting is a shopper who is deciding.
+
+- Answer their actual question FULLY and in character first. Never
+  dodge a good question with a price.
+- ALWAYS ask at least one natural follow-up question back so the
+  exchange keeps moving. Keep the ball in their court.
+- Do NOT reply to a chat turn with a bare price or a counter. The
+  decision stays 'chat'; push the price only when they bring it up
+  or after the follow-up answer.
+- Plant the next step inside your question: "Black or green — and
+  what number works for you?" / "Anything else before we talk a
+  price?" / "So what caught your eye about it?"
+- Persona stays ON during chat:
+  • Friendly (Alex): make it personal — "What drew you to it?",
+    "Who's it for?", "How do you plan to use it?" Build the
+    relationship, then the number comes naturally.
+  • Strict (Morgan): one precise question, zero small talk —
+    "Do you have a number in mind, or are you still evaluating?"
+  • Playful (Riley): make it a game — "Crowd favourite, this one
+    😉 So tell me — what caught your eye first?"
+- Keep every chat reply SHORT and soaked in your persona, then hand
+  the conversation back to the shopper. An interactive shopkeeper
+  closes deals; a quote machine loses them.
 `
 
 // ── Persona Prompts — each one is a complete, distinct personality ──
@@ -791,11 +821,20 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
     : null
 
   if (isProductQuestion) {
-    if (verified) {
-      return `Good question! I can tell you this directly: ${verified}
-That's what we're offering at ${price}. Anything else you'd like to know about it, or shall we talk a price you had in mind?`
+    // Persona-true product answers: quote the verified description when it
+    // exists, otherwise be honest about verification limits — never invent.
+    const productQ: Record<Persona, string> = {
+      strict_negotiator: verified
+        ? `Per our listing: ${verified} That is the product at ${price}. Do you have further questions, or shall we proceed?`
+        : `To be precise, I only state verified facts — the full specification is on the product page. Listed price: ${price}. Ask a specific question or make an offer.`,
+      playful_friend: verified
+        ? `Ooh, now you're asking the fun stuff! Inside scoop: ${verified} And she's sitting at ${price}. What else do you want to know — or should we start the haggling?`
+        : `Haha, nice try — I don't quote specs from memory 😜 The product page has all the juicy details. What I CAN confirm: it's at ${price}. Poke my brain with a specific question, or let's talk numbers!`,
+      friendly_shopkeeper: verified
+        ? `Happy to tell you, friend! Straight from the store: ${verified} That's the one, at ${price}. Anything else you'd like to know — or shall we talk a number?`
+        : `I'd love to tell you more, friend — but I only quote what the listing can back up. The full specs live on the product page. What I can confirm is it's at ${price}. Ask me anything specific, or let's talk a number!`,
     }
-    return `Great question! I'd rather not quote details I can't verify right now — the full specs are on the product page. What I can confirm is it's listed at ${price}, and I'm happy to work out a deal. Care to make an offer?`
+    return productQ[ctx.persona]
   }
 
   // First-contact free text with no prior turns: a warm opening is the right
@@ -806,11 +845,21 @@ That's what we're offering at ${price}. Anything else you'd like to know about i
   }
 
   if (isGreeting) {
-    return `Hello! 👋 I'm here to help you take ${item} home for less. It's listed at ${price}. Tell me a price you had in mind — or ask me anything about it!`
+    const greeting: Record<Persona, string> = {
+      strict_negotiator: `Welcome. This is ${item}, listed at ${price}. Present your offer — or ask a question and I'll answer directly.`,
+      playful_friend: `Well hello there! 😄 So you've found ${item} — listed at ${price}, but let's be honest, that's just the opening bid. Fancy telling me a number, or want to quiz me first?`,
+      friendly_shopkeeper: `Hello friend! 👋 Lovely to see you here. That's ${item} you're looking at — listed at ${price}. Tell me the number you had in mind, or ask me anything about it!`,
+    }
+    return greeting[ctx.persona]
   }
 
   if (isThanks) {
-    return `You're most welcome! 😊 As a reminder, it's listed at ${price} — but if you tell me the number you had in mind, I'll see what I can do.`
+    const thanks: Record<Persona, string> = {
+      strict_negotiator: `You're welcome. Proceed with an offer at your convenience.`,
+      playful_friend: `Anytime! 😁 Now then — that number isn't going to offer itself. What are we at?`,
+      friendly_shopkeeper: `You're most welcome, friend! 😊 Whenever you're ready, just tell me the price you had in mind and I'll do my best.`,
+    }
+    return thanks[ctx.persona]
   }
 
   if (ctx.language === 'hinglish') {
@@ -819,7 +868,12 @@ That's what we're offering at ${price}. Anything else you'd like to know about i
   if (ctx.language === 'hi') {
     return `समझ गया! 👍 ${item} की सूचीबद्ध कीमत ${price} है। बताइए, आप कितना सोच रहे हैं — या कुछ पूछना हो तो पूछ लीजिए!`
   }
-  return `Got it! 👍 ${item} is listed at ${price}. Tell me the price you had in mind — or ask me anything about it and I'll do my best to help.`
+  const ack: Record<Persona, string> = {
+    strict_negotiator: `Understood. ${item} is listed at ${price}. State your figure or your question.`,
+    playful_friend: `Ha, noted! 😄 ${item} — sitting pretty at ${price}. Give me a number, or hit me with a question.`,
+    friendly_shopkeeper: `Got it, friend! 👍 ${item} is at ${price}. Tell me the number you had in mind and I'll see what I can do.`,
+  }
+  return ack[ctx.persona]
 }
 
 // ── Build customer history context from past sessions ──
@@ -952,13 +1006,22 @@ export function ruleBasedDecision(
   ctx: NegotiationContext
 ): NegotiationResult {
   const boundedOffer = Math.max(0, Math.min(offer, ctx.originalPrice))
-  const { minPrice, originalPrice, attemptsUsed, maxAttempts } = ctx
+  const { minPrice, originalPrice, attemptsUsed, maxAttempts, persona } = ctx
   const attemptsLeft = maxAttempts - attemptsUsed
   const currencySymbol = ctx.currencySymbol
 
+  // Every rule reply is persona-true: Morgan (strict) is measured and never
+  // uses emoji, Riley (playful) is dramatic and games the haggle, Alex
+  // (friendly) is warm and familial. The numbers and bounds are identical —
+  // only the voice changes.
   if (boundedOffer >= minPrice) {
+    const accept: Record<Persona, string> = {
+      strict_negotiator: `Agreed at ${currencySymbol}${boundedOffer.toFixed(2)}. Confirm the acceptance and your discount code will be generated.`,
+      playful_friend: `DEAL! 🎉 ${currencySymbol}${boundedOffer.toFixed(2)} — you absolute legend! Hit Accept and the magic code is yours.`,
+      friendly_shopkeeper: `It's a deal, friend! 🎉 ${currencySymbol}${boundedOffer.toFixed(2)} works for me. Accept it and I'll sort your code right away.`,
+    }
     return {
-      reply: `Done! ${currencySymbol}${boundedOffer.toFixed(2)} works for me. Shall we lock it in? Click "Accept" and I'll generate your discount code.`,
+      reply: accept[persona],
       decision: 'accept',
       counterOffer: boundedOffer,
       tactic: 'accept_at_floor',
@@ -968,8 +1031,13 @@ export function ruleBasedDecision(
 
   if (boundedOffer < minPrice * 0.3) {
     const counter = effectiveCounter(ctx)
+    const lowball: Record<Persona, string> = {
+      strict_negotiator: `${currencySymbol}${boundedOffer.toFixed(2)} is not feasible. My position: ${currencySymbol}${counter.toFixed(2)}. Confirm within this session if that works.`,
+      playful_friend: `WOW. ${currencySymbol}${boundedOffer.toFixed(2)}?! Nice try 😄 Come back to earth with me — ${currencySymbol}${counter.toFixed(2)}. Now we're talking?`,
+      friendly_shopkeeper: `Oh friend, I wish I could do ${currencySymbol}${boundedOffer.toFixed(2)}! 😄 Realistically I can offer ${currencySymbol}${counter.toFixed(2)} as a fair starting point. Does that work better?`,
+    }
     return {
-      reply: `I appreciate the creativity but I can't do ${currencySymbol}${boundedOffer.toFixed(2)}. Let me offer ${currencySymbol}${counter.toFixed(2)} — a fair starting point. What do you think?`,
+      reply: lowball[persona],
       decision: 'counter',
       counterOffer: counter,
       tactic: 'graduated_open',
@@ -979,8 +1047,13 @@ export function ruleBasedDecision(
 
   const counter = effectiveCounter(ctx)
   if (attemptsLeft > 1) {
+    const meet: Record<Persona, string> = {
+      strict_negotiator: `I appreciate the offer, however ${currencySymbol}${boundedOffer.toFixed(2)} is below my position. Given the quality, I can offer ${currencySymbol}${counter.toFixed(2)}. Your call.`,
+      playful_friend: `Mmm, ${currencySymbol}${boundedOffer.toFixed(2)}? You'll have to do better than that 😏 I'll meet you at ${currencySymbol}${counter.toFixed(2)} — and that's me being generous!`,
+      friendly_shopkeeper: `Hmm, ${currencySymbol}${boundedOffer.toFixed(2)} is a little low for me. Let's meet in the middle — how about ${currencySymbol}${counter.toFixed(2)}? I think that's fair for the quality.`,
+    }
     return {
-      reply: `Hmm, ${currencySymbol}${boundedOffer.toFixed(2)} is a bit low for me. Let me meet you partway — how about ${currencySymbol}${counter.toFixed(2)}? I think that's fair given the quality.`,
+      reply: meet[persona],
       decision: 'counter',
       counterOffer: counter,
       tactic: 'meet_partway',
@@ -989,8 +1062,13 @@ export function ruleBasedDecision(
   }
 
   const quote = quotedFloor(ctx)
+  const final: Record<Persona, string> = {
+    strict_negotiator: `This is my final position: ${currencySymbol}${quote.toFixed(2)}. I've justified it clearly. The decision is yours.`,
+    playful_friend: `OKAY OKAY, you win! 🙃 FINAL final offer: ${currencySymbol}${quote.toFixed(2)}. If my boss asks, this never happened. Deal?`,
+    friendly_shopkeeper: `Friend, I've stretched as far as I can. My final offer: ${currencySymbol}${quote.toFixed(2)}. I really hope you'll take it — let's make this work!`,
+  }
   return {
-    reply: `Alright, I've done my best today. I can do ${currencySymbol}${quote.toFixed(2)} — if that works for you, hit Accept and I'll sort out your code right away.`,
+    reply: final[persona],
     decision: 'counter',
     counterOffer: quote,
     tactic: 'final_offer',
