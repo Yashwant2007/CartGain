@@ -50,7 +50,7 @@ Customer ─▶ Bargain API ─▶ Session State Machine ─▶ Product Context
 |--------|----------------|-------|
 | Bargain safety | `src/lib/financial-safety.ts`, `offer-validation.ts`, `abuse.ts`, `intent.ts`, `negotiation-state.ts` | Multi-layer; high test density |
 | Recovery attribution | `src/lib/attribution.ts`, `bargain/goals.ts` | Evidence-based; refund-netted |
-| Payments | `lib/payment.ts` + `lib/payments/*` adapters; routes `api/payments/*`, `api/payment/*` (shims), `api/webhooks/payment/*` | Two webhook handlers — consolidation gated on merchant dashboard confirmation (ADR-009) |
+| Payments | `lib/payment.ts` + `lib/payments/*` adapters; routes `api/payments/*`, `api/payment/*` (shims), `api/webhooks/payment/cashfree` | Single Razorpay webhook (`/api/payment/webhook`) — adapter route retired after owner confirmed the registered URL (ADR-009) |
 | Shopify | `lib/shopify*` adapters; `api/shopify/*`; `extensions/` | HMAC-verified webhooks, encrypted tokens, purge on uninstall |
 | Queue | `lib/jobs/*` + `lib/queue/` | Bull + ioredis in-process; NX dedupe; idempotent processors |
 | Observability | `lib/observability/*` | `captureError`/`logWarn` with redaction |
@@ -95,7 +95,7 @@ Route handlers remain flat under `src/app/api` (99 routes). Logical bundles
 
 | Risk | Level | Action |
 |------|-------|--------|
-| Two Razorpay webhooks live; dashboard-registered URL unknown | HIGH | Owner: confirm registered URL in Razorpay dashboard → retire the other (ADR-009) |
+| ~~Two Razorpay webhooks~~ **RESOLVED** | — | Merchant confirmed registration = `/api/payment/webhook`; adapter route `webhooks/payment/razorpay` deleted; `razorpay-adapter` lib retained (ADR-009) |
 | `vercel-build` runs `prisma db push --accept-data-loss` | HIGH (C-2) | Migrate to `prisma migrate deploy` when schema churn stabilizes |
 | SQL-fallback in one recovery path (`raw` re-exec) absent | MEDIUM | Reviewed; defer |
 | `.claude/**` + backup filename retain old brand | LOW | Local tooling / label only; inert (gitignored) |
