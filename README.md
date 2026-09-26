@@ -1,379 +1,126 @@
-# RecoverFlow 🚀
+# CartGain 🚀
 
-**Multi-Channel Cart Recovery SaaS** - Recover abandoned carts with SMS, WhatsApp, Email, and Push notifications.
+**Cart recovery + AI bargain engine for Shopify merchants.** Recover abandoned
+carts and win more of them with a storefront bargaining widget that negotiates
+with shoppers in real time — safely, within merchant-set price floors.
 
-![RecoverFlow](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+> Formerly branded "RecoverFlow". This repository is CartGain.
 
-## Features
+## What it does
 
-- 📱 **Multi-Channel Recovery**: SMS, WhatsApp, Email, Push notifications
-- 🤖 **AI Optimization**: Smart timing and channel selection
-- 💳 **Pay-As-You-Go**: No monthly minimums, pay only for what you use
-- 🔌 **Multi-Platform**: Shopify, WooCommerce, Magento, BigCommerce, Custom API
-- 📊 **Real-Time Analytics**: Track recovered revenue and ROI
-- 🎯 **A/B Testing**: Optimize messages and timing
-- 💰 **Dynamic Discounts**: Auto-generate discount codes
-- 🔒 **Compliance Ready**: TCPA, GDPR, WhatsApp Business Policy compliant
+- **Abandoned cart recovery** — email/WhatsApp rescue sequences with secure
+  redirect links (click tracking, COD confirm, payment resume).
+- **AI Bargain widget** — an embeddable Shopify storefront assistant that greets
+  shoppers, negotiates offers and locks deals as Shopify discount codes. The
+  negotiation runs inside a **deterministic financial-safety layer**: the AI
+  crafts the wording; the floor price, discount depth and campaign rules are
+  enforced server-side in integer minor units and can never be breached.
+- **Personas & goals** — merchant-chosen sales personalities
+  (friendly/strict/playful) and per-day deal goals with revenue-share
+  attribution.
+- **RTO & payment recovery** — COD→prepaid nudges, RTO risk scoring, payment
+  retry campaigns.
+- **Analytics** — recovered revenue, ROI, campaign A/B tests, bargain KPIs.
+- **Billing** — Razorpay subscriptions and Shopify Billing (app subscription)
+  with invoices and a revenue-share ledger.
 
-## Tech Stack
+## Tech stack
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | Next.js 14, TypeScript, Tailwind CSS, Framer Motion |
-| Backend | Next.js API Routes, Prisma ORM |
-| Database | PostgreSQL |
-| Cache/Queue | Redis (Upstash) |
-| Auth | NextAuth.js |
-| Payments | Razorpay |
-| SMS | MSG91 |
-| WhatsApp | Meta Business API |
+| Frontend | Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS |
+| Backend | Next.js Route Handlers, Prisma ORM |
+| Database | PostgreSQL (Supabase) |
+| Queue | Bull + ioredis (in-process on Vercel serverless) |
+| Auth | NextAuth.js v4 (credentials, 2FA/TOTP) |
+| Payments | Razorpay (primary) + Cashfree (secondary), Shopify Billing |
+| WhatsApp | Meta Graph API (webhook, HMAC-verified) |
 | Email | Resend |
-| Hosting | Vercel |
+| AI | OpenAI (primary) + OpenAI-compatible fallback (Groq) |
+| Hosting | Vercel (`cart-gain.com`) |
 
-## Quick Start
-
-### Prerequisites
-
-- Node.js 18+ 
-- npm or yarn
-- PostgreSQL database
-- Accounts for: MSG91, Resend, Razorpay
-
-### Installation
+## Quick start
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/recoverflow.git
-cd recoverflow
-
-# Install dependencies
 npm install
-
-# Copy environment variables
-cp .env.example .env.local
-
-# Edit .env.local with your credentials
-# Required: DATABASE_URL, NEXTAUTH_SECRET, RAZORPAY keys, MSG91 credentials
-
-# Generate Prisma client
+cp .env.example .env.local   # then fill in your credentials
 npx prisma generate
-
-# Run database migrations
 npx prisma migrate dev
-
-# Start development server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+Open http://localhost:3000
 
-## Project Structure
+Required env: `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`,
+`ENCRYPTION_KEY`, `RESEND_API_KEY`, Razorpay keys. See `.env.example` for the
+full list. Validate any missing variable with:
+`npm run typecheck` and the `/api/health` endpoint (renders missing vars).
 
-```
-recoverflow/
-├── prisma/
-│   └── schema.prisma          # Database schema
-├── src/
-│   ├── app/
-│   │   ├── api/               # API routes
-│   │   │   ├── auth/          # Authentication
-│   │   │   ├── webhooks/      # Shopify, Razorpay, Cashfree webhooks
-│   │   │   ├── carts/         # Cart operations
-│   │   │   ├── campaigns/     # Campaign management
-│   │   │   ├── analytics/     # Analytics data
-│   │   │   ├── rto/           # RTO risk scoring & config endpoints
-│   │   │   ├── payments/      # Payment recovery config & metrics
-│   │   │   └── jobs/          # Cron job endpoints
-│   │   ├── r/                 # Secure redirect links (click tracking, COD confirm, payment resume)
-│   │   ├── dashboard/         # User dashboard
-│   │   │   ├── campaigns/     # Campaign management UI
-│   │   │   ├── analytics/     # Analytics UI
-│   │   │   ├── integrations/  # Integration settings
-│   │   │   └── settings/      # User settings
-│   │   ├── login/             # Login page
-│   │   ├── signup/            # Signup page
-│   │   ├── layout.tsx         # Root layout
-│   │   └── page.tsx           # Landing page
-│   ├── components/            # React components
-│   ├── lib/
-│   │   ├── rto/               # RTO risk scoring engine (scorer, config, nudge)
-│   │   ├── payments/          # Payment-failure recovery (gateway adapters, classifier, recovery)
-│   │   ├── links/             # Secure token generation/verification
-│   │   ├── jobs/              # Background job processors
-│   │   ├── queue/             # Bull/Redis queue management
-│   │   ├── services/          # SMS, WhatsApp, Email services
-│   │   ├── alerter.ts         # Monitoring alert system
-│   │   ├── data-protection.ts # PII redaction & audit logging
-│   │   ├── db.ts              # Prisma client
-│   │   └── utils.ts           # Utility functions
-│   └── types/                 # TypeScript types
-├── .env.example               # Environment variables template
-├── LAUNCH_GUIDE.md            # Comprehensive launch guide
-├── next.config.js             # Next.js configuration
-├── package.json               # Dependencies
-├── tailwind.config.js         # Tailwind configuration
-└── tsconfig.json              # TypeScript configuration
-```
+## Scripts
 
-## Environment Variables
+| Script | What it does |
+|--------|--------------|
+| `npm run dev` | Start the dev server |
+| `npm run build` | `prisma generate && next build` |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Jest (unit + integration, 640+ tests) |
+| `npm run vercel-build` | Vercel production build |
 
-```env
-# Database
-DATABASE_URL="postgresql://user:password@localhost:5432/recoverflow"
-
-# NextAuth
-NEXTAUTH_SECRET="your-secret-key"
-NEXTAUTH_URL="http://localhost:3000"
-
-# Razorpay (Payments)
-RAZORPAY_KEY_ID="rzp_test_..."
-RAZORPAY_KEY_SECRET="..."
-RAZORPAY_WEBHOOK_SECRET="..."
-
-# Cashfree (Payment Gateway — optional, for payment-failure recovery)
-CASHFREE_WEBHOOK_SECRET=""
-
-# MSG91 (SMS)
-MSG91_AUTH_KEY="your_auth_key"
-MSG91_SENDER_ID="CARTGN"
-
-# WhatsApp Business API
-WHATSAPP_BUSINESS_TOKEN="..."
-WHATSAPP_PHONE_NUMBER_ID="..."
-
-# Email (Resend)
-RESEND_API_KEY="re_xxx"
-FROM_EMAIL="noreply@cart-gain.com"
-FROM_NAME="CartGain"
-
-# Redis
-REDIS_URL="redis://localhost:6379"
-
-# Secure link token secret (for single-use payment/confirmation links)
-# If not set, falls back to NEXTAUTH_SECRET
-LINK_SECRET=""
-
-# Monitoring alerts — email address for webhook/cron error notifications
-ALERT_EMAIL=""
-```
-
-## API Routes
-
-### Authentication
-- `POST /api/auth/register` - Create new account
-- `POST /api/auth/signin` - Sign in
-- `POST /api/auth/signout` - Sign out
-
-### Carts
-- `GET /api/carts` - List abandoned carts
-- `POST /api/carts` - Create/update cart
-- `POST /api/carts/[id]/recover` - Trigger recovery
-
-### Campaigns
-- `GET /api/campaigns` - List campaigns
-- `POST /api/campaigns` - Create campaign
-- `PUT /api/campaigns/[id]` - Update campaign
-- `DELETE /api/campaigns/[id]` - Delete campaign
-
-### Analytics
-- `GET /api/analytics/overview` - Dashboard metrics
-- `GET /api/analytics/channels` - Channel performance
-- `GET /api/analytics/revenue` - Revenue data
-
-### Webhooks
-- `POST /api/webhooks/shopify` - Shopify cart/order webhooks
-- `POST /api/payment/webhook` - Razorpay payment webhook (legacy)
-- `POST /api/webhooks/payment/razorpay` - Razorpay payment-failure webhook
-- `POST /api/webhooks/payment/cashfree` - Cashfree payment-failure webhook
-
-### RTO / COD-Fraud Reduction
-- `POST /api/rto/score` - Score a COD order for RTO risk and trigger nudge
-- `GET /api/rto/config` - Get RTO config for a merchant
-- `PUT /api/rto/config` - Update RTO config (weights, thresholds, incentive, categories)
-- `GET /api/rto/metrics` - RTO metrics dashboard (scores by band, nudge conversion rate)
-- `GET /api/rto/pincode-stats` - Pincode-level RTO statistics
-
-### Payment-Failure Recovery
-- `GET /api/payments/recovery/config` - Get payment recovery config
-- `PUT /api/payments/recovery/config` - Update payment recovery config
-- `GET /api/payments/recovery/metrics` - Payment recovery metrics dashboard
-
-### Jobs (Secured with JOB_SECRET)
-- `POST /api/jobs/process-carts` - Process abandoned carts (every 5 min)
-- `POST /api/jobs/retry-payments` - Process payment-failure retries
-- `POST /api/jobs/process-billing` - Process revenue share billing (daily)
-
-## Database Schema
+## Project structure
 
 ```
-User
-├── Account
-├── Session
-├── Store
-│   ├── Cart
-│   │   └── Message
-│   ├── Campaign
-│   │   └── ABTest
-│   ├── RecoveredCart
-│   ├── MerchantConfig           # Feature flags & tuning per merchant
-│   ├── RtoRiskScore             # Per-order RTO risk assessment
-│   ├── PincodeStats             # Historical RTO rates per pincode
-│   ├── CodNudge                 # COD→prepaid conversion nudges
-│   └── Customer                 # Per-merchant customer aggregates
-├── PaymentAttempt               # Normalized payment failures from any gateway
-├── PaymentRecoveryCampaign       # Per-attempt recovery message tracking
-├── Analytics
-├── Subscription
-└── DataAccessLog                # Audit trail for GDPR/compliance
+src/
+├── app/
+│   ├── api/            # Route handlers (auth, bargain, shopify, payments, jobs, …)
+│   ├── dashboard/      # Merchant dashboard
+│   ├── bargain/        # Storefront embed + host page
+│   ├── demo/ s/ r/     # Demo surfaces & recovery redirects
+│   └── marketing/      # Pricing, terms, privacy, docs…
+├── components/         # UI primitives + domain surfaces (bargain widget, charts…)
+├── lib/
+│   ├── bargain/        # Bargain engine: safety, policy, abuse, intent, state machine
+│   ├── payments/       # Gateway adapters (razorpay/cashfree) + recovery
+│   ├── shopify*.ts     # Shopify OAuth, GraphQL, webhooks
+│   ├── services/       # AI, email, WhatsApp orchestration
+│   ├── jobs/, queue/   # Bull jobs + processors
+│   ├── observability/  # Structured logs, redaction
+│   └── …               # env, validation, rate-limit, financial-safety…
+└── middleware.ts       # Auth gate + x-request-id trace corridor
+extensions/             # Shopify UI extensions
+docs/                   # architecture, decisions (ADRs), security, operations
 ```
 
-## Key Features Explained
+## Bargain safety model (important)
 
-### 1. Multi-Channel Recovery
+The negotiator is layered. The AI is never the final authority on money:
 
 ```
-Cart Abandoned
-    ↓
-┌───────────────────────────────────────┐
-│  AI decides optimal channel/timing   │
-├───────────────────────────────────────┤
-│  SMS (15 min)    → 99% open rate     │
-│  WhatsApp (1 hr) → Rich media        │
-│  Email (3 hr)    → Detailed content  │
-│  Push (24 hr)    → Free reminder     │
-└───────────────────────────────────────┘
+Customer → Bargain API → Session state → Product context
+  → Deterministic policy (floor / attempts / campaign / coupons / stock)
+  → AI negotiator (wording only)
+  → validateOffer() + buildExecutablePrice()  ← hard, server-side
+  → Response
 ```
 
-### 2. AI Optimization
+- The merchant floor is computed server-side, byte-for-byte guarded in integer
+  minor units, and **never sent to the client or to the AI prompt**.
+- Session lifecycle is a deterministic state machine
+  (`active → accepting → accepted | rejected | expired | abandoned`); invalid
+  transitions are impossible by construction.
+- Casual "I quit" wording triggers a **retention** path, never a termination;
+  only a second walk-out or an exhausted attempt budget closes a session.
 
-- Analyzes historical recovery data
-- Considers customer timezone, device, cart value
-- Predicts best channel and send time
-- A/B tests message variants
+See `docs/architecture/` and `docs/decisions/` for the deep dive.
 
-### 3. Dynamic Discounting
+## Documentation
 
-- Only offers discounts when abandonment pattern suggests needed
-- Calculates optimal discount amount
-- Generates unique discount codes
-- Tracks discount ROI
-
-## Monetization
-
-### Pricing Tiers
-
-| Tier | Price | Best For |
-|------|-------|----------|
-| Free | $0 | Testing, <50 carts/month |
-| Pay-As-You-Go | $0.02/SMS | Growing stores |
-| Pro | $99/month | High-volume stores |
-
-### Revenue Model
-
-- SMS: $0.02/message (cost: ~$0.0075)
-- WhatsApp: $0.005/message (cost: ~$0.0025)
-- Email: Free (included)
-- Push: Free (included)
-
-**Margin**: ~60-70% on messaging
-
-## Deployment
-
-### Vercel (Recommended)
-
-```bash
-# Install Vercel CLI
-npm install -g vercel
-
-# Deploy
-vercel
-
-# Follow prompts to connect GitHub, set env vars
-```
-
-### Database
-
-1. Create PostgreSQL database (Supabase, PlanetScale, or self-hosted)
-2. Run migrations: `npx prisma migrate deploy`
-3. Update DATABASE_URL in environment
-
-### Razorpay Webhooks
-
-Configure these webhook events in Razorpay Dashboard:
-- `payment.captured`
-- `order.paid`
-- `subscription.activated`
-- `payment.failed` (required for payment-failure recovery)
-
-Endpoint: `https://yourdomain.com/api/payment/webhook`
-Secret: Your `RAZORPAY_WEBHOOK_SECRET` from .env.local
-
-### Payment-Failure Recovery Webhooks
-
-#### Razorpay
-Configure `payment.failed` event in Razorpay Dashboard:
-- Endpoint: `https://yourdomain.com/api/webhooks/payment/razorpay`
-- Secret: Your `RAZORPAY_WEBHOOK_SECRET`
-
-#### Cashfree
-Configure `ORDER_PAYMENT_FAILED` event in Cashfree Dashboard:
-- Endpoint: `https://yourdomain.com/api/webhooks/payment/cashfree`
-- Secret: Your `CASHFREE_WEBHOOK_SECRET`
-
-### Cron Jobs
-
-Set `CRON_SECRET` (same value as `JOB_SECRET`) in Vercel → Settings → Environment Variables.
-Vercel automatically sends it as `Authorization: Bearer <CRON_SECRET>` on every cron request —
-no `?secret=` query parameter is used (it leaks into function logs).
-
-Cron endpoints:
-- `GET /api/jobs/process-carts` — every 5 minutes
-- `GET /api/jobs/retry-payments` — every 15 minutes
-- `GET /api/jobs/process-billing` — every 30 minutes
-- `GET /api/jobs/weekly-report` — weekly
-
-Cron routes are disabled (401) until a secret is configured — fail closed by design.
-
-## Testing
-
-```bash
-# Run tests
-npm test
-
-# Run E2E tests
-npm run test:e2e
-
-# Check types
-npm run type-check
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/new-feature`
-3. Commit changes: `git commit -am 'Add new feature'`
-4. Push to branch: `git push origin feature/new-feature`
-5. Submit pull request
+- `docs/architecture/` — audit + final architecture
+- `docs/decisions/` — architecture decision records (ADRs)
+- `docs/security/` — security & staff access policies
+- `docs/observability.md`, `docs/incident-response.md`, `docs/operations`
+- `CONTRIBUTING.md` — developer onboarding
 
 ## License
 
-MIT License - see LICENSE file for details
-
-## Support
-
-- Documentation: [docs.recoverflow.com](https://docs.recoverflow.com)
-- Email: support@recoverflow.com
-- Twitter: [@recoverflow](https://twitter.com/recoverflow)
-
-## Acknowledgments
-
-- Inspired by CartBoss's success ($37k/mo)
-- Built for the Surgent.dev community
-- Thanks to all beta testers!
-
----
-
-**Built with ❤️ by RecoverFlow Team**
-
-*Version 1.0.0 - April 2026*
+MIT

@@ -280,4 +280,4 @@ real floor to a counter). `src/app/api/bargain/start/route.ts` fetches the autho
 - Do NOT delete/break: recovery, auth, billing, Shopify integration, analytics, pricing, DB logic.
 - Never hardcode merchant min-price in frontend; never expose merchant floor/margin/economics to customers.
 - Keep ROI plan data in `ROICalculator.tsx` in sync with `payment.ts::PLANS`.
-- Re-run tsc + lint + jest (636) before committing.
+- Re-run tsc + lint + jest (647) before committing.
