@@ -1,3 +1,7 @@
+// LEGACY Razorpay webhook handler.
+// Logical twin of src/app/api/webhooks/payment/razorpay/route.ts (adapter path).
+// Retire one once the merchant confirms which URL is registered in the Razorpay
+// dashboard (see ADR-009). Frontend calls /api/payment/* which shim to this file.
 import { NextRequest, NextResponse } from "next/server";
 import { verifyWebhookSignature, PLANS, resolvePlanId, PAID_PLAN_IDS, getPlan } from "@/lib/payment";
 import prisma from "@/lib/db";

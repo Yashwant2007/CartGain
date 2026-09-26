@@ -1,3 +1,7 @@
+// ADAPTER Razorpay webhook handler.
+// Logical twin of src/app/api/payments/webhook/route.ts (legacy path).
+// Retire one once the merchant confirms which URL is registered in the Razorpay
+// dashboard (see ADR-009).
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { razorpayAdapter } from '@/lib/payments/razorpay-adapter'
