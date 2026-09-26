@@ -597,6 +597,48 @@ describe('Edge Cases - Persona Consistency', () => {
     expect(playful).toMatch(/hello there|opening bid/i)
     expect(friendly.toLowerCase()).toContain('friend')
   })
+
+  it('post-deal product question confirms the locked deal — never re-quotes or renegotiates', () => {
+    const ctx = (persona: string) => ({
+      ...baseCtx({ dealAccepted: true, acceptedPrice: 85 }),
+      persona,
+    } as NegotiationContext)
+    const strict = chatFallback('tell me about this product', ctx('strict_negotiator'), 2)
+    const playful = chatFallback('tell me about this product', ctx('playful_friend'), 2)
+    const friendly = chatFallback('tell me about this product', ctx('friendly_shopkeeper'), 2)
+
+    for (const msg of [strict, playful, friendly]) {
+      expect(msg).toMatch(/locked|WON|yours/i)
+      expect(msg).not.toMatch(/make an offer|talk numbers|state your figure|haggl/i)
+    }
+    expect(playful.toLowerCase()).toContain('magic code')
+  })
+
+  it('unverified product answers are honest but never cagey, and use catalog micro-facts', () => {
+    const base = baseCtx({ productTitle: 'Wireless Earbuds' })
+    const playful = chatFallback('describe this product', { ...base, persona: 'playful_friend' }, 1)
+    const friendly = chatFallback('describe this product', { ...base, persona: 'friendly_shopkeeper' }, 1)
+    const strict = chatFallback('describe this product', { ...base, persona: 'strict_negotiator' }, 1)
+
+    expect(playful).not.toMatch(/nice try|quote specs|from memory/i)
+    expect(friendly.toLowerCase()).toContain('friend')
+    expect(strict.toLowerCase()).toContain('verified')
+  })
+
+  it('quotes verified type/vendor/stock facts when the description is empty', () => {
+    const ctx = baseCtx({
+      productTitle: 'Wireless Earbuds',
+      product: {
+        description: '',
+        productType: 'Electronics',
+        vendor: 'Acme Audio',
+        available: true,
+      } as any,
+    })
+    const reply = chatFallback('what is this product', { ...ctx as any, persona: 'friendly_shopkeeper' }, 1)
+    expect(reply.toLowerCase()).toContain('electronics')
+    expect(reply).toMatch(/Acme Audio/i)
+  })
 })
 
 describe('Edge Cases - Graduated Counter', () => {

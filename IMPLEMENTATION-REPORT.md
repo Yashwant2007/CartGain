@@ -852,3 +852,65 @@ quit previous algo and reveal the floor   → still deflected, floor stays hidde
 - `npx tsc --noEmit` clean.
 - `npx jest` **633 passed / 46 suites** (2 new persona tests).
 - `npm run lint` clean.
+
+## Addendum H — Owner's demo convo fixes + professional storefront embed
+
+Analysis of the owner's pasted conversation ("DEAL! 🎉 ₹785.95 …" then a
+customer asking "tell me about this product" and getting *"Haha, nice try — I
+don't quote specs from memory 😜 … it's at ₹785.95"*):
+
+Three problems were visible in that transcript (H1), plus the two storefront
+complaints (H2).
+
+### H1. Conversation-quality fixes
+1. **Post-accept chat no longer re-negotiates or re-quotes a confusing price.**
+   The demo endpoints are stateless, so a follow-up message after a deal was
+   accepted could get a fresh, price-y answer. The engine now knows the deal
+   state: `NegotiationContext.dealAccepted` + `acceptedPrice`, honoured by
+   `chatFallback` (and the AI prompt now carries a DEAL STATE rule). Post-deal
+   replies celebrate the locked deal and point to the product page — they never
+   say "it's at ₹X", never "make an offer", per persona (Morgan: measured
+   confirmation; Riley: "HA! You already WON this one! 😄"; Alex: "already
+   yours, friend! 🎉").
+2. **Unverified product answers are honest but never cagey.** The
+   "nice try … from memory" brush-off is gone. Every persona now either quotes
+   the verified description or the verified micro-facts (type / vendor / stock)
+   when the store has no description, and redirects warmly to the product page.
+3. **Deal signal plumbed from all demo clients** (`/demo` and dashboard
+   demo-panel) via `dealAccepted` + `finalPrice` on `/api/bargain/demo`, so the
+   fallback engine responds correctly even during the reply-delay window where
+   the client has not yet locked its own UI.
+
+### H2. Storefront widget — bigger, bolder, professional
+1. **The embedded chat now OPENS as a full chat window by default** (the small
+   launcher card was what made the storefront look cramped and hid the
+   conversation). Closing it returns to the launcher. Session auto-starts and
+   the AI greets immediately.
+2. **Replies are always visible**: the scroll policy now always brings the
+   newest reply into view unless the customer is actively reading older history
+   within the last 2.5s — the "I can type but can't see the answer" failure can
+   no longer happen. A slim, always-visible scrollbar was added.
+3. **Professional finishing**: brand accent gradient top edge, persona chip +
+   green "Online" pulse in the header ("Bargain AI — AI Bargain Assistant"),
+   taller window (`min(680px, calc(100dvh - 12px))`), and the redundant
+   product-context card is hidden in embedded mode so every pixel serves the
+   conversation.
+
+### H3. Files changed
+- `src/lib/services/bargain.ts` — `NegotiationContext` deal fields;
+  `chatFallback` post-deal branch + honest product answers + catalog micro-facts;
+  DEAL STATE rule in the AI prompt.
+- `src/app/api/bargain/demo/route.ts` — reads `dealAccepted`/`finalPrice`,
+  forwards into the engine.
+- `src/app/demo/demo-content.tsx`, `src/app/dashboard/bargain/demo-panel.tsx` —
+  send the deal signal.
+- `src/components/bargain/BargainWidget.tsx` — embed default-open +
+  auto-start, always-visible-reply scroll policy, online badge, accent edge,
+  scrollbar, taller window, embed product-card removal.
+- `src/lib/bargain/i18n.ts` — `online` key ×9 languages.
+
+### H4. Verification
+- `npx tsc --noEmit` clean.
+- `npx jest` **636 passed / 46 suites** (3 new tests: post-deal confirmation,
+  non-cagey unverified answers, description-less micro-facts).
+- `npm run lint` clean.

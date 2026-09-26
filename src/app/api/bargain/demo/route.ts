@@ -160,13 +160,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // When the client has already accepted a deal earlier in this exchange
+    // (widget decision state), tell the engine so a follow-up chat confirms
+    // the locked deal instead of re-quoting a confusing price or reopening
+    // negotiation on a closed exchange.
+    const dealAccepted = body.dealAccepted === true
+    const acceptedPrice = typeof body.finalPrice === 'number' ? clamp(body.finalPrice, 1, 1_000_000) : undefined
+    const ctx2 = dealAccepted ? { ...ctx, dealAccepted, acceptedPrice } : ctx
+
     let result: NegotiationResult
     try {
-      result = await negotiateStep(ctx, history, message, offer ?? undefined, `demo_${session.user.id}`)
+      result = await negotiateStep(ctx2, history, message, offer ?? undefined, `demo_${session.user.id}`)
     } catch {
       result = offer != null
-        ? ruleBasedDecision(offer, ctx)
-        : { reply: chatFallback(message, ctx, history.length), decision: 'chat', tactic: 'demo_fallback', sentiment: 'neutral' }
+        ? ruleBasedDecision(offer, ctx2)
+        : { reply: chatFallback(message, ctx2, history.length), decision: 'chat', tactic: 'demo_fallback', sentiment: 'neutral' }
     }
 
     return NextResponse.json({

@@ -111,6 +111,9 @@ export default function DemoContent() {
   const [alreadyUsed, setAlreadyUsed] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const sessionIdRef = useRef(0)
+  // True once a deal was accepted in this exchange, so a stray follow-up chat
+  // signals the backend that the deal is locked (never re-quote / renegotiate).
+  const dealAcceptedRef = useRef(false)
 
   const minPrice = useMemo(
     () => Math.round((product.price * (1 - DEMO_PROFIT_PERCENT / 100)) * 100) / 100,
@@ -145,6 +148,7 @@ export default function DemoContent() {
       language,
     }
     sessionIdRef.current += 1
+    dealAcceptedRef.current = false
     setMessages([{ role: 'ai', content: buildOpeningMessage(ctx) }])
     setAttemptsUsed(0)
     setEnded(null)
@@ -155,6 +159,7 @@ export default function DemoContent() {
 
   function reset() {
     sessionIdRef.current += 1
+    dealAcceptedRef.current = false
     setStarted(false)
     setMessages([])
     setInput('')
@@ -253,6 +258,8 @@ export default function DemoContent() {
             productTitle: ctx.productTitle,
             language: ctx.language,
             walkoutTriggered: isWalkout,
+            dealAccepted: dealAcceptedRef.current,
+            finalPrice: newFinal ?? (ended === 'accepted' ? finalPrice : undefined),
           }),
         })
         const data = await res.json()
@@ -294,6 +301,8 @@ export default function DemoContent() {
       newEnded = 'accepted'
       newFinal = newFinal ?? offer ?? counterOffer ?? null
     }
+
+    if (decision === 'accept') dealAcceptedRef.current = true
 
     const sid = sessionIdRef.current
     setMessages(prev => [...prev, { role: 'customer', content: userText, offeredPrice: offer }])

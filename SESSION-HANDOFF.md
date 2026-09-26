@@ -5,22 +5,22 @@
 Last updated: Sat Sep 26 2026
 
 ## Recent cycles (brief — details in `IMPLEMENTATION-REPORT.md`)
-- **Personas talk like their names + chat-first behaviour — code complete,
-  verified; commit+deploy pending (Addendum G).**
-  Owner: make playful/strict/friendly actually behave per their name/talking
-  pattern, and interactive chat should be given priority. Before this, personas
-  only lived in the AI system prompt (Alex warm / Morgan strict / Riley
-  playful) — the deterministic/AI-down paths were persona-blind. Now
-  `ruleBasedDecision` and `chatFallback` are persona-true across accept/
-  lowball/counter/final and product-Q/greeting/thanks/ack replies (Morgan:
-  measured, full stops, no emoji; Riley: dramatic, "WOW… Nice try 😄",
-  "OKAY OKAY you win 🙃"; Alex: warm "friend" voice; numbers/bounds identical).
-  Added a "CONVERSATION FIRST" block to the AI prompt: a message with no number
-  is a chat turn + the #1 sales tool — answer fully in character, ALWAYS ask a
-  follow-up question back, never answer chat with a bare price/counter, plant
-  the next step in the question (and per-persona chat recipe). Test coverage:
-  2 new persona-consistency tests. Verified: tsc clean, jest **633 green**, lint
-  clean. Needs commit + `npx vercel --prod --yes`.
+- **Owner's demo-convo + storefront embed fixes — code complete, verified; commit+deploy pending (NEW, Addendum H).**
+  Analysed pasted convo ("DEAL! 🎉 ₹785.95 … tell me about this product" → "nice try — I don't quote specs
+  from memory"). Fixes: (1) deal-state awareness — `NegotiationContext.dealAccepted`/`acceptedPrice`;
+  `chatFallback` now confirms a locked deal instead of re-quoting price/renegotiating; AI prompt gained a DEAL
+  STATE rule; demo clients (`/demo`, dashboard demo-panel) signal acceptance. (2) unverified product answers
+  are honest, never cagey, and use catalog micro-facts (type/vendor/stock) when a store lacks a description.
+  (3) storefront embed is now a proper chat: opens FULL by default (launcher → close only), replies ALWAYS
+  auto-scroll into view (2.5s reading-grace), brand accent top edge, "Online" badge + persona chip header,
+  taller window (`min(680px, calc(100dvh - 12px))`), visible slim scrollbar, redundant product card hidden
+  in embed. Verified: tsc clean, jest **636 green** (3 new tests), lint clean. Needs commit + `npx vercel --prod --yes`.
+- **Personas talk like their names + chat-first behaviour — committed `1bfce5ad`, pushed, deployed (DONE).**
+  `ruleBasedDecision` and `chatFallback` are persona-true across accept/lowball/counter/final and
+  product-Q/greeting/thanks/ack replies (Morgan: measured, full stops, no emoji; Riley: dramatic;
+  Alex: warm "friend"; numbers/bounds identical). AI prompt gained "CONVERSATION FIRST" (no-number message =
+  chat turn = #1 sales tool — answer in character, ALWAYS a follow-up question, never a bare price/counter).
+  2 new persona-consistency tests. Verified tsc clean, jest 633 green, lint clean. Deployed; prod HTTP 200.
 - **Bargain shopkeeper-quote fixes — committed `b83e1b9f`, pushed, deployed (DONE).**
   Opening no longer leaks "N attempts" (engine copy aligned); `chat` replies no
   longer carry a bogus "counter: ₹X" (counterOffer dropped for chat
@@ -237,11 +237,13 @@ real floor to a counter). `src/app/api/bargain/start/route.ts` fetches the autho
   "counter: ₹X" (counterOffer dropped for chat everywhere); demo answered product questions from real
   verified catalog facts (`buildProductContext` wired into the demo route); "Tell me about this product"
   chip on the storefront widget (Addendum F).
-- **Personas talk like their names + chat-first — code complete, verified; commit+deploy pending (latest, Addendum G).**
-  ruleBasedDecision + chatFallback now persona-true (Morgan measured/no-emoji, Riley dramatic, Alex warm);
-  AI prompt gains "Conversation First" (chat turns answered in character + a follow-up question, never a
-  bare price). Needs commit + `npx vercel --prod --yes`, then owner re-tests each persona on /demo + the
-  store: friendly/strict/playful should read obviously different in chatter AND during straight bargaining.
+- **Personas talk like their names + chat-first — committed `1bfce5ad`, pushed, deployed, prod HTTP 200 (DONE).**
+  Plus the follow-up owner convo/storefront embed work (Addendum H) built on top — see "Recent cycles" above.
+- **Owner's demo-convo + storefront embed fixes (Addendum H) — code complete,
+  verified; commit+deploy pending.** After deploy, owner re-tests on the store:
+  embed should now open as a full chat window (not a small card), replies stay
+  visible, and the pasted scenario (deal accepted → customer asks about the
+  product) should confirm the locked deal instead of re-quoting the price.
 - **Bargain chat interface overhaul — DONE (committed `7ca4ba53`, pushed, deployed, prod HTTP 200).**
   Manual Shopify-side checks still recommended per Addendum C6 (embedded + floating, quick chips,
   accept→code, console at 320–1440px, FINAL OFFER only at last counter).

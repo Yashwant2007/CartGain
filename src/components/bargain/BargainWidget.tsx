@@ -126,7 +126,7 @@ export default function BargainWidget({
   persona,
   mode,
 }: Props) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState<boolean>(isEmbed)
   const [minimised, setMinimised] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -241,8 +241,11 @@ export default function BargainWidget({
     return () => window.removeEventListener('keydown', onKey)
   }, [isEmbed, open])
 
-  // Scroll policy: only follow new messages when the customer is at the bottom
-  // (reading older history is never yanked down). Their own send always jumps.
+  // Scroll policy: the newest reply is ALWAYS brought into view — a customer
+  // who can't see the answer is the complaint we must never have. The only
+  // exception: they are actively reading older history (scrolled up within the
+  // last 2.5s); their own send always jumps back to the bottom.
+  const lastInteractRef = useRef(0)
   const scrollToBottom = useCallback(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -250,7 +253,8 @@ export default function BargainWidget({
   }, [])
 
   useEffect(() => {
-    if (messages.length === 0 || !atBottom) return
+    if (messages.length === 0) return
+    if (Date.now() - lastInteractRef.current < 2500 && !atBottom) return
     const t = requestAnimationFrame(() => scrollToBottom())
     return () => cancelAnimationFrame(t)
   }, [messages, thinking, atBottom, scrollToBottom])
@@ -711,6 +715,17 @@ export default function BargainWidget({
     }
   }
 
+  // Embedded mode opens as a full chat window by default (the launcher card is
+  // what made the storefront look small/cramped). Auto-start the session so the
+  // AI greets immediately. Idempotent: busyRef + sessionId guard below.
+  useEffect(() => {
+    if (!isEmbed || !open || minimised || sessionId || loading || busyRef.current) return
+    void startSession()
+    // startSession is a stable function declaration; the run is already gated
+    // by sessionId/loading/busyRef so re-renders never double-start.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEmbed, open, minimised, sessionId, loading])
+
   function closePanel() {
     setOpen(false)
     setMinimised(false)
@@ -745,7 +760,7 @@ export default function BargainWidget({
               overflow: 'hidden',
               // A proper chat window that never overflows the device — the
               // parent iframe (bargain-embed.js) clamps to 60–2400px.
-              height: open && !minimised ? 'min(640px, calc(100dvh - 24px))' : 'auto',
+              height: open && !minimised ? 'min(680px, calc(100dvh - 12px))' : 'auto',
             }
           : {}),
       }}
@@ -913,6 +928,9 @@ export default function BargainWidget({
               : {}),
           }}
         >
+          {/* ── Slim brand accent: gives the embedded window a finished, professional top edge ── */}
+          <div style={{ height: 3, flexShrink: 0, background: 'linear-gradient(90deg, #a5b4fc, #6366f1 45%, #818cf8)' }} />
+
           {/* ── Header: product identity + close/minimise ── */}
           <div style={{
             padding: '14px 14px 0',
@@ -939,8 +957,11 @@ export default function BargainWidget({
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 1.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {t('makeOfferSub')}
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 1.5, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 4, background: '#34d399', flexShrink: 0, boxShadow: '0 0 0 3px rgba(52,211,153,0.16)' }} />
+                  <span style={{ fontWeight: 700, color: '#059669', flexShrink: 0 }}>{t('online')}</span>
+                  <span style={{ color: '#cbd5e1', flexShrink: 0 }}>·</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('bargainTitle')} — AI Bargain Assistant</span>
                 </div>
               </div>
               {!isEmbed && (
@@ -1072,6 +1093,7 @@ export default function BargainWidget({
               const el = e.currentTarget
               const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
               setAtBottom(nearBottom)
+              if (!nearBottom) lastInteractRef.current = Date.now()
             }}
             style={{
               flex: 1,
@@ -1098,8 +1120,11 @@ export default function BargainWidget({
               />
             ) : (
               <>
-                {/* Product context — what we're negotiating, shown once at top */}
-                {messages.length > 0 && (
+                {/* Product context — what we're negotiating, shown once at top.
+                Hidden in embedded mode: the chat header already shows the
+                product, price and persona, and the slim window needs every
+                pixel for the actual conversation. */}
+                {!isEmbed && messages.length > 0 && (
                   <ProductContextCard
                     image={image}
                     title={productTitle}
@@ -1677,6 +1702,14 @@ export default function BargainWidget({
 
         .spin { animation: spin 1s linear infinite }
         .cg-dot { animation: cgDotPulse 1.2s infinite ease-in-out }
+
+        /* Visible, slim scrollbar for the conversation so more content is
+           always discoverable and scrollable on small screens. */
+        .cartgain-bargain [role="log"] { scrollbar-width: thin; scrollbar-color: #c7d2fe transparent }
+        .cartgain-bargain [role="log"]::-webkit-scrollbar { width: 8px }
+        .cartgain-bargain [role="log"]::-webkit-scrollbar-track { background: transparent }
+        .cartgain-bargain [role="log"]::-webkit-scrollbar-thumb { background: #c7d2fe; border-radius: 999px }
+        .cartgain-bargain [role="log"]::-webkit-scrollbar-thumb:hover { background: #a5b4fc }
 
         /* Reduced motion: kill every animation + transition */
         .cg-reduced-motion *, .cg-reduced-motion [style*="animation"], .cg-reduced-motion .cg-fab { animation: none !important; transition: none !important }

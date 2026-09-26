@@ -67,6 +67,9 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
   const [aiError, setAiError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const sessionIdRef = useRef(0)
+  // True once a deal was accepted in this exchange, so a stray follow-up chat
+  // signals the backend that the deal is locked (never re-quote / renegotiate).
+  const dealAcceptedRef = useRef(false)
 
   const minPrice = useMemo(
     () => Math.round(price * (1 - minProfitPercent / 100) * 100) / 100,
@@ -93,6 +96,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
 
   function reset() {
     sessionIdRef.current += 1
+    dealAcceptedRef.current = false
     setStarted(false)
     setMessages([])
     setInput('')
@@ -105,6 +109,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
 
   function start() {
     sessionIdRef.current += 1
+    dealAcceptedRef.current = false
     setAiError(null)
     setMessages([{ role: 'ai', content: buildOpeningMessage(buildCtx(0)) }])
     setAttemptsUsed(0)
@@ -159,6 +164,8 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
           productTitle: ctx.productTitle,
           language: ctx.language,
           walkoutTriggered: isWalkout,
+          dealAccepted: dealAcceptedRef.current,
+          finalPrice: newFinal ?? (ended === 'accepted' ? finalPrice : undefined),
         }),
       })
       const data = await res.json()
@@ -199,6 +206,8 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
     } else if (isWalkout && attemptsLeft <= 0) {
       newEnded = 'abandoned'
     }
+
+    if (decision === 'accept') dealAcceptedRef.current = true
 
     const sid = sessionIdRef.current
     setMessages(prev => [...prev, { role: 'customer', content: userText, offeredPrice: offer }])

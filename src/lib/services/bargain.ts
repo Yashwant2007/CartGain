@@ -56,6 +56,12 @@ export interface NegotiationContext {
   couponsAllowed?: boolean
   /** True when the current turn asks for a multi-product/bundle deal (spec §27). */
   bundleRequested?: boolean
+  /** True when a deal was already accepted earlier in this exchange. The bot
+   *  must confirm the locked deal — never re-quote an ambiguous price or reopen
+   *  negotiation on a closed session. */
+  dealAccepted?: boolean
+  /** The agreed price when the deal was accepted (used only with dealAccepted). */
+  acceptedPrice?: number
 }
 
 export interface NegotiationResult {
@@ -616,6 +622,11 @@ chatting is a shopper who is deciding.
 - Keep every chat reply SHORT and soaked in your persona, then hand
   the conversation back to the shopper. An interactive shopkeeper
   closes deals; a quote machine loses them.
+- DEAL STATE: if the deal was ALREADY accepted in this exchange (your
+  previous reply confirmed a locked price + code), a follow-up chat
+  turn must CELEBRATE the locked deal and point to the product page
+  for details — never re-quote the price, never renegotiate, never
+  sound annoyed. The deal is done.
 `
 
 // ── Persona Prompts — each one is a complete, distinct personality ──
@@ -820,19 +831,52 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
       : ctx.product.description.trim()
     : null
 
+  // Verified micro-facts: even without a description, the store context carries
+  // safe catalog facts (type / vendor / stock) we are allowed to state. This
+  // makes product answers honest AND useful instead of a brush-off.
+  let facts = verified
+  if (!facts && ctx.product) {
+    const bits = [
+      ctx.product.productType ? `type: ${ctx.product.productType}` : null,
+      ctx.product.vendor ? `made by ${ctx.product.vendor}` : null,
+      ctx.product.available === true ? 'in stock right now' : ctx.product.available === false ? 'currently out of stock' : null,
+    ].filter(Boolean)
+    if (bits.length) facts = bits.join(' · ')
+  }
+
+  // Post-deal chat: the deal is already locked. Confirm the win and point to
+  // the product page — never re-quote an ambiguous price or reopen negotiation.
+  if (ctx.dealAccepted) {
+    const ad = ctx.acceptedPrice != null ? `${ctx.currencySymbol}${ctx.acceptedPrice.toFixed(2)}` : 'the agreed price'
+    if (isProductQuestion) {
+      const postDealProduct: Record<Persona, string> = {
+        strict_negotiator: `That deal is already locked at ${ad} — your discount code is live. The product page holds the complete specification. Is there anything else I can confirm?`,
+        playful_friend: `HA! You already WON this one! 😄 Deal's locked at ${ad} and your magic code is live. For the full scoop, the product page is your best friend. Anything else? 🎉`,
+        friendly_shopkeeper: `This one's already yours, friend! 🎉 Locked at ${ad} and your code is live. The product page has the full details — is there anything else I can help with?`,
+      }
+      return postDealProduct[ctx.persona]
+    }
+    const postDeal: Record<Persona, string> = {
+      strict_negotiator: `The deal stands at ${ad}. Your code is ready. Anything else?`,
+      playful_friend: `You've already sealed it! 😄 ${ad}, done deal, code's ready. What's next?`,
+      friendly_shopkeeper: `All settled, friend! 🎉 You got it at ${ad} and your code is ready to go. Anything else I can help with?`,
+    }
+    return postDeal[ctx.persona]
+  }
+
   if (isProductQuestion) {
     // Persona-true product answers: quote the verified description when it
-    // exists, otherwise be honest about verification limits — never invent.
+    // exists, otherwise honest catalog facts when available — never invent.
     const productQ: Record<Persona, string> = {
-      strict_negotiator: verified
-        ? `Per our listing: ${verified} That is the product at ${price}. Do you have further questions, or shall we proceed?`
-        : `To be precise, I only state verified facts — the full specification is on the product page. Listed price: ${price}. Ask a specific question or make an offer.`,
-      playful_friend: verified
-        ? `Ooh, now you're asking the fun stuff! Inside scoop: ${verified} And she's sitting at ${price}. What else do you want to know — or should we start the haggling?`
-        : `Haha, nice try — I don't quote specs from memory 😜 The product page has all the juicy details. What I CAN confirm: it's at ${price}. Poke my brain with a specific question, or let's talk numbers!`,
-      friendly_shopkeeper: verified
-        ? `Happy to tell you, friend! Straight from the store: ${verified} That's the one, at ${price}. Anything else you'd like to know — or shall we talk a number?`
-        : `I'd love to tell you more, friend — but I only quote what the listing can back up. The full specs live on the product page. What I can confirm is it's at ${price}. Ask me anything specific, or let's talk a number!`,
+      strict_negotiator: facts
+        ? `Per our listing: ${facts} That is the product at ${price}. Do you have further questions, or shall we proceed?`
+        : `To be precise, I only quote verified facts — the full specification is on the product page. Listed price: ${price}. Ask a specific question or make an offer.`,
+      playful_friend: facts
+        ? `Ooh, now you're asking the fun stuff! Inside scoop: ${facts} And she's sitting at ${price}. What else do you want to know — or should we start the haggling?`
+        : `That's exactly the kind of question I love — but I don't keep the full spec sheet in my head, I only quote what the store can back up 😄 The product page has every detail, and this one is listed at ${price}. Ask me something specific, or let's get to the fun part: your offer!`,
+      friendly_shopkeeper: facts
+        ? `Happy to tell you, friend! Straight from the store: ${facts} That's the one, at ${price}. Anything else you'd like to know — or shall we talk a number?`
+        : `Of course, friend! I only quote facts our store can verify, so the full spec sheet is on the product page. I can confirm this one is listed at ${price}. Ask me anything specific, or tell me the number you had in mind!`,
     }
     return productQ[ctx.persona]
   }
