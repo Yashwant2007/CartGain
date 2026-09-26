@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { logWarn } from '@/lib/observability/logger'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,7 +24,7 @@ function verifyHubSignature(rawBody: string, signatureHeader: string | null): bo
   if (!/^[a-f0-9]{64}$/.test(expected)) return false
   const appSecret = process.env.WHATSAPP_APP_SECRET
   if (!appSecret) {
-    console.warn('[WhatsApp Webhook] WHATSAPP_APP_SECRET not configured — cannot verify X-Hub-Signature-256')
+    logWarn('whatsapp', 'webhook_verify', 'WHATSAPP_APP_SECRET not configured — cannot verify X-Hub-Signature-256')
     return false
   }
   const actual = crypto.createHmac('sha256', appSecret).update(rawBody, 'utf8').digest('hex')
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
     const expectedToken = process.env.WHATSAPP_VERIFY_TOKEN
 
     if (!expectedToken) {
-      console.error('[WhatsApp Webhook] WHATSAPP_VERIFY_TOKEN not configured on server')
+      logWarn('whatsapp', 'webhook_verify', 'WHATSAPP_VERIFY_TOKEN not configured on server')
       return new NextResponse('Webhook not configured', { status: 500 })
     }
 
