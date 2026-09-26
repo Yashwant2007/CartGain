@@ -2,14 +2,30 @@
 
 > **How to resume:** just tell me "Have a look at `SESSION-HANDOFF.md`" and I'll read this file to get back on the same page.
 
-Last updated: Fri Sep 25 2026
+Last updated: Sat Sep 26 2026
 
 ## Recent cycles (brief — details in `IMPLEMENTATION-REPORT.md`)
-- **Shopify App Store automated review fixes (latest) — code complete, verified; commit+deploy pending.**
-  Root cause: fresh App Store installs died — `install/route.ts` redirected to the `/signup` login wall
+- **Bargain storefront = real AI chat (latest) — code complete, verified; commit+deploy pending.**
+  Owner's live-demo complaints: "no real AI salesperson — it's hardcoded / didn't describe the product",
+  "chat window too small in the Shopify store", "can't type anything except numbers", "should be a real
+  chatbot not fixed phrases." Root causes: (a) production widget `BargainWidget.tsx` stripped every
+  non-digit from the input client-side — free text never reached the (already fully conversational)
+  backend; (b) canned feel: `negotiateStep`/demo fallbacks echoed the OPENING message in response to any
+  no-offer free text ("describe me this product" → another "Hey! Welcome…"); (c) embed root was a fixed
+  `height: 900` and `announceHeight` measured the whole document; (d) demo widget's hardcoded opening said
+  "You've got N attempts…". Fixes: free-text chat composer (Enter to send, dynamic placeholder, `Send`
+  v/s `Make offer · ₹X` CTA from the first number in the message, offer chip only when an amount is
+  attached), embed sized `min(640px, calc(100dvh - 24px))` and announced from the widget root ref
+  (parent iframe clamps 60–2400 in `bargain-embed.js`), removed the `:has(input:focus)` panel-collapse,
+  added `chatFallback()` (en/hinglish/hi) so AI-down/no-offer turns acknowledge + pivot instead of
+  re-greeting (cold-open still opens warmly; demo route uses it too), removed attempts copy from demo
+  openings, fixed the timer to `Auto-closes in {n}` (was `{n} offers remaining` with a clock). New i18n
+  keys `typeMessage`/`send`/`expiresIn` × 9 languages. Verified: tsc clean, jest **631 green**, lint
+  clean. See IMPLEMENTATION-REPORT.md Addendum E. Needs commit + `npx vercel --prod --yes`.
+- **Shopify App Store automated review fixes — committed `a1921034`, pushed, deployed (DONE).**
+  Fresh App Store installs died because `install/route.ts` sent merchants to the `/signup` login wall
   (fails "Immediately authenticates after install"), OAuth state only existed via a session-bound
-  `/api/shopify/connect` (fresh installs hit callback "Invalid state"), and compliance webhooks were only
-  registered after a dashboard-driven connect (real installs never registered them). Fix = auto-provision:
+  `/api/shopify/connect`, and compliance webhooks only registered post-connect. Fix = auto-provision:
   `install/route.ts` now HMAC-verifies then **immediately 302s to Shopify OAuth** (short-circuit → `/dashboard`
   when already authed+connected so re-opens don't re-OAuth); `callback/route.ts` detects install-origin state
   (no storeId) and auto-provisions User (owner email from online-token `associated_user`) + Store (by domain,
@@ -18,7 +34,7 @@ Last updated: Fri Sep 25 2026
   `/dashboard` embedded. `SHOPIFY_OAUTH_SCOPES` + `buildShopifyOAuthUrl` extracted to `src/lib/shopify-oauth.ts`
   (used by both connect + install). TLS + HMAC-webhook checks were already green.
   Verified: tsc clean, jest **631 green**, lint clean. See IMPLEMENTATION-REPORT.md Addendum D.
-  Needs commit + `npx vercel --prod --yes`; live-store E2E is owner-side.
+  Committed `a1921034`, pushed, deployed to https://cart-gain.com; live-store E2E is owner-side.
 - **Bargain chat interface overhaul — committed `7ca4ba53`, pushed, deployed, prod HTTP 200 (DONE).**
   Full production rewrite of `src/components/bargain/BargainWidget.tsx` to the 26-section
   conversational-commerce spec: explicit phases (launcher → panel → terminal states), product
@@ -201,11 +217,17 @@ real floor to a counter). `src/app/api/bargain/start/route.ts` fetches the autho
      product-complaint ("this is a scam") now redirect via `off_topic_extreme` **without consuming an attempt**.
 
 ## Open / next items (from our plan)
-- **Shopify App Store automated review (this session) — code complete, verified; commit + deploy pending.**
-  Auto-provision install flow done (Addendum D). After deploy: live-store test install on the owner's partner
-  test store to confirm all 6 automated checks (immediate OAuth redirect, post-auth app-UI redirect,
-  compliance webhooks registered at install, HMAC webhook signature, TLS). `customers/data_request` export is
-  still ack-only (see SHOPIFY_PROTECTED_DATA_READINESS.md §7) — flag before App Store submission.
+- **Shopify App Store automated review — committed `a1921034`, pushed, deployed (this session).**
+  Auto-provision install flow done (Addendum D). Deployed to https://cart-gain.com; prod curl checks green
+  (install HMAC-fail 307 → `?error=invalid_signature`, callback 307, /bargain/embed 200, /dashboard 307→login).
+  REMAINING (owner-side): live-store test install on the owner's partner test store to confirm all 6 automated
+  checks (immediate OAuth redirect, post-auth app-UI redirect, compliance webhooks registered at install,
+  HMAC webhook signature, TLS). `customers/data_request` export is still ack-only (see
+  SHOPIFY_PROTECTED_DATA_READINESS.md §7) — flag before App Store submission.
+- **Bargain storefront = real AI chat — code complete, verified; commit+deploy pending (latest, Addendum E).**
+  Production widget free-text chat composer, viewport-capped embed sizing, `chatFallback` (no more
+  re-greeting on "describe me this product"), demo openings cleaned. Needs commit + `npx vercel --prod --yes`,
+  then owner re-tests on the live store (type "describe me this product" / any question; confirm panel fits).
 - **Bargain chat interface overhaul — DONE (committed `7ca4ba53`, pushed, deployed, prod HTTP 200).**
   Manual Shopify-side checks still recommended per Addendum C6 (embedded + floating, quick chips,
   accept→code, console at 320–1440px, FINAL OFFER only at last counter).

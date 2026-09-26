@@ -6,7 +6,7 @@ import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import {
   negotiateStep,
   ruleBasedDecision,
-  buildOpeningMessage,
+  chatFallback,
   SUPPORTED_LANGUAGES,
   type Persona,
   type NegotiationContext,
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
     } catch {
       result = offer != null
         ? ruleBasedDecision(offer, ctx)
-        : { reply: buildOpeningMessage(ctx), decision: 'chat', counterOffer: minPrice, tactic: 'demo_fallback', sentiment: 'neutral' }
+        : { reply: chatFallback(message, ctx, history.length), decision: 'chat', counterOffer: minPrice, tactic: 'demo_fallback', sentiment: 'neutral' }
     }
 
     return NextResponse.json({

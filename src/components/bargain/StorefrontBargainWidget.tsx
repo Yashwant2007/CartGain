@@ -158,11 +158,11 @@ export default function StorefrontBargainWidget({
 
   const PersonaOpenings: Record<string, (item: string, price: number, fmt: (n: number) => string) => string> = {
     friendly: (item, price, f) =>
-      `Hey! Welcome 👋 I see you're interested in ${item}. It's listed at ${f(price)}. I'd love to help you get a good deal — what price were you thinking? You've got ${maxAttempts} attempts to bargain with me.`,
+      `Hey! Welcome 👋 I see you're interested in ${item}. It's listed at ${f(price)}. I'd love to help you get a good deal — what price were you thinking?`,
     strict: (item, price, f) =>
-      `Thank you for your interest in ${item}. The current price is ${f(price)}. I'm open to reasonable offers within ${maxAttempts} exchanges. What price were you considering?`,
+      `Thank you for your interest in ${item}. The current price is ${f(price)}. I'm open to a fair offer. What price were you considering?`,
     playful: (item, price, f) =>
-      `Hey hey! 👋 I see you're checking out ${item} — nice choice! Listed at ${f(price)}, but hey, that's just the starting point 😏 You've got ${maxAttempts} chances to charm me into a better deal. What's your move?`,
+      `Hey hey! 👋 I see you're checking out ${item} — nice choice! Listed at ${f(price)}, but hey, that's just the starting point 😏 What's your move?`,
   }
 
   const PersonaAccept: Record<string, (p: number, f: (n: number) => string) => string> = {

@@ -44,6 +44,7 @@ export type UiKey =
   | 'notice'
   | 'offered'
   | 'typeOffer'
+  | 'typeMessage'
   | 'sessionEnded'
   | 'acceptDeal'
   | 'dealComplete'
@@ -69,7 +70,9 @@ export type UiKey =
   | 'tabChat'
   | 'tabDeal'
   | 'offersRemaining'
+  | 'expiresIn'
   | 'sendOffer'
+  | 'send'
   | 'addToCart'
   | 'alternativesTitle'
   | 'viewProduct'
@@ -117,6 +120,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     notice: 'Notice',
     offered: 'Offered:',
     typeOffer: 'Type your offer...',
+    typeMessage: 'Ask about this product or make an offer…',
     sessionEnded: 'Session ended',
     acceptDeal: 'Accept & Get Code',
     dealComplete: '✓ Deal Complete',
@@ -140,7 +144,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     dealWarmClose: 'It was a pleasure bargaining with you — thank you for being a valued customer. Apply your code and enjoy!',
     dealRejected: 'Looks like we couldn\u2019t quite reach a deal this time. The listed price still stands — and the door is always open. Come back anytime! 😊',
     offersRemaining: '{n} offers remaining',
+    expiresIn: 'Auto-closes in {n}',
     sendOffer: 'Send offer',
+    send: 'Send',
     addToCart: 'Add to Cart',
     alternativesTitle: 'Alternatives for you',
     viewProduct: 'View product',
@@ -189,6 +195,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     notice: 'Notice',
     offered: 'Offer:',
     typeOffer: 'Apni bhaw likho...',
+    typeMessage: 'Is product ke baare mein poochho ya offer bhejo…',
     sessionEnded: 'Session khatam',
     acceptDeal: 'Deal Accept karo & Code Lo',
     dealComplete: '✓ Deal Complete',
@@ -214,7 +221,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     tabChat: 'Baatchit',
     tabDeal: 'Deal',
     offersRemaining: '{n} offers baaki',
+    expiresIn: '{n} mein band hoga',
     sendOffer: 'Offer bhejo',
+    send: 'Bhejo',
     addToCart: 'Cart mein jodo',
     alternativesTitle: 'Aapke liye options',
     viewProduct: 'Product dekho',
@@ -261,6 +270,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     notice: 'सूचना',
     offered: 'ऑफ़र:',
     typeOffer: 'अपना भाव लिखें...',
+    typeMessage: 'इस उत्पाद के बारे में पूछें या ऑफ़र भेजें…',
     sessionEnded: 'सेशन समाप्त',
     acceptDeal: 'सौदा स्वीकारें और कोड पाएँ',
     dealComplete: '✓ सौदा पूर्ण',
@@ -286,7 +296,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     tabChat: 'बातचीत',
     tabDeal: 'डील',
     offersRemaining: '{n} ऑफ़र बाकी',
+    expiresIn: '{n} में बंद होगा',
     sendOffer: 'ऑफ़र भेजें',
+    send: 'भेजें',
     addToCart: 'कार्ट में जोड़ें',
     alternativesTitle: 'आपके लिए विकल्प',
     viewProduct: 'उत्पाद देखें',
@@ -333,6 +345,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     notice: 'அறிவிப்பு',
     offered: 'ஆஃபர்:',
     typeOffer: 'உங்கள் விலையை எழுதுங்கள்...',
+    typeMessage: 'இந்த தயாரிப்பைப் பற்றிக் கேளுங்கள் அல்லது சலுகை அனுப்புங்கள்…',
     sessionEnded: 'அமர்வு முடிந்தது',
     acceptDeal: 'ஒப்பந்தத்தை ஏற்று குறியீடு பெறுக',
     dealComplete: '✓ ஒப்பந்தம் முடிந்தது',
@@ -358,7 +371,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     tabChat: 'அரட்டை',
     tabDeal: 'ஒப்பந்தம்',
     offersRemaining: '{n} சலுகைகள் மீதம்',
+    expiresIn: '{n} இல் முடியும்',
     sendOffer: 'ஆஃபரை அனுப்பு',
+    send: 'அனுப்பு',
     addToCart: 'கார்ட்டில் சேர்',
     alternativesTitle: 'உங்களுக்கான மாற்றுகள்',
     viewProduct: 'தயாரிப்பைப் பார்',
@@ -405,6 +420,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     notice: 'గమనిక',
     offered: 'ఆఫర్:',
     typeOffer: 'మీ ధరను టైప్ చేయండి...',
+    typeMessage: 'ఈ ఉత్పత్తి గురించి అడగండి లేదా ఆఫర్ పంపండి…',
     sessionEnded: 'సెషన్ ముగిసింది',
     acceptDeal: 'ఒప్పందం ఆమోదించి కోడ్ పొందండి',
     dealComplete: '✓ ఒప్పందం పూర్తయింది',
@@ -430,7 +446,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     tabChat: 'చాట్',
     tabDeal: 'డీల్',
     offersRemaining: '{n} ఆఫర్లు మిగిలి ఉన్నాయి',
+    expiresIn: '{n}లో మూసివేయబడుతుంది',
     sendOffer: 'ఆఫర్ పంపండి',
+    send: 'పంపండి',
     addToCart: 'కార్ట్లో చేర్చండి',
     alternativesTitle: 'మీ కోసం ప్రత్యామ్నాయాలు',
     viewProduct: 'ఉత్పత్తి చూడండి',
@@ -477,6 +495,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     notice: 'বিজ্ঞপ্তি',
     offered: 'অফার:',
     typeOffer: 'আপনার দাম লিখুন...',
+    typeMessage: 'এই পণ্য সম্পর্কে জিজ্ঞাসা করুন বা অফার পাঠান…',
     sessionEnded: 'সেশন শেষ',
     acceptDeal: 'দর মেনে কোড নিন',
     dealComplete: '✓ দর চূড়ান্ত',
@@ -502,7 +521,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     tabChat: 'আলাপ',
     tabDeal: 'ডিল',
     offersRemaining: '{n}টি অফার বাকি',
+    expiresIn: '{n} এর মধ্যে বন্ধ হবে',
     sendOffer: 'অফার পাঠান',
+    send: 'পাঠান',
     addToCart: 'কার্টে যোগ করুন',
     alternativesTitle: 'আপনার জন্য বিকল্প',
     viewProduct: 'পণ্য দেখুন',
@@ -549,6 +570,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     notice: 'सूचना',
     offered: 'ऑफर:',
     typeOffer: 'तुमचा भाव लिहा...',
+    typeMessage: 'या उत्पादाबद्दल विचारा किंवा ऑफर पाठवा…',
     sessionEnded: 'सत्र संपले',
     acceptDeal: 'सौदा स्वीकारा आणि कोड मिळवा',
     dealComplete: '✓ सौदा पूर्ण',
@@ -574,7 +596,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     tabChat: 'गप्पा',
     tabDeal: 'डील',
     offersRemaining: '{n} ऑफर शिल्लक',
+    expiresIn: '{n} मध्ये बंद होईल',
     sendOffer: 'ऑफर पाठवा',
+    send: 'पाठवा',
     addToCart: 'कार्टमध्ये घाला',
     alternativesTitle: 'तुमच्यासाठी पर्याय',
     viewProduct: 'उत्पादन पहा',
@@ -621,6 +645,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     notice: 'સૂચના',
     offered: 'ઓફર:',
     typeOffer: 'તમારો ભાવ લખો...',
+    typeMessage: 'આ ઉત્પાદન વિશે પૂછો અથવા ઑફર મોકલો…',
     sessionEnded: 'સત્ર સમાપ્ત',
     acceptDeal: 'સોદો સ્વીકારો અને કોડ મેળવો',
     dealComplete: '✓ સોદો પૂર્ણ',
@@ -646,7 +671,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     tabChat: 'ચેટ',
     tabDeal: 'ડીલ',
     offersRemaining: '{n} ઑફર બાકી',
+    expiresIn: '{n} માં બંધ થશે',
     sendOffer: 'ઑફર મોકલો',
+    send: 'મોકલો',
     addToCart: 'કાર્ટમાં ઉમેરો',
     alternativesTitle: 'તમારા માટે વિકલ્પો',
     viewProduct: 'પ્રોડક્ટ જુઓ',
@@ -693,6 +720,7 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     notice: 'ਸੂਚਨਾ',
     offered: 'ਆਫਰ:',
     typeOffer: 'ਆਪਣਾ ਭਾਅ ਲਿਖੋ...',
+    typeMessage: 'ਇਸ ਉਤਪਾਦ ਬਾਰੇ ਪੁੱਛੋ ਜਾਂ ਆਫਰ ਭੇਜੋ…',
     sessionEnded: 'ਸੈਸ਼ਨ ਖ਼ਤਮ',
     acceptDeal: 'ਸੌਦਾ ਸਵੀਕਾਰ ਕਰੋ ਅਤੇ ਕੋਡ ਲਵੋ',
     dealComplete: '✓ ਸੌਦਾ ਪੂਰਾ',
@@ -718,7 +746,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     tabChat: 'ਗੱਲਬਾਤ',
     tabDeal: 'ਡੀਲ',
     offersRemaining: '{n} ਆਫਰ ਬਾਕੀ',
+    expiresIn: '{n} ਵਿੱਚ ਬੰਦ ਹੋਵੇਗਾ',
     sendOffer: 'ਆਫਰ ਭੇਜੋ',
+    send: 'ਭੇਜੋ',
     addToCart: 'ਕਾਰਟ ਵਿੱਚ ਜੋੜੋ',
     alternativesTitle: 'ਤੁਹਾਡੇ ਲਈ ਵਿਕਲਪ',
     viewProduct: 'ਉਤਪਾਦ ਵੇਖੋ',

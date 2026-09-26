@@ -155,6 +155,7 @@ export default function BargainWidget({
   const scrollRef = useRef<HTMLDivElement>(null)
   const launcherRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
   // In-flight guard: blocks double clicks / Enter / focus races beyond the
   // disabled-attribute timing window. One negotiation action at a time.
   const busyRef = useRef(false)
@@ -200,15 +201,16 @@ export default function BargainWidget({
     return out.slice(0, 3)
   }, [lastCounter, originalPrice, sessionEnded, decision])
 
-  // Live numeric draft parsed from the offer field — drives the CTA label so
-  // the customer always sees the exact amount they are about to send.
+  // First number typed anywhere in the message is the draft offer — it drives
+  // the CTA label ("Make offer · ₹X") and the optimistic bubble. Free text
+  // without a number is a chat message (product question / small talk) and is
+  // sent as-is; the backend extracts and clamps any amount it contains.
   const draftAmount = (() => {
-    const n = parseFloat(input.replace(/[^\d.]/g, ''))
+    const cleaned = input.replace(/,/g, '')
+    const m = cleaned.match(/\d+(?:\.\d{1,2})?/)
+    const n = m != null ? parseFloat(m[0]) : NaN
     return Number.isFinite(n) && n > 0 ? n : null
   })()
-
-  // The offer field has text that cannot be parsed into a valid amount.
-  const inputInvalid = input.trim().length > 0 && draftAmount == null
 
   const unavailable = rejection != null && /UNAVAILABLE/i.test(rejection.reason)
 
@@ -300,13 +302,11 @@ export default function BargainWidget({
     return () => clearInterval(iv)
   }, [expiresAt])
 
-  // Embedded mode: keep the parent Shopify iframe sized to our content.
+  // Embedded mode: keep the parent Shopify iframe sized to OUR widget (not the
+  // whole document) so the frame hugs the panel exactly, never 900px of page.
   const announceHeight = useCallback(() => {
-    if (!isEmbed || typeof window === 'undefined') return
-    const h = Math.max(
-      document.documentElement?.scrollHeight ?? 0,
-      document.body?.scrollHeight ?? 0,
-    )
+    if (!isEmbed || typeof window === 'undefined' || !rootRef.current) return
+    const h = Math.round(rootRef.current.getBoundingClientRect().height)
     try {
       window.parent?.postMessage({ type: 'cg_resize', height: h }, '*')
     } catch {}
@@ -720,6 +720,7 @@ export default function BargainWidget({
 
   return (
     <div
+      ref={rootRef}
       className={prefersReduced ? 'cartgain-bargain bargain-widget-root cg-reduced-motion' : 'cartgain-bargain bargain-widget-root'}
       style={{
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -732,7 +733,9 @@ export default function BargainWidget({
               border: '1px solid #e0e7ff',
               boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 12px 32px rgba(79,70,229,0.10)',
               overflow: 'hidden',
-              height: open && !minimised ? 900 : 'auto',
+              // A proper chat window that never overflows the device — the
+              // parent iframe (bargain-embed.js) clamps to 60–2400px.
+              height: open && !minimised ? 'min(640px, calc(100dvh - 24px))' : 'auto',
             }
           : {}),
       }}
@@ -1043,7 +1046,7 @@ export default function BargainWidget({
             }}>
               <Clock size={11} style={{ color: '#94a3b8' }} />
               <span style={{ fontVariantNumeric: 'tabular-nums', color: '#64748b' }}>
-                {t('offersRemaining', { n: Math.floor(timeLeft / 60) + ':' + String(timeLeft % 60).padStart(2, '0') })}
+                {t('expiresIn', { n: Math.floor(timeLeft / 60) + ':' + String(timeLeft % 60).padStart(2, '0') })}
               </span>
             </div>
           )}
@@ -1454,37 +1457,29 @@ export default function BargainWidget({
                 flexDirection: 'column',
                 gap: 8,
               }}>
-                {/* Offer field — the primary interaction */}
+                {/* Message / offer composer — free text is a real chat message;
+                    a number anywhere in it is treated as the negotiation offer. */}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   borderRadius: 13,
-                  border: inputInvalid ? '1px solid #fca5a5' : '1px solid #e2e8f0',
+                  border: '1px solid #e2e8f0',
                   background: '#f8fafc',
-                  paddingLeft: 14,
+                  padding: '0 6px 0 14px',
                   transition: 'border-color 0.15s ease',
                   opacity: sessionEnded ? 0.55 : 1,
                 }}>
-                  <span style={{ fontWeight: 800, color: '#4f46e5', fontSize: 16, marginRight: 2, flexShrink: 0 }}>
-                    {currencySymbol}
-                  </span>
                   <input
                     ref={inputRef}
                     type="text"
-                    inputMode="decimal"
+                    inputMode="text"
                     autoComplete="off"
-                    pattern="[0-9]*[.,]?[0-9]*"
-                    aria-label={t('typeOffer')}
-                    aria-invalid={inputInvalid || undefined}
-                    placeholder={t('typeOffer')}
+                    maxLength={500}
+                    aria-label={t('typeMessage')}
+                    placeholder={t('typeMessage')}
                     value={input}
                     onChange={e => {
-                      const cleaned = e.target.value
-                        .replace(/[^\d.]/g, '')
-                        .replace(/(\..*)\./g, '$1')
-                        .replace(/(\.\d{2})\d+/g, '$1')
-                        .slice(0, 12)
-                      setInput(cleaned)
+                      setInput(e.target.value)
                       setError(null)
                     }}
                     onKeyDown={e => {
@@ -1497,29 +1492,23 @@ export default function BargainWidget({
                     style={{
                       flex: 1,
                       minWidth: 0,
-                      padding: '13px 14px 13px 2px',
+                      width: 0,
+                      padding: '13px 8px 13px 0',
                       border: 'none',
                       background: 'transparent',
                       color: '#0f172a',
-                      fontSize: 17,
-                      fontWeight: 700,
-                      fontVariantNumeric: 'tabular-nums',
+                      fontSize: 15.5,
                       outline: 'none',
-                      minHeight: 50,
+                      minHeight: 52,
                     }}
                   />
                 </div>
-                {inputInvalid && (
-                  <div style={{ fontSize: 12, color: '#dc2626', padding: '0 4px' }}>
-                    {t('newPrice')} — enter a valid amount
-                  </div>
-                )}
 
                 {/* Primary CTA */}
                 <button
                   onClick={() => sendMessage()}
-                  disabled={loading || !input.trim() || inputInvalid || sessionEnded || !!busyRef.current}
-                  aria-label={t('makeOffer')}
+                  disabled={loading || !input.trim() || sessionEnded || !!busyRef.current}
+                  aria-label={draftAmount != null ? t('makeOffer') : t('send')}
                   className="cg-btn cg-btn-send"
                 >
                   {loading
@@ -1527,7 +1516,7 @@ export default function BargainWidget({
                     : <Send size={17} />}
                   {draftAmount != null
                     ? `${t('makeOffer')} · ${currencySymbol}${draftAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
-                    : t('makeOffer')}
+                    : t('send')}
                 </button>
               </div>
             </>
@@ -1693,10 +1682,10 @@ export default function BargainWidget({
           .cartgain-bargain .cg-panel-mini { left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: auto }
         }
         @media (max-width: 680px) {
-          /* dvh already shrinks with the keyboard on modern mobile; this is a
-             belt-and-braces fallback so the composer never hides behind it. */
+          /* dvh already shrinks with the keyboard on modern mobile; the panel
+             keeps its constant height (never collapses below the chat while
+             typing) and the composer stays reachable above the keyboard. */
           .cartgain-bargain .cg-panel-fixed { height: 88dvh; max-height: 100dvh }
-          .cartgain-bargain .cg-panel-fixed:has(input:focus) { height: auto; min-height: min(520px, 100dvh) }
         }
         @supports (padding: max(0px)) {
           .cartgain-bargain .cg-panel-fixed, .cartgain-bargain .cg-panel-mini { padding-bottom: env(safe-area-inset-bottom) }
@@ -1797,7 +1786,7 @@ function MessageBubble({ m, t, currencySymbol, isFinal }: {
 }) {
   const isCustomer = m.role === 'customer'
   const label = isCustomer
-    ? t('youOffered')
+    ? m.offeredPrice != null ? t('youOffered') : ''
     : isFinal
     ? t('finalOffer')
     : m.offeredPrice != null

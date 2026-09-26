@@ -652,3 +652,85 @@ NextAuth session cookie, land in the embedded app UI. The dashboard-driven
 5. Confirm `customers/data_request` webhook ack+audit behavior
    (see `SHOPIFY_PROTECTED_DATA_READINESS.md` §7 — ack-only today; programmatic
    export is a pre-submission open item).
+
+---
+
+## Addendum E — Bargain storefront: real AI chat + proper chat-window sizing
+
+**Date:** Sat Sep 26 2026
+
+### E1. Problem (owner's live-demo complaints)
+From a real storefront bargaining session the owner demoed:
+1. "There is no real AI-type salesperson chat — it is just hardcoded." Asking
+   `describe me this product` returned a canned re-greeting instead of an answer.
+2. "In the Shopify store the interface is so small that the chat window is not
+   even fully visible." The embed did not fit/left the window cut off.
+3. "In that window I am not able to type anything except numbers." Free text was
+   impossible from the storefront widget.
+4. "It should be a real-time interactive chat interface bot, not just a hardcoded
+   bot that says fixed things."
+
+### E2. Root causes
+- **Numeric-only input (client-side).** `BargainWidget.tsx` `onChange` stripped
+  every non-digit (`[^\d.]` + `.slice(0,12)`), so free-text questions could never
+  reach the (already fully conversational) backend — product questions,
+  `PRODUCT_QUESTION` intent analysis, `buildProductContext` verified-facts and the
+  AI's `chat` decision were all unreachable from the storefront UI.
+- **Canned feel on AI-down.** `negotiateStep()`'s no-offer paths (AI unavailable,
+  JSON parse failure, empty reply, all-tiers-failed) returned `buildOpeningMessage`
+  for ANY free text — so mid-conversation, `describe me this product` got another
+  `Hey! Welcome… What price were you thinking?`. The demo route had the same
+  fallback. That is the "hardcoded, says fixed things" impression.
+- **Embed sizing.** The embed root was a hardcoded `height: 900` and `announceHeight`
+  measured the whole `document`; the mobile media query also collapsed the panel to
+  `min(520px, 100dvh)` while typing (`:has(input:focus)`), which shrank the chat.
+- **Demo greeting.** `StorefrontBargainWidget` hardcoded openings bragged
+  "You've got N attempts to bargain with me" — fixed-script copy the production
+  engine never says.
+
+### E3. Fixes
+- **Free-text chat composer** (`src/components/bargain/BargainWidget.tsx`):
+  - Removed the digit-stripping `onChange`, `pattern`, and `₹`-prefix decoration;
+    the field is now a real message input (`inputMode="text"`, `maxLength=500`).
+  - `draftAmount` = first number typed anywhere in the message (drives the CTA
+    label and the optimistic bubble); free text without a number is a chat message.
+  - CTA: `Send` for chat, `Make offer · ₹X` when a number is present; no more
+    `inputInvalid` red-blocking of non-numeric messages.
+  - Customer bubble shows `YOU OFFERED` only when an actual amount is attached.
+- **Proper chat-window sizing (Shopify embed):**
+  - Embed root height `min(640px, calc(100dvh - 24px))` (was fixed `900`), so the
+    panel always fits the device and the theme.
+  - `announceHeight` now measures the widget root (`rootRef.getBoundingClientRect()`)
+    instead of `document` — the parent iframe (`bargain-embed.js`, clamp 60–2400)
+    hugs the panel.
+  - Removed the `:has(input:focus)` height-collapse so the panel never shrinks
+    while typing.
+- **`chatFallback()`** (`src/lib/services/bargain.ts`, exported; used by the offer
+  path's 4 AI-down/no-offer branches and the demo route):
+  - `isProductQuestion` → answers from the **verified** product description when
+    present (short excerpt), otherwise honestly points to the product page and
+    pivots to the deal.
+  - Greetings/thanks/generic free text are acknowledged warmly and steered back to
+    the negotiation (en + hinglish + hi variants; other languages fall back to en).
+  - A true cold-open (no prior turns) still returns the warm opening message.
+- **Demo widget** (`StorefrontBargainWidget.tsx`): removed the "N attempts"
+  framing — openings now mirror the engine's honest persona tone.
+
+### E4. Files changed
+- `src/components/bargain/BargainWidget.tsx` — free-text composer, CTA labels,
+  bubble labels, embed sizing + `rootRef`-based height announce, timer copy,
+  removed input-sanitizer + `pattern` + `:has` collapse.
+- `src/lib/services/bargain.ts` — new `chatFallback()` wired into all four
+  no-offer AI-down/parse-fail fallback sites.
+- `src/app/api/bargain/demo/route.ts` — demo fallback uses `chatFallback`;
+  unused `buildOpeningMessage` import removed.
+- `src/components/bargain/StorefrontBargainWidget.tsx` — honest opening copy.
+- `src/lib/bargain/i18n.ts` — new keys `typeMessage` / `send` / `expiresIn` in all
+  9 languages (used for chat placeholder, CTA, and the session auto-close timer,
+  which previously mislabeled `offersRemaining` with a clock).
+
+### E5. Verification
+- `npx tsc --noEmit` clean.
+- `npx jest` **631 passed / 46 suites** (incl. `decision.test.ts` AI-unavailable
+  fallback suite).
+- `npm run lint` clean.

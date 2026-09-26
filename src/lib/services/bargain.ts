@@ -761,6 +761,67 @@ export function buildOpeningMessage(ctx: NegotiationContext): string {
   return `Hey! Welcome${welcomeBack ? ' So good to see you again!' : ''} I see you're eyeing ${item} — great choice. It's at ${price} right now. I'd love to work out a deal for you. What price were you thinking?`
 }
 
+// ── Chat fallback (AI unavailable / unparseable AI text for free-text
+//    no-offer messages) ──
+// The previous behavior echoed the opening message in response to ANY free-text
+// no-offer message ("describe me this product" → another "Hey! Welcome…"),
+// which made the bot feel canned and scripted. Instead, acknowledge exactly
+// what the customer wrote and pivot warmly back to the deal, citing only the
+// store's verified product description. A true cold-open (no prior turns)
+// still deserves the warm opening message.
+export function chatFallback(customerMessage: string, ctx: NegotiationContext, historyLength = 0): string {
+  const item = ctx.productTitle ? `this ${ctx.productTitle}` : 'this item'
+  const price = `${ctx.currencySymbol}${ctx.originalPrice.toFixed(2)}`
+  const low = customerMessage.toLowerCase()
+
+  const isProductQuestion =
+    /(?:describe|explain|tell me (?:about|more)|what (?:is|are|about)|about (?:this|the)|details?|features?|specs?|material|quality|how (?:is|good)|worth\s+(?:it|the)|think of|review)/i.test(low) &&
+    !/(?:offer|price|discount)/i.test(low)
+  const isGreeting =
+    /(?:^|\b)(?:hi+|hello|hey|namaste|namaskar|hola|yo|good\s+(?:morning|afternoon|evening))(?:\b|!|,)/i.test(low)
+  const isThanks =
+    /(?:^|\b)(?:thanks|thank you|thx|thanku|shukriya|dhanyavaad)(?:\b|!|,)/i.test(low)
+
+  // Verified description only — the context builder already stripped the
+  // merchant's disallowed claims, so it is safe to quote a short excerpt.
+  const verified = ctx.product?.description && ctx.product.description.length > 0
+    ? ctx.product.description.length > 180
+      ? `${ctx.product.description.slice(0, 180).trim()}…`
+      : ctx.product.description.trim()
+    : null
+
+  if (isProductQuestion) {
+    if (verified) {
+      return `Good question! I can tell you this directly: ${verified}
+That's what we're offering at ${price}. Anything else you'd like to know about it, or shall we talk a price you had in mind?`
+    }
+    return `Great question! I'd rather not quote details I can't verify right now — the full specs are on the product page. What I can confirm is it's listed at ${price}, and I'm happy to work out a deal. Care to make an offer?`
+  }
+
+  // First-contact free text with no prior turns: a warm opening is the right
+  // reply. Re-greeting mid-conversation is what made the bot feel canned —
+  // that risk only exists once the exchange is already underway.
+  if (historyLength === 0) {
+    return buildOpeningMessage(ctx)
+  }
+
+  if (isGreeting) {
+    return `Hello! 👋 I'm here to help you take ${item} home for less. It's listed at ${price}. Tell me a price you had in mind — or ask me anything about it!`
+  }
+
+  if (isThanks) {
+    return `You're most welcome! 😊 As a reminder, it's listed at ${price} — but if you tell me the number you had in mind, I'll see what I can do.`
+  }
+
+  if (ctx.language === 'hinglish') {
+    return `Samajh gaya! 👍 ${item} ka listed price ${price} hai. Batao, aap kitna soch rahe ho — ya kuch poochna ho toh poochh lo!`
+  }
+  if (ctx.language === 'hi') {
+    return `समझ गया! 👍 ${item} की सूचीबद्ध कीमत ${price} है। बताइए, आप कितना सोच रहे हैं — या कुछ पूछना हो तो पूछ लीजिए!`
+  }
+  return `Got it! 👍 ${item} is listed at ${price}. Tell me the price you had in mind — or ask me anything about it and I'll do my best to help.`
+}
+
 // ── Build customer history context from past sessions ──
 
 export async function buildCustomerContext(
@@ -1502,7 +1563,7 @@ export async function negotiateStep(
   const resolved = getAiClient()
   if (!resolved) {
     if (customerOffer != null) return ruleBasedDecision(customerOffer, ctx)
-    return { reply: buildOpeningMessage(ctx), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'ai_unavailable', sentiment: 'neutral' }
+    return { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'ai_unavailable', sentiment: 'neutral' }
   }
   const ai = resolved.client
   const tier = resolved.tier
@@ -1547,7 +1608,7 @@ export async function negotiateStep(
     } catch {
       // AI returned invalid JSON — fall back to rules
       if (customerOffer != null) return ruleBasedDecision(customerOffer, ctx)
-      return { reply: buildOpeningMessage(ctx), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'parse_fallback', sentiment: 'neutral' }
+      return { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'parse_fallback', sentiment: 'neutral' }
     }
 
     // Validate decision
@@ -1594,7 +1655,7 @@ export async function negotiateStep(
       ? parsed.reply.trim().replace(/\[\[CUR\]\]/g, ctx.currencySymbol)
       : (customerOffer != null
           ? ruleBasedDecision(customerOffer, ctx).reply
-          : buildOpeningMessage(ctx))
+          : chatFallback(customerMessage, ctx, history.length))
 
     const floorLeaked = detectFloorLeak(reply, ctx.minPrice)
     const percentLeaked = detectPercentFloorLeak(reply, ctx.minPrice, ctx.originalPrice)
@@ -1638,6 +1699,6 @@ export async function negotiateStep(
     }
     return customerOffer != null
       ? ruleBasedDecision(customerOffer, ctx)
-      : { reply: buildOpeningMessage(ctx), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'conversational', sentiment: 'neutral' }
+      : { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', counterOffer: ctx.minPrice, tactic: 'conversational', sentiment: 'neutral' }
   }
 }
