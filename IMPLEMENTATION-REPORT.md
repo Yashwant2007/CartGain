@@ -932,3 +932,37 @@ safe — the parent sets the width, we don't). `cg_resize` then grows the iframe
 exactly that and it stays stable (no circularity). The floating panel keeps its
 `88dvh` bottom-sheet behavior (it lives in the main document, so dvh is correct
 there). Fixed in `BargainWidget.tsx` (`panelHeight` state + match/resize effect).
+
+### H6. Follow-up: height convergence heartbeat + store currency sync
+
+Even after H5 the owner measured the live iframe at ~450×370 (not 520/600) with
+replies clipped. Checks against the deployed theme assets showed the theme has
+**no** height/max-height cap on `.cg-bargain-frame` (only border-radius +
+`transition: height .2s`), and the parent controller sizes iframes **only** from
+receiving `cg_resize`. That makes a lost/raced one-shot announce the remaining
+failure mode — so the embed now **re-announces its height on a 700ms heartbeat
+while open** (in addition to state-driven + `cg_get_height` announces), which
+guarantees the parent converges to the real panel height no matter how late the
+controller attaches or how many early messages get dropped.
+
+Second, real bug caught in the same transcript: the header badge showed
+`$785.95` but the bot replies said `₹785.95`. The widget passes the shop's true
+currency (USD Liquid value) but the server quoted from `store.currency` — which
+stays at the app's INR default for a shop created before its currency was known.
+The start route now syncs `store.currency` from the widget-supplied `currency`
+(the Shopify shop currency is authoritative), so replies, counters and the
+price-mismatch message all use the shop's real symbol.
+
+### H7. Files changed
+- `src/app/api/bargain/start/route.ts` — sync `store.currency` from the
+  shop-provided currency so every downstream quote uses the real symbol.
+- `src/components/bargain/BargainWidget.tsx` — embed height heartbeat
+  (`cg_resize` every 700ms while open) so the parent frame always converges to
+  `panelHeight`.
+
+### H8. Verification
+- `npx tsc --noEmit` clean; `npm run lint` clean; `npx jest` **636 passed / 46 suites**.
+- Committed `92e38158`, pushed, deployed to cart-gain.com.
+- Prod smoke: `/` 200, `/bargain/embed` 200, `/dashboard` 307, `.env.local` not
+  served (404 — correct). Pixel re-measure on the owner's live store still
+  requires an owner-side hard refresh.
