@@ -7,13 +7,13 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   transform: {
-    // .tsx components render with react-jsx (jsx:preserve in the app config is
-    // for Next's SWC compiler, not ts-jest).
-    '^.+\\.tsx$': ['ts-jest', {
+    // Single unified ts-jest transform for both .ts and .tsx. A shared
+    // tsconfig (tsconfig.jest.json overrides jsx in the app tsconfig.json to
+    // react-jsx for tests) avoids the dual-compiler state that intermittently
+    // processed .tsx files with jsx:preserve (raw "<" -> SyntaxError) under
+    // full-suite parallelism on Linux CI.
+    '^.+\\.(ts|tsx)$': ['ts-jest', {
       tsconfig: 'tsconfig.jest.json',
-    }],
-    '^.+\\.ts$': ['ts-jest', {
-      tsconfig: 'tsconfig.json',
     }],
   },
   testMatch: ['**/__tests__/**/*.test.ts', '**/__tests__/**/*.test.tsx'],
