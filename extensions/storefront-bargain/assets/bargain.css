@@ -121,6 +121,82 @@
   border: 0;
 }
 
+/* ── Drawer boot skeleton ─────────────────────────────────────────────────
+   Sits over the frame until the widget posts cg_hello. Painted by the theme
+   (not the iframe) so the drawer always shows a chat-shaped placeholder
+   instead of a blank white panel while the app boots. */
+.cg-bargain-boot {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: #ffffff;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  pointer-events: none;
+}
+.cg-bargain-boot-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #a5b4fc, #6366f1 45%, #818cf8);
+}
+.cg-bargain-boot-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cg-bargain-boot-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  flex: 0 0 auto;
+  background: #eef2ff;
+}
+.cg-bargain-boot-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cg-bargain-boot-line {
+  height: 9px;
+  border-radius: 999px;
+  background: #eef2f7;
+  max-width: 70%;
+}
+.cg-bargain-boot-line-lg {
+  height: 12px;
+  max-width: 45%;
+  background: #e0e7ff;
+}
+.cg-bargain-boot-bubble {
+  height: 56px;
+  border-radius: 16px 16px 16px 4px;
+  background: #f1f5f9;
+  max-width: 84%;
+}
+.cg-bargain-boot-bubble-alt {
+  align-self: flex-end;
+  border-radius: 16px 16px 4px 16px;
+  background: #eef2ff;
+  max-width: 62%;
+  height: 40px;
+}
+.cg-bargain-boot-bar,
+.cg-bargain-boot-avatar,
+.cg-bargain-boot-line,
+.cg-bargain-boot-bubble {
+  animation: cgBootPulse 1.5s ease-in-out infinite;
+}
+@keyframes cgBootPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
 /* ── Floating launcher (app embed fallback) ─────────────────────────────── */
 .cg-bargain-embed {
   position: fixed;
@@ -184,5 +260,8 @@
   .cg-bargain-backdrop,
   .cg-bargain-drawer {
     transition: none;
+  }
+  .cg-bargain-boot * {
+    animation: none !important;
   }
 }

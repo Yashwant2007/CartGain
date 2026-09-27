@@ -100,6 +100,13 @@ export type UiKey =
   | 'negotiationEnded'
   | 'privateNote'
   | 'minimise'
+  | 'roundOf'
+  | 'lastRound'
+  | 'priceProgress'
+  | 'bestSoFar'
+  | 'railLabel'
+  | 'priceHeld'
+  | 'shopkeeperOnline'
 
 const I18N: Record<UiLang, Record<UiKey, string>> = {
   en: {
@@ -176,6 +183,13 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     negotiationEnded: 'This negotiation has ended.',
     privateNote: 'Private · No spam · Your price is held while you chat',
     minimise: 'Minimise chat',
+    roundOf: 'Round {n} of {m}',
+    lastRound: 'Last round',
+    priceProgress: 'Best price so far',
+    bestSoFar: 'Best:',
+    railLabel: 'Down from {from} to {to}',
+    priceHeld: 'Your price is held while you chat',
+    shopkeeperOnline: 'Shopkeeper online',
     tabChat: 'Chat',
     tabDeal: 'Deal',
   },
@@ -255,6 +269,13 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     negotiationEnded: 'Ye negotiation khatam ho gayi hai.',
     privateNote: 'Private · Koi spam nahi · Aapki price chat ke dauran hold rehti hai',
     minimise: 'Chat chhota karein',
+    roundOf: 'Round {n} / {m}',
+    lastRound: 'Aakhri round',
+    priceProgress: 'Ab tak ki best price',
+    bestSoFar: 'Best:',
+    railLabel: '{from} se {to} tak',
+    priceHeld: 'Chat ke dauran aapki price hold hai',
+    shopkeeperOnline: 'Dukaandar online',
   },
   hi: {
     farewell_friendly: 'समझ गया दोस्त, दरवाज़ा हमेशा खुला है। अगर मन बदले तो बता देना। ध्यान रखना! 👋',
@@ -332,6 +353,13 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     negotiationEnded: 'यह मोलभाव समाप्त हो गया है।',
     privateNote: 'निजी · कोई स्पैम नहीं · चैट के दौरान आपकी कीमत सुरक्षित रहती है',
     minimise: 'चैट छोटा करें',
+    roundOf: 'राउंड {n} / {m}',
+    lastRound: 'आख़िरी राउंड',
+    priceProgress: 'अब तक की सबसे अच्छी कीमत',
+    bestSoFar: 'सबसे अच्छा:',
+    railLabel: '{from} से घटकर {to}',
+    priceHeld: 'बातचीत के दौरान आपकी कीमत सुरक्षित रहती है',
+    shopkeeperOnline: 'दुकानदार ऑनलाइन',
   },
   ta: {
     farewell_friendly: 'புரிந்தது நண்பரே, கதவு எப்போதும் திறந்தே உள்ளது. மனம் மாறினால் சொல்லுங்கள். பார்த்துக்கொள்ளுங்கள்! 👋',
@@ -409,6 +437,13 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     negotiationEnded: 'இந்த பேரம் முடிவடைந்தது.',
     privateNote: 'தனிப்பட்ட · ஸ்பேம் இல்லை · பேசிக் கொண்டிருக்கும்போது உங்கள் விலை பாதுகாக்கப்படுகிறது',
     minimise: 'அரட்டையை சுருக்கவும்',
+    roundOf: 'சுற்று {n} / {m}',
+    lastRound: 'கடைசி சுற்று',
+    priceProgress: 'இதுவரை சிறந்த விலை',
+    bestSoFar: 'சிறந்தது:',
+    railLabel: '{from} இலிருந்து {to} வரை',
+    priceHeld: 'பேசுவதின்போது உங்கள் விலை பாதுகாக்கப்படுகிறது',
+    shopkeeperOnline: 'கடைக்காரர் ஆன்லைன்',
   },
   te: {
     farewell_friendly: 'అర్థమైంది స్నేహితుడా, తలుపు ఎప్పుడూ తెరిచే ఉంది. మనసు మారితే చెప్పండి. జాగ్రత్త! 👋',
@@ -486,6 +521,13 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     negotiationEnded: 'ఈ బేరం ముగిసింది.',
     privateNote: 'వ్యక్తిగతం · స్పామ్ లేదు · మీరు మాట్లాడుతున్నప్పుడు మీ ధర సురక్షితం',
     minimise: 'చాట్ చిన్నది చేయండి',
+    roundOf: 'రౌండ్ {n} / {m}',
+    lastRound: 'చివరి రౌండ్',
+    priceProgress: 'ఇప్పటివరకు ఉత్తమ ధర',
+    bestSoFar: 'ఉత్తమం:',
+    railLabel: '{from} నుండి {to} వరకు',
+    priceHeld: 'మాట్లాడుతున్నప్పుడు మీ ధర రాఖబడుతుంది',
+    shopkeeperOnline: 'దుకాణాదారు ఆన్‌లైన్',
   },
   bn: {
     farewell_friendly: 'বুঝেছি বন্ধু, দরজা সবসময় খোলা। মন বদলালে জানিয়ে দিও। ভালো থেকো! 👋',
@@ -563,6 +605,13 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     negotiationEnded: 'এই দরকষাকষি শেষ হয়েছে।',
     privateNote: 'ব্যক্তিগত · কোনো স্প্যাম নয় · আপনি চ্যাট করার সময় আপনার দাম সুরক্ষিত থাকে',
     minimise: 'চ্যাট ছোট করুন',
+    roundOf: 'রাউন্ড {n} / {m}',
+    lastRound: 'শেষ রাউন্ড',
+    priceProgress: 'এ পর্যন্ত সেরা দাম',
+    bestSoFar: 'সেরা:',
+    railLabel: '{from} থেকে {to}',
+    priceHeld: 'কথা বলার সময় আপনার দাম ধরে রাখা হয়',
+    shopkeeperOnline: 'দোকানি অনলাইন',
   },
   mr: {
     farewell_friendly: 'समजलो मित्रा, दार नेहमी उघडे आहे. मन बदललं तर सांग. काळजी घ्या! 👋',
@@ -640,6 +689,13 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     negotiationEnded: 'ही वाटाघाट संपली आहे.',
     privateNote: 'खाजगी · स्पॅम नाही · तुम्ही चॅट करत असताना तुमची किंमत राखून ठेवली जाते',
     minimise: 'चॅट लहान करा',
+    roundOf: 'फेरी {n} / {m}',
+    lastRound: 'शेवटची फेरी',
+    priceProgress: 'आतापर्यंतची सर्वोत्तम किंमत',
+    bestSoFar: 'सर्वोत्तम:',
+    railLabel: '{from} पासून {to} पर्यंत',
+    priceHeld: 'बातचीतदरम्यान तुमची किंमत सुरक्षित राहते',
+    shopkeeperOnline: 'दुकानदार ऑनलाइन',
   },
   gu: {
     farewell_friendly: 'સમજ્યો મિત્ર, દરવાજો હંમેશા ખુલ્લો છે. મન બદલાય તો કહેજે. કાળજી રાખજો! 👋',
@@ -717,6 +773,13 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     negotiationEnded: 'આ સોદાબાજી સમાપ્ત થઈ ગઈ છે.',
     privateNote: 'ખાનગી · કોઈ સ્પામ નહીં · તમે ચેટ કરો ત્યારે તમારી કિંમત જળવાઈ રહે છે',
     minimise: 'ચેટ નાની કરો',
+    roundOf: 'રાઉન્ડ {n} / {m}',
+    lastRound: 'છેલ્લો રાઉન્ડ',
+    priceProgress: 'અત્યાર સુધીની શ્રેષ્ઠ કિંમત',
+    bestSoFar: 'શ્રેષ્ઠ:',
+    railLabel: '{from} થી {to} સુધી',
+    priceHeld: 'વાતચીત દરમિયાન તમારી કિંમત સુરક્ષિત રહે છે',
+    shopkeeperOnline: 'દુકાનદાર ઓનલાઇન',
   },
   pa: {
     farewell_friendly: 'ਸਮਝ ਗਿਆ ਮਿੱਤਰਾ, ਦਰਵਾਜ਼ਾ ਹਮੇਸ਼ਾ ਖੁੱਲ੍ਹਾ ਹੈ। ਮਨ ਬਦਲੇ ਤਾਂ ਦੱਸ ਦੇਣਾ। ਖ਼ਿਆਲ ਰੱਖੀਂ! 👋',
@@ -794,6 +857,13 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     negotiationEnded: 'ਇਹ ਗੱਲਬਾਤ ਖਤਮ ਹੋ ਗਈ ਹੈ।',
     privateNote: 'ਨਿੱਜੀ · ਕੋਈ ਸਪੈਮ ਨਹੀਂ · ਜਦੋਂ ਤੁਸੀਂ ਚੈਟ ਕਰਦੇ ਹੋ ਤੁਹਾਡੀ ਕੀਮਤ ਸੁਰੱਖਿਅਤ ਰਹਿੰਦੀ ਹੈ',
     minimise: 'ਚੈਟ ਛੋਟੀ ਕਰੋ',
+    roundOf: 'ਰਾਊਂਡ {n} / {m}',
+    lastRound: 'ਆਖਰੀ ਰਾਊਂਡ',
+    priceProgress: 'ਹੁਣ ਤੱਕ ਦੀ ਸਭ ਤੋਂ ਵਧੀਆ ਕੀਮਤ',
+    bestSoFar: 'ਸਭ ਤੋਂ ਵਧੀਆ:',
+    railLabel: '{from} ਤੋਂ {to} ਤੱਕ',
+    priceHeld: 'ਗੱਲ ਬਾਤ ਦੌਰਾਨ ਤੁਹਾਡੀ ਕੀਮਤ ਸੁਰੱਖਿਅਤ ਰਹਿੰਦੀ ਹੈ',
+    shopkeeperOnline: 'ਦੁਕਾਨਦਾਰ ਆਨਲਾਈਨ',
   },
 }
 

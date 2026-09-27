@@ -20,12 +20,15 @@ import type {
   PublicBargainSession,
 } from '@/lib/bargain/api-types'
 import {
+  ChatSkeleton,
   DealInfoPanel,
   MessageBubble,
+  PriceRail,
   ProductContextCard,
   ProductThumb,
   QuickChip,
   RecoCard,
+  RoundMeter,
   StateCard,
   TypingIndicator,
 } from '@/components/bargain/BargainPrimitives'
@@ -82,6 +85,12 @@ type Props = {
   persona?: string
   mode?: 'item' | 'cart'
   /**
+   * How many offers the merchant allows in one session. Drives the round meter
+   * only — it is a count, never a price. Omit and the meter simply does not
+   * render, so an unknown budget never shows a wrong number.
+   */
+  maxAttempts?: number | null
+  /**
    * Drawer mode: the widget fills 100% of its host (a fixed right-side drawer /
    * full-screen mobile sheet created by the theme controller). The controller
    * owns open/close; the in-frame close button asks the parent to close via
@@ -115,6 +124,7 @@ export default function BargainWidget({
   image,
   persona,
   mode,
+  maxAttempts,
   view = 'inline',
 }: Props) {
   const [open, setOpen] = useState<boolean>(isEmbed)
@@ -137,6 +147,11 @@ export default function BargainWidget({
   const [returning, setReturning] = useState(false)
   const [endedReason, setEndedReason] = useState<'accepted' | 'rejected' | 'expired' | 'abandoned' | 'optout' | null>(null)
   const [floorReached, setFloorReached] = useState(false)
+  // Server-authoritative round count. The offer route increments attemptsUsed
+  // atomically and (importantly) DECREMENTS it again when a turn is rejected as
+  // abuse, so counting our own bubbles would drift. The API reports the truth;
+  // `roundsFallback` covers the window before the first offer response lands.
+  const [attemptsUsed, setAttemptsUsed] = useState<number | null>(null)
   const [rejection, setRejection] = useState<BargainRejection | null>(null)
   const [activeTab, setActiveTab] = useState<'chat' | 'info'>('chat')
   const [recommendations, setRecommendations] = useState<BargainRecommendation[] | null>(null)
@@ -239,6 +254,32 @@ export default function BargainWidget({
     [lastCounter, livePrice, sessionEnded, decision],
   )
 
+  // Rounds spent. Prefers the server's own `attemptsUsed` (authoritative, and
+  // correct when a turn was rolled back as abuse); falls back to counting the
+  // customer's turns in the transcript for the brief window before the first
+  // offer response arrives. Never invents a number.
+  const roundsFallback = useMemo(
+    () => messages.filter((m) => m.role === 'customer').length,
+    [messages],
+  )
+  const roundsUsed = attemptsUsed ?? roundsFallback
+
+  // Lowest price each side has actually named. The AI side is read straight off
+  // the server's counter offers; the customer side off the amounts the shopper
+  // typed. Used only to draw the progress rail — never to quote a price back.
+  const bestCustomerOffer = useMemo(() => {
+    let best: number | null = null
+    for (const m of messages) {
+      if (m.role !== 'customer') continue
+      if (typeof m.offeredPrice !== 'number' || !Number.isFinite(m.offeredPrice) || m.offeredPrice <= 0) continue
+      best = best == null ? m.offeredPrice : Math.min(best, m.offeredPrice)
+    }
+    return best
+  }, [messages])
+
+  const showRoundMeter = !sessionEnded && decision !== 'accept' && maxAttempts != null && maxAttempts > 0
+  const showPriceRail = !sessionEnded && decision !== 'accept' && lastCounter != null
+
   // First number typed anywhere in the message is the draft offer — it drives
   // the CTA label ("Make offer · ₹X") and the optimistic bubble. Free text
   // without a number is a chat message (product question / small talk) and is
@@ -336,13 +377,17 @@ export default function BargainWidget({
 
   // Embedded mode: keep the parent Shopify iframe sized to OUR widget (not the
   // whole document) so the frame hugs the panel exactly, never 900px of page.
+  // Skipped in drawer mode: the controller fixes the frame to the drawer and
+  // ignores cg_resize. Emitting it anyway is pure noise, and a STALE cached
+  // controller that still honours it would shrink the live drawer to our panel
+  // height — the exact "right size, wrong content" class of bug we just fixed.
   const announceHeight = useCallback(() => {
-    if (!isEmbed || typeof window === 'undefined' || !rootRef.current) return
+    if (!isEmbed || isDrawer || typeof window === 'undefined' || !rootRef.current) return
     const h = Math.round(rootRef.current.getBoundingClientRect().height)
     try {
       window.parent?.postMessage({ type: 'cg_resize', height: h }, '*')
     } catch {}
-  }, [isEmbed])
+  }, [isEmbed, isDrawer])
 
   useEffect(() => {
     if (!isEmbed) return
@@ -362,6 +407,21 @@ export default function BargainWidget({
     const tt = setTimeout(announceHeight, 40)
     return () => clearTimeout(tt)
   }, [isEmbed, announceHeight, open, minimised, panelHeight, messages, decision, discountCode, loading, sessionEnded, copied, floorReached, rejection])
+
+  // Drawer mode: tell the theme controller we are alive so it can swap its boot
+  // skeleton for the real chat. Fired on an idle tick (post-hydration) because
+  // the controller is a separate document that may not be listening yet.
+  const helloSent = useRef(false)
+  useEffect(() => {
+    if (!isDrawer || helloSent.current) return
+    const id = window.setTimeout(() => {
+      helloSent.current = true
+      try {
+        window.parent?.postMessage({ type: 'cg_hello' } as CgEmbedMessage, '*')
+      } catch {}
+    }, 80)
+    return () => window.clearTimeout(id)
+  }, [isDrawer])
 
   // Keep re-announcing while the embed is open. The merchant theme's controller
   // only sizes the iframe from our cg_resize messages — a one-shot announce can
@@ -545,6 +605,7 @@ export default function BargainWidget({
         setDecision(data.decision)
       }
       if (data.floorReached === true) setFloorReached(true)
+      if (typeof data.attemptsUsed === 'number') setAttemptsUsed(data.attemptsUsed)
       if (data.finalPrice != null) setFinalPrice(data.finalPrice)
       if (Array.isArray(data.recommendations) && data.recommendations.length > 0) {
         setRecommendations(data.recommendations)
@@ -828,19 +889,41 @@ export default function BargainWidget({
       style={{
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         ...(isEmbed
-          ? {
-              position: 'relative',
-              width: '100%',
-              background: '#ffffff',
-              borderRadius: 18,
-              border: '1px solid #e0e7ff',
-              boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 12px 32px rgba(79,70,229,0.10)',
-              overflow: 'hidden',
-              // A proper chat window the parent iframe grows to match via cg_resize
-              // (bargain.js / bargain-embed.js clamp 60–2400px). In drawer mode the
-              // controller fixes the iframe to 100% and the widget fills it.
-              height: isDrawer ? '100%' : open && !minimised ? panelHeight : 'auto',
-            }
+          ? isDrawer
+            ? {
+                // Drawer mode: the theme controller already sized this iframe to
+                // 100% of the drawer, so the iframe's own viewport IS the host.
+                // `position: fixed; inset: 0` pins the root to the viewport and
+                // is immune to ancestor height. A `height: 100%` here silently
+                // collapsed to 0: the app's html/body are `height: auto`, a
+                // percentage against an auto-height containing block computes to
+                // `auto`, and every child of this root is absolutely positioned
+                // or screen-reader-only — so the drawer opened perfectly sized
+                // and completely empty. Never reintroduce a percentage height.
+                position: 'fixed',
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+                width: '100%',
+                background: '#ffffff',
+                overflow: 'hidden',
+                isolation: 'isolate',
+              }
+            : {
+                position: 'relative',
+                width: '100%',
+                background: '#ffffff',
+                borderRadius: 18,
+                border: '1px solid #e0e7ff',
+                boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 12px 32px rgba(79,70,229,0.10)',
+                overflow: 'hidden',
+                // Inline embed: a proper chat window the parent iframe grows to
+                // match via cg_resize (the controller clamps 60–2400px). An
+                // explicit pixel height is required here — the iframe is sized
+                // FROM this value, so it can never be circular.
+                height: open && !minimised ? panelHeight : 'auto',
+              }
           : {}),
       }}
     >
@@ -1034,8 +1117,8 @@ export default function BargainWidget({
                   )}
                 </div>
                 <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 1.5, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: 4, background: '#34d399', flexShrink: 0 }} />
-                  <span style={{ fontWeight: 700, color: '#059669', flexShrink: 0 }}>{t('online')}</span>
+                  <span style={{ width: 7, height: 7, borderRadius: 4, background: '#34d399', flexShrink: 0, boxShadow: '0 0 0 3px rgba(52,211,153,0.18)' }} />
+                  <span style={{ fontWeight: 700, color: '#059669', flexShrink: 0 }}>{t('shopkeeperOnline')}</span>
                   <span style={{ color: '#cbd5e1', flexShrink: 0 }}>·</span>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 1 }}>
                     {productCtx.title ? productCtx.title : 'This item'}
@@ -1103,6 +1186,9 @@ export default function BargainWidget({
               </div>
               <div style={{ flex: 1 }} />
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, paddingLeft: 8 }}>
+                {showRoundMeter && (
+                  <RoundMeter used={roundsUsed} max={maxAttempts} t={t} />
+                )}
                 {timeLeft != null && !sessionEnded && (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#64748b', fontSize: 11.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     <Clock size={11} style={{ color: '#94a3b8' }} />
@@ -1124,6 +1210,17 @@ export default function BargainWidget({
               </div>
             </div>
           </div>
+
+          {/* ── Price progress rail: listed → best on the table ── */}
+          {showPriceRail && (
+            <PriceRail
+              currencySymbol={currencySymbol}
+              listedPrice={livePrice}
+              bestCounter={lastCounter}
+              bestCustomerOffer={bestCustomerOffer}
+              t={t}
+            />
+          )}
 
           {/* ── Conversation ── */}
           <div
@@ -1178,15 +1275,7 @@ export default function BargainWidget({
                 )}
 
                 {messages.length === 0 && (
-                  <div style={{
-                    alignSelf: 'center', margin: 'auto 0', textAlign: 'center',
-                    color: '#64748b', fontSize: 13, padding: '26px 28px',
-                    background: '#ffffff', border: '1px solid #eef2f7', borderRadius: 16,
-                    boxShadow: '0 1px 3px rgba(15,23,42,0.04)', maxWidth: 300,
-                  }}>
-                    <Loader2 size={22} className="spin" style={{ animation: 'spin 1s linear infinite', margin: '0 auto 14px', color: '#6366f1' }} />
-                    {t('connecting')}
-                  </div>
+                  <ChatSkeleton t={t} />
                 )}
 
                 {messages.map((m, idx) => (
@@ -1732,6 +1821,13 @@ export default function BargainWidget({
         .cg-btn-ghost:hover { background: #f8fafc }
 
         .cg-card-cta { display: flex; gap: 8; justify-content: center; flex-wrap: wrap; margin-top: 14px }
+
+        .cg-skel-bar {
+          height: 9px; border-radius: 999px; background: #e8ecf4;
+          animation: cgSkelPulse 1.5s ease-in-out infinite;
+        }
+        .cg-skel-row { animation: cgMsgIn 0.2s ease-out }
+        @keyframes cgSkelPulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.45 } }
 
         .spin { animation: spin 1s linear infinite }
         .cg-dot { animation: cgDotPulse 1.2s infinite ease-in-out }

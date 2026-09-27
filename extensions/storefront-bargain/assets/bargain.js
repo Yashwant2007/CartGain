@@ -10,18 +10,46 @@ function ensureDrawer(){
   var b=document.createElement('div');b.className=NS+'-backdrop';b.setAttribute('data-cg-backdrop','');
   var f=document.createElement('iframe');
   f.className=NS+'-frame';f.setAttribute('data-cg-drawer-frame','');f.title='CartGain price negotiation';
-  f.setAttribute('loading','lazy');f.setAttribute('allow','clipboard-write; clipboard-read');
+  /* NEVER loading="lazy" here. The frame is created off-screen (translateX(100%))
+     and only revealed after src is set, which is exactly the case where browsers
+     defer — and sometimes never start — a lazy iframe. The drawer is opened on
+     demand, so lazy loading buys nothing and risks a permanently empty drawer. */
+  f.setAttribute('allow','clipboard-write; clipboard-read');
   f.setAttribute('sandbox','allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox');
   f.setAttribute('referrerpolicy','origin');f.setAttribute('aria-hidden','true');
+  f.setAttribute('tabindex','-1');
   var w=document.createElement('div');w.className=NS+'-frame-wrap';w.appendChild(f);
   var a=document.createElement('aside');
   a.className=NS+'-drawer';a.setAttribute('role','dialog');a.setAttribute('aria-modal','true');a.setAttribute('aria-label','Price negotiation');
   a.appendChild(f);
+  /* Shown until the widget reports cg_hello. A drawer that fades in blank reads
+     as broken; this reads as "loading" and costs one postMessage. */
+  var s=document.createElement('div');s.className=NS+'-boot';s.setAttribute('data-cg-boot','');
+  s.setAttribute('aria-hidden','true');
+  s.innerHTML='<div class="'+NS+'-boot-bar"></div>'+
+    '<div class="'+NS+'-boot-row"><div class="'+NS+'-boot-avatar"></div>'+
+    '<div class="'+NS+'-boot-lines"><div class="'+NS+'-boot-line '+NS+'-boot-line-lg"></div>'+
+    '<div class="'+NS+'-boot-line"></div></div></div>'+
+    '<div class="'+NS+'-boot-bubble"></div>'+
+    '<div class="'+NS+'-boot-bubble '+NS+'-boot-bubble-alt"></div>';
+  a.appendChild(s);
   document.body.appendChild(b);document.body.appendChild(a);
-  drawer={shell:a,backdrop:b,frame:f};
+  drawer={shell:a,backdrop:b,frame:f,boot:s};
   b.addEventListener('click',close);
   a.addEventListener('keydown',function(e){if(e.key==='Escape'){e.preventDefault();close();}});
+  /* The widget listens for cg_product_update only after it mounts, so anything
+     posted before load is lost. Re-push the page's selected variant on every
+     frame load so a variant picked before opening always reaches the widget. */
+  f.addEventListener('load',function(){
+    if(!drawer||!drawer.shell.classList.contains('is-open')||!activeRoot)return;
+    lastSentVariant=null;
+    var sel=readSelectedVariant(activeRoot);
+    if(sel&&sel.id)pushProductUpdate(drawer,activeRoot,sel.id);
+  });
   return drawer;
+}
+function hideBoot(){
+  if(drawer&&drawer.boot&&drawer.boot.parentNode)drawer.boot.parentNode.removeChild(drawer.boot);
 }
 function widgetSrc(root){
   var src=root.getAttribute('data-cg-src')||'';if(!src)return'';
@@ -29,9 +57,14 @@ function widgetSrc(root){
 }
 function open(root){
   var d=ensureDrawer(),src=widgetSrc(root);if(!src)return;
-  if(d.frame.dataset.src!==src){d.frame.dataset.src=src;d.frame.setAttribute('src',src);lastSentVariant=null;}
-  else if(d.frame.getAttribute('src')!==src){d.frame.setAttribute('src',src);lastSentVariant=null;}
+  var reloading=false;
+  if(d.frame.dataset.src!==src){d.frame.dataset.src=src;d.frame.setAttribute('src',src);lastSentVariant=null;reloading=true;}
+  else if(d.frame.getAttribute('src')!==src){d.frame.setAttribute('src',src);lastSentVariant=null;reloading=true;}
   activeRoot=root;lastSentVariant=null;
+  /* Only when the frame is actually (re)loading: if the same src is reused the
+     iframe keeps its live session and the widget is already on screen, so a
+     skeleton would only cover good content. */
+  if(reloading)showBoot(d);
   var initial=readSelectedVariant(root);
   if(initial&&initial.id)pushProductUpdate(d,root,initial.id);
   window.setTimeout(function(){
@@ -46,6 +79,14 @@ function open(root){
   if(root.getAttribute('aria-expanded'))root.setAttribute('aria-expanded','true');
   window.__cgOpener=qs(root,'[data-cg-bargain-open]')||root;
   d.frame.focus();
+}
+function showBoot(d){
+  if(!d||!d.boot)return;
+  if(!d.boot.isConnected)d.shell.appendChild(d.boot);
+  /* Hard ceiling: if the widget never says hello (blocked, offline, a theme
+     still running an older app bundle) the skeleton must not sit on top of the
+     real UI forever. */
+  window.setTimeout(hideBoot,12000);
 }
 function close(){
   if(!drawer)return;
@@ -105,8 +146,9 @@ function onVariantMaybe(){
 }
 window.addEventListener('message',function(event){
   if(!event.data||typeof event.data!=='object')return;
-  if(event.data.type==='cg_empty'){if(activeRoot)activeRoot.classList.add('is-hidden');close();}
-  else if(event.data.type==='cg_close'){close();}
+  if(event.data.type==='cg_hello'){hideBoot();}
+  else if(event.data.type==='cg_empty'){hideBoot();if(activeRoot)activeRoot.classList.add('is-hidden');close();}
+  else if(event.data.type==='cg_close'){hideBoot();close();}
 });
 function bindRoot(root){
   var opener=qs(root,'[data-cg-bargain-open]');if(!opener)return;

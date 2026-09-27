@@ -6,7 +6,7 @@
 // clamped); the merchant floor never reaches these components.
 
 import type { ReactNode } from 'react'
-import { Tag, Zap, ShieldCheck } from 'lucide-react'
+import { Tag, Zap, ShieldCheck, Loader2 } from 'lucide-react'
 import type { UiKey } from '@/lib/bargain/i18n'
 import type { BargainDecision, BargainMessage, BargainRecommendation } from '@/lib/bargain/api-types'
 
@@ -350,6 +350,179 @@ export function DealInfoPanel({ t, currencySymbol, originalPrice, finalPrice, de
           Price is guaranteed while you negotiate — it resets if you leave and come back.
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Round meter ───────────────────────────────────────────────────────────
+// Shows how many negotiation rounds the shopper has spent of the store's budget.
+// SAFETY: `maxAttempts` is a COUNT the merchant publishes (the assistant already
+// tells the shopper how many offers they have left in its replies), never a price
+// or a margin. The rail renders nothing when the budget is unknown.
+export function RoundMeter({ used, max, t }: { used: number; max?: number | null; t: UiText }) {
+  if (!max || max < 1) return null
+  const total = Math.max(1, Math.floor(max))
+  const spent = Math.min(total, Math.max(0, Math.floor(used)))
+  const left = Math.max(0, total - spent)
+  const last = left === 1 || left === 0
+  return (
+    <div
+      className="cg-rounds"
+      role="group"
+      aria-label={t('roundOf', { n: spent + 1, m: total })}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
+    >
+      <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }} aria-hidden="true">
+        {Array.from({ length: total }).map((_, i) => (
+          <span
+            key={i}
+            style={{
+              width: 14,
+              height: 5,
+              borderRadius: 999,
+              background: i < spent ? '#c7d2fe' : 'linear-gradient(90deg, #6366f1, #4f46e5)',
+              boxShadow: i < spent ? 'none' : '0 1px 3px rgba(79,70,229,0.35)',
+            }}
+          />
+        ))}
+      </span>
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: last ? '#b45309' : '#64748b',
+          whiteSpace: 'nowrap',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {last ? t('lastRound') : t('roundOf', { n: spent + 1, m: total })}
+      </span>
+    </div>
+  )
+}
+
+// ── Price rail ────────────────────────────────────────────────────────────
+// Where the negotiation stands, in one glance: the listed price, the best price
+// the shopkeeper has actually put on the table, and the best number the shopper
+// has named. Every value is either the public listed price or a number the
+// SERVER sent back in a message — nothing here is derived from the floor, and
+// the component renders nothing at all until there is a second data point.
+export function PriceRail({
+  currencySymbol,
+  listedPrice,
+  bestCounter,
+  bestCustomerOffer,
+  t,
+}: {
+  currencySymbol: string
+  listedPrice: number
+  bestCounter: number | null
+  bestCustomerOffer: number | null
+  t: UiText
+}) {
+  const fmt = (n: number) => `${currencySymbol}${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+  // Only numbers that came from the server (AI counter) or from the shopper
+  // themselves. The listed price is public storefront data.
+  const best = [bestCounter, bestCustomerOffer]
+    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0)
+    .reduce((min, v) => Math.min(min, v), Number.POSITIVE_INFINITY)
+
+  if (!Number.isFinite(best) || listedPrice <= 0 || best >= listedPrice) {
+    // Nothing has moved yet — the rail would be a duplicate of the header pill.
+    return null
+  }
+
+  const offPct = Math.max(0, Math.min(99, Math.round((1 - best / listedPrice) * 100)))
+  const widthPct = Math.max(6, Math.min(100, offPct))
+
+  return (
+    <div
+      className="cg-rail"
+      style={{
+        flexShrink: 0,
+        padding: '9px 16px 10px',
+        background: '#ffffff',
+        borderBottom: '1px solid #eef2f7',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#94a3b8' }}>
+          {t('priceProgress')}
+        </span>
+        <span style={{ fontSize: 11.5, fontWeight: 800, color: '#15803d', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+          −{offPct}%
+        </span>
+      </div>
+      <div
+        role="img"
+        aria-label={t('railLabel', { from: fmt(listedPrice), to: fmt(best) })}
+        style={{ position: 'relative', height: 8, borderRadius: 999, background: '#eef2f7', overflow: 'hidden' }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: `${widthPct}%`,
+            borderRadius: 999,
+            background: 'linear-gradient(90deg, #a5b4fc, #6366f1 60%, #4f46e5)',
+            boxShadow: '0 1px 4px rgba(79,70,229,0.35)',
+            transition: 'width 0.35s ease',
+          }}
+        />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginTop: 6 }}>
+        <span style={{ fontSize: 11.5, color: '#94a3b8', textDecoration: 'line-through', fontVariantNumeric: 'tabular-nums' }}>
+          {fmt(listedPrice)}
+        </span>
+        {bestCounter != null && bestCustomerOffer != null && (
+          <span style={{ fontSize: 11.5, fontWeight: 800, color: '#4f46e5', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+            {t('bestSoFar')}{' '}{fmt(Math.min(bestCounter, bestCustomerOffer))}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Boot / connecting skeleton ────────────────────────────────────────────
+// Shown for the moment between "drawer opened" and "the assistant replied".
+// A bare spinner reads as a hang; a chat-shaped placeholder reads as loading.
+export function ChatSkeleton({ t }: { t: UiText }) {
+  return (
+    <div className="cg-skeleton" style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '4px 2px' }}>
+      <div
+        className="cg-skel-row"
+        style={{
+          alignSelf: 'flex-start',
+          maxWidth: '84%',
+          background: '#ffffff',
+          border: '1px solid #e9e4f9',
+          borderRadius: '16px 16px 16px 4px',
+          padding: '12px 16px',
+          boxShadow: '0 1px 3px rgba(15,23,42,0.05)',
+        }}
+      >
+        <div className="cg-skel-bar" style={{ width: '78%' }} />
+        <div className="cg-skel-bar" style={{ width: '54%', marginTop: 8 }} />
+      </div>
+      <div
+        className="cg-skel-row"
+        style={{
+          alignSelf: 'flex-start',
+          maxWidth: '70%',
+          background: '#ffffff',
+          border: '1px solid #e9e4f9',
+          borderRadius: '16px 16px 16px 4px',
+          padding: '12px 16px',
+          boxShadow: '0 1px 3px rgba(15,23,42,0.05)',
+        }}
+      >
+        <div className="cg-skel-bar" style={{ width: '62%' }} />
+      </div>
+      <div style={{ fontSize: 12.5, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 7, marginTop: 2 }}>
+        <Loader2 size={14} className="spin" style={{ animation: 'spin 1s linear infinite', color: '#6366f1' }} />
+        {t('connecting')}
+      </div>
     </div>
   )
 }

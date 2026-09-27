@@ -24,6 +24,9 @@ export type CgParentMessage =
 export type CgEmbedMessage =
   | { type: 'cg_resize'; height: number }
   | { type: 'cg_empty'; height?: never }
+  /** Drawer mode: posted once the widget has mounted, so the theme controller can
+   *  swap its boot skeleton for the real chat. */
+  | { type: 'cg_hello'; height?: never }
   /** Drawer mode: the widget's close button asks the theme controller to close. */
   | { type: 'cg_close'; height?: never }
 
@@ -106,6 +109,12 @@ export type BargainOfferSuccess = {
   finalPrice?: number | null
   /** Boolean-only signal that the AI just presented its best (= last) price. */
   floorReached?: boolean
+  /**
+   * Rounds consumed so far, as persisted server-side. A COUNT for the round
+   * meter — never a price, margin or floor. Reflects the post-transaction value
+   * (an abuse turn that does not consume an attempt is reported as rolled back).
+   */
+  attemptsUsed?: number
   recommendations?: BargainRecommendation[]
   recommendationReason?: string
   abuseDetected?: boolean

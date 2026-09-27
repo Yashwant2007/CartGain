@@ -3,7 +3,10 @@
  */
 import { render, screen, fireEvent } from '@testing-library/react'
 import {
+  ChatSkeleton,
   MessageBubble,
+  PriceRail,
+  RoundMeter,
   StateCard,
   QuickChip,
   ProductContextCard,
@@ -100,5 +103,57 @@ describe('BargainPrimitives (critical storefront UI flows)', () => {
     // proper click to confirm the handler wiring end-to-end.
     fireEvent.click(screen.getByRole('button', { name: '₹850' }))
     expect(onClick).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('RoundMeter (offer budget)', () => {
+  it('renders one pip per allowed round and labels the current one', () => {
+    const { container } = render(<RoundMeter used={1} max={3} t={t} />)
+    expect(container.querySelectorAll('.cg-rounds > span > span')).toHaveLength(3)
+    expect(screen.getByText('roundOf')).toBeTruthy()
+  })
+
+  it('switches to the last-round callout when one round is left', () => {
+    render(<RoundMeter used={2} max={3} t={t} />)
+    expect(screen.getByText('lastRound')).toBeTruthy()
+  })
+
+  it('renders nothing when the budget is unknown (never invents a count)', () => {
+    const { container } = render(<RoundMeter used={1} max={null} t={t} />)
+    expect(container.firstChild).toBeNull()
+  })
+})
+
+describe('PriceRail (progress, server-sourced numbers only)', () => {
+  it('stays hidden until a price below the listed one exists', () => {
+    const { container } = render(
+      <PriceRail currencySymbol="₹" listedPrice={999} bestCounter={null} bestCustomerOffer={null} t={t} />,
+    )
+    expect(container.firstChild).toBeNull()
+  })
+
+  it('stays hidden when nothing has actually moved down', () => {
+    const { container } = render(
+      <PriceRail currencySymbol="₹" listedPrice={999} bestCounter={1200} bestCustomerOffer={null} t={t} />,
+    )
+    expect(container.firstChild).toBeNull()
+  })
+
+  it('reports the drop from the listed price to the best number named', () => {
+    const { container } = render(
+      <PriceRail currencySymbol="₹" listedPrice={1000} bestCounter={900} bestCustomerOffer={850} t={t} />,
+    )
+    // 15% off the listed price, described for screen readers.
+    expect(screen.getByText('−15%')).toBeTruthy()
+    expect(container.textContent).toContain('₹1,000')
+    expect(container.textContent).toContain('₹850')
+  })
+})
+
+describe('ChatSkeleton (connecting state)', () => {
+  it('shows the connecting copy with a chat-shaped placeholder', () => {
+    const { container } = render(<ChatSkeleton t={t} />)
+    expect(screen.getByText('connecting')).toBeTruthy()
+    expect(container.querySelectorAll('.cg-skel-bar').length).toBeGreaterThan(0)
   })
 })

@@ -413,6 +413,9 @@ export async function POST(request: NextRequest) {
         counterOffer: retentionPrice,
         sessionStatus: 'active',
         sessionId: bargainSession.id,
+        // The retention turn still consumed an attempt — report it so the UI
+        // round meter stays in step with the server.
+        attemptsUsed,
       })
     }
 
@@ -636,6 +639,10 @@ export async function POST(request: NextRequest) {
       // "Final offer" frame. NEVER carries the floor amount itself; the client
       // cannot compute or alter it.
       floorReached: result.tactic === 'final_offer',
+      // Rounds spent, straight from the session row. A COUNT only — the UI
+      // renders it as a round meter. It is the post-transaction value, so an
+      // abuse turn that was rolled back below is reported correctly.
+      attemptsUsed: effectiveAttemptsUsed,
       ...(isAbuseNoConsume ? { abuseDetected: true, abuseCategory: (result.metadata as any)?.category } : {}),
       ...(recommendations && recoReason
         ? {
