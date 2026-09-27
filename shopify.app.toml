@@ -6,13 +6,18 @@ description = "Recover abandoned carts with WhatsApp, Email and SMS — plus AI 
 application_url = "https://cart-gain.com/api/shopify/install"
 embedded = true
 # handle = "cartgain"  # linked via client_id; omitted to avoid branding validation bug
-# Privacy + ToS are surfaced to Shopify reviewers for the protected-customer-data review.
-privacy_policy_url = "https://cart-gain.com/privacy"
-tos_url = "https://cart-gain.com/terms"
+# Privacy URL + ToS are surfaced to Shopify reviewers for the protected-customer-data
+# review. They were previously listed here, but Shopify CLI >= 4.8 rejects
+# privacy_policy_url / tos_url in app.toml; they now live in the Partner Dashboard.
 
 [webhooks]
 # Kept in sync with src/lib/shopify.ts (setupShopifyWebhooks) — the topics below
 # must match the runtime list exactly so every install gets identical webhooks.
+# Exception: the three GDPR/privacy topics (customers/data_request,
+# customers/redact, shop/redact) are intentionally NOT listed here — they are
+# configured in the Partner Dashboard (protected customer data) and Shopify's
+# app-config validation rejects re-declaring them in app.toml. The runtime
+# still registers them at install, so store privacy handling is unchanged.
 api_version = "2026-04"
 
   [[webhooks.subscriptions]]
@@ -27,9 +32,6 @@ api_version = "2026-04"
   "orders/cancelled",
   "refunds/create",
   "app/uninstalled",
-  "customers/data_request",
-  "customers/redact",
-  "shop/redact",
   "app_subscriptions/update"
 ]
 
@@ -38,7 +40,9 @@ api_version = "2026-04"
 # src/app/api/shopify/connect/route.ts. CartGain does not write customers,
 # orders, products, or draft orders, so those write scopes are intentionally
 # not requested (see SHOPIFY_PROTECTED_DATA_READINESS.md).
-scopes = "read_checkouts,write_checkouts,read_orders,read_customers,read_products,read_discounts,write_discounts,write_webhooks,read_webhooks"
+# read_webhooks / write_webhooks are omitted: Shopify deprecated those scopes
+# and webhook management is implicit for the app.
+scopes = "read_checkouts,write_checkouts,read_orders,read_customers,read_products,read_discounts,write_discounts"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 

@@ -1,11 +1,34 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   X, Minimize2, Send, MessageCircle, CheckCircle2, Clock, Tag, Zap,
   ShieldCheck, ArrowRight, Loader2, AlertCircle, RotateCcw,
 } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
+import { buildQuickOffers } from '@/lib/bargain/offers'
+import type {
+  BargainAcceptSuccess,
+  BargainMessage,
+  BargainOfferSuccess,
+  BargainRecommendation,
+  BargainRejection,
+  BargainStartSuccess,
+  CgEmbedMessage,
+  CgParentMessage,
+  PlanLimit,
+  PublicBargainSession,
+} from '@/lib/bargain/api-types'
+import {
+  DealInfoPanel,
+  MessageBubble,
+  ProductContextCard,
+  ProductThumb,
+  QuickChip,
+  RecoCard,
+  StateCard,
+  TypingIndicator,
+} from '@/components/bargain/BargainPrimitives'
 
 // Stable per-device+cart bargain identity. Persists across tabs/refreshes on the
 // same browser (localStorage deviceId seeded on first visit) and is blended with
@@ -58,54 +81,21 @@ type Props = {
   image?: string
   persona?: string
   mode?: 'item' | 'cart'
+  /**
+   * Drawer mode: the widget fills 100% of its host (a fixed right-side drawer /
+   * full-screen mobile sheet created by the theme controller). The controller
+   * owns open/close; the in-frame close button asks the parent to close via
+   * cg_close, and the parent can push a live variant/price update via
+   * cg_product_update. Session state persists across opens because the widget
+   * never unmounts — the controller keeps the same iframe alive.
+   */
+  view?: 'inline' | 'drawer'
 }
 
 const PERSONA_CHIP: Record<string, { label: string; emoji: string }> = {
   friendly_shopkeeper: { label: 'Friendly', emoji: '😊' },
   strict_negotiator: { label: 'Strict', emoji: '📊' },
   playful_friend: { label: 'Playful', emoji: '😏' },
-}
-
-type Message = {
-  id: string
-  role: 'customer' | 'ai' | 'system'
-  content: string
-  offeredPrice?: number | null
-  createdAt: string
-}
-
-type Session = {
-  sessionId: string
-  status: string
-  finalPrice?: number | null
-  discountCode?: string | null
-  expiresAt?: string
-}
-
-// Sanitized recommendation card, built server-side from the store's real
-// Shopify catalog. Never contains merchant financial secrets (floor / margin /
-// max discount) — only facts Shopify already exposes on the storefront.
-type Recommendation = {
-  productId: string
-  variantId: string
-  title: string
-  price: number
-  compareAtPrice?: number | null
-  currency: string
-  imageUrl: string | null
-  productUrl: string | null
-  available: boolean
-  onSale: boolean
-  budgetFit: 'under' | 'over' | 'unknown'
-  tags: string[]
-}
-
-// A rejection the backend reported on accept (machine reason codes). The
-// message is server-authored copy — never invented client-side.
-type Rejection = {
-  code: string
-  reason: string
-  message: string
 }
 
 export default function BargainWidget({
@@ -125,11 +115,12 @@ export default function BargainWidget({
   image,
   persona,
   mode,
+  view = 'inline',
 }: Props) {
   const [open, setOpen] = useState<boolean>(isEmbed)
   const [minimised, setMinimised] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<BargainMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -146,9 +137,9 @@ export default function BargainWidget({
   const [returning, setReturning] = useState(false)
   const [endedReason, setEndedReason] = useState<'accepted' | 'rejected' | 'expired' | 'abandoned' | 'optout' | null>(null)
   const [floorReached, setFloorReached] = useState(false)
-  const [rejection, setRejection] = useState<Rejection | null>(null)
+  const [rejection, setRejection] = useState<BargainRejection | null>(null)
   const [activeTab, setActiveTab] = useState<'chat' | 'info'>('chat')
-  const [recommendations, setRecommendations] = useState<Recommendation[] | null>(null)
+  const [recommendations, setRecommendations] = useState<BargainRecommendation[] | null>(null)
   const [atBottom, setAtBottom] = useState(true)
   const [announcer, setAnnouncer] = useState('')
   // Embed mode: a FIXED panel height. Never calc(100dvh — the iframe has no
@@ -158,6 +149,48 @@ export default function BargainWidget({
   // and the parent grows the iframe to match; width-based breakpoints are safe
   // (width is set by the parent column, not by us).
   const [panelHeight, setPanelHeight] = useState(isEmbed ? 600 : 0)
+
+  // Drawer mode: the widget fills 100% of its host and the THEME controller —
+  // not this component — decides visibility (open/close keep the same iframe
+  // alive so the session survives close→reopen). The controller can also push
+  // a live variant/price update via cg_product_update; the widget applies it to
+  // the product context and (if no session is running yet) negotiates from it.
+  const isDrawer = isEmbed && view === 'drawer'
+  const [productCtx, setProductCtx] = useState({
+    price: originalPrice,
+    image: image ?? null,
+    variantId: variantId ?? null,
+    title: productTitle ?? null,
+  })
+  // In drawer mode the session start is deferred ~500ms (or until the first
+  // cg_product_update arrives) so a variant picked before opening is bound into
+  // the START call instead of the default variant.
+  const [productPending, setProductPending] = useState(isDrawer)
+
+  const livePrice = productCtx.price
+
+  useEffect(() => {
+    if (!isDrawer || typeof window === 'undefined') return
+    const onMessage = (e: MessageEvent) => {
+      const d = (e.data ?? null) as CgParentMessage | null
+      if (!d || d.type !== 'cg_product_update') return
+      setProductCtx((c) => ({
+        price: typeof d.price === 'number' && Number.isFinite(d.price) && d.price > 0 ? d.price : c.price,
+        image: d.image != null ? (d.image || c.image) : c.image,
+        variantId: d.variantId != null ? d.variantId : c.variantId,
+        title: typeof d.title === 'string' && d.title ? d.title : c.title,
+      }))
+      setProductPending(false)
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [isDrawer])
+
+  useEffect(() => {
+    if (!isDrawer || !productPending) return
+    const t = window.setTimeout(() => setProductPending(false), 500)
+    return () => window.clearTimeout(t)
+  }, [isDrawer, productPending])
 
   useEffect(() => {
     if (!isEmbed) return
@@ -184,7 +217,7 @@ export default function BargainWidget({
 
   const thinking = loading && decision !== 'accept'
   const personaChip = persona ? PERSONA_CHIP[persona] : undefined
-  const savings = decision === 'accept' && finalPrice != null ? originalPrice - finalPrice : null
+  const savings = decision === 'accept' && finalPrice != null ? livePrice - finalPrice : null
 
   // The last price the shopkeeper actually put on the table (server-issued
   // counter). Used for the "Accept" bar and quick-offer chips. Never computed,
@@ -201,20 +234,10 @@ export default function BargainWidget({
   // server's live counter (if any) plus conservative percentages of the LISTED
   // price (11%/15% off). These always sit comfortably above any merchant floor
   // and never carry a floor-derived value; they only prefill the offer box.
-  const quickOffers = useMemo(() => {
-    const out: number[] = []
-    if (lastCounter != null && !sessionEnded && decision !== 'accept') {
-      const v = Math.round(lastCounter)
-      if (!out.includes(v)) out.push(v)
-    }
-    if (originalPrice > 0) {
-      for (const pct of [11, 15]) {
-        const v = Math.round(originalPrice * (1 - pct / 100))
-        if (!out.includes(v)) out.push(v)
-      }
-    }
-    return out.slice(0, 3)
-  }, [lastCounter, originalPrice, sessionEnded, decision])
+  const quickOffers = useMemo(
+    () => buildQuickOffers({ lastCounter, listedPrice: livePrice, sessionEnded, decision }),
+    [lastCounter, livePrice, sessionEnded, decision],
+  )
 
   // First number typed anywhere in the message is the draft offer — it drives
   // the CTA label ("Make offer · ₹X") and the optimistic bubble. Free text
@@ -245,16 +268,6 @@ export default function BargainWidget({
     mq.addEventListener?.('change', update)
     return () => mq.removeEventListener?.('change', update)
   }, [])
-
-  // Floating panel: close on Escape. Never fires in embedded mode.
-  useEffect(() => {
-    if (isEmbed || !open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closePanel()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [isEmbed, open])
 
   // Scroll policy: the newest reply is ALWAYS brought into view — a customer
   // who can't see the answer is the complaint we must never have. The only
@@ -377,8 +390,8 @@ export default function BargainWidget({
         body: JSON.stringify({
           storeId,
           shopifyProductId,
-          variantId,
-          originalPrice,
+          variantId: productCtx.variantId,
+          originalPrice: livePrice,
           currency,
           cartToken,
           customerEmail,
@@ -387,7 +400,12 @@ export default function BargainWidget({
           language,
         }),
       })
-      const data = await res.json()
+      const data = (await res.json()) as BargainStartSuccess & {
+        message?: string
+        code?: string
+        planId?: string
+        upgradeUrl?: string
+      }
       if (!res.ok) {
         if (res.status === 402 && data.code) {
           setLimit({ code: data.code, planId: data.planId, upgradeUrl: data.upgradeUrl })
@@ -400,7 +418,7 @@ export default function BargainWidget({
       setExpiresAt(data.expiresAt ?? null)
       if (data.returning) setReturning(true)
       if (data.existingSession && data.session?.messages?.length) {
-        const restored: Message[] = data.session.messages.map((m: any) => ({
+        const restored: BargainMessage[] = data.session.messages.map((m: BargainMessage) => ({
           id: m.id,
           role: m.role === 'ai' ? 'ai' : m.role === 'customer' ? 'customer' : 'system',
           content: m.content,
@@ -414,7 +432,7 @@ export default function BargainWidget({
           if (data.session.status === 'rejected') setDecision('reject')
         }
       } else {
-        const aiMsg: Message = {
+        const aiMsg: BargainMessage = {
           id: 'opening',
           role: 'ai',
           content: data.openingMessage ?? 'Welcome! What price were you thinking?',
@@ -473,7 +491,11 @@ export default function BargainWidget({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, message: msg, ...buyerIdentity() }),
       })
-      const data = await res.json()
+      const data = (await res.json()) as BargainOfferSuccess & {
+        message?: string
+        terminal?: boolean
+        status?: 'accepted' | 'rejected' | 'expired' | 'abandoned'
+      }
       if (!res.ok) {
         if (res.status === 410) {
           // Session expired while the customer was typing — terminal, but
@@ -539,7 +561,7 @@ export default function BargainWidget({
 
   // Shopper interacted with a recommendation card — record it server-side. This
   // is write-only analytics; the server never returns card data from it.
-  async function fireRecoEvent(action: 'clicked' | 'added', card: Recommendation) {
+  async function fireRecoEvent(action: 'clicked' | 'added', card: BargainRecommendation) {
     if (!sessionId) return
     try {
       await fetch(`${apiBase}/api/bargain/recommend/event`, {
@@ -561,7 +583,7 @@ export default function BargainWidget({
   // Add a recommended product to the storefront cart (only works when the
   // widget runs on the Shopify storefront origin). Falls back to the product
   // page so the flow never dead-ends.
-  async function addRecoToCart(card: Recommendation) {
+  async function addRecoToCart(card: BargainRecommendation) {
     if (!card.available) return
     fireRecoEvent('added', card)
     if (typeof window === 'undefined' || !card.variantId) {
@@ -631,7 +653,13 @@ export default function BargainWidget({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, ...buyerIdentity() }),
       })
-      const data = await res.json()
+      const data = (await res.json()) as BargainAcceptSuccess & {
+        message?: string
+        code?: string
+        planId?: string
+        upgradeUrl?: string
+        reason?: string
+      }
       if (!res.ok) {
         if (res.status === 402 && data.code) {
           setLimit({ code: data.code, planId: data.planId, upgradeUrl: data.upgradeUrl })
@@ -671,7 +699,7 @@ export default function BargainWidget({
         {
           id: `s-${Date.now()}`,
           role: 'system',
-          content: `🎉 ${t('greatDeal')} ${currencySymbol}${(data.finalPrice ?? originalPrice).toFixed(2)} — ${t('copy')} ${data.discountCode ?? ''} ${t('codeApply')}`,
+          content: `🎉 ${t('greatDeal')} ${currencySymbol}${(data.finalPrice ?? livePrice).toFixed(2)} — ${t('copy')} ${data.discountCode ?? ''} ${t('codeApply')}`,
           createdAt: new Date().toISOString(),
         },
       ])
@@ -744,22 +772,45 @@ export default function BargainWidget({
 
   // Embedded mode opens as a full chat window by default (the launcher card is
   // what made the storefront look small/cramped). Auto-start the session so the
-  // AI greets immediately. Idempotent: busyRef + sessionId guard below.
+  // AI greets immediately. Idempotent: busyRef + sessionId guard below. In
+  // drawer mode the start waits for the controller's first cg_product_update
+  // (or a short deadline) so a variant picked before opening is honored.
   useEffect(() => {
     if (!isEmbed || !open || minimised || sessionId || loading || busyRef.current) return
+    if (isDrawer && productPending) return
     void startSession()
     // startSession is a stable function declaration; the run is already gated
     // by sessionId/loading/busyRef so re-renders never double-start.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEmbed, open, minimised, sessionId, loading])
+  }, [isEmbed, isDrawer, productPending, open, minimised, sessionId, loading])
 
-  function closePanel() {
+  const closePanel = useCallback(() => {
+    if (isDrawer && typeof window !== 'undefined') {
+      // The theme controller owns visibility in a drawer — closing keeps the
+      // same iframe alive (session preserved) and lets the parent restore the
+      // page scroll/focus state.
+      try {
+        window.parent?.postMessage({ type: 'cg_close' } as CgEmbedMessage, '*')
+      } catch {}
+      return
+    }
     setOpen(false)
     setMinimised(false)
     // Keyboard users: hand focus back to the launcher when the panel closes so
     // the next tab-stop lands somewhere predictable in the theme.
     window.setTimeout(() => launcherRef.current?.focus(), 0)
-  }
+  }, [isDrawer])
+
+  // Floating panel: close on Escape. Never fires in embedded/drawer mode (the
+  // theme page owns key handling there). Order matters — closePanel above.
+  useEffect(() => {
+    if (isEmbed || !open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closePanel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isEmbed, open, closePanel])
 
   function copyCode() {
     if (!discountCode) return
@@ -786,8 +837,9 @@ export default function BargainWidget({
               boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 12px 32px rgba(79,70,229,0.10)',
               overflow: 'hidden',
               // A proper chat window the parent iframe grows to match via cg_resize
-              // (bargain.js / bargain-embed.js clamp 60–2400px).
-              height: open && !minimised ? panelHeight : 'auto',
+              // (bargain.js / bargain-embed.js clamp 60–2400px). In drawer mode the
+              // controller fixes the iframe to 100% and the widget fills it.
+              height: isDrawer ? '100%' : open && !minimised ? panelHeight : 'auto',
             }
           : {}),
       }}
@@ -834,13 +886,13 @@ export default function BargainWidget({
               background: 'linear-gradient(180deg, #818cf8, #4f46e5)',
               flexShrink: 0,
             }} />
-            <ProductThumb image={image} title={productTitle} size={40} />
+            <ProductThumb image={productCtx.image} title={productCtx.title} size={40} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minWidth: 0 }}>
-                {productTitle ? productTitle : 'This item'}
+                {productCtx.title ? productCtx.title : 'This item'}
               </div>
               <div style={{ fontSize: 12.5, color: '#334155', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
-                <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 16 }}>{currencySymbol}{originalPrice.toFixed(2)}</span>
+                <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 16 }}>{currencySymbol}{livePrice.toFixed(2)}</span>
                 <span style={{ color: '#cbd5e1', fontSize: 10 }}>·</span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   <Zap size={11} style={{ color: '#4f46e5', flexShrink: 0 }} />
@@ -965,7 +1017,7 @@ export default function BargainWidget({
             background: 'linear-gradient(180deg, #ffffff, #fafbff)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-              <ProductThumb image={image} title={productTitle} size={40} />
+              <ProductThumb image={productCtx.image} title={productCtx.title} size={40} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                   <span style={{ fontWeight: 800, fontSize: 14.5, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -986,7 +1038,7 @@ export default function BargainWidget({
                   <span style={{ fontWeight: 700, color: '#059669', flexShrink: 0 }}>{t('online')}</span>
                   <span style={{ color: '#cbd5e1', flexShrink: 0 }}>·</span>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 1 }}>
-                    {productTitle ? productTitle : 'This item'}
+                    {productCtx.title ? productCtx.title : 'This item'}
                   </span>
                 </div>
               </div>
@@ -996,7 +1048,7 @@ export default function BargainWidget({
                 borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
               }}>
                 <Zap size={11} />
-                {currencySymbol}{originalPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                {currencySymbol}{livePrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
               </span>
               {!isEmbed && (
                 <button onClick={() => setMinimised(true)} aria-label={t('minimise')} className="cg-icon-btn" style={{ width: 40, height: 40, borderRadius: 11 }}>
@@ -1102,11 +1154,11 @@ export default function BargainWidget({
               <DealInfoPanel
                 t={t}
                 currencySymbol={currencySymbol}
-                originalPrice={originalPrice}
+                originalPrice={livePrice}
                 finalPrice={finalPrice}
                 decision={decision}
                 discountCode={discountCode}
-                productTitle={productTitle}
+                productTitle={productCtx.title}
                 sessEnded={sessionEnded}
               />
             ) : (
@@ -1117,10 +1169,10 @@ export default function BargainWidget({
                 pixel for the actual conversation. */}
                 {!isEmbed && messages.length > 0 && (
                   <ProductContextCard
-                    image={image}
-                    title={productTitle}
+                    image={productCtx.image}
+                    title={productCtx.title}
                     currencySymbol={currencySymbol}
-                    price={originalPrice}
+                    price={livePrice}
                     mode={mode}
                   />
                 )}
@@ -1170,35 +1222,7 @@ export default function BargainWidget({
                 )}
 
                 {/* AI thinking indicator */}
-                {thinking && (
-                  <div style={{ alignSelf: 'flex-start', animation: 'cgMsgIn 0.18s ease-out' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 3, paddingLeft: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{
-                    width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                    background: 'linear-gradient(135deg,#818cf8,#4f46e5)', color: '#ffffff',
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <span style={{ fontSize: 10, lineHeight: 1 }}>{personaChip ? personaChip.emoji : '🤝'}</span>
-                  </span>
-                  {personaChip ? personaChip.label : t('assistant')}
-                </div>
-                    <div style={{
-                      background: '#ffffff',
-                      border: '1px solid #e9e4f9',
-                      padding: '12px 16px',
-                      borderRadius: '16px 16px 16px 4px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      boxShadow: '0 1px 3px rgba(15,23,42,0.05)',
-                    }}>
-                      <span className="cg-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#6366f1' }} />
-                      <span className="cg-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#6366f1', animationDelay: '0.15s' }} />
-                      <span className="cg-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#6366f1', animationDelay: '0.3s' }} />
-                      <span style={{ fontSize: 13, color: '#64748b', marginLeft: 4 }}>{t('checking')}</span>
-                    </div>
-                  </div>
-                )}
+                {thinking && <TypingIndicator personaChip={personaChip} t={t} />}
 
                 {/* ── Accepted deal card — conversion hero ── */}
                 {decision === 'accept' && finalPrice != null && (
@@ -1235,7 +1259,7 @@ export default function BargainWidget({
                     <div style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10,
                     }}>
-                      <span style={{ textDecoration: 'line-through', color: '#cbd5e1', fontWeight: 600, fontSize: 16 }}>{currencySymbol}{originalPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                      <span style={{ textDecoration: 'line-through', color: '#cbd5e1', fontWeight: 600, fontSize: 16 }}>{currencySymbol}{livePrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
                       <ArrowRight size={16} style={{ color: '#94a3b8' }} />
                       <span style={{ fontWeight: 900, color: '#15803d', fontSize: 32, fontVariantNumeric: 'tabular-nums' }}>{currencySymbol}{finalPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
                     </div>
@@ -1469,7 +1493,7 @@ export default function BargainWidget({
                   borderTop: !sessionEnded && decision !== 'accept' && lastCounter != null ? 'none' : '1px solid #eef2f7',
                   flexWrap: 'wrap',
                 }}>
-                  {!sessionEnded && productTitle && decision !== 'accept' && (
+                  {!sessionEnded && productCtx.title && decision !== 'accept' && (
                     <QuickChip key="ask" label={t('askProduct')} disabled={thinking || !!busyRef.current} onClick={() => fillChat(t('askProduct'))} />
                   )}
                   {quickOffers.map((v) => (
@@ -1597,10 +1621,10 @@ export default function BargainWidget({
       {open && minimised && (
         <div role="dialog" aria-label={t('makeOfferSub')} className={isEmbed ? 'cg-embed-mini' : 'cg-panel-mini'}>
           <div className="cg-mini-inner">
-            <ProductThumb image={image} title={productTitle} size={32} />
+            <ProductThumb image={productCtx.image} title={productCtx.title} size={32} />
             <div className="cg-mini-copy">
               <div>{t('bargainTitle')}</div>
-              <div>{productTitle ? productTitle : 'This item'}</div>
+              <div>{productCtx.title ? productCtx.title : 'This item'}</div>
             </div>
             <button type="button" onClick={() => setMinimised(false)} aria-label={t('makeOffer')} className="cg-icon-btn" style={{ width: 44, height: 44 }}>
               <MessageCircle size={18} />
@@ -1759,453 +1783,3 @@ function startedComposer(sessionEnded: boolean, decision: 'idle' | 'counter' | '
   return true
 }
 
-function ProductThumb({ image, title, size }: { image?: string; title?: string; size: number }) {
-  if (image) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={image}
-        alt=""
-        width={size}
-        height={size}
-        style={{ width: size, height: size, borderRadius: size / 4, objectFit: 'cover', border: '1px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}
-      />
-    )
-  }
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: size / 4,
-      background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-      color: '#6366f1',
-    }}>
-      <Tag size={Math.round(size * 0.44)} />
-    </div>
-  )
-}
-
-// Compact product context at the top of the conversation — what the customer is
-// negotiating. Only facts the storefront already shows (image, name, listed
-// price). Never internal merchant data.
-function ProductContextCard({ image, title, currencySymbol, price, mode }: {
-  image?: string
-  title?: string
-  currencySymbol: string
-  price: number
-  mode?: 'item' | 'cart'
-}) {
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 10,
-      background: '#ffffff',
-      border: '1px solid #eef2f7',
-      borderRadius: 14,
-      padding: '10px 12px',
-      boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
-      animation: 'cgMsgIn 0.2s ease-out',
-    }}>
-      <ProductThumb image={image} title={title} size={42} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {title ? title : 'This item'}
-        </div>
-        <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 1 }}>
-          <span style={{ fontWeight: 700, color: '#475569' }}>Listed price ·</span>{' '}
-          <span style={{ fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>{currencySymbol}{price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-        </div>
-      </div>
-      {mode === 'cart' && (
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
-          background: '#eef2ff', color: '#4f46e5', border: '1px solid #e0e7ff',
-          borderRadius: 999, padding: '3px 10px', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap',
-        }}>
-          <Zap size={11} />
-          Whole cart
-        </span>
-      )}
-    </div>
-  )
-}
-
-// One chat bubble. Offers within a message are visually emphasized and labeled
-// (YOU OFFERED / COUNTER OFFER / FINAL OFFER) so the negotiation scans at a
-// glance.
-function MessageBubble({ m, t, currencySymbol, personaChip, isFinal }: {
-  m: Message
-  t: (key: UiKey, vars?: Record<string, string | number>) => string
-  currencySymbol: string
-  personaChip?: { label: string; emoji: string }
-  isFinal: boolean
-}) {
-  const isCustomer = m.role === 'customer'
-  const label = isCustomer
-    ? m.offeredPrice != null ? t('youOffered') : ''
-    : isFinal
-    ? t('finalOffer')
-    : m.offeredPrice != null
-    ? t('counterOffer')
-    : ''
-
-  return (
-    <div
-      style={{
-        alignSelf: isCustomer ? 'flex-end' : 'flex-start',
-        maxWidth: isCustomer ? '86%' : '84%',
-        animation: 'cgMsgIn 0.18s ease-out',
-      }}
-    >
-      {!isCustomer && (
-        <div style={{
-          fontSize: 12,
-          fontWeight: 700,
-          color: '#334155',
-          marginBottom: 3,
-          paddingLeft: 2,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-        }}>
-          <span style={{
-            width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-            background: m.role === 'ai' ? 'linear-gradient(135deg,#818cf8,#4f46e5)' : '#e2e8f0',
-            color: m.role === 'ai' ? '#ffffff' : '#475569',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <span style={{ fontSize: 10, lineHeight: 1 }}>
-              {m.role === 'ai' ? (personaChip ? personaChip.emoji : '🤝') : 'ℹ'}
-            </span>
-          </span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>
-            {m.role === 'ai'
-              ? (personaChip ? personaChip.label : t('assistant'))
-              : t('notice')}
-          </span>
-        </div>
-      )}
-      <div
-        style={{
-          background:
-            isCustomer
-              ? 'linear-gradient(135deg, #6366f1, #4f46e5)'
-              : m.role === 'system'
-              ? '#f8fafc'
-              : '#ffffff',
-          color: isCustomer ? '#ffffff' : m.role === 'system' ? '#334155' : '#334155',
-          padding: '11px 14px',
-          borderRadius: isCustomer ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-          fontSize: 14.5,
-          lineHeight: 1.55,
-          border: m.role !== 'customer' ? '1px solid #e3e8f0' : 'none',
-          boxShadow: m.role !== 'customer' ? '0 1px 4px rgba(15,23,42,0.07)' : '0 2px 10px rgba(79,70,229,0.22)',
-          wordBreak: 'break-word',
-        }}
-      >
-        {m.content}
-        {m.offeredPrice != null && (
-          <div style={{
-            marginTop: 8,
-            padding: '6px 12px',
-            background: isCustomer ? 'rgba(255,255,255,0.16)' : isFinal ? '#fffbeb' : '#f0fdf4',
-            borderRadius: 9,
-            border: isCustomer ? 'none' : isFinal ? '1px solid #fde68a' : '1px solid #bbf7d0',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 7,
-          }}>
-            {isFinal ? <Tag size={13} style={{ color: '#b45309', flexShrink: 0 }} /> : <Tag size={13} style={{ color: isCustomer ? '#ffffff' : '#15803d', flexShrink: 0 }} />}
-            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: isCustomer ? 'rgba(255,255,255,0.85)' : isFinal ? '#b45309' : '#15803d', opacity: 0.9 }}>
-              {label}
-            </span>
-            <span style={{ flex: 1 }} />
-            <span style={{ fontSize: 15, fontWeight: 800, color: isCustomer ? '#ffffff' : isFinal ? '#b45309' : '#15803d', fontVariantNumeric: 'tabular-nums' }}>
-              {currencySymbol}{m.offeredPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-            </span>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// Calm, non-error terminal / notice card. Copy never leaks merchant internals.
-function StateCard({ icon, tone, title, body, children }: {
-  icon: ReactNode
-  tone: 'slate' | 'amber' | 'rose' | 'indigo' | 'green'
-  title: string
-  body?: string
-  children?: ReactNode
-}) {
-  const toneStyles: Record<string, { bg: string; border: string; fg: string; iconBg: string }> = {
-    slate: { bg: 'linear-gradient(180deg, #f8fafc, #f1f5f9)', border: '#e2e8f0', fg: '#334155', iconBg: '#e2e8f0' },
-    amber: { bg: 'linear-gradient(180deg, #fffbeb, #fef9ed)', border: '#fde68a', fg: '#92400e', iconBg: '#fef3c7' },
-    rose: { bg: 'linear-gradient(180deg, #fff7f7, #fef2f2)', border: '#fecaca', fg: '#b91c1c', iconBg: '#fee2e2' },
-    indigo: { bg: 'linear-gradient(180deg, #eef2ff, #f8faff)', border: '#e0e7ff', fg: '#4338ca', iconBg: '#e0e7ff' },
-    green: { bg: 'linear-gradient(180deg, #f0fdf4, #ecfdf5)', border: '#bbf7d0', fg: '#15803d', iconBg: '#dcfce7' },
-  }
-  const s = toneStyles[tone]
-  return (
-    <div style={{
-      padding: '16px 18px',
-      fontSize: 13.5,
-      color: s.fg,
-      background: s.bg,
-      borderRadius: 14,
-      border: `1px solid ${s.border}`,
-      textAlign: 'center',
-      lineHeight: 1.55,
-      animation: 'cgMsgIn 0.25s ease-out',
-    }}>
-      <div style={{
-        width: 42, height: 42, borderRadius: '50%', background: s.iconBg,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        margin: '0 auto 10px', color: s.fg,
-      }}>
-        {icon}
-      </div>
-      <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 4 }}>{title}</div>
-      {body && <div style={{ opacity: 0.92 }}>{body}</div>}
-      {children}
-    </div>
-  )
-}
-
-// Deal details tab — a professional, at-a-glance summary of the negotiation in a
-// single frame. Mirrors the merchant's own pricing levers without ever revealing
-// the hidden floor.
-function DealInfoPanel({ t, currencySymbol, originalPrice, finalPrice, decision, discountCode, productTitle, sessEnded }: {
-  t: (key: UiKey, vars?: Record<string, string | number>) => string
-  currencySymbol: string
-  originalPrice: number
-  finalPrice: number | null
-  decision: 'idle' | 'counter' | 'accept' | 'reject'
-  discountCode: string | null
-  productTitle?: string
-  sessEnded: boolean
-}) {
-  const savings = decision === 'accept' && finalPrice != null ? originalPrice - finalPrice : null
-  const discountPct = finalPrice != null && finalPrice > 0 ? Math.round((1 - finalPrice / originalPrice) * 100) : null
-  const rows: { label: string; value: ReactNode; tint?: 'green' | 'indigo' | 'neutral' }[] = [
-    {
-      label: 'Listed price',
-      value: <span style={{ fontWeight: 800 }}>{currencySymbol}{originalPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>,
-    },
-    decision === 'accept' && finalPrice != null
-      ? {
-          label: 'Deal price',
-          value: <span style={{ fontWeight: 800, color: '#15803d' }}>{currencySymbol}{finalPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}{discountPct != null ? ` (−${discountPct}%)` : ''}</span>,
-          tint: 'green' as const,
-        }
-      : {
-          label: 'Try your luck',
-          value: <span style={{ fontWeight: 700, color: '#4f46e5' }}>name a price that feels fair and I\u2019ll consider it</span>,
-          tint: 'indigo' as const,
-        },
-    {
-      label: 'How it works',
-      value: 'Chat with the shopkeeper, agree on a price, then get a personal discount code you apply at checkout.',
-      tint: 'neutral',
-    },
-    decision === 'accept' && discountCode
-      ? {
-          label: 'Your code',
-          value: <span style={{ fontWeight: 800, letterSpacing: 0.5, color: '#4f46e5' }}>{discountCode}</span>,
-          tint: 'indigo' as const,
-        }
-      : ({
-          label: 'Good to know',
-          value: 'No rush — the offer window stays open all session. Agree on a price and your personal code is issued.',
-          tint: 'neutral',
-        } as { label: string; value: ReactNode; tint?: 'green' | 'indigo' | 'neutral' }),
-  ].filter(Boolean) as { label: string; value: ReactNode; tint?: 'green' | 'indigo' | 'neutral' }[]
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 3 }}>
-        <div style={{
-          width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-          background: 'linear-gradient(135deg, #eef2ff, #e0e7ff)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <Tag size={18} style={{ color: '#4f46e5' }} />
-        </div>
-        <div>
-          <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a' }}>Deal details</div>
-          <div style={{ fontSize: 12, color: '#64748b' }}>{productTitle ? productTitle : 'This item'}</div>
-        </div>
-      </div>
-
-      {rows.map((r, i) => (
-        <div key={i} style={{
-          background: r.tint === 'green' ? 'linear-gradient(135deg,#f0fdf4,#ecfdf5)' : r.tint === 'indigo' ? '#f8faff' : '#fafbfc',
-          border: r.tint === 'green' ? '1px solid #bbf7d0' : r.tint === 'indigo' ? '1px solid #e0e7ff' : '1px solid #eef2f7',
-          borderRadius: 10,
-          padding: '10px 12px',
-        }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: '#94a3b8', marginBottom: 2 }}>
-            {r.label}
-          </div>
-          <div style={{ fontSize: 13.5, color: '#334155', lineHeight: 1.5 }}>{r.value}</div>
-        </div>
-      ))}
-
-      {!sessEnded && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 7,
-          fontSize: 12, color: '#64748b', padding: '3px 1px',
-        }}>
-          <ShieldCheck size={13} style={{ color: '#16a34a', flexShrink: 0 }} />
-          Price is guaranteed while you negotiate — it resets if you leave and come back.
-        </div>
-      )}
-    </div>
-  )
-}
-
-function QuickChip({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      type="button"
-      style={{
-        background: '#eef2ff',
-        border: '1px solid #c7d2fe',
-        color: '#4338ca',
-        borderRadius: 999,
-        padding: '9px 16px',
-        fontSize: 13,
-        fontWeight: 700,
-        cursor: disabled ? 'default' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-        transition: 'all 0.15s ease',
-        outline: 'none',
-        minHeight: 42,
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = '#4f46e5'; e.currentTarget.style.borderColor = '#4f46e5'; e.currentTarget.style.color = '#ffffff' }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.borderColor = '#c7d2fe'; e.currentTarget.style.color = '#4338ca' }}
-    >
-      {label}
-    </button>
-  )
-}
-
-function RecoBadge({ bg, fg, children }: { bg: string; fg: string; children: ReactNode }) {
-  return (
-    <span style={{
-      background: bg,
-      color: fg,
-      fontSize: 10.5,
-      fontWeight: 700,
-      borderRadius: 999,
-      padding: '2px 8px',
-    }}>
-      {children}
-    </span>
-  )
-}
-
-function RecoCard({
-  card,
-  currencySymbol: sym,
-  t,
-  onView,
-  onAdd,
-}: {
-  card: Recommendation
-  currencySymbol: string
-  t: (key: UiKey, vars?: Record<string, string | number>) => string
-  onView: (card: Recommendation) => void
-  onAdd: (card: Recommendation) => void
-}) {
-  const fmt = (n: number) => `${sym}${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
-  return (
-    <div style={{
-      display: 'flex',
-      gap: 10,
-      padding: 10,
-      background: '#fafbff',
-      border: '1px solid #e2e8f0',
-      borderRadius: 14,
-      alignItems: 'flex-start',
-    }}>
-      {card.imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={card.imageUrl}
-          alt={card.title}
-          loading="lazy"
-          style={{ width: 62, height: 62, borderRadius: 10, objectFit: 'cover', background: '#eef2ff', flexShrink: 0 }}
-        />
-      ) : (
-        <div style={{
-          width: 62, height: 62, borderRadius: 10, background: '#eef2ff', flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
-        }}>
-          🛍️
-        </div>
-      )}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontWeight: 700, fontSize: 13.5, color: '#1e293b', lineHeight: 1.35,
-          display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden',
-        }}>
-          {card.title}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 800, fontSize: 15, color: '#15803d' }}>{fmt(card.price)}</span>
-          {card.compareAtPrice != null && card.compareAtPrice > card.price && (
-            <span style={{ fontSize: 12.5, color: '#94a3b8', textDecoration: 'line-through' }}>{fmt(card.compareAtPrice)}</span>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 5, marginTop: 4, flexWrap: 'wrap' }}>
-          {card.onSale && <RecoBadge bg="#dcfce7" fg="#166534">{t('onSale')}</RecoBadge>}
-          {card.budgetFit === 'over' && <RecoBadge bg="#fef3c7" fg="#b45309">{t('overBudget')}</RecoBadge>}
-          {!card.available && <RecoBadge bg="#fff1f2" fg="#be123c">{t('notice')}</RecoBadge>}
-        </div>
-        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-          <a
-            href={card.productUrl ?? '#'}
-            target="_blank"
-            rel="noreferrer"
-            onClick={() => onView(card)}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #c7d2fe',
-              color: '#4338ca',
-              borderRadius: 9,
-              padding: '8px 12px',
-              fontSize: 12.5,
-              fontWeight: 700,
-              textDecoration: 'none',
-              outline: 'none',
-            }}
-          >
-            {t('viewProduct')}
-          </a>
-          <button
-            type="button"
-            onClick={() => onAdd(card)}
-            disabled={!card.available}
-            style={{
-              background: 'linear-gradient(135deg,#6366f1,#4f46e5)',
-              border: 'none',
-              color: '#ffffff',
-              borderRadius: 9,
-              padding: '8px 12px',
-              fontSize: 12.5,
-              fontWeight: 700,
-              cursor: card.available ? 'pointer' : 'default',
-              opacity: card.available ? 1 : 0.5,
-              outline: 'none',
-            }}
-          >
-            {t('addToCart')}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}

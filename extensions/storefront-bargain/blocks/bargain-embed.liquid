@@ -1,8 +1,9 @@
 {% comment %}
-  CartGain Bargain — app embed.
-  Works on ALL themes (including legacy / non-OS 2.0) where app blocks show
-  "not found". Merchants enable it under: Theme settings -> App embeds.
-  Shows a floating bargaining widget on product and cart pages.
+  CartGain Bargain — app embed (floating launcher).
+  Fallback for themes where app blocks can't be placed inline. Merchants enable
+  it under: Theme settings → App embeds. Renders a floating "Make an offer"
+  badge that opens the SAME fixed drawer as the product/cart blocks (controller:
+  bargain.js). Works on every theme including legacy / non-OS 2.0.
 {% endcomment %}
 
 {%- if block.settings.enable_product and template contains 'product' -%}
@@ -24,7 +25,6 @@
     | append: '&currency=' | append: currency
     | append: '&image=' | append: img_enc -%}
 {%- elsif block.settings.enable_cart and template == 'cart' -%}
-  {%- assign embed_mode = 'cart' -%}
   {%- assign first_item = cart.items[0] -%}
   {%- if first_item -%}
     {%- assign iprice = first_item.final_price | times: 1.0 | divided_by: 100 -%}
@@ -43,36 +43,30 @@
     | append: '&image=' | append: iimg_enc -%}
 {%- endif -%}
 
-{%- if widget_src and request.design_mode -%}
-<div class="cg-bargain-embed" data-cg-bargain-embed>
-  <div class="cg-bargain-embed__badge">CartGain Bargain (live preview)</div>
-  <div class="cg-bargain-embed__panel">
-    <div class="cg-bargain-placeholder" style="width:100%;height:120px;display:flex;align-items:center;justify-content:center;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:12px;text-align:center;">
-      <div style="color:#64748b;font-family:system-ui,sans-serif;font-size:13px;">
-        Floating bargaining widget — preview disabled in theme editor. Appears on the live storefront.
-      </div>
-    </div>
-  </div>
-</div>
-{%- elsif widget_src -%}
+{%- if widget_src -%}
 <div
-  class="cg-bargain-embed cg-bargain-embed--{{ embed_mode }} cg-bargain-embed--{{ block.settings.position | default: 'bottom-right' }}"
-  data-cg-bargain-embed
-  data-mode="{{ embed_mode }}"
-  data-heading="{{ block.settings.heading | escape }}"
+  class="cg-bargain-embed cg-bargain-embed--{{ block.settings.position | default: 'bottom-right' }}"
+  data-cg-bargain-root
+  data-cg-src="{{ widget_src | escape }}"
+  data-cg-variant=""
+  data-cg-variants=""
+  data-accent="#1d4ed8"
+  style="--cg-accent: #1d4ed8;"
 >
-  <div class="cg-bargain-embed__badge">{{ block.settings.heading }}</div>
-  <div class="cg-bargain-embed__panel">
-    <iframe
-      class="cg-bargain-frame"
-      data-cg-bargain
-      src="{{ widget_src }}"
-      title="CartGain price negotiation"
-      loading="lazy"
-      style="border:0;width:100%;height:200px;display:block;"
-      allow="clipboard-write; clipboard-read"
-    ></iframe>
-  </div>
+  {% if request.design_mode %}
+    <div class="cg-bargain-embed__badge cg-bargain-embed__badge--preview">CartGain Bargain (launcher — disabled in theme editor)</div>
+  {% else %}
+    <button
+      type="button"
+      class="cg-bargain-embed__badge"
+      data-cg-bargain-open
+      aria-haspopup="dialog"
+      aria-expanded="false"
+    >
+      <span aria-hidden="true">🤝</span>
+      <span>{{ block.settings.heading }}</span>
+    </button>
+  {% endif %}
 </div>
 {%- endif -%}
 
@@ -80,7 +74,7 @@
 {
   "name": "CartGain Bargain",
   "target": "body",
-  "javascript": "bargain-embed.js",
+  "javascript": "bargain.js",
   "stylesheet": "bargain.css",
   "settings": [
     {
@@ -91,7 +85,7 @@
       "type": "text",
       "id": "heading",
       "label": "Widget label",
-      "default": "Bargain Now"
+      "default": "Make an offer"
     },
     {
       "type": "select",

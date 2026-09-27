@@ -11,9 +11,10 @@ export const metadata: Metadata = {
 }
 
 // Public storefront embed — iframed on Shopify product + cart pages (no auth).
-// Query params: shop, product, variant, price, currency, title, image, mode, linkout
-// The store is resolved server-side by the Shopify shop domain, and the widget
-// is driven by the merchant's saved BargainConfig (persona, language, enabled).
+// Query params: shop, product, variant, price, currency, title, image, mode,
+// linkout, view. The store is resolved server-side by the Shopify shop domain,
+// and the widget is driven by the merchant's saved BargainConfig (persona,
+// language, enabled).
 export default async function EmbedPage({
   searchParams,
 }: {
@@ -24,6 +25,14 @@ export default async function EmbedPage({
     return typeof v === 'string' ? v : undefined
   }
 
+  const safeDecode = (value: string): string => {
+    try {
+      return decodeURIComponent(value)
+    } catch {
+      return value
+    }
+  }
+
   const shop = sp('shop')
   const shopifyProductId = sp('product')
   const variantId = sp('variant')
@@ -32,6 +41,14 @@ export default async function EmbedPage({
   const title = sp('title')
   const image = sp('image')
   const mode = sp('mode') === 'cart' ? 'cart' : 'item'
+  // Drawer mode: the theme controller hosts the iframe in a fixed right-side
+  // drawer / full-screen mobile sheet and owns open/close + variant sync.
+  const view = sp('view') === 'drawer' ? 'drawer' : 'inline'
+
+  // Shopify themes url_encode these params when they build the embed src —
+  // decode once here so the widget never renders percent-encoded text/URLs.
+  const decodedTitle = title ? safeDecode(title) : title
+  const decodedImage = image ? safeDecode(image) : image
 
   let storeId: string | null = null
   let storeFound = false
@@ -103,12 +120,13 @@ export default async function EmbedPage({
       variantId={variantId}
       originalPrice={price}
       currency={currency}
-      productTitle={title || 'this item'}
-      image={image}
+      productTitle={decodedTitle || 'this item'}
+      image={decodedImage}
       language={language}
       persona={persona}
       mode={mode}
       linkout={sp('linkout')}
+      view={view}
       embedded
     />
   )

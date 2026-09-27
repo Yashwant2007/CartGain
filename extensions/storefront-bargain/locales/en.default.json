@@ -5,7 +5,7 @@
       "settings": {
         "heading": {
           "label": "Heading",
-          "default": "Want a better price?"
+          "default": "Make an offer"
         },
         "accent": {
           "label": "Accent color",
@@ -18,11 +18,29 @@
       "settings": {
         "heading": {
           "label": "Heading",
-          "default": "Need a better total?"
+          "default": "Make an offer"
         },
         "accent": {
           "label": "Accent color",
           "default": "#1d4ed8"
+        }
+      }
+    },
+    "bargain-embed": {
+      "name": "CartGain Bargain",
+      "settings": {
+        "heading": {
+          "label": "Widget label",
+          "default": "Make an offer"
+        },
+        "position": {
+          "label": "Position"
+        },
+        "enable_product": {
+          "label": "Show on product pages"
+        },
+        "enable_cart": {
+          "label": "Show on cart page"
         }
       }
     }

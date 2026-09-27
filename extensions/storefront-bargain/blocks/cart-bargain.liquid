@@ -1,7 +1,9 @@
 {% comment %}
-  CartGain Bargain — cart page block.
-  Lets shoppers bargain either a cart line item or the whole cart total
-  (order-scoped code) right before they check out — no payment yet.
+  CartGain Bargain — cart page block (drawer).
+  Lets shoppers bargain a cart line item (drawer negotiation) right before
+  checkout. The CTA opens the same fixed drawer as the product block; the
+  widget negotiates the first cart line as the anchor item. No floors of any
+  kind are embedded in the page — the server is the only source of price truth.
 {% endcomment %}
 
 {% assign currency = cart.currency.iso_code | default: shop.currency %}
@@ -24,29 +26,36 @@
   | append: '&image=' | append: iimg_enc
 %}
 
-<div class="cg-bargain-block" data-cg-bargain-root {{ block.shopify_attributes }}>
+<div
+  class="cg-bargain-block"
+  data-cg-bargain-root
+  {{ block.shopify_attributes }}
+  data-cg-src="{{ widget_src | escape }}"
+  data-cg-variant="{{ first_item.variant.id }}"
+  data-cg-variants=""
+  data-accent="{{ block.settings.accent | default: '#1d4ed8' | escape }}"
+  style="--cg-accent: {{ block.settings.accent | default: '#1d4ed8' }};"
+>
   {% if request.design_mode %}
-    <!-- Theme editor preview: show static placeholder -->
-    <div class="cg-bargain-placeholder" style="border:0;width:100%;height:220px;display:flex;align-items:center;justify-content:center;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:16px;text-align:center;">
-      <div style="color:#64748b;font-family:system-ui,sans-serif;">
-        <div style="font-size:24px;margin-bottom:8px;">🤝</div>
-        <div style="font-weight:600;color:#334155;margin-bottom:4px;">CartGain Cart Bargain Widget</div>
-        <div style="font-size:13px;color:#94a3b8;">Widget loads on live storefront.<br>Preview disabled in theme editor.</div>
-      </div>
+    <div class="cg-bargain-cta cg-bargain-cta--preview">
+      <span class="cg-bargain-cta__txt">{{ block.settings.heading }}</span>
+      <span class="cg-bargain-cta__chev" aria-hidden="true">›</span>
     </div>
+    <p class="cg-bargain-note">CartGain Cart Bargain — opens the negotiation drawer on the live storefront.</p>
   {% else %}
-    <!-- Live storefront: load actual widget -->
-    <iframe
-      class="cg-bargain-frame"
-      data-cg-bargain
-      src="{{ widget_src }}"
-      title="CartGain price negotiation"
-      loading="lazy"
-      style="border:0;width:100%;height:220px;display:block;"
-      allow="clipboard-write; clipboard-read"
-      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-      referrerpolicy="origin"
-    ></iframe>
+    <button
+      type="button"
+      class="cg-bargain-cta"
+      data-cg-bargain-open
+      aria-haspopup="dialog"
+      aria-expanded="false"
+    >
+      <svg class="cg-bargain-cta__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+      </svg>
+      <span class="cg-bargain-cta__txt">{{ block.settings.heading }}</span>
+      <span class="cg-bargain-cta__chev" aria-hidden="true">›</span>
+    </button>
   {% endif %}
 </div>
 
@@ -64,13 +73,13 @@
     },
     {
       "type": "paragraph",
-      "content": "Lets shoppers negotiate the cart total or a chosen item before checkout. Accepted deals create a real Shopify discount code."
+      "content": "Lets shoppers negotiate the price of a cart item before checkout. Accepted deals create a real Shopify discount code."
     },
     {
       "type": "text",
       "id": "heading",
-      "label": "Heading",
-      "default": "Need a better total?"
+      "label": "Button label",
+      "default": "Make an offer"
     },
     {
       "type": "color",

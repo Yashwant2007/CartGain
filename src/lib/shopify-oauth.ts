@@ -8,8 +8,8 @@ import crypto from 'crypto'
  *   checkout REST endpoints CartGain uses.
  * - read_discounts / write_discounts: create and manage recovery discount
  *   codes (discountCodeBasicCreate).
- * - write_webhooks / read_webhooks: register/update Shopify webhooks at
- *   install time (including privacy/redaction topics).
+ * - read_webhooks / write_webhooks are NOT requested — Shopify deprecated those
+ *   scopes and webhook management is implicit for the app.
  * Not requested: write_customers, write_orders, write_products,
  * write_draft_orders, read_draft_orders, fulfillment scopes — CartGain does
  * not write customers/orders/products and never uses draft orders.
@@ -22,8 +22,6 @@ export const SHOPIFY_OAUTH_SCOPES = [
   'read_products',
   'read_discounts',
   'write_discounts',
-  'write_webhooks',
-  'read_webhooks',
 ].join(',')
 
 export function buildShopifyOAuthUrl(opts: {

@@ -7,7 +7,12 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
+    // .tsx components render with react-jsx (jsx:preserve in the app config is
+    // for Next's SWC compiler, not ts-jest).
+    '^.+\\.tsx$': ['ts-jest', {
+      tsconfig: 'tsconfig.jest.json',
+    }],
+    '^.+\\.ts$': ['ts-jest', {
       tsconfig: 'tsconfig.json',
     }],
   },

@@ -1,60 +1,188 @@
-.cg-bargain-block {
-  width: 100%;
-  margin: 8px 0;
+/* ════════════════════════════════════════════════════════════════════════
+   CartGain Bargain — storefront controller styles (drawer / launcher / CTA)
+   Scoped tightly under .cg-bargain-* so it never leaks into the theme and the
+   theme never bleeds into it. A small, deliberate z-index scale is used so the
+   drawer stacks above theme content without stomping on other overlays:
+   launcher badge 1005 · drawer backdrop 10000 · drawer 10001.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.cg-bargain-block,
+.cg-bargain-embed,
+.cg-bargain-backdrop,
+.cg-bargain-drawer {
+  box-sizing: border-box;
+}
+.cg-bargain-block *,
+.cg-bargain-drawer *,
+.cg-bargain-embed * {
+  box-sizing: border-box;
 }
 
-.cg-bargain-frame {
-  border-radius: 12px;
-  overflow: hidden;
-  background: transparent;
-  transition: height 0.2s ease;
-}
-
-/* ---- App embed (works on any theme) ---- */
-.cg-bargain-embed {
-  position: fixed;
-  z-index: 99999;
-}
-.cg-bargain-embed--bottom-right { right: 16px; bottom: 16px; }
-.cg-bargain-embed--bottom-left  { left: 16px; bottom: 16px; }
-
-.cg-bargain-embed__badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  background: #ffffff;
-  color: #4f46e5;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1;
-  padding: 14px 18px;
-  border-radius: 999px;
-  border: 2px solid #4f46e5;
-  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
-  transition: transform 0.15s ease;
-  user-select: none;
-}
-.cg-bargain-embed__badge:hover { transform: scale(1.04); }
-
-.cg-bargain-embed__panel {
-  display: none;
-  width: min(360px, calc(100vw - 32px));
-  border-radius: 14px;
-  overflow: hidden;
-  background: transparent;
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
-  margin-bottom: 10px;
-  border: 1px solid #e2e8f0;
-}
-.cg-bargain-embed.is-open .cg-bargain-embed__badge { display: none; }
-.cg-bargain-embed.is-open .cg-bargain-embed__panel { display: block; }
-
-/* Hidden state: the store has bargaining disabled (cg_empty received) — hide
-   the whole widget so no placeholder/badge appears on the customer's theme. */
-.cg-bargain-embed.is-hidden,
+/* Blocks report their accent via an inline --cg-accent custom property. */
 .cg-bargain-block.is-hidden {
   display: none !important;
 }
 
+/* ── CTA button (product + cart blocks) ─────────────────────────────────── */
+.cg-bargain-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 18px;
+  margin: 4px 0 8px;
+  border: 1px solid var(--cg-accent, #1d4ed8);
+  border-radius: 10px;
+  background: var(--cg-accent, #1d4ed8);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  text-align: center;
+  -webkit-tap-highlight-color: transparent;
+  transition: filter 160ms ease, transform 160ms ease;
+}
+.cg-bargain-cta:hover,
+.cg-bargain-cta:focus-visible {
+  filter: brightness(1.07);
+}
+.cg-bargain-cta:active {
+  transform: translateY(1px);
+}
+.cg-bargain-cta:focus-visible {
+  outline: 2px solid var(--cg-accent, #1d4ed8);
+  outline-offset: 2px;
+}
+.cg-bargain-cta__ic {
+  flex: 0 0 auto;
+}
+.cg-bargain-cta__chev {
+  margin-left: auto;
+  font-size: 18px;
+  line-height: 1;
+  opacity: 0.85;
+}
+.cg-bargain-cta--preview {
+  pointer-events: none;
+  opacity: 0.85;
+}
+.cg-bargain-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.7;
+}
+
+/* ── Drawer + backdrop ──────────────────────────────────────────────────── */
+.cg-bargain-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.48);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 220ms ease, visibility 220ms ease;
+}
+.cg-bargain-backdrop.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.cg-bargain-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10001;
+  width: min(430px, 94vw);
+  background: #fff;
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.18);
+  transform: translateX(100%);
+  visibility: hidden;
+  transition: transform 260ms ease, visibility 260ms ease;
+  overflow: hidden;
+}
+.cg-bargain-drawer.is-open {
+  transform: translateX(0);
+  visibility: visible;
+}
+
+.cg-bargain-frame-wrap,
+.cg-bargain-frame {
+  width: 100%;
+  height: 100%;
+}
+.cg-bargain-drawer .cg-bargain-frame {
+  display: block;
+  border: 0;
+}
+
+/* ── Floating launcher (app embed fallback) ─────────────────────────────── */
+.cg-bargain-embed {
+  position: fixed;
+  z-index: 1005;
+}
+.cg-bargain-embed--bottom-right {
+  right: 18px;
+  bottom: 18px;
+}
+.cg-bargain-embed--bottom-left {
+  left: 18px;
+  bottom: 18px;
+}
+.cg-bargain-embed__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--cg-accent, #1d4ed8);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+  -webkit-tap-highlight-color: transparent;
+}
+.cg-bargain-embed__badge:hover,
+.cg-bargain-embed__badge:focus-visible {
+  filter: brightness(1.07);
+}
+.cg-bargain-embed__badge:focus-visible {
+  outline: 2px solid var(--cg-accent, #1d4ed8);
+  outline-offset: 2px;
+}
+.cg-bargain-embed__badge--preview {
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* ── Mobile: full-screen sheet with safe-area padding ───────────────────── */
+@media (max-width: 767px) {
+  .cg-bargain-drawer {
+    width: 100%;
+    max-width: 100vw;
+  }
+  .cg-bargain-drawer .cg-bargain-frame-wrap {
+    padding:
+      env(safe-area-inset-top, 0px)
+      env(safe-area-inset-right, 0px)
+      env(safe-area-inset-bottom, 0px)
+      env(safe-area-inset-left, 0px);
+  }
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .cg-bargain-backdrop,
+  .cg-bargain-drawer {
+    transition: none;
+  }
+}
