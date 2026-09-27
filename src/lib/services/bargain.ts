@@ -811,6 +811,34 @@ export function buildOpeningMessage(ctx: NegotiationContext): string {
 // what the customer wrote and pivot warmly back to the deal, citing only the
 // store's verified product description. A true cold-open (no prior turns)
 // still deserves the warm opening message.
+/**
+ * Loud, countable signal that a shopper is being served a template instead of
+ * a real negotiation.
+ *
+ * This is the failure that was invisible for far too long: when the primary
+ * provider's quota trips, `getAiClient()` returns null and every conversation
+ * silently degrades to `chatFallback` — canned lines like "Samajh gaya! listed
+ * price X hai" — for the whole breaker window (15 min per warm instance). The
+ * storefront looked alive, the session worked, nothing threw, and the only
+ * symptom was that the bot "felt off". Nobody could tell the difference between
+ * a deliberately terse persona and a dead model.
+ *
+ * Never log message text or customer PII here — reason and tier only.
+ */
+function reportAiDegradation(reason: 'ai_unavailable' | 'parse_fallback' | 'all_tiers_failed', detail?: string): void {
+  console.error(
+    `[BARGAIN_AI_DEGRADED] reason=${reason}${detail ? ` detail=${detail}` : ''} — serving template replies; shoppers are NOT getting a live negotiation`,
+  )
+  try {
+    // Fire-and-forget: never block or throw on the negotiation hot path.
+    void import('@/lib/analytics/track')
+      .then(({ track }) => track({ name: 'cartgain_bargain_ai_degraded', properties: { reason, detail: detail ?? null } }))
+      .catch(() => {})
+  } catch {
+    /* observability must never break a negotiation */
+  }
+}
+
 export function chatFallback(customerMessage: string, ctx: NegotiationContext, historyLength = 0): string {
   const item = ctx.productTitle ? `this ${ctx.productTitle}` : 'this item'
   const price = `${ctx.currencySymbol}${ctx.originalPrice.toFixed(2)}`
@@ -905,6 +933,21 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
       friendly_shopkeeper: `You're most welcome, friend! 😊 Whenever you're ready, just tell me the price you had in mind and I'll do my best.`,
     }
     return thanks[ctx.persona]
+  }
+
+  // Generic acknowledgement. Once the listed price has already been said (any
+  // prior turn mentioned it, or the opening did), repeating it every reply is
+  // the single biggest reason the fallback read as a bot: live transcripts
+  // showed "Samajh gaya! listed price $600" straight after a reply that had
+  // already quoted $600. Acknowledge the customer and go straight back to the
+  // ask — the number is what matters, and they already know the price.
+  if (historyLength > 0) {
+    const backToNumber: Record<Persona, string> = {
+      strict_negotiator: `Understood. Give me your number and I'll tell you where I land.`,
+      playful_friend: `Got it 😄 Fair enough. So — what's the number you're thinking? I'll be honest with you.`,
+      friendly_shopkeeper: `I hear you, friend 🙂 Tell me the figure you had in mind and I'll tell you straight where I can get to.`,
+    }
+    return backToNumber[ctx.persona]
   }
 
   if (ctx.language === 'hinglish') {
@@ -1713,6 +1756,7 @@ export async function negotiateStep(
 
   const resolved = getAiClient()
   if (!resolved) {
+    reportAiDegradation('ai_unavailable', 'no provider tier available')
     if (customerOffer != null) return ruleBasedDecision(customerOffer, ctx)
     return { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', tactic: 'ai_unavailable', sentiment: 'neutral' }
   }
@@ -1758,6 +1802,7 @@ export async function negotiateStep(
       parsed = JSON.parse(raw)
     } catch {
       // AI returned invalid JSON — fall back to rules
+      reportAiDegradation('parse_fallback', `tier=${tier}`)
       if (customerOffer != null) return ruleBasedDecision(customerOffer, ctx)
       return { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', tactic: 'parse_fallback', sentiment: 'neutral' }
     }
@@ -1853,6 +1898,7 @@ export async function negotiateStep(
     if (retried && retried.tier !== tier) {
       return negotiateStep(ctx, history, customerMessage, customerOffer, sessionId)
     }
+    reportAiDegradation('all_tiers_failed', `tier=${tier}`)
     return customerOffer != null
       ? ruleBasedDecision(customerOffer, ctx)
       : { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', tactic: 'conversational', sentiment: 'neutral' }

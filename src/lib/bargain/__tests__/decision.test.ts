@@ -241,6 +241,22 @@ describe('negotiateStep (AI unavailable — rule-based fallback)', () => {
     expect(result.decision).toBe('chat')
     expect(result.reply).toContain('Welcome')
   })
+
+  it('LOUDLY reports that the shopper is being served a template, not a live AI', async () => {
+    // This is the failure that ran silently for so long: quota trips, every
+    // conversation degrades to canned lines, nothing throws, and the storefront
+    // just "feels off". If this assertion is ever removed the bug comes back
+    // invisibly.
+    const err = jest.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await negotiateStep(baseCtx(), [], 'i am a student, can you do better', undefined)
+      const logged = err.mock.calls.map((c) => String(c[0])).join('\n')
+      expect(logged).toContain('BARGAIN_AI_DEGRADED')
+      expect(logged).toContain('ai_unavailable')
+    } finally {
+      err.mockRestore()
+    }
+  })
 })
 
 describe('negotiateStep (AI available — safety overrides)', () => {
@@ -596,6 +612,27 @@ describe('Edge Cases - Persona Consistency', () => {
     expect(strict).toMatch(/Present your offer|Welcome\./)
     expect(playful).toMatch(/hello there|opening bid/i)
     expect(friendly.toLowerCase()).toContain('friend')
+  })
+
+  it('mid-conversation acknowledgement asks for a number WITHOUT re-quoting the listed price', () => {
+    // Live storefront transcript: "…listed price $600.00 hai…" came back turn
+    // after turn, immediately after $600 had already been quoted. The shopper
+    // reads that as a bot, not a shopkeeper. Past the opening, the price is
+    // known — the reply should just ask for their number.
+    const personas = ['strict_negotiator', 'playful_friend', 'friendly_shopkeeper'] as const
+    for (const persona of personas) {
+      const ctx = { ...baseCtx(), persona } as NegotiationContext
+      const reply = chatFallback('i am a student and it is too expensive', ctx, 2)
+      expect(reply).not.toMatch(/\d/)
+      expect(reply).toMatch(/number|figure|your offer/i)
+    }
+  })
+
+  it('still quotes the listed price on a genuine cold open', () => {
+    const ctx = { ...baseCtx(), persona: 'friendly_shopkeeper' } as NegotiationContext
+    const reply = chatFallback('do you have this in stock?', ctx, 0)
+    // A first turn with no prior history earns the warm, price-carrying open.
+    expect(reply).toMatch(/\d/)
   })
 
   it('post-deal product question confirms the locked deal — never re-quotes or renegotiates', () => {

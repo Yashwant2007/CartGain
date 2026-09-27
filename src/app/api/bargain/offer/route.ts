@@ -265,29 +265,79 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Atomic attempt claim — prevents race conditions from concurrent requests
-    const claimResult = await prisma.bargainSession.updateMany({
-      where: {
-        id: bargainSession.id,
-        status: 'active',
-        attemptsUsed: bargainSession.attemptsUsed,
-      },
-      data: { attemptsUsed: { increment: 1 } },
-    })
-    if (claimResult.count === 0) {
-      // Another request already claimed this attempt or status changed
-      const refreshed = await prisma.bargainSession.findUnique({ where: { id: bargainSession.id }, select: { status: true, attemptsUsed: true } })
-      if (!refreshed || refreshed.status !== 'active') {
-        return NextResponse.json({ message: `Session is ${refreshed?.status ?? 'gone'}.`, terminal: true, status: refreshed?.status }, { status: 409 })
+    // A turn that names no price is CHAT ("tell me about this product", "I'm a
+    // student, it's too expensive"), not a negotiation round. Charging chat
+    // against the offer budget is what killed real sessions: with
+    // maxAttempts=3, three small-talk messages consumed the whole budget, so
+    // the customer's first ACTUAL number arrived to find `attemptsExhausted`
+    // and was refused without ever reaching the model. The budget exists to
+    // bound negotiation rounds, so only a turn that quotes a price claims one.
+    // Small talk is still bounded by the per-IP rate limit at the top of this
+    // route (30/min), so this cannot be used to farm free model calls.
+    const isOfferTurn = customerOffer != null
+
+    if (isOfferTurn) {
+      // Atomic attempt claim — prevents race conditions from concurrent requests
+      const claimResult = await prisma.bargainSession.updateMany({
+        where: {
+          id: bargainSession.id,
+          status: 'active',
+          attemptsUsed: bargainSession.attemptsUsed,
+        },
+        data: { attemptsUsed: { increment: 1 } },
+      })
+      if (claimResult.count === 0) {
+        // Another request already claimed this attempt or status changed
+        const refreshed = await prisma.bargainSession.findUnique({ where: { id: bargainSession.id }, select: { status: true, attemptsUsed: true } })
+        if (!refreshed || refreshed.status !== 'active') {
+          return NextResponse.json({ message: `Session is ${refreshed?.status ?? 'gone'}.`, terminal: true, status: refreshed?.status }, { status: 409 })
+        }
+        return NextResponse.json({ message: 'Too fast — someone else just used this attempt. Please try again.', terminal: false }, { status: 429 })
       }
-      return NextResponse.json({ message: 'Too fast — someone else just used this attempt. Please try again.', terminal: false }, { status: 429 })
     }
 
-    const attemptsUsed = bargainSession.attemptsUsed + 1
+    const attemptsUsed = isOfferTurn ? bargainSession.attemptsUsed + 1 : bargainSession.attemptsUsed
     const attemptsRemaining = Math.max(0, config.maxAttempts - attemptsUsed)
-    const attemptsExhausted = attemptsUsed >= config.maxAttempts
+    const attemptsExhausted = isOfferTurn && attemptsUsed >= config.maxAttempts
 
     if (attemptsExhausted && attemptsRemaining <= 0) {
+      // The budget is spent, but the customer just put a NUMBER on the table and
+      // it still has to be judged. Refusing blind threw away sales: a shopper on
+      // their last round who offered ABOVE the floor got "you've used all your
+      // attempts" instead of a deal. So we evaluate deterministically (no model
+      // call — the budget is the cost bound) and either close at their number
+      // or refuse with one last, genuinely final counter.
+      if (customerOffer != null && customerOffer >= minPrice) {
+        const finalPrice = Math.round(Math.min(customerOffer, bargainSession.originalPrice) * 100) / 100
+        const acceptReply =
+          `Done! ${currencySymbol}${finalPrice.toFixed(2)} works for me — that's my last round, so let's lock it in. Tap "Accept" and your discount code is generated.`
+        await prisma.$transaction([
+          prisma.bargainMessage.create({
+            data: { sessionId: bargainSession.id, role: 'customer', content: data.message, offeredPrice: customerOffer },
+          }),
+          prisma.bargainMessage.create({
+            data: {
+              sessionId: bargainSession.id, role: 'ai', content: acceptReply, offeredPrice: finalPrice,
+              metadata: { decision: 'accept', tactic: 'accept_final_round', reason: 'budget_spent_but_acceptable' } as any,
+            },
+          }),
+          prisma.bargainSession.update({
+            where: { id: bargainSession.id },
+            data: { status: 'accepted', currentOffer: finalPrice, finalPrice },
+          }),
+        ])
+        return NextResponse.json({
+          reply: acceptReply,
+          decision: 'accept',
+          counterOffer: finalPrice,
+          finalPrice,
+          sessionStatus: 'accepted',
+          sessionId: bargainSession.id,
+          floorReached: true,
+          attemptsUsed,
+        })
+      }
+
       const rejectReply = uiText(lang, 'attempts_exhausted')
       await prisma.$transaction([
         prisma.bargainMessage.create({
@@ -304,7 +354,7 @@ export async function POST(request: NextRequest) {
           data: { status: 'rejected', currentOffer: customerOffer ?? bargainSession.currentOffer },
         }),
       ])
-      return NextResponse.json({ reply: rejectReply, decision: 'reject', sessionStatus: 'rejected' })
+      return NextResponse.json({ reply: rejectReply, decision: 'reject', sessionStatus: 'rejected', attemptsUsed })
     }
 
     const ctx: NegotiationContext = {
@@ -422,8 +472,11 @@ export async function POST(request: NextRequest) {
     // ── NORMAL NEGOTIATION (incl. bulk) ──
     const result = await negotiateStep(ctx, history, data.message, customerOffer ?? undefined, bargainSession.id)
 
-    // If abuse was detected and doesn't consume an attempt, don't count it
-    const isAbuseNoConsume = (result.metadata as any)?.abuse === true &&
+    // If abuse was detected and doesn't consume an attempt, don't count it.
+    // Only meaningful on an offer turn: a chat turn never incremented, so
+    // "rolling back" would corrupt the counter downward.
+    const isAbuseNoConsume = isOfferTurn &&
+      (result.metadata as any)?.abuse === true &&
       (result.metadata as any)?.consumeAttempt === false
 
     const sessionStatus =
