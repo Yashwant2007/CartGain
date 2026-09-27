@@ -36,6 +36,7 @@ import {
   detectSystemPromptLeak,
   type NegotiationContext,
 } from '../src/lib/services/bargain'
+import { neutralSignals } from '../src/lib/bargain/behavior'
 
 loadEnv('.env', '.env.local')
 
@@ -56,7 +57,7 @@ const ctx = (over: Partial<NegotiationContext> = {}): NegotiationContext => ({
   ...over,
 })
 
-const analysis = { behavior: 'first_timer' as const, offTopicCount: 0, concessionCount: 0, lastAIOffer: null }
+const analysis = { behavior: 'first_timer' as const, offTopicCount: 0, concessionCount: 0, lastAIOffer: null, signals: neutralSignals() }
 
 let failures = 0
 let aiCalls = 0

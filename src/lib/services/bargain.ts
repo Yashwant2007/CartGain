@@ -9,6 +9,7 @@ import {
 } from '@/lib/bargain/engine'
 import { productContextToPromptBlock, type ProductContext } from '@/lib/bargain/product-context'
 import { shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
+import { analyzeSocialSignals, socialSignalsToPromptBlock, type SocialSignals } from '@/lib/bargain/behavior'
 
 // Model for the negotiation agent. Defaults to the full gpt-4o for best
 // negotiation quality; set BARGAIN_MODEL=gpt-4o-mini to cut OpenAI cost.
@@ -1172,11 +1173,20 @@ type CustomerBehavior =
   | 'combo_tactician'
   | 'unknown'
 
+export interface ConversationAnalysis {
+  behavior: CustomerBehavior
+  offTopicCount: number
+  concessionCount: number
+  lastAIOffer: number | null
+  /** Deterministic conversational-warmth signals (name, tone, emotion, …). */
+  signals: SocialSignals
+}
+
 function analyzeConversation(
   history: { role: 'customer' | 'ai'; content: string; offeredPrice?: number }[],
   customerMessage: string,
   ctx: NegotiationContext,
-): { behavior: CustomerBehavior; offTopicCount: number; concessionCount: number; lastAIOffer: number | null } {
+): ConversationAnalysis {
   const customerMessages = history
     .filter(m => m.role === 'customer')
     .map(m => m.content.toLowerCase())
@@ -1248,7 +1258,18 @@ function analyzeConversation(
     behavior = 'gradual_approach'
   }
 
-  return { behavior, offTopicCount, concessionCount, lastAIOffer }
+  return {
+    behavior,
+    offTopicCount,
+    concessionCount,
+    lastAIOffer,
+    signals: analyzeSocialSignals({
+      history,
+      currentMessage: customerMessage,
+      // Product/store words must never be misread as a self-introduced name.
+      exclusions: [ctx.productTitle, ctx.storeName].filter((s): s is string => typeof s === 'string'),
+    }),
+  }
 }
 
 // ── Build behavioral strategy hint ──
@@ -1501,6 +1522,14 @@ export function buildSystemPrompt(
   // Behavioral strategy
   if (behaviorHint) {
     contextParts.push(behaviorHint)
+  }
+
+  // Conversational warmth (name, tone, emotion, urgency, re-asks) — read and
+  // mirror, never classified by the model itself. Only populated when real
+  // signals exist, so a neutral message adds nothing to the prompt.
+  const signalsPromptBlock = socialSignalsToPromptBlock(conversationAnalysis.signals)
+  if (signalsPromptBlock) {
+    contextParts.push('\n' + signalsPromptBlock)
   }
 
   // Merchant-chosen negotiation temperament (overrides persona's default pace)

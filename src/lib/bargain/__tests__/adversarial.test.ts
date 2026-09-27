@@ -13,6 +13,7 @@ import { buildExecutablePrice } from '../../financial-safety'
 import { clampOfferToSafety } from '../engine'
 import { detectFloorLeak, detectPercentFloorLeak, detectSystemPromptLeak, buildSystemPrompt, type NegotiationContext } from '../../services/bargain'
 import { detectCouponMention, bargainCampaignStatus, detectMultiProductRequest, couponMentionedInMessages } from '../policy'
+import { neutralSignals } from '../behavior'
 
 // A fixed, attacker-visible baseline. The floor is 800 (merchant-protected).
 const PRICE = { requestedPrice: 850, originalPrice: 1000, floorPrice: 800 }
@@ -83,7 +84,7 @@ describe('clampOfferToSafety — negotiation-time price bound (§22/§28)', () =
 })
 
 describe('Leak guards still scrub after §24/§27 prompt additions (§38)', () => {
-  const analysis = { behavior: 'first_timer' as const, offTopicCount: 0, concessionCount: 0, lastAIOffer: null }
+  const analysis = { behavior: 'first_timer' as const, offTopicCount: 0, concessionCount: 0, lastAIOffer: null, signals: neutralSignals() }
   const base = (over: Partial<NegotiationContext> = {}): NegotiationContext => ({
     storeName: 'T', currencySymbol: '₹', originalPrice: 1000, minPrice: 800,
     attemptsUsed: 0, maxAttempts: 3, persona: 'friendly_shopkeeper', ...over,

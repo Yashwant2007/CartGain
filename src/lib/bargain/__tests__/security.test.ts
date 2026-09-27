@@ -10,6 +10,7 @@ import {
 import { extractPrice } from '../text'
 import { checkAbuse, clearAbuseState } from '../abuse'
 import { assertSessionOwnership } from '../session-bind'
+import { neutralSignals } from '../behavior'
 
 const baseCtx = (over: Partial<NegotiationContext> = {}): NegotiationContext => ({
   storeName: 'Test Store',
@@ -141,7 +142,7 @@ describe('Abuse firewall blocks injection/extraction attempts', () => {
 // appear in the system prompt, even in the bulk/walkout variants.
 // ════════════════════════════════════════════════════════════
 describe('System-prompt floor hygiene (no literal floor in prompt)', () => {
-  const analysis = { behavior: 'first_timer' as const, offTopicCount: 0, concessionCount: 0, lastAIOffer: null }
+  const analysis = { behavior: 'first_timer' as const, offTopicCount: 0, concessionCount: 0, lastAIOffer: null, signals: neutralSignals() }
 
   it('bulk-context prompt has NO literal per-unit or total floor number', () => {
     const prompt = buildSystemPrompt(

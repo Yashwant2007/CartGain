@@ -103,10 +103,29 @@ price is ever committed client-side; the server returns the final price/code.
 | `src/components/bargain/BargainPrimitives.tsx` | extracted presentational widgets |
 | `src/lib/bargain/api-types.ts` | typed cross-frame + API message contract |
 | `src/lib/bargain/offers.ts` | floor-safe quick-offer chips (`QUICK_OFFER_DISCOUNTS`) |
+| `src/lib/bargain/intent.ts` | deterministic shopper-intent/objection/budget classifier (WHAT they want) |
+| `src/lib/bargain/behavior.ts` | deterministic social-signal classifier (HOW they talk): self-shared name, greeting, tone (terse/verbose/polite), emotion (frustrated/skeptical/hesitant/apologetic/playful/excited), urgency, enthusiasm, ALL-CAPS, demands, question, re-asks |
 
 Deployable output is a **theme app extension**: `npx shopify app build`/
 `deploy` regenerates `.shopify/deploy-bundle/<uid>/` (gitignored). The tracked
 canonical source is `extensions/storefront-bargain/`.
+
+### Conversation-warmth layer (how replies stop being "blunt")
+
+Before every `negotiateStep`, the system prompt is enriched — alongside the
+intent/strategy blocks — with a **SOCIAL SIGNALS** block from `behavior.ts`:
+
+- A name (`"I'm Rahul"`, `"my name is Priya"`, `"this is Dev"`, `"call me Meera"`,
+  plus earlier-in-session names) becomes a one-line instruction to greet/use it
+  warmly once, never invent names, and use it ≤2 times per exchange.
+- Active signals each emit one mirroring rule (short reply for terse shoppers,
+  acknowledge frustration before the number, de-escalate ALL-CAPS/demands,
+  reassure the hesitant, address re-asks directly, match politeness/warmth).
+- Detection is 100% deterministic and runs BEFORE the LLM (like intent) — the
+  model is told what to read and how to respond, it never decides the read.
+  Neutral messages add zero bytes to the prompt. Name/emotion detection
+  respected product/store/stopword exclusions so "this is Gold…" on a Gold
+  product is never read as a name.
 
 ## 7. Test coverage
 
@@ -115,6 +134,10 @@ canonical source is `extensions/storefront-bargain/`.
   send", state card actions, product context, cart badge, disabled chips,
   keyboard/typing states.
 - `src/lib/bargain/__tests__/offers.test.ts`: floor-safe quick chips.
+- `src/lib/bargain/__tests__/behavior.test.ts`: name detection honesty
+  (introductions yes, "this is amazing"/negations/product words no), tone and
+  emotion reads, urgency/caps/demands/re-asks, and that the prompt block only
+  emits mirroring rules for signals that are really present.
 - `src/lib/bargain/__tests__/` (API/negotiation suites): server-price
   authority, financial-safety fuzz.
 
