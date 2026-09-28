@@ -114,7 +114,7 @@ export function getAiClient(userKey?: string): AiResolved | null {
   if (userKey && isUserOnCooldown(userKey)) return null
 
   if (!isTierTripped('primary')) {
-    const key = process.env.OPENAI_API_KEY
+    const key = envTrimmed('OPENAI_API_KEY')
     if (key) {
       if (!primaryClient) primaryClient = new OpenAI({ apiKey: key, timeout: 10000 })
       return { client: primaryClient, tier: 'primary' }

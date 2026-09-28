@@ -4,7 +4,11 @@ import { checkAbuse } from '@/lib/bargain/abuse'
 import { getAiClient, handleAiFailure } from '@/lib/ai-client'
 import {
   strategyAdjustedCounter,
+  quotedFloor as engineQuotedFloor,
+  ruleBasedDecision as engineRuleBasedDecision,
+  retentionOffer as engineRetentionOffer,
   type BargainStrategy,
+  type NegotiationContext as EngineNegotiationContext,
   type NegotiationGoalContext,
 } from '@/lib/bargain/engine'
 import { productContextToPromptBlock, type ProductContext } from '@/lib/bargain/product-context'
@@ -1084,113 +1088,34 @@ function effectiveCounter(ctx: NegotiationContext): number {
 // discount allowed. minPrice remains the internal accept threshold — a shopper's
 // OWN offer at/above the floor is still honoured — but the AI never volunteers
 // floor-level money itself.
+//
+// Implemented once in the pure engine module and shared with the client-side
+// demo, so the /demo negotiation window can never quote the floor that the
+// storefront refuses to quote.
 export function quotedFloor(ctx: Pick<NegotiationContext, 'minPrice' | 'originalPrice'>): number {
-  const cushion = Math.max(1, Math.round(ctx.minPrice * 0.01 * 100) / 100)
-  return Math.min(ctx.originalPrice, Math.round((ctx.minPrice + cushion) * 100) / 100)
+  return engineQuotedFloor(ctx as Pick<EngineNegotiationContext, 'minPrice' | 'originalPrice'>)
 }
 
+// ── Rule-based decision (no AI) ──
+// This is the reply a shopper gets when both AI tiers are unavailable, so it
+// must match the storefront exactly. The single implementation lives in
+// `lib/bargain/engine.ts` (client-safe, persona-true, floor-safe); we only
+// inject the goal/strategy-aware counter the server uses for pacing.
 export function ruleBasedDecision(
   offer: number,
-  ctx: NegotiationContext
+  ctx: NegotiationContext,
 ): NegotiationResult {
-  const boundedOffer = Math.max(0, Math.min(offer, ctx.originalPrice))
-  const { minPrice, originalPrice, attemptsUsed, maxAttempts, persona } = ctx
-  const attemptsLeft = maxAttempts - attemptsUsed
-  const currencySymbol = ctx.currencySymbol
-
-  // Every rule reply is persona-true: Morgan (strict) is measured and never
-  // uses emoji, Riley (playful) is dramatic and games the haggle, Alex
-  // (friendly) is warm and familial. The numbers and bounds are identical —
-  // only the voice changes.
-  if (boundedOffer >= minPrice) {
-    const accept: Record<Persona, string> = {
-      strict_negotiator: `Agreed at ${currencySymbol}${boundedOffer.toFixed(2)}. Confirm the acceptance and your discount code will be generated.`,
-      playful_friend: `DEAL! 🎉 ${currencySymbol}${boundedOffer.toFixed(2)} — you absolute legend! Hit Accept and the magic code is yours.`,
-      friendly_shopkeeper: `It's a deal, friend! 🎉 ${currencySymbol}${boundedOffer.toFixed(2)} works for me. Accept it and I'll sort your code right away.`,
-    }
-    return {
-      reply: accept[persona],
-      decision: 'accept',
-      counterOffer: boundedOffer,
-      tactic: 'accept_at_floor',
-      sentiment: 'happy',
-    }
-  }
-
-  if (boundedOffer < minPrice * 0.3) {
-    const counter = effectiveCounter(ctx)
-    const lowball: Record<Persona, string> = {
-      strict_negotiator: `${currencySymbol}${boundedOffer.toFixed(2)} is not feasible. My position: ${currencySymbol}${counter.toFixed(2)}. Confirm within this session if that works.`,
-      playful_friend: `WOW. ${currencySymbol}${boundedOffer.toFixed(2)}?! Nice try 😄 Come back to earth with me — ${currencySymbol}${counter.toFixed(2)}. Now we're talking?`,
-      friendly_shopkeeper: `Oh friend, I wish I could do ${currencySymbol}${boundedOffer.toFixed(2)}! 😄 Realistically I can offer ${currencySymbol}${counter.toFixed(2)} as a fair starting point. Does that work better?`,
-    }
-    return {
-      reply: lowball[persona],
-      decision: 'counter',
-      counterOffer: counter,
-      tactic: 'graduated_open',
-      sentiment: 'playful',
-    }
-  }
-
-  const counter = effectiveCounter(ctx)
-  if (attemptsLeft > 1) {
-    const meet: Record<Persona, string> = {
-      strict_negotiator: `I appreciate the offer, however ${currencySymbol}${boundedOffer.toFixed(2)} is below my position. Given the quality, I can offer ${currencySymbol}${counter.toFixed(2)}. Your call.`,
-      playful_friend: `Mmm, ${currencySymbol}${boundedOffer.toFixed(2)}? You'll have to do better than that 😏 I'll meet you at ${currencySymbol}${counter.toFixed(2)} — and that's me being generous!`,
-      friendly_shopkeeper: `Hmm, ${currencySymbol}${boundedOffer.toFixed(2)} is a little low for me. Let's meet in the middle — how about ${currencySymbol}${counter.toFixed(2)}? I think that's fair for the quality.`,
-    }
-    return {
-      reply: meet[persona],
-      decision: 'counter',
-      counterOffer: counter,
-      tactic: 'meet_partway',
-      sentiment: 'conciliatory',
-    }
-  }
-
-  const quote = quotedFloor(ctx)
-  const final: Record<Persona, string> = {
-    strict_negotiator: `This is my final position: ${currencySymbol}${quote.toFixed(2)}. I've justified it clearly. The decision is yours.`,
-    playful_friend: `OKAY OKAY, you win! 🙃 FINAL final offer: ${currencySymbol}${quote.toFixed(2)}. If my boss asks, this never happened. Deal?`,
-    friendly_shopkeeper: `Friend, I've stretched as far as I can. My final offer: ${currencySymbol}${quote.toFixed(2)}. I really hope you'll take it — let's make this work!`,
-  }
-  return {
-    reply: final[persona],
-    decision: 'counter',
-    counterOffer: quote,
-    tactic: 'final_offer',
-    sentiment: 'final',
-  }
+  return engineRuleBasedDecision(offer, ctx as EngineNegotiationContext, effectiveCounter)
 }
 
 // ── Retention offer (walkout fallback) ──
-
+// Shared with the demo window via the engine so a walkout price can never dip
+// below the safe quoted floor on one surface but not the other.
 export function retentionOffer(
   ctx: NegotiationContext,
   lastCounter: number | null,
 ): NegotiationResult {
-  const { minPrice, originalPrice, currencySymbol, persona } = ctx
-  const last = lastCounter ?? originalPrice
-  const step = Math.max(Math.round((originalPrice - minPrice) * 0.08 * 100) / 100, 1)
-  const price = Math.max(quotedFloor(ctx), Math.round((last - step) * 100) / 100)
-
-  let reply: string
-  if (persona === 'strict_negotiator') {
-    reply = `One moment. For this order I can stretch to ${currencySymbol}${price.toFixed(2)}. Your call.`
-  } else if (persona === 'playful_friend') {
-    reply = `WAIT WAIT WAIT! Okay, you drive a hard bargain! For you, today — ${currencySymbol}${price.toFixed(2)}. Deal?`
-  } else {
-    reply = `Wait, friend — before you go! For you, I can do ${currencySymbol}${price.toFixed(2)} today. Please stay — I really want this to work for you.`
-  }
-
-  return {
-    reply,
-    decision: 'counter',
-    counterOffer: price,
-    tactic: 'walkout_retention',
-    sentiment: 'urgent',
-  }
+  return engineRetentionOffer(ctx as EngineNegotiationContext, lastCounter)
 }
 
 // ────────────────────────────────────────────────────────────

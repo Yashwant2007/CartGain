@@ -292,9 +292,19 @@ export default function DemoContent() {
       }
     }
 
-    // Exhausted final attempt → reject
+    // Final round: judge the customer's own number before rejecting, exactly as
+    // the storefront route does. Exhausting the attempt budget must not refuse
+    // an offer that already clears the floor — that silently lost sales on the
+    // live widget. Deterministic, no model call, floor never revealed.
     if (newEnded != null) {
       // already abandoned
+    } else if (exhausted && offer != null && offer >= ctx.minPrice && decision !== 'accept') {
+      newEnded = 'accepted'
+      newFinal = newFinal ?? offer
+      decision = 'accept'
+      counterOffer = offer
+      dealAcceptedRef.current = true
+      reply = `${ctx.currencySymbol}${offer.toFixed(2)} works for me 🎉 Click Accept and I'll generate your discount code.`
     } else if (exhausted && decision !== 'accept') {
       newEnded = 'rejected'
     } else if (decision === 'accept') {
