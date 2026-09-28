@@ -72,3 +72,47 @@ describe('decorateForFallback', () => {
     expect(create).toHaveBeenCalledTimes(1)
   })
 })
+describe('provider env parsing (getAiHealth)', () => {
+  const ORIGINAL = { ...process.env }
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL }
+    jest.resetModules()
+  })
+
+  it('trims a pasted base URL that has a leading space', async () => {
+    // Shipped to production exactly like this. The OpenAI SDK concatenates
+    // `${baseURL}/chat/completions`, so the leading space made every fallback
+    // call throw on URL parse → tier breaker trips → the whole storefront
+    // silently falls back to hard-coded templates.
+    process.env.AI_FALLBACK_BASE_URL = ' https://api.groq.com/openai/v1'
+    process.env.AI_FALLBACK_API_KEY = 'gsk_test'
+    process.env.AI_FALLBACK_MODEL = ' openai/gpt-oss-120b '
+
+    const { getAiHealth } = await import('../ai-client')
+    const ai = getAiHealth()
+
+    expect(ai.fallback.baseUrl).toBe('https://api.groq.com/openai/v1')
+    expect(ai.fallback.model).toBe('openai/gpt-oss-120b')
+    expect(ai.fallback.baseUrl.startsWith(' ')).toBe(false)
+    expect(ai.fallback.configured).toBe(true)
+  })
+
+  it('treats a whitespace-only value as unset and falls back to the default', async () => {
+    process.env.AI_FALLBACK_BASE_URL = '   '
+    process.env.AI_FALLBACK_API_KEY = 'gsk_test'
+
+    const { getAiHealth } = await import('../ai-client')
+    const ai = getAiHealth()
+
+    expect(ai.fallback.baseUrl).toBe('https://api.groq.com/openai/v1')
+    expect(ai.fallback.model).toBe('openai/gpt-oss-120b')
+  })
+
+  it('trims the API key so a pasted newline does not look configured-but-broken', async () => {
+    process.env.AI_FALLBACK_API_KEY = '\n  gsk_test  \n'
+
+    const { getAiHealth } = await import('../ai-client')
+    expect(getAiHealth().fallback.configured).toBe(true)
+  })
+})

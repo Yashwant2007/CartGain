@@ -37,8 +37,28 @@ const DEFAULT_FALLBACK_BASE_URL = 'https://api.groq.com/openai/v1'
 // default llama-3.3-70b-versatile was deprecated by Groq (shutdown 08/16/26).
 const DEFAULT_FALLBACK_MODEL = 'openai/gpt-oss-120b'
 
+/**
+ * Provider config is typed by hand into the Vercel dashboard, so a stray
+ * leading/trailing space is a routine accident. We shipped exactly that:
+ * `AI_FALLBACK_BASE_URL=" https://api.groq.com/openai/v1"`. The OpenAI SDK
+ * builds request URLs by concatenation, so a leading space makes every
+ * fallback call throw on URL parse — which trips the tier breaker and drops
+ * the whole storefront back onto hard-coded templates, silently. Trim every
+ * provider value and treat an empty-after-trim value as unset.
+ */
+function envTrimmed(name: string): string | undefined {
+  const raw = process.env[name]
+  if (typeof raw !== 'string') return undefined
+  const trimmed = raw.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function fallbackBaseUrl(): string {
+  return envTrimmed('AI_FALLBACK_BASE_URL') ?? DEFAULT_FALLBACK_BASE_URL
+}
+
 function fallbackModel(): string {
-  return process.env.AI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL
+  return envTrimmed('AI_FALLBACK_MODEL') ?? DEFAULT_FALLBACK_MODEL
 }
 
 function isFormatUnsupported(err: any): boolean {
@@ -77,11 +97,11 @@ export function decorateForFallback(client: any, requestedModel: string): OpenAI
 
 function makeFallbackClient(): OpenAI | null {
   if (fallbackClient) return fallbackClient
-  const fallbackKey = process.env.AI_FALLBACK_API_KEY
+  const fallbackKey = envTrimmed('AI_FALLBACK_API_KEY')
   if (!fallbackKey) return null
   const client = new OpenAI({
     apiKey: fallbackKey,
-    baseURL: process.env.AI_FALLBACK_BASE_URL || DEFAULT_FALLBACK_BASE_URL,
+    baseURL: fallbackBaseUrl(),
     timeout: 20000,
   })
   fallbackClient = decorateForFallback(client, fallbackModel())
@@ -134,7 +154,7 @@ export function handleAiFailure(err: any, context: string, userKey: string | und
 
 export function getAiHealth() {
   const primaryConfigured = Boolean(process.env.OPENAI_API_KEY)
-  const fallbackConfigured = Boolean(process.env.AI_FALLBACK_API_KEY)
+  const fallbackConfigured = Boolean(envTrimmed('AI_FALLBACK_API_KEY'))
   const primaryTripped = isTierTripped('primary')
   const fallbackTripped = isTierTripped('fallback')
   return {
@@ -142,8 +162,8 @@ export function getAiHealth() {
     fallback: {
       configured: fallbackConfigured,
       tripped: fallbackTripped,
-      baseUrl: process.env.AI_FALLBACK_BASE_URL || DEFAULT_FALLBACK_BASE_URL,
-      model: process.env.AI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL,
+      baseUrl: fallbackBaseUrl(),
+      model: fallbackModel(),
     },
     activeTier:
       primaryConfigured && !primaryTripped
