@@ -7,7 +7,6 @@
 {% endcomment %}
 
 {%- if block.settings.enable_product and template contains 'product' -%}
-  {%- assign embed_mode = 'product' -%}
   {%- assign v = product.selected_or_first_available_variant -%}
   {%- assign pprice = v.price | times: 1.0 | divided_by: 100 -%}
   {%- assign currency = cart.currency.iso_code | default: shop.currency -%}
