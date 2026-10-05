@@ -71,7 +71,34 @@ describe('check 3 — mandatory compliance webhooks are declared in the app conf
   it('points the compliance subscriptions at the webhook handler', () => {
     expect(complianceBlocks.length).toBeGreaterThan(0)
     for (const block of complianceBlocks) {
-      expect(block.uri).toBe('/api/webhooks/shopify')
+      expect(block.uri).toBe('https://cart-gain.com/api/webhooks/shopify')
+    }
+  })
+
+  it('uses absolute webhook URIs so they cannot resolve against application_url', () => {
+    // Shopify resolves a relative webhook `uri` against `application_url`.
+    // application_url here is a SUBPATH ("/api/shopify/install"), so a relative
+    // "/api/webhooks/shopify" was delivered to
+    // "/api/shopify/install/api/webhooks/shopify" and 404'd — which failed the
+    // automated HMAC check even though the handler was correct.
+    const applicationUrl = APP_TOML.match(/^application_url\s*=\s*"([^"]+)"/m)?.[1] ?? ''
+    const applicationUrlHasPath = new URL(applicationUrl).pathname.replace(/\/$/, '') !== ''
+
+    for (const block of blocks) {
+      const uri = block.uri!
+      const isAbsolute = /^https?:\/\//.test(uri)
+      if (!isAbsolute) {
+        // A relative uri is only safe when application_url is origin-only.
+        expect(applicationUrlHasPath).toBe(false)
+      }
+    }
+  })
+
+  it('every declared webhook URI is reachable on the live host', () => {
+    // Guards the class of bug rather than one literal: a URI that does not
+    // start with the application origin will 404 at delivery time.
+    for (const block of blocks) {
+      expect(block.uri).toMatch(/^https:\/\/cart-gain\.com\/api\/webhooks\/shopify$/)
     }
   })
 

@@ -27,8 +27,16 @@ embedded = true
 # merchant gets identical behaviour whichever applies.
 api_version = "2026-04"
 
+# Webhook URIs below are ABSOLUTE on purpose. Shopify resolves a relative
+# webhook `uri` against `application_url`, and application_url below is a
+# subpath ("/api/shopify/install"). A relative "/api/webhooks/shopify" therefore
+# resolved to "/api/shopify/install/api/webhooks/shopify" and every
+# config-declared delivery 404'd — which is what failed the automated
+# "Verifies webhooks with HMAC signatures" check. Absolute HTTPS URLs are
+# supported and are resolved verbatim.
+
   [[webhooks.subscriptions]]
-  uri = "/api/webhooks/shopify"
+  uri = "https://cart-gain.com/api/webhooks/shopify"
   topics = [
   "carts/update",
   "checkouts/create",
@@ -46,7 +54,7 @@ api_version = "2026-04"
   # customers/redact      — delete a customer's data
   # shop/redact           — delete a shop's data (48h after uninstall)
   [[webhooks.subscriptions]]
-  uri = "/api/webhooks/shopify"
+  uri = "https://cart-gain.com/api/webhooks/shopify"
   compliance_topics = [
   "customers/data_request",
   "customers/redact",
