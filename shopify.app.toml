@@ -11,13 +11,20 @@ embedded = true
 # privacy_policy_url / tos_url in app.toml; they now live in the Partner Dashboard.
 
 [webhooks]
-# Kept in sync with src/lib/shopify.ts (setupShopifyWebhooks) — the topics below
-# must match the runtime list exactly so every install gets identical webhooks.
-# Exception: the three GDPR/privacy topics (customers/data_request,
-# customers/redact, shop/redact) are intentionally NOT listed here — they are
-# configured in the Partner Dashboard (protected customer data) and Shopify's
-# app-config validation rejects re-declaring them in app.toml. The runtime
-# still registers them at install, so store privacy handling is unchanged.
+# Functional topics, declared with `topics`.
+#
+# The three MANDATORY compliance topics are declared separately below with
+# `compliance_topics` (not `topics` — the key is different, which is why an
+# earlier version of this file claimed they "could not be re-declared in
+# app.toml" and left them out entirely). Shopify's automated pre-submission
+# check reads these from the app config, and the Partner Dashboard no longer
+# exposes an input for them: config TOML + `shopify app deploy` is the only
+# registration path. Missing them fails
+#   - "Provides mandatory compliance webhooks"
+#   - "Verifies webhooks with HMAC signatures" (no registered endpoint to test)
+# Declaring them here is additive — src/lib/shopify.ts still registers all three
+# at install via the Admin API, and both paths point at the same handler, so a
+# merchant gets identical behaviour whichever applies.
 api_version = "2026-04"
 
   [[webhooks.subscriptions]]
@@ -33,6 +40,17 @@ api_version = "2026-04"
   "refunds/create",
   "app/uninstalled",
   "app_subscriptions/update"
+]
+
+  # customers/data_request — data subject access request
+  # customers/redact      — delete a customer's data
+  # shop/redact           — delete a shop's data (48h after uninstall)
+  [[webhooks.subscriptions]]
+  uri = "/api/webhooks/shopify"
+  compliance_topics = [
+  "customers/data_request",
+  "customers/redact",
+  "shop/redact"
 ]
 
 [access_scopes]
