@@ -69,11 +69,33 @@ export async function getAccessToken(store: {
   }
 }
 
+/**
+ * SHA-256 of the configured app secret, truncated.
+ *
+ * When a legitimate delivery is rejected there are only two possible causes: the
+ * code is wrong, or the secret we hold is not the secret Shopify signed with.
+ * The code is easy to read, the secret is not — so log a preimage-resistant
+ * fingerprint instead. The merchant (or we, together) can hash the secret from
+ * the Partner Dashboard locally and compare the two values without the secret
+ * ever being written to a log, a chat, or a commit.
+ */
+function secretFingerprint(secret: string): string {
+  return crypto.createHash('sha256').update(secret, 'utf8').digest('hex').slice(0, 16)
+}
+
 export function verifyShopifyWebhook(body: string, headers: Headers): boolean {
   const hmacHeader = headers.get('x-shopify-hmac-sha256')
-  const shopifySecret = process.env.SHOPIFY_API_SECRET
+  // Trim: a value pasted into the Vercel dashboard often carries a trailing
+  // newline. The OAuth query-HMAC and the body-HMAC would then disagree with
+  // Shopify while both "look" configured.
+  const shopifySecret = process.env.SHOPIFY_API_SECRET?.trim()
 
   if (!hmacHeader || !shopifySecret) {
+    console.error(
+      `[shopify-webhook] REJECTED before comparison — ${
+        !hmacHeader ? 'missing X-Shopify-Hmac-Sha256 header' : 'SHOPIFY_API_SECRET is not configured'
+      }`,
+    )
     return false
   }
 
@@ -84,8 +106,31 @@ export function verifyShopifyWebhook(body: string, headers: Headers): boolean {
 
   const expected = Buffer.from(hmac)
   const received = Buffer.from(hmacHeader)
-  if (expected.length !== received.length) return false
-  return crypto.timingSafeEqual(expected, received)
+  if (expected.length !== received.length) {
+    console.error(
+      `[shopify-webhook] REJECTED — signature length mismatch ` +
+        `(received ${received.length}B, expected ${expected.length}B). ` +
+        `topic=${headers.get('x-shopify-topic') ?? 'unknown'} ` +
+        `bodyBytes=${Buffer.byteLength(body, 'utf8')} ` +
+        `secretFp=${secretFingerprint(shopifySecret)} ` +
+        `— compare that fingerprint against sha256 of the Partner Dashboard client secret.`,
+    )
+    return false
+  }
+  if (!crypto.timingSafeEqual(expected, received)) {
+    console.error(
+      `[shopify-webhook] REJECTED — HMAC mismatch. ` +
+        `topic=${headers.get('x-shopify-topic') ?? 'unknown'} ` +
+        `shop=${headers.get('x-shopify-shop-domain') ?? 'unknown'} ` +
+        `bodyBytes=${Buffer.byteLength(body, 'utf8')} ` +
+        `secretFp=${secretFingerprint(shopifySecret)} ` +
+        `— a valid Shopify delivery failing here means the configured secret is not ` +
+        `this app's client secret (wrong app, stale value, or Vercel SHOPIFY_API_KEY ` +
+        `pointing at a different client_id than shopify.app.toml).`,
+    )
+    return false
+  }
+  return true
 }
 
 export async function verifyShopifyAccessToken(accessToken: string): Promise<{
@@ -103,7 +148,7 @@ export async function verifyShopifyAccessToken(accessToken: string): Promise<{
       signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
         client_id: process.env.SHOPIFY_API_KEY,
-        client_secret: process.env.SHOPIFY_API_SECRET,
+        client_secret: process.env.SHOPIFY_API_SECRET?.trim(),
         code: accessToken,
       }),
     })

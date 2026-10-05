@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
     }
 
     const apiKey = process.env.SHOPIFY_API_KEY
-    const apiSecret = process.env.SHOPIFY_API_SECRET
+    const apiSecret = process.env.SHOPIFY_API_SECRET?.trim()
 
     if (!apiKey || !apiSecret) {
       return redirectWithCleanup('/dashboard/integrations?shopify_error=Shopify+not+configured', baseUrl)

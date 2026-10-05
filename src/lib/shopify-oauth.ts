@@ -99,7 +99,7 @@ export function isValidShopDomain(shop: string | null): boolean {
  * was tampered with in transit.
  */
 export function verifyShopifyCallbackHmac(params: URLSearchParams): boolean {
-  const secret = process.env.SHOPIFY_API_SECRET
+  const secret = process.env.SHOPIFY_API_SECRET?.trim()
   if (!secret) return false
 
   const hmac = params.get('hmac')

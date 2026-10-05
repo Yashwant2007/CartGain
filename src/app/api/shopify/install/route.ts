@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 // Verifies the HMAC Shopify sends on every install/load request.
 // See: https://shopify.dev/docs/apps/auth/oauth/getting-started#verify-installation
 function verifyShopifyInstallHmac(query: URLSearchParams): boolean {
-  const secret = process.env.SHOPIFY_API_SECRET
+  const secret = process.env.SHOPIFY_API_SECRET?.trim()
   if (!secret) return false
 
   const hmac = query.get('hmac')
