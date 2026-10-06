@@ -18,8 +18,10 @@ export const SHOPIFY_OAUTH_SCOPES = [
   'read_checkouts',
   'write_checkouts',
   'read_orders',
+  'read_all_orders',
   'read_customers',
   'read_products',
+  'read_product_listings',
   'read_discounts',
   'write_discounts',
 ].join(',')
