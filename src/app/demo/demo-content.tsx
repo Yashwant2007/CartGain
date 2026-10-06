@@ -207,9 +207,10 @@ export default function DemoContent() {
     const offer = extractPriceLocal(userText)
     const isWalkout = detectWalkoutLocal(userText)
 
-    const nextAttempt = attemptsUsed + 1
+    const isOfferTurn = offer != null
+    const nextAttempt = isOfferTurn ? attemptsUsed + 1 : attemptsUsed
     const attemptsLeft = MAX_ATTEMPTS - nextAttempt
-    const exhausted = nextAttempt >= MAX_ATTEMPTS
+    const exhausted = isOfferTurn && nextAttempt >= MAX_ATTEMPTS
 
     const ctx: NegotiationContext = {
       storeName: 'Lumina Beauty',
