@@ -1582,9 +1582,7 @@ export default function BargainWidget({
                   borderTop: !sessionEnded && decision !== 'accept' && lastCounter != null ? 'none' : '1px solid #eef2f7',
                   flexWrap: 'wrap',
                 }}>
-                  {!sessionEnded && productCtx.title && decision !== 'accept' && (
-                    <QuickChip key="ask" label={t('askProduct')} disabled={thinking || !!busyRef.current} onClick={() => fillChat(t('askProduct'))} />
-                  )}
+
                   {quickOffers.map((v) => (
                     <QuickChip key={v} label={`${currencySymbol}${v.toLocaleString('en-IN')}`} disabled={thinking || !!busyRef.current} onClick={() => fillOffer(v)} />
                   ))}

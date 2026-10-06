@@ -113,7 +113,9 @@ export type AiResolved = { client: OpenAI; tier: AiTier }
 export function getAiClient(userKey?: string): AiResolved | null {
   if (userKey && isUserOnCooldown(userKey)) return null
 
-  if (!isTierTripped('primary')) {
+  const forceFallback = envTrimmed('AI_FORCE_FALLBACK') === 'true' || envTrimmed('AI_FORCE_FALLBACK') === '1'
+
+  if (!forceFallback && !isTierTripped('primary')) {
     const key = envTrimmed('OPENAI_API_KEY')
     if (key) {
       if (!primaryClient) primaryClient = new OpenAI({ apiKey: key, timeout: 10000 })
@@ -124,6 +126,14 @@ export function getAiClient(userKey?: string): AiResolved | null {
   if (!isTierTripped('fallback')) {
     const fbClient = makeFallbackClient()
     if (fbClient) return { client: fbClient, tier: 'fallback' }
+  }
+
+  if (!forceFallback && !isTierTripped('primary')) {
+    const key = envTrimmed('OPENAI_API_KEY')
+    if (key) {
+      if (!primaryClient) primaryClient = new OpenAI({ apiKey: key, timeout: 10000 })
+      return { client: primaryClient, tier: 'primary' }
+    }
   }
 
   return null
