@@ -198,7 +198,7 @@ export default function DemoContent() {
   }
 
   function replyDelay(len: number) {
-    return 650 + Math.min(len, 240) * 1.1
+    return 250 + Math.min(len, 120) * 0.6
   }
 
   async function send() {
