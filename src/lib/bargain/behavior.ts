@@ -91,7 +91,7 @@ const NAME_STOPWORDS = new Set([
   'i', 'me', 'my', 'a', 'an', 'the', 'this', 'that', 'these', 'those', 'you', 'your', 'yours',
   'it', 'its', 'we', 'us', 'our', 'they', 'them', 'he', 'she', 'him', 'her',
   'so', 'just', 'only', 'very', 'really', 'too', 'sure', 'sorry', 'happy', 'ready', 'back',
-  'done', 'fine', 'okay', 'great', 'good', 'better', 'cheaper', 'new', 'right', 'wrong',
+  'done', 'fine', 'okay', 'going', 'leave', 'leaving', 'great', 'good', 'better', 'cheaper', 'new', 'right', 'wrong',
   'here', 'there', 'now', 'today', 'tomorrow', 'tonight', 'little', 'bit', 'much', 'lot',
   'interested', 'looking', 'trying', 'hoping', 'wanting', 'needing', 'thinking', 'wondering',
   'saying', 'asking', 'seeing', 'checking', 'searching', 'browsing', 'buying', 'ordering',
@@ -214,7 +214,8 @@ function capsRatio(text: string): number {
  * conversational-warmth signals the AI should read and mirror.
  */
 export function analyzeSocialSignals(input: SocialSignalInput): SocialSignals {
-  const { currentMessage, exclusions = [] } = input
+  const currentMessage = input.currentMessage ?? ''
+  const exclusions = input.exclusions ?? []
   const history = input.history ?? []
   const text = ` ${currentMessage.replace(/\s+/g, ' ').trim().toLowerCase()} `
   const hats = (key: keyof typeof RE): boolean => RE[key].test(text)
