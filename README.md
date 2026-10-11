@@ -65,7 +65,20 @@ full list. Validate any missing variable with:
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Jest (unit + integration, 640+ tests) |
-| `npm run vercel-build` | Vercel production build |
+| `npm run vercel-build` | Vercel production build (`prisma migrate deploy && prisma generate && next build`) |
+
+## Database migrations
+
+Production and preview deploys run `prisma migrate deploy` (see
+`npm run vercel-build`). Schema changes therefore need a committed migration:
+
+1. Edit `prisma/schema.prisma`.
+2. `npx prisma migrate dev --name <change>` (creates `prisma/migrations/<ts>_<change>/`).
+3. Commit the schema **and** the new migration folder; deploy applies it.
+
+Do not use `prisma db push` against production — it bypasses migration history
+and can silently drop data. The existing database was baselined with
+`prisma migrate resolve --applied` so `migrate deploy` is the source of truth.
 
 ## Project structure
 
