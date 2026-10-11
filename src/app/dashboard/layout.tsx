@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import {
   LayoutDashboard,
@@ -34,8 +34,6 @@ function DashboardLayoutInner({
 }) {
   const pathname = usePathname()
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const queryStoreId = searchParams.get('storeId')
   const { data: session, status } = useSession()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -91,8 +89,6 @@ function DashboardLayoutInner({
     return null
   }
 
-  const withStoreId = (href: string) => queryStoreId ? `${href}?storeId=${queryStoreId}` : href
-
   const navigation = [
     { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Campaigns', href: '/dashboard/campaigns', icon: Megaphone },
@@ -124,7 +120,7 @@ function DashboardLayoutInner({
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 border-b border-blue-800/30">
-            <Link href={withStoreId('/dashboard')} className="flex items-center space-x-2 group min-h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded" onClick={closeSidebar}>
+            <Link href="/dashboard" className="flex items-center space-x-2 group min-h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded" onClick={closeSidebar}>
               <Image
                 src="/favicon-32x32.png"
                 alt="CartGain"
@@ -146,12 +142,11 @@ function DashboardLayoutInner({
           {/* Navigation */}
           <nav className="flex-1 px-3 sm:px-4 py-4 sm:py-6 space-y-1 overflow-y-auto">
             {navigation.map((item) => {
-              const itemHref = withStoreId(item.href)
               const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
               return (
                 <Link
                   key={item.name}
-                  href={itemHref}
+                  href={item.href}
                   onClick={closeSidebar}
                   className={`flex items-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 min-h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
                     isActive
@@ -230,7 +225,7 @@ function DashboardLayoutInner({
                 </div>
               </div>
               <Link
-                href={withStoreId('/dashboard/subscription')}
+                href={'/dashboard/subscription'}
                 className="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap bg-gradient-to-r from-red-500 to-orange-500 text-white hover:shadow-lg hover:shadow-red-500/50 transition-all flex-shrink-0"
               >
                 Upgrade Now
@@ -250,7 +245,7 @@ function DashboardLayoutInner({
                 </div>
               </div>
               <Link
-                href={withStoreId('/dashboard/subscription')}
+                href={'/dashboard/subscription'}
                 className="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg hover:shadow-amber-500/50 transition-all flex-shrink-0"
               >
                 View Plans

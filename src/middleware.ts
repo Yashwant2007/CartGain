@@ -37,16 +37,73 @@ function clearStaleCookies(headers: Headers) {
 // report can be tied to the exact server-side events.
 const API_TRACE_MATCHER = /^\/api\//
 
+// ─── CSRF defense ────────────────────────────────────────────────────────────
+// The session cookie is SameSite=None (required so it survives the embedded
+// Shopify admin iframe), which means the browser WILL attach it to cross-site
+// requests too. Mutating API calls that ride on the session cookie must
+// therefore prove they came from our own origin. Browser requests always carry
+// an Origin (or, failing that, a Referer) on state-changing methods, so a
+// mismatch means a forged cross-site call.
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+const SESSION_COOKIE_NAMES = ['next-auth.session-token', '__Secure-next-auth.session-token']
+const ALLOWED_EMBED_ORIGINS = new Set(['admin.shopify.com'])
+// Public endpoints that legitimately receive cross-origin requests (the
+// storefront widget runs on arbitrary merchant domains; webhooks come from
+// providers; OAuth callbacks from Google/email). These never rely on a
+// merchant session cookie for authorization.
+const CSRF_EXEMPT_PREFIXES = [
+  '/api/bargain/', // storefront widget (arbitrary merchant store domains)
+  '/api/webhooks/', // HMAC-verified provider callbacks
+  '/api/shopify/', // OAuth install/callback + session-token endpoints
+  '/api/auth/callback/', // OAuth provider callback
+  '/api/health',
+  '/api/opt-out', // public unsubscribe
+  '/api/analytics/events', // public funnel events
+]
+
+function hasSessionCookie(req: NextRequest): boolean {
+  return SESSION_COOKIE_NAMES.some(name => Boolean(req.cookies.get(name)?.value))
+}
+
+function isSameOriginRequest(req: NextRequest): boolean {
+  const source = req.headers.get('origin') || req.headers.get('referer')
+  if (!source) return false
+  try {
+    const host = new URL(source).host
+    return host === req.nextUrl.host || ALLOWED_EMBED_ORIGINS.has(host)
+  } catch {
+    return false
+  }
+}
+
+function isCsrfExempt(pathname: string): boolean {
+  return CSRF_EXEMPT_PREFIXES.some(prefix => pathname.startsWith(prefix))
+}
+
 export default async function middleware(
   req: NextRequestWithAuth,
   event: NextFetchEvent
 ) {
   if (API_TRACE_MATCHER.test(req.nextUrl.pathname)) {
+    const pathname = req.nextUrl.pathname
     const response = NextResponse.next()
     const existing = req.headers.get('x-request-id')
     const traceId = existing || crypto.randomUUID()
     req.headers.set('x-request-id', traceId)
     response.headers.set('x-request-id', traceId)
+
+    if (
+      !SAFE_METHODS.has(req.method) &&
+      hasSessionCookie(req) &&
+      !isCsrfExempt(pathname) &&
+      !isSameOriginRequest(req)
+    ) {
+      console.warn(`[csrf] blocked cross-origin ${req.method} ${pathname}`)
+      const blocked = NextResponse.json({ message: 'Request blocked' }, { status: 403 })
+      blocked.headers.set('x-request-id', traceId)
+      return blocked
+    }
+
     return response
   }
 

@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 
 type HookState = {
   storeId: string | null
@@ -9,8 +8,10 @@ type HookState = {
   error: string | null
 }
 
+// Resolves the caller's store strictly server-side from the authenticated
+// session. The store id is NEVER read from the URL: a storeId query param is
+// not an access key, and carrying one around only made it look like one.
 export function useResolvedStoreId(): HookState {
-  const router = useRouter()
   const [state, setState] = useState<HookState>({
     storeId: null,
     loading: true,
@@ -19,14 +20,9 @@ export function useResolvedStoreId(): HookState {
 
   useEffect(() => {
     let cancelled = false
-    let resolvedId: string | null = null
 
     const resolveStoreId = async () => {
       try {
-        // Always resolve the store server-side so a stale storeId persisted in
-        // the URL (reinstall, shared browser, different account) can never make
-        // dashboard APIs 404. The query param is kept in the URL below purely
-        // as a cosmetic deep-link.
         const response = await fetch('/api/stores/current')
         if (!response.ok) {
           if (response.status === 401) {
@@ -36,7 +32,7 @@ export function useResolvedStoreId(): HookState {
         }
 
         const data = await response.json()
-        resolvedId = data?.store?.id ?? null
+        const resolvedId: string | null = data?.store?.id ?? null
 
         if (!resolvedId) {
           throw new Error('Store ID is missing from server response')
@@ -61,16 +57,7 @@ export function useResolvedStoreId(): HookState {
     return () => {
       cancelled = true
     }
-  }, [router])
-
-  useEffect(() => {
-    if (state.storeId && !state.loading && typeof window !== 'undefined') {
-      const hasQueryStoreId = new URLSearchParams(window.location.search).has('storeId')
-      if (!hasQueryStoreId) {
-        router.replace(`${window.location.pathname}?storeId=${state.storeId}`, { scroll: false })
-      }
-    }
-  }, [state.storeId, state.loading, router])
+  }, [])
 
   return state
 }

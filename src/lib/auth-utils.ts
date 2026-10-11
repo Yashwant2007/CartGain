@@ -61,6 +61,21 @@ export function generateRandomToken(length = 32): string {
   return randomBytes(length).toString('hex')
 }
 
+// Tokens live in the shared VerificationToken table keyed by `identifier`.
+// Namespacing the identifier by purpose means an email-verification token can
+// never be replayed to reset a password (and vice-versa) — the two flows can no
+// longer be confused for each other.
+export const EMAIL_VERIFY_PREFIX = 'email-verify:'
+export const PASSWORD_RESET_PREFIX = 'password-reset:'
+
+export function emailVerifyIdentifier(email: string): string {
+  return `${EMAIL_VERIFY_PREFIX}${email.trim().toLowerCase()}`
+}
+
+export function passwordResetIdentifier(email: string): string {
+  return `${PASSWORD_RESET_PREFIX}${email.trim().toLowerCase()}`
+}
+
 // Error response builder with proper status codes
 export function createErrorResponse(code: string, message: string, status: number = 400) {
   return {

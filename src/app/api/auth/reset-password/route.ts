@@ -6,6 +6,7 @@ import {
   createErrorResponse,
   createSuccessResponse,
   AUTH_ERROR_CODES,
+  passwordResetIdentifier,
 } from '@/lib/auth-utils'
 
 // Server-side only - load bcrypt when needed
@@ -59,11 +60,14 @@ export async function POST(request: NextRequest) {
 
     const { token, email, password } = validationResult.data
 
-    // Find and validate token
+    // Find and validate token. Only a token issued by the reset flow
+    // (password-reset: namespace) can reset a password — an email-verification
+    // token is rejected here even if it is still valid.
+    const identifier = passwordResetIdentifier(email)
     const verificationToken = await prisma.verificationToken.findUnique({
       where: {
         identifier_token: {
-          identifier: email,
+          identifier,
           token,
         },
       },
@@ -86,7 +90,7 @@ export async function POST(request: NextRequest) {
       await prisma.verificationToken.delete({
         where: {
           identifier_token: {
-            identifier: email,
+            identifier,
             token,
           },
         },
@@ -130,7 +134,7 @@ export async function POST(request: NextRequest) {
       prisma.verificationToken.delete({
         where: {
           identifier_token: {
-            identifier: email,
+            identifier,
             token,
           },
         },

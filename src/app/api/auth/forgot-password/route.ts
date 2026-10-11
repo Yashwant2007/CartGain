@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { sendEmail } from '@/lib/services/email'
+import { sendPasswordResetEmail } from '@/lib/services/auth-emails'
 import {
   forgotPasswordSchema,
   createErrorResponse,
   createSuccessResponse,
   AUTH_ERROR_CODES,
   generateRandomToken,
+  passwordResetIdentifier,
   PASSWORD_RESET_EXPIRES_IN,
 } from '@/lib/auth-utils'
 
@@ -64,52 +65,22 @@ export async function POST(request: NextRequest) {
     const resetToken = generateRandomToken()
     const resetTokenExpires = new Date(Date.now() + PASSWORD_RESET_EXPIRES_IN)
 
+    // Only replace this user's outstanding *reset* tokens — never the email
+    // verification token (different namespace), so requesting a reset link
+    // cannot invalidate a pending verification link.
     await prisma.verificationToken.deleteMany({
-      where: { identifier: email },
+      where: { identifier: passwordResetIdentifier(email) },
     })
 
     await prisma.verificationToken.create({
       data: {
-        identifier: email,
+        identifier: passwordResetIdentifier(email),
         token: resetToken,
         expires: resetTokenExpires,
       },
     })
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://cart-gain.com'
-    const resetLink = `${appUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`
-
-    const result = await sendEmail({
-      to: email,
-      subject: 'Reset your password',
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
-            .container { max-width: 480px; margin: 40px auto; padding: 32px; background: #1e293b; border-radius: 16px; border: 1px solid #334155; }
-            .logo { font-size: 24px; font-weight: bold; color: #22d3ee; text-align: center; margin-bottom: 24px; }
-            h1 { font-size: 20px; text-align: center; margin-bottom: 16px; }
-            .btn { display: block; width: 200px; margin: 24px auto; padding: 12px 24px; background: linear-gradient(135deg, #06b6d4, #3b82f6); color: white; text-decoration: none; border-radius: 8px; text-align: center; font-weight: 600; }
-            .footer { text-align: center; font-size: 12px; color: #64748b; margin-top: 32px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="logo">CartGain</div>
-            <h1>Reset your password</h1>
-            <p style="text-align: center; color: #94a3b8;">Click the button below to reset your password. This link expires in 1 hour.</p>
-            <a href="${resetLink}" class="btn">Reset Password</a>
-            <p style="text-align: center; font-size: 12px; color: #64748b;">Or copy this link: ${resetLink}</p>
-            <div class="footer"><p>If you didn't request this, you can safely ignore this email.</p></div>
-          </div>
-        </body>
-        </html>
-      `,
-      text: `Reset your password: ${resetLink}`,
-    })
+    const result = await sendPasswordResetEmail(email, resetToken)
 
     if (!result.success) {
       console.error('Forgot password: failed to send email:', result.error)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { emailVerifyIdentifier } from '@/lib/auth-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
       where: { token },
     })
 
-    if (!verificationToken || verificationToken.identifier !== email) {
+    if (!verificationToken || verificationToken.identifier !== emailVerifyIdentifier(email)) {
       return NextResponse.redirect(new URL('/login?error=Invalid+or+expired+verification+link', req.url))
     }
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { sendEmail } from '@/lib/services/email'
+import { sendVerificationEmail } from '@/lib/services/auth-emails'
 import { createFreeSubscription } from '@/lib/subscription'
 import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
@@ -11,6 +11,7 @@ import {
   createSuccessResponse,
   AUTH_ERROR_CODES,
   generateRandomToken,
+  emailVerifyIdentifier,
   VERIFICATION_EXPIRES_IN,
 } from '@/lib/auth-utils'
 
@@ -113,10 +114,12 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Store verification token (use existing VerificationToken model)
+    // Store verification token (use existing VerificationToken model). The
+    // identifier is namespaced so this token can only ever verify an email —
+    // never reset a password.
     await prisma.verificationToken.create({
       data: {
-        identifier: email,
+        identifier: emailVerifyIdentifier(email),
         token: verificationToken,
         expires: verificationTokenExpires,
       },
@@ -125,40 +128,7 @@ export async function POST(request: NextRequest) {
     // Create free subscription for the user
     await createFreeSubscription(user.id)
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://cart-gain.com'
-    const verifyLink = `${appUrl}/verify-email?token=${verificationToken}&email=${encodeURIComponent(email)}`
-
-    const emailResult = await sendEmail({
-      to: email,
-      subject: 'Verify your email address',
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
-            .container { max-width: 480px; margin: 40px auto; padding: 32px; background: #1e293b; border-radius: 16px; border: 1px solid #334155; }
-            .logo { font-size: 24px; font-weight: bold; color: #22d3ee; text-align: center; margin-bottom: 24px; }
-            h1 { font-size: 20px; text-align: center; margin-bottom: 16px; }
-            .btn { display: block; width: 200px; margin: 24px auto; padding: 12px 24px; background: linear-gradient(135deg, #06b6d4, #3b82f6); color: white; text-decoration: none; border-radius: 8px; text-align: center; font-weight: 600; }
-            .footer { text-align: center; font-size: 12px; color: #64748b; margin-top: 32px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="logo">CartGain</div>
-            <h1>Welcome to CartGain!</h1>
-            <p style="text-align: center; color: #94a3b8;">Click the button below to verify your email and start recovering abandoned carts.</p>
-            <a href="${verifyLink}" class="btn">Verify Email</a>
-            <p style="text-align: center; font-size: 12px; color: #64748b;">Or copy this link: ${verifyLink}</p>
-            <div class="footer"><p>This link expires in 24 hours.</p></div>
-          </div>
-        </body>
-        </html>
-      `,
-      text: `Verify your email: ${verifyLink}`,
-    })
+    const emailResult = await sendVerificationEmail(email, verificationToken)
 
     if (!emailResult.success) {
       console.error('Registration: failed to send verification email:', emailResult.error)
