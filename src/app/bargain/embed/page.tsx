@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import prisma from '@/lib/db'
+import { resolveActiveStoreIdByShopDomain } from '@/lib/stores/resolve-by-domain'
 import BargainWidget from '@/components/bargain/BargainWidget'
 
 export const dynamic = 'force-dynamic'
@@ -59,24 +60,10 @@ export default async function EmbedPage({
   let maxAttempts: number | undefined
 
   if (shop) {
-    const normalizedShop = shop.trim().toLowerCase().replace(/^www\./, '')
-    let store = await prisma.store.findFirst({
-      where: {
-        isActive: true,
-        OR: [{ domain: normalizedShop }, { domain: { contains: normalizedShop } }],
-      },
-      select: { id: true },
-    })
-    if (!store && normalizedShop.endsWith('.myshopify.com')) {
-      // A store's domain might be stored as a bare handle (e.g. "my-store")
-      // while the embed passes the full permanent domain. Match on the handle
-      // so the widget still resolves for auto-created/legacy store rows.
-      const handle = normalizedShop.slice(0, -'.myshopify.com'.length)
-      store = await prisma.store.findFirst({
-        where: { isActive: true, OR: [{ domain: handle }, { domain: { endsWith: handle } }] },
-        select: { id: true },
-      })
-    }
+    // Strict, exact-only resolution (see resolve-by-domain.ts) — no substring
+    // matching, which previously allowed a shop to resolve to another store.
+    const resolvedStoreId = await resolveActiveStoreIdByShopDomain(prisma, shop)
+    const store = resolvedStoreId ? { id: resolvedStoreId } : null
     if (store) {
       storeFound = true
       storeId = store.id
