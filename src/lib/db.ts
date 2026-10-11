@@ -47,7 +47,12 @@ function createPrismaClient(): PrismaClient {
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   })
 
-  // Global retry middleware: retries all queries on transient DB errors (P1001, P1002, P1017)
+  // Global retry middleware: retries all queries on transient DB errors
+  // (P1001 connection refused, P1002 timeout, P1017 server closed, P2024 pool
+  // timeout). P2024 is the "Timed out fetching a new connection from the
+  // connection pool" failure that surfaced on the analytics hot path — under a
+  // burst the pool is briefly saturated, and a short backoff retry rides it out
+  // instead of dropping the write.
   const extended = client.$extends({
     query: {
       $allModels: {
@@ -60,7 +65,7 @@ function createPrismaClient(): PrismaClient {
             } catch (error) {
               if (
                 error instanceof Prisma.PrismaClientKnownRequestError &&
-                (error.code === 'P1001' || error.code === 'P1002' || error.code === 'P1017')
+                (error.code === 'P1001' || error.code === 'P1002' || error.code === 'P1017' || error.code === 'P2024')
               ) {
                 if (attempt < maxRetries) {
                   const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 200
@@ -81,10 +86,12 @@ function createPrismaClient(): PrismaClient {
   return extended as unknown as PrismaClient
 }
 
-export const prisma =
-  globalForPrisma.prisma ??
-  createPrismaClient()
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+// Cache the client on the global object in EVERY environment, production
+// included. Vercel reuses warm serverless instances, so without a global
+// singleton each module evaluation could construct a fresh PrismaClient (and a
+// fresh connection pool) on the same instance — which is what exhausted the
+// database connection pool. `globalThis` survives module re-evaluation.
+export const prisma = globalForPrisma.prisma ?? createPrismaClient()
+globalForPrisma.prisma = prisma
 
 export default prisma

@@ -76,7 +76,16 @@ export function decorateForFallback(client: any, requestedModel: string): OpenAI
         return {
           completions: {
             create: async (params: any) => {
-              const req = { ...params, model }
+              const req: any = { ...params, model }
+              // Groq's gpt-oss models are reasoning models: at the default
+              // effort the hidden reasoning can eat the whole completion
+              // budget, leaving `content` empty and dropping the shopper onto
+              // template replies. Cap the effort so the negotiation JSON always
+              // makes it out. Only applies to gpt-oss (other fallback models
+              // would reject the parameter).
+              if (/gpt-oss/i.test(model) && req.reasoning_effort == null) {
+                req.reasoning_effort = 'low'
+              }
               try {
                 return await rawCreate(req)
               } catch (err: any) {

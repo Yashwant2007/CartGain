@@ -71,6 +71,24 @@ describe('decorateForFallback', () => {
     ).rejects.toBe(rateError)
     expect(create).toHaveBeenCalledTimes(1)
   })
+
+  it('caps reasoning effort on gpt-oss so the answer fits the token budget', async () => {
+    const create = jest.fn().mockResolvedValue({ ok: true })
+    const decorated = decorateForFallback(fakeChatCompletions(create), 'openai/gpt-oss-120b')
+
+    await (decorated as any).chat.completions.create({ model: 'gpt-4o', messages: [] })
+
+    expect(create.mock.calls[0][0].reasoning_effort).toBe('low')
+  })
+
+  it('does not add reasoning_effort for non-reasoning fallback models', async () => {
+    const create = jest.fn().mockResolvedValue({ ok: true })
+    const decorated = decorateForFallback(fakeChatCompletions(create), 'llama-3.3-70b-versatile')
+
+    await (decorated as any).chat.completions.create({ model: 'gpt-4o', messages: [] })
+
+    expect(create.mock.calls[0][0]).not.toHaveProperty('reasoning_effort')
+  })
 })
 describe('provider env parsing (getAiHealth)', () => {
   const ORIGINAL = { ...process.env }

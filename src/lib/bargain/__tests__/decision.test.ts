@@ -6,6 +6,7 @@ import {
   computeMinPrice,
   negotiateStep,
   chatFallback,
+  extractJsonObject,
   type NegotiationContext,
 } from '@/lib/services/bargain'
 import prisma from '@/lib/db'
@@ -58,6 +59,30 @@ const prismaMock = prisma as unknown as {
   bargainConfig: { findUnique: jest.Mock }
   bargainProduct: { findUnique: jest.Mock }
 }
+
+describe('extractJsonObject', () => {
+  it('parses a plain JSON object', () => {
+    expect(extractJsonObject('{"reply":"hi","decision":"chat"}')).toEqual({ reply: 'hi', decision: 'chat' })
+  })
+
+  it('recovers an object wrapped in markdown fences', () => {
+    expect(extractJsonObject('```json\n{"reply":"ok"}\n```')).toEqual({ reply: 'ok' })
+  })
+
+  it('recovers the first balanced object embedded in prose', () => {
+    expect(extractJsonObject('Sure! {"reply":"ok","n":1} hope that helps')).toEqual({ reply: 'ok', n: 1 })
+  })
+
+  it('handles braces inside string values', () => {
+    expect(extractJsonObject('{"reply":"use {curly} braces"}')).toEqual({ reply: 'use {curly} braces' })
+  })
+
+  it('returns null for empty or non-object payloads', () => {
+    expect(extractJsonObject('')).toBeNull()
+    expect(extractJsonObject('just some prose with no json')).toBeNull()
+    expect(extractJsonObject('[1,2,3]')).toBeNull()
+  })
+})
 
 describe('ruleBasedDecision', () => {
   it('accepts offers at or above the floor', () => {

@@ -209,4 +209,55 @@ describe('primary outage is absorbed inside the same request', () => {
     expect(seen[0].response_format).toEqual({ type: 'json_object' })
     expect(seen[0].messages[0].role).toBe('system')
   })
+
+  it('salvages a non-JSON prose reply from Groq instead of serving a template', async () => {
+    setEnv({ OPENAI_API_KEY: undefined })
+    ;(globalThis as any).__nextCreate = jest.fn(async () => ({
+      choices: [{ message: { content: 'Bhai, 88 pe bhi thoda kam pad raha hai — 90 pe set karein?' } }],
+      usage: {},
+    }))
+
+    const res = await negotiateStep(ctx(), [], 'kuch kam karo', 88, 'sess-prose')
+
+    // A real, human reply — not a canned template line.
+    expect(res.reply).toContain('Bhai')
+    expect(res.decision).toBe('counter')
+    expect(res.counterOffer!).toBeGreaterThanOrEqual(80)
+  })
+
+  it('recovers a JSON reply wrapped in markdown fences', async () => {
+    setEnv({ OPENAI_API_KEY: undefined })
+    ;(globalThis as any).__nextCreate = jest.fn(async () => ({
+      choices: [
+        {
+          message: {
+            content:
+              'Here you go:\n```json\n' +
+              JSON.stringify({ reply: 'Fenced reply.', decision: 'counter', counterOffer: 90, tactic: 't', sentiment: 'happy' }) +
+              '\n```',
+          },
+        },
+      ],
+      usage: {},
+    }))
+
+    const res = await negotiateStep(ctx(), [], '90?', 90, 'sess-fence')
+
+    expect(res.reply).toBe('Fenced reply.')
+    expect(res.decision).toBe('counter')
+    expect(res.counterOffer).toBe(90)
+  })
+
+  it('degrades safely when Groq returns empty content (reasoning ate the budget)', async () => {
+    setEnv({ OPENAI_API_KEY: undefined })
+    ;(globalThis as any).__nextCreate = jest.fn(async () => ({
+      choices: [{ message: { content: '' }, finish_reason: 'length' }],
+      usage: { completion_tokens_details: { reasoning_tokens: 1200 } },
+    }))
+
+    const res = await negotiateStep(ctx({ minPrice: 80, attemptsUsed: 3, maxAttempts: 3 }), [], '70?', 70, 'sess-empty')
+
+    expect(res.reply).not.toContain('80.00')
+    if (res.decision === 'counter') expect(res.counterOffer!).toBeGreaterThan(80)
+  })
 })

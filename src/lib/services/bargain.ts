@@ -19,6 +19,78 @@ import { analyzeSocialSignals, socialSignalsToPromptBlock, type SocialSignals } 
 // negotiation quality; set BARGAIN_MODEL=gpt-4o-mini to cut OpenAI cost.
 const BARGAIN_MODEL = process.env.BARGAIN_MODEL || 'gpt-4o'
 
+// Completion budget. Reasoning-model fallbacks (Groq `openai/gpt-oss-120b`)
+// spend hidden reasoning tokens out of this budget BEFORE emitting the JSON
+// answer. At the old 320-token cap the reasoning phase exhausted the budget,
+// `message.content` came back empty, `JSON.parse('')` threw, and every shopper
+// was served a canned template line (`BARGAIN_AI_DEGRADED reason=parse_fallback`).
+// Give the model enough headroom to think AND answer.
+const BARGAIN_MAX_TOKENS = Number(process.env.BARGAIN_MAX_TOKENS) || 1200
+
+/**
+ * Recover a JSON object from a model reply.
+ *
+ * `response_format: json_object` is best-effort, especially on the Groq
+ * reasoning fallback and at the negotiation temperature. The model may wrap the
+ * object in prose or markdown fences, or emit a stray trailing newline. Rather
+ * than declare `parse_fallback` and drop the shopper onto a template, dig the
+ * object back out. Returns null only when no object is present at all.
+ */
+export function extractJsonObject(raw: string): Record<string, unknown> | null {
+  if (!raw) return null
+  const text = raw.trim()
+  if (!text) return null
+
+  const tryParse = (s: string): Record<string, unknown> | null => {
+    try {
+      const value = JSON.parse(s)
+      return value && typeof value === 'object' && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : null
+    } catch {
+      return null
+    }
+  }
+
+  const direct = tryParse(text)
+  if (direct) return direct
+
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fenced) {
+    const inner = tryParse(fenced[1].trim())
+    if (inner) return inner
+  }
+
+  // Scan for the first balanced {...} block, respecting strings and escapes.
+  const start = text.indexOf('{')
+  if (start !== -1) {
+    let depth = 0
+    let inString = false
+    let escaped = false
+    for (let i = start; i < text.length; i++) {
+      const ch = text[i]
+      if (inString) {
+        if (escaped) escaped = false
+        else if (ch === '\\') escaped = true
+        else if (ch === '"') inString = false
+        continue
+      }
+      if (ch === '"') inString = true
+      else if (ch === '{') depth++
+      else if (ch === '}') {
+        depth--
+        if (depth === 0) {
+          const balanced = tryParse(text.slice(start, i + 1))
+          if (balanced) return balanced
+          break
+        }
+      }
+    }
+  }
+
+  return null
+}
+
 // ── Types ──
 
 export type Persona = 'friendly_shopkeeper' | 'strict_negotiator' | 'playful_friend'
@@ -1719,19 +1791,30 @@ export async function negotiateStep(
       model: BARGAIN_MODEL,
       messages,
       temperature: 0.85,
-      max_tokens: 320,
+      max_completion_tokens: BARGAIN_MAX_TOKENS,
       response_format: { type: 'json_object' },
     })
 
     const raw = completion.choices[0]?.message?.content ?? ''
-    let parsed: any = null
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      // AI returned invalid JSON — fall back to rules
+    let parsed: any = extractJsonObject(raw)
+
+    if (!parsed) {
+      // The provider replied, but not as a JSON object. Two real causes:
+      //  (1) a reasoning-model fallback (Groq gpt-oss) whose hidden reasoning
+      //      consumed the whole token budget, leaving `content` empty; or
+      //  (2) the model wrapped valid JSON in prose/markdown. Either way, never
+      //      drop the shopper onto a canned template: if there is any prose,
+      //      salvage it as a live reply and let the normal safety path clamp the
+      //      price. Only a completely empty reply degrades to the rules.
       reportAiDegradation('parse_fallback', `tier=${tier}`)
-      if (customerOffer != null) return ruleBasedDecision(customerOffer, ctx)
-      return { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', tactic: 'parse_fallback', sentiment: 'neutral' }
+      const prose = raw.replace(/```(?:json)?/gi, '').trim()
+      if (prose) {
+        parsed = { reply: prose, decision: customerOffer != null ? 'counter' : 'chat' }
+      } else if (customerOffer != null) {
+        return ruleBasedDecision(customerOffer, ctx)
+      } else {
+        return { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', tactic: 'parse_fallback', sentiment: 'neutral' }
+      }
     }
 
     // Validate decision
