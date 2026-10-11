@@ -138,6 +138,27 @@ describe('handleAiFailure trips the tier on provider failures', () => {
 
     expect(isTierTripped('primary')).toBe(false)
   })
+
+  it('does NOT trip on the SDK connection-timeout type either', async () => {
+    const { handleAiFailure } = await import('../ai-client')
+    const { isTierTripped, resetQuotaBreakForTests } = await import('../ai-quota')
+    resetQuotaBreakForTests()
+
+    handleAiFailure({ name: 'APIConnectionTimeoutError', message: 'Connection timed out.' }, 'test', undefined, 'primary')
+
+    expect(isTierTripped('primary')).toBe(false)
+  })
+
+  it('trips when the provider is unreachable (connection error / refused)', async () => {
+    const { handleAiFailure } = await import('../ai-client')
+    const { isTierTripped, resetQuotaBreakForTests } = await import('../ai-quota')
+
+    for (const err of [{ name: 'APIConnectionError' }, { code: 'ECONNREFUSED' }, { code: 'ENOTFOUND' }]) {
+      resetQuotaBreakForTests()
+      handleAiFailure(err, 'test', undefined, 'primary')
+      expect(isTierTripped('primary')).toBe(true)
+    }
+  })
 })
 
 describe('provider env parsing (getAiHealth)', () => {

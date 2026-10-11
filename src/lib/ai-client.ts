@@ -150,21 +150,33 @@ export function getAiClient(userKey?: string): AiResolved | null {
 
 export function handleAiFailure(err: any, context: string, userKey: string | undefined, tier: AiTier): void {
   const status: number | undefined = err?.status ?? err?.statusCode
+  const name: string | undefined = err?.name
+  const code: string | undefined = err?.code
   const quota = isInsufficientQuotaError(err)
+  // A slow reply is NOT an outage: tripping a tier for 15 minutes because of one
+  // timeout would push every shopper onto the fallback, so timeouts stay local.
+  const timeout =
+    name === 'APIConnectionTimeoutError' ||
+    name === 'AbortError' ||
+    name === 'TimeoutError' ||
+    code === 'ETIMEDOUT'
+  // The provider being unreachable (DNS/refused/reset) is a real outage too.
+  const connection =
+    name === 'APIConnectionError' ||
+    ['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE', 'EHOSTUNREACH', 'ENETUNREACH'].includes(
+      code ?? '',
+    )
   // Any HTTP-level failure means this tier cannot serve the request right now,
   // so fail over instead of silently serving templates. This explicitly covers
   // 429 rate-limits/quota — the exact case that previously degraded a whole
-  // storefront to canned lines without any log line. No-status errors
-  // (timeouts, transient network blips) are deliberately NOT treated as an
-  // outage: one slow reply must not push every shopper onto the fallback for
-  // 15 minutes. 413 is excluded here too — that is a request-SIZE problem the
-  // bargain path handles with a compact retry, not a tier outage.
+  // storefront to canned lines without any log line. 413 is excluded: that is a
+  // request-SIZE problem the bargain path handles with a compact retry.
   const httpFailure = typeof status === 'number' && status >= 400 && status !== 413
-  if (quota || httpFailure) {
+  if (!timeout && (quota || connection || httpFailure)) {
     tripTierBreaker(tier)
     if (tier === 'fallback' && userKey) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
     if (shouldLogQuota()) {
-      const reason = quota ? 'credits exhausted' : `HTTP ${status}`
+      const reason = quota ? 'credits exhausted' : httpFailure ? `HTTP ${status}` : 'provider unreachable'
       console.warn(
         `[AI] ${context}: ${tier} tier failing (${reason}) — ${
           tier === 'primary' ? 'switching to fallback provider' : 'falling back to heuristics'
