@@ -15,7 +15,7 @@ interface HealthStatus {
   checks: {
     database: { status: 'ok' | 'error'; latencyMs: number; error?: string }
     redis: { status: 'ok' | 'degraded' | 'error'; latencyMs?: number; error?: string }
-    env: { status: 'ok' | 'degraded'; missing: string[]; unpadded?: boolean }
+    env: { status: 'ok' | 'degraded'; missing: string[]; unpadded?: boolean; optionalMissing?: boolean }
     ai: {
       status: 'ok' | 'degraded'
       activeTier: 'primary' | 'fallback' | 'none'
@@ -28,7 +28,6 @@ interface HealthStatus {
 
 export async function GET() {
   const start = Date.now()
-  const missing: string[] = []
 
   const requiredVars = [
     'DATABASE_URL',
@@ -52,13 +51,17 @@ export async function GET() {
     'ALERT_EMAIL',
   ]
 
-  const requiredMissing = missing.filter((k) => requiredVars.includes(k))
-  const optionalMissing = missing.filter((k) => optionalVars.includes(k))
-
+  const requiredMissing: string[] = []
   for (const key of requiredVars) {
     if (!process.env[key]) requiredMissing.push(key)
   }
 
+  // Optional integrations (WhatsApp, email alerts, …) degrade gracefully when
+  // unset, so their absence is reported but NEVER flips the overall status to
+  // "degraded". Treating them as failures kept the endpoint permanently
+  // "degraded", which trained everyone to ignore a signal that should mean
+  // something.
+  const optionalMissing: string[] = []
   for (const key of optionalVars) {
     if (!process.env[key]) optionalMissing.push(key)
   }
@@ -133,7 +136,7 @@ export async function GET() {
   const overall: HealthStatus['status'] =
     dbStatus.status === 'error' ? 'error' :
     requiredMissing.length > 0 || redisStatus.status === 'error' ? 'error' :
-    redisStatus.status === 'degraded' || aiStatus.status === 'degraded' || optionalMissing.length > 0 ? 'degraded' :
+    redisStatus.status === 'degraded' || aiStatus.status === 'degraded' ? 'degraded' :
     'ok'
 
   const body: HealthStatus = {
@@ -151,6 +154,8 @@ export async function GET() {
         missing: requiredMissing.length > 0 ? ['N'] : [],
         // Boolean only, for the same reason: a count or list would leak the stack.
         unpadded: unpadded.length > 0,
+        // Optional integrations are missing but the app still works.
+        optionalMissing: optionalMissing.length > 0,
       },
       ai: aiStatus,
       version: '1.0.0',
