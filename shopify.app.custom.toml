@@ -1,0 +1,79 @@
+# CartGain — Custom Distribution app configuration
+# =============================================================================
+# This is the SECOND Shopify app registration for CartGain: the same product as
+# the public app, but distributed as a **Custom distribution** app so merchants
+# can be onboarded before App Store review completes.
+#
+# It is intentionally NOT the default config. The live public app is defined by
+# `shopify.app.toml` and is never touched by anything in this file.
+#
+#   Public app  →  shopify.app.toml            (default config)
+#   Custom app  →  shopify.app.custom.toml      (this file, `--config custom`)
+#
+# All CLI commands for this app MUST pass `--config custom`, e.g.
+#   shopify app config link --config custom      # one-time: writes the real client_id
+#   shopify app deploy --config custom           # deploys config + extensions to the custom app
+#   shopify app dev --config custom
+#
+# Never run the bare `shopify app deploy` (no --config) from this repo on behalf
+# of the custom app — that targets the public app.
+#
+# The full setup runbook lives in docs/shopify-custom-distribution.md.
+# =============================================================================
+#
+# Learn more about configuring your app at
+# https://shopify.dev/docs/apps/tools/cli/configuration
+
+# Client ID of the "CartGain Custom" app record created in the CartGain Dev
+# Dashboard org (224514645). Created via `shopify app init`.
+client_id = "850b64332c8925413d0d6d8d39ede515"
+name = "CartGain Custom"
+description = "Recover abandoned carts with WhatsApp, Email and SMS — plus AI price negotiation at checkout that converts bargain hunters into buyers."
+# Custom-distribution host. Point this at the custom app's own deployment
+# (recommended: a dedicated subdomain on a second Vercel project). Replace if
+# you choose a different host.
+application_url = "https://custom.cart-gain.com/api/shopify/install"
+embedded = true
+
+[webhooks]
+api_version = "2026-04"
+
+# Functional webhook topics. Absolute HTTPS URIs (see the note in
+# shopify.app.toml: relative URIs resolve against the application_url subpath
+# and 404).
+  [[webhooks.subscriptions]]
+  uri = "https://custom.cart-gain.com/api/webhooks/shopify"
+  topics = [
+  "carts/update",
+  "checkouts/create",
+  "checkouts/update",
+  "orders/create",
+  "orders/cancelled",
+  "refunds/create",
+  "app/uninstalled",
+  "app_subscriptions/update"
+]
+
+  # Mandatory compliance webhooks. Required for any app that touches customer
+  # data — custom distribution included.
+  #   customers/data_request — data subject access request
+  #   customers/redact      — delete a customer's data
+  #   shop/redact           — delete a shop's data (48h after uninstall)
+  [[webhooks.subscriptions]]
+  uri = "https://custom.cart-gain.com/api/webhooks/shopify"
+  compliance_topics = [
+  "customers/data_request",
+  "customers/redact",
+  "shop/redact"
+]
+
+[access_scopes]
+# Identical to the public app — kept in sync with the runtime OAuth request in
+# src/app/api/shopify/connect/route.ts and src/lib/shopify-oauth.ts.
+# read_webhooks / write_webhooks are omitted (deprecated by Shopify).
+scopes = "read_checkouts,write_checkouts,read_orders,read_all_orders,read_customers,read_products,read_product_listings,read_discounts,write_discounts"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [ "https://custom.cart-gain.com/api/shopify/callback" ]

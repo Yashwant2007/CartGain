@@ -25,9 +25,11 @@ pnpm-debug.log*
 .DS_Store
 *.pem
 
-# stray Shopify app configs (only shopify.app.toml is the real one)
+# stray Shopify app configs (only shopify.app.toml is the real public app;
+# shopify.app.custom.toml is the tracked Custom distribution app config)
 shopify.app.*.toml
 !shopify.app.toml
+!shopify.app.custom.toml
 
 # debug
 *.log
