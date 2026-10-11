@@ -65,9 +65,12 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 12)
 
+    // First password for a Google-only account. tokenVersion is deliberately
+    // NOT bumped here: the caller just signed in via OAuth and there are no
+    // password-based sessions to revoke, so keeping them signed in is correct.
     await prisma.user.update({
       where: { id: session.user.id },
-      data: { password: hashedPassword },
+      data: { password: hashedPassword, passwordChangedAt: new Date() },
     })
 
     return NextResponse.json({ message: 'Password set successfully' })

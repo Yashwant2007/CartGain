@@ -3,7 +3,9 @@ import { NextFetchEvent, NextRequest, NextResponse } from 'next/server'
 
 const auth = withAuth({
   callbacks: {
-    authorized: ({ token }) => !!token,
+    // Reject revoked tokens (flagged by the jwt callback after a password
+    // change/reset) in addition to missing ones.
+    authorized: ({ token }) => !!token && !(token as any).revoked,
   },
   pages: {
     signIn: '/login',

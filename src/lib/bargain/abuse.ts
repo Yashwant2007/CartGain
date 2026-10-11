@@ -248,8 +248,23 @@ const OFF_TOPIC_PATTERNS: RegExp[] = [
   /\b(?:this\s+(?:item|product|store|shop)\s+is\s+(?:a\s+)?(?:bad|cheap|fake|poor|worst|waste|scam|fraud))\b/i,
 ]
 
-const OFF_TOPIC_RESPONSE =
-  `I'm happy to chat, but let's focus on the deal! What price would be fair for this item?`
+// Rotating, empathetic fallbacks so the same canned line never repeats twice
+// in a row (a repeated static reply reads as "broken bot" to shoppers).
+const OFF_TOPIC_RESPONSES = [
+  `I'm happy to chat 😄 but let's keep our eyes on the deal — what price would feel fair for this item?`,
+  `Ha, I like the vibe 🙂 now let's win this one — what's the number you're hoping for?`,
+  `I'm right here for you 🤝 just tell me the price you have in mind and we'll make it work ✨`,
+]
+
+const FLOODING_RESPONSES = [
+  `Whoa, one at a time 😅 I'm right here — send me a single price and I'll see what I can do 🙌`,
+  `Slow down a sec 🤝 no need to rush — what's the one price you'd be happy with?`,
+  `Easy there 😄 let's take this one step at a time — what number works for you?`,
+]
+
+function pickResponse(options: string[], seed: number): string {
+  return options[Math.abs(seed) % options.length]
+}
 
 // ────────────────────────────────────────────────────────────
 // LAYER 5: REPETITION & FLOODING
@@ -277,10 +292,10 @@ function detectRepetition(
     }
   }
 
-  // Check for flooding (many messages in short time)
-  const now = state.messageTimestamps.length > 0
-    ? state.messageTimestamps[state.messageTimestamps.length - 1] + 100 // simulate 100ms between calls
-    : Date.now()
+  // Check for flooding using real wall-clock time. (Previously this fabricated
+  // +100ms timestamps per message, which made any conversation of 5+ turns look
+  // permanently "flooded" and latch onto one canned reply forever.)
+  const now = Date.now()
   const recentTimestamps = state.messageTimestamps.filter(t => now - t < 10000) // last 10 seconds
   const isFlooding = recentTimestamps.length >= 5 // 5+ messages in 10 seconds
 
@@ -406,7 +421,7 @@ export function checkAbuse(
       reason: flood.gibberish ? 'Gibberish/low-entropy message detected'
         : flood.emoji ? 'Emoji-only spam detected'
         : 'Message exceeds reasonable length',
-      response: 'Whoa, let\'s keep messages short and focused. What\'s your offer on this item?',
+      response: pickResponse(FLOODING_RESPONSES, state.messageCount),
       consumeAttempt: false, // don't waste an attempt on spam
     }
   }
@@ -515,7 +530,7 @@ export function checkAbuse(
         severity: 'low',
         category: 'off_topic_extreme',
         reason: 'Non-negotiation topic detected',
-        response: OFF_TOPIC_RESPONSE,
+        response: pickResponse(OFF_TOPIC_RESPONSES, state.messageCount),
         consumeAttempt: false, // don't waste an attempt on chit-chat
       }
     }
@@ -529,7 +544,7 @@ export function checkAbuse(
       severity: 'medium',
       category: 'flooding',
       reason: 'Message flooding detected',
-      response: 'Whoa, slow down! Let\'s take this one step at a time. What\'s your best offer?',
+      response: pickResponse(FLOODING_RESPONSES, state.messageCount),
       consumeAttempt: false,
     }
   }
@@ -546,10 +561,7 @@ export function checkAbuse(
 
   // ── Update conversation state ──
   state.messageCount++
-  const simulatedTime = state.messageTimestamps.length > 0
-    ? state.messageTimestamps[state.messageTimestamps.length - 1] + 100
-    : Date.now()
-  state.messageTimestamps.push(simulatedTime)
+  state.messageTimestamps.push(Date.now())
   state.recentMessages.push(sanitized)
   if (state.recentMessages.length > 10) state.recentMessages.shift()
   state.lastMessage = sanitized

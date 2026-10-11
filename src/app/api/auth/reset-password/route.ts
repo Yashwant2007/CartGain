@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { invalidateTokenVersionCache } from '@/lib/auth'
 import { checkRateLimit } from '@/lib/rate-limit'
 import {
   resetPasswordSchema,
@@ -125,11 +126,16 @@ export async function POST(request: NextRequest) {
     // Hash new password
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    // Update password and delete token
+    // Update password and delete token. Bump tokenVersion so any session an
+    // attacker may have established before the reset is revoked.
     await Promise.all([
       prisma.user.update({
         where: { id: user.id },
-        data: { password: hashedPassword },
+        data: {
+          password: hashedPassword,
+          passwordChangedAt: new Date(),
+          tokenVersion: { increment: 1 },
+        },
       }),
       prisma.verificationToken.delete({
         where: {
@@ -140,6 +146,7 @@ export async function POST(request: NextRequest) {
         },
       }),
     ])
+    invalidateTokenVersionCache(user.id)
 
     return NextResponse.json(
       createSuccessResponse(

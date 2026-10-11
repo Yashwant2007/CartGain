@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { authOptions, invalidateTokenVersionCache } from '@/lib/auth'
 import prisma from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
@@ -43,9 +43,23 @@ export async function POST(request: NextRequest) {
     if (!valid) return NextResponse.json({ error: 'Current password is incorrect' }, { status: 400 })
 
     const hashed = await bcrypt.hash(parsed.data.newPassword, 12)
-    await prisma.user.update({ where: { id: user.id }, data: { password: hashed } })
+    // Bump tokenVersion so every session minted before this change is revoked.
+    // The caller's own session is included, so the client must sign in again.
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashed,
+        passwordChangedAt: new Date(),
+        tokenVersion: { increment: 1 },
+      },
+    })
+    invalidateTokenVersionCache(user.id)
 
-    return NextResponse.json({ success: true, message: 'Password updated successfully' })
+    return NextResponse.json({
+      success: true,
+      message: 'Password updated. Please sign in again.',
+      reauthRequired: true,
+    })
   } catch (error) {
     console.error('Change password error:', error)
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })

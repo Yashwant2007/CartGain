@@ -381,6 +381,33 @@ describe('Abuse Detection — Response Quality', () => {
     const r = check('sierra tango uniform', 'flood-session')
     expect(r.isAbusive).toBe(true)
     expect(r.category).toBe('flooding')
-    expect(r.response).toContain('slow down')
+    expect(r.response).toBeTruthy()
+    expect(r.consumeAttempt).toBe(false)
+  })
+
+  it('does not latch into flooding after several normal-tempo turns', () => {
+    // Regression: fabricated +100ms timestamps made turn 6+ look like a flood
+    // and returned the same canned reply forever. Real wall-clock pacing must
+    // keep a normal multi-turn conversation clean.
+    const msgs = [
+      'hi is this available',
+      'can you do better on the price',
+      'my budget is tight',
+      'what about 60 percent off',
+      'ok give me your best then',
+      'i will think about it',
+      'actually i want to buy',
+    ]
+    const base = Date.UTC(2026, 0, 1)
+    let t = base
+    const spy = jest.spyOn(Date, 'now').mockImplementation(() => t)
+    let last = check(msgs[0], 'tempo-session')
+    for (let i = 1; i < msgs.length; i++) {
+      t = base + i * 30_000 // 30s between turns = normal human tempo
+      last = check(msgs[i], 'tempo-session')
+    }
+    spy.mockRestore()
+    expect(last.isAbusive).toBe(false)
+    expect(last.category).toBe('clean')
   })
 })

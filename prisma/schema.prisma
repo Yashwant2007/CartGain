@@ -21,6 +21,11 @@ model User {
   totpSecret    String?
   totpEnabled   Boolean   @default(false)
   notificationPrefs Json?
+  // Revocation counter for JWT sessions. Bumped on password change/reset so any
+  // token minted before the change (which carries the old value) is rejected.
+  tokenVersion  Int       @default(0)
+  // Audit: when the account password was last set/changed.
+  passwordChangedAt DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

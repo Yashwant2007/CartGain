@@ -21,6 +21,35 @@ if (typeof window === 'undefined') {
   }
 }
 
+// ── JWT session revocation ────────────────────────────────────────────────────
+// JWTs are stateless, so a password change cannot reach tokens already in the
+// wild. Every token is stamped with the account's `tokenVersion` at sign-in;
+// when the password changes we bump the DB value and any token holding the old
+// version is rejected. The version is cached briefly per instance so a session
+// authed on every API request does not hit the DB on every call — worst-case
+// revocation lag is the TTL below.
+const TOKEN_VERSION_TTL_MS = 60 * 1000
+const tokenVersionCache = new Map<string, { version: number; at: number }>()
+
+async function getCurrentTokenVersion(userId: string): Promise<number | null> {
+  const cached = tokenVersionCache.get(userId)
+  if (cached && Date.now() - cached.at < TOKEN_VERSION_TTL_MS) return cached.version
+  const row = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { tokenVersion: true },
+  })
+  if (!row) return null
+  tokenVersionCache.set(userId, { version: row.tokenVersion, at: Date.now() })
+  return row.tokenVersion
+}
+
+// Called right after a password change/reset so the bump is honoured immediately
+// on this instance instead of waiting out the TTL.
+export function invalidateTokenVersionCache(userId?: string): void {
+  if (userId) tokenVersionCache.delete(userId)
+  else tokenVersionCache.clear()
+}
+
 // Shopify sign-in OAuth is handled via API routes at /api/shopify/connect and /api/shopify/callback
 // These allow merchants to connect their Shopify stores to CartGain.
 // The flow is: settings page → /api/shopify/connect → Shopify auth → /api/shopify/callback → store linked
@@ -186,13 +215,15 @@ export const authOptions: NextAuthOptions = {
 
         // Flag accounts that still need a password so the client can route
         // Google-only merchants to the set-password step instead of leaving
-        // them stranded after an OAuth redirect.
+        // them stranded after an OAuth redirect. Also stamp the current
+        // session-revocation version onto the token.
         try {
           const accountRow = await prisma.user.findUnique({
             where: { id: user.id },
-            select: { password: true },
+            select: { password: true, tokenVersion: true },
           })
           token.requirePassword = accountRow?.password ? false : true
+          token.tokenVersion = accountRow?.tokenVersion ?? 0
         } catch (error) {
           console.error('Failed to check user password:', error)
         }
@@ -209,10 +240,30 @@ export const authOptions: NextAuthOptions = {
         } catch (error) {
           console.error('Failed to fetch user store:', error)
         }
+      } else if (token.revoked) {
+        // Already revoked — keep rejecting without another DB round-trip.
+        return token
+      } else if (token.id && typeof token.tokenVersion === 'number') {
+        // Existing session: verify the token wasn't minted before a password
+        // change/reset. Fail OPEN on a DB error so a transient outage cannot
+        // log every merchant out at once.
+        try {
+          const current = await getCurrentTokenVersion(token.id as string)
+          if (current != null && current !== token.tokenVersion) {
+            return { ...token, revoked: true }
+          }
+        } catch (error) {
+          console.error('Failed to verify session token version:', error)
+        }
       }
       return token
     },
     async session({ session, token }) {
+      if (token.revoked) {
+        // Surface an unauthenticated session so callers redirect to /login
+        // instead of rendering a dashboard for a revoked token.
+        return { ...session, user: undefined } as any
+      }
       if (session.user) {
         session.user.id = token.id as string
         session.user.storeId = token.storeId as string

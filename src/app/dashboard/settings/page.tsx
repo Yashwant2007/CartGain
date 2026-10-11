@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
+import { signOut } from 'next-auth/react'
 import { Bell, CreditCard, Shield, User, Key, ExternalLink } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 
@@ -566,8 +567,16 @@ function SecuritySettings() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to change password')
-      setPasswordMessage('Password updated successfully!')
       setPasswords({ current: '', new: '', confirm: '' })
+      // Changing the password revokes every existing session (including this
+      // one), so send the user back to sign in with the new credentials.
+      if (data.reauthRequired) {
+        setPasswordMessage('Password updated. Redirecting to sign in…')
+        await new Promise(r => setTimeout(r, 800))
+        await signOut({ callbackUrl: '/login?passwordChanged=1' })
+        return
+      }
+      setPasswordMessage('Password updated successfully!')
       setTimeout(() => setPasswordMessage(null), 3000)
     } catch (error) {
       setPasswordError(error instanceof Error ? error.message : 'Failed to change password')

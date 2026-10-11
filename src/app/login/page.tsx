@@ -148,7 +148,7 @@ function LoginContent() {
   useEffect(() => {
     if (sp.get('verified') === 'true') setEmailVerifiedNotice(true)
     if (sp.get('registered') === 'true') setJustRegistered(true)
-    if (sp.get('passwordReset') === 'true') setPasswordResetNotice(true)
+    if (sp.get('passwordReset') === 'true' || sp.get('passwordChanged') === 'true') setPasswordResetNotice(true)
 
     const err = sp.get('error')
     if (err) {

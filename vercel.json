@@ -1,5 +1,6 @@
 {
   "buildCommand": "npm run vercel-build",
+  "regions": ["bom1"],
   "env": {
     "NODE_ENV": "production"
   },
