@@ -176,6 +176,13 @@ export function getAiHealth() {
   const fallbackConfigured = Boolean(envTrimmed('AI_FALLBACK_API_KEY'))
   const primaryTripped = isTierTripped('primary')
   const fallbackTripped = isTierTripped('fallback')
+  const forceFallback = envTrimmed('AI_FORCE_FALLBACK') === 'true' || envTrimmed('AI_FORCE_FALLBACK') === '1'
+  const activeTier =
+    !forceFallback && primaryConfigured && !primaryTripped
+      ? 'primary'
+      : fallbackConfigured && !fallbackTripped
+      ? 'fallback'
+      : 'none'
   return {
     primary: { configured: primaryConfigured, tripped: primaryTripped },
     fallback: {
@@ -184,12 +191,8 @@ export function getAiHealth() {
       baseUrl: fallbackBaseUrl(),
       model: fallbackModel(),
     },
-    activeTier:
-      primaryConfigured && !primaryTripped
-        ? 'primary'
-        : fallbackConfigured && !fallbackTripped
-        ? 'fallback'
-        : 'none',
+    forceFallback,
+    activeTier,
   } as const
 }
 

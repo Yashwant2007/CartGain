@@ -260,4 +260,64 @@ describe('primary outage is absorbed inside the same request', () => {
     expect(res.reply).not.toContain('80.00')
     if (res.decision === 'counter') expect(res.counterOffer!).toBeGreaterThan(80)
   })
+
+  it('retries the SAME tier with the compact prompt on a 413 too-large error, without tripping the breaker', async () => {
+    // The exact production failure: the request overflowed the provider's
+    // per-minute token bucket. It is a size problem, not an outage, so we retry
+    // in-request with the compact prompt + smaller budget — never a template.
+    const seen: any[] = []
+    ;(globalThis as any).__nextCreate = jest.fn(async (req: any) => {
+      seen.push(req)
+      if (seen.length === 1) {
+        throw {
+          status: 413,
+          error: {
+            message:
+              'Request too large for model `gpt-4o` on tokens per minute (TPM): Limit 8000, Requested 8181, please reduce your message size',
+          },
+        }
+      }
+      return modelReply(90)
+    })
+
+    const res = await negotiateStep(ctx(), [], 'can you do 90?', 90, 'sess-413')
+
+    expect(res.reply).toBe('Groq answered you.')
+    // Two attempts, both on the primary (no failover), the second compact.
+    expect(sentModels).toEqual(['gpt-4o', 'gpt-4o'])
+    expect(seen[0].messages[0].content).toContain('NEGOTIATION PSYCHOLOGY')
+    expect(seen[1].messages[0].content).toContain('CORE LAWS')
+    expect(seen[1].messages[0].content).not.toContain('NEGOTIATION PSYCHOLOGY')
+    expect(seen[1].max_completion_tokens).toBeLessThan(seen[0].max_completion_tokens)
+    // A size error is not an outage — the primary stays healthy for the next turn.
+    expect(isTierTripped('primary')).toBe(false)
+  })
+
+  it('sends the compact prompt on the fallback tier from the very first call', async () => {
+    setEnv({ OPENAI_API_KEY: undefined })
+    const seen: any[] = []
+    ;(globalThis as any).__nextCreate = jest.fn(async (req: any) => {
+      seen.push(req)
+      return modelReply(90)
+    })
+
+    await negotiateStep(ctx(), [], '90?', 90, 'sess-compact-fb')
+
+    expect(seen[0].messages[0].content).toContain('CORE LAWS')
+    expect(seen[0].messages[0].content).not.toContain('NEGOTIATION PSYCHOLOGY')
+    expect(seen[0].max_completion_tokens).toBe(700)
+  })
+
+  it('degrades safely when even the compact retry is too large', async () => {
+    ;(globalThis as any).__nextCreate = jest.fn(async () => {
+      throw { status: 413, error: { message: 'Request too large' } }
+    })
+
+    const res = await negotiateStep(ctx({ minPrice: 80, attemptsUsed: 3, maxAttempts: 3 }), [], '70?', 70, 'sess-413-2')
+
+    // Compact retried exactly once on the same tier, then degraded to the rules.
+    expect(sentModels).toEqual(['gpt-4o', 'gpt-4o'])
+    expect(res.reply).not.toContain('80.00')
+    if (res.decision === 'counter') expect(res.counterOffer!).toBeGreaterThan(80)
+  })
 })
