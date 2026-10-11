@@ -86,6 +86,12 @@ export function extractQuantity(text: string): number | null {
   return null
 }
 
+// Non-price "unit" words that, when they follow a bare number, mark it as a
+// count / age / duration rather than a money offer ("2 kids", "50 years",
+// "3 days", "10 minutes"). Currency-anchored numbers bypass this check.
+const NON_PRICE_UNIT_AFTER =
+  /^\s*(?:kids?|children|child|yrs?|years?|months?|weeks?|days?|hours?|hrs?|minutes?|mins?|seconds?|secs?|people|persons?|members?|guys?|girls?|boys?|reviews?|stars?|times?|percent|%|\d\s*(?:am|pm)\b)/i
+
 // ── Price extraction: pull a numeric offer out of free text ──
 export function extractPrice(text: string): number | null {
   // A leading minus before a number/currency means a negative/absurd "offer"
@@ -95,20 +101,40 @@ export function extractPrice(text: string): number | null {
   }
 
   const patterns = [
-    /(?:₹|INR|Rs\.?)\s*(\d+(?:\.\d{1,2})?)/i,
-    /(?:\$|USD)\s*(\d+(?:\.\d{1,2})?)/i,
-    /(?:€|EUR)\s*(\d+(?:\.\d{1,2})?)/i,
-    /(\d+(?:\.\d{1,2})?)\s*(?:₹|rs\.?|inr|rupees?)/i,
-    /(\d+(?:\.\d{1,2})?)\s*(?:\$|dollars?|usd)/i,
-    /(\d+(?:\.\d{1,2})?)\s*(?:€|euros?|eur)/i,
-    /\b(\d+(?:\.\d{1,2})?)\b/,
+    /(?:₹|INR|Rs\.?)\s*([\d,]+(?:\.\d{1,2})?)/i,
+    /(?:\$|USD)\s*([\d,]+(?:\.\d{1,2})?)/i,
+    /(?:€|EUR)\s*([\d,]+(?:\.\d{1,2})?)/i,
+    /([\d,]+(?:\.\d{1,2})?)\s*(?:₹|rs\.?|inr|rupees?)/i,
+    /([\d,]+(?:\.\d{1,2})?)\s*(?:\$|dollars?|usd)/i,
+    /([\d,]+(?:\.\d{1,2})?)\s*(?:€|euros?|eur)/i,
   ]
   for (const pattern of patterns) {
     const match = text.match(pattern)
     if (match) {
-      const val = parseFloat(match[1])
+      const val = parseFloat(match[1].replace(/,/g, ''))
       if (val > 0 && val < 1_000_000) return val
     }
+  }
+
+  // A bare number only counts as an offer when it is NOT used as a count, an
+  // age, or a duration. "I have 2 kids" must not register as a bid of 2, and
+  // "my mum is 50" must not register as a bid of 50 — otherwise normal chat
+  // silently spends the customer's negotiation budget. A sentence can still
+  // contain both ("2 kids ... give me 300"), so scan every number and take the
+  // first one that reads as money.
+  const bareRe = /\d{1,3}(?:,\d{2,3})+|\d+(?:\.\d{1,2})?/g
+  let m: RegExpExecArray | null
+  while ((m = bareRe.exec(text)) !== null) {
+    const raw = m[0]
+    const val = parseFloat(raw.replace(/,/g, ''))
+    if (!(val > 0 && val < 1_000_000)) continue
+    const after = text.slice(m.index + raw.length)
+    const before = text.slice(0, m.index)
+    if (NON_PRICE_UNIT_AFTER.test(after)) continue
+    // Age idioms: "I am 25", "I'm 30", "age 40" — a small number here is a
+    // person's age, not a bid.
+    if (val <= 120 && /(?:\bi(?:\s+am|'?m)|\bage\b|\baged\b|\bturning\b)\s*$/i.test(before)) continue
+    return val
   }
   return null
 }

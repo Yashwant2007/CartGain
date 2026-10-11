@@ -214,8 +214,12 @@ export async function POST(request: NextRequest) {
       ? data.language
       : (config.language || 'auto')
 
-    const customerContext = await buildCustomerContext(data.storeId, data.customerEmail || null)
-    const returning = !!(customerContext && data.customerEmail)
+    const customerContext = await buildCustomerContext(data.storeId, {
+      customerEmail: data.customerEmail || null,
+      customerFingerprint: data.customerFingerprint || null,
+      cartToken: data.cartToken || null,
+    })
+    const returning = !!(customerContext && (data.customerEmail || data.customerFingerprint || data.cartToken))
 
     const ctx: NegotiationContext = {
       storeName: store.name,

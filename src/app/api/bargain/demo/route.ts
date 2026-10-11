@@ -121,6 +121,21 @@ export async function POST(request: NextRequest) {
         })).filter((m: { content: string }) => m.content.length > 0)
       : []
 
+    // Offer-direction read over the replayed history so the demo negotiates on
+    // the same serious/not-serious signal as the live storefront.
+    const priorCustomerOffers = history
+      .filter((m) => m.role === 'customer' && typeof m.offeredPrice === 'number')
+      .map((m) => m.offeredPrice as number)
+    let customerOfferTrend: NegotiationContext['customerOfferTrend']
+    if (offer != null) {
+      if (priorCustomerOffers.length === 0) {
+        customerOfferTrend = 'new'
+      } else {
+        const last = priorCustomerOffers[priorCustomerOffers.length - 1]
+        customerOfferTrend = offer > last ? 'rising' : offer < last ? 'falling' : 'flat'
+      }
+    }
+
     const ctx: NegotiationContext = {
       storeName,
       currencySymbol,
@@ -133,6 +148,7 @@ export async function POST(request: NextRequest) {
       bulkQuantity,
       language: effectiveLanguage,
       walkoutTriggered: body.walkoutTriggered === true,
+      customerOfferTrend,
       customerContext: 'Sequential guided product demo on the CartGain site.',
     }
 

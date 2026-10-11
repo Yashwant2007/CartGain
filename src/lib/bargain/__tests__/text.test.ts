@@ -179,4 +179,22 @@ describe('extractPrice', () => {
     expect(extractPrice('350 ₹ final')).toBe(350)
     expect(extractPrice('25 $ only')).toBe(25)
   })
+
+  it('does NOT read counts, ages, or durations as price offers (attempt-budget leak)', () => {
+    expect(extractPrice('I have 2 kids')).toBeNull()
+    expect(extractPrice('my mom is 50 years old')).toBeNull()
+    expect(extractPrice('I am 25')).toBeNull()
+    expect(extractPrice("i'm 30")).toBeNull()
+    expect(extractPrice('give me 3 days to decide')).toBeNull()
+    expect(extractPrice('it took 10 minutes')).toBeNull()
+  })
+
+  it('still finds the offer in a sentence that also mentions a count', () => {
+    expect(extractPrice('I have 2 kids, please give me 300')).toBe(300)
+  })
+
+  it('parses comma-grouped thousands', () => {
+    expect(extractPrice('my offer is 1,000')).toBe(1000)
+    expect(extractPrice('₹1,250 final')).toBe(1250)
+  })
 })

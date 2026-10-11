@@ -357,6 +357,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ reply: rejectReply, decision: 'reject', sessionStatus: 'rejected', attemptsUsed })
     }
 
+    // Deterministic offer-direction read over this same buyer's earlier turns.
+    // The engine uses it to reward real upward movement and to HOLD against a
+    // repeated lowball instead of folding — the difference between a salesman
+    // and a vending machine.
+    const priorCustomerOffers = bargainSession.messages
+      .filter((m: any) => m.role === 'customer' && m.offeredPrice != null)
+      .map((m: any) => m.offeredPrice as number)
+    let customerOfferTrend: NegotiationContext['customerOfferTrend']
+    if (customerOffer != null) {
+      if (priorCustomerOffers.length === 0) {
+        customerOfferTrend = 'new'
+      } else {
+        const last = priorCustomerOffers[priorCustomerOffers.length - 1]
+        customerOfferTrend = customerOffer > last ? 'rising' : customerOffer < last ? 'falling' : 'flat'
+      }
+    }
+
     const ctx: NegotiationContext = {
       storeName: bargainSession.store.name,
       currencySymbol,
@@ -369,7 +386,12 @@ export async function POST(request: NextRequest) {
       bulkQuantity: bulkQuantity ?? undefined,
       walkoutTriggered: isWalkout,
       language: lang,
-      customerContext: await buildCustomerContext(bargainSession.storeId, bargainSession.customerEmail),
+      customerContext: await buildCustomerContext(bargainSession.storeId, {
+        customerEmail: bargainSession.customerEmail,
+        customerFingerprint: bargainSession.customerFingerprint,
+        cartToken: bargainSession.cartToken,
+      }),
+      customerOfferTrend,
       goal: await buildGoalContextForNegotiation(config, bargainSession.store.timezone, new Date()),
       product: productCtx,
       intent: intentAnalysis,

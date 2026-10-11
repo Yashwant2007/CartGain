@@ -132,10 +132,21 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
     const userText = input.trim()
     const offer = extractPrice(userText)
     const isWalkout = detectWalkout(userText)
+    // Only a turn that quotes a price spends an attempt — plain chat is free.
+    // Otherwise a few friendly "how are you / my budget is tight" messages burn
+    // the whole budget before the customer ever names a number, and the first
+    // real offer is met by an exhausted session. Mirrors the offer route.
+    const isOfferTurn = offer != null
 
-    const nextAttempt = attemptsUsed + 1
+    const nextAttempt = attemptsUsed + (isOfferTurn ? 1 : 0)
     const attemptsLeft = maxAttempts - nextAttempt
-    const exhausted = nextAttempt >= maxAttempts
+    const exhausted = isOfferTurn && nextAttempt >= maxAttempts
+    // The model is handed the PRE-increment round count. Passing the post-
+    // increment value on the final offer would leave `attemptsLeft = 0` and the
+    // prompt would announce "session ended" instead of a firm final round (the
+    // offer route short-circuits that last turn deterministically; the demo
+    // does not, so it must not over-count). Pacing then reads early → mid →
+    // final across the customer's three real offers.
     const ctx = buildCtx(attemptsUsed)
 
     let reply = ''
