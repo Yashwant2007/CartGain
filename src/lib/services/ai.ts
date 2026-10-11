@@ -36,12 +36,19 @@ export async function generateEmailContent(ctx: CartContext, storeId?: string): 
       messages: [
         {
           role: 'system',
-          content: `You are a cart recovery copywriter for ${ctx.storeName}. Generate a warm, personalized email.
+          content: `You are a world-class e-commerce retention copywriter writing for ${ctx.storeName}. Your job: win back an abandoned cart with a short, irresistible email that makes the shopper FEEL the product again and click back.
+
+Write a warm, personal recovery email using the customer's REAL data (their name and their exact items). Follow this recovery flow:
+1. HOOK — validate their taste and make the cart feel personal ("you have great taste...").
+2. DESIRE — remind them WHY they wanted it, using a real benefit from the item (not just the name), so they picture owning it.
+3. REASSURANCE — remove the risk in half a sentence (we saved it for you, secure checkout).
+4. REWARD / URGENCY — if a discount exists, make it the headline reason to return now; otherwise use gentle, honest urgency (best-seller / limited stock) — never fabricate scarcity.
+5. CTA — one clear, warm call to action.
 
 Return valid JSON with these keys:
-- "subject": compelling subject line with emoji (max 60 chars)
-- "body": concise HTML inside a <div> with inline styles. Keep it tight — just 2-3 short sentences. Mention 1-2 products by name. Use 1-2 emojis. Warm tone, gentle urgency. End with a one-liner CTA. Do NOT include the cart URL — it will be added separately.
-${ctx.discountCode ? `\nINCLUDE this discount offer prominently: code ${ctx.discountCode}${ctx.discountValue ? ` for ${ctx.discountValue}${ctx.discountType === 'percentage' ? '%' : ''} off` : ''}. Make it the main reason to return.` : ''}`,
+- "subject": compelling subject line with 1 emoji (max 60 chars), personalized with their name or product.
+- "body": concise HTML inside a <div> with inline styles. 2-4 short sentences max. Mention 1-2 products by name. Use 1-2 emojis. Warm, human, never corporate. End with a one-line CTA. Do NOT include the cart URL — it will be added separately.
+${ctx.discountCode ? `\nINCLUDE this discount offer prominently: code ${ctx.discountCode}${ctx.discountValue ? ` for ${ctx.discountValue}${ctx.discountType === 'percentage' ? '%' : ''} off` : ''}. Make it the main reason to return now.` : ''}`,
         },
         {
           role: 'user',
@@ -177,7 +184,11 @@ CRITICAL: Under 35 words. Graceful finality. Make them feel "I need to do this n
       messages: [
         {
           role: 'system',
-          content: prompt + '\n\nReturn ONLY the message text, no JSON, no quotes.',
+          content:
+            prompt +
+            '\n\nALWAYS make it feel written for THIS person: use the real product names and a real benefit from the context, and the customer' +
+            ' name where it fits naturally. The message must lure them back with desire and a gentle reward/urgency — never generic, never' +
+            ' desperate. Return ONLY the message text, no JSON, no quotes.',
         },
         {
           role: 'user',
@@ -209,7 +220,7 @@ export async function generateSubjectLines(ctx: CartContext, count = 3, storeId?
       messages: [
         {
           role: 'system',
-          content: `Generate ${count} email subject lines for an abandoned cart recovery email. Rules: each must be under 60 chars, include 1 emoji, feel urgent but warm. Return a JSON array of strings ONLY: ["subject1", "subject2", "subject3"]. No other text.`,
+          content: `Generate ${count} email subject lines for an abandoned cart recovery email. Each must be under 60 chars, include 1 emoji, and be impossible to ignore — personalized with the customer's name or product, curious and luring, warm not sleazy. Vary the angle: one taste-validation, one curiosity/benefit, one gentle urgency/loss-aversion. Return a JSON array of strings ONLY: ["subject1", "subject2", "subject3"]. No other text.`,
         },
         {
           role: 'user',

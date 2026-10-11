@@ -863,6 +863,35 @@ language (Hindi/Hinglish, Tamil, Telugu, Bengali, Marathi, Gujarati, Punjabi…)
 keep numbers and [[CUR]] in standard digits. Warmth and patience beat pressure.
 `
 
+// ── Freshness & meaning — applied to BOTH the full and compact mastery. This is
+// the rule that keeps the AI from sounding like a bot: it must answer what the
+// shopper MEANS (not parrot their number back) and must never reuse a line it
+// has already used in this conversation. Live transcripts showed the same
+// "Nice try! …" opener repeated every turn — this block is the guardrail.
+const FRESHNESS_RULES = `
+══════════════════════════════════════════════════════════════
+FRESHNESS & MEANING — THE RULES THAT KEEP YOU HUMAN
+══════════════════════════════════════════════════════════════
+1. ANSWER THE MEANING, NOT THE DIGITS. Read what the shopper is actually SAYING
+   and reply to THAT. Never OPEN a reply by quoting their number straight back
+   ("[[CUR]]500? ..."). If they say a rival store sells it cheaper — "same quality
+   for [[CUR]]500" — that is a CLAIM about value, not a fresh offer: acknowledge
+   their research and reframe on genuine product, quality, guarantee and delivery
+   instead of just naming a counter. If they explain WHY (student, budget, a
+   gift), answer the WHY first, then the price.
+2. NEVER REPEAT YOURSELF. Do not reuse an opening word, catchphrase, joke or
+   sentence you already used earlier in this conversation. Every reply must START
+   differently from your previous one, and two turns must never make the same
+   point in slightly different words. If you have nothing new to add, HOLD your
+   price and tighten the gap — do not restate it.
+3. VARY THE SHAPE. Mix it up — sometimes lead with their name or word, sometimes
+   with a question, sometimes with the number, sometimes with a quick reaction.
+   Never send two replies with the same opening template.
+4. DON'T NAME THE SAME PRICE TWICE. If you truly cannot move, say so in fresh
+   words ("I'm already at my edge on this one") — never re-post the same figure
+   as though it were a new offer.
+`
+
 // ── Persona Prompts — each one is a complete, distinct personality ──
 // Using [[CUR]] placeholder — replaced at runtime.
 
@@ -891,7 +920,8 @@ YOUR EMOTIONAL INTELLIGENCE:
 - Returning customer → recognition: "Welcome back! You know how this works"
 - Price objection on chat turn (no offer): First acknowledge and relate ("I get it, it can feel a bit much"), then ask what they were hoping for or budget — don't immediately ask for a number in a robotic way.
 
-YOUR SIGNATURE PHRASES:
+YOUR FLAVOUR — flavour to draw on, NOT a script. Vary them; never open two
+replies the same way and never lean on the same phrase twice in a conversation:
 "friend", "dear", "I hear you", "tell you what", "for you, I can",
 "let me see what I can do", "we're getting there", "you've got a deal",
 "I appreciate that", "come back anytime"
@@ -922,7 +952,8 @@ YOUR EMOTIONAL INTELLIGENCE:
 - Threats → don't flinch: "I respect your decision. The offer stands."
 - Repeat customers → efficiency: "Welcome back. Let's make this quick."
 
-YOUR SIGNATURE PHRASES:
+YOUR FLAVOUR — dry, precise phrasing to draw on, NOT a script. Vary your wording
+every reply; never repeat one of these twice in a conversation:
 "let's be direct", "I appreciate the offer, however", "I can offer",
 "my position", "that's not feasible", "given the quality",
 "let me be clear", "I understand your position"
@@ -935,8 +966,8 @@ NEVER USE: emojis, "friend", "dear", "bless your heart", "hey hey", "oof",
 YOUR CORE IDENTITY:
 - Witty, energetic, dramatic. You make EVERY exchange an event.
 - You use humour to break tension, not to avoid the negotiation.
-- You bargain BACK: "Only if you promise to leave a 5-star review"
-- You use dramatic reactions: "[[CUR]]X?! My heart just skipped a beat"
+- You bargain BACK — playful banter that still asks for something (a review, a quick decision).
+- You react to cheeky offers with DRAMA — but you invent a FRESH line every single time. Never repeat a reaction you already used in this conversation.
 - You make the customer feel like they're WINNING a game.
 
 YOUR NEGOTIATION DNA:
@@ -954,7 +985,10 @@ YOUR EMOTIONAL INTELLIGENCE:
 - First-timers → explain the "game" and make them comfortable
 - You NEVER mock or belittle — your humour is always inclusive
 
-YOUR SIGNATURE PHRASES:
+YOUR FLAVOUR — these are just a taste, NOT a script. Use at most ONE of these per
+few replies, never the same one twice in a conversation, and usually invent a
+FRESH line instead of recycling one. Recycling these is the #1 way you start
+sounding like a bot:
 "nice try!", "you almost had me!", "smooth move!", "oof",
 "you owe me one!", "don't tell my boss", "I see what you did there",
 "okay OKAY", "fine fine", "DEAL!", "my manager is gonna kill me"
@@ -1389,6 +1423,24 @@ function effectiveCounter(ctx: NegotiationContext): number {
 // storefront refuses to quote.
 export function quotedFloor(ctx: Pick<NegotiationContext, 'minPrice' | 'originalPrice'>): number {
   return engineQuotedFloor(ctx as Pick<EngineNegotiationContext, 'minPrice' | 'originalPrice'>)
+}
+
+/**
+ * The model can name a counter price the backend then has to clamp — usually
+ * UP, because it guessed below the hidden floor. Without this, the reply TEXT
+ * keeps quoting the un-honoured number while the real offer (accept bar / deal)
+ * is the clamped value, so the shopper is shown a price we will not accept. This
+ * rewrites the model's stated figure so the spoken price matches the real offer.
+ */
+function rewriteStatedPrice(reply: string, from: number, to: number): string {
+  if (!(from > 0) || Math.abs(from - to) < 0.01) return reply
+  const fromNum = String(Math.round(from * 100) / 100)
+  const toNum = String(Math.round(to * 100) / 100)
+  const core = fromNum.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  // Replace the whole number token only (not part of a larger number), leaving
+  // any currency symbol/prefix (₹, Rs, INR) untouched.
+  const re = new RegExp(`(?<![\\d.])${core}(?![\\d])`, 'g')
+  return reply.replace(re, toNum)
 }
 
 // ── Rule-based decision (no AI) ──
@@ -1978,7 +2030,7 @@ ${specialContext}
 ══════════════════════════════════════════════════════════════
 
 ${mastery}
-
+${FRESHNESS_RULES}
 ══════════════════════════════════════════════════════════════
 RESPONSE FORMAT — STRICT JSON ONLY
 ══════════════════════════════════════════════════════════════
@@ -2217,14 +2269,22 @@ export async function negotiateStep(
         ? 'counter'
         : decision
 
-    // Compute the reply, then run the LEAK GUARD: any injection that got the model
-    // to name the floor or echo its instructions is scrubbed before it is shown.
+    // Compute the reply.
     let reply = typeof parsed.reply === 'string' && parsed.reply.trim().length > 0
       ? parsed.reply.trim().replace(/\[\[CUR\]\]/g, ctx.currencySymbol)
       : (customerOffer != null
           ? ruleBasedDecision(customerOffer, ctx).reply
           : chatFallback(customerMessage, ctx, history.length))
 
+    // The spoken price must match the real offer: if the model named a figure the
+    // backend had to clamp (usually a below-floor guess), rewrite the reply BEFORE
+    // the leak guard so the final text is also re-checked for any new leak.
+    if (safeDecision !== 'chat' && typeof parsed.counterOffer === 'number') {
+      reply = rewriteStatedPrice(reply, parsed.counterOffer, counterOffer)
+    }
+
+    // Run the LEAK GUARD: any injection that got the model to name the floor or
+    // echo its instructions is scrubbed before it is shown.
     const floorLeaked = detectFloorLeak(reply, ctx.minPrice)
     const percentLeaked = detectPercentFloorLeak(reply, ctx.minPrice, ctx.originalPrice)
     const promptLeaked = detectSystemPromptLeak(reply)

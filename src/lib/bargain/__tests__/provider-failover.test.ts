@@ -329,6 +329,29 @@ describe('primary outage is absorbed inside the same request', () => {
     expect(seen[0].max_completion_tokens).toBe(700)
   })
 
+  it('rewrites a below-floor price the model named so the spoken price matches the real offer', async () => {
+    // Live demos showed the model say "₹790" while the backend clamped the real
+    // offer to ₹808 — the shopper saw a price we would not honour. The reply text
+    // must be corrected to the clamped value.
+    setEnv({ OPENAI_API_KEY: undefined })
+    ;(globalThis as any).__nextCreate = jest.fn(async () => ({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({ reply: 'I can do ₹70 for you.', decision: 'counter', counterOffer: 70 }),
+          },
+        },
+      ],
+      usage: {},
+    }))
+
+    const res = await negotiateStep(ctx({ minPrice: 80 }), [], '70?', 70, 'sess-rw')
+
+    expect(res.reply).not.toContain('70')
+    expect(res.counterOffer!).toBeGreaterThanOrEqual(80)
+    expect(res.reply).toContain(String(res.counterOffer))
+  })
+
   it('degrades safely when even the compact retry is too large', async () => {
     ;(globalThis as any).__nextCreate = jest.fn(async () => {
       throw { status: 413, error: { message: 'Request too large' } }

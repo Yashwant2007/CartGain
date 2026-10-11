@@ -566,11 +566,6 @@ export default function DemoContent() {
                     }`}
                   >
                     <div>{m.content}</div>
-                    {m.offeredPrice != null && (
-                      <div className="text-[11px] mt-1 opacity-70 font-mono">
-                        {m.role === 'customer' ? 'offered' : 'counter'}: ₹{m.offeredPrice.toFixed(2)}
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}
