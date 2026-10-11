@@ -43,7 +43,11 @@ const LANGUAGES: { id: string; label: string }[] = [
   { id: 'te', label: 'తెలుగు' },
   { id: 'bn', label: 'বাংলা' },
   { id: 'mr', label: 'मराठी' },
+  { id: 'gu', label: 'ગુજરાતી' },
+  { id: 'kn', label: 'ಕನ್ನಡ' },
+  { id: 'ml', label: 'മലയാളം' },
   { id: 'pa', label: 'ਪੰਜਾਬੀ' },
+  { id: 'or', label: 'ଓଡ଼ିଆ' },
 ]
 
 type DemoPanelProps = {

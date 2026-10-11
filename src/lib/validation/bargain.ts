@@ -16,7 +16,6 @@ export const CLAIM_LIST = z.array(CLAIM_ITEM).max(50).default([])
 export const bargainConfigUpsertSchema = z.object({
   enabled: z.boolean().optional(),
   maxAttempts: z.number().int().min(1).max(10).optional(),
-  aiModel: z.enum(['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1']).optional(),
   aiPersona: z.enum(['friendly_shopkeeper', 'strict_negotiator', 'playful_friend']).optional(),
   language: z.string().min(0).max(12).optional(),
   minProfitPercent: z.number().min(0).max(100).optional(),
@@ -39,7 +38,6 @@ export const bargainConfigUpsertSchema = z.object({
   disallowedClaims: CLAIM_LIST.optional(),
   recommendationsEnabled: z.boolean().optional(),
   alternativeRecommendationsEnabled: z.boolean().optional(),
-  complementRecommendationsEnabled: z.boolean().optional(),
   couponStackingEnabled: z.boolean().optional(),
 })
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import {
@@ -30,7 +30,6 @@ type BargainConfig = {
   storeId: string
   enabled: boolean
   maxAttempts: number
-  aiModel: string
   aiPersona: string
   language: string
   minProfitPercent: number
@@ -51,8 +50,38 @@ type BargainConfig = {
   disallowedClaims: string[]
   recommendationsEnabled: boolean
   alternativeRecommendationsEnabled: boolean
-  complementRecommendationsEnabled: boolean
   couponStackingEnabled: boolean
+}
+
+// All supported negotiation languages (mirrors SUPPORTED_LANGUAGES in the engine).
+const LANGUAGE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'auto', label: 'Auto · mirror the customer' },
+  { value: 'en', label: 'English' },
+  { value: 'hinglish', label: 'Hinglish' },
+  { value: 'hi', label: 'हिन्दी (Hindi)' },
+  { value: 'ta', label: 'தமிழ் (Tamil)' },
+  { value: 'te', label: 'తెలుగు (Telugu)' },
+  { value: 'bn', label: 'বাংলা (Bengali)' },
+  { value: 'mr', label: 'मराठी (Marathi)' },
+  { value: 'gu', label: 'ગુજરાતી (Gujarati)' },
+  { value: 'kn', label: 'ಕನ್ನಡ (Kannada)' },
+  { value: 'ml', label: 'മലയാളം (Malayalam)' },
+  { value: 'pa', label: 'ਪੰਜਾਬੀ (Punjabi)' },
+  { value: 'or', label: 'ଓଡ଼ିଆ (Odia)' },
+]
+
+// Shared control styling so every field in the config form looks and behaves the
+// same (focus ring, disabled state, sizing).
+const CONTROL_CLS =
+  'w-full rounded-lg border border-blue-800/40 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-blue-300/30 transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50'
+
+// Drop config fields the UI no longer manages (they were dead/contradictory
+// options) so a stale value can never be silently re-saved from the browser.
+function normalizeConfigForm(config: Partial<BargainConfig> & Record<string, unknown>): Partial<BargainConfig> {
+  const rest = { ...config }
+  delete rest.aiModel
+  delete rest.complementRecommendationsEnabled
+  return rest
 }
 
 type GoalStatus = {
@@ -187,7 +216,7 @@ void fetchConfig()
       }
       const data = await res.json()
       setConfig(data.config)
-      setConfigForm(data.config)
+      setConfigForm(normalizeConfigForm(data.config))
     } catch (err: any) {
       if (err?.name === 'AbortError') return
       setConfigMessage({ type: 'error', text: err.message ?? 'Failed to load config' })
@@ -210,7 +239,7 @@ void fetchConfig()
       }
       const data = await res.json()
       setConfig(data.config)
-      setConfigForm(data.config)
+      setConfigForm(normalizeConfigForm(data.config))
       setConfigMessage({ type: 'success', text: 'Config saved' })
     } catch (err: any) {
       setConfigMessage({ type: 'error', text: err.message ?? 'Failed to save config' })
@@ -315,438 +344,384 @@ void fetchConfig()
 
       {/* Config tab */}
       {tab === 'config' && (
-        <div className="max-w-2xl space-y-5 bg-slate-900/60 border border-blue-800/30 rounded-xl p-6">
+        <div className="space-y-5">
           {!config ? (
             configMessage ? (
-              <div className="text-red-300 text-sm p-4 text-center space-y-3">
-                <div>{configMessage.text}</div>
+              <div className="space-y-4 rounded-2xl border border-blue-800/30 bg-slate-900/60 p-8 text-center">
+                <p className="text-sm text-red-300">{configMessage.text}</p>
                 <button
                   onClick={() => fetchConfig()}
-                  className="inline-flex items-center px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-blue-800/40 text-blue-200 text-xs font-medium transition"
+                  className="inline-flex items-center rounded-lg border border-blue-800/40 bg-slate-800 px-4 py-2 text-sm font-medium text-blue-200 transition hover:bg-slate-700"
                 >
-                  <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Retry
+                  <RotateCcw className="mr-2 h-4 w-4" /> Retry
                 </button>
               </div>
             ) : (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-5 h-5 animate-spin text-blue-400 mr-2" />
-                <span className="text-blue-300/60 text-sm">Loading config…</span>
+              <div className="flex items-center justify-center rounded-2xl border border-blue-800/30 bg-slate-900/60 py-16">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin text-blue-400" />
+                <span className="text-sm text-blue-300/60">Loading config…</span>
               </div>
             )
           ) : (
             <>
-              {/* Enable toggle */}
-              <div className="flex items-center justify-between p-4 rounded-xl border border-blue-800/40 bg-slate-950/40">
-                <div>
-                  <div className="text-blue-100 font-medium">Enable Bargain for this store</div>
-                  <div className="text-xs text-blue-300/60 mt-0.5">
-                    When on, the AI negotiator is available to your customers at checkout on bargainable products.
-                  </div>
+              {/* Sticky action bar */}
+              <div className="sticky top-16 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-800/30 bg-slate-950/80 px-4 py-3 backdrop-blur">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className={`inline-flex h-2.5 w-2.5 rounded-full ${configForm.enabled ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+                  <span className="font-medium text-blue-100">
+                    Bargain is {configForm.enabled ? 'live' : 'paused'}
+                  </span>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={configForm.enabled ?? false}
-                  onChange={e => setConfigForm({ ...configForm, enabled: e.target.checked })}
-                  className="w-5 h-5 accent-blue-500"
-                />
-              </div>
-
-              {/* Group: Conversation behaviour */}
-              <GroupTitle icon={MessageSquare} title="Negotiation" subtitle="How many rounds and how long a session stays open." />
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-blue-200 mb-1">Max attempts per customer</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={configForm.maxAttempts ?? 3}
-                    onChange={e => setConfigForm({ ...configForm, maxAttempts: parseInt(e.target.value) })}
-                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                  />
-                  <p className="text-xs text-blue-300/60 mt-1">Quality offers only — fewer rounds feels premium.</p>
-                </div>
-                <div>
-                  <label className="block text-sm text-blue-200 mb-1">Session timeout (seconds)</label>
-                  <input
-                    type="number"
-                    min={30}
-                    max={3600}
-                    value={configForm.sessionTimeout ?? 300}
-                    onChange={e => setConfigForm({ ...configForm, sessionTimeout: parseInt(e.target.value) })}
-                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                  />
-                  <p className="text-xs text-blue-300/60 mt-1">A timed offer adds gentle urgency without pressure.</p>
-                </div>
-              </div>
-
-              {/* Group: AI Salesperson — negotiation mode + product knowledge */}
-              <GroupTitle
-                icon={Sparkles}
-                title="AI Selling & Product Knowledge"
-                subtitle="Merchant-controlled: the negotiating temperament, the claims the AI may use, the claims it must never repeat, and cross-sell behaviour."
-              />
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-blue-200 mb-1">Negotiation mode</label>
-                  <select
-                    value={configForm.negotiationMode ?? 'balanced'}
-                    onChange={e => setConfigForm({ ...configForm, negotiationMode: e.target.value })}
-                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                  >
-                    <option value="conservative">Conservative · protect margin</option>
-                    <option value="balanced">Balanced · fair deals (default)</option>
-                    <option value="flexible">Flexible · closing-focused</option>
-                  </select>
-                  <p className="text-xs text-blue-300/60 mt-1">
-                    Sets how hard the AI pushes toward the listed price. The hidden margin floor always holds.
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-blue-200">Cross-sell suggestions</span>
-                    <input
-                      type="checkbox"
-                      checked={configForm.recommendationsEnabled ?? true}
-                      onChange={e => setConfigForm({ ...configForm, recommendationsEnabled: e.target.checked })}
-                      className="w-5 h-5 accent-blue-500"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-blue-200">Recommend similar alternatives</span>
-                    <input
-                      type="checkbox"
-                      checked={configForm.alternativeRecommendationsEnabled ?? true}
-                      onChange={e => setConfigForm({ ...configForm, alternativeRecommendationsEnabled: e.target.checked })}
-                      className="w-5 h-5 accent-blue-500"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-blue-200">Recommend complements <span className="text-xs text-blue-300/50">· next phase</span></span>
-                    <input
-                      type="checkbox"
-                      checked={configForm.complementRecommendationsEnabled ?? true}
-                      onChange={e => setConfigForm({ ...configForm, complementRecommendationsEnabled: e.target.checked })}
-                      className="w-5 h-5 accent-blue-500"
-                    />
-                  </div>
-                  <p className="text-xs text-blue-300/60 mt-1">
-                    When both master + alternative toggles are on, the agent suggests matching
-                    products from your verified catalog when a shopper&apos;s budget can&apos;t reach your
-                    floor (or a lowball risks the sale). Cards rank by budget fit; over-budget picks
-                    are clearly labelled. Complement suggestions ship with the next phase.
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm text-blue-200 mb-1">Approved selling points (one per line)</label>
-                  <textarea
-                    rows={4}
-                    value={(configForm.approvedSellingPoints ?? []).join('\n')}
-                    onChange={e =>
-                      setConfigForm({
-                        ...configForm,
-                        approvedSellingPoints: e.target.value.split('\n').map(s => s.trim()).filter(Boolean),
-                      })}
-                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                    placeholder={'machine-washable\n7-day replacement warranty'}
-                  />
-                  <p className="text-xs text-blue-300/60 mt-1">
-                    Only these merchant-vetted claims reach the AI. It may mention them when relevant.
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm text-blue-200 mb-1">Claims the AI must never repeat (one per line)</label>
-                  <textarea
-                    rows={4}
-                    value={(configForm.disallowedClaims ?? []).join('\n')}
-                    onChange={e =>
-                      setConfigForm({
-                        ...configForm,
-                        disallowedClaims: e.target.value.split('\n').map(s => s.trim()).filter(Boolean),
-                      })}
-                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                    placeholder={'cures skin problems\nworld #1 brand'}
-                  />
-                  <p className="text-xs text-blue-300/60 mt-1">
-                    These phrases are scrubbed from product context so the AI never repeats unverified claims.
-                  </p>
-                </div>
-              </div>
-
-              {/* Group: Personality & voice */}
-              <GroupTitle icon={Sparkles} title="Personality" subtitle="The tone your customers experience, in their language." />
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-blue-200 mb-1">AI Persona</label>
-                  <select
-                    value={configForm.aiPersona ?? 'friendly_shopkeeper'}
-                    onChange={e => setConfigForm({ ...configForm, aiPersona: e.target.value })}
-                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                  >
-                    <option value="friendly_shopkeeper">Friendly Shopkeeper</option>
-                    <option value="strict_negotiator">Strict Negotiator</option>
-                    <option value="playful_friend">Playful Friend</option>
-                  </select>
-                  <p className="text-xs text-blue-300/60 mt-1">Strict protects margin, Friendly recovers more, Playful is a balance.</p>
-                </div>
-                <div>
-                  <label className="block text-sm text-blue-200 mb-1">Default language</label>
-                  <select
-                    value={configForm.language ?? 'auto'}
-                    onChange={e => setConfigForm({ ...configForm, language: e.target.value })}
-                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                  >
-                    <option value="auto">Auto · mirror the customer</option>
-                    <option value="en">English</option>
-                    <option value="hinglish">Hinglish</option>
-                    <option value="hi">हिन्दी (Hindi)</option>
-                    <option value="ta">தமிழ் (Tamil)</option>
-                    <option value="te">తెలుగు (Telugu)</option>
-                    <option value="bn">বাংলা (Bengali)</option>
-                    <option value="mr">मराठी (Marathi)</option>
-                    <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
-                  </select>
-                  <p className="text-xs text-blue-300/60 mt-1">
-                    Auto mirrors whatever language the customer writes in. Pick one to force that language branch.
-                  </p>
-                </div>
-              </div>
-
-              {/* Group: Margin protection */}
-              <GroupTitle icon={Percent} title="Margin protection" subtitle="Guardrails the AI can never cross — never shown to customers." />
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-blue-200 mb-1">Min Profit % (global fallback)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.5}
-                    value={configForm.minProfitPercent ?? 20}
-                    onChange={e => setConfigForm({ ...configForm, minProfitPercent: parseFloat(e.target.value) })}
-                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                  />
-                  <p className="text-xs text-blue-300/60 mt-1">
-                    The AI will never agree to a price below this margin of the original.
-                  </p>
+                <div className="flex items-center gap-3">
+                  {configMessage && (
+                    <span className={configMessage.type === 'success' ? 'text-sm text-emerald-300' : 'text-sm text-red-300'}>
+                      {configMessage.text}
+                    </span>
+                  )}
                   <button
-                    onClick={() => setTab('products')}
-                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-blue-300/70 hover:text-blue-200 transition"
+                    onClick={saveConfig}
+                    disabled={savingConfig}
+                    className="flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-50"
                   >
-                    <Link2 className="w-3 h-3" /> Set a different floor per product →
+                    {savingConfig ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    Save changes
                   </button>
                 </div>
-                <div>
-                  <label className="block text-sm text-blue-200 mb-1">AI Model</label>
-                  <select
-                    value={configForm.aiModel ?? 'gpt-4o-mini'}
-                    onChange={e => setConfigForm({ ...configForm, aiModel: e.target.value })}
-                    className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                  >
-                    <option value="gpt-4o-mini">gpt-4o-mini (cheap, fast)</option>
-                    <option value="gpt-4o">gpt-4o (higher quality)</option>
-                    <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                    <option value="gpt-4.1">gpt-4.1 (best)</option>
-                  </select>
-                  <p className="text-xs text-blue-300/60 mt-1">Higher quality models write more personality; mini is fastest and cheapest.</p>
-                </div>
-              </div>
-              <div className="mt-4 flex items-center justify-between p-4 rounded-xl border border-blue-800/40 bg-slate-950/40">
-                <div>
-                  <div className="text-blue-100 font-medium">Coupon stacking</div>
-                  <div className="text-xs text-blue-300/60 mt-0.5">
-                    When off, the bargain discount code can never be combined with another coupon or promo code — enforced automatically at accept, even if the AI ever mentions one.
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={configForm.couponStackingEnabled ?? false}
-                  onChange={e => setConfigForm({ ...configForm, couponStackingEnabled: e.target.checked })}
-                  className="w-5 h-5 accent-blue-500"
-                />
               </div>
 
-              {/* Group: Daily goal & strategy */}
-              <GroupTitle
-                icon={Target}
-                title="AI Salesperson · Daily Goal"
-                subtitle="Set a real daily target. CartGain paces the negotiation toward it — always inside your margin floor."
-              />
-              <div className="flex items-center justify-between p-4 rounded-xl border border-blue-800/40 bg-slate-950/40">
-                <div>
-                  <div className="text-blue-100 font-medium">Enable daily goal</div>
-                  <div className="text-xs text-blue-300/60 mt-0.5">
-                    When on, negotiation intensity follows your progress automatically. Customers never see this.
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={configForm.goalEnabled ?? false}
-                  onChange={e => setConfigForm({ ...configForm, goalEnabled: e.target.checked })}
-                  className="w-5 h-5 accent-blue-500"
-                />
-              </div>
+              <div className="grid gap-5 lg:grid-cols-2">
+                {/* Master switch */}
+                <ConfigCard
+                  className="lg:col-span-2"
+                  icon={Sparkles}
+                  title="Bargain system"
+                  description="Turn the AI salesperson on or off for this store. When live, it negotiates at checkout on products you mark as bargainable."
+                >
+                  <ToggleRow
+                    title="Enable bargain for this store"
+                    description="Customers see a Bargain option on bargainable products. Turning this off pauses every negotiation instantly."
+                    checked={configForm.enabled ?? false}
+                    onChange={v => setConfigForm({ ...configForm, enabled: v })}
+                  />
+                </ConfigCard>
 
-              {configForm.goalEnabled && (
-                <div className="space-y-4">
-                  <div className="grid sm:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm text-blue-200 mb-1">Goal measures</label>
-                      <select
-                        value={configForm.goalType ?? 'orders'}
-                        onChange={e => setConfigForm({ ...configForm, goalType: e.target.value })}
-                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                      >
-                        <option value="orders">Orders placed</option>
-                        <option value="revenue">Revenue (₹)</option>
-                      </select>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-sm text-blue-200 mb-1">Daily target</label>
+                {/* Session limits */}
+                <ConfigCard
+                  icon={Timer}
+                  title="Session limits"
+                  description="How many rounds a shopper gets and how long an open offer stays valid."
+                >
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field
+                      label="Max attempts per customer"
+                      hint="Only real price offers count. Fewer rounds feels premium and protects margin."
+                    >
                       <input
                         type="number"
                         min={1}
-                        step={configForm.goalType === 'revenue' ? 100 : 1}
-                        value={configForm.goalTarget ?? 10}
-                        onChange={e => setConfigForm({ ...configForm, goalTarget: parseFloat(e.target.value) })}
-                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
+                        max={10}
+                        value={configForm.maxAttempts ?? 3}
+                        onChange={e => setConfigForm({ ...configForm, maxAttempts: Math.min(10, Math.max(1, parseInt(e.target.value) || 1)) })}
+                        className={CONTROL_CLS}
                       />
-                      <p className="text-xs text-blue-300/60 mt-1">
-                        {configForm.goalType === 'revenue'
-                          ? 'Target revenue (order net) to recognize by the end of the window.'
-                          : 'Number of confirmed orders to recognize by the end of the window.'}
-                      </p>
-                    </div>
+                    </Field>
+                    <Field
+                      label="Session timeout (seconds)"
+                      hint="After this, an open offer expires. Adds gentle urgency without pressure."
+                    >
+                      <input
+                        type="number"
+                        min={30}
+                        max={3600}
+                        value={configForm.sessionTimeout ?? 300}
+                        onChange={e => setConfigForm({ ...configForm, sessionTimeout: Math.min(3600, Math.max(30, parseInt(e.target.value) || 30)) })}
+                        className={CONTROL_CLS}
+                      />
+                    </Field>
                   </div>
+                </ConfigCard>
 
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-blue-200 mb-1">Window starts</label>
-                      <input
-                        type="datetime-local"
-                        value={toLocalDateTimeInput(configForm.goalStartTime ?? null)}
-                        onChange={e => setConfigForm({ ...configForm, goalStartTime: fromLocalDateTimeInput(e.target.value) })}
-                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                      />
-                      <p className="text-xs text-blue-300/60 mt-1">Set the time in your browser; shown in your store timezone.</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm text-blue-200 mb-1">Window ends</label>
-                      <input
-                        type="datetime-local"
-                        value={toLocalDateTimeInput(configForm.goalEndTime ?? null)}
-                        onChange={e => setConfigForm({ ...configForm, goalEndTime: fromLocalDateTimeInput(e.target.value) })}
-                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                      />
-                      <p className="text-xs text-blue-300/60 mt-1">Orders placed during this window count toward the goal.</p>
-                    </div>
-                  </div>
-
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-blue-200 mb-1">Store timezone</label>
-                      <select
-                        value={configForm.goalTimezone ?? 'Asia/Kolkata'}
-                        onChange={e => setConfigForm({ ...configForm, goalTimezone: e.target.value })}
-                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                      >
-                        <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
-                        <option value="Asia/Karachi">Asia/Karachi (PKT)</option>
-                        <option value="Asia/Dubai">Asia/Dubai (GST)</option>
-                        <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
-                        <option value="Asia/Dhaka">Asia/Dhaka (BST)</option>
-                        <option value="Africa/Nairobi">Africa/Nairobi (EAT)</option>
-                        <option value="Europe/London">Europe/London (GMT/BST)</option>
-                        <option value="America/New_York">America/New_York (EST/EDT)</option>
-                        <option value="America/Los_Angeles">America/Los_Angeles (PST/PDT)</option>
-                        <option value="UTC">UTC</option>
-                      </select>
-                      <p className="text-xs text-blue-300/60 mt-1">Used to bucket the day and display the window.</p>
-                    </div>
-                    <div className="flex items-end">
-                      <label className="block text-sm text-blue-200 mb-1">
-                        <span className="block">Auto dynamic strategy</span>
-                        <span className="block text-xs text-blue-300/60 mt-1 font-normal">
-                          Let CartGain switch between Conservative / Normal / Aggressive / Closing based on your progress.
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={configForm.dynamicStrategyEnabled ?? false}
-                          onChange={e => setConfigForm({ ...configForm, dynamicStrategyEnabled: e.target.checked })}
-                          className="mt-2 w-5 h-5 accent-blue-500"
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-blue-200 mb-1">Campaign name (optional)</label>
-                      <input
-                        type="text"
-                        maxLength={60}
-                        value={configForm.campaignName ?? ''}
-                        onChange={e => setConfigForm({ ...configForm, campaignName: e.target.value || null })}
-                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                        placeholder="e.g. Diwali sale"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-blue-200 mb-1">Campaign message (optional)</label>
-                      <input
-                        type="text"
-                        maxLength={250}
-                        value={configForm.campaignMessage ?? ''}
-                        onChange={e => setConfigForm({ ...configForm, campaignMessage: e.target.value || null })}
-                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                        placeholder="Only truthful context you want the AI to reference"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-blue-200 mb-1">Campaign starts</label>
-                      <input
-                        type="datetime-local"
-                        value={toLocalDateTimeInput(configForm.campaignStart ?? null)}
-                        onChange={e => setConfigForm({ ...configForm, campaignStart: fromLocalDateTimeInput(e.target.value) })}
-                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                      />
-                      <p className="text-xs text-blue-300/60 mt-1">Leave empty to run for the whole goal window.</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm text-blue-200 mb-1">Campaign ends</label>
-                      <input
-                        type="datetime-local"
-                        value={toLocalDateTimeInput(configForm.campaignEnd ?? null)}
-                        onChange={e => setConfigForm({ ...configForm, campaignEnd: fromLocalDateTimeInput(e.target.value) })}
-                        className="w-full bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2 text-white"
-                      />
-                      <p className="text-xs text-blue-300/60 mt-1">The AI only references the campaign while it is live.</p>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setTab('goals')}
-                    className="inline-flex items-center gap-1.5 text-xs text-blue-300/70 hover:text-blue-200 transition"
-                  >
-                    <Gauge className="w-3.5 h-3.5" /> View live goal progress →
-                  </button>
-                </div>
-              )}
-
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  onClick={saveConfig}
-                  disabled={savingConfig}
-                  className="flex items-center px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50"
+                {/* Voice & strategy */}
+                <ConfigCard
+                  icon={Sparkles}
+                  title="AI voice & strategy"
+                  description="The personality your customers meet, how hard the AI pushes the price, and the language it speaks."
                 >
-                  {savingConfig ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                  Save Config
-                </button>
+                  <Field label="AI persona" hint="Tone of voice only — it does not change the price logic.">
+                    <select
+                      value={configForm.aiPersona ?? 'friendly_shopkeeper'}
+                      onChange={e => setConfigForm({ ...configForm, aiPersona: e.target.value })}
+                      className={CONTROL_CLS}
+                    >
+                      <option value="friendly_shopkeeper">Friendly Shopkeeper · warm and neighbourly</option>
+                      <option value="strict_negotiator">Strict Negotiator · precise and formal</option>
+                      <option value="playful_friend">Playful Friend · cheeky and casual</option>
+                    </select>
+                  </Field>
+                  <Field label="Negotiation mode" hint="How steeply the AI concedes. The hidden margin floor always holds.">
+                    <select
+                      value={configForm.negotiationMode ?? 'balanced'}
+                      onChange={e => setConfigForm({ ...configForm, negotiationMode: e.target.value })}
+                      className={CONTROL_CLS}
+                    >
+                      <option value="conservative">Conservative · protect margin, concede slowly</option>
+                      <option value="balanced">Balanced · fair deals (recommended)</option>
+                      <option value="flexible">Flexible · closing-focused, moves faster</option>
+                    </select>
+                  </Field>
+                  <Field label="Default language" hint="Auto mirrors the customer’s language. Pick one to always reply in that language.">
+                    <select
+                      value={configForm.language ?? 'auto'}
+                      onChange={e => setConfigForm({ ...configForm, language: e.target.value })}
+                      className={CONTROL_CLS}
+                    >
+                      {LANGUAGE_OPTIONS.map(o => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </Field>
+                </ConfigCard>
+
+                {/* Margin protection */}
+                <ConfigCard
+                  icon={Percent}
+                  title="Margin protection"
+                  description="The hard floor the AI can never cross. Customers never see this number."
+                >
+                  <Field
+                    label="Minimum profit % (global fallback)"
+                    hint="The AI will never agree to a price below this % margin of the listed price. Per-product floors can override it."
+                  >
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      value={configForm.minProfitPercent ?? 20}
+                      onChange={e => setConfigForm({ ...configForm, minProfitPercent: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) })}
+                      className={CONTROL_CLS}
+                    />
+                  </Field>
+                  <button
+                    onClick={() => setTab('products')}
+                    className="inline-flex items-center gap-1.5 text-sm text-blue-300/80 transition hover:text-blue-200"
+                  >
+                    <Link2 className="h-4 w-4" /> Set a different floor per product
+                  </button>
+                </ConfigCard>
+
+                {/* Product knowledge */}
+                <ConfigCard
+                  className="lg:col-span-2"
+                  icon={ListChecks}
+                  title="Product knowledge"
+                  description="Teach the AI what it may say about your products — and what it must never repeat."
+                >
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field
+                      label="Approved selling points"
+                      hint="One per line. Only these merchant-vetted claims reach the AI."
+                    >
+                      <textarea
+                        rows={5}
+                        value={(configForm.approvedSellingPoints ?? []).join('\n')}
+                        onChange={e => setConfigForm({ ...configForm, approvedSellingPoints: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}
+                        className={CONTROL_CLS}
+                        placeholder={'machine-washable\n7-day replacement warranty'}
+                      />
+                    </Field>
+                    <Field
+                      label="Claims the AI must never repeat"
+                      hint="One per line. These phrases are scrubbed from product context entirely."
+                    >
+                      <textarea
+                        rows={5}
+                        value={(configForm.disallowedClaims ?? []).join('\n')}
+                        onChange={e => setConfigForm({ ...configForm, disallowedClaims: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}
+                        className={CONTROL_CLS}
+                        placeholder={'cures skin problems\nworld #1 brand'}
+                      />
+                    </Field>
+                  </div>
+                </ConfigCard>
+
+                {/* Cross-sell & discounts */}
+                <ConfigCard
+                  className="lg:col-span-2"
+                  icon={Users}
+                  title="Cross-sell & discounts"
+                  description="What the AI may offer alongside the negotiation."
+                >
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <ToggleRow
+                      title="Suggest similar products"
+                      description="When a shopper’s budget can’t reach your floor, show matching items from your verified catalog, ranked by budget fit."
+                      checked={configForm.recommendationsEnabled ?? true}
+                      onChange={v => setConfigForm({ ...configForm, recommendationsEnabled: v, alternativeRecommendationsEnabled: v })}
+                    />
+                    <ToggleRow
+                      title="Allow coupon stacking"
+                      description="Off is recommended: the bargain discount can never be combined with another coupon or promo. Enforced at accept, even if the AI mentions one."
+                      checked={configForm.couponStackingEnabled ?? false}
+                      onChange={v => setConfigForm({ ...configForm, couponStackingEnabled: v })}
+                    />
+                  </div>
+                </ConfigCard>
+
+                {/* Daily goal & campaign */}
+                <ConfigCard
+                  className="lg:col-span-2"
+                  icon={Target}
+                  title="Daily goal & campaign"
+                  description="Set a real daily target. CartGain paces the negotiation toward it — always inside your margin floor. Customers never see this."
+                >
+                  <ToggleRow
+                    title="Enable daily goal"
+                    description="When on, negotiation intensity follows your progress automatically."
+                    checked={configForm.goalEnabled ?? false}
+                    onChange={v => setConfigForm({ ...configForm, goalEnabled: v })}
+                  />
+
+                  {configForm.goalEnabled && (
+                    <div className="space-y-5 rounded-xl border border-blue-800/30 bg-slate-950/30 p-4 sm:p-5">
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        <Field label="Goal measures">
+                          <select
+                            value={configForm.goalType ?? 'orders'}
+                            onChange={e => setConfigForm({ ...configForm, goalType: e.target.value })}
+                            className={CONTROL_CLS}
+                          >
+                            <option value="orders">Orders placed</option>
+                            <option value="revenue">Revenue (₹)</option>
+                          </select>
+                        </Field>
+                        <Field
+                          className="sm:col-span-2"
+                          label="Daily target"
+                          hint={configForm.goalType === 'revenue'
+                            ? 'Revenue (order net) to recognise by the end of the window.'
+                            : 'Confirmed orders to recognise by the end of the window.'}
+                        >
+                          <input
+                            type="number"
+                            min={1}
+                            step={configForm.goalType === 'revenue' ? 100 : 1}
+                            value={configForm.goalTarget ?? 10}
+                            onChange={e => setConfigForm({ ...configForm, goalTarget: Math.max(1, parseFloat(e.target.value) || 1) })}
+                            className={CONTROL_CLS}
+                          />
+                        </Field>
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        <Field label="Window starts" hint="Set in your browser; shown in your store timezone.">
+                          <input
+                            type="datetime-local"
+                            value={toLocalDateTimeInput(configForm.goalStartTime ?? null)}
+                            onChange={e => setConfigForm({ ...configForm, goalStartTime: fromLocalDateTimeInput(e.target.value) })}
+                            className={CONTROL_CLS}
+                          />
+                        </Field>
+                        <Field label="Window ends" hint="Orders placed in this window count toward the goal.">
+                          <input
+                            type="datetime-local"
+                            value={toLocalDateTimeInput(configForm.goalEndTime ?? null)}
+                            onChange={e => setConfigForm({ ...configForm, goalEndTime: fromLocalDateTimeInput(e.target.value) })}
+                            className={CONTROL_CLS}
+                          />
+                        </Field>
+                        <Field label="Store timezone" hint="Used to bucket the day and display the window.">
+                          <select
+                            value={configForm.goalTimezone ?? 'Asia/Kolkata'}
+                            onChange={e => setConfigForm({ ...configForm, goalTimezone: e.target.value })}
+                            className={CONTROL_CLS}
+                          >
+                            <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                            <option value="Asia/Karachi">Asia/Karachi (PKT)</option>
+                            <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+                            <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
+                            <option value="Asia/Dhaka">Asia/Dhaka (BST)</option>
+                            <option value="Africa/Nairobi">Africa/Nairobi (EAT)</option>
+                            <option value="Europe/London">Europe/London (GMT/BST)</option>
+                            <option value="America/New_York">America/New_York (EST/EDT)</option>
+                            <option value="America/Los_Angeles">America/Los_Angeles (PST/PDT)</option>
+                            <option value="UTC">UTC</option>
+                          </select>
+                        </Field>
+                      </div>
+
+                      <ToggleRow
+                        title="Auto dynamic strategy"
+                        description="Let CartGain switch between Conservative / Normal / Aggressive / Closing based on your progress."
+                        checked={configForm.dynamicStrategyEnabled ?? false}
+                        onChange={v => setConfigForm({ ...configForm, dynamicStrategyEnabled: v })}
+                      />
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Field label="Campaign name (optional)">
+                          <input
+                            type="text"
+                            maxLength={60}
+                            value={configForm.campaignName ?? ''}
+                            onChange={e => setConfigForm({ ...configForm, campaignName: e.target.value || null })}
+                            className={CONTROL_CLS}
+                            placeholder="e.g. Diwali sale"
+                          />
+                        </Field>
+                        <Field label="Campaign message (optional)" hint="Only truthful context you want the AI to reference.">
+                          <input
+                            type="text"
+                            maxLength={250}
+                            value={configForm.campaignMessage ?? ''}
+                            onChange={e => setConfigForm({ ...configForm, campaignMessage: e.target.value || null })}
+                            className={CONTROL_CLS}
+                            placeholder="e.g. Festive week — free shipping"
+                          />
+                        </Field>
+                        <Field label="Campaign starts" hint="Leave empty to run for the whole goal window.">
+                          <input
+                            type="datetime-local"
+                            value={toLocalDateTimeInput(configForm.campaignStart ?? null)}
+                            onChange={e => setConfigForm({ ...configForm, campaignStart: fromLocalDateTimeInput(e.target.value) })}
+                            className={CONTROL_CLS}
+                          />
+                        </Field>
+                        <Field label="Campaign ends" hint="The AI only references the campaign while it is live.">
+                          <input
+                            type="datetime-local"
+                            value={toLocalDateTimeInput(configForm.campaignEnd ?? null)}
+                            onChange={e => setConfigForm({ ...configForm, campaignEnd: fromLocalDateTimeInput(e.target.value) })}
+                            className={CONTROL_CLS}
+                          />
+                        </Field>
+                      </div>
+
+                      <button
+                        onClick={() => setTab('goals')}
+                        className="inline-flex items-center gap-1.5 text-sm text-blue-300/80 transition hover:text-blue-200"
+                      >
+                        <Gauge className="h-4 w-4" /> View live goal progress
+                      </button>
+                    </div>
+                  )}
+                </ConfigCard>
+              </div>
+
+              {/* Bottom save (mirror of the sticky bar for long pages) */}
+              <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
                 {configMessage && (
-                  <span className={configMessage.type === 'success' ? 'text-emerald-300 text-sm' : 'text-red-300 text-sm'}>
+                  <span className={configMessage.type === 'success' ? 'text-sm text-emerald-300' : 'text-sm text-red-300'}>
                     {configMessage.text}
                   </span>
                 )}
+                <button
+                  onClick={saveConfig}
+                  disabled={savingConfig}
+                  className="flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-50"
+                >
+                  {savingConfig ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                  Save changes
+                </button>
               </div>
             </>
           )}
@@ -1108,15 +1083,79 @@ function GoalStatusPill({ status }: { status: string }) {
   return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${m.cls}`}>{m.label}</span>
 }
 
-function GroupTitle({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle: string }) {
+function ConfigCard({
+  icon: Icon,
+  title,
+  description,
+  className = '',
+  children,
+}: {
+  icon: any
+  title: string
+  description: string
+  className?: string
+  children: ReactNode
+}) {
   return (
-    <div className="pt-4">
-      <div className="flex items-center gap-2 text-blue-100 font-semibold">
-        <Icon className="w-4 h-4 text-blue-400" />
-        {title}
+    <section className={`rounded-2xl border border-blue-800/30 bg-slate-900/60 p-5 sm:p-6 ${className}`}>
+      <div className="mb-4 flex items-start gap-3">
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-900/40">
+          <Icon className="h-5 w-5 text-blue-300" />
+        </span>
+        <div>
+          <h3 className="text-base font-semibold text-blue-50">{title}</h3>
+          <p className="mt-0.5 text-sm text-blue-300/60">{description}</p>
+        </div>
       </div>
-      <p className="text-xs text-blue-300/60 mt-0.5 mb-3">{subtitle}</p>
-    </div>
+      <div className="space-y-4">{children}</div>
+    </section>
+  )
+}
+
+function ToggleRow({
+  title,
+  description,
+  checked,
+  onChange,
+}: {
+  title: string
+  description: string
+  checked: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <label className="flex cursor-pointer items-start justify-between gap-4 rounded-xl border border-blue-800/40 bg-slate-950/40 p-4">
+      <span>
+        <span className="block font-medium text-blue-100">{title}</span>
+        <span className="mt-0.5 block text-sm text-blue-300/60">{description}</span>
+      </span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={e => onChange(e.target.checked)}
+        className="mt-1 h-5 w-5 shrink-0 accent-blue-500"
+      />
+    </label>
+  )
+}
+
+function Field({
+  label,
+  hint,
+  className = '',
+  children,
+}: {
+  label: string
+  hint?: string
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <label className={`block ${className}`}>
+      <span className="mb-1 block text-sm font-medium text-blue-200">{label}</span>
+      {children}
+      {hint && <span className="mt-1 block text-sm text-blue-300/60">{hint}</span>}
+    </label>
   )
 }
 
