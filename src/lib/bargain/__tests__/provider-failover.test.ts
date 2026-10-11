@@ -129,6 +129,27 @@ describe('primary outage is absorbed inside the same request', () => {
     expect(sentModels).toEqual(['gpt-4o', 'openai/gpt-oss-120b'])
   })
 
+  it('serves a real Groq reply on a plain 429 rate-limit (the silent-degrade bug)', async () => {
+    // The exact production failure: OpenAI returns a bare 429 rate-limit with
+    // NO insufficient_quota code. This used to be swallowed silently (no
+    // userKey on the bargain path → no cooldown, no trip, no log), so the retry
+    // re-resolved the SAME primary tier and the shopper got a template. It must
+    // now trip the primary and fail over to Groq inside the same request.
+    ;(globalThis as any).__nextCreate = jest.fn(async (req: any) => {
+      if (req.model === 'gpt-4o') {
+        throw { status: 429, error: { message: 'Rate limit reached for gpt-4o', type: 'requests', code: 'rate_limit_exceeded' } }
+      }
+      return modelReply(90)
+    })
+
+    const res = await negotiateStep(ctx(), [{ role: 'customer', content: 'hi' }], 'can you do 90?', 90, 'sess-429')
+
+    expect(res.reply).toBe('Groq answered you.')
+    expect(res.decision).toBe('counter')
+    expect(sentModels).toEqual(['gpt-4o', 'openai/gpt-oss-120b'])
+    expect(isTierTripped('primary')).toBe(true)
+  })
+
   it('does NOT fail over on a single timeout, and keeps the primary breaker closed', async () => {
     // Deliberate: a one-off slow response is not an outage. Tripping the tier
     // would push every shopper onto Groq for 15 minutes because of one slow
@@ -286,7 +307,7 @@ describe('primary outage is absorbed inside the same request', () => {
     // Two attempts, both on the primary (no failover), the second compact.
     expect(sentModels).toEqual(['gpt-4o', 'gpt-4o'])
     expect(seen[0].messages[0].content).toContain('NEGOTIATION PSYCHOLOGY')
-    expect(seen[1].messages[0].content).toContain('CORE LAWS')
+    expect(seen[1].messages[0].content).toContain('professional salesperson and master negotiator')
     expect(seen[1].messages[0].content).not.toContain('NEGOTIATION PSYCHOLOGY')
     expect(seen[1].max_completion_tokens).toBeLessThan(seen[0].max_completion_tokens)
     // A size error is not an outage — the primary stays healthy for the next turn.
@@ -303,7 +324,7 @@ describe('primary outage is absorbed inside the same request', () => {
 
     await negotiateStep(ctx(), [], '90?', 90, 'sess-compact-fb')
 
-    expect(seen[0].messages[0].content).toContain('CORE LAWS')
+    expect(seen[0].messages[0].content).toContain('professional salesperson and master negotiator')
     expect(seen[0].messages[0].content).not.toContain('NEGOTIATION PSYCHOLOGY')
     expect(seen[0].max_completion_tokens).toBe(700)
   })

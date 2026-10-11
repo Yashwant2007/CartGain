@@ -57,7 +57,7 @@ const ctx = (over: Partial<NegotiationContext> = {}): NegotiationContext => ({
   ...over,
 })
 
-const analysis = { behavior: 'first_timer' as const, offTopicCount: 0, concessionCount: 0, lastAIOffer: null, signals: neutralSignals() }
+const analysis = { behavior: 'first_timer' as const, offTopicCount: 0, concessionCount: 0, lastAIOffer: null, seriousness: 'casual' as const, signals: neutralSignals() }
 
 let failures = 0
 let aiCalls = 0

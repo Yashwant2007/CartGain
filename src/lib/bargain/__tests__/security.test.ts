@@ -142,7 +142,7 @@ describe('Abuse firewall blocks injection/extraction attempts', () => {
 // appear in the system prompt, even in the bulk/walkout variants.
 // ════════════════════════════════════════════════════════════
 describe('System-prompt floor hygiene (no literal floor in prompt)', () => {
-  const analysis = { behavior: 'first_timer' as const, offTopicCount: 0, concessionCount: 0, lastAIOffer: null, signals: neutralSignals() }
+  const analysis = { behavior: 'first_timer' as const, offTopicCount: 0, concessionCount: 0, lastAIOffer: null, seriousness: 'casual' as const, signals: neutralSignals() }
 
   it('bulk-context prompt has NO literal per-unit or total floor number', () => {
     const prompt = buildSystemPrompt(

@@ -84,7 +84,7 @@ describe('clampOfferToSafety — negotiation-time price bound (§22/§28)', () =
 })
 
 describe('Leak guards still scrub after §24/§27 prompt additions (§38)', () => {
-  const analysis = { behavior: 'first_timer' as const, offTopicCount: 0, concessionCount: 0, lastAIOffer: null, signals: neutralSignals() }
+  const analysis = { behavior: 'first_timer' as const, offTopicCount: 0, concessionCount: 0, lastAIOffer: null, seriousness: 'casual' as const, signals: neutralSignals() }
   const base = (over: Partial<NegotiationContext> = {}): NegotiationContext => ({
     storeName: 'T', currencySymbol: '₹', originalPrice: 1000, minPrice: 800,
     attemptsUsed: 0, maxAttempts: 3, persona: 'friendly_shopkeeper', ...over,
@@ -127,6 +127,39 @@ describe('Policy classifiers harden (cross-module integrity)', () => {
   it('bundle classifier never questions same-SKU volume', () => {
     expect(detectMultiProductRequest('2 serum')).toBe(false)
     expect(detectMultiProductRequest('serum and moisturizer together')).toBe(true)
+  })
+
+  it('time-waster cadence is steered to protect margin, not to discount', () => {
+    const tw = {
+      behavior: 'flatterer' as const,
+      offTopicCount: 3,
+      concessionCount: 0,
+      lastAIOffer: null,
+      seriousness: 'time_waster' as const,
+      signals: neutralSignals(),
+    }
+    const prompt = buildSystemPrompt(
+      { storeName: 'T', currencySymbol: '₹', originalPrice: 1000, minPrice: 800, attemptsUsed: 0, maxAttempts: 3, persona: 'friendly_shopkeeper' },
+      tw,
+    )
+    expect(prompt).toContain('BUYER SERIOUSNESS: LOW')
+    expect(prompt).toMatch(/NEVER reward a game with a discount/i)
+  })
+
+  it('a serious buyer is steered toward a close', () => {
+    const serious = {
+      behavior: 'first_timer' as const,
+      offTopicCount: 0,
+      concessionCount: 0,
+      lastAIOffer: null,
+      seriousness: 'serious' as const,
+      signals: neutralSignals(),
+    }
+    const prompt = buildSystemPrompt(
+      { storeName: 'T', currencySymbol: '₹', originalPrice: 1000, minPrice: 800, attemptsUsed: 0, maxAttempts: 3, persona: 'friendly_shopkeeper' },
+      serious,
+    )
+    expect(prompt).toContain('BUYER SERIOUSNESS: HIGH')
   })
 
   it('no hostile message can raise or lower the floor (structural)', () => {

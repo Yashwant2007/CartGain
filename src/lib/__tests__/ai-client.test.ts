@@ -90,6 +90,56 @@ describe('decorateForFallback', () => {
     expect(create.mock.calls[0][0]).not.toHaveProperty('reasoning_effort')
   })
 })
+describe('handleAiFailure trips the tier on provider failures', () => {
+  const ORIGINAL = { ...process.env }
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL }
+    jest.resetModules()
+  })
+
+  it('trips the primary on a plain 429 rate-limit (no insufficient_quota code)', async () => {
+    const { handleAiFailure } = await import('../ai-client')
+    const { isTierTripped, resetQuotaBreakForTests } = await import('../ai-quota')
+    resetQuotaBreakForTests()
+
+    handleAiFailure({ status: 429, error: { code: 'rate_limit_exceeded' } }, 'test', undefined, 'primary')
+
+    expect(isTierTripped('primary')).toBe(true)
+  })
+
+  it('trips on other HTTP provider failures (401/403/404/500)', async () => {
+    const { handleAiFailure } = await import('../ai-client')
+    const { isTierTripped, resetQuotaBreakForTests } = await import('../ai-quota')
+
+    for (const status of [401, 403, 404, 500, 503]) {
+      resetQuotaBreakForTests()
+      handleAiFailure({ status }, 'test', undefined, 'primary')
+      expect(isTierTripped('primary')).toBe(true)
+    }
+  })
+
+  it('does NOT trip on a 413 request-size error (handled by the compact retry)', async () => {
+    const { handleAiFailure } = await import('../ai-client')
+    const { isTierTripped, resetQuotaBreakForTests } = await import('../ai-quota')
+    resetQuotaBreakForTests()
+
+    handleAiFailure({ status: 413, error: { message: 'Request too large' } }, 'test', undefined, 'primary')
+
+    expect(isTierTripped('primary')).toBe(false)
+  })
+
+  it('does NOT trip on a no-status timeout (one slow reply is not an outage)', async () => {
+    const { handleAiFailure } = await import('../ai-client')
+    const { isTierTripped, resetQuotaBreakForTests } = await import('../ai-quota')
+    resetQuotaBreakForTests()
+
+    handleAiFailure({ code: 'ETIMEDOUT', message: 'Request timed out.' }, 'test', undefined, 'primary')
+
+    expect(isTierTripped('primary')).toBe(false)
+  })
+})
+
 describe('provider env parsing (getAiHealth)', () => {
   const ORIGINAL = { ...process.env }
 

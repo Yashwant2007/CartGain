@@ -149,23 +149,28 @@ export function getAiClient(userKey?: string): AiResolved | null {
 }
 
 export function handleAiFailure(err: any, context: string, userKey: string | undefined, tier: AiTier): void {
-  if (isInsufficientQuotaError(err) || err?.status === 401) {
+  const status: number | undefined = err?.status ?? err?.statusCode
+  const quota = isInsufficientQuotaError(err)
+  // Any HTTP-level failure means this tier cannot serve the request right now,
+  // so fail over instead of silently serving templates. This explicitly covers
+  // 429 rate-limits/quota — the exact case that previously degraded a whole
+  // storefront to canned lines without any log line. No-status errors
+  // (timeouts, transient network blips) are deliberately NOT treated as an
+  // outage: one slow reply must not push every shopper onto the fallback for
+  // 15 minutes. 413 is excluded here too — that is a request-SIZE problem the
+  // bargain path handles with a compact retry, not a tier outage.
+  const httpFailure = typeof status === 'number' && status >= 400 && status !== 413
+  if (quota || httpFailure) {
     tripTierBreaker(tier)
+    if (tier === 'fallback' && userKey) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
     if (shouldLogQuota()) {
-      const reason = isInsufficientQuotaError(err)
-        ? 'credits exhausted'
-        : err?.status === 401
-        ? 'authentication failed (401)'
-        : 'unexpected failure'
+      const reason = quota ? 'credits exhausted' : `HTTP ${status}`
       console.warn(
-        `[AI] ${context}: ${tier} tier ${reason} — ${
+        `[AI] ${context}: ${tier} tier failing (${reason}) — ${
           tier === 'primary' ? 'switching to fallback provider' : 'falling back to heuristics'
         }`
       )
     }
-    if (tier === 'fallback' && userKey) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
-  } else if (err?.status === 429) {
-    if (userKey) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
   } else {
     console.error(`[AI] ${context}:`, err)
   }
