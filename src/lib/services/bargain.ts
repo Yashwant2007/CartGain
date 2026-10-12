@@ -4,6 +4,7 @@ import { checkAbuse } from '@/lib/bargain/abuse'
 import { getAiClient, handleAiFailure } from '@/lib/ai-client'
 import {
   strategyAdjustedCounter,
+  tacticalCounter,
   quotedFloor as engineQuotedFloor,
   ruleBasedDecision as engineRuleBasedDecision,
   retentionOffer as engineRetentionOffer,
@@ -1395,24 +1396,17 @@ export async function computeMinPrice(opts: {
   return { minPrice: Math.round(Math.min(minPrice, originalPrice) * 100) / 100, isBargainable: true }
 }
 
-// ── Graduated counter (fallback) ──
-
-function graduatedCounter(ctx: NegotiationContext): number {
-  const { originalPrice, minPrice, attemptsUsed, maxAttempts } = ctx
-  const progress = attemptsUsed / maxAttempts
-  const priceRange = originalPrice - minPrice
-  const counter = originalPrice - priceRange * progress
-  return Math.round(counter * 100) / 100
-}
-
 // ── Strategy-aware counter ──
 // The deterministic pacing layer (goals.ts) picks a strategy; this nudges the
-// fallback counter within [minPrice, originalPrice] accordingly. The strategy
-// never moves a counter below the merchant floor.
+// tactical base counter within [minPrice, originalPrice] accordingly. The base
+// is the shared, convex `tacticalCounter` (slow early, interest-aware) so the
+// no-AI path and the AI lower-bound can never diverge. The strategy never moves
+// a counter below the merchant floor.
 function effectiveCounter(ctx: NegotiationContext): number {
   const strat = ctx.goal?.strategy
-  if (!strat || strat === 'NORMAL') return graduatedCounter(ctx)
-  return strategyAdjustedCounter(ctx, strat, graduatedCounter(ctx))
+  const base = tacticalCounter(ctx as EngineNegotiationContext)
+  if (!strat || strat === 'NORMAL') return base
+  return strategyAdjustedCounter(ctx as EngineNegotiationContext, strat, base)
 }
 
 // ── Rule-based fallback (when AI is unavailable) ──
@@ -2244,9 +2238,18 @@ export async function negotiateStep(
 
     // ── BACKEND SAFETY: Validate and clamp counterOffer ──
     const attemptsLeft = ctx.maxAttempts - ctx.attemptsUsed
-    // When the budget is nearly spent the fallback closes near the quoted floor
-    // (see quotedFloor) — never AT minPrice, so the hidden floor stays hidden.
-    const fallbackCounter = attemptsLeft <= 2 ? quotedFloor(ctx) : effectiveCounter(ctx)
+    // Tactical pacing — the same convex, interest-aware curve the no-AI path
+    // uses. This is the fix for the live "jumps to ₹850 on round one" behaviour:
+    // a below-schedule AI counter is lifted back up so concessions are EARNED,
+    // not volunteered. On the final round we deliberately do NOT apply the bound
+    // — that turn is the designed close, where the safe quoted floor may be named
+    // (and never minPrice itself, which stays hidden).
+    const pacingCounter = effectiveCounter({
+      ...ctx,
+      seriousness: conversationAnalysis.seriousness,
+    } as NegotiationContext)
+    const finalRound = attemptsLeft <= 1
+    const fallbackCounter = finalRound ? quotedFloor(ctx) : pacingCounter
     let counterOffer =
       typeof parsed.counterOffer === 'number' && parsed.counterOffer > 0
         ? Math.round(parsed.counterOffer * 100) / 100
@@ -2254,7 +2257,7 @@ export async function negotiateStep(
 
     // ENFORCE FLOOR: AI counter must never go below minPrice (bumped above it)
     if (counterOffer < ctx.minPrice) {
-      counterOffer = attemptsLeft <= 2 ? quotedFloor(ctx) : effectiveCounter(ctx)
+      counterOffer = fallbackCounter
     }
     // ENFORCE CEILING: AI counter must never exceed original price
     if (counterOffer > ctx.originalPrice) {
@@ -2267,6 +2270,10 @@ export async function negotiateStep(
     // NEVER quote the hidden floor itself — keep a price above it.
     if (counterOffer <= ctx.minPrice) {
       counterOffer = quotedFloor(ctx)
+    }
+    // TACTICAL PACING: never concede faster than the schedule on a live round.
+    if (!finalRound) {
+      counterOffer = Math.max(counterOffer, pacingCounter)
     }
 
     // SAFETY: If AI claims "accept" but customer offer < floor, downgrade to counter

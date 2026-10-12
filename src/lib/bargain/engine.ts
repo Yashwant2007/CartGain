@@ -37,6 +37,12 @@ export interface NegotiationContext {
   walkoutTriggered?: boolean
   language?: string
   goal?: NegotiationGoalContext
+  /** Deterministic read of the customer's offer direction across the session
+   *  (mirrors services/bargain). Drives the tactical pacing nudge. */
+  customerOfferTrend?: 'new' | 'rising' | 'flat' | 'falling'
+  /** Deterministic buyer-seriousness read (mirrors services/bargain). A genuine
+   *  buyer earns a little more movement; a time-waster is held firmer. */
+  seriousness?: 'serious' | 'casual' | 'time_waster'
 }
 
 export interface NegotiationResult {
@@ -59,6 +65,40 @@ export function graduatedCounter(ctx: NegotiationContext): number {
   const priceRange = originalPrice - minPrice
   const counter = originalPrice - priceRange * progress
   return Math.round(Math.max(quotedFloor(ctx), counter) * 100) / 100
+}
+
+// ── Tactical pacing: concede slowly, reward real interest ──
+// The graduated curve above moves linearly, so the very first counter can already
+// sit well below the listed price — it reads as a panic discount and gives away
+// margin before the shopper has shown any real interest. `tacticalCounter` is
+// deliberately CONVEX: early counters stay near the listed price and only bend
+// toward the safe quote as rounds are actually spent, so the discount has to be
+// earned. A deterministic interest read then nudges the number — a serious buyer
+// gets a touch more movement, a time-waster is held firmer — and real upward
+// movement in the shopper's own offers is rewarded. The result is always clamped
+// to [quotedFloor, originalPrice]: pacing shapes the offer, it never breaches the
+// floor-secrecy rule (the merchant's true minimum is never quoted).
+export function tacticalProgress(t: number): number {
+  const clamped = Math.min(1, Math.max(0, t))
+  return Math.round(Math.pow(clamped, 1.6) * 1e6) / 1e6
+}
+
+export function tacticalCounter(ctx: NegotiationContext): number {
+  const { originalPrice, attemptsUsed, maxAttempts } = ctx
+  const floor = quotedFloor(ctx)
+  const range = originalPrice - floor
+  if (range <= 0) return Math.round(floor * 100) / 100
+
+  const rawProgress = maxAttempts > 0 ? attemptsUsed / maxAttempts : 1
+  const progress = tacticalProgress(rawProgress)
+  let counter = originalPrice - range * progress
+
+  // Interest-aware nudge — reward engagement, hold against testing.
+  if (ctx.seriousness === 'serious') counter -= range * progress * 0.08
+  else if (ctx.seriousness === 'time_waster') counter += range * (1 - progress) * 0.12
+  if (ctx.customerOfferTrend === 'rising') counter -= range * progress * 0.05
+
+  return Math.round(Math.min(originalPrice, Math.max(floor, counter)) * 100) / 100
 }
 
 // ── Strategy-aware counter ──
@@ -179,7 +219,7 @@ export function quotedFloor(ctx: Pick<NegotiationContext, 'minPrice' | 'original
 export function ruleBasedDecision(
   offer: number,
   ctx: NegotiationContext,
-  counterFor: (ctx: NegotiationContext) => number = graduatedCounter,
+  counterFor: (ctx: NegotiationContext) => number = tacticalCounter,
 ): NegotiationResult {
   const boundedOffer = Math.max(0, Math.min(offer, ctx.originalPrice))
   const { minPrice, originalPrice, attemptsUsed, maxAttempts, persona } = ctx

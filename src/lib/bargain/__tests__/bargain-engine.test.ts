@@ -5,6 +5,7 @@ import {
   buildOpeningMessage,
   type NegotiationContext,
 } from '../../services/bargain'
+import { tacticalCounter, tacticalProgress, quotedFloor } from '../engine'
 
 const baseCtx = (over: Partial<NegotiationContext> = {}): NegotiationContext => ({
   storeName: 'Test Store',
@@ -178,3 +179,79 @@ describe('buildOpeningMessage', () => {
     expect(playful.toLowerCase()).toMatch(/back|round 2|welcome back|again/)
   })
 })
+
+// ── tactical pacing (concede slowly; reward real interest) ──
+
+describe('tacticalProgress', () => {
+  it('is convex — slows early progress and reaches 1 only at the end', () => {
+    expect(tacticalProgress(0)).toBe(0)
+    expect(tacticalProgress(1)).toBe(1)
+    // At one third of the rounds, barely a tenth of the range has moved.
+    expect(tacticalProgress(1 / 3)).toBeLessThan(0.2)
+    // Monotonic.
+    expect(tacticalProgress(0.25)).toBeLessThan(tacticalProgress(0.5))
+    expect(tacticalProgress(0.5)).toBeLessThan(tacticalProgress(0.75))
+  })
+
+  it('clamps out-of-range input', () => {
+    expect(tacticalProgress(-1)).toBe(0)
+    expect(tacticalProgress(2)).toBe(1)
+  })
+})
+
+describe('tacticalCounter — the discount must be earned', () => {
+  const ctx = (over: Partial<NegotiationContext> = {}): NegotiationContext => ({
+    storeName: 'Test Store',
+    currencySymbol: '₹',
+    originalPrice: 1000,
+    minPrice: 800,
+    attemptsUsed: 0,
+    maxAttempts: 3,
+    persona: 'friendly_shopkeeper',
+    ...over,
+  })
+
+  it('anchors at the listed price on the opening round (no panic discount)', () => {
+    expect(tacticalCounter(ctx({ attemptsUsed: 0 }))).toBe(1000)
+  })
+
+  it('keeps the first counter well clear of the floor (the live ₹850 bug)', () => {
+    // Round 1 of 3: the old AI freely said ₹850 (~25% off). Pacing holds ~₹967.
+    const first = tacticalCounter(ctx({ attemptsUsed: 1 }))
+    expect(first).toBeGreaterThan(950)
+    expect(first).toBeLessThan(1000)
+  })
+
+  it('descends round over round but never below the safe quoted floor', () => {
+    const floor = quotedFloor(ctx())
+    const r1 = tacticalCounter(ctx({ attemptsUsed: 0 }))
+    const r2 = tacticalCounter(ctx({ attemptsUsed: 1 }))
+    const r3 = tacticalCounter(ctx({ attemptsUsed: 2 }))
+    expect(r1).toBeGreaterThan(r2)
+    expect(r2).toBeGreaterThan(r3)
+    expect(r3).toBeGreaterThanOrEqual(floor)
+    expect(r3).toBeGreaterThan(800) // never the hidden floor itself
+  })
+
+  it('rewards a serious buyer with more movement than a time-waster', () => {
+    const base = ctx({ attemptsUsed: 1 })
+    const serious = tacticalCounter({ ...base, seriousness: 'serious' })
+    const casual = tacticalCounter({ ...base, seriousness: 'casual' })
+    const waster = tacticalCounter({ ...base, seriousness: 'time_waster' })
+    expect(serious).toBeLessThanOrEqual(casual)
+    expect(casual).toBeLessThanOrEqual(waster)
+  })
+
+  it('rewards real upward movement in the shopper\'s own offers', () => {
+    const base = ctx({ attemptsUsed: 1 })
+    const rising = tacticalCounter({ ...base, customerOfferTrend: 'rising' })
+    const flat = tacticalCounter({ ...base, customerOfferTrend: 'flat' })
+    expect(rising).toBeLessThan(flat)
+  })
+
+  it('quotes the floor in the flat-range edge case rather than the floor itself', () => {
+    const flat = ctx({ originalPrice: 800, minPrice: 800 })
+    expect(tacticalCounter(flat)).toBe(quotedFloor(flat))
+  })
+})
+

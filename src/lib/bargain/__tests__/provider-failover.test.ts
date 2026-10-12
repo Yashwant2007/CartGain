@@ -111,7 +111,9 @@ describe('primary outage is absorbed inside the same request', () => {
 
     expect(res.reply).toBe('Groq answered you.')
     expect(res.decision).toBe('counter')
-    expect(res.counterOffer).toBe(90)
+    // The tactic pacing bound lifts the model's early ₹90 up to the round-one
+    // schedule (orig 100 / floor 81 → ₹96.72): concessions must be earned.
+    expect(res.counterOffer).toBe(96.72)
     // Both tiers were exercised, in order, inside one call.
     expect(sentModels).toEqual(['gpt-4o', 'openai/gpt-oss-120b'])
     expect(isTierTripped('primary')).toBe(true)
@@ -266,7 +268,7 @@ describe('primary outage is absorbed inside the same request', () => {
 
     expect(res.reply).toBe('Fenced reply.')
     expect(res.decision).toBe('counter')
-    expect(res.counterOffer).toBe(90)
+    expect(res.counterOffer).toBe(96.72)
   })
 
   it('degrades safely when Groq returns empty content (reasoning ate the budget)', async () => {

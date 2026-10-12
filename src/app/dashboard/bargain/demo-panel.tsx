@@ -15,7 +15,7 @@ import {
   buildOpeningMessage,
   ruleBasedDecision,
   retentionOffer,
-  graduatedCounter,
+  tacticalCounter,
   type Persona,
   type NegotiationContext,
   type NegotiationResult,
@@ -208,7 +208,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
         counterOffer = result.counterOffer ?? null
         decision = result.decision
       } else {
-        const counter = graduatedCounter(ctx)
+        const counter = tacticalCounter(ctx)
         reply = `What price did you have in mind? I could probably do ₹${counter.toFixed(2)} if you make me a fair offer.`
         counterOffer = counter
       }
