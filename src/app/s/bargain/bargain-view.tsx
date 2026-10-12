@@ -2,6 +2,7 @@
 
 import { Suspense, useMemo, useState, type ReactNode, useEffect } from 'react'
 import Image from 'next/image'
+import { ShoppingCart, Package, Lock } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import BargainWidget, { type BargainItem } from '@/components/bargain/StorefrontBargainWidget'
@@ -31,7 +32,7 @@ function WidgetLoading() {
 function AlreadyUsed() {
   return (
     <div className="p-8 text-center">
-      <div className="text-2xl mb-3">🔒</div>
+      <div className="flex justify-center mb-3 text-slate-400"><Lock size={26} /></div>
       <p className="text-sm font-semibold text-white mb-2">Demo already used</p>
       <p className="text-xs text-slate-400 mb-4">
         Each account gets one live storefront demo to keep price-shoppers and bots from burning margins.
@@ -168,7 +169,7 @@ function PageContent() {
               wholeCart ? 'bg-blue-600/25 text-blue-100' : 'bg-white/5 text-slate-300 hover:bg-white/10'
             }`}
           >
-            <span>🛒 Whole cart</span>
+            <span className="flex items-center gap-1.5"><ShoppingCart size={15} /> Whole cart</span>
             <span className="text-xs text-blue-300">{currency === 'USD' ? '$' : currency + ' '}{total.toFixed(2)}</span>
           </button>
         </div>
@@ -189,7 +190,7 @@ function PageContent() {
                 {item.featured_image?.url || item.image ? (
                   <Image src={item.featured_image?.url || item.image || ''} alt="" width={32} height={32} className="w-8 h-8 rounded object-cover" unoptimized />
                 ) : (
-                  <span className="w-8 h-8 rounded bg-blue-600/20 flex items-center justify-center">📦</span>
+                  <span className="w-8 h-8 rounded bg-blue-600/20 flex items-center justify-center text-blue-300"><Package size={16} /></span>
                 )}
                 <span className="flex-1 min-w-0 truncate">{item.title}{item.quantity && item.quantity > 1 ? ` × ${item.quantity}` : ''}</span>
                 <span className="text-xs text-blue-300">{currency === 'USD' ? '$' : currency + ' '}{p.toFixed(2)}</span>

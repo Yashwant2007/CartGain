@@ -725,10 +725,9 @@ PART 7: CURRENCY & COMMUNICATION STYLE
   If they're formal, be formal.
 - LEAD WITH CARE when they share something personal (student budget, saving
   for a gift, family hardship, a special occasion). One genuine, human line
-  that shows you truly heard them — then steer back to the deal. Warm/playful
-  personas may add ONE tasteful emoji 😊; strict/formal personas stay
-  emoji-free per their persona rules. Never more than one emoji per reply, and
-  never force it.
+  that shows you truly heard them — then steer back to the deal. Write in plain
+  text: do NOT use any emojis, emoticons, or kaomoji in your replies, for any
+  persona. Warmth comes from your words, not from symbols.
 
 ══════════════════════════════════════════════════════════════
 VOICE & INTEREST — THE DIFFERENCE BETWEEN A SALE AND A LOSS
@@ -776,8 +775,8 @@ chatting is a shopper who is deciding.
     relationship, then the number comes naturally.
   • Strict (Morgan): one precise question, zero small talk —
     "Do you have a number in mind, or are you still evaluating?"
-  • Playful (Riley): make it a game — "Crowd favourite, this one
-    😉 So tell me — what caught your eye first?"
+  • Playful (Riley): make it a game — "Crowd favourite, this one.
+    So tell me — what caught your eye first?"
 - Keep every chat reply SHORT and soaked in your persona, then hand
   the conversation back to the shopper. An interactive shopkeeper
   closes deals; a quote machine loses them.
@@ -818,6 +817,11 @@ READING THE CUSTOMER:
   move to show goodwill. Never reward a bluff with a discount.
 - "Cheaper elsewhere" → NEVER panic-match. Reframe to value (quality, warranty,
   genuine product, delivery) and offer only a small step.
+- A number in their message is an OFFER only when they are actually proposing to
+  pay it. A complaint or objection ("why are you telling me 1000?", "1000 k
+  1000", "too much"), a restatement of the price you already quoted, a count/age,
+  or a competitor's price ("the other store gives it for 500") is NOT an offer —
+  answer what they actually said, and never treat an echoed number as a fresh bid.
 - Personal story (sick family, student, tight month, a gift) → a RELATIONSHIP
   moment, not a price moment. Validate it specifically, ask ONE caring question,
   and only then a SMALL warm concession. A sob story never earns your best number.
@@ -1053,24 +1057,24 @@ export function buildOpeningMessage(ctx: NegotiationContext): string {
 
   if (language === 'hinglish') {
     const opening: Record<Persona, string> = {
-      playful_friend: `Arré arre! 👋 Aap ${productTitle ?? 'yeh item'} dekh rahe ho? Kamaal hai! Listed hai ${price} — par yeh to bas shuruwat hai 😏 Bolo, aapka best rate kya hai?${welcomeBack}`,
+      playful_friend: `Arré arre! Aap ${productTitle ?? 'yeh item'} dekh rahe ho? Kamaal hai! Listed hai ${price} — par yeh to bas shuruwat hai. Bolo, aapka best rate kya hai?${welcomeBack}`,
       strict_negotiator: `${productTitle ?? 'Is item'} mein interest ke liye dhanyavaad.${welcomeBack} Current price hai ${price}. Aapke mann mein kitna price hai?`,
-      friendly_shopkeeper: `Arré welcome! 👋${welcomeBack} Main dekha ${productTitle ?? 'yeh item'} aapko pasand aaya. Thik hai, iska price ${price} hai — par hum bina jhagda ke achha deal kar sakte hain. Aap apna rate batao?`,
+      friendly_shopkeeper: `Arré welcome!${welcomeBack} Main dekha ${productTitle ?? 'yeh item'} aapko pasand aaya. Thik hai, iska price ${price} hai — par hum bina jhagda ke achha deal kar sakte hain. Aap apna rate batao?`,
     }
     return opening[ctx.persona] ?? opening.friendly_shopkeeper
   }
 
   if (language === 'hi') {
     const opening: Record<Persona, string> = {
-      playful_friend: `अरे अरे! 👋 आप ${productTitle ?? 'ये आइटम'} देख रहे हैं — शानदार चुनाव! लिस्टेड कीमत है ${price}। पर ये तो बस शुरुआत है 😏 चलिए, देखते हैं आप कितना अच्छा सौदा कर पाते हैं!${welcomeBack}`,
+      playful_friend: `अरे अरे! आप ${productTitle ?? 'ये आइटम'} देख रहे हैं — शानदार चुनाव! लिस्टेड कीमत है ${price}। पर ये तो बस शुरुआत है। चलिए, देखते हैं आप कितना अच्छा सौदा कर पाते हैं!${welcomeBack}`,
       strict_negotiator: `${productTitle ?? 'इस आइटम'} में रुचि दिखाने के लिए धन्यवाद${welcomeBack}। वर्तमान कीमत ${price} है। आपका प्रस्ताव क्या है?`,
-      friendly_shopkeeper: `नमस्ते! 👋${welcomeBack} आपको ${productTitle ?? 'ये आइटम'} पसंद आया, ये बहुत अच्छा है। कीमत है ${price}। आप क्या कीमत सोच रहे हैं?`,
+      friendly_shopkeeper: `नमस्ते!${welcomeBack} आपको ${productTitle ?? 'ये आइटम'} पसंद आया, ये बहुत अच्छा है। कीमत है ${price}। आप क्या कीमत सोच रहे हैं?`,
     }
     return opening[ctx.persona] ?? opening.friendly_shopkeeper
   }
 
   if (ctx.persona === 'playful_friend') {
-    return `${welcomeBack} Hey hey! 👋 I see you're checking out ${item} — great taste! Listed at ${price}, but let's be honest, that's just the sticker price 😏 What's your move?`
+    return `${welcomeBack} Hey hey! I see you're checking out ${item} — great taste! Listed at ${price}, but let's be honest, that's just the sticker price. What's your move?`
   }
   if (ctx.persona === 'strict_negotiator') {
     return `Thank you for your interest in ${item}.${welcomeBack} Listed price: ${price}. I'm open to a fair offer. What did you have in mind?`
@@ -1155,15 +1159,15 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
     if (isProductQuestion) {
       const postDealProduct: Record<Persona, string> = {
         strict_negotiator: `That deal is already locked at ${ad} — your discount code is live. The product page holds the complete specification. Is there anything else I can confirm?`,
-        playful_friend: `HA! You already WON this one! 😄 Deal's locked at ${ad} and your magic code is live. For the full scoop, the product page is your best friend. Anything else? 🎉`,
-        friendly_shopkeeper: `This one's already yours, friend! 🎉 Locked at ${ad} and your code is live. The product page has the full details — is there anything else I can help with?`,
+        playful_friend: `HA! You already WON this one! Deal's locked at ${ad} and your magic code is live. For the full scoop, the product page is your best friend. Anything else?`,
+        friendly_shopkeeper: `This one's already yours, friend! Locked at ${ad} and your code is live. The product page has the full details — is there anything else I can help with?`,
       }
       return postDealProduct[ctx.persona]
     }
     const postDeal: Record<Persona, string> = {
       strict_negotiator: `The deal stands at ${ad}. Your code is ready. Anything else?`,
-      playful_friend: `You've already sealed it! 😄 ${ad}, done deal, code's ready. What's next?`,
-      friendly_shopkeeper: `All settled, friend! 🎉 You got it at ${ad} and your code is ready to go. Anything else I can help with?`,
+      playful_friend: `You've already sealed it! ${ad}, done deal, code's ready. What's next?`,
+      friendly_shopkeeper: `All settled, friend! You got it at ${ad} and your code is ready to go. Anything else I can help with?`,
     }
     return postDeal[ctx.persona]
   }
@@ -1177,7 +1181,7 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
         : `To be precise, I only quote verified facts — the full specification is on the product page. Listed price: ${price}. Ask a specific question or make an offer.`,
       playful_friend: facts
         ? `Ooh, now you're asking the fun stuff! Inside scoop: ${facts} And she's sitting at ${price}. What else do you want to know — or should we start the haggling?`
-        : `That's exactly the kind of question I love — but I don't keep the full spec sheet in my head, I only quote what the store can back up 😄 The product page has every detail, and this one is listed at ${price}. Ask me something specific, or let's get to the fun part: your offer!`,
+        : `That's exactly the kind of question I love — but I don't keep the full spec sheet in my head, I only quote what the store can back up. The product page has every detail, and this one is listed at ${price}. Ask me something specific, or let's get to the fun part: your offer!`,
       friendly_shopkeeper: facts
         ? `Happy to tell you, friend! Straight from the store: ${facts} That's the one, at ${price}. Anything else you'd like to know — or shall we talk a number?`
         : `Of course, friend! I only quote facts our store can verify, so the full spec sheet is on the product page. I can confirm this one is listed at ${price}. Ask me anything specific, or tell me the number you had in mind!`,
@@ -1195,8 +1199,8 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
   if (isGreeting) {
     const greeting: Record<Persona, string> = {
       strict_negotiator: `Welcome. This is ${item}, listed at ${price}. Present your offer — or ask a question and I'll answer directly.`,
-      playful_friend: `Well hello there! 😄 So you've found ${item} — listed at ${price}, but let's be honest, that's just the opening bid. Fancy telling me a number, or want to quiz me first?`,
-      friendly_shopkeeper: `Hello friend! 👋 Lovely to see you here. That's ${item} you're looking at — listed at ${price}. Tell me the number you had in mind, or ask me anything about it!`,
+      playful_friend: `Well hello there! So you've found ${item} — listed at ${price}, but let's be honest, that's just the opening bid. Fancy telling me a number, or want to quiz me first?`,
+      friendly_shopkeeper: `Hello friend! Lovely to see you here. That's ${item} you're looking at — listed at ${price}. Tell me the number you had in mind, or ask me anything about it!`,
     }
     return greeting[ctx.persona]
   }
@@ -1204,8 +1208,8 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
   if (isThanks) {
     const thanks: Record<Persona, string> = {
       strict_negotiator: `You're welcome. Proceed with an offer at your convenience.`,
-      playful_friend: `Anytime! 😁 Now then — that number isn't going to offer itself. What are we at?`,
-      friendly_shopkeeper: `You're most welcome, friend! 😊 Whenever you're ready, just tell me the price you had in mind and I'll do my best.`,
+      playful_friend: `Anytime! Now then — that number isn't going to offer itself. What are we at?`,
+      friendly_shopkeeper: `You're most welcome, friend! Whenever you're ready, just tell me the price you had in mind and I'll do my best.`,
     }
     return thanks[ctx.persona]
   }
@@ -1219,22 +1223,22 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
   if (historyLength > 0) {
     const backToNumber: Record<Persona, string> = {
       strict_negotiator: `Understood. Give me your number and I'll tell you where I land.`,
-      playful_friend: `Got it 😄 Fair enough. So — what's the number you're thinking? I'll be honest with you.`,
-      friendly_shopkeeper: `I hear you, friend 🙂 Tell me the figure you had in mind and I'll tell you straight where I can get to.`,
+      playful_friend: `Got it. Fair enough. So — what's the number you're thinking? I'll be honest with you.`,
+      friendly_shopkeeper: `I hear you, friend. Tell me the figure you had in mind and I'll tell you straight where I can get to.`,
     }
     return backToNumber[ctx.persona]
   }
 
   if (ctx.language === 'hinglish') {
-    return `Samajh gaya! 👍 ${item} ka listed price ${price} hai. Batao, aap kitna soch rahe ho — ya kuch poochna ho toh poochh lo!`
+    return `Samajh gaya! ${item} ka listed price ${price} hai. Batao, aap kitna soch rahe ho — ya kuch poochna ho toh poochh lo!`
   }
   if (ctx.language === 'hi') {
-    return `समझ गया! 👍 ${item} की सूचीबद्ध कीमत ${price} है। बताइए, आप कितना सोच रहे हैं — या कुछ पूछना हो तो पूछ लीजिए!`
+    return `समझ गया! ${item} की सूचीबद्ध कीमत ${price} है। बताइए, आप कितना सोच रहे हैं — या कुछ पूछना हो तो पूछ लीजिए!`
   }
   const ack: Record<Persona, string> = {
     strict_negotiator: `Understood. ${item} is listed at ${price}. State your figure or your question.`,
-    playful_friend: `Ha, noted! 😄 ${item} — sitting pretty at ${price}. Give me a number, or hit me with a question.`,
-    friendly_shopkeeper: `Got it, friend! 👍 ${item} is at ${price}. Tell me the number you had in mind and I'll see what I can do.`,
+    playful_friend: `Ha, noted! ${item} — sitting pretty at ${price}. Give me a number, or hit me with a question.`,
+    friendly_shopkeeper: `Got it, friend! ${item} is at ${price}. Tell me the number you had in mind and I'll see what I can do.`,
   }
   return ack[ctx.persona]
 }
@@ -2114,7 +2118,7 @@ export function detectSystemPromptLeak(reply: string): boolean {
 const LEAK_SAFE_REPLY: Record<Persona, string> = {
   friendly_shopkeeper: "Friend, I appreciate you asking — but that's my internal pricing and I can't share it. What price feels fair to you?",
   strict_negotiator: "I don't share internal pricing. If you have a number in mind, I'm happy to consider it.",
-  playful_friend: "Ooh, trying to get my secrets! Nice try 😄 But you've gotta work for the discount — what's your offer?",
+  playful_friend: "Ooh, trying to get my secrets! Nice try. But you've gotta work for the discount — what's your offer?",
 }
 
 export async function negotiateStep(
@@ -2281,6 +2285,16 @@ export async function negotiateStep(
       decision === 'accept' && customerOffer != null && customerOffer < ctx.minPrice
         ? 'counter'
         : decision
+
+    // An accepted deal is honoured at the customer's own (bounded) offer — the
+    // same figure ruleBasedDecision quotes. Pin the returned counterOffer to it,
+    // so the badge under the reply can never display a stale pacing number or
+    // contradict the agreed price in the text ("you've got it at ₹1000" while
+    // the tag reads ₹962.59). The rewrite below then reconciles any AI-stated
+    // figure that the backend had to change.
+    if (safeDecision === 'accept' && customerOffer != null) {
+      counterOffer = Math.round(Math.min(ctx.originalPrice, Math.max(ctx.minPrice, customerOffer)) * 100) / 100
+    }
 
     // Compute the reply.
     let reply = typeof parsed.reply === 'string' && parsed.reply.trim().length > 0

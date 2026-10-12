@@ -6,7 +6,7 @@
 // clamped); the merchant floor never reaches these components.
 
 import type { ReactNode } from 'react'
-import { Tag, Zap, ShieldCheck, Loader2 } from 'lucide-react'
+import { Tag, Zap, ShieldCheck, Loader2, ShoppingBag } from 'lucide-react'
 import type { UiKey } from '@/lib/bargain/i18n'
 import type { BargainDecision, BargainMessage, BargainRecommendation } from '@/lib/bargain/api-types'
 
@@ -129,7 +129,7 @@ export function MessageBubble({ m, t, currencySymbol, personaChip, isFinal }: {
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           }}>
             <span style={{ fontSize: 10, lineHeight: 1 }}>
-              {m.role === 'ai' ? (personaChip ? personaChip.emoji : '🤝') : 'ℹ'}
+              {m.role === 'ai' ? (personaChip ? personaChip.label.charAt(0) : t('assistant').charAt(0)) : 'ℹ'}
             </span>
           </span>
           <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>
@@ -197,7 +197,7 @@ export function TypingIndicator({ personaChip, t }: {
           background: 'linear-gradient(135deg,#818cf8,#4f46e5)', color: '#ffffff',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <span style={{ fontSize: 10, lineHeight: 1 }}>{personaChip ? personaChip.emoji : '🤝'}</span>
+          <span style={{ fontSize: 10, lineHeight: 1 }}>{personaChip ? personaChip.label.charAt(0) : t('assistant').charAt(0)}</span>
         </span>
         {personaChip ? personaChip.label : t('assistant')}
       </div>
@@ -607,9 +607,9 @@ export function RecoCard({
       ) : (
         <div style={{
           width: 62, height: 62, borderRadius: 10, background: '#eef2ff', flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          🛍️
+          <ShoppingBag size={26} color="#6366f1" />
         </div>
       )}
       <div style={{ flex: 1, minWidth: 0 }}>

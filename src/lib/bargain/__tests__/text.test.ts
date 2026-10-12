@@ -197,4 +197,25 @@ describe('extractPrice', () => {
     expect(extractPrice('my offer is 1,000')).toBe(1000)
     expect(extractPrice('₹1,250 final')).toBe(1250)
   })
+
+  it('does NOT treat an echoed/duplicated number as a new offer', () => {
+    // The customer is repeating the seller's own figure, not bidding.
+    expect(extractPrice('broo 1000 k 1000 hi bta rhe ho ap')).toBeNull()
+    expect(extractPrice('1000 1000')).toBeNull()
+    // A genuine bid that happens to repeat still parses — only the echo is dropped.
+    expect(extractPrice('can you do 500?')).toBe(500)
+  })
+
+  it('does NOT read a competitor price as the customer’s offer', () => {
+    expect(extractPrice('the other store is giving it for 500')).toBeNull()
+    expect(extractPrice('amazon has it for 400')).toBeNull()
+    expect(extractPrice('flipkart is selling it at 300, cheaper')).toBeNull()
+    expect(extractPrice('hi sir how are you the other store is giving it for 500')).toBeNull()
+  })
+
+  it('still reads a real offer that is stated before a competitor price', () => {
+    // The customer's own bid is kept; first valid match still wins (unchanged).
+    expect(extractPrice('I will give you 550, amazon has it for 400')).toBe(550)
+    expect(extractPrice('my offer is 450, the other store wants 500')).toBe(450)
+  })
 })

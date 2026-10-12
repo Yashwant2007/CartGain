@@ -92,6 +92,14 @@ export function extractQuantity(text: string): number | null {
 const NON_PRICE_UNIT_AFTER =
   /^\s*(?:kids?|children|child|yrs?|years?|months?|weeks?|days?|hours?|hrs?|minutes?|mins?|seconds?|secs?|people|persons?|members?|guys?|girls?|boys?|reviews?|stars?|times?|percent|%|\d\s*(?:am|pm)\b)/i
 
+// A customer naming a competitor's price ("the other store is giving it for
+// 500", "Amazon has it for 400") is citing context, not bidding. When such a
+// bare number has no explicit first-person bid near it, it is not an offer.
+const COMPARISON_CUE =
+  /\b(?:other\s+(?:store|shop|seller|site|guy)|another\s+(?:store|shop|seller|site|guy)|competitor|elsewhere|somewhere\s+else|amazon|flipkart|meesho|myntra|ajio|online|market|cheaper|sasta|kam\s+daam|badhiya\s+daam)\b/i
+const BID_CUE =
+  /\b(?:i(?:'?ll| will| can| wanna| want to)?\s*(?:give|pay|offer|do|take|buy|spend)|offer|my\s+(?:budget|offer|price|max|maximum|final)|final\s+offer|can\s+you\s+do|will\s+you\s+(?:take|accept|do)|make\s+it)\b/i
+
 // ── Price extraction: pull a numeric offer out of free text ──
 export function extractPrice(text: string): number | null {
   // A leading minus before a number/currency means a negative/absurd "offer"
@@ -134,6 +142,27 @@ export function extractPrice(text: string): number | null {
     // Age idioms: "I am 25", "I'm 30", "age 40" — a small number here is a
     // person's age, not a bid.
     if (val <= 120 && /(?:\bi(?:\s+am|'?m)|\bage\b|\baged\b|\bturning\b)\s*$/i.test(before)) continue
+
+    // Emphasis / echo: "1000 k 1000", "1000 1000", "1000, 1000" — the
+    // customer is repeating the merchant's own price to make a point, not
+    // bidding. Only the immediately-following repeat counts, so a genuine
+    // re-bid ("500 ... 500 is my max") still parses.
+    const tail = text.slice(m.index + raw.length, m.index + raw.length + 8)
+    const tailNum = tail.match(/\d[\d,]*/)
+    if (tailNum && parseFloat(tailNum[0].replace(/,/g, '')) === val) {
+      const between = tail.slice(0, tail.indexOf(tailNum[0]))
+      if (between.length <= 6) {
+        // Skip both numbers so the echoed repeat is not re-read as the offer.
+        bareRe.lastIndex = m.index + raw.length + tail.indexOf(tailNum[0]) + tailNum[0].length
+        continue
+      }
+    }
+
+    // Competitor comparison: a bare number near "other store"/"Amazon"/etc.
+    // with no first-person bid is context, not an offer.
+    const around = text.slice(Math.max(0, m.index - 45), m.index + raw.length + 45)
+    if (COMPARISON_CUE.test(around) && !BID_CUE.test(around)) continue
+
     return val
   }
   return null

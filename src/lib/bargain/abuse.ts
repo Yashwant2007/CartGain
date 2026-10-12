@@ -251,15 +251,15 @@ const OFF_TOPIC_PATTERNS: RegExp[] = [
 // Rotating, empathetic fallbacks so the same canned line never repeats twice
 // in a row (a repeated static reply reads as "broken bot" to shoppers).
 const OFF_TOPIC_RESPONSES = [
-  `I'm happy to chat 😄 but let's keep our eyes on the deal — what price would feel fair for this item?`,
-  `Ha, I like the vibe 🙂 now let's win this one — what's the number you're hoping for?`,
-  `I'm right here for you 🤝 just tell me the price you have in mind and we'll make it work ✨`,
+  `I'm happy to chat, but let's keep our eyes on the deal — what price would feel fair for this item?`,
+  `Ha, I like the vibe. Now let's win this one — what's the number you're hoping for?`,
+  `I'm right here for you — just tell me the price you have in mind and we'll make it work.`,
 ]
 
 const FLOODING_RESPONSES = [
-  `Whoa, one at a time 😅 I'm right here — send me a single price and I'll see what I can do 🙌`,
-  `Slow down a sec 🤝 no need to rush — what's the one price you'd be happy with?`,
-  `Easy there 😄 let's take this one step at a time — what number works for you?`,
+  `Whoa, one at a time — I'm right here. Send me a single price and I'll see what I can do.`,
+  `Slow down a sec, no need to rush — what's the one price you'd be happy with?`,
+  `Easy there, let's take this one step at a time — what number works for you?`,
 ]
 
 function pickResponse(options: string[], seed: number): string {

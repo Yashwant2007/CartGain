@@ -166,34 +166,34 @@ export function bulkFloorFactor(quantity: number): number {
 export function buildOpeningMessage(ctx: NegotiationContext): string {
   const { originalPrice, currencySymbol, productTitle, customerContext, language } = ctx
   const item = productTitle ? `this ${productTitle}` : 'this'
-  const warmup = customerContext ? ' Welcome back! 🙌' : ''
+  const warmup = customerContext ? ' Welcome back!' : ''
   const price = `${currencySymbol}${originalPrice.toFixed(2)}`
 
   if (language === 'hinglish') {
     const opening: Record<Persona, string> = {
-      playful_friend: `Arré arre! 👋 Aap ${productTitle ?? 'yeh item'} dekh rahe ho? Kamaal hai! Listed hai ${price} — par yeh to bas shuruwat hai 😏 Bolo, aapka best rate kya hai — ya kuch poochhna ho toh poochh lo!${warmup}`,
+      playful_friend: `Arré arre! Aap ${productTitle ?? 'yeh item'} dekh rahe ho? Kamaal hai! Listed hai ${price} — par yeh to bas shuruwat hai. Bolo, aapka best rate kya hai — ya kuch poochhna ho toh poochh lo!${warmup}`,
       strict_negotiator: `${productTitle ?? 'Is item'} mein interest ke liye dhanyavaad.${warmup} Current price hai ${price}. Reasonable offer sunne ke liye taiyar hoon. Aapke mann mein kitna price hai?`,
-      friendly_shopkeeper: `Arré welcome! 👋${warmup} Main dekha ${productTitle ?? 'yeh item'} aapko pasand aaya. Iska price ${price} hai — par hum achha deal kar sakte hain. Aap apna rate batao, ya iske baare mein kuch bhi poochh lo!`,
+      friendly_shopkeeper: `Arré welcome!${warmup} Main dekha ${productTitle ?? 'yeh item'} aapko pasand aaya. Iska price ${price} hai — par hum achha deal kar sakte hain. Aap apna rate batao, ya iske baare mein kuch bhi poochh lo!`,
     }
     return opening[ctx.persona] ?? opening.friendly_shopkeeper
   }
 
   if (language === 'hi') {
     const opening: Record<Persona, string> = {
-      playful_friend: `अरे अरे! 👋 आप ${productTitle ?? 'ये आइटम'} देख रहे हैं — शानदार चुनाव! लिस्टेड कीमत है ${price}। पर ये तो बस शुरुआत है 😏 बताइए, आप कितनी कीमत सोच रहे हैं? या कुछ पूछना हो तो पूछिए!${warmup}`,
+      playful_friend: `अरे अरे! आप ${productTitle ?? 'ये आइटम'} देख रहे हैं — शानदार चुनाव! लिस्टेड कीमत है ${price}। पर ये तो बस शुरुआत है। बताइए, आप कितनी कीमत सोच रहे हैं? या कुछ पूछना हो तो पूछिए!${warmup}`,
       strict_negotiator: `${productTitle ?? 'इस आइटम'} में रुचि दिखाने के लिए धन्यवाद${warmup}। वर्तमान कीमत ${price} है। आपका प्रस्ताव क्या है?`,
-      friendly_shopkeeper: `नमस्ते! 👋${warmup} आपको ${productTitle ?? 'ये आइटम'} पसंद आया, ये बहुत अच्छा है। कीमत है ${price}। आप क्या कीमत सोच रहे हैं? या इसके बारे में कुछ पूछना हो तो पूछिए!`,
+      friendly_shopkeeper: `नमस्ते!${warmup} आपको ${productTitle ?? 'ये आइटम'} पसंद आया, ये बहुत अच्छा है। कीमत है ${price}। आप क्या कीमत सोच रहे हैं? या इसके बारे में कुछ पूछना हो तो पूछिए!`,
     }
     return opening[ctx.persona] ?? opening.friendly_shopkeeper
   }
 
   if (ctx.persona === 'playful_friend') {
-    return `${warmup} Hey hey! 👋 I see you're checking out ${item} — nice choice! Listed at ${price}, and it's yours for the right price 😏 What's your move — name a number, or ask me anything about it?`
+    return `${warmup} Hey hey! I see you're checking out ${item} — nice choice! Listed at ${price}, and it's yours for the right price. What's your move — name a number, or ask me anything about it?`
   }
   if (ctx.persona === 'strict_negotiator') {
     return `Thank you for your interest in ${item}.${warmup} The current price is ${price}. I'm open to a reasonable offer — what price did you have in mind?`
   }
-  return `Hey! Welcome 👋${warmup} I see you're interested in ${item}. It's listed at ${price}. I'd love to help you get a good deal — what price were you thinking? And if you have any questions about it, just ask!`
+  return `Hey! Welcome!${warmup} I see you're interested in ${item}. It's listed at ${price}. I'd love to help you get a good deal — what price were you thinking? And if you have any questions about it, just ask!`
 }
 
 // ── Safe final-quote floor (the merchant's true minimum is never spoken) ──
@@ -229,8 +229,8 @@ export function ruleBasedDecision(
   if (boundedOffer >= minPrice) {
     const accept: Record<Persona, string> = {
       strict_negotiator: `Agreed at ${currencySymbol}${boundedOffer.toFixed(2)}. Confirm the acceptance and your discount code will be generated.`,
-      playful_friend: `DEAL! 🎉 ${currencySymbol}${boundedOffer.toFixed(2)} — you absolute legend! Hit Accept and the magic code is yours.`,
-      friendly_shopkeeper: `It's a deal, friend! 🎉 ${currencySymbol}${boundedOffer.toFixed(2)} works for me. Accept it and I'll sort your code right away.`,
+      playful_friend: `DEAL! ${currencySymbol}${boundedOffer.toFixed(2)} — you absolute legend! Hit Accept and the magic code is yours.`,
+      friendly_shopkeeper: `It's a deal, friend! ${currencySymbol}${boundedOffer.toFixed(2)} works for me. Accept it and I'll sort your code right away.`,
     }
     return {
       reply: accept[persona] ?? accept.friendly_shopkeeper,
@@ -248,8 +248,8 @@ export function ruleBasedDecision(
   if (boundedOffer < minPrice * 0.3) {
     const lowball: Record<Persona, string> = {
       strict_negotiator: `${currencySymbol}${boundedOffer.toFixed(2)} is not feasible. My position: ${currencySymbol}${counter.toFixed(2)}. Confirm within this session if that works.`,
-      playful_friend: `WOW. ${currencySymbol}${boundedOffer.toFixed(2)}?! Nice try 😄 Come back to earth with me — ${currencySymbol}${counter.toFixed(2)}. Now we're talking?`,
-      friendly_shopkeeper: `Oh friend, I wish I could do ${currencySymbol}${boundedOffer.toFixed(2)}! 😄 Realistically I can offer ${currencySymbol}${counter.toFixed(2)} as a fair starting point. Does that work better?`,
+      playful_friend: `WOW. ${currencySymbol}${boundedOffer.toFixed(2)}?! Nice try. Come back to earth with me — ${currencySymbol}${counter.toFixed(2)}. Now we're talking?`,
+      friendly_shopkeeper: `Oh friend, I wish I could do ${currencySymbol}${boundedOffer.toFixed(2)}! Realistically I can offer ${currencySymbol}${counter.toFixed(2)} as a fair starting point. Does that work better?`,
     }
     return {
       reply: lowball[persona] ?? lowball.friendly_shopkeeper,
@@ -263,7 +263,7 @@ export function ruleBasedDecision(
   if (attemptsLeft > 1) {
     const meet: Record<Persona, string> = {
       strict_negotiator: `I appreciate the offer, however ${currencySymbol}${boundedOffer.toFixed(2)} is below my position. Given the quality, I can offer ${currencySymbol}${counter.toFixed(2)}. Your call.`,
-      playful_friend: `Mmm, ${currencySymbol}${boundedOffer.toFixed(2)}? You'll have to do better than that 😏 I'll meet you at ${currencySymbol}${counter.toFixed(2)} — and that's me being generous!`,
+      playful_friend: `Mmm, ${currencySymbol}${boundedOffer.toFixed(2)}? You'll have to do better than that. I'll meet you at ${currencySymbol}${counter.toFixed(2)} — and that's me being generous!`,
       friendly_shopkeeper: `Hmm, ${currencySymbol}${boundedOffer.toFixed(2)} is a little low for me. Let's meet in the middle — how about ${currencySymbol}${counter.toFixed(2)}? I think that's fair for the quality.`,
     }
     return {
@@ -278,7 +278,7 @@ export function ruleBasedDecision(
   const quote = quotedFloor(ctx)
   const final: Record<Persona, string> = {
     strict_negotiator: `This is my final position: ${currencySymbol}${quote.toFixed(2)}. I've justified it clearly. The decision is yours.`,
-    playful_friend: `OKAY OKAY, you win! 🙃 FINAL final offer: ${currencySymbol}${quote.toFixed(2)}. If my boss asks, this never happened. Deal?`,
+    playful_friend: `OKAY OKAY, you win! FINAL final offer: ${currencySymbol}${quote.toFixed(2)}. If my boss asks, this never happened. Deal?`,
     friendly_shopkeeper: `Friend, I've stretched as far as I can. My final offer: ${currencySymbol}${quote.toFixed(2)}. I really hope you'll take it — let's make this work!`,
   }
   return {

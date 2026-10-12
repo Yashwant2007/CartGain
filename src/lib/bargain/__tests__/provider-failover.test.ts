@@ -354,6 +354,69 @@ describe('primary outage is absorbed inside the same request', () => {
     expect(res.reply).toContain(String(res.counterOffer))
   })
 
+  it('pins an AI accept to the customer offer, not a stale pacing number (badge/text mismatch)', async () => {
+    // The live bug: the reply said "you've got it at ₹1000" but the counter badge
+    // read ₹962.59 — the pacing fallback leaked into the accepted deal. On accept
+    // the returned price must be the customer's own (bounded) offer.
+    setEnv({ OPENAI_API_KEY: undefined })
+    ;(globalThis as any).__nextCreate = jest.fn(async () => ({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({ reply: "You've got it at ₹1000. Deal!", decision: 'accept' }),
+          },
+        },
+      ],
+      usage: {},
+    }))
+
+    const res = await negotiateStep(ctx({ originalPrice: 1000, minPrice: 800 }), [], 'ok, 1000 final', 1000, 'sess-accept')
+
+    expect(res.decision).toBe('accept')
+    expect(res.counterOffer).toBe(1000)
+  })
+
+  it('reconciles an AI-stated accept figure with the true accepted price', async () => {
+    setEnv({ OPENAI_API_KEY: undefined })
+    ;(globalThis as any).__nextCreate = jest.fn(async () => ({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              reply: 'Alright, I can do ₹962.59 for you. Deal!',
+              decision: 'accept',
+              counterOffer: 962.59,
+            }),
+          },
+        },
+      ],
+      usage: {},
+    }))
+
+    const res = await negotiateStep(ctx({ originalPrice: 1000, minPrice: 800 }), [], '1000, take it', 1000, 'sess-accept-rw')
+
+    expect(res.decision).toBe('accept')
+    expect(res.counterOffer).toBe(1000)
+    // The spoken figure is corrected to the agreed price so text and badge agree.
+    expect(res.reply).toContain('1000')
+    expect(res.reply).not.toContain('962.59')
+  })
+
+  it('still refuses an accept below the floor (downgrades to a floor-safe counter)', async () => {
+    setEnv({ OPENAI_API_KEY: undefined })
+    ;(globalThis as any).__nextCreate = jest.fn(async () => ({
+      choices: [
+        { message: { content: JSON.stringify({ reply: 'Okay, ₹50 it is.', decision: 'accept' }) } },
+      ],
+      usage: {},
+    }))
+
+    const res = await negotiateStep(ctx({ originalPrice: 1000, minPrice: 800 }), [], '50 only', 50, 'sess-accept-low')
+
+    expect(res.decision).toBe('counter')
+    expect(res.counterOffer!).toBeGreaterThanOrEqual(800)
+  })
+
   it('degrades safely when even the compact retry is too large', async () => {
     ;(globalThis as any).__nextCreate = jest.fn(async () => {
       throw { status: 413, error: { message: 'Request too large' } }

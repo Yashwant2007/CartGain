@@ -167,7 +167,7 @@ describe('buildOpeningMessage', () => {
     expect(buildOpeningMessage({ ...ctx, persona: 'strict_negotiator' })).toContain('Thank you for your interest')
   })
   it('uses the playful persona tone', () => {
-    expect(buildOpeningMessage({ ...ctx, persona: 'playful_friend' })).toContain('😏')
+    expect(buildOpeningMessage({ ...ctx, persona: 'playful_friend' })).toContain("What's your move")
   })
   it('acknowledges returning customers', () => {
     expect(buildOpeningMessage({ ...ctx, customerContext: 'past sessions' })).toContain('So good to see you again')
@@ -609,7 +609,9 @@ describe('Edge Cases - Persona Consistency', () => {
 
     expect(friendly).toContain('Welcome')
     expect(strict).toContain('interest')
-    expect(playful).toMatch(/😏|Hey/)
+    expect(playful).toContain("What's your move")
+    // No persona uses emojis in the negotiation copy.
+    expect(friendly + strict + playful).not.toMatch(/[\u2600-\u27BF\u2B00-\u2BFF]|[\uD800-\uDBFF][\uDC00-\uDFFF]/)
   })
 
   it('rule-based replies stay in persona — strict is measured, playful is dramatic, friendly is warm', () => {

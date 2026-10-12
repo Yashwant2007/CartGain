@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
         shopifyStatus: 'created',
         currency: bargainSession.store.currency,
         expiresAt: bargainSession.expiredAt.toISOString(),
-        message: `🎉 Deal already locked at ${bargainSession.store.currency} ${(bargainSession.finalPrice ?? bargainSession.originalPrice).toFixed(2)}! Use code: ${bargainSession.discountCode}`,
+        message: `Deal already locked at ${bargainSession.store.currency} ${(bargainSession.finalPrice ?? bargainSession.originalPrice).toFixed(2)}! Use code: ${bargainSession.discountCode}`,
       })
     }
 
@@ -262,7 +262,7 @@ export async function POST(request: NextRequest) {
           discountCode: refreshed.discountCode,
           shopifyStatus: 'created',
           currency: bargainSession.store.currency,
-          message: '🎉 Deal already locked — code issued.',
+          message: 'Deal already locked — code issued.',
         })
       }
       return NextResponse.json({
@@ -358,8 +358,8 @@ export async function POST(request: NextRequest) {
       expiresAt: bargainSession.expiredAt.toISOString(),
       message:
         shopifyCode.status === 'created'
-          ? `🎉 You got it for ${bargainSession.store.currency} ${executable.finalPrice.toFixed(2)}! Use code: ${shopifyCode.code}`
-          : `🎉 Deal locked at ${bargainSession.store.currency} ${executable.finalPrice.toFixed(2)}! Your code: ${shopifyCode.code} — apply at checkout.`,
+          ? `You got it for ${bargainSession.store.currency} ${executable.finalPrice.toFixed(2)}! Use code: ${shopifyCode.code}`
+          : `Deal locked at ${bargainSession.store.currency} ${executable.finalPrice.toFixed(2)}! Your code: ${shopifyCode.code} — apply at checkout.`,
     })
   } catch (error) {
     const validationResponse = handleValidationError(error)

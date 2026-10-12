@@ -102,9 +102,9 @@ type Props = {
 }
 
 const PERSONA_CHIP: Record<string, { label: string; emoji: string }> = {
-  friendly_shopkeeper: { label: 'Friendly', emoji: '😊' },
-  strict_negotiator: { label: 'Strict', emoji: '📊' },
-  playful_friend: { label: 'Playful', emoji: '😏' },
+  friendly_shopkeeper: { label: 'Friendly', emoji: '' },
+  strict_negotiator: { label: 'Strict', emoji: '' },
+  playful_friend: { label: 'Playful', emoji: '' },
 }
 
 export default function BargainWidget({
@@ -760,7 +760,7 @@ export default function BargainWidget({
         {
           id: `s-${Date.now()}`,
           role: 'system',
-          content: `🎉 ${t('greatDeal')} ${currencySymbol}${(data.finalPrice ?? livePrice).toFixed(2)} — ${t('copy')} ${data.discountCode ?? ''} ${t('codeApply')}`,
+          content: `${t('greatDeal')} ${currencySymbol}${(data.finalPrice ?? livePrice).toFixed(2)} — ${t('copy')} ${data.discountCode ?? ''} ${t('codeApply')}`,
           createdAt: new Date().toISOString(),
         },
       ])
@@ -1112,7 +1112,7 @@ export default function BargainWidget({
                       background: '#eef2ff', border: '1px solid #e0e7ff',
                       borderRadius: 999, padding: '1px 8px', whiteSpace: 'nowrap', flexShrink: 0,
                     }}>
-                      {personaChip.emoji} {personaChip.label}
+                      {personaChip.label}
                     </span>
                   )}
                 </div>
@@ -1340,7 +1340,7 @@ export default function BargainWidget({
                       <CheckCircle2 size={32} style={{ color: '#16a34a' }} />
                     </div>
                     <div style={{ fontWeight: 800, fontSize: 19, color: '#0f172a', marginBottom: 2 }}>
-                      {t('greatDeal')} 🎉
+                      {t('greatDeal')}
                     </div>
                     <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 8 }}>
                       {t('yourFinalPrice')}
@@ -1504,7 +1504,6 @@ export default function BargainWidget({
                     border: '1px solid #c7d2fe',
                     textAlign: 'center',
                   }}>
-                    <div style={{ fontSize: 22, marginBottom: 8 }}>🔒</div>
                     <div style={{ fontWeight: 800, color: '#4338ca', marginBottom: 5, fontSize: 14 }}>
                       {limit.code === 'bargain_sessions_exhausted'
                         ? 'This month\u2019s bargain sessions are used up'

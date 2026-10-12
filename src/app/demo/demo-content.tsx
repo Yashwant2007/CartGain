@@ -14,6 +14,7 @@ import {
   type NegotiationContext,
   type NegotiationResult,
 } from '@/lib/bargain/engine'
+import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 
 type ChatMsg = {
   role: 'customer' | 'ai'
@@ -169,34 +170,6 @@ export default function DemoContent() {
     setThinking(false)
   }
 
-  // Lightweight price extractor (mirrors lib/bargain/text.extractPrice)
-  function extractPriceLocal(text: string): number | null {
-    const patterns = [
-      /(?:₹|INR|Rs\.?)\s*(\d+(?:\.\d{1,2})?)/i,
-      /(\d+(?:\.\d{1,2})?)\s*(?:₹|rs\.?|inr|rupees?)/i,
-      /\b(\d+(?:\.\d{1,2})?)\b/,
-    ]
-    for (const p of patterns) {
-      const m = text.match(p)
-      if (m) {
-        const v = parseFloat(m[1])
-        if (v > 0 && v < 1_000_000) return v
-      }
-    }
-    return null
-  }
-
-  function detectWalkoutLocal(text: string): boolean {
-    const t = text.toLowerCase()
-    if (/(?:leaving|going)\s+(?:for|to)\s+(?:work|school|gym|dinner|lunch)/.test(t)) return false
-    if (/(?:i'?m|i am)\s+(?:out|leaving|done)/.test(t)) return true
-    if (/forget\s+(?:it|this)/.test(t)) return true
-    if (/never\s+mind|bye|goodbye/.test(t)) return true
-    if (/(?:too\s+expensive|rip\s*off|can'?t\s+afford)/.test(t)
-      && /\b(?:leav|go|walk|out|away|elsewhere|another)\b/.test(t)) return true
-    return false
-  }
-
   function replyDelay(len: number) {
     return 250 + Math.min(len, 120) * 0.6
   }
@@ -204,8 +177,8 @@ export default function DemoContent() {
   async function send() {
     if (!input.trim() || ended || thinking) return
     const userText = input.trim()
-    const offer = extractPriceLocal(userText)
-    const isWalkout = detectWalkoutLocal(userText)
+    const offer = extractPrice(userText)
+    const isWalkout = detectWalkout(userText)
 
     const isOfferTurn = offer != null
     const nextAttempt = isOfferTurn ? attemptsUsed + 1 : attemptsUsed
@@ -305,7 +278,7 @@ export default function DemoContent() {
       decision = 'accept'
       counterOffer = offer
       dealAcceptedRef.current = true
-      reply = `${ctx.currencySymbol}${offer.toFixed(2)} works for me 🎉 Click Accept and I'll generate your discount code.`
+      reply = `${ctx.currencySymbol}${offer.toFixed(2)} works for me. Click Accept and I'll generate your discount code.`
     } else if (exhausted && decision !== 'accept') {
       newEnded = 'rejected'
     } else if (decision === 'accept') {
