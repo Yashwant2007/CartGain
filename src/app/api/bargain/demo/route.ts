@@ -86,7 +86,16 @@ export async function POST(request: NextRequest) {
     minPrice = Math.min(minPrice, originalPrice)
 
     const maxAttempts = Math.round(clamp(typeof body.maxAttempts === 'number' ? body.maxAttempts : 3, 1, 10))
-    const attemptsUsed = Math.round(clamp(typeof body.attemptsUsed === 'number' ? body.attemptsUsed : 0, 0, maxAttempts))
+    // The client reports the number of turns ALREADY completed (0 on the first
+    // message). The engine works in 1-based rounds — the live storefront passes
+    // `session.attemptsUsed + 1` for exactly the same reason. Without this the
+    // first offer lands on round 0, where the pacing schedule sits AT the listed
+    // price, so the backend forces the first counter back up to the list — the
+    // "₹500 is a bold play! I can bring it down to ₹1000" (on a ₹1000 item)
+    // frustration. This one-line alignment makes the embed pace exactly like the
+    // real storefront.
+    const turnsSent = Math.round(clamp(typeof body.attemptsUsed === 'number' ? body.attemptsUsed : 0, 0, maxAttempts))
+    const attemptsUsed = Math.min(maxAttempts, turnsSent + 1)
 
     // Persona authority: 'store' (storefront preview + real embed) always uses
     // the merchant's config. Marketing /demo may pass an explicit persona to

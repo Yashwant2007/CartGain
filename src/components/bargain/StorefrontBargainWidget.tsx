@@ -186,6 +186,13 @@ export default function StorefrontBargainWidget({
     playful: 'Aw, really? No hard feelings! Come back anytime',
   }
 
+  // Human typing rhythm: the three-dot bubble should read as "thinking", never
+  // a flicker. We keep it visible for a short, length-scaled minimum and, when
+  // the model answers faster than that, hold the reply back for the remainder —
+  // so a fast answer still feels typed, while a slow one is never padded.
+  const minThinkingMs = (reply: string) =>
+    Math.min(1600, Math.max(650, reply.length * 12))
+
   const handleSend = async () => {
     if (!input.trim() || loading) return
     const userText = input.trim()
@@ -193,6 +200,7 @@ export default function StorefrontBargainWidget({
     setInput('')
     setLoading(true)
     setError(null)
+    const startedAt = Date.now()
 
     try {
       const offer = extractPrice(userText)
@@ -243,6 +251,8 @@ export default function StorefrontBargainWidget({
       const priceTag = data.decision !== 'chat' && typeof data.counterOffer === 'number'
         ? data.counterOffer
         : undefined
+      const wait = minThinkingMs(data.reply ?? '') - (Date.now() - startedAt)
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait))
       setMessages((prev) => [...prev, { role: 'ai', content: data.reply, price: priceTag }])
       setAttempts(nextAttempt)
 
@@ -311,6 +321,8 @@ export default function StorefrontBargainWidget({
         setStep('chat')
       }
 
+      const wait = minThinkingMs(result.reply) - (Date.now() - startedAt)
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait))
       setMessages((prev) => [...prev, { role: 'ai', content: result.reply, price: result.counterOffer }])
       setAttempts(nextAttempt)
     } finally {
@@ -436,6 +448,18 @@ export default function StorefrontBargainWidget({
                 )}
               </div>
             ))}
+            {loading && (
+              <div
+                className="rounded-lg px-3 py-2 bg-gray-100 mr-8 inline-flex items-center gap-1"
+                role="status"
+                aria-label="Assistant is typing"
+              >
+                <span className="sr-only">Assistant is typing</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" />
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '120ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '240ms' }} />
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2">

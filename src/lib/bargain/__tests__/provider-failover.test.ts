@@ -417,6 +417,49 @@ describe('primary outage is absorbed inside the same request', () => {
     expect(res.counterOffer!).toBeGreaterThanOrEqual(800)
   })
 
+  it('never quotes the listed price as a concession (a counter must be a real drop)', async () => {
+    // The live "₹500 is a bold play! I can bring it down to ₹1000" on a ₹1000
+    // item: the model held at the sticker. The backend steps it down to the
+    // round's real pacing price and rewrites the spoken figure to match.
+    setEnv({ OPENAI_API_KEY: undefined })
+    ;(globalThis as any).__nextCreate = jest.fn(async () => ({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              reply: 'I can bring it down to ₹1000 for you.',
+              decision: 'counter',
+              counterOffer: 1000,
+            }),
+          },
+        },
+      ],
+      usage: {},
+    }))
+
+    const res = await negotiateStep(ctx({ originalPrice: 1000, minPrice: 800 }), [], 'the other store gives 500', 500, 'sess-list')
+
+    expect(res.decision).toBe('counter')
+    expect(res.counterOffer!).toBeLessThan(1000)
+    expect(res.counterOffer!).toBeGreaterThan(800)
+    expect(res.reply).not.toContain('1000')
+  })
+
+  it('accepts a full-price offer instead of countering it', async () => {
+    setEnv({ OPENAI_API_KEY: undefined })
+    ;(globalThis as any).__nextCreate = jest.fn(async () => ({
+      choices: [
+        { message: { content: JSON.stringify({ reply: 'Let me think about that.', decision: 'counter', counterOffer: 980 }) } },
+      ],
+      usage: {},
+    }))
+
+    const res = await negotiateStep(ctx({ originalPrice: 1000, minPrice: 800 }), [], 'I will pay the full price, 1000', 1000, 'sess-full')
+
+    expect(res.decision).toBe('accept')
+    expect(res.counterOffer).toBe(1000)
+  })
+
   it('degrades safely when even the compact retry is too large', async () => {
     ;(globalThis as any).__nextCreate = jest.fn(async () => {
       throw { status: 413, error: { message: 'Request too large' } }

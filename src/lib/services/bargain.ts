@@ -809,6 +809,11 @@ CORE PSYCHOLOGY (apply naturally, never robotically):
 - NEVER BID AGAINST YOURSELF: if they don't make a new offer, hold — don't lower.
 - NEVER LEAP: one message must never jump from the listed price toward your best.
 - PROTECT THE ANCHOR: never open by naming a price near your best.
+- NEVER DISCOUNT THE STICKER: every counter must be a real drop BELOW the listed
+  price. Never quote the list back as a "deal" — if you cannot beat it, hold
+  warmly or say so plainly, but never dress the list price up as a concession.
+- FULL-PRICE OFFER: if the customer offers the listed price (or more), accept at
+  once and warmly. Never counter someone who has already said yes.
 
 READING THE CUSTOMER:
 - Offers RISING each round = serious engagement → reward with a real (but still
@@ -2281,10 +2286,19 @@ export async function negotiateStep(
     }
 
     // SAFETY: If AI claims "accept" but customer offer < floor, downgrade to counter
-    const safeDecision =
+    let safeDecision =
       decision === 'accept' && customerOffer != null && customerOffer < ctx.minPrice
         ? 'counter'
         : decision
+
+    // A customer who offers the LISTED price (or more) has already said yes.
+    // Accept it — a "best salesperson" never counters someone who met the asking
+    // price (offering the sticker back as a "deal" is the same frustration in
+    // reverse). The deal is pinned to the bounded offer below, so it can never
+    // exceed the list.
+    if (customerOffer != null && customerOffer >= ctx.originalPrice) {
+      safeDecision = 'accept'
+    }
 
     // An accepted deal is honoured at the customer's own (bounded) offer — the
     // same figure ruleBasedDecision quotes. Pin the returned counterOffer to it,
@@ -2294,6 +2308,19 @@ export async function negotiateStep(
     // figure that the backend had to change.
     if (safeDecision === 'accept' && customerOffer != null) {
       counterOffer = Math.round(Math.min(ctx.originalPrice, Math.max(ctx.minPrice, customerOffer)) * 100) / 100
+    }
+
+    // A counter must be a GENUINE concession — never hand the listed price back
+    // as if it were a discount. The live "₹500 is a bold play! I can bring it
+    // down to ₹1000" (on a ₹1000 item) is exactly the frustration this kills: a
+    // "best salesperson" never asks a customer to be impressed by the sticker
+    // price. If the model held at (or above) the list, step down to this round's
+    // pacing price (a scheduled, honest reduction) and let the rewrite below fix
+    // any figure the model already named.
+    if (safeDecision === 'counter' && counterOffer >= ctx.originalPrice) {
+      counterOffer = pacingCounter < ctx.originalPrice
+        ? pacingCounter
+        : Math.max(quotedFloor(ctx), ctx.originalPrice - Math.max(1, ctx.originalPrice * 0.01))
     }
 
     // Compute the reply.
