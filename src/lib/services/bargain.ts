@@ -725,9 +725,12 @@ PART 7: CURRENCY & COMMUNICATION STYLE
   If they're formal, be formal.
 - LEAD WITH CARE when they share something personal (student budget, saving
   for a gift, family hardship, a special occasion). One genuine, human line
-  that shows you truly heard them — then steer back to the deal. Write in plain
-  text: do NOT use any emojis, emoticons, or kaomoji in your replies, for any
-  persona. Warmth comes from your words, not from symbols.
+  that shows you truly heard them — then steer back to the deal.
+- TONE & SYMBOLS: use at most ONE tasteful emoji in a reply, and ONLY when it
+  genuinely adds warmth (celebrating a deal or light rapport). Only the
+  playful_friend and friendly_shopkeeper personas may use one emoji very sparingly.
+  The strict_negotiator persona must NEVER use emojis. Never use emoticons,
+  kaomoji, or multiple emojis. Authenticity always comes before decoration.
 
 ══════════════════════════════════════════════════════════════
 VOICE & INTEREST — THE DIFFERENCE BETWEEN A SALE AND A LOSS
@@ -814,6 +817,9 @@ CORE PSYCHOLOGY (apply naturally, never robotically):
   warmly or say so plainly, but never dress the list price up as a concession.
 - FULL-PRICE OFFER: if the customer offers the listed price (or more), accept at
   once and warmly. Never counter someone who has already said yes.
+- AUTHENTIC SPARSITY: use at most ONE tasteful emoji, only in playful_friend or
+  friendly_shopkeeper when it naturally fits a celebratory or warm moment. Never use
+  multiple emojis, emoticons, or kaomoji. Strict_negotiator: zero emojis.
 
 READING THE CUSTOMER:
 - Offers RISING each round = serious engagement → reward with a real (but still
@@ -903,7 +909,23 @@ FRESHNESS & MEANING — THE RULES THAT KEEP YOU HUMAN
 3. VARY THE SHAPE. Mix it up — sometimes lead with their name or word, sometimes
    with a question, sometimes with the number, sometimes with a quick reaction.
    Never send two replies with the same opening template.
-4. DON'T NAME THE SAME PRICE TWICE. If you truly cannot move, say so in fresh
+4. REPEATED MESSAGE — AUTHENTICALLY. If the customer sends the EXACT same message
+   again, do NOT copy your last reply. Acknowledge the repeat differently ("you've
+   said that again — fair enough"), and CHANGE your approach (different question,
+   smaller move, or hold firm) based on whether it was a bargain price or chat.
+5. VALUE FRAMING WITH REAL SIGNALS. Reference ONLY real, verified signals
+   (compare-at price, stock level/scarcity, vendor/brand, product type/tags, season
+   or valid occasion) to justify value. DO NOT invent reviews, ratings, bestseller
+   status, competitor numbers, or "market analysis". A phrase like "a solid pick"
+   is fine; numeric social proof is not. Never fabricate "most people buy" claims.
+6. TRENDY, RELATABLE BUT HONEST. Use current, natural phrasing in the customer's
+   language (Hinglish/Hindi + regional languages) where appropriate — light, modern
+   lines that feel fresh. A tasteful, culturally-relatable comparison or a light
+   meme-flavoured line is welcome WHEN it fits naturally (e.g. comparing the value
+   to something familiar), but never force a catchphrase, never be offensive or
+   dated, and never trade clarity for a joke. Relatability must stay authentic and
+   brand-safe, and must never bend a fact.
+7. DON'T NAME THE SAME PRICE TWICE. If you truly cannot move, say so in fresh
    words ("I'm already at my edge on this one") — never re-post the same figure
    as though it were a new offer.
 `
@@ -1123,6 +1145,43 @@ function reportAiDegradation(reason: 'ai_unavailable' | 'parse_fallback' | 'all_
   }
 }
 
+// Deterministic variety for the offline fallback. When both AI tiers are down,
+// the template path is all a shopper sees — and returning the SAME fixed line
+// for every different question is what made the bot feel broken. These variants
+// are chosen from a stable hash of the message, so different questions get
+// different phrasing (while a repeat of the same message stays consistent).
+function hashSeed(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+function pickVaried<T>(options: T[], seed: string): T {
+  return options[hashSeed(seed) % options.length]
+}
+
+// Detect a near-verbatim repeat of one of the shopper's OWN earlier messages.
+// `kind` distinguishes a repeated price/offer (→ hold firm) from repeated plain
+// talk (→ change the approach). Pure and exported so it is unit-testable.
+export function detectRepeatedMessage(
+  customerMessage: string,
+  history: { role: 'customer' | 'ai'; content: string }[],
+): { repeated: boolean; kind: 'offer' | 'talk' | null } {
+  const currentNorm = normalizeForCompare(customerMessage)
+  if (currentNorm.length < 2) return { repeated: false, kind: null }
+  const repeated = history.some(
+    (m) => m.role === 'customer' && normalizeForCompare(m.content) === currentNorm,
+  )
+  if (!repeated) return { repeated: false, kind: null }
+  const kind: 'offer' | 'talk' = /(?:₹|rs\.?\s*|inr\s*)?\d[\d,]*(?:\.\d+)?/i.test(customerMessage)
+    ? 'offer'
+    : 'talk'
+  return { repeated: true, kind }
+}
+
 export function chatFallback(customerMessage: string, ctx: NegotiationContext, historyLength = 0): string {
   const item = ctx.productTitle ? `this ${ctx.productTitle}` : 'this item'
   const price = `${ctx.currencySymbol}${ctx.originalPrice.toFixed(2)}`
@@ -1226,12 +1285,21 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
   // already quoted $600. Acknowledge the customer and go straight back to the
   // ask — the number is what matters, and they already know the price.
   if (historyLength > 0) {
-    const backToNumber: Record<Persona, string> = {
-      strict_negotiator: `Understood. Give me your number and I'll tell you where I land.`,
-      playful_friend: `Got it. Fair enough. So — what's the number you're thinking? I'll be honest with you.`,
-      friendly_shopkeeper: `I hear you, friend. Tell me the figure you had in mind and I'll tell you straight where I can get to.`,
+    const backToNumber: Record<Persona, string[]> = {
+      strict_negotiator: [
+        `Understood. Give me your number and I'll tell you where I land.`,
+        `Noted. Tell me the figure you have in mind and I'll respond directly.`,
+      ],
+      playful_friend: [
+        `Got it. Fair enough. So — what's the number you're thinking? I'll be honest with you.`,
+        `Ha, alright. So what's the figure? Hit me with it — I don't bite.`,
+      ],
+      friendly_shopkeeper: [
+        `I hear you, friend. Tell me the figure you had in mind and I'll tell you straight where I can get to.`,
+        `I hear you, friend. Give me the number you're hoping for and I'll see what I can do.`,
+      ],
     }
-    return backToNumber[ctx.persona]
+    return pickVaried(backToNumber[ctx.persona], `${customerMessage}|${historyLength}`)
   }
 
   if (ctx.language === 'hinglish') {
@@ -1509,6 +1577,23 @@ export interface ConversationAnalysis {
   seriousness: SeriousnessLevel
   /** Deterministic conversational-warmth signals (name, tone, emotion, …). */
   signals: SocialSignals
+  /** True when the shopper just repeated an earlier message near-verbatim. */
+  repeatedMessage?: boolean
+  /** What the repeated message was: a price/offer, or plain talk. */
+  repeatedKind?: 'offer' | 'talk' | null
+}
+
+// Normalize a message for near-duplicate comparison: lowercase, strip
+// punctuation/symbols (including currency signs), collapse whitespace. Keeps
+// ASCII letters/digits and Devanagari (Hindi) letters/digits; other scripts
+// normalize to empty and simply don't trigger repeat detection. No `u` flag so
+// it compiles under this repo's es5 target.
+function normalizeForCompare(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0900-\u097f\s]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 /**
@@ -1644,12 +1729,20 @@ function analyzeConversation(
     behavior = 'gradual_approach'
   }
 
+  // Near-duplicate detection: did the shopper just repeat one of their own
+  // earlier messages (or the same one twice)? This is the "same text again"
+  // signal used to vary the reply and switch handling (hold on a repeated
+  // bargain, redirect on repeated talk).
+  const { repeated: repeatedMessage, kind: repeatedKind } = detectRepeatedMessage(customerMessage, history)
+
   return {
     behavior,
     offTopicCount,
     concessionCount,
     lastAIOffer,
     seriousness: classifySeriousness(history, customerMessage, ctx, offTopicCount),
+    repeatedMessage,
+    repeatedKind,
     signals: analyzeSocialSignals({
       history,
       currentMessage: customerMessage,
@@ -1773,6 +1866,28 @@ function buildBehaviorHint(
 // ────────────────────────────────────────────────────────────
 // THE MASTER SYSTEM PROMPT — BUILT PER-REQUEST
 // ────────────────────────────────────────────────────────────
+
+// Calendar-derived season/occasion hint. This is deterministic and TRUE for the
+// given date — the AI may reference it as "this festive week"/"the weekend", but
+// must never invent a sale, festival, or event that isn't real. Kept short so it
+// costs almost nothing against the token budget.
+export function seasonContext(now: Date = new Date()): string {
+  const month = now.getMonth() // 0-11
+  const day = now.getDate()
+  const weekday = now.getDay() // 0 Sun .. 6 Sat
+  const isWeekend = weekday === 0 || weekday === 6
+  const monthName = now.toLocaleString('en-IN', { month: 'long', timeZone: 'Asia/Kolkata' })
+  let occasion = ''
+  if (month === 9 && day >= 1) occasion = 'the festive/Diwali season in India'
+  else if (month === 10) occasion = 'the post-Diwali / wedding season in India'
+  else if (month === 11) occasion = 'the year-end and New Year gifting season'
+  else if (month === 1 || month === 2) occasion = 'the wedding and Holi season approaching'
+  else if (month === 4 || month === 5) occasion = 'the summer season'
+  else if (month === 6 || month === 7) occasion = 'the monsoon season'
+  const bits = [`Today is ${monthName} ${day}, ${isWeekend ? 'a weekend' : 'a weekday'}.`]
+  if (occasion) bits.push(`It is currently ${occasion}.`)
+  return bits.join(' ')
+}
 
 export function buildSystemPrompt(
   ctx: NegotiationContext,
@@ -1972,6 +2087,29 @@ export function buildSystemPrompt(
     contextParts.push(behaviorHint)
   }
 
+  // Repeated-message handling — the shopper just sent (near-)identical text
+  // again. Never mirror your last reply; handle it according to what was
+  // repeated: a price (hold or a token move, acknowledge the repeat openly) or
+  // plain talk (answer differently and push the conversation forward).
+  if (conversationAnalysis.repeatedMessage) {
+    if (conversationAnalysis.repeatedKind === 'offer') {
+      contextParts.push(
+        `REPEATED MESSAGE (SAME PRICE AGAIN): The shopper just sent the same price/message ` +
+        `as before. Do NOT repeat your last reply or reuse its wording. Acknowledge the repeat ` +
+        `openly and naturally ("you've said that again", "same number, huh?"), then treat it as a ` +
+        `TEST — HOLD your price or make at most a token move. Never reward a repeated lowball ` +
+        `with a discount, and never simply re-post the same figure.`,
+      )
+    } else {
+      contextParts.push(
+        `REPEATED MESSAGE (SAME TALK AGAIN): The shopper just repeated the same non-price message. ` +
+        `Do NOT reuse your previous reply's opening, wording or joke. Acknowledge lightly that they ` +
+        `said it again, then CHANGE the approach — answer from a new angle, ask a different ` +
+        `follow-up, or gently steer to a number. Keep it warm and brief.`,
+      )
+    }
+  }
+
   // Conversational warmth (name, tone, emotion, urgency, re-asks) — read and
   // mirror, never classified by the model itself. Only populated when real
   // signals exist, so a neutral message adds nothing to the prompt.
@@ -1988,6 +2126,18 @@ export function buildSystemPrompt(
   // Verified product intelligence — the ONLY product facts the model may cite
   if (ctx.product) {
     contextParts.push('\n' + productContextToPromptBlock(ctx.product, currencySymbol))
+  }
+
+  // Relatability layer: current date/season context (real, calendar-derived — never
+  // invented) + an instruction to weave in product highlights from verified facts.
+  // This is what makes the AI feel "current" and product-aware rather than generic.
+  {
+    const now = new Date()
+    const seasonLine = seasonContext(now)
+    const highlightHint = ctx.product
+      ? 'Use ONE verified product highlight (vendor, type, tag, or compare-at saving) to justify your price when you counter — grounded in the PRODUCT CONTEXT above, never invented.'
+      : 'If a verified product highlight is available, mention it once to justify your price; never invent features.'
+    contextParts.push(`RELATABLE CONTEXT: ${seasonLine} ${highlightHint} Reference the season/occasion only if genuinely relevant; never fabricate scarcity, reviews, or trends.`)
   }
 
   // Deterministic shopper-intent classification for the current message
@@ -2281,8 +2431,19 @@ export async function negotiateStep(
       counterOffer = quotedFloor(ctx)
     }
     // TACTICAL PACING: never concede faster than the schedule on a live round.
+    // Pin to a tight, PROPORTIONAL band around the schedule so concessions are
+    // consistent, earned and shrinking (the user's fix for both "stuck at one
+    // price" and sudden big drops). The band widens with the gap still left to
+    // the list, so it can never park near the sticker on a cheap item; the AI
+    // still chooses the exact word-of-mouth wording, never the broad price.
     if (!finalRound) {
-      counterOffer = Math.max(counterOffer, pacingCounter)
+      const remaining = ctx.originalPrice - pacingCounter
+      const bandMax = Math.min(
+        ctx.originalPrice - Math.max(0.01, ctx.originalPrice * 0.005),
+        pacingCounter + Math.max(0.5, remaining * 0.35),
+      )
+      counterOffer = Math.max(pacingCounter, counterOffer)
+      counterOffer = Math.min(bandMax, counterOffer)
     }
 
     // SAFETY: If AI claims "accept" but customer offer < floor, downgrade to counter

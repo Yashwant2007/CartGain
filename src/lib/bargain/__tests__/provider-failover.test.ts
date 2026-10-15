@@ -473,3 +473,35 @@ describe('primary outage is absorbed inside the same request', () => {
     if (res.decision === 'counter') expect(res.counterOffer!).toBeGreaterThan(80)
   })
 })
+
+describe('counter consistency — pinned to a tight schedule band', () => {
+  it('lifts a below-schedule AI counter up to the round schedule', async () => {
+    // Model low-balls its own counter; the backend must pin it up to the earned
+    // round-one schedule (orig 1000 / floor 800 → ~966.90), never below.
+    setEnv({ OPENAI_API_KEY: undefined })
+    ;(globalThis as any).__nextCreate = jest.fn(async () => ({
+      choices: [{ message: { content: JSON.stringify({ reply: 'I can do ₹820.', decision: 'counter', counterOffer: 820 }) } }],
+      usage: {},
+    }))
+
+    const res = await negotiateStep(ctx({ originalPrice: 1000, minPrice: 800 }), [], 'how about 820?', 820, 'sess-band-low')
+    expect(res.decision).toBe('counter')
+    expect(res.counterOffer!).toBeGreaterThan(960)
+    expect(res.counterOffer!).toBeLessThan(1000)
+  })
+
+  it('caps an above-schedule AI counter so it never parks at the sticker', async () => {
+    // Model tries to hold at the list price (the classic "stuck" behaviour). The
+    // band clamps it just above the schedule, always a real drop below the list.
+    setEnv({ OPENAI_API_KEY: undefined })
+    ;(globalThis as any).__nextCreate = jest.fn(async () => ({
+      choices: [{ message: { content: JSON.stringify({ reply: 'Best I can do is ₹990.', decision: 'counter', counterOffer: 990 }) } }],
+      usage: {},
+    }))
+
+    const res = await negotiateStep(ctx({ originalPrice: 1000, minPrice: 800 }), [], 'what about it?', 820, 'sess-band-high')
+    expect(res.decision).toBe('counter')
+    expect(res.counterOffer!).toBeLessThanOrEqual(980)
+    expect(res.counterOffer!).toBeGreaterThan(960)
+  })
+})

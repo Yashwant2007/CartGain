@@ -11,7 +11,7 @@
 import { validateOffer } from '../offer-validation'
 import { buildExecutablePrice } from '../../financial-safety'
 import { clampOfferToSafety } from '../engine'
-import { detectFloorLeak, detectPercentFloorLeak, detectSystemPromptLeak, buildSystemPrompt, type NegotiationContext } from '../../services/bargain'
+import { detectFloorLeak, detectPercentFloorLeak, detectSystemPromptLeak, buildSystemPrompt, detectRepeatedMessage, seasonContext, type NegotiationContext } from '../../services/bargain'
 import { detectCouponMention, bargainCampaignStatus, detectMultiProductRequest, couponMentionedInMessages } from '../policy'
 import { neutralSignals } from '../behavior'
 
@@ -177,5 +177,56 @@ describe('Policy classifiers harden (cross-module integrity)', () => {
         expect(v.ok).toBe(true)
       }
     }
+  })
+})
+
+describe('Relatability + repeated-message + season guidance', () => {
+  const analysis = { behavior: 'first_timer' as const, offTopicCount: 0, concessionCount: 0, lastAIOffer: null, seriousness: 'casual' as const, signals: neutralSignals() }
+  const base = (over: Partial<NegotiationContext> = {}): NegotiationContext => ({
+    storeName: 'T', currencySymbol: '₹', originalPrice: 1000, minPrice: 800,
+    attemptsUsed: 0, maxAttempts: 3, persona: 'friendly_shopkeeper', ...over,
+  })
+
+  it('detects a repeated offer vs. repeated talk', () => {
+    const history = [
+      { role: 'customer' as const, content: 'can you do 700?' },
+      { role: 'ai' as const, content: 'Hmm, let me see.' },
+    ]
+    expect(detectRepeatedMessage('can you do 700?', history)).toEqual({ repeated: true, kind: 'offer' })
+    expect(detectRepeatedMessage('CAN YOU DO 700 ?!', history)).toEqual({ repeated: true, kind: 'offer' })
+
+    const talkHistory = [{ role: 'customer' as const, content: 'is it genuine?' }]
+    expect(detectRepeatedMessage('Is it genuine', talkHistory)).toEqual({ repeated: true, kind: 'talk' })
+    expect(detectRepeatedMessage('something brand new', history)).toEqual({ repeated: false, kind: null })
+  })
+
+  it('prompt steers a repeated price to hold, and repeated talk to change approach', () => {
+    const offerPrompt = buildSystemPrompt(base(), { ...analysis, repeatedMessage: true, repeatedKind: 'offer' })
+    expect(offerPrompt).toMatch(/REPEATED MESSAGE \(SAME PRICE AGAIN\)/)
+    expect(offerPrompt).toMatch(/never reward a repeated lowball/i)
+
+    const talkPrompt = buildSystemPrompt(base(), { ...analysis, repeatedMessage: true, repeatedKind: 'talk' })
+    expect(talkPrompt).toMatch(/REPEATED MESSAGE \(SAME TALK AGAIN\)/)
+  })
+
+  it('prompt carries the real-signal value-framing and emoji-sparsity rules', () => {
+    const prompt = buildSystemPrompt(base(), analysis)
+    expect(prompt).toMatch(/VALUE FRAMING WITH REAL SIGNALS/)
+    expect(prompt).toMatch(/TONE & SYMBOLS|AUTHENTIC SPARSITY/)
+    expect(prompt).toMatch(/RELATABLE CONTEXT/)
+    // Never invites fabricated social proof.
+    expect(prompt).toMatch(/DO NOT invent reviews, ratings, bestseller/i)
+
+    const compactPrompt = buildSystemPrompt(base(), analysis, { compact: true })
+    expect(compactPrompt).toMatch(/AUTHENTIC SPARSITY/)
+    expect(compactPrompt).toMatch(/VALUE FRAMING WITH REAL SIGNALS/)
+  })
+
+  it('seasonContext is deterministic and truthful for a fixed date', () => {
+    const diwali = seasonContext(new Date('2026-10-20T12:00:00Z'))
+    expect(diwali).toMatch(/festive\/Diwali season/i)
+    const summer = seasonContext(new Date('2026-05-10T12:00:00Z'))
+    expect(summer).toMatch(/summer season/i)
+    expect(seasonContext(new Date('2026-03-02T12:00:00Z'))).toMatch(/Today is March/)
   })
 })
