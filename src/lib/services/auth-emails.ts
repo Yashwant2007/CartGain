@@ -19,7 +19,6 @@ function shell({ heading, body, cta, link, footer }: {
       <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
         .container { max-width: 480px; margin: 40px auto; padding: 32px; background: #1e293b; border-radius: 16px; border: 1px solid #334155; }
-        .logo { font-size: 24px; font-weight: bold; color: #22d3ee; text-align: center; margin-bottom: 24px; }
         h1 { font-size: 20px; text-align: center; margin-bottom: 16px; }
         .btn { display: block; width: 200px; margin: 24px auto; padding: 12px 24px; background: linear-gradient(135deg, #06b6d4, #3b82f6); color: white; text-decoration: none; border-radius: 8px; text-align: center; font-weight: 600; }
         .footer { text-align: center; font-size: 12px; color: #64748b; margin-top: 32px; }
@@ -27,7 +26,7 @@ function shell({ heading, body, cta, link, footer }: {
     </head>
     <body>
       <div class="container">
-        <div class="logo">CartGain</div>
+        <img src="${appBaseUrl()}/logo.png" alt="CartGain" width="160" style="display:block;margin:0 auto 24px;width:160px;max-width:60%;height:auto;border-radius:12px;" />
         <h1>${heading}</h1>
         <p style="text-align: center; color: #94a3b8;">${body}</p>
         <a href="${link}" class="btn">${cta}</a>

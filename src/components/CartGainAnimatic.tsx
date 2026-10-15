@@ -278,7 +278,10 @@ export default function CartGainAnimatic() {
           <div className={`${styles.scene} ${currentScene === 5 ? styles.active : ''}`} id="s6">
             <div className={styles.s6Bg}></div>
             <div className={styles.endFrame}>
-              <div className={styles.logoMark}>C</div>
+              <div className={styles.logoMark}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo.png" alt="CartGain" className={styles.logoImg} />
+              </div>
               <div className={styles.brandName}>
                 CartGain<span className={styles.brandTm}>™</span>
               </div>
