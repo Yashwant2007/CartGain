@@ -4,7 +4,9 @@ import { checkAbuse } from '@/lib/bargain/abuse'
 import { getAiClient, handleAiFailure } from '@/lib/ai-client'
 import {
   strategyAdjustedCounter,
-  tacticalCounter,
+  reciprocalCounter,
+  isAbsurdOffer,
+  absurdOfferReply,
   quotedFloor as engineQuotedFloor,
   ruleBasedDecision as engineRuleBasedDecision,
   retentionOffer as engineRetentionOffer,
@@ -162,6 +164,13 @@ export interface NegotiationContext {
    *  Lets the agent reward real movement, hold against testing, and never treat
    *  a repeated lowball as fresh engagement. */
   customerOfferTrend?: 'new' | 'rising' | 'flat' | 'falling'
+  /** Deterministic buyer-seriousness read (mirrors the engine). A genuine buyer
+   *  earns a little more movement; a time-waster is held firmer. */
+  seriousness?: 'serious' | 'casual' | 'time_waster'
+  /** The AI's most recent standing counter. Lets the reciprocal pacing stay
+   *  monotonic (a real shopkeeper does not RAISE a price mid-haggle) without ever
+   *  consulting the hidden floor. */
+  lastCounter?: number | null
 }
 
 export interface NegotiationResult {
@@ -1479,9 +1488,18 @@ export async function computeMinPrice(opts: {
 // is the shared, convex `tacticalCounter` (slow early, interest-aware) so the
 // no-AI path and the AI lower-bound can never diverge. The strategy never moves
 // a counter below the merchant floor.
-function effectiveCounter(ctx: NegotiationContext): number {
+//
+// As of the reciprocal model this is offer-aware: it responds to what the
+// customer actually bid (and the AI's last standing price), so the same session
+// shape no longer produces the same fixed number every time. See
+// `reciprocalCounter` in lib/bargain/engine.ts.
+function effectiveCounter(
+  ctx: NegotiationContext,
+  offer?: number | null,
+  lastCounter?: number | null,
+): number {
   const strat = ctx.goal?.strategy
-  const base = tacticalCounter(ctx as EngineNegotiationContext)
+  const base = reciprocalCounter(ctx as EngineNegotiationContext, offer ?? null, lastCounter ?? null)
   if (!strat || strat === 'NORMAL') return base
   return strategyAdjustedCounter(ctx as EngineNegotiationContext, strat, base)
 }
@@ -2318,6 +2336,25 @@ export async function negotiateStep(
   }
   // ── END ABUSE DETECTION ──
 
+  // ── ABSURD OFFER: reply in persona, NEVER counter ──
+  // An offer so far below the merchant's floor is not a bid to answer with a
+  // price. The old behaviour countered it on the fixed schedule, which did two
+  // bad things: it REWARDED a joke with a real number, and it taught shoppers
+  // that patient lowballing walks the price down to the floor. Instead such a
+  // turn earns a persona-true reply with no counter and no price in the text
+  // (strict handles it strictly, playful jokes, friendly stays warm), inviting a
+  // real number. Handled deterministically here so it can never drift, and it
+  // burns no AI call.
+  if (validatedOffer != null && isAbsurdOffer(validatedOffer, ctx)) {
+    return {
+      reply: absurdOfferReply(validatedOffer, ctx),
+      decision: 'chat',
+      tactic: 'absurd_offer',
+      sentiment: ctx.persona === 'playful_friend' ? 'playful' : ctx.persona === 'strict_negotiator' ? 'firm' : 'warm',
+      metadata: { absurdOffer: true, offer: validatedOffer },
+    }
+  }
+
   const resolved = getAiClient()
   if (!resolved) {
     reportAiDegradation('ai_unavailable', 'no provider tier available')
@@ -2396,27 +2433,26 @@ export async function negotiateStep(
       : (customerOffer != null && customerOffer >= ctx.minPrice ? 'accept' : 'counter')
 
     // ── BACKEND SAFETY: Validate and clamp counterOffer ──
-    const attemptsLeft = ctx.maxAttempts - ctx.attemptsUsed
-    // Tactical pacing — the same convex, interest-aware curve the no-AI path
-    // uses. This is the fix for the live "jumps to ₹850 on round one" behaviour:
-    // a below-schedule AI counter is lifted back up so concessions are EARNED,
-    // not volunteered. On the final round we deliberately do NOT apply the bound
-    // — that turn is the designed close, where the safe quoted floor may be named
-    // (and never minPrice itself, which stays hidden).
-    const pacingCounter = effectiveCounter({
-      ...ctx,
-      seriousness: conversationAnalysis.seriousness,
-    } as NegotiationContext)
-    const finalRound = attemptsLeft <= 1
-    const fallbackCounter = finalRound ? quotedFloor(ctx) : pacingCounter
+    // Reciprocal pacing — the same offer-aware model the no-AI path uses. It
+    // RESPONDS to the customer's actual bid and to the AI's own last standing
+    // price, so the counter is monotonic (never rises mid-haggle), holds on
+    // unserious/repeated/falling lowballs, and is bounded below by this round's
+    // earned, floor-safe standing price. This replaces the old fixed descending
+    // schedule that handed the same numbers out every session and always walked
+    // the price down to the floor by the final round.
+    const pacingCounter = effectiveCounter(
+      { ...ctx, seriousness: conversationAnalysis.seriousness } as NegotiationContext,
+      validatedOffer,
+      conversationAnalysis.lastAIOffer,
+    )
     let counterOffer =
       typeof parsed.counterOffer === 'number' && parsed.counterOffer > 0
         ? Math.round(parsed.counterOffer * 100) / 100
-        : fallbackCounter
+        : pacingCounter
 
     // ENFORCE FLOOR: AI counter must never go below minPrice (bumped above it)
     if (counterOffer < ctx.minPrice) {
-      counterOffer = fallbackCounter
+      counterOffer = pacingCounter
     }
     // ENFORCE CEILING: AI counter must never exceed original price
     if (counterOffer > ctx.originalPrice) {
@@ -2430,13 +2466,14 @@ export async function negotiateStep(
     if (counterOffer <= ctx.minPrice) {
       counterOffer = quotedFloor(ctx)
     }
-    // TACTICAL PACING: never concede faster than the schedule on a live round.
-    // Pin to a tight, PROPORTIONAL band around the schedule so concessions are
-    // consistent, earned and shrinking (the user's fix for both "stuck at one
-    // price" and sudden big drops). The band widens with the gap still left to
-    // the list, so it can never park near the sticker on a cheap item; the AI
-    // still chooses the exact word-of-mouth wording, never the broad price.
-    if (!finalRound) {
+    // RECIPROCAL PACING: pin to a tight, PROPORTIONAL band around the pacing
+    // counter so concessions are consistent, earned and shrinking. The band
+    // widens with the gap still left to the list, so it can never park near the
+    // sticker on a cheap item; the AI still chooses the exact wording, never the
+    // broad price. Applied on EVERY round (including the last) — the old
+    // final-round escape that forced the safe floor is what made the AI always
+    // reach the floor by the end, teaching customers to hold out.
+    {
       const remaining = ctx.originalPrice - pacingCounter
       const bandMax = Math.min(
         ctx.originalPrice - Math.max(0.01, ctx.originalPrice * 0.005),

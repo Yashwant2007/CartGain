@@ -34,11 +34,11 @@ describe('Absurd-offer handling (bounded by backend)', () => {
     expect(r.counterOffer).toBe(850)
   })
 
-  it('NEVER accepts below the floor (offer $1 / $0 / negative clamp to counter)', () => {
+  it('NEVER accepts below the floor (offer $1 / $0 / negative → persona reply, no counter)', () => {
     for (const offer of [1, 0, -50]) {
       const r = ruleBasedDecision(offer, baseCtx({ attemptsUsed: 0 }))
-      expect(r.decision).toBe('counter')
-      expect(r.counterOffer!).toBeGreaterThanOrEqual(800)
+      expect(r.decision).toBe('chat')
+      expect(r.counterOffer).toBeUndefined()
     }
   })
 
@@ -46,8 +46,8 @@ describe('Absurd-offer handling (bounded by backend)', () => {
     // $99.99 on a $100 listed product (just below list, well above floor) → accept is correct
     const high = ruleBasedDecision(99.99, baseCtx({ originalPrice: 100, minPrice: 80 }))
     expect(high.decision).toBe('accept')
-    // A much lower offer below floor → counter, never at/below the floor early
-    const low = ruleBasedDecision(30, baseCtx({ originalPrice: 100, minPrice: 80, attemptsUsed: 0 }))
+    // A low-but-plausible offer below floor → counter, never at/below the floor early
+    const low = ruleBasedDecision(50, baseCtx({ originalPrice: 100, minPrice: 80, attemptsUsed: 0 }))
     expect(low.decision).toBe('counter')
     expect(low.counterOffer!).toBeGreaterThanOrEqual(80)
   })

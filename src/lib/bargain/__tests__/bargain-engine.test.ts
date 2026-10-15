@@ -5,7 +5,7 @@ import {
   buildOpeningMessage,
   type NegotiationContext,
 } from '../../services/bargain'
-import { tacticalCounter, tacticalProgress, quotedFloor } from '../engine'
+import { tacticalCounter, tacticalProgress, quotedFloor, isAbsurdOffer, reciprocalCounter } from '../engine'
 
 const baseCtx = (over: Partial<NegotiationContext> = {}): NegotiationContext => ({
   storeName: 'Test Store',
@@ -40,12 +40,11 @@ describe('ruleBasedDecision', () => {
     expect(r.counterOffer).toBeLessThanOrEqual(1000)
   })
 
-  it('counters for absurdly low offers (< 30% of floor) without jumping to floor', () => {
+  it('never counters an absurd offer — replies in persona with no price', () => {
     const r = ruleBasedDecision(50, baseCtx({ attemptsUsed: 0 }))
-    expect(r.decision).toBe('counter')
-    expect(r.tactic).toBe('graduated_open')
-    // First-attempt counter should be near the original price, not the floor
-    expect(r.counterOffer).toBeGreaterThan(800)
+    expect(r.decision).toBe('chat')
+    expect(r.tactic).toBe('absurd_offer')
+    expect(r.counterOffer).toBeUndefined()
   })
 
   it('quotes above the hidden floor on the final attempt', () => {
@@ -56,12 +55,67 @@ describe('ruleBasedDecision', () => {
   })
 
   it('graduates counters — later attempts yield lower counter prices', () => {
+    // Chain the AI's standing price the way a real session does (the server
+    // feeds back the previous counter), so the reciprocal model stays monotonic.
     const r1 = ruleBasedDecision(700, baseCtx({ attemptsUsed: 0 }))
-    const r2 = ruleBasedDecision(700, baseCtx({ attemptsUsed: 1 }))
-    const r3 = ruleBasedDecision(700, baseCtx({ attemptsUsed: 2, maxAttempts: 3 }))
+    const r2 = ruleBasedDecision(700, baseCtx({ attemptsUsed: 1, lastCounter: r1.counterOffer ?? null }))
+    const r3 = ruleBasedDecision(700, baseCtx({ attemptsUsed: 2, maxAttempts: 3, lastCounter: r2.counterOffer ?? null }))
     expect(r1.counterOffer).toBeGreaterThan(r2.counterOffer!)
     expect(r2.counterOffer).toBeGreaterThan(r3.counterOffer!)
     expect(r3.counterOffer).toBeGreaterThan(800) // quoted above the hidden floor
+  })
+})
+
+// ── Absurd offers & reciprocal pacing ──
+
+describe('isAbsurdOffer', () => {
+  it('flags offers far below the floor (and hostile/non-finite values)', () => {
+    const c = baseCtx() // list 1000 / floor 800
+    expect(isAbsurdOffer(200, c)).toBe(true) // ≤ 50% of floor
+    expect(isAbsurdOffer(400, c)).toBe(true) // exactly the boundary
+    expect(isAbsurdOffer(401, c)).toBe(false)
+    expect(isAbsurdOffer(0, c)).toBe(true)
+    expect(isAbsurdOffer(-5, c)).toBe(true)
+    expect(isAbsurdOffer(NaN, c)).toBe(true)
+    expect(isAbsurdOffer(null, c)).toBe(true)
+    expect(isAbsurdOffer(undefined, c)).toBe(true)
+  })
+})
+
+describe('reciprocalCounter', () => {
+  it('is monotonic non-increasing across a session', () => {
+    const first = reciprocalCounter(baseCtx({ attemptsUsed: 1 }), 600, null)
+    const second = reciprocalCounter(baseCtx({ attemptsUsed: 2 }), 600, first)
+    const third = reciprocalCounter(baseCtx({ attemptsUsed: 3 }), 600, second)
+    expect(first).toBeGreaterThanOrEqual(second)
+    expect(second).toBeGreaterThanOrEqual(third)
+  })
+
+  it('never sinks to the hidden floor for an ordinary buyer', () => {
+    const c = baseCtx({ attemptsUsed: 3, maxAttempts: 3 })
+    const r = reciprocalCounter(c, 500, null)
+    expect(r).toBeGreaterThan(quotedFloor(c))
+    expect(r).toBeLessThanOrEqual(c.originalPrice)
+  })
+
+  it('holds firmer against an unserious buyer than a serious one', () => {
+    const waster = reciprocalCounter(baseCtx({ attemptsUsed: 2, seriousness: 'time_waster' }), 600, null)
+    const serious = reciprocalCounter(baseCtx({ attemptsUsed: 2, seriousness: 'serious' }), 600, null)
+    expect(waster).toBeGreaterThan(serious)
+  })
+
+  it('holds on a lowball but meets a customer who moves up to our price', () => {
+    const c = baseCtx({ attemptsUsed: 1 })
+    const hold = reciprocalCounter(c, 500, null)
+    const meet = reciprocalCounter(c, hold + 5, null)
+    expect(meet).toBe(hold + 5) // we take their number, never ask for more
+    expect(meet).toBeLessThanOrEqual(1000)
+  })
+
+  it('never raises the standing price mid-negotiation', () => {
+    const established = 900
+    const same = reciprocalCounter(baseCtx({ attemptsUsed: 2 }), 500, established)
+    expect(same).toBeLessThanOrEqual(established)
   })
 })
 

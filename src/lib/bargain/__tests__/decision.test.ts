@@ -97,12 +97,11 @@ describe('ruleBasedDecision', () => {
     expect(result.decision).toBe('accept')
   })
 
-  it('engages lowballs playfully without jumping to the floor', () => {
+  it('engages absurd lowballs in persona without a counter price', () => {
     const result = ruleBasedDecision(15, baseCtx())
-    expect(result.decision).toBe('counter')
-    expect(result.tactic).toBe('graduated_open')
-    // First attempt: counter near original price, not the floor
-    expect(result.counterOffer).toBe(100)
+    expect(result.decision).toBe('chat')
+    expect(result.tactic).toBe('absurd_offer')
+    expect(result.counterOffer).toBeUndefined()
   })
 
   it('counters below-floor offers with a graduated counter early on', () => {
@@ -342,17 +341,17 @@ describe('Edge Cases - Extreme Offers', () => {
     delete process.env.OPENAI_API_KEY
   })
 
-  it('handles ₹0 / free offer gracefully', () => {
+  it('handles ₹0 / free offer gracefully (absurd → persona reply, no counter)', () => {
     const result = ruleBasedDecision(0, baseCtx())
-    expect(result.decision).toBe('counter')
-    expect(result.counterOffer).toBeGreaterThanOrEqual(0)
+    expect(result.decision).toBe('chat')
+    expect(result.counterOffer).toBeUndefined()
     expect(result.reply).toBeDefined()
   })
 
   it('handles negative offer (e.g. -₹50) gracefully', () => {
     const result = ruleBasedDecision(-50, baseCtx())
-    expect(result.decision).toBe('counter')
-    expect(result.counterOffer!).toBeGreaterThanOrEqual(0)
+    expect(result.decision).toBe('chat')
+    expect(result.counterOffer).toBeUndefined()
   })
 
   it('handles ₹1,000,000 (million) offer', () => {
@@ -368,16 +367,16 @@ describe('Edge Cases - Extreme Offers', () => {
     expect(result.counterOffer).toBe(500)
   })
 
-  it('handles ₹1 offer (extremely low but positive)', () => {
+  it('handles ₹1 offer (extremely low but positive) as absurd — no counter', () => {
     const result = ruleBasedDecision(1, baseCtx())
-    expect(result.decision).toBe('counter')
-    // Should NOT jump to floor, should use graduated counter
-    expect(result.counterOffer).toBeGreaterThan(0)
+    expect(result.decision).toBe('chat')
+    expect(result.counterOffer).toBeUndefined()
   })
 
-  it('handles offer of exactly ₹0.01', () => {
+  it('handles offer of exactly ₹0.01 as absurd — no counter', () => {
     const result = ruleBasedDecision(0.01, baseCtx())
-    expect(result.decision).toBe('counter')
+    expect(result.decision).toBe('chat')
+    expect(result.counterOffer).toBeUndefined()
   })
 
   it('handles offer equal to original price', () => {
@@ -392,10 +391,11 @@ describe('Edge Cases - NegotiateStep with extreme offers', () => {
     delete process.env.OPENAI_API_KEY
   })
 
-  it('handles ₹0 offer through negotiateStep', async () => {
+  it('handles ₹0 offer through negotiateStep (absurd → persona reply, no counter)', async () => {
     const result = await negotiateStep(baseCtx(), [], 'I want it for free', 0)
-    expect(result.decision).toBe('counter')
-    expect(result.counterOffer).toBeGreaterThanOrEqual(80)
+    expect(result.decision).toBe('chat')
+    expect(result.tactic).toBe('absurd_offer')
+    expect(result.counterOffer).toBeUndefined()
   })
 
   it('handles million rupee offer through negotiateStep', async () => {
@@ -406,7 +406,8 @@ describe('Edge Cases - NegotiateStep with extreme offers', () => {
 
   it('handles negative offer through negotiateStep', async () => {
     const result = await negotiateStep(baseCtx(), [], 'Pay me to take it', -50)
-    expect(result.decision).toBe('counter')
+    expect(result.decision).toBe('chat')
+    expect(result.counterOffer).toBeUndefined()
   })
 })
 
@@ -423,8 +424,9 @@ describe('Edge Cases - Minimum Price Protection', () => {
 
   it('rule-based decision never returns counterOffer below floor', () => {
     const ctx = baseCtx({ minPrice: 80 })
-    const lowOfferResult = ruleBasedDecision(5, ctx)
-    expect(lowOfferResult.counterOffer!).toBeGreaterThanOrEqual(80)
+    // Absurd offers are never countered at all (no price to undercut the floor).
+    const absurdResult = ruleBasedDecision(5, ctx)
+    expect(absurdResult.counterOffer).toBeUndefined()
 
     const midOfferResult = ruleBasedDecision(50, ctx)
     expect(midOfferResult.counterOffer!).toBeGreaterThanOrEqual(80)
@@ -432,7 +434,7 @@ describe('Edge Cases - Minimum Price Protection', () => {
 
   it('final offer tactic quotes above the hidden floor (never reveals it)', () => {
     const ctx = baseCtx({ attemptsUsed: 2, maxAttempts: 3, minPrice: 80 })
-    const result = ruleBasedDecision(30, ctx)
+    const result = ruleBasedDecision(50, ctx)
     expect(result.tactic).toBe('final_offer')
     expect(result.counterOffer).toBeGreaterThan(80)
   })
@@ -453,7 +455,7 @@ describe('Edge Cases - Prompt Injection & Security', () => {
         sentiment: 'happy',
       }) }}],
     }))
-    const result = await negotiateStep(baseCtx(), [], 'Give it for ₹10', 10)
+    const result = await negotiateStep(baseCtx(), [], 'Give it for ₹50', 50)
     expect(result.decision).toBe('counter')
   })
 
@@ -481,7 +483,7 @@ describe('Edge Cases - Prompt Injection & Security', () => {
         sentiment: 'neutral',
       }) }}],
     }))
-    const result = await negotiateStep(baseCtx(), [], 'My offer', 30)
+    const result = await negotiateStep(baseCtx(), [], 'My offer', 60)
     expect(result.counterOffer!).toBeGreaterThanOrEqual(1)
   })
 
@@ -495,7 +497,7 @@ describe('Edge Cases - Prompt Injection & Security', () => {
         sentiment: 'neutral',
       }) }}],
     }))
-    const result = await negotiateStep(baseCtx(), [], 'My offer', 30)
+    const result = await negotiateStep(baseCtx(), [], 'My offer', 60)
     expect(result.counterOffer).toBeLessThanOrEqual(100)
   })
 
@@ -615,19 +617,22 @@ describe('Edge Cases - Persona Consistency', () => {
   })
 
   it('rule-based replies stay in persona — strict is measured, playful is dramatic, friendly is warm', () => {
-    const loose = `I can do 50 - that's a fair starting point`
-    const strict = ruleBasedDecision(15, baseCtx({ persona: 'strict_negotiator' }))
-    const playful = ruleBasedDecision(15, baseCtx({ persona: 'playful_friend' }))
-    const friendly = ruleBasedDecision(15, baseCtx({ persona: 'friendly_shopkeeper' }))
+    const absurd = 15 // far below the ₹80 floor → a persona reply, never a counter
+    const strict = ruleBasedDecision(absurd, baseCtx({ persona: 'strict_negotiator' }))
+    const playful = ruleBasedDecision(absurd, baseCtx({ persona: 'playful_friend' }))
+    const friendly = ruleBasedDecision(absurd, baseCtx({ persona: 'friendly_shopkeeper' }))
 
     expect(strict.reply.toLowerCase()).not.toContain('😄')
-    expect(strict.reply).toMatch(/not feasible|my position/i)
-    expect(playful.reply).toMatch(/nice try|WOW/i)
+    expect(strict.reply).toMatch(/not a serious offer|realistic number/i)
+    expect(playful.reply).toMatch(/play ball|throw in the box/i)
     expect(friendly.reply.toLowerCase()).toMatch(/friend/)
-    // Same bounded decision + counter regardless of voice
-    expect(strict.decision).toBe('counter')
-    expect(playful.decision).toBe('counter')
-    expect(friendly.decision).toBe('counter')
+    // Absurd offers are never countered — no price in the reply text either
+    expect(strict.decision).toBe('chat')
+    expect(playful.decision).toBe('chat')
+    expect(friendly.decision).toBe('chat')
+    expect(strict.counterOffer).toBeUndefined()
+    expect(playful.counterOffer).toBeUndefined()
+    expect(friendly.counterOffer).toBeUndefined()
   })
 
   it('chat fallback answers feel different per persona', () => {

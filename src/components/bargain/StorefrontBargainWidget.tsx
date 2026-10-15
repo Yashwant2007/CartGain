@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { ShoppingCart } from 'lucide-react'
 import { currencySymbolFor } from '@/lib/bargain/i18n'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
-import { tacticalCounter, type NegotiationContext } from '@/lib/bargain/engine'
+import { reciprocalCounter, isAbsurdOffer, type NegotiationContext } from '@/lib/bargain/engine'
 
 type Line =
   | { kind: 'item'; id: string; variantId?: string | null; title: string; price: number; image?: string }
@@ -126,10 +126,12 @@ export default function StorefrontBargainWidget({
     setError(null)
   }
 
-  // Local fallback pacing (only used if the API is unreachable) — same convex,
-  // interest-aware curve as the server so the client can never disagree with it.
-  const localCounter = (attemptsUsed: number): number =>
-    tacticalCounter({
+  // Local fallback pacing (only used if the API is unreachable) — the same
+  // offer-aware, reciprocal model as the server so the client can never disagree
+  // with it. Responds to the customer's actual offer and the AI's last standing
+  // price, so counters are monotonic and never a fixed schedule.
+  const localCounter = (attemptsUsed: number, offer: number | null, lastCounter: number | null): number =>
+    reciprocalCounter({
       storeName: shop,
       currencySymbol: currencySymbolFor(currency),
       originalPrice,
@@ -139,7 +141,8 @@ export default function StorefrontBargainWidget({
       persona: PERSONA_MAP[persona] as NegotiationContext['persona'] ?? 'friendly_shopkeeper',
       productTitle: title,
       language,
-    } as NegotiationContext)
+      lastCounter,
+    } as NegotiationContext, offer)
 
   const PersonaOpenings: Record<string, (item: string, price: number, fmt: (n: number) => string) => string> = {
     friendly: (item, price, f) =>
@@ -156,22 +159,18 @@ export default function StorefrontBargainWidget({
     playful: (p, f) => `DEAL! Told you we'd get there! Code's coming right up.`,
   }
 
-  const PersonaLowball: Record<string, (offer: number, counter: number, f: (n: number) => string) => string> = {
-    friendly: (offer, counter, f) => `I appreciate the creativity, but I can't do ${f(offer)}. Let me offer ${f(counter)} — a fair starting point. What do you think?`,
-    strict: (offer, counter, f) => `That is not a viable offer. A reasonable starting point would be ${f(counter)}.`,
-    playful: (offer, counter, f) => `Free?! I like your confidence! Best I can do is ${f(counter)} and that's me being generous.`,
+  // An absurd offer earns a persona-true reply with NO counter price — never
+  // reward a joke with a number (see isAbsurdOffer / absurdOfferReply in engine).
+  const PersonaAbsurd: Record<string, (offer: number, f: (n: number) => string) => string> = {
+    friendly: (offer, f) => `Oh friend, ${f(offer)} wouldn't even cover the packaging! Ha. I know you're just warming up — what's a fair number you'd genuinely pay?`,
+    strict: (offer, f) => `${f(offer)} is not a serious offer, and I don't negotiate on jokes. Come back with a realistic number and I'll treat it with respect.`,
+    playful: (offer, f) => `Ha! ${f(offer)}? For that I'll throw in the box it came in. Come on, give me a real number and I'll play ball.`,
   }
 
   const PersonaCounter: Record<string, (offer: number, counter: number, f: (n: number) => string) => string> = {
     friendly: (offer, counter, f) => `Hmm, ${f(offer)} is a bit low for me. Let me meet you partway — how about ${f(counter)}? I think that's fair given the quality.`,
     strict: (offer, counter, f) => `My offer already reflects the market rate for this quality tier. I can offer ${f(counter)}.`,
     playful: (offer, counter, f) => `Can *I* do better? The real question is, can *you*? Just kidding — here's my final. ${f(counter)}. That's it. No more. Maybe.`,
-  }
-
-  const PersonaFinal: Record<string, (floor: number, f: (n: number) => string) => string> = {
-    friendly: (floor, f) => `Alright, I've done my best. This is my final offer: ${f(floor)}. It's the lowest I can go. Take it or leave it — but I really hope you take it!`,
-    strict: (floor, f) => `This is my final position: ${f(floor)}. Beyond this, the offer stands. Your decision.`,
-    playful: (floor, f) => `OKAY OKAY you win! Here's my absolute last offer: ${f(floor)}. My manager is gonna kill me. Deal?`,
   }
 
   const PersonaRetention: Record<string, (price: number, f: (n: number) => string) => string> = {
@@ -244,7 +243,11 @@ export default function StorefrontBargainWidget({
       }
 
       const nextAttempt = attempts + 1
-      const exhausted = nextAttempt >= maxAttempts
+      // A joke offer far below the floor gets a persona reply but must not burn
+      // the customer's bargain budget — otherwise "₹5 … ₹2" ends the session at
+      // "you've reached the limit" without a real round having happened.
+      const isAbsurdTurn = offer != null && isAbsurdOffer(offer, { minPrice, originalPrice })
+      const exhausted = !isAbsurdTurn && nextAttempt >= maxAttempts
 
       // 'chat' replies (product questions, greetings) carry no price — only a
       // real counter/accept lands a "Counter: ₹X" tag on the bubble.
@@ -254,7 +257,7 @@ export default function StorefrontBargainWidget({
       const wait = minThinkingMs(data.reply ?? '') - (Date.now() - startedAt)
       if (wait > 0) await new Promise((r) => setTimeout(r, wait))
       setMessages((prev) => [...prev, { role: 'ai', content: data.reply, price: priceTag }])
-      setAttempts(nextAttempt)
+      setAttempts(isAbsurdTurn ? attempts : nextAttempt)
 
       if (data.decision === 'accept') {
         setStep('deal')
@@ -272,6 +275,7 @@ export default function StorefrontBargainWidget({
       const isWalkout = detectWalkout(userText)
       const nextAttempt = attempts + 1
       const exhausted = nextAttempt >= maxAttempts
+      const lastAiPrice = [...messages].reverse().find((m) => m.role === 'ai' && m.price != null)?.price ?? null
 
       let result: { reply: string; decision: string; counterOffer?: number }
       let newStep: string = 'chat'
@@ -291,19 +295,15 @@ export default function StorefrontBargainWidget({
       } else if (offer != null) {
         if (offer >= minPrice) {
           result = { reply: PersonaAccept[persona](offer, (n) => money(currency, n)), decision: 'accept', counterOffer: offer }
-        } else if (offer < minPrice * 0.3) {
-          const counter = localCounter(attempts)
-          result = { reply: PersonaLowball[persona](offer, counter, (n) => money(currency, n)), decision: 'counter', counterOffer: counter }
+        } else if (isAbsurdOffer(offer, { minPrice, originalPrice })) {
+          // Absurd → persona reply, NO counter price, never consumes the schedule.
+          result = { reply: PersonaAbsurd[persona](offer, (n) => money(currency, n)), decision: 'chat' }
         } else {
-          const counter = localCounter(attempts)
-          if (exhausted) {
-            result = { reply: PersonaFinal[persona](minPrice, (n) => money(currency, n)), decision: 'counter', counterOffer: minPrice }
-          } else {
-            result = { reply: PersonaCounter[persona](offer, counter, (n) => money(currency, n)), decision: 'counter', counterOffer: counter }
-          }
+          const counter = localCounter(attempts, offer, lastAiPrice)
+          result = { reply: PersonaCounter[persona](offer, counter, (n) => money(currency, n)), decision: 'counter', counterOffer: counter }
         }
       } else {
-        const counter = localCounter(attempts)
+        const counter = localCounter(attempts, null, lastAiPrice)
         result = {
           reply: `What price did you have in mind? I could probably do ${money(currency, counter)} if you make me a fair offer.`,
           decision: 'counter',

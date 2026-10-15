@@ -80,7 +80,9 @@ describe('no-AI fallback keeps the floor secret (the path shoppers see during an
     const r = engineRuleBasedDecision(200, c) // 200 < 300 floor, last attempt
     expect(r.decision).toBe('counter')
     expect(r.counterOffer).toBeGreaterThan(c.minPrice)
-    expect(r.counterOffer).toBe(quotedFloor(c))
+    // The reciprocal model no longer collapses the final round onto the safe
+    // quote — it holds a genuine, earned price that stays above it.
+    expect(r.counterOffer).toBeGreaterThan(quotedFloor(c))
     expect(r.counterOffer).not.toBe(c.minPrice)
   })
 
@@ -110,11 +112,16 @@ describe('no-AI fallback keeps the floor secret (the path shoppers see during an
 
   it('ignores absurd and hostile offer values without leaking', () => {
     const c = ctx()
-    for (const bad of [-1, -99999, NaN, Infinity, 0]) {
+    for (const bad of [-1, -99999, NaN, 0]) {
       const r = engineRuleBasedDecision(bad, c)
-      expect(Number.isFinite(r.counterOffer!)).toBe(true)
-      expect(r.counterOffer!).toBeGreaterThanOrEqual(quotedFloor(c))
+      // Absurd/hostile values earn a persona reply, never a counter price.
+      expect(r.decision).toBe('chat')
+      expect(r.counterOffer).toBeUndefined()
     }
+    // A nonsensically HIGH offer is just an offer at the list — accepted, not countered.
+    const high = engineRuleBasedDecision(Infinity, c)
+    expect(high.decision).toBe('accept')
+    expect(high.counterOffer).toBe(c.originalPrice)
   })
 })
 

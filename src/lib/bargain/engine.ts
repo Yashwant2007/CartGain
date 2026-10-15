@@ -43,6 +43,10 @@ export interface NegotiationContext {
   /** Deterministic buyer-seriousness read (mirrors services/bargain). A genuine
    *  buyer earns a little more movement; a time-waster is held firmer. */
   seriousness?: 'serious' | 'casual' | 'time_waster'
+  /** The AI's most recent standing counter in this session. Lets the reciprocal
+   *  pacing be monotonic (a real shopkeeper does not RAISE a price mid-haggle)
+   *  without ever needing the hidden floor. */
+  lastCounter?: number | null
 }
 
 export interface NegotiationResult {
@@ -99,6 +103,105 @@ export function tacticalCounter(ctx: NegotiationContext): number {
   if (ctx.customerOfferTrend === 'rising') counter -= range * progress * 0.05
 
   return Math.round(Math.min(originalPrice, Math.max(floor, counter)) * 100) / 100
+}
+
+// ── Absurd offers get a PERSONA REPLY, never a counter ──
+// An offer so far below the merchant's floor that treating it as a genuine bid
+// would be theatre. The old engine "countered" these on the schedule, which two
+// things: (1) it rewarded a joke with a real number, and (2) it taught shoppers
+// that patient lowballing walks the price down to the floor. Instead such a turn
+// earns a persona-true reply with NO price, inviting a real number.
+export function isAbsurdOffer(
+  offer: number | null | undefined,
+  ctx: Pick<NegotiationContext, 'minPrice' | 'originalPrice'>,
+): boolean {
+  if (offer == null || !Number.isFinite(offer) || offer <= 0) return true
+  const floor = ctx.minPrice > 0 ? ctx.minPrice : ctx.originalPrice
+  return offer <= floor * 0.5 || offer <= ctx.originalPrice * 0.1
+}
+
+// Persona-true reply to an absurd offer. Strict handles it strictly, playful
+// jokes around, friendly stays warm — none of them name a price, because a price
+// here would be a reward for a non-offer.
+export function absurdOfferReply(offer: number, ctx: NegotiationContext): string {
+  const cur = ctx.currencySymbol
+  const item = ctx.productTitle ? `this ${ctx.productTitle}` : 'this'
+  const shown = Number.isFinite(offer) && offer > 0 ? offer.toFixed(2) : '0'
+  const replies: Record<Persona, string> = {
+    strict_negotiator:
+      `${cur}${shown} is not a serious offer for ${item}, and I don't negotiate on jokes. ` +
+      `Come back with a realistic number and I'll treat it with respect.`,
+    playful_friend:
+      `Ha! ${cur}${shown}? For that I'll throw in the box it came in. ` +
+      `Come on, give me a real number and I'll play ball.`,
+    friendly_shopkeeper:
+      `Oh friend, ${cur}${shown} wouldn't even cover the packaging! Ha. ` +
+      `I know you're just warming up — what's a fair number you'd genuinely pay?`,
+  }
+  return replies[ctx.persona] ?? replies.friendly_shopkeeper
+}
+
+// ── Reciprocal counter: bargain like a person, not a schedule ──
+// The old model conceded on a fixed curve keyed only to the turn number, so the
+// same numbers appeared every session (₹964.25, then ₹950, …) and any shopper
+// who simply waited always saw the price march down to the floor. This model
+// instead RESPONDS to what the customer actually does:
+//   • it holds at this round's EARNED price — a convex, interest-aware position
+//     that concedes slowly at first and never sinks to the hidden floor for an
+//     ordinary buyer (only a genuinely serious buyer earns the bottom),
+//   • it MEETS a customer who moves up to or beyond that price (they named a
+//     number we can live with — we take it, never ask for more),
+//   • it HOLDS when the shopper is unserious, repeats a lowball, or goes
+//     backwards (no reward for testing), and
+//   • it is MONOTONIC — the standing price never rises mid-negotiation.
+// Because the customer's own offer, the trend, the seriousness and the AI's last
+// standing price all move the number, two sessions with different behaviour
+// produce different prices: genuine haggling, not a fixed rate of steps.
+export function reciprocalCounter(
+  ctx: NegotiationContext,
+  offer?: number | null,
+  lastCounter?: number | null,
+): number {
+  const list = ctx.originalPrice
+  const quoted = quotedFloor(ctx)
+  if (list <= quoted) return Math.round(quoted * 100) / 100
+
+  const range = list - quoted
+  const rawProgress = ctx.maxAttempts > 0 ? ctx.attemptsUsed / ctx.maxAttempts : 1
+  const progress = tacticalProgress(rawProgress)
+
+  // How far the AI is WILLING to move this turn. Interest-aware: a serious buyer
+  // earns more movement, a time-waster is held firm, and the shopper's own offer
+  // direction matters most (rising rewards, flat/falling holds).
+  let engagement = 0.75
+  if (ctx.seriousness === 'serious') engagement = 1
+  else if (ctx.seriousness === 'casual') engagement = 0.55
+  else if (ctx.seriousness === 'time_waster') engagement = 0.1
+  if (ctx.customerOfferTrend === 'rising') engagement = Math.min(1, engagement + 0.2)
+  else if (ctx.customerOfferTrend === 'flat') engagement = Math.max(0.05, engagement - 0.3)
+  else if (ctx.customerOfferTrend === 'falling') engagement = Math.max(0.05, engagement - 0.45)
+
+  // This round's earned price. Note engagement < 1 stops an ordinary buyer ABOVE
+  // the hidden floor — the AI does not always reach it, so holding out is not
+  // automatically rewarded.
+  const earnedFloor = list - range * progress * engagement
+
+  // The AI's standing price: its last counter if there was one, else the list.
+  const base =
+    lastCounter != null && Number.isFinite(lastCounter) && lastCounter >= quoted && lastCounter <= list
+      ? lastCounter
+      : list
+
+  // The hold price for this turn — never above the standing price (monotonic),
+  // never below the safe floor.
+  const low = Math.min(base, Math.max(earnedFloor, quoted))
+
+  // If the customer has moved to or above the price we're willing to hold, meet
+  // them at their own number (we never ask for more than they offered). Otherwise
+  // hold firm — a low or repeated offer is not rewarded.
+  const meet = offer != null && Number.isFinite(offer) && offer > low ? Math.min(base, offer) : low
+
+  return Math.round(Math.min(list, Math.max(quoted, meet)) * 100) / 100
 }
 
 // ── Strategy-aware counter ──
@@ -219,7 +322,7 @@ export function quotedFloor(ctx: Pick<NegotiationContext, 'minPrice' | 'original
 export function ruleBasedDecision(
   offer: number,
   ctx: NegotiationContext,
-  counterFor: (ctx: NegotiationContext) => number = tacticalCounter,
+  counterFor: (ctx: NegotiationContext, offer: number, last: number | null) => number = reciprocalCounter,
 ): NegotiationResult {
   const boundedOffer = Math.max(0, Math.min(offer, ctx.originalPrice))
   const { minPrice, originalPrice, attemptsUsed, maxAttempts, persona } = ctx
@@ -241,23 +344,26 @@ export function ruleBasedDecision(
     }
   }
 
-  // No counter may sit at or below the safe quote: the hidden minimum is an
-  // internal accept threshold, never a price we volunteer.
-  const counter = Math.min(originalPrice, Math.max(quotedFloor(ctx), counterFor(ctx)))
-
-  if (boundedOffer < minPrice * 0.3) {
-    const lowball: Record<Persona, string> = {
-      strict_negotiator: `${currencySymbol}${boundedOffer.toFixed(2)} is not feasible. My position: ${currencySymbol}${counter.toFixed(2)}. Confirm within this session if that works.`,
-      playful_friend: `WOW. ${currencySymbol}${boundedOffer.toFixed(2)}?! Nice try. Come back to earth with me — ${currencySymbol}${counter.toFixed(2)}. Now we're talking?`,
-      friendly_shopkeeper: `Oh friend, I wish I could do ${currencySymbol}${boundedOffer.toFixed(2)}! Realistically I can offer ${currencySymbol}${counter.toFixed(2)} as a fair starting point. Does that work better?`,
-    }
+  // An absurd offer is NOT a bid to be answered with a price. Reply in persona
+  // (strict handles it strictly, playful jokes, friendly stays warm) and invite a
+  // real number — never reward a joke with a number, and never burn a scheduled
+  // step on it.
+  if (isAbsurdOffer(boundedOffer, ctx)) {
     return {
-      reply: lowball[persona] ?? lowball.friendly_shopkeeper,
-      decision: 'counter',
-      counterOffer: counter,
-      tactic: 'graduated_open',
-      sentiment: 'playful',
+      reply: absurdOfferReply(boundedOffer, ctx),
+      decision: 'chat',
+      tactic: 'absurd_offer',
+      sentiment: persona === 'playful_friend' ? 'playful' : persona === 'strict_negotiator' ? 'firm' : 'warm',
     }
+  }
+
+  // A genuine below-floor offer: respond with the reciprocal counter (never below
+  // the round's earned, floor-safe standing price).
+  let counter = counterFor(ctx, boundedOffer, ctx.lastCounter ?? null)
+  counter = Math.min(originalPrice, Math.max(quotedFloor(ctx), counter))
+  // A counter must always be a REAL drop below the listed price.
+  if (counter >= originalPrice) {
+    counter = Math.max(quotedFloor(ctx), originalPrice - Math.max(1, originalPrice * 0.01))
   }
 
   if (attemptsLeft > 1) {
@@ -275,16 +381,15 @@ export function ruleBasedDecision(
     }
   }
 
-  const quote = quotedFloor(ctx)
   const final: Record<Persona, string> = {
-    strict_negotiator: `This is my final position: ${currencySymbol}${quote.toFixed(2)}. I've justified it clearly. The decision is yours.`,
-    playful_friend: `OKAY OKAY, you win! FINAL final offer: ${currencySymbol}${quote.toFixed(2)}. If my boss asks, this never happened. Deal?`,
-    friendly_shopkeeper: `Friend, I've stretched as far as I can. My final offer: ${currencySymbol}${quote.toFixed(2)}. I really hope you'll take it — let's make this work!`,
+    strict_negotiator: `This is my position: ${currencySymbol}${counter.toFixed(2)}. I've justified it clearly. The decision is yours.`,
+    playful_friend: `Okay, here's where I can land — ${currencySymbol}${counter.toFixed(2)}. If my boss asks, this never happened. Deal?`,
+    friendly_shopkeeper: `Friend, I've stretched as far as I can for now. My best is ${currencySymbol}${counter.toFixed(2)}. I really hope you'll take it — let's make this work!`,
   }
   return {
     reply: final[persona] ?? final.friendly_shopkeeper,
     decision: 'counter',
-    counterOffer: quote,
+    counterOffer: counter,
     tactic: 'final_offer',
     sentiment: 'final',
   }

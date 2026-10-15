@@ -9,7 +9,8 @@ import {
   buildOpeningMessage,
   ruleBasedDecision,
   retentionOffer,
-  tacticalCounter,
+  reciprocalCounter,
+  isAbsurdOffer,
   type Persona,
   type NegotiationContext,
   type NegotiationResult,
@@ -180,7 +181,7 @@ export default function DemoContent() {
     const offer = extractPrice(userText)
     const isWalkout = detectWalkout(userText)
 
-    const isOfferTurn = offer != null
+    const isOfferTurn = offer != null && !isAbsurdOffer(offer, { minPrice, originalPrice: product.price })
     const nextAttempt = isOfferTurn ? attemptsUsed + 1 : attemptsUsed
     const attemptsLeft = MAX_ATTEMPTS - nextAttempt
     const exhausted = isOfferTurn && nextAttempt >= MAX_ATTEMPTS
@@ -248,18 +249,19 @@ export default function DemoContent() {
 
       // AI unavailable / rate-limited → local fallback engine
       if (!reply) {
+        const lastAiOffer = [...messages].reverse().find(m => m.role === 'ai' && m.offeredPrice != null)?.offeredPrice ?? null
         if (isWalkout && attemptsLeft > 0) {
           const lastCounter = [...messages].reverse().find(m => m.role === 'ai' && m.offeredPrice != null)?.offeredPrice ?? null
           const r = retentionOffer(ctx, lastCounter)
           reply = r.reply
           counterOffer = r.counterOffer ?? null
         } else if (offer != null) {
-          const result = ruleBasedDecision(offer, { ...ctx, attemptsUsed })
+          const result = ruleBasedDecision(offer, { ...ctx, attemptsUsed, lastCounter: lastAiOffer })
           reply = result.reply
           counterOffer = result.counterOffer ?? null
           decision = result.decision
         } else {
-          const counter = tacticalCounter({ ...ctx, attemptsUsed })
+          const counter = reciprocalCounter({ ...ctx, attemptsUsed, lastCounter: lastAiOffer } as NegotiationContext)
           reply = `What price did you have in mind? I could probably do ₹${counter.toFixed(2)} if you make me a fair offer.`
           counterOffer = counter
         }

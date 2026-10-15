@@ -111,9 +111,10 @@ describe('primary outage is absorbed inside the same request', () => {
 
     expect(res.reply).toBe('Groq answered you.')
     expect(res.decision).toBe('counter')
-    // The tactic pacing bound lifts the model's early ₹90 up to the round-one
-    // schedule (orig 100 / floor 81 → ₹96.72): concessions must be earned.
-    expect(res.counterOffer).toBe(96.72)
+    // The reciprocal pacing bound holds the model's early ₹90 at the round's
+    // earned price (orig 100 / floor 81, casual buyer → ₹98.20): concessions
+    // must be earned, never volunteered.
+    expect(res.counterOffer).toBe(98.2)
     // Both tiers were exercised, in order, inside one call.
     expect(sentModels).toEqual(['gpt-4o', 'openai/gpt-oss-120b'])
     expect(isTierTripped('primary')).toBe(true)
@@ -188,7 +189,7 @@ describe('primary outage is absorbed inside the same request', () => {
     setEnv({ OPENAI_API_KEY: undefined })
     ;(globalThis as any).__nextCreate = jest.fn(async () => modelReply(1))
 
-    const res = await negotiateStep(ctx({ minPrice: 80 }), [], '1 rupee?', 1, 'sess-5')
+    const res = await negotiateStep(ctx({ minPrice: 80 }), [], '60 rupees?', 60, 'sess-5')
 
     expect(res.counterOffer!).toBeGreaterThanOrEqual(80)
   })
@@ -268,7 +269,7 @@ describe('primary outage is absorbed inside the same request', () => {
 
     expect(res.reply).toBe('Fenced reply.')
     expect(res.decision).toBe('counter')
-    expect(res.counterOffer).toBe(96.72)
+    expect(res.counterOffer).toBe(98.2)
   })
 
   it('degrades safely when Groq returns empty content (reasoning ate the budget)', async () => {
@@ -411,7 +412,7 @@ describe('primary outage is absorbed inside the same request', () => {
       usage: {},
     }))
 
-    const res = await negotiateStep(ctx({ originalPrice: 1000, minPrice: 800 }), [], '50 only', 50, 'sess-accept-low')
+    const res = await negotiateStep(ctx({ originalPrice: 1000, minPrice: 800 }), [], '500 only', 500, 'sess-accept-low')
 
     expect(res.decision).toBe('counter')
     expect(res.counterOffer!).toBeGreaterThanOrEqual(800)
@@ -501,7 +502,9 @@ describe('counter consistency — pinned to a tight schedule band', () => {
 
     const res = await negotiateStep(ctx({ originalPrice: 1000, minPrice: 800 }), [], 'what about it?', 820, 'sess-band-high')
     expect(res.decision).toBe('counter')
-    expect(res.counterOffer!).toBeLessThanOrEqual(980)
+    // The band still clamps a hold-at-sticker counter down to just above the
+    // round schedule, so it is always a real drop below the list.
+    expect(res.counterOffer!).toBeLessThan(1000)
     expect(res.counterOffer!).toBeGreaterThan(960)
   })
 })

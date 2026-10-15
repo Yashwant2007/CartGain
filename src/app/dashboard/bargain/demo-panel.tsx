@@ -15,7 +15,8 @@ import {
   buildOpeningMessage,
   ruleBasedDecision,
   retentionOffer,
-  tacticalCounter,
+  reciprocalCounter,
+  isAbsurdOffer,
   type Persona,
   type NegotiationContext,
   type NegotiationResult,
@@ -136,7 +137,8 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
     // Otherwise a few friendly "how are you / my budget is tight" messages burn
     // the whole budget before the customer ever names a number, and the first
     // real offer is met by an exhausted session. Mirrors the offer route.
-    const isOfferTurn = offer != null
+    const isAbsurd = offer != null && isAbsurdOffer(offer, { minPrice, originalPrice: price })
+    const isOfferTurn = offer != null && !isAbsurd
 
     const nextAttempt = attemptsUsed + (isOfferTurn ? 1 : 0)
     const attemptsLeft = maxAttempts - nextAttempt
@@ -197,18 +199,19 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
     }
 
     if (!reply) {
+      const lastAiOffer = [...messages].reverse().find(m => m.role === 'ai' && m.offeredPrice != null)?.offeredPrice ?? null
       if (isWalkout && attemptsLeft > 0) {
         const lastCounter = [...messages].reverse().find(m => m.role === 'ai' && m.offeredPrice != null)?.offeredPrice ?? null
         const r = retentionOffer(ctx, lastCounter)
         reply = r.reply
         counterOffer = r.counterOffer ?? null
       } else if (offer != null) {
-        const result = ruleBasedDecision(offer, ctx)
+        const result = ruleBasedDecision(offer, { ...ctx, lastCounter: lastAiOffer })
         reply = result.reply
         counterOffer = result.counterOffer ?? null
         decision = result.decision
       } else {
-        const counter = tacticalCounter(ctx)
+        const counter = reciprocalCounter({ ...ctx, lastCounter: lastAiOffer } as NegotiationContext)
         reply = `What price did you have in mind? I could probably do ₹${counter.toFixed(2)} if you make me a fair offer.`
         counterOffer = counter
       }

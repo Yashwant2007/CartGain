@@ -501,14 +501,23 @@ export async function POST(request: NextRequest) {
       (result.metadata as any)?.abuse === true &&
       (result.metadata as any)?.consumeAttempt === false
 
+    // An absurd offer (a joke number far below the floor) earns a persona reply
+    // but is NOT a serious negotiation round, so it must not burn the customer's
+    // attempt budget — that is what turned "₹5 … ₹2" into "you've reached the
+    // limit" in a real session. It is safe to roll back: absurd offers are
+    // short-circuited before any model call, so this cannot farm free AI usage.
+    const isAbsurdNoConsume = isOfferTurn && (result.metadata as any)?.absurdOffer === true
+
+    const isNoConsumeTurn = isAbuseNoConsume || isAbsurdNoConsume
+
     const sessionStatus =
       result.decision === 'accept' ? 'accepted' :
       result.decision === 'reject' ? 'rejected' : 'active'
 
-    // Roll back the attempt if abuse doesn't consume it
-    const effectiveAttemptsUsed = isAbuseNoConsume ? attemptsUsed - 1 : attemptsUsed
+    // Roll back the attempt if the turn doesn't consume it
+    const effectiveAttemptsUsed = isNoConsumeTurn ? attemptsUsed - 1 : attemptsUsed
 
-    if (isAbuseNoConsume) {
+    if (isNoConsumeTurn) {
       await prisma.bargainSession.update({
         where: { id: bargainSession.id },
         data: { attemptsUsed: { decrement: 1 } },
