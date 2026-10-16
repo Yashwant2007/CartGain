@@ -196,7 +196,6 @@ export async function attributeBargainPurchase(params: PurchaseAttribution): Pro
   })
   if (!session) return false
 
-  const net = round2(Math.max(0, orderAmount))
   const base = round2(session.finalPrice ?? session.originalPrice)
 
   let credited = false
@@ -217,8 +216,8 @@ export async function attributeBargainPurchase(params: PurchaseAttribution): Pro
       const today = new Date(new Date().toDateString())
       await tx.analytics.upsert({
         where: { userId_date: { userId: store.userId, date: today } },
-        update: { bargainPurchases: { increment: 1 }, bargainRevenue: { increment: net } },
-        create: { userId: store.userId, date: today, bargainPurchases: 1, bargainRevenue: net },
+        update: { bargainPurchases: { increment: 1 }, bargainRevenue: { increment: base } },
+        create: { userId: store.userId, date: today, bargainPurchases: 1, bargainRevenue: base },
       })
 
       const existing = await tx.bargainRevenueShareEvent.findUnique({ where: { sessionId: session.id } })

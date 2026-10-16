@@ -140,6 +140,7 @@ export default function BargainWidget({
   const [sessionEnded, setSessionEnded] = useState(false)
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [discountCode, setDiscountCode] = useState<string | null>(null)
+  const [purchaseUrl, setPurchaseUrl] = useState<string | null>(null)
   const [shopifyStatus, setShopifyStatus] = useState<'created' | 'pending' | 'failed' | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
   const [timeLeft, setTimeLeft] = useState<number | null>(null)
@@ -292,6 +293,28 @@ export default function BargainWidget({
   })()
 
   const unavailable = rejection != null && /UNAVAILABLE/i.test(rejection.reason)
+
+  // A deal that ended without an explicit accept still leaves the shopper with
+  // the last price we offered — a one-use code plus a link that applies it, so
+  // the visit still ends in a purchase window rather than a dead end.
+  const retentionOffer = discountCode ? (
+    <div style={{
+      margin: '2px 0 12px', padding: '10px 12px', borderRadius: 12,
+      background: '#fffbeb', border: '1px dashed #fcd34d', textAlign: 'center',
+    }}>
+      <div style={{ fontSize: 12, color: '#92400e', fontWeight: 700, marginBottom: 6 }}>
+        We saved your best price — here is a one-time code:
+      </div>
+      <code style={{ fontWeight: 800, color: '#b45309', letterSpacing: 0.6 }}>{discountCode}</code>
+      {purchaseUrl && (
+        <div style={{ marginTop: 10 }}>
+          <a href={purchaseUrl} className="cg-btn cg-btn-primary" style={{ display: 'inline-flex' }}>
+            Checkout at your price
+          </a>
+        </div>
+      )}
+    </div>
+  ) : null
 
   // ── Effects: environment / a11y / timers ──────────────────────────────
 
@@ -490,6 +513,10 @@ export default function BargainWidget({
           setSessionEnded(true)
           if (data.session.status === 'expired') setEndedReason('expired')
           if (data.session.status === 'rejected') setDecision('reject')
+          // A negotiation that ended WITHOUT an accept still hands the shopper
+          // the last price we offered — surface it as a ready-to-use deal.
+          if (data.session.discountCode) setDiscountCode(data.session.discountCode)
+          if (data.session.purchaseUrl) setPurchaseUrl(data.session.purchaseUrl)
         }
       } else {
         const aiMsg: BargainMessage = {
@@ -572,6 +599,12 @@ export default function BargainWidget({
         if (data.terminal) {
           setSessionEnded(true)
           if (data.status) setEndedReason(data.status)
+          // The deal ended (rejected/abandoned) — but the backend still mints a
+          // retention code at the last price offered. Capture it so the shopper
+          // can still check out at that price.
+          if (data.discountCode) setDiscountCode(data.discountCode)
+          if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
+          if (data.finalPrice != null) setFinalPrice(data.finalPrice)
           setMessages(prev => [...prev, {
             id: `s-${Date.now()}`, role: 'system', content: data.message ?? 'Session ended.',
             offeredPrice: null, createdAt: new Date().toISOString(),
@@ -604,6 +637,8 @@ export default function BargainWidget({
       if (data.decision === 'accept' || data.decision === 'reject') {
         setDecision(data.decision)
       }
+      if (data.discountCode) setDiscountCode(data.discountCode)
+      if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
       if (data.floorReached === true) setFloorReached(true)
       if (typeof data.attemptsUsed === 'number') setAttemptsUsed(data.attemptsUsed)
       if (data.finalPrice != null) setFinalPrice(data.finalPrice)
@@ -754,6 +789,7 @@ export default function BargainWidget({
       }
       setFinalPrice(data.finalPrice)
       setDiscountCode(data.discountCode)
+      setPurchaseUrl(data.purchaseUrl ?? null)
       setShopifyStatus(data.shopifyStatus)
       setMessages(prev => [
         ...prev,
@@ -788,6 +824,7 @@ export default function BargainWidget({
     setDecision('idle')
     setFinalPrice(null)
     setDiscountCode(null)
+    setPurchaseUrl(null)
     setEndedReason(null)
     setLimit(null)
     setRecommendations(null)
@@ -1395,6 +1432,13 @@ export default function BargainWidget({
                         </button>
                       </div>
                     )}
+                    {purchaseUrl && (
+                      <div style={{ marginTop: 12 }}>
+                        <a href={purchaseUrl} className="cg-btn cg-btn-primary" style={{ display: 'inline-flex' }}>
+                          Checkout at your price
+                        </a>
+                      </div>
+                    )}
                     <div style={{ fontSize: 12, marginTop: 10, color: '#94a3b8' }}>
                       {t('codeApply')}
                     </div>
@@ -1409,6 +1453,7 @@ export default function BargainWidget({
                     title={t('negotiationEnded')}
                     body={t('dealRejected')}
                   >
+                    {retentionOffer}
                     <div className="cg-card-cta">
                       <button type="button" className="cg-btn cg-btn-primary" onClick={restartNegotiation}>
                         <RotateCcw size={14} /> {t('startNew')}
@@ -1427,6 +1472,7 @@ export default function BargainWidget({
                     title={t('expiredSession')}
                     body={t('terminal_expired')}
                   >
+                    {retentionOffer}
                     <div className="cg-card-cta">
                       <button type="button" className="cg-btn cg-btn-primary" onClick={restartNegotiation}>
                         <RotateCcw size={14} /> {t('startNew')}
@@ -1445,6 +1491,7 @@ export default function BargainWidget({
                     title={t('negotiationEnded')}
                     body={t('terminal_abandoned')}
                   >
+                    {retentionOffer}
                     <div className="cg-card-cta">
                       <button type="button" className="cg-btn cg-btn-primary" onClick={restartNegotiation}>
                         <RotateCcw size={14} /> {t('startNew')}

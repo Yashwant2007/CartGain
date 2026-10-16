@@ -49,6 +49,11 @@ export type PublicBargainSession = {
   currentOffer: number | null
   finalPrice: number | null
   status: string
+  /** Issued when a negotiation ended without an accept — the last price we
+   *  offered, usable at checkout. */
+  discountCode?: string | null
+  /** Link that applies the issued code and drops the shopper into checkout. */
+  purchaseUrl?: string | null
   attemptsUsed: number
   language: string
   startedAt: string
@@ -120,6 +125,10 @@ export type BargainOfferSuccess = {
   abuseDetected?: boolean
   abuseCategory?: string
   terminal?: boolean
+  /** Retention deal minted when the negotiation ends WITHOUT an accept. */
+  discountCode?: string | null
+  purchaseUrl?: string | null
+  claimUrl?: string | null
 }
 
 /** Terminal / non-OK offer responses the widget must handle gracefully. */
@@ -143,6 +152,8 @@ export type BargainAcceptSuccess = {
   discountPercent: number
   discountCode: string
   shopifyStatus: 'created' | 'pending' | 'failed'
+  /** Link that applies the code and drops the shopper straight into checkout. */
+  purchaseUrl?: string | null
   currency: string
   expiresAt: string
   message: string

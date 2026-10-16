@@ -68,8 +68,9 @@ export default function HeroNegotiationDemo() {
         {/* Chat panel */}
         <div className="lg:col-span-3 p-5 sm:p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white text-sm font-bold">
-              CG
+            <div className="w-9 h-9 rounded-full overflow-hidden ring-1 ring-blue-700/40 flex-shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.png" alt="CartGain" className="w-full h-full object-cover" />
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">

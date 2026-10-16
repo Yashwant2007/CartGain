@@ -24,6 +24,8 @@ function publicSession(s: any) {
     currentOffer: s.currentOffer,
     finalPrice: s.finalPrice,
     status: s.status,
+    discountCode: s.discountCode ?? null,
+    purchaseUrl: s.purchaseUrl ?? null,
     attemptsUsed: s.attemptsUsed,
     language: s.language,
     startedAt: s.startedAt,
