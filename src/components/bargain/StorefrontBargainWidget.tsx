@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { ShoppingCart } from 'lucide-react'
 import { currencySymbolFor } from '@/lib/bargain/i18n'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
-import { reciprocalCounter, isAbsurdOffer, type NegotiationContext } from '@/lib/bargain/engine'
+import { reciprocalCounter, isAbsurdOffer, absurdOfferReply, type NegotiationContext } from '@/lib/bargain/engine'
 
 type Line =
   | { kind: 'item'; id: string; variantId?: string | null; title: string; price: number; image?: string }
@@ -159,14 +159,6 @@ export default function StorefrontBargainWidget({
     playful: (p, f) => `DEAL! Told you we'd get there! Code's coming right up.`,
   }
 
-  // An absurd offer earns a persona-true reply with NO counter price — never
-  // reward a joke with a number (see isAbsurdOffer / absurdOfferReply in engine).
-  const PersonaAbsurd: Record<string, (offer: number, f: (n: number) => string) => string> = {
-    friendly: (offer, f) => `Oh friend, ${f(offer)} wouldn't even cover the packaging! Ha. I know you're just warming up — what's a fair number you'd genuinely pay?`,
-    strict: (offer, f) => `${f(offer)} is not a serious offer, and I don't negotiate on jokes. Come back with a realistic number and I'll treat it with respect.`,
-    playful: (offer, f) => `Ha! ${f(offer)}? For that I'll throw in the box it came in. Come on, give me a real number and I'll play ball.`,
-  }
-
   const PersonaCounter: Record<string, (offer: number, counter: number, f: (n: number) => string) => string> = {
     friendly: (offer, counter, f) => `Hmm, ${f(offer)} is a bit low for me. Let me meet you partway — how about ${f(counter)}? I think that's fair given the quality.`,
     strict: (offer, counter, f) => `My offer already reflects the market rate for this quality tier. I can offer ${f(counter)}.`,
@@ -296,8 +288,31 @@ export default function StorefrontBargainWidget({
         if (offer >= minPrice) {
           result = { reply: PersonaAccept[persona](offer, (n) => money(currency, n)), decision: 'accept', counterOffer: offer }
         } else if (isAbsurdOffer(offer, { minPrice, originalPrice })) {
-          // Absurd → persona reply, NO counter price, never consumes the schedule.
-          result = { reply: PersonaAbsurd[persona](offer, (n) => money(currency, n)), decision: 'chat' }
+          // Absurd → persona reply, NO counter price. Count the trailing run of
+          // absurd customer offers so the copy escalates instead of repeating.
+          let absurdStreak = 1
+          for (let i = messages.length - 1; i >= 0; i--) {
+            const m = messages[i]
+            if (m.role !== 'customer') continue
+            const p = extractPrice(m.content)
+            if (p == null) continue
+            if (isAbsurdOffer(p, { minPrice, originalPrice })) absurdStreak++
+            else break
+          }
+          const reply = absurdOfferReply(offer, {
+            storeName: shop,
+            currencySymbol: currencySymbolFor(currency),
+            originalPrice,
+            minPrice,
+            attemptsUsed: nextAttempt,
+            maxAttempts,
+            persona: PERSONA_MAP[persona] as NegotiationContext['persona'] ?? 'friendly_shopkeeper',
+            productTitle: title,
+            language,
+            lastCounter: lastAiPrice,
+            absurdStreak,
+          })
+          result = { reply, decision: 'chat' }
         } else {
           const counter = localCounter(attempts, offer, lastAiPrice)
           result = { reply: PersonaCounter[persona](offer, counter, (n) => money(currency, n)), decision: 'counter', counterOffer: counter }

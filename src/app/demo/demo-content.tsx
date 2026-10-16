@@ -256,7 +256,14 @@ export default function DemoContent() {
           reply = r.reply
           counterOffer = r.counterOffer ?? null
         } else if (offer != null) {
-          const result = ruleBasedDecision(offer, { ...ctx, attemptsUsed, lastCounter: lastAiOffer })
+          let absurdStreak = 1
+          for (let i = messages.length - 1; i >= 0; i--) {
+            const m = messages[i]
+            if (m.role !== 'customer' || m.offeredPrice == null) continue
+            if (isAbsurdOffer(m.offeredPrice, ctx)) absurdStreak++
+            else break
+          }
+          const result = ruleBasedDecision(offer, { ...ctx, attemptsUsed, lastCounter: lastAiOffer, absurdStreak })
           reply = result.reply
           counterOffer = result.counterOffer ?? null
           decision = result.decision

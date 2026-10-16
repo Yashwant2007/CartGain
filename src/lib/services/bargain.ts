@@ -171,6 +171,9 @@ export interface NegotiationContext {
    *  monotonic (a real shopkeeper does not RAISE a price mid-haggle) without ever
    *  consulting the hidden floor. */
   lastCounter?: number | null
+  /** Trailing run of absurd lowballs (including the current one) so the persona
+   *  reply can escalate instead of repeating the same canned line. */
+  absurdStreak?: number
 }
 
 export interface NegotiationResult {
@@ -2341,17 +2344,28 @@ export async function negotiateStep(
   // price. The old behaviour countered it on the fixed schedule, which did two
   // bad things: it REWARDED a joke with a real number, and it taught shoppers
   // that patient lowballing walks the price down to the floor. Instead such a
-  // turn earns a persona-true reply with no counter and no price in the text
-  // (strict handles it strictly, playful jokes, friendly stays warm), inviting a
-  // real number. Handled deterministically here so it can never drift, and it
-  // burns no AI call.
+  // turn earns a persona-true reply with no counter (strict handles it strictly,
+  // playful jokes, friendly stays warm). The reply ESCALATES across a run of
+  // lowballs and, past a sustained streak, names a floor-safe ANCHOR (always
+  // ABOVE the hidden minimum) so the shopper gets a real number to work from
+  // rather than the same canned line every turn. Handled deterministically here
+  // so it can never drift, and it burns no AI call.
   if (validatedOffer != null && isAbsurdOffer(validatedOffer, ctx)) {
+    // Count the trailing run of absurd customer offers so the reply can move
+    // from banter → acknowledgement → anchored number like a live negotiator.
+    let absurdStreak = 1
+    for (let i = history.length - 1; i >= 0; i--) {
+      const m = history[i]
+      if (m.role !== 'customer' || m.offeredPrice == null) continue
+      if (isAbsurdOffer(m.offeredPrice, ctx)) absurdStreak++
+      else break
+    }
     return {
-      reply: absurdOfferReply(validatedOffer, ctx),
+      reply: absurdOfferReply(validatedOffer, { ...ctx, absurdStreak }),
       decision: 'chat',
       tactic: 'absurd_offer',
       sentiment: ctx.persona === 'playful_friend' ? 'playful' : ctx.persona === 'strict_negotiator' ? 'firm' : 'warm',
-      metadata: { absurdOffer: true, offer: validatedOffer },
+      metadata: { absurdOffer: true, offer: validatedOffer, absurdStreak },
     }
   }
 

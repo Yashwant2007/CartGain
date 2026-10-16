@@ -9,6 +9,7 @@ import {
   extractJsonObject,
   type NegotiationContext,
 } from '@/lib/services/bargain'
+import { quotedFloor } from '@/lib/bargain/engine'
 import prisma from '@/lib/db'
 
 jest.mock('@/lib/db', () => ({
@@ -633,6 +634,31 @@ describe('Edge Cases - Persona Consistency', () => {
     expect(strict.counterOffer).toBeUndefined()
     expect(playful.counterOffer).toBeUndefined()
     expect(friendly.counterOffer).toBeUndefined()
+  })
+
+  it('escalates absurd-offer copy across a streak and anchors at the safe floor (never counters)', () => {
+    const at = (streak: number, offer: number) =>
+      ruleBasedDecision(offer, baseCtx({ persona: 'friendly_shopkeeper', absurdStreak: streak, attemptsUsed: streak }))
+
+    const first = at(1, 2)
+    const second = at(2, 3)
+    const third = at(3, 4)
+    const fourth = at(4, 5)
+
+    // A shopper who keeps lowballing never sees the same line twice.
+    expect(new Set([first.reply, second.reply, third.reply, fourth.reply]).size).toBe(4)
+
+    // …but the copy is deterministic: the same turn always reads the same.
+    expect(at(3, 4).reply).toBe(third.reply)
+
+    // A sustained streak hands the shopper a real, floor-SAFE number (ABOVE the
+    // hidden minimum) so it can never leak or breach the merchant's floor…
+    const anchor = quotedFloor(baseCtx())
+    expect(anchor).toBeGreaterThan(baseCtx().minPrice)
+    expect(third.reply).toContain(anchor.toFixed(2))
+    // …while still never issuing a counter — the margin is protected.
+    expect(third.counterOffer).toBeUndefined()
+    expect(fourth.counterOffer).toBeUndefined()
   })
 
   it('chat fallback answers feel different per persona', () => {

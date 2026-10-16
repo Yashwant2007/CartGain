@@ -47,6 +47,11 @@ export interface NegotiationContext {
    *  pacing be monotonic (a real shopkeeper does not RAISE a price mid-haggle)
    *  without ever needing the hidden floor. */
   lastCounter?: number | null
+  /** How many absurd lowballs in a row the shopper has now thrown (including the
+   *  current one). Lets the persona reply ESCALATE and stop repeating itself,
+   *  instead of parroting the same joke line every turn. Callers with history
+   *  set it; engines without it fall back to offer-based variation. */
+  absurdStreak?: number
 }
 
 export interface NegotiationResult {
@@ -107,10 +112,19 @@ export function tacticalCounter(ctx: NegotiationContext): number {
 
 // ── Absurd offers get a PERSONA REPLY, never a counter ──
 // An offer so far below the merchant's floor that treating it as a genuine bid
-// would be theatre. The old engine "countered" these on the schedule, which two
-// things: (1) it rewarded a joke with a real number, and (2) it taught shoppers
-// that patient lowballing walks the price down to the floor. Instead such a turn
-// earns a persona-true reply with NO price, inviting a real number.
+// would be theatre. The old engine "countered" these on the schedule, which did
+// two bad things: (1) it rewarded a joke with a real number, and (2) it taught
+// shoppers that patient lowballing walks the price down to the floor. Instead
+// such a turn earns a persona-true reply with NO counter price.
+//
+// The reply ESCALATES across repeats so it reads like a live negotiator, not a
+// looping script: the first joke gets light banter, a rising series of jokes gets
+// acknowledged ("you're inching up"), and a sustained streak gets a firm,
+// floor-safe ANCHOR (the quotable floor, always ABOVE the hidden minimum) so the
+// shopper is handed a real number to work from instead of a dead end. The variant
+// is picked deterministically from the offer value and the streak, so two
+// identical requests always get identical copy (idempotent) while consecutive
+// turns never repeat verbatim.
 export function isAbsurdOffer(
   offer: number | null | undefined,
   ctx: Pick<NegotiationContext, 'minPrice' | 'originalPrice'>,
@@ -120,25 +134,79 @@ export function isAbsurdOffer(
   return offer <= floor * 0.5 || offer <= ctx.originalPrice * 0.1
 }
 
-// Persona-true reply to an absurd offer. Strict handles it strictly, playful
-// jokes around, friendly stays warm — none of them name a price, because a price
-// here would be a reward for a non-offer.
+function stableHash(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  return h
+}
+
 export function absurdOfferReply(offer: number, ctx: NegotiationContext): string {
   const cur = ctx.currencySymbol
   const item = ctx.productTitle ? `this ${ctx.productTitle}` : 'this'
   const shown = Number.isFinite(offer) && offer > 0 ? offer.toFixed(2) : '0'
-  const replies: Record<Persona, string> = {
-    strict_negotiator:
-      `${cur}${shown} is not a serious offer for ${item}, and I don't negotiate on jokes. ` +
-      `Come back with a realistic number and I'll treat it with respect.`,
-    playful_friend:
-      `Ha! ${cur}${shown}? For that I'll throw in the box it came in. ` +
-      `Come on, give me a real number and I'll play ball.`,
-    friendly_shopkeeper:
-      `Oh friend, ${cur}${shown} wouldn't even cover the packaging! Ha. ` +
-      `I know you're just warming up — what's a fair number you'd genuinely pay?`,
+  const price = `${cur}${shown}`
+  const anchor = `${cur}${quotedFloor(ctx).toFixed(2)}`
+
+  // How many absurd jabs in a row — callers with history pass the true streak;
+  // otherwise fall back to the (non-burning) attempt counter.
+  const streak = Math.max(1, Math.floor(ctx.absurdStreak ?? ctx.attemptsUsed ?? 0) || 1)
+  const stage = streak <= 1 ? 1 : streak === 2 ? 2 : 3
+
+  const banks: Record<Persona, { s1: string[]; s2: string[]; s3: string[] }> = {
+    strict_negotiator: {
+      s1: [
+        `${price} is not a serious offer for ${item}. I don't negotiate on jokes — give me a realistic number.`,
+        `That's not a serious offer. ${price} won't get you ${item} — name a realistic number.`,
+        `I'll be blunt: ${price} is not a serious offer. Come back with a realistic number and I'll work with you.`,
+      ],
+      s2: [
+        `You're edging up, but ${price} is still not in the conversation for ${item}. Stop testing me and give me a realistic number.`,
+        `${price} is still far off. I hear the bump — it's just not enough. Name a realistic number.`,
+      ],
+      s3: [
+        `We're going in circles. ${price} isn't happening. My realistic starting point is ${anchor} — meet me near that and we have a deal.`,
+        `Enough of this. ${price} won't work for ${item}. I can start around ${anchor}; if that's workable, the deal is yours.`,
+        `Straight talk: ${price} is off the table. My position starts at ${anchor}. Bring a serious offer and we'll close.`,
+      ],
+    },
+    playful_friend: {
+      s1: [
+        `Ha! ${price}? For that I'll throw in the box it came in. Come on — play ball with a real number!`,
+        `${price}?! You're joking — for that I'll throw in the box it came in! Give me a real number and let's play ball.`,
+        `Nice try! ${price} won't do it — but I like the hustle. Throw a real number at me and we'll play ball.`,
+      ],
+      s2: [
+        `You keep nudging it up — I see the game! But ${price} is still a no. Play ball with a real number.`,
+        `Ooh, inching up! ${price} still won't fly, though. Throw me a number I can actually play ball with.`,
+      ],
+      s3: [
+        `Okay, enough games — you're clearly testing me! ${price} won't fly, but let's get real: my ballpark starts around ${anchor}. Play in that range!`,
+        `You're persistent, I'll give you that! ${price} is still a joke — real talk, I start around ${anchor}. Meet me there?`,
+        `Cards on the table: ${price} is a no. My ballpark opens near ${anchor}. Get in the game and we'll talk!`,
+      ],
+    },
+    friendly_shopkeeper: {
+      s1: [
+        `Oh friend, ${price} wouldn't even cover the packaging! What's a fair number you'd genuinely pay?`,
+        `Ha, ${price}? Friend, that's a warm-up, not an offer. What are you really thinking?`,
+        `I love the enthusiasm, friend — but ${price} won't work. What number feels fair to you?`,
+      ],
+      s2: [
+        `I can tell you're inching up, friend, and I appreciate it — but ${price} is still too far off for ${item}. What feels fair?`,
+        `You're getting warmer, friend, but ${price} is still not workable. Give me a realistic number and I'll do my best.`,
+      ],
+      s3: [
+        `Friend, ${price} genuinely won't work, and I don't want to waste your time. A real starting point for ${item} is around ${anchor} — if that's workable, we'll make it happen.`,
+        `I want to be straight with you: ${price} is out of reach for ${item}. We can start around ${anchor}. Shall we try that?`,
+        `Honestly, ${price} isn't doable for ${item} — but I don't want you to walk away. Around ${anchor} I can make something work.`,
+      ],
+    },
   }
-  return replies[ctx.persona] ?? replies.friendly_shopkeeper
+
+  const bank = banks[ctx.persona] ?? banks.friendly_shopkeeper
+  const pool = stage === 1 ? bank.s1 : stage === 2 ? bank.s2 : bank.s3
+  const idx = (stableHash(shown) + streak) % pool.length
+  return pool[idx]
 }
 
 // ── Reciprocal counter: bargain like a person, not a schedule ──

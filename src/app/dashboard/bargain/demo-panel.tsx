@@ -206,7 +206,14 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
         reply = r.reply
         counterOffer = r.counterOffer ?? null
       } else if (offer != null) {
-        const result = ruleBasedDecision(offer, { ...ctx, lastCounter: lastAiOffer })
+        let absurdStreak = 1
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const m = messages[i]
+          if (m.role !== 'customer' || m.offeredPrice == null) continue
+          if (isAbsurdOffer(m.offeredPrice, ctx)) absurdStreak++
+          else break
+        }
+        const result = ruleBasedDecision(offer, { ...ctx, lastCounter: lastAiOffer, absurdStreak })
         reply = result.reply
         counterOffer = result.counterOffer ?? null
         decision = result.decision
