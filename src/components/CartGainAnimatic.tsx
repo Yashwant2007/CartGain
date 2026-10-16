@@ -165,7 +165,10 @@ export default function CartGainAnimatic() {
             <div className={styles.s2Bg}></div>
             <div className={styles.waCard}>
               <div className={styles.waHeader}>
-                <div className={styles.waIcon}>CG</div>
+                <div className={styles.waIcon}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/logo.png" alt="CartGain" className={styles.waLogo} />
+                </div>
                 <div>
                   <div className={styles.waFrom}>CartGain on WhatsApp</div>
                   <div style={{ fontSize: '9px', color: '#4a7090' }}>Today 2:34 PM</div>

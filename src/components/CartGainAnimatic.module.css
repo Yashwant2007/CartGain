@@ -272,6 +272,14 @@
   color: #fff;
   font-weight: 700;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.waLogo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .waFrom {
@@ -681,7 +689,7 @@
 .logoMark {
   width: clamp(50px, 14%, 80px);
   height: clamp(50px, 14%, 80px);
-  background: #10B981;
+  background: transparent;
   border-radius: 16px;
   display: flex;
   align-items: center;
@@ -696,7 +704,7 @@
 .logoImg {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: inherit;
   display: block;
 }

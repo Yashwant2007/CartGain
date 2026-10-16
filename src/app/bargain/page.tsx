@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import {
   ArrowRight, CheckCircle2, Zap, MessageSquare, Sparkles, Shield, UsersRound,
 } from 'lucide-react'
@@ -81,9 +82,14 @@ export default function BargainPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 sm:h-16">
             <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold">CG</span>
-              </div>
+              <Image
+                src="/favicon-32x32.png"
+                alt=""
+                width={32}
+                height={32}
+                className="w-8 h-8 rounded-lg flex-shrink-0"
+                priority
+              />
               <span className="text-lg font-bold text-white">CartGain</span>
             </Link>
             <div className="flex items-center space-x-3">
