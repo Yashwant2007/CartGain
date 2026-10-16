@@ -3,8 +3,10 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import prisma from '@/lib/db'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, ShoppingBag, Zap } from 'lucide-react'
+import { ArrowLeft, ShoppingBag, Zap, Tag } from 'lucide-react'
 import BargainWidget from '@/components/bargain/BargainWidget'
+import { getAbandonedBargainContextForCartToken } from '@/lib/bargain/hooks'
+import { fetchShopifyProductDetail } from '@/lib/shopify'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +48,18 @@ export default async function CartRecoveryPage({ params }: { params: { id: strin
   const itemCount = items.length || 1
   const perItemPrice = cart.totalValue / itemCount
 
+  // If the shopper walked away mid-negotiation, resurface the last price we
+  // offered with a one-tap link back to their purchase window.
+  const bargainContext = await getAbandonedBargainContextForCartToken(cart.cartId).catch(() => null)
+
+  // Fetch the primary product's live description so the recovery link really
+  // shows the item, not just a title and a price.
+  const firstProductId = items?.[0]?.shopifyProductId
+  const productDetail = firstProductId
+    ? await fetchShopifyProductDetail(cart.store, firstProductId).catch(() => null)
+    : null
+  const productDescription = productDetail?.body_plain?.trim() || null
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
       <nav className="border-b border-blue-800/30 bg-slate-900/80 backdrop-blur-lg">
@@ -60,6 +74,26 @@ export default async function CartRecoveryPage({ params }: { params: { id: strin
           <ArrowLeft className="w-4 h-4" />
           Back to {cart.store.name}
         </Link>
+
+        {bargainContext?.discountCode && bargainContext.purchaseUrl && (
+          <div className="mb-6 rounded-2xl border border-cyan-500/40 bg-cyan-500/10 p-5">
+            <div className="flex items-center gap-2 text-cyan-100 font-semibold mb-1">
+              <Tag className="w-4 h-4" />
+              You had a deal on the table
+            </div>
+            <p className="text-sm text-blue-200/90 mb-3">
+              At checkout, use your personal code{' '}
+              <code className="text-cyan-100 font-bold">{bargainContext.discountCode}</code> to get the price you
+              negotiated. It&apos;s single-use and bound to you.
+            </p>
+            <a
+              href={bargainContext.purchaseUrl}
+              className="inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold bg-gradient-to-r from-cyan-500 to-blue-500 hover:shadow-lg hover:shadow-cyan-500/50 transition-all active:scale-95"
+            >
+              Checkout at your price
+            </a>
+          </div>
+        )}
 
         {/* Bargain Widget - Visible at cart recovery checkout */}
         <BargainWidget
@@ -80,6 +114,15 @@ export default async function CartRecoveryPage({ params }: { params: { id: strin
 
           {cart.customerName && (
             <p className="text-blue-200 mb-6">Hi {cart.customerName}, these items are still waiting for you!</p>
+          )}
+
+          {productDescription && (
+            <div className="mb-6 p-4 rounded-xl bg-slate-900/40 border border-blue-700/20">
+              <div className="text-xs uppercase tracking-wide text-blue-300/60 mb-1">
+                {productDetail?.title || 'About this item'}
+              </div>
+              <p className="text-sm text-blue-100/90 leading-relaxed line-clamp-4">{productDescription}</p>
+            </div>
           )}
 
           <div className="space-y-4 mb-6">

@@ -7,6 +7,7 @@ import { buildGoalContextForNegotiation } from '@/lib/bargain/goals'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { getBargainGate, recordBargainSessionOp, BARGAIN_SESSIONS_EXHAUSTED } from '@/lib/bargain/gate'
+import { generateClaimToken } from '@/lib/bargain/purchase'
 import { logDataAccess } from '@/lib/data-protection'
 import { track } from '@/lib/analytics/track'
 
@@ -275,6 +276,7 @@ export async function POST(request: NextRequest) {
           attemptsUsed: 0,
           status: 'active',
           language,
+          claimToken: generateClaimToken(),
           startedAt: now,
           expiredAt,
           messages: {

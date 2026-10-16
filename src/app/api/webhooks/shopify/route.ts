@@ -12,6 +12,7 @@ import {
 } from '@/lib/data-export'
 import { computeRefundNetting, isMessageAttributable } from '@/lib/attribution'
 import { attributeBargainGoal, netBargainGoalRefund } from '@/lib/bargain/goals'
+import { attributeBargainPurchase } from '@/lib/bargain/purchase'
 import { reconcileShopifySubscription, downgradeSubscriptionToFree } from '@/lib/shopify-billing/service'
 import { mapShopifyStatus } from '@/lib/shopify-billing/subscriptions'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS, resolvePlanId, getPlan } from '@/lib/payment'
@@ -510,6 +511,28 @@ async function processOrderCreate(data: any, store: any, domain: string) {
     })
   } catch (err) {
     console.error('[BARGAIN_GOAL_ATTRIBUTE]', err)
+  }
+
+  // ── Bargain purchase attribution ──
+  // If the order used a bargain discount code, mark the session purchased,
+  // advance the merchant's bargain analytics (count + value) and book the
+  // rev-share event exactly once. Independent of cart-recovery attribution —
+  // a bargain purchase is credited on its own even with no recovery message.
+  try {
+    await attributeBargainPurchase({
+      store: { id: store.id, userId: store.userId, timezone: store.timezone },
+      shopifyOrderId: shopifyOrderId ?? '',
+      orderAmount: netAmount,
+      orderCreatedAt,
+      email: data.email ?? null,
+      cartToken: data.cart_token ?? null,
+      checkoutToken: data.token ?? null,
+      appliedCodes: Array.isArray(data.discount_codes)
+        ? data.discount_codes.map((dc: any) => (dc && dc.code) || null).filter(Boolean)
+        : [],
+    })
+  } catch (err) {
+    console.error('[BARGAIN_PURCHASE_ATTRIBUTE]', err)
   }
 
   if (!cart.convertedAt) {

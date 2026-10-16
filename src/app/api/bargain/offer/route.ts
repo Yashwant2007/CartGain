@@ -16,6 +16,7 @@ import { analyzeIntent } from '@/lib/bargain/intent'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
 import { searchRecommendations, recommendationReason, type RecommendationCard, type RecommendationReason, type RecommendationContext } from '@/lib/bargain/recommendations'
 import { fetchShopifyProducts } from '@/lib/shopify'
+import { issueRetentionDiscount, buildBargainClaimUrl } from '@/lib/bargain/purchase'
 import { track } from '@/lib/analytics/track'
 
 export const dynamic = 'force-dynamic'
@@ -354,7 +355,19 @@ export async function POST(request: NextRequest) {
           data: { status: 'rejected', currentOffer: customerOffer ?? bargainSession.currentOffer },
         }),
       ])
-      return NextResponse.json({ reply: rejectReply, decision: 'reject', sessionStatus: 'rejected', attemptsUsed })
+      // No deal reached — still hand the customer the last price we offered so
+      // the sale isn't lost, with a link straight into their purchase window.
+      const retention = await issueRetentionDiscount(bargainSession.id).catch(() => null)
+      return NextResponse.json({
+        reply: rejectReply,
+        decision: 'reject',
+        sessionStatus: 'rejected',
+        attemptsUsed,
+        discountCode: retention?.code ?? null,
+        finalPrice: retention?.finalPrice ?? null,
+        purchaseUrl: retention?.purchaseUrl ?? null,
+        claimUrl: bargainSession.claimToken ? buildBargainClaimUrl(bargainSession.claimToken) : null,
+      })
     }
 
     // Deterministic offer-direction read over this same buyer's earlier turns.
@@ -437,11 +450,16 @@ export async function POST(request: NextRequest) {
             data: { status: 'abandoned', currentOffer: customerOffer ?? bargainSession.currentOffer },
           }),
         ])
+        const retention = await issueRetentionDiscount(bargainSession.id).catch(() => null)
         return NextResponse.json({
           reply: farewell,
           decision: 'reject',
           sessionStatus: 'abandoned',
           terminal: true,
+          discountCode: retention?.code ?? null,
+          finalPrice: retention?.finalPrice ?? null,
+          purchaseUrl: retention?.purchaseUrl ?? null,
+          claimUrl: bargainSession.claimToken ? buildBargainClaimUrl(bargainSession.claimToken) : null,
         })
       }
 

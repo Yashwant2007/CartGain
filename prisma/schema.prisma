@@ -264,6 +264,9 @@ model Analytics {
   whatsappCount   Int       @default(0)
   emailCount      Int       @default(0)
   pushCount       Int       @default(0)
+  // Bargain-window outcomes, tracked separately from cart recovery.
+  bargainPurchases Int      @default(0) // count of purchases completed via a bargain code
+  bargainRevenue   Float    @default(0) // net value sealed by the negotiated window
 
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -406,6 +409,11 @@ model BargainSession {
   discountCode      String?   // Shopify discount code if accepted
   discountCodeCustomerEmail String?   // email the code was bound to (prevents sharing)
   discountCodeCartToken String?    // cartToken the code was bound to (prevents sharing)
+  claimToken        String?   @unique // opaque token for the post-bargain purchase-window link
+  purchaseUrl       String?   // checkout link that applies the issued code (purchase window)
+  purchasedAt       DateTime? // when an order confirmed using this bargain code
+  purchasedOrderId  String?   @unique // Shopify order id — idempotent purchase attribution
+  purchaseValue     Float?    // recognized net value of the bargain purchase
   attemptsUsed      Int       @default(0)
   status            String    @default("active") // active, accepted, rejected, expired, abandoned
   language          String    @default("auto") // auto, en, hinglish, hi, ta, te, bn, mr, gu, kn, ml, pa, or
@@ -624,6 +632,8 @@ model BargainRevenueShareEvent {
   netAmount         Float    // finalPrice — rev share base
   revSharePercent   Float    // rate locked at event time
   revShareAmount    Float    // netAmount × revSharePercent / 100
+  shopifyOrderId    String?  // order that confirmed the deal (null until purchased)
+  purchasedAt       DateTime? // when the deal's purchase was confirmed
   invoiceId         String?  // null = pending billing; set when invoiced
   createdAt         DateTime @default(now())
 

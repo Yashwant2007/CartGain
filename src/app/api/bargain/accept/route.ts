@@ -6,6 +6,7 @@ import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { assertSessionOwnership } from '@/lib/bargain/session-bind'
 import { getBargainGate, decideDealMode, recordBargainDealOps, BARGAIN_DEALS_EXHAUSTED } from '@/lib/bargain/gate'
 import { computeMinPrice } from '@/lib/services/bargain'
+import { generateBargainCode, buildBargainCheckoutUrl } from '@/lib/bargain/purchase'
 import { fetchShopifyProductPrice, fetchShopifyProductDetail } from '@/lib/shopify'
 import { buildExecutablePrice } from '@/lib/financial-safety'
 import { validateOffer } from '@/lib/bargain/offer-validation'
@@ -61,6 +62,14 @@ export async function POST(request: NextRequest) {
         ),
         discountCode: bargainSession.discountCode,
         shopifyStatus: 'created',
+        purchaseUrl:
+          bargainSession.purchaseUrl ??
+          buildBargainCheckoutUrl({
+            domain: bargainSession.store.domain,
+            code: bargainSession.discountCode,
+            variantId: bargainSession.variantId,
+            quantity: bargainSession.bulkQuantity,
+          }),
         currency: bargainSession.store.currency,
         expiresAt: bargainSession.expiredAt.toISOString(),
         message: `Deal already locked at ${bargainSession.store.currency} ${(bargainSession.finalPrice ?? bargainSession.originalPrice).toFixed(2)}! Use code: ${bargainSession.discountCode}`,
@@ -253,7 +262,7 @@ export async function POST(request: NextRequest) {
     if (claim.count === 0) {
       const refreshed = await prisma.bargainSession.findUnique({
         where: { id: bargainSession.id },
-        select: { status: true, discountCode: true, finalPrice: true, originalPrice: true },
+        select: { status: true, discountCode: true, finalPrice: true, originalPrice: true, purchaseUrl: true, variantId: true, bulkQuantity: true },
       })
       if (refreshed?.status === 'accepted' && refreshed.discountCode) {
         return NextResponse.json({
@@ -261,6 +270,14 @@ export async function POST(request: NextRequest) {
           finalPrice: refreshed.finalPrice ?? refreshed.originalPrice,
           discountCode: refreshed.discountCode,
           shopifyStatus: 'created',
+          purchaseUrl:
+            refreshed.purchaseUrl ??
+            buildBargainCheckoutUrl({
+              domain: bargainSession.store.domain,
+              code: refreshed.discountCode,
+              variantId: refreshed.variantId,
+              quantity: refreshed.bulkQuantity,
+            }),
           currency: bargainSession.store.currency,
           message: 'Deal already locked — code issued.',
         })
@@ -273,7 +290,7 @@ export async function POST(request: NextRequest) {
     }
 
     const discountPercent = executable.discountPercent
-    const code = `BARGAIN-${bargainSession.id.slice(-6).toUpperCase()}`
+    const code = generateBargainCode()
     const customerEmail = bargainSession.customerEmail
     const cartToken = bargainSession.cartToken
 
@@ -312,6 +329,12 @@ export async function POST(request: NextRequest) {
 
     // Commit the acceptance atomically: meters + system message + session update
     // guarded by the 'accepting' CAS so a racing request cannot double-meter.
+    const purchaseUrl = buildBargainCheckoutUrl({
+      domain: bargainSession.store.domain,
+      code,
+      variantId: bargainSession.variantId,
+      quantity: executable.bulkQuantity,
+    })
     await prisma.$transaction([
       ...recordBargainDealOps(gate, bargainSession.id, currentPrice, executable.finalPrice, dealMode as 'included' | 'overage'),
       prisma.bargainMessage.create({
@@ -344,6 +367,7 @@ export async function POST(request: NextRequest) {
           discountCode: code,
           discountCodeCustomerEmail: customerEmail,
           discountCodeCartToken: cartToken,
+          purchaseUrl,
         },
       }),
     ])
@@ -354,6 +378,7 @@ export async function POST(request: NextRequest) {
       discountPercent,
       discountCode: shopifyCode.code,
       shopifyStatus: shopifyCode.status,
+      purchaseUrl,
       currency: bargainSession.store.currency,
       expiresAt: bargainSession.expiredAt.toISOString(),
       message:

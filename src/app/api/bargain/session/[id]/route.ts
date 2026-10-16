@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { issueRetentionDiscount } from '@/lib/bargain/purchase'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,13 +33,15 @@ export async function GET(
       return NextResponse.json({ message: 'Session not found' }, { status: 404 })
     }
 
-    // Expire it if past due (lazy expiry)
+    // Expire it if past due (lazy expiry). An expired negotiation still leaves
+    // the customer with the last price we offered, so they can complete later.
     let status = bargainSession.status
     if (status === 'active' && bargainSession.expiredAt < new Date()) {
       await prisma.bargainSession.update({
         where: { id: bargainSession.id },
         data: { status: 'expired' },
       })
+      await issueRetentionDiscount(bargainSession.id).catch(() => null)
       status = 'expired'
     }
 
@@ -48,6 +51,7 @@ export async function GET(
       originalPrice: bargainSession.originalPrice,
       finalPrice: bargainSession.finalPrice,
       discountCode: bargainSession.discountCode,
+      purchaseUrl: bargainSession.purchaseUrl,
       attemptsUsed: bargainSession.attemptsUsed,
       expiresAt: bargainSession.expiredAt.toISOString(),
       messages: bargainSession.messages,
