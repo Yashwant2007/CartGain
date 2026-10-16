@@ -1,4 +1,4 @@
-import { generateBargainDiscountCode } from '@/lib/bargain/discount'
+import { generateBargainDiscountCode, buildCustomerSelection } from '@/lib/bargain/discount'
 
 jest.mock('@/lib/shopify', () => ({
   getAccessToken: jest.fn(),
@@ -67,5 +67,37 @@ describe('generateBargainDiscountCode — financial safety', () => {
     const result = await generateBargainDiscountCode({ ...baseOpts, floorPrice: 800 })
     expect(result.status).toBe('pending')
     expect(result.code).toBe('BARGAIN-ABC123')
+  })
+
+  it('never corrupts the code with binding metadata in the pending path', async () => {
+    (getAccessToken as jest.Mock).mockResolvedValue(null)
+    const result = await generateBargainDiscountCode({
+      ...baseOpts,
+      floorPrice: 800,
+      customerEmail: 'buyer@example.com',
+      cartToken: 'cart-1',
+    })
+    expect(result.status).toBe('pending')
+    expect(result.code).toBe('BARGAIN-ABC123')
+  })
+})
+
+describe('buildCustomerSelection', () => {
+  it('binds to a specific customer when a Shopify id is available', () => {
+    expect(buildCustomerSelection('123456')).toEqual({
+      customers: { add: ['gid://shopify/Customer/123456'] },
+    })
+  })
+
+  it('accepts an already-formed customer GID', () => {
+    expect(buildCustomerSelection('gid://shopify/Customer/999')).toEqual({
+      customers: { add: ['gid://shopify/Customer/999'] },
+    })
+  })
+
+  it('falls back to all-customers (single-use, not customer-bound) without an id', () => {
+    expect(buildCustomerSelection(null)).toEqual({ all: true })
+    expect(buildCustomerSelection(undefined)).toEqual({ all: true })
+    expect(buildCustomerSelection('  ')).toEqual({ all: true })
   })
 })

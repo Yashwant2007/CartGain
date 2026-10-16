@@ -25,6 +25,9 @@ jest.mock('@/lib/db', () => ({
     dataAccessLog: {
       create: jest.fn(),
     },
+    optOut: {
+      findFirst: jest.fn(async () => null),
+    },
   },
 }))
 

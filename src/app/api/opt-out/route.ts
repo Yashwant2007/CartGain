@@ -3,10 +3,70 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { verifyOptOutToken, normalizeOptOutEmail, normalizeOptOutPhone } from '@/lib/opt-out'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const PHONE_RE = /^\+?\d{8,15}$/
+
+function confirmationHtml(contact: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Unsubscribed</title></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;margin:0;padding:40px 16px;">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+    <div style="font-size:44px;margin-bottom:12px;">✅</div>
+    <h1 style="font-size:20px;color:#0f172a;margin:0 0 12px;">You're unsubscribed</h1>
+    <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 8px;">We'll stop sending recovery and reminder messages to <strong>${contact}</strong>.</p>
+    <p style="color:#94a3b8;font-size:13px;margin:0;">You can close this window.</p>
+  </div>
+</body></html>`
+}
+
+async function recordOptOut(storeId: string, email: string | null, phone: string | null): Promise<void> {
+  const data: any = { storeId, reason: 'customer_request' }
+  if (email) data.email = normalizeOptOutEmail(email)
+  if (phone) data.phone = normalizeOptOutPhone(phone)
+
+  if (data.email) {
+    const existing = await prisma.optOut.findUnique({
+      where: { storeId_email: { storeId, email: data.email } },
+    })
+    if (!existing) await prisma.optOut.create({ data })
+  } else if (data.phone) {
+    const existing = await prisma.optOut.findUnique({
+      where: { storeId_phone: { storeId, phone: data.phone } },
+    })
+    if (!existing) await prisma.optOut.create({ data })
+  }
+}
+
+// GET /api/opt-out
+//   ?t=<signed token>  → public one-click unsubscribe from an email/WhatsApp link
+//   (no token)         → authenticated merchant view of the store's opt-out list
+export async function GET(request: NextRequest) {
+  const token = request.nextUrl.searchParams.get('t')
+
+  if (token) {
+    try {
+      const payload = verifyOptOutToken(token)
+      if (!payload) {
+        return new NextResponse('This unsubscribe link is invalid or has been altered.', { status: 400 })
+      }
+      const store = await prisma.store.findUnique({ where: { id: payload.storeId }, select: { id: true } })
+      if (!store) {
+        return new NextResponse('Store not found.', { status: 404 })
+      }
+      await recordOptOut(payload.storeId, payload.email ?? null, payload.phone ?? null)
+      return new NextResponse(confirmationHtml(payload.email || payload.phone || 'this contact'), {
+        status: 200,
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      })
+    } catch (error) {
+      console.error('Opt-out (token) error:', error)
+      return new NextResponse('Something went wrong.', { status: 500 })
+    }
+  }
+
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
@@ -17,27 +77,30 @@ export async function GET() {
       where: { userId: session.user.id },
       orderBy: { createdAt: 'asc' },
     })
-
     if (!store) {
-      return NextResponse.json({ message: 'No store found' }, { status: 404 })
+      return NextResponse.json({ message: 'Store not found' }, { status: 404 })
     }
 
     const optOuts = await prisma.optOut.findMany({
       where: { storeId: store.id },
       orderBy: { optedOutAt: 'desc' },
-      take: 100,
     })
 
     return NextResponse.json({ optOuts })
   } catch (error) {
-    console.error('List opt-outs error:', error)
+    console.error('Opt-out list error:', error)
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })
   }
 }
 
+// POST /api/opt-out
+//   + valid signed token (body.t or query t)  → public unsubscribe (JSON)
+//   + authenticated merchant session          → merchant-initiated opt-out
+// Anything else is rejected: an unauthenticated, unsigned request must never be
+// able to suppress contacts.
 export async function POST(request: NextRequest) {
   try {
-    const rate = await checkSimpleRateLimit(`optout_${request.headers.get('x-forwarded-for') || 'unknown'}`)
+    const rate = await checkSimpleRateLimit(`bargain_optout_${request.headers.get('x-forwarded-for') || 'unknown'}`)
     if (!rate.allowed) {
       return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
         status: 429,
@@ -45,50 +108,59 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const body = await request.json()
-    const { storeId, email, phone } = body
+    const body = await request.json().catch(() => ({}))
+    const token: string | null = body?.t || request.nextUrl.searchParams.get('t')
 
-    if (!storeId || typeof storeId !== 'string') {
-      return NextResponse.json({ message: 'storeId is required' }, { status: 400 })
+    let storeId: string | null = null
+    let email: string | null = null
+    let phone: string | null = null
+
+    if (token) {
+      const payload = verifyOptOutToken(token)
+      if (!payload) {
+        return NextResponse.json({ message: 'Invalid or tampered opt-out token' }, { status: 403 })
+      }
+      storeId = payload.storeId
+      email = payload.email ?? null
+      phone = payload.phone ?? null
+    } else {
+      // No token → must be an authenticated merchant acting on their own store.
+      const session = await getServerSession(authOptions)
+      if (!session?.user?.id) {
+        return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      }
+      const store = await prisma.store.findFirst({
+        where: { userId: session.user.id },
+        orderBy: { createdAt: 'asc' },
+      })
+      if (!store || store.id !== body?.storeId) {
+        return NextResponse.json({ message: 'Forbidden' }, { status: 403 })
+      }
+      storeId = store.id
+      if (body?.email) {
+        if (typeof body.email !== 'string' || body.email.length > 254 || !EMAIL_RE.test(body.email)) {
+          return NextResponse.json({ message: 'A valid email is required' }, { status: 400 })
+        }
+        email = body.email
+      }
+      if (body?.phone) {
+        if (typeof body.phone !== 'string' || !PHONE_RE.test(body.phone.replace(/[\s-]/g, ''))) {
+          return NextResponse.json({ message: 'A valid phone number is required' }, { status: 400 })
+        }
+        phone = body.phone
+      }
     }
 
-    if (!email && !phone) {
-      return NextResponse.json({ message: 'email or phone is required' }, { status: 400 })
+    if (!storeId || (!email && !phone)) {
+      return NextResponse.json({ message: 'storeId and email or phone are required' }, { status: 400 })
     }
 
-    if (email && (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
-      return NextResponse.json({ message: 'A valid email is required' }, { status: 400 })
-    }
-
-    if (phone && (typeof phone !== 'string' || !/^\+?\d{8,15}$/.test(phone.replace(/[\s-]/g, '')))) {
-      return NextResponse.json({ message: 'A valid phone number is required' }, { status: 400 })
-    }
-
-    const store = await prisma.store.findUnique({ where: { id: storeId } })
+    const store = await prisma.store.findUnique({ where: { id: storeId }, select: { id: true } })
     if (!store) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404 })
     }
 
-    const data: any = { storeId, reason: 'customer_request' }
-    if (email) data.email = email.toLowerCase().trim()
-    if (phone) data.phone = phone.replace(/\D/g, '')
-
-    if (data.email) {
-      const existing = await prisma.optOut.findUnique({
-        where: { storeId_email: { storeId, email: data.email } },
-      })
-      if (!existing) {
-        await prisma.optOut.create({ data })
-      }
-    } else if (data.phone) {
-      const existing = await prisma.optOut.findUnique({
-        where: { storeId_phone: { storeId, phone: data.phone } },
-      })
-      if (!existing) {
-        await prisma.optOut.create({ data })
-      }
-    }
-
+    await recordOptOut(storeId, email, phone)
     return NextResponse.json({ success: true, message: 'Opt-out recorded' })
   } catch (error) {
     console.error('Opt-out error:', error)

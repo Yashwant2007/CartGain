@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainStartSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerContext, SUPPORTED_LANGUAGES, type NegotiationContext } from '@/lib/services/bargain'
-import { currencySymbolFor } from '@/lib/bargain/i18n'
+import { currencySymbolFor, CURRENCY_SYMBOLS } from '@/lib/bargain/i18n'
 import { buildGoalContextForNegotiation } from '@/lib/bargain/goals'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
@@ -62,13 +62,21 @@ export async function POST(request: NextRequest) {
 
     // The Shopify shop's real currency (from the Liquid embed / theme currency)
     // is authoritative — the storestamp we created the store with may lag behind
-    // (e.g. a USD shop created while the app default was INR). Keep the store
-    // record in sync so quoted prices, counters and replies use the shop's
-    // actual symbol instead of a stale default.
-    if (data.currency && data.currency !== store.currency) {
+    // (e.g. a shop created while the app default was stale). This is a PUBLIC,
+    // unauthenticated route, so the client value is only accepted when it is a
+    // real supported currency AND the store is still on the schema default
+    // ("USD") — i.e. it has never been confirmed to a currency. Once a merchant
+    // store holds a non-default currency, this route can no longer rewrite it.
+    const requestedCurrency = typeof data.currency === 'string' ? data.currency.toUpperCase() : null
+    if (
+      requestedCurrency &&
+      requestedCurrency !== store.currency &&
+      store.currency === 'USD' &&
+      Object.prototype.hasOwnProperty.call(CURRENCY_SYMBOLS, requestedCurrency)
+    ) {
       store = await prisma.store.update({
         where: { id: store.id },
-        data: { currency: data.currency },
+        data: { currency: requestedCurrency },
       })
     }
 
@@ -92,19 +100,16 @@ export async function POST(request: NextRequest) {
       originalPrice = actualPrice
     }
 
-    // Load config — auto-create with bargaining ON. The storefront widget renders
-    // for every connected active store (see embed page), so reaching this endpoint
-    // is itself the signal that bargaining should be live. Previously a stale
-    // BargainConfig.enabled=false (created before the flag defaulted to true, or
-    // toggled off in the dashboard while the widget still rendered) produced the
-    // "Bargaining is not enabled for this store" dead-end: the button showed but a
-    // click always errored. We reconcile to enabled=true so a storefront bargain
-    // always just works. Merchants who truly want bargaining OFF should remove the
-    // widget block from their theme (the embed hides itself for disabled stores).
+    // Load config — auto-create on first contact with bargaining ON, but NEVER
+    // override an existing config. This route is public/unauthenticated, so
+    // force-enabling here would let any anonymous caller re-enable bargaining on
+    // a store whose merchant deliberately turned it OFF. A disabled store now
+    // correctly fails the `isBargainable` gate below. Merchants who want
+    // bargaining off simply leave `enabled: false` (the embed also hides itself).
     const config = await prisma.bargainConfig.upsert({
       where: { storeId: data.storeId },
       create: { storeId: data.storeId, enabled: true },
-      update: { enabled: true },
+      update: {},
     })
 
     // Plan gate — bargain sessions are a hard quota on every tier.

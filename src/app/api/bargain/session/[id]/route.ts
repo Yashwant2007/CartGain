@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { issueRetentionDiscount } from '@/lib/bargain/purchase'
+import { assertSessionOwnership } from '@/lib/bargain/session-bind'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/bargain/session/[id] — customer polls session status (no auth — storefront)
+// GET /api/bargain/session/[id] — customer polls session status (no auth —
+// storefront). The caller must reproduce one of the session's buyer identities
+// (fingerprint / email / cart token) — otherwise the response would leak the
+// discount code, final price and full transcript to anyone holding the id.
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -31,6 +35,18 @@ export async function GET(
 
     if (!bargainSession) {
       return NextResponse.json({ message: 'Session not found' }, { status: 404 })
+    }
+
+    // Ownership binding — mirrors /offer and /accept. Anonymous/legacy sessions
+    // with no stored identity remain readable (cannot do better); everything
+    // else requires a matching identity handle.
+    const ownership = assertSessionOwnership(bargainSession, {
+      customerFingerprint: request.nextUrl.searchParams.get('customerFingerprint'),
+      customerEmail: request.nextUrl.searchParams.get('customerEmail'),
+      cartToken: request.nextUrl.searchParams.get('cartToken'),
+    })
+    if (!ownership.ok) {
+      return NextResponse.json({ message: ownership.reason }, { status: 403 })
     }
 
     // Expire it if past due (lazy expiry). An expired negotiation still leaves

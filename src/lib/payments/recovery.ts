@@ -5,6 +5,7 @@ import { sendWhatsAppMessage } from '@/lib/services/whatsapp'
 import { sendEmail } from '@/lib/services/email'
 import { getMerchantConfig } from '@/lib/rto/config'
 import { logDataAccess } from '@/lib/data-protection'
+import { isContactOptedOut } from '@/lib/opt-out'
 import type { GatewayPaymentEvent, FailureCategory } from './types'
 import { DEFAULT_RETRY_SCHEDULE } from './types'
 
@@ -52,11 +53,26 @@ export async function handlePaymentFailure(
   const nextRetryAt = new Date(now.getTime() + schedule.delayMinutes * 60 * 1000)
   const token = generateSecureToken(`${attempt.id}:${event.orderRef}`)
   const resumeUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/r/resume-payment/${token}`
-
   const channels = (config.paymentChannelPriority.length > 0
     ? config.paymentChannelPriority
-    : customerContact?.phone ? ['whatsapp'] : ['email']).filter((c: string) => c !== 'sms')
+    : customerContact?.phone
+      ? ['whatsapp']
+      : ['email']).filter((c: string) => c !== 'sms')
 
+  // Consent gate: a customer who opted out must never be re-contacted on any
+  // channel. Checked once against every identity we hold for the failure.
+  if (await isContactOptedOut(event.merchantId, { email: customerContact?.email, phone: customerContact?.phone })) {
+    await logDataAccess({
+      actorType: 'system',
+      action: 'recovery_suppressed_opt_out',
+      resourceType: 'payment_attempt',
+      resourceId: attempt.id,
+      actorId: event.merchantId,
+      purpose: 'Payment failure recovery',
+      metadata: { reason: 'opted_out' },
+    })
+    return
+  }
   const customerFriendlyMessages: Record<string, string> = {
     bank_downtime: 'Your bank was temporarily unavailable. Please try again — your cart is saved!',
     upi_timeout: 'Your UPI payment timed out. Try again or use a different payment method.',

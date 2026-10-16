@@ -5,6 +5,7 @@ import { sendWhatsAppMessage } from '@/lib/services/whatsapp'
 import { sendEmail } from '@/lib/services/email'
 import { getMerchantConfig, parseWeights, parseThresholds } from './config'
 import { logDataAccess } from '@/lib/data-protection'
+import { isContactOptedOut } from '@/lib/opt-out'
 import type { ScoringInput, AddressInfo, OrderInfo, CustomerInfo, VelocitySignals } from './types'
 
 export interface ScoreOrderParams {
@@ -98,6 +99,20 @@ async function sendNudge(params: NudgeParams): Promise<void> {
   const prepaidUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/r/cod-to-prepaid/${token}`
 
   const channels = customer.phone ? ['whatsapp'] : ['email']
+
+  // Consent gate — verified opt-out blocks COD confirmation nudges too.
+  if (await isContactOptedOut(storeId, { email: customer.email, phone: customer.phone })) {
+    await logDataAccess({
+      actorType: 'system',
+      action: 'nudge_suppressed_opt_out',
+      resourceType: 'cod_nudge',
+      resourceId: orderId,
+      actorId: storeId,
+      purpose: 'COD to prepaid nudge',
+      metadata: { reason: 'opted_out' },
+    })
+    return
+  }
 
   for (const channel of channels) {
     let sent = false

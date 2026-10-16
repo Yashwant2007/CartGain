@@ -294,6 +294,17 @@ export async function POST(request: NextRequest) {
     const customerEmail = bargainSession.customerEmail
     const cartToken = bargainSession.cartToken
 
+    // If we know the Shopify customer for this cart, bind the code to them so a
+    // shared screenshot can't be redeemed by someone else.
+    let shopifyCustomerId: string | null = null
+    if (cartToken) {
+      const cart = await prisma.cart.findUnique({
+        where: { storeId_cartId: { storeId: bargainSession.storeId, cartId: cartToken } },
+        select: { customerId: true },
+      })
+      shopifyCustomerId = cart?.customerId ?? null
+    }
+
     // Create the Shopify discount code BEFORE committing the acceptance. On
     // failure the claim is rolled back to 'active' so the customer can retry —
     // an 'accepted' session must never carry a code Shopify does not know.
@@ -311,8 +322,8 @@ export async function POST(request: NextRequest) {
         cartToken,
         bulkQuantity: executable.bulkQuantity,
         floorPrice: minPrice,
-      })
-    } catch (err: any) {
+        shopifyCustomerId,
+      })    } catch (err: any) {
       console.error('[BARGAIN_ACCEPT_SHOPIFY]', err?.message ?? err)
       shopifyCode = { code, status: 'failed', error: err?.message ?? 'unknown' }
     }

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
-import { logWarn } from '@/lib/observability/logger'
+import { logWarn, logInfo } from '@/lib/observability/logger'
+import { parseWhatsAppEvents, isWhatsAppOptOutText } from '@/lib/whatsapp/inbound'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,8 +60,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-const MESSAGE_ENTRYPOINTS = ['messages', 'message_templates', 'message_template_status_update', 'account_alerts']
-
 export async function POST(request: NextRequest) {
   try {
     const rate = await checkSimpleRateLimit(`webhook_whatsapp_${request.headers.get('x-forwarded-for') || 'unknown'}`)
@@ -78,26 +77,49 @@ export async function POST(request: NextRequest) {
 
     const body = JSON.parse(rawBody)
 
-    const entry = Array.isArray(body?.entry) ? body.entry[0] : null
-    const changes = Array.isArray(entry?.changes) ? entry.changes[0] : null
-    const value = changes?.value
-    const field = changes?.field
-    const entrypoint = Array.isArray(value?.entrypoint) ? value.entrypoint[0] : null
-
-    if (!MESSAGE_ENTRYPOINTS.includes(entrypoint) || typeof field !== 'string') {
+    const events = parseWhatsAppEvents(body)
+    if (events.length === 0) {
       return NextResponse.json({ status: 'ignored' })
     }
 
-    // Store the incoming message payload for the recovery pipeline.
-    const { redisSet } = await import('@/lib/redis')
-    await redisSet('whatsapp:inbound', JSON.stringify({
-      receivedAt: new Date().toISOString(),
-      field,
-      entrypoint,
-      body,
-    }), 24 * 60 * 60 * 1000).catch(() => {})
+    // Persist every event to a bounded, append-only list so none are lost
+    // (the previous single `redisSet` key silently overwrote all but the last
+    // event). Status events update delivery tracking; inbound messages are the
+    // customer's reply channel and may carry an opt-out.
+    const { redisLPush } = await import('@/lib/redis')
+    const receivedAt = new Date().toISOString()
+    let delivered = 0
+    let inboundMessages = 0
 
-    return NextResponse.json({ status: 'ok' })
+    for (const event of events) {
+      await redisLPush('whatsapp:inbound', JSON.stringify({ receivedAt, ...event }), 500).catch(() => {})
+
+      if (event.kind === 'status') {
+        delivered++
+        logInfo('whatsapp', 'delivery_status', `WhatsApp delivery status: ${event.status}`, {
+          wamid: event.wamid,
+          status: event.status,
+        })
+      } else {
+        inboundMessages++
+        if (isWhatsAppOptOutText(event.text)) {
+          // NOTE: mapping an inbound WhatsApp number → store needs a per-store
+          // phone_number_id registry (not yet modelled). Until then we surface
+          // the opt-out loudly instead of silently ignoring it.
+          logWarn('whatsapp', 'inbound_opt_out', 'Inbound WhatsApp opt-out keyword received', {
+            from: event.from,
+            phoneNumberId: event.phoneNumberId,
+          })
+        } else {
+          logInfo('whatsapp', 'inbound_message', 'Inbound WhatsApp message received', {
+            from: event.from,
+            phoneNumberId: event.phoneNumberId,
+          })
+        }
+      }
+    }
+
+    return NextResponse.json({ status: 'ok', statuses: delivered, messages: inboundMessages })
   } catch {
     return NextResponse.json({ status: 'error' }, { status: 400 })
   }

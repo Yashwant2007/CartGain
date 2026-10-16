@@ -5,6 +5,7 @@ import { generateSecureToken } from '@/lib/links'
 import { sendWhatsAppMessage } from '@/lib/services/whatsapp'
 import { sendEmail } from '@/lib/services/email'
 import { acquireLock, releaseLock } from '@/lib/job-lock'
+import { isContactOptedOut } from '@/lib/opt-out'
 import { DEFAULT_RETRY_SCHEDULE } from '@/lib/payments/types'
 import type { FailureCategory } from '@/lib/payments/types'
 
@@ -58,6 +59,24 @@ export async function processRetryPayments(): Promise<RetryResult> {
       const channels = (config.paymentChannelPriority.length > 0
         ? config.paymentChannelPriority
         : ['whatsapp']).filter((c: string) => c !== 'sms')
+
+      // Consent gate — never re-contact a customer who opted out. We look up the
+      // cart once and suppress the whole campaign (removing it from the pending
+      // set) so it is not retried on a later run.
+      const cartContact = await prisma.cart.findFirst({
+        where: { storeId: campaign.attempt.merchantId, cartId: campaign.attempt.orderRef },
+        select: { customerEmail: true, customerPhone: true },
+      })
+      if (await isContactOptedOut(campaign.attempt.merchantId, {
+        email: cartContact?.customerEmail,
+        phone: cartContact?.customerPhone,
+      })) {
+        await prisma.paymentRecoveryCampaign.update({
+          where: { id: campaign.id },
+          data: { status: 'suppressed', nextRetryAt: null },
+        })
+        continue
+      }
 
       const category = campaign.attempt.failureCategory as FailureCategory
       const customerFriendlyMessages: Record<string, string> = {

@@ -112,7 +112,7 @@ export async function sendEmail({
 }
 
 export const EmailTemplates = {
-  abandoned: (customerName: string, items: any[], cartTotal: number, cartUrl: string, storeName: string, currencySymbol = '₹', aiBody?: string) => `
+  abandoned: (customerName: string, items: any[], cartTotal: number, cartUrl: string, storeName: string, currencySymbol = '₹', aiBody?: string, unsubscribeUrl?: string) => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -166,7 +166,7 @@ export const EmailTemplates = {
 
       <div style="text-align: center; border-top: 1px solid #f0f0f5; padding-top: 20px; margin-top: 8px;">
         <p style="font-size: 12px; color: #94a3b8; margin: 0 0 4px;">This email was sent because you started a checkout at <strong>${storeName}</strong>.</p>
-        <p style="font-size: 12px; color: #94a3b8; margin: 0 0 4px;"><a href="${cartUrl}?unsubscribe=true" style="color: #94a3b8;">Unsubscribe from recovery messages</a></p>
+        <p style="font-size: 12px; color: #94a3b8; margin: 0 0 4px;"><a href="${unsubscribeUrl || `${cartUrl}?unsubscribe=true`}" style="color: #94a3b8;">Unsubscribe from recovery messages</a></p>
         <p style="font-size: 12px; color: #94a3b8; margin: 0;">© ${new Date().getFullYear()} ${storeName}. All rights reserved.</p>
       </div>
     </div>
@@ -175,7 +175,7 @@ export const EmailTemplates = {
 </html>
   `,
 
-  withDiscount: (customerName: string, items: any[], cartTotal: number, discountCode: string, discountPercent: number, cartUrl: string, storeName: string, currencySymbol = '₹') => `
+  withDiscount: (customerName: string, items: any[], cartTotal: number, discountCode: string, discountPercent: number, cartUrl: string, storeName: string, currencySymbol = '₹', unsubscribeUrl?: string) => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -209,7 +209,7 @@ export const EmailTemplates = {
     </p>
 
     <div class="footer">
-      <p><a href="${cartUrl}?unsubscribe=true" style="color: #999;">Unsubscribe</a></p>
+      <p><a href="${unsubscribeUrl || `${cartUrl}?unsubscribe=true`}" style="color: #999;">Unsubscribe</a></p>
       <p>© ${new Date().getFullYear()} ${storeName}. All rights reserved.</p>
     </div>
   </div>
@@ -271,9 +271,10 @@ export async function sendDiscountEmail(
   discountPercent: number,
   cartUrl: string,
   storeName: string,
-  currencySymbol = '₹'
+  currencySymbol = '₹',
+  unsubscribeUrl?: string
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const html = EmailTemplates.withDiscount(customerName, items, cartTotal, discountCode, discountPercent, cartUrl, storeName, currencySymbol)
+  const html = EmailTemplates.withDiscount(customerName, items, cartTotal, discountCode, discountPercent, cartUrl, storeName, currencySymbol, unsubscribeUrl)
   const text = `Hi ${customerName || 'there'}, here's ${discountPercent}% off your cart! Use code ${discountCode} at checkout: ${cartUrl}`
 
   return sendEmail({

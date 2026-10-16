@@ -28,6 +28,9 @@ jest.mock('@/lib/db', () => ({
     customer: {
       findFirst: jest.fn(),
     },
+    optOut: {
+      findFirst: jest.fn(async () => null),
+    },
   },
 }))
 

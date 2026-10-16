@@ -30,4 +30,22 @@ describe('Secure Link Tokens', () => {
     const token2 = generateSecureToken('same-data')
     expect(token1).not.toBe(token2)
   })
+
+  it('fails closed in production when no secret is configured', () => {
+    const prevNodeEnv = process.env.NODE_ENV
+    const prevLink = process.env.LINK_SECRET
+    const prevNext = process.env.NEXTAUTH_SECRET
+    try {
+      // Force the "no secret" path in a production environment.
+      ;(process.env as any).NODE_ENV = 'production'
+      delete process.env.LINK_SECRET
+      delete process.env.NEXTAUTH_SECRET
+      expect(verifySecureToken('not-a-valid-token')).toBeNull()
+      expect(() => generateSecureToken('x')).toThrow()
+    } finally {
+      ;(process.env as any).NODE_ENV = prevNodeEnv
+      if (prevLink !== undefined) process.env.LINK_SECRET = prevLink
+      if (prevNext !== undefined) process.env.NEXTAUTH_SECRET = prevNext
+    }
+  })
 })

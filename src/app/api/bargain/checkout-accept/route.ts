@@ -8,6 +8,7 @@ import { validateOffer } from '@/lib/bargain/offer-validation'
 import { bargainCampaignStatus } from '@/lib/bargain/policy'
 import { track } from '@/lib/analytics/track'
 import { redisIncr, redisExpire } from '@/lib/redis'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,6 +57,18 @@ export async function OPTIONS(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const headers = corsHeaders(request.headers.get('origin'))
   try {
+    // Per-IP throttle. This endpoint mints codes from client-supplied prices and
+    // returns a distinguishable below-floor rejection, so unbounded probing
+    // could binary-search the merchant floor. The per-shop code budget (below)
+    // does not cover rejections; this does.
+    const rate = await checkSimpleRateLimit(`bargain_checkout_${request.headers.get('x-forwarded-for') || 'unknown'}`)
+    if (!rate.allowed) {
+      return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
+        status: 429,
+        headers: { ...headers, 'Retry-After': String(rate.retryAfter) },
+      })
+    }
+
     const body = await request.json()
     const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, discountPercent, code, orderLevel, bulkQuantity } = body
 

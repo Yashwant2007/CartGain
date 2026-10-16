@@ -1,6 +1,7 @@
 import prisma from '@/lib/db'
 import { logDataAccess, redactSensitive } from '@/lib/data-protection'
 import { sendEmail, EmailTemplates } from '@/lib/services/email'
+import { buildOptOutUrl } from '@/lib/opt-out'
 import { sanitizePhoneNumber } from '@/lib/utils'
 import { sendWhatsAppMessage, WhatsAppTemplates } from '@/lib/services/whatsapp'
 import { generateEmailContent, generateWhatsAppContent, generatePersonalizedDiscount } from '@/lib/services/ai'
@@ -495,7 +496,7 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
                 aiBody = ai.body
               }
             }
-            const emailHtml = EmailTemplates.abandoned(customerName, cartItems, cart.totalValue, cartUrl, store.name, currencySymbol, aiBody)
+            const emailHtml = EmailTemplates.abandoned(customerName, cartItems, cart.totalValue, cartUrl, store.name, currencySymbol, aiBody, buildOptOutUrl(appUrl, { storeId: store.id, email: cart.customerEmail }))
             const emailResult = await sendEmail({
               to: cart.customerEmail!,
               subject: aiSubject || `🛍️ ${customerName}, your ${store.name} cart is waiting!`,

@@ -70,4 +70,23 @@ export async function redisSetNX(key: string, value: string, ttlMs: number): Pro
   } catch { return false }
 }
 
+// Append to a Redis list, optionally trimming it to the newest `maxLen` entries.
+// Used for inbound event streams where every event matters (unlike redisSet,
+// which would overwrite the previous value).
+export async function redisLPush(key: string, value: string, maxLen?: number): Promise<number> {
+  const r = getRedis()
+  if (!r) return 0
+  try {
+    const len = await r.lpush(key, value)
+    if (maxLen && len > maxLen) await r.ltrim(key, 0, maxLen - 1)
+    return len
+  } catch { return 0 }
+}
+
+export async function redisLRange(key: string, start: number, stop: number): Promise<string[]> {
+  const r = getRedis()
+  if (!r) return []
+  try { return await r.lrange(key, start, stop) } catch { return [] }
+}
+
 export { getRedis }

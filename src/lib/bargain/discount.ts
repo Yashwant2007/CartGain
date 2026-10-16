@@ -14,7 +14,7 @@ type Store = {
   shopifyTokenExpiresAt: Date | null
 }
 
-// Discount code with customer binding to prevent sharing
+// Discount code with (optional) customer binding to reduce sharing.
 export type GeneratedBargainDiscount = {
   code: string
   status: 'created' | 'pending' | 'failed'
@@ -22,6 +22,23 @@ export type GeneratedBargainDiscount = {
   // Customer binding: if set, the code can only be used by this customer
   customerEmail?: string
   cartToken?: string
+}
+
+// Shopify `customerSelection` for a discount. When we hold a Shopify customer id
+// we bind the code to that customer so a shared screenshot cannot be redeemed by
+// anyone else. Without a customer identity we can only scope it to "all
+// customers" — the code is still single-use globally (usageLimit 1,
+// appliesOncePerCustomer true), but it is NOT customer-bound, so treat it as
+// confidential rather than shareable.
+export function buildCustomerSelection(
+  shopifyCustomerId?: string | null,
+): { all: true } | { customers: { add: string[] } } {
+  const id = shopifyCustomerId?.trim()
+  if (id) {
+    const gid = id.startsWith('gid://') ? id : `gid://shopify/Customer/${id}`
+    return { customers: { add: [gid] } }
+  }
+  return { all: true }
 }
 
 /**
@@ -39,9 +56,9 @@ export type GeneratedBargainDiscount = {
  *   the merchant floor). The `minimumSubtotal` is bound to
  *   `originalPrice * bulkQuantity` so a bulk-negotiated per-unit price CANNOT be
  *   applied to a 1-unit purchase below the single-unit floor.
- * - CRITICAL: If customerEmail or cartToken is provided, the code is tagged
- *   with metafields so it can only be used by that specific customer.
- *   Prevents code sharing on Telegram/deals groups.
+ * - Customer binding: when `shopifyCustomerId` is supplied the code is bound to
+ *   that customer (only they can redeem it). Otherwise it is single-use globally
+ *   but not customer-bound — see buildCustomerSelection.
  */
 export async function generateBargainDiscountCode(opts: {
   store: Store
@@ -55,6 +72,7 @@ export async function generateBargainDiscountCode(opts: {
   cartToken?: string | null
   bulkQuantity?: number | null
   floorPrice?: number | null
+  shopifyCustomerId?: string | null
 }): Promise<GeneratedBargainDiscount> {
   const { store, shopifyProductId, variantId, originalPrice, finalPrice, code, customerEmail, cartToken } = opts
   const bulkQuantity = Math.max(1, Math.floor(opts.bulkQuantity ?? 1))
@@ -94,14 +112,13 @@ export async function generateBargainDiscountCode(opts: {
   }
 
   if (!accessToken) {
-    // Not Shopify-connected — code stored locally, merchant can sync later
-    // Still bind it to customer if provided (stored as metadata)
+    // Not Shopify-connected — code stored locally, merchant can sync later.
+    // Return the code UNCHANGED: never append the customer identity to it (that
+    // produced bogus codes like `CG-ABC:me@x.com:` that no checkout could use).
     return {
       code,
       status: 'pending',
       error: 'Shopify not connected — code stored pending sync',
-      // Store customer binding in metadata for later sync
-      ...(customerEmail || cartToken ? { code: `${code}:${customerEmail || ''}:${cartToken || ''}` } : {}),
     }
   }
 
@@ -137,7 +154,7 @@ export async function generateBargainDiscountCode(opts: {
       endsAt: expiresAt,
       usageLimit: 1,
       appliesOncePerCustomer: true,
-      customerSelection: { all: true },
+      customerSelection: buildCustomerSelection(opts.shopifyCustomerId),
       eligibleProducts: scope === 'product' ? { productsV2: { productsToAdd: [productGid!] } } : undefined,
       variants: scope === 'variant' ? { productVariantsToAdd: [variantGid!] } : undefined,
       value: {
@@ -165,13 +182,16 @@ export async function generateBargainDiscountCode(opts: {
         error: userErrors[0].message || 'Shopify rejected the discount code',
       }
     }
-    // If customer binding provided, set metafields on the created code
-    if (customerEmail || cartToken) {
-      // The code was just created - set metafields for binding
-      // We'll do this via a separate GraphQL call
-      // For now, store the binding info and rely on appliesOncePerCustomer + metadata
+    // Customer binding is applied via customerSelection above (when we hold a
+    // Shopify customer id). There is no additional metafield step — Shopify has
+    // no supported metafield that restricts a code to an email/cart token, so we
+    // do not pretend otherwise.
+    return {
+      code,
+      status: 'created',
+      ...(customerEmail ? { customerEmail } : {}),
+      ...(cartToken ? { cartToken } : {}),
     }
-    return { code, status: 'created' }
   } catch (err: any) {
     return {
       code,

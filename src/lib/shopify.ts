@@ -2,6 +2,52 @@ import crypto from 'crypto'
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000 // refresh 5 min before expiry
 
+const SHOPIFY_MAX_RETRIES = 3
+const SHOPIFY_BASE_BACKOFF_MS = 500
+const SHOPIFY_MAX_BACKOFF_MS = 30_000
+
+// Shopify returns 429 (throttled) with a Retry-After header, and transient 5xx
+// during incidents. Without backing off we hammer the API, extend the throttle
+// window and fail recoveries that would have succeeded a second later.
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status === 430 || (status >= 500 && status < 600)
+}
+
+// Pure: milliseconds to wait before the next attempt. Honours Retry-After
+// (seconds OR an HTTP-date), otherwise exponential backoff. Capped so a bad
+// header can't stall a request for minutes.
+export function retryDelayMs(
+  response: { status: number; headers: { get(name: string): string | null } },
+  attempt: number,
+): number {
+  const retryAfter = response.headers.get('retry-after')
+  if (retryAfter) {
+    const seconds = Number(retryAfter)
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      return Math.min(seconds * 1000, SHOPIFY_MAX_BACKOFF_MS)
+    }
+    const date = Date.parse(retryAfter)
+    if (!Number.isNaN(date)) {
+      return Math.min(Math.max(date - Date.now(), 0), SHOPIFY_MAX_BACKOFF_MS)
+    }
+  }
+  return Math.min(SHOPIFY_BASE_BACKOFF_MS * 2 ** attempt, SHOPIFY_MAX_BACKOFF_MS)
+}
+
+// fetch() wrapper with bounded retry/backoff for Shopify rate limits. Retries
+// reuse the caller's `init` (including its AbortSignal timeout) — status-based
+// throttling never trips that timeout, so the signal is still live.
+async function shopifyFetch(input: string, init: RequestInit = {}, retries = SHOPIFY_MAX_RETRIES): Promise<Response> {
+  let res = await globalThis.fetch(input, init)
+  let attempt = 0
+  while (isRetryableStatus(res.status) && attempt < retries) {
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs(res, attempt)))
+    res = await globalThis.fetch(input, init)
+    attempt++
+  }
+  return res
+}
+
 export async function getAccessToken(store: {
   id: string
   domain: string
@@ -32,7 +78,7 @@ export async function getAccessToken(store: {
   try { refreshToken = decrypt(store.shopifyRefreshToken) } catch { return null }
 
   try {
-    const res = await fetch(`https://${store.domain}/admin/oauth/access_token`, {
+    const res = await shopifyFetch(`https://${store.domain}/admin/oauth/access_token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(10000),
@@ -140,7 +186,7 @@ export async function verifyShopifyAccessToken(accessToken: string): Promise<{
 }> {
   try {
     // Exchange token for shop domain
-    const response = await fetch(`https://api.shopify.com/admin/oauth/access_token`, {
+    const response = await shopifyFetch(`https://api.shopify.com/admin/oauth/access_token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -177,7 +223,7 @@ export async function createShopifyWebhook(
   webhookUrl: string
 ): Promise<boolean> {
   try {
-    const response = await fetch(`https://${shopDomain}/admin/api/2026-04/webhooks.json`, {
+    const response = await shopifyFetch(`https://${shopDomain}/admin/api/2026-04/webhooks.json`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -220,7 +266,7 @@ export async function createShopifyWebhookIfMissing(
   webhookUrl: string
 ): Promise<boolean> {
   try {
-    const listRes = await fetch(
+    const listRes = await shopifyFetch(
       `https://${shopDomain}/admin/api/2026-04/webhooks.json?topic=${encodeURIComponent(topic)}`,
       {
         headers: { 'X-Shopify-Access-Token': accessToken },
@@ -237,7 +283,7 @@ export async function createShopifyWebhookIfMissing(
 
       const stale = existing.find((w) => w.address !== webhookUrl)
       if (stale) {
-        const updateRes = await fetch(`https://${shopDomain}/admin/api/2026-04/webhooks/${stale.id}.json`, {
+        const updateRes = await shopifyFetch(`https://${shopDomain}/admin/api/2026-04/webhooks/${stale.id}.json`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -297,7 +343,7 @@ export async function fetchShopifyCarts(
   limit: number = 50
 ): Promise<any[]> {
   try {
-    const response = await fetch(
+    const response = await shopifyFetch(
       `https://${shopDomain}/admin/api/2026-04/carts.json?limit=${limit}`,
       {
         headers: {
@@ -322,7 +368,7 @@ export async function fetchAbandonedCheckouts(
 ): Promise<any[] | null> {
   try {
     const url = `https://${shopDomain}/admin/api/2026-04/abandoned_checkouts.json?limit=${limit}`
-    const response = await fetch(url, {
+    const response = await shopifyFetch(url, {
       headers: { 'X-Shopify-Access-Token': accessToken },
       signal: AbortSignal.timeout(10000),
     })
@@ -353,7 +399,7 @@ export async function fetchShopifyProductPrice(
   const url = `https://${store.domain}/admin/api/2026-04/products/${productId}.json`
 
   try {
-    const res = await fetch(url, {
+    const res = await shopifyFetch(url, {
       headers: { 'X-Shopify-Access-Token': accessToken },
       signal: AbortSignal.timeout(5000),
     })
@@ -416,7 +462,7 @@ export async function fetchShopifyProductDetail(
   const url = `https://${store.domain}/admin/api/2026-04/products/${productId}.json`
 
   try {
-    const res = await fetch(url, {
+    const res = await shopifyFetch(url, {
       headers: { 'X-Shopify-Access-Token': accessToken },
       signal: AbortSignal.timeout(5000),
     })
@@ -498,7 +544,7 @@ export async function fetchShopifyProducts(
 
   const url = `https://${store.domain}/admin/api/2026-04/products.json?${params.toString()}`
   try {
-    const res = await fetch(url, {
+    const res = await shopifyFetch(url, {
       headers: { 'X-Shopify-Access-Token': accessToken },
       signal: AbortSignal.timeout(10000),
     })
