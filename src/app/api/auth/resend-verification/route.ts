@@ -5,6 +5,7 @@ import { sendVerificationEmail } from '@/lib/services/auth-emails'
 import {
   forgotPasswordSchema,
   generateRandomToken,
+  hashToken,
   emailVerifyIdentifier,
   VERIFICATION_EXPIRES_IN,
 } from '@/lib/auth-utils'
@@ -59,7 +60,8 @@ export async function POST(request: NextRequest) {
   await prisma.verificationToken.create({
     data: {
       identifier: emailVerifyIdentifier(email),
-      token,
+      // Digest only — the raw token exists solely in the email.
+      token: hashToken(token),
       expires,
     },
   })

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
-import { emailVerifyIdentifier } from '@/lib/auth-utils'
+import { emailVerifyIdentifier, hashToken } from '@/lib/auth-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,14 +14,18 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const token = searchParams.get('token')
-    const email = searchParams.get('email')
+    const rawEmail = searchParams.get('email')
 
-    if (!token || !email) {
+    if (!token || !rawEmail) {
       return NextResponse.redirect(new URL('/login?error=Missing+verification+parameters', req.url))
     }
 
+    const email = rawEmail.trim().toLowerCase()
+    // We store only the token digest, so look it up by hash.
+    const hashed = hashToken(token)
+
     const verificationToken = await prisma.verificationToken.findUnique({
-      where: { token },
+      where: { token: hashed },
     })
 
     if (!verificationToken || verificationToken.identifier !== emailVerifyIdentifier(email)) {
@@ -29,12 +33,19 @@ export async function GET(req: NextRequest) {
     }
 
     if (verificationToken.expires < new Date()) {
-      await prisma.verificationToken.delete({ where: { token } })
+      await prisma.verificationToken.deleteMany({ where: { token: hashed } })
       return NextResponse.redirect(new URL('/login?error=Verification+link+has+expired', req.url))
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    // Atomically consume the token: exactly one request may succeed even if the
+    // link is opened twice concurrently.
+    const consumed = await prisma.verificationToken.deleteMany({ where: { token: hashed } })
+    if (consumed.count !== 1) {
+      return NextResponse.redirect(new URL('/login?error=Invalid+or+expired+verification+link', req.url))
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
       select: { id: true },
     })
     if (!user) {
@@ -42,7 +53,7 @@ export async function GET(req: NextRequest) {
     }
 
     await prisma.user.update({
-      where: { email },
+      where: { id: user.id },
       data: { emailVerified: new Date() },
     })
 
@@ -50,8 +61,6 @@ export async function GET(req: NextRequest) {
       where: { userId: user.id },
       data: { isActive: true },
     })
-
-    await prisma.verificationToken.delete({ where: { token } })
 
     return NextResponse.redirect(new URL('/login?verified=true', req.url))
   } catch (error) {

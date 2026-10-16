@@ -11,6 +11,7 @@ import {
   createSuccessResponse,
   AUTH_ERROR_CODES,
   generateRandomToken,
+  hashToken,
   emailVerifyIdentifier,
   VERIFICATION_EXPIRES_IN,
 } from '@/lib/auth-utils'
@@ -65,11 +66,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { email, password, name, storeName, storeDomain } = validationResult.data
+    const { password, name, storeName, storeDomain } = validationResult.data
+    // Canonicalize email so "A@B.com" and "a@b.com" cannot create two accounts.
+    const email = validationResult.data.email.trim().toLowerCase()
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
+    // Case-insensitive duplicate check: the unique index alone would allow a
+    // second account differing only by case.
+    const existingUser = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
     })
 
     if (existingUser) {
@@ -120,7 +124,8 @@ export async function POST(request: NextRequest) {
     await prisma.verificationToken.create({
       data: {
         identifier: emailVerifyIdentifier(email),
-        token: verificationToken,
+        // Persist only the digest — the raw token lives solely in the email.
+        token: hashToken(verificationToken),
         expires: verificationTokenExpires,
       },
     })

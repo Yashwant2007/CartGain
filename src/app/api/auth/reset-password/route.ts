@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { invalidateTokenVersionCache } from '@/lib/auth'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { sendPasswordChangedEmail } from '@/lib/services/auth-emails'
 import {
   resetPasswordSchema,
   createErrorResponse,
   createSuccessResponse,
   AUTH_ERROR_CODES,
   passwordResetIdentifier,
+  hashToken,
 } from '@/lib/auth-utils'
 
 // Server-side only - load bcrypt when needed
@@ -59,19 +61,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { token, email, password } = validationResult.data
+    const { token, password } = validationResult.data
+    const email = validationResult.data.email.trim().toLowerCase()
 
     // Find and validate token. Only a token issued by the reset flow
     // (password-reset: namespace) can reset a password — an email-verification
-    // token is rejected here even if it is still valid.
+    // token is rejected here even if it is still valid. The stored token is a
+    // digest, so the incoming raw token is hashed before lookup.
     const identifier = passwordResetIdentifier(email)
+    const hashed = hashToken(token)
     const verificationToken = await prisma.verificationToken.findUnique({
-      where: {
-        identifier_token: {
-          identifier,
-          token,
-        },
-      },
+      where: { identifier_token: { identifier, token: hashed } },
     })
 
     if (!verificationToken) {
@@ -87,14 +87,8 @@ export async function POST(request: NextRequest) {
 
     // Check if token is expired
     if (new Date() > verificationToken.expires) {
-      // Delete expired token
-      await prisma.verificationToken.delete({
-        where: {
-          identifier_token: {
-            identifier,
-            token,
-          },
-        },
+      await prisma.verificationToken.deleteMany({
+        where: { identifier, token: hashed },
       })
 
       return NextResponse.json(
@@ -107,9 +101,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email },
+    // Case-insensitive lookup tolerates accounts stored before normalization.
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
     })
 
     if (!user) {
@@ -126,27 +120,39 @@ export async function POST(request: NextRequest) {
     // Hash new password
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    // Update password and delete token. Bump tokenVersion so any session an
-    // attacker may have established before the reset is revoked.
-    await Promise.all([
-      prisma.user.update({
-        where: { id: user.id },
-        data: {
-          password: hashedPassword,
-          passwordChangedAt: new Date(),
-          tokenVersion: { increment: 1 },
-        },
-      }),
-      prisma.verificationToken.delete({
-        where: {
-          identifier_token: {
-            identifier,
-            token,
-          },
-        },
-      }),
-    ])
+    // Atomically consume the token so a link can only be used once, even under
+    // concurrent submissions.
+    const consumed = await prisma.verificationToken.deleteMany({
+      where: { identifier, token: hashed },
+    })
+    if (consumed.count !== 1) {
+      return NextResponse.json(
+        createErrorResponse(
+          AUTH_ERROR_CODES.INVALID_TOKEN,
+          'Invalid or expired reset link',
+          400
+        ),
+        { status: 400 }
+      )
+    }
+
+    // Update password. Bump tokenVersion so any session an attacker may have
+    // established before the reset is revoked.
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        passwordChangedAt: new Date(),
+        tokenVersion: { increment: 1 },
+      },
+    })
     invalidateTokenVersionCache(user.id)
+
+    // Out-of-band notification: alert the owner of the account that its
+    // password changed (best-effort — never fail the reset on email delivery).
+    await sendPasswordChangedEmail(user.email).catch((err) => {
+      console.error('Reset password: failed to send notification email:', err)
+    })
 
     return NextResponse.json(
       createSuccessResponse(

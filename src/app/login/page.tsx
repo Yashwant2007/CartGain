@@ -158,6 +158,7 @@ function LoginContent() {
         NoAccount: 'No account found with this email. Please create one.',
         GoogleOnly: 'This account uses Google sign-in. Continue with Google below.',
         WrongPassword: 'Incorrect password. Please try again.',
+        EmailNotVerified: 'Please verify your email before signing in. Check your inbox for the verification link.',
         Default: 'Sign-in failed. Please try again.',
       }
       setError(msg[err] ?? msg.Default)
@@ -239,6 +240,10 @@ function LoginContent() {
         else if (result.error === 'GoogleOnly') {
           setError('This account uses Google sign-in. Continue with Google below.')
           setStep('google_only')
+        }
+        else if (result.error === 'EmailNotVerified') {
+          setError('Please verify your email before signing in.')
+          setStep('verify_email')
         }
         else setError('The email or password doesn\'t match. Please try again.')
       } else if (result?.ok) {

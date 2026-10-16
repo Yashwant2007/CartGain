@@ -55,6 +55,18 @@ export async function redisIncr(key: string): Promise<number> {
   try { return await r.incr(key) } catch { return 0 }
 }
 
+// Like redisIncr but distinguishes "Redis unusable" (returns null) from a real
+// counter value. Callers that MUST NOT silently skip work when Redis is down
+// (rate limiting) use this so they can fall back to a local limiter instead of
+// treating an absent Redis as "count 0 = no requests".
+export async function redisIncrOrNull(key: string): Promise<number | null> {
+  const r = getRedis()
+  if (!r) return null
+  try { return await r.incr(key) } catch { return null }
+}
+
+// ttlMs is in MILLISECONDS (uses PEXPIRE). Pass milliseconds — passing seconds
+// silently sets a TTL ~1000x too short and defeats the counter it guards.
 export async function redisExpire(key: string, ttlMs: number): Promise<void> {
   const r = getRedis()
   if (!r) return

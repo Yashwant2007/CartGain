@@ -1,5 +1,5 @@
 import { headers } from 'next/headers'
-import { redisIncr, redisExpire } from './redis'
+import { redisIncrOrNull, redisExpire } from './redis'
 
 export interface RateLimitConfig {
   maxAttempts?: number
@@ -49,15 +49,15 @@ function memoryInc(key: string, windowMs: number): number {
 // Returns the count if Redis is healthy, or null when Redis is unavailable
 // so callers can fall back to the in-memory limiter.
 async function redisCountOrNull(key: string, windowMs: number): Promise<number | null> {
-  try {
-    const count = await redisIncr(key)
-    if (count === 1) {
-      await redisExpire(key, Math.floor(windowMs / 1000))
-    }
-    return count
-  } catch {
-    return null
+  // redisIncrOrNull returns null (not 0) when Redis is unavailable/unconfigured,
+  // so the caller falls back to the in-memory limiter instead of silently
+  // allowing unlimited requests. windowMs is passed through as milliseconds.
+  const count = await redisIncrOrNull(key)
+  if (count === null) return null
+  if (count === 1) {
+    await redisExpire(key, windowMs)
   }
+  return count
 }
 
 export async function checkRateLimit(

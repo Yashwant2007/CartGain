@@ -88,15 +88,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, skipped: 'unparseable' }, { status: 200 })
   }
 
+  // The HMAC covers only the body, NOT the x-shopify-shop-domain header. Since
+  // every store shares this app's signing secret, a captured+replayed body could
+  // otherwise be re-aimed at a different tenant by swapping the header (e.g. an
+  // attacker's app/uninstalled replayed with a victim's domain → destructive
+  // purge). When the (signed) payload declares its shop, that value is
+  // authoritative; a header that disagrees is rejected outright.
+  const payloadDomain =
+    (typeof data?.shop_domain === 'string' && data.shop_domain.trim()) ||
+    (typeof data?.myshopify_domain === 'string' && data.myshopify_domain.trim()) ||
+    (typeof data?.domain === 'string' && data.domain.trim()) ||
+    null
+
+  if (payloadDomain && shopDomain !== 'unknown' && shopDomain.toLowerCase() !== payloadDomain.toLowerCase()) {
+    console.warn(`Webhook [${topic}] rejected — header domain ${shopDomain} does not match signed payload domain ${payloadDomain}`)
+    return NextResponse.json({ message: 'Shop domain mismatch' }, { status: 401 })
+  }
+
+  const resolvedDomain = payloadDomain || shopDomain
+
   // Acknowledge immediately — all processing happens after the response.
   // waitUntil() guarantees Vercel keeps the function alive until the async
   // work finishes (it would otherwise be frozen the moment we return 200).
-  console.log(`Webhook [${topic}] from ${shopDomain} — acked (async processing)`)
+  console.log(`Webhook [${topic}] from ${resolvedDomain} — acked (async processing)`)
 
   waitUntil((async () => {
-    const store = await prisma.store.findFirst({ where: { domain: shopDomain } })
+    const store = await prisma.store.findFirst({ where: { domain: resolvedDomain } })
     if (!store) {
-      console.log(`No store found for domain ${shopDomain} — dropping event`)
+      console.log(`No store found for domain ${resolvedDomain} — dropping event`)
       return
     }
 

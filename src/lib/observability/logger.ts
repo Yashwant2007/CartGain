@@ -173,7 +173,8 @@ async function maybeAlertSpike(component: string, operation: string, entry: Stru
   try {
     const key = `errrate:${component}:${Math.floor(Date.now() / (SPIKE_WINDOW_SECONDS * 1000))}`
     const count = await redisIncr(key)
-    if (count === 1) await redisExpire(key, SPIKE_WINDOW_SECONDS)
+    // redisExpire expects MILLISECONDS; SPIKE_WINDOW_SECONDS is seconds.
+    if (count === 1) await redisExpire(key, SPIKE_WINDOW_SECONDS * 1000)
     if (count === SPIKE_THRESHOLD) {
       await notifySpikeDeduped(component, operation, entry)
     }

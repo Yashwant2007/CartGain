@@ -91,8 +91,23 @@ export async function PATCH(request: Request) {
     if (data.currency !== undefined) updateData.currency = data.currency
     if (data.platform !== undefined) updateData.platform = data.platform
     if (data.webhookUrl !== undefined) updateData.webhookUrl = data.webhookUrl
-    if (data.apiKey !== undefined) updateData.apiKey = data.apiKey ? encrypt(data.apiKey) : ''
-    if (data.apiSecret !== undefined) updateData.apiSecret = data.apiSecret ? encrypt(data.apiSecret) : ''
+    // Disconnect = clearing the credentials. Store null (not empty string) so
+    // that "is this store connected?" checks keyed on `apiKey != null` don't
+    // treat a disconnected store as still linked. Also drop the derived Shopify
+    // refresh token + expiry so no live credential is left behind.
+    let disconnected = false
+    if (data.apiKey !== undefined) {
+      updateData.apiKey = data.apiKey ? encrypt(data.apiKey) : null
+      if (!data.apiKey) disconnected = true
+    }
+    if (data.apiSecret !== undefined) {
+      updateData.apiSecret = data.apiSecret ? encrypt(data.apiSecret) : null
+      if (!data.apiSecret) disconnected = true
+    }
+    if (disconnected) {
+      updateData.shopifyRefreshToken = null
+      updateData.shopifyTokenExpiresAt = null
+    }
 
     const updatedStore = await prisma.store.update({
       where: { id: store.id },

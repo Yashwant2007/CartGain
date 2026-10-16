@@ -67,7 +67,10 @@ const providers: any[] = [
         throw new Error(parsed.error.errors[0]?.message || 'Invalid credentials')
       }
 
-      const { email, password } = parsed.data
+      // Normalize so "User@X.com" and "user@x.com" resolve to the same account
+      // (and the same rate-limit bucket).
+      const email = parsed.data.email.trim().toLowerCase()
+      const { password } = parsed.data
 
       const rateLimitResult = await checkRateLimit(`auth/login:${email}`, {
         maxAttempts: 10,
@@ -78,8 +81,10 @@ const providers: any[] = [
         throw new Error('Too many login attempts. Please try again later.')
       }
 
-      const user = await prisma.user.findUnique({
-        where: { email },
+      // Case-insensitive lookup tolerates accounts created before email
+      // normalization was enforced.
+      const user = await prisma.user.findFirst({
+        where: { email: { equals: email, mode: 'insensitive' } },
       })
 
       if (!user) {
@@ -97,6 +102,13 @@ const providers: any[] = [
 
       if (!isCorrectPassword) {
         throw new Error('WrongPassword')
+      }
+
+      // Password verified — only now is it safe to disclose verification state.
+      // Unverified credentials accounts may not sign in until they confirm their
+      // email (the resend link is available on the login page).
+      if (!user.emailVerified) {
+        throw new Error('EmailNotVerified')
       }
 
       return {

@@ -61,6 +61,15 @@ export function generateRandomToken(length = 32): string {
   return randomBytes(length).toString('hex')
 }
 
+// Verification/reset tokens are only ever compared server-side, so we persist
+// their SHA-256 digest instead of the raw value. A leaked database snapshot then
+// yields no usable token: the raw value exists only in the email that was sent.
+// Lookups must hash the incoming token with the same function.
+export function hashToken(token: string): string {
+  const { createHash } = require('crypto') as typeof import('crypto')
+  return createHash('sha256').update(token).digest('hex')
+}
+
 // Tokens live in the shared VerificationToken table keyed by `identifier`.
 // Namespacing the identifier by purpose means an email-verification token can
 // never be replayed to reset a password (and vice-versa) — the two flows can no

@@ -30,11 +30,11 @@ jest.mock('@vercel/functions', () => ({ waitUntil: jest.fn() }))
 
 const COMPLIANCE_TOPICS = ['customers/data_request', 'customers/redact', 'shop/redact'] as const
 
-function delivery(topic: string, body: string, signature: string | null) {
+function delivery(topic: string, body: string, signature: string | null, domain = 'review-store.myshopify.com') {
   const headers = new Headers({
     'content-type': 'application/json',
     'x-shopify-topic': topic,
-    'x-shopify-shop-domain': 'review-store.myshopify.com',
+    'x-shopify-shop-domain': domain,
     'x-shopify-webhook-id': `wh-${topic}-1`,
   })
   if (signature) headers.set('x-shopify-hmac-sha256', signature)
@@ -111,7 +111,21 @@ describe('compliance webhook handler status contract', () => {
     // The reviewer's test install may not exist in our DB yet. That must not
     // turn into an error response.
     const body = JSON.stringify({ shop_domain: 'brand-new-review-store.myshopify.com', shop_id: 1 })
-    const res = await post(delivery('customers/data_request', body, sign(body)))
+    const res = await post(delivery('customers/data_request', body, sign(body), 'brand-new-review-store.myshopify.com'))
     expect(res.status).toBe(200)
+  })
+
+  it('rejects a validly-signed body whose header targets a different shop', async () => {
+    // The HMAC covers only the body. A captured body cannot be re-aimed at
+    // another tenant by swapping the x-shopify-shop-domain header.
+    const body = JSON.stringify({ shop_domain: 'attacker.myshopify.com', shop_id: 1 })
+    const res = await post(delivery('shop/redact', body, sign(body), 'victim.myshopify.com'))
+    expect(res.status).toBe(401)
+  })
+
+  it('rejects a replayed app/uninstalled aimed at another shop via the header', async () => {
+    const body = JSON.stringify({ domain: 'attacker.myshopify.com', myshopify_domain: 'attacker.myshopify.com' })
+    const res = await post(delivery('app/uninstalled', body, sign(body), 'victim.myshopify.com'))
+    expect(res.status).toBe(401)
   })
 })

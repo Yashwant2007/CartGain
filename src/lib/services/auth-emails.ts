@@ -62,6 +62,25 @@ export async function sendVerificationEmail(email: string, token: string) {
   })
 }
 
+// Sent after a successful password change or reset so the account owner is
+// alerted to credential changes they did not make (the earliest signal of
+// account takeover). No token or link is included.
+export async function sendPasswordChangedEmail(email: string) {
+  const link = `${appBaseUrl()}/login`
+  return sendEmail({
+    to: email,
+    subject: 'Your CartGain password was changed',
+    html: shell({
+      heading: 'Password changed',
+      body: 'Your CartGain password was successfully changed. If this was you, no action is needed. If you did not make this change, reset your password immediately and contact support.',
+      cta: 'Sign in',
+      link,
+      footer: 'For your security, all other sessions have been signed out.',
+    }),
+    text: `Your CartGain password was changed. If this was not you, reset your password immediately: ${link}`,
+  })
+}
+
 export async function sendPasswordResetEmail(email: string, token: string) {
   const link = buildPasswordResetLink(email, token)
   return sendEmail({

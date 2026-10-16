@@ -8,6 +8,7 @@ import {
   createSuccessResponse,
   AUTH_ERROR_CODES,
   generateRandomToken,
+  hashToken,
   passwordResetIdentifier,
   PASSWORD_RESET_EXPIRES_IN,
 } from '@/lib/auth-utils'
@@ -46,10 +47,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { email } = validationResult.data
+    const email = validationResult.data.email.trim().toLowerCase()
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
     })
 
     if (!user) {
@@ -75,23 +76,18 @@ export async function POST(request: NextRequest) {
     await prisma.verificationToken.create({
       data: {
         identifier: passwordResetIdentifier(email),
-        token: resetToken,
+        // Digest only — the raw token exists solely in the email.
+        token: hashToken(resetToken),
         expires: resetTokenExpires,
       },
     })
 
     const result = await sendPasswordResetEmail(email, resetToken)
 
+    // Always return the same generic 200 even when delivery fails, so a
+    // send-failure response can't be used to confirm that an account exists.
     if (!result.success) {
       console.error('Forgot password: failed to send email:', result.error)
-      return NextResponse.json(
-        createErrorResponse(
-          AUTH_ERROR_CODES.SERVER_ERROR,
-          'Failed to send reset email. Please try again later.',
-          500
-        ),
-        { status: 500 }
-      )
     }
 
     return NextResponse.json(

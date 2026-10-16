@@ -6,6 +6,7 @@ import prisma from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { validatePasswordStrength } from '@/lib/auth-utils'
+import { sendPasswordChangedEmail } from '@/lib/services/auth-emails'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,6 +55,12 @@ export async function POST(request: NextRequest) {
       },
     })
     invalidateTokenVersionCache(user.id)
+
+    if (user.email) {
+      await sendPasswordChangedEmail(user.email).catch((err) => {
+        console.error('Change password: failed to send notification email:', err)
+      })
+    }
 
     return NextResponse.json({
       success: true,
