@@ -22,6 +22,7 @@
  */
 import { POST } from '@/app/api/bargain/offer/route'
 import prisma from '@/lib/db'
+import { signSessionToken } from '@/lib/bargain/session-bind'
 
 jest.mock('@/lib/db', () => ({
   __esModule: true,
@@ -95,7 +96,7 @@ function makeRequest(message: string) {
   return new Request('https://cart-gain.com/api/bargain/offer', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ sessionId: 'sess-1', message }),
+    body: JSON.stringify({ sessionId: 'sess-1', message, sessionToken: signSessionToken('sess-1') }),
   }) as any
 }
 

@@ -4,7 +4,7 @@ import { bargainOfferSchema, validateOrThrow, handleValidationError } from '@/li
 import { negotiateStep, ruleBasedDecision, buildOpeningMessage, buildCustomerContext, computeMinPrice, retentionOffer, quotedFloor, type NegotiationContext } from '@/lib/services/bargain'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { detectWalkout, extractQuantity, extractPrice } from '@/lib/bargain/text'
-import { assertSessionOwnership } from '@/lib/bargain/session-bind'
+import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
 import { uiText, currencySymbolFor } from '@/lib/bargain/i18n'
 import { detectLanguage } from '@/lib/bargain/language'
 import { logDataAccess } from '@/lib/data-protection'
@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
       customerFingerprint: data.customerFingerprint,
       customerEmail: data.customerEmail,
       cartToken: data.cartToken,
+      tokenOk: verifySessionToken(bargainSession.id, data.sessionToken),
     })
     if (!ownership.ok) {
       return NextResponse.json({ message: ownership.reason }, { status: 403 })

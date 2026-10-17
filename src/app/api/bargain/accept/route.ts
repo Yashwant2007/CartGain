@@ -3,7 +3,7 @@ import prisma from '@/lib/db'
 import { bargainAcceptSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
-import { assertSessionOwnership } from '@/lib/bargain/session-bind'
+import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
 import { getBargainGate, decideDealMode, recordBargainDealOps, BARGAIN_DEALS_EXHAUSTED } from '@/lib/bargain/gate'
 import { computeMinPrice } from '@/lib/services/bargain'
 import { generateBargainCode, buildBargainCheckoutUrl } from '@/lib/bargain/purchase'
@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
       customerFingerprint: data.customerFingerprint,
       customerEmail: data.customerEmail,
       cartToken: data.cartToken,
+      tokenOk: verifySessionToken(bargainSession.id, data.sessionToken),
     })
     if (!ownership.ok) {
       return NextResponse.json({ message: ownership.reason }, { status: 403 })

@@ -130,6 +130,7 @@ export default function BargainWidget({
   const [open, setOpen] = useState<boolean>(isEmbed)
   const [minimised, setMinimised] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [sessionToken, setSessionToken] = useState<string | null>(null)
   const [messages, setMessages] = useState<BargainMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -498,6 +499,7 @@ export default function BargainWidget({
         throw new Error(data.message ?? 'Could not start bargaining')
       }
       setSessionId(data.sessionId)
+      if (data.sessionToken) setSessionToken(data.sessionToken)
       setExpiresAt(data.expiresAt ?? null)
       if (data.returning) setReturning(true)
       if (data.existingSession && data.session?.messages?.length) {
@@ -545,6 +547,7 @@ export default function BargainWidget({
       customerFingerprint: bargainFingerprint(cartToken ?? ''),
       cartToken: cartToken ?? undefined,
       customerEmail: customerEmail ?? undefined,
+      sessionToken: sessionToken ?? undefined,
     }
   }
 

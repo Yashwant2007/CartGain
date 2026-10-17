@@ -19,6 +19,16 @@ export const dynamic = 'force-dynamic'
 const MAX_CODES_PER_SHOP_HOUR = 250
 const CODE_WINDOW_SECONDS = 60 * 60
 
+// Accepts a raw numeric Shopify customer id or a `gid://shopify/Customer/<id>`
+// and returns it in the raw-numeric form `buildCustomerSelection` expects, or
+// null for anything else. Strict allow-list keeps client input out of the
+// GraphQL body shape.
+function normalizeShopifyCustomerId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const m = value.trim().match(/^(?:gid:\/\/shopify\/Customer\/)?(\d{1,20})$/)
+  return m ? m[1] : null
+}
+
 async function underCodeBudget(shopKey: string): Promise<boolean> {
   try {
     const count = await redisIncr(`bargain:codes:${shopKey}`)
@@ -72,7 +82,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, discountPercent, code, orderLevel, bulkQuantity } = body
+    const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, discountPercent, code, orderLevel, bulkQuantity, shopifyCustomerId, customerEmail } = body
 
     if (
       typeof shopDomain !== 'string' || !shopDomain ||
@@ -81,6 +91,16 @@ export async function POST(request: NextRequest) {
     ) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400, headers })
     }
+
+    // Buyer binding: the Checkout UI Extension forwards the logged-in customer
+    // id/email when it has protected-customer-data access. The id is strictly
+    // validated (numeric or gid) before it reaches the Shopify discount, so it
+    // can only ever bind a code to a real customer — never inject GraphQL.
+    const normalizedCustomerId = normalizeShopifyCustomerId(shopifyCustomerId)
+    const safeCustomerEmail =
+      typeof customerEmail === 'string' && customerEmail.length <= 254 && customerEmail.includes('@')
+        ? customerEmail
+        : null
 
     // Find store by domain (domain is not unique alone, use findFirst)
     const cleanDomain = shopDomain.replace('.myshopify.com', '')
@@ -239,6 +259,7 @@ export async function POST(request: NextRequest) {
       code,
       bulkQuantity: safeBulk,
       floorPrice: minPrice,
+      shopifyCustomerId: normalizedCustomerId,
     })
 
     if (result.status === 'failed') {
@@ -266,6 +287,7 @@ export async function POST(request: NextRequest) {
           bargainFloor: minPrice,
           bulkQuantity: safeBulk,
           discountCode: result.code,
+          customerEmail: safeCustomerEmail,
           status: 'accepted',
           expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         },

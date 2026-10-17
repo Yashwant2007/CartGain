@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { issueRetentionDiscount } from '@/lib/bargain/purchase'
-import { assertSessionOwnership } from '@/lib/bargain/session-bind'
+import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,13 +37,14 @@ export async function GET(
       return NextResponse.json({ message: 'Session not found' }, { status: 404 })
     }
 
-    // Ownership binding — mirrors /offer and /accept. Anonymous/legacy sessions
-    // with no stored identity remain readable (cannot do better); everything
-    // else requires a matching identity handle.
+    // Ownership binding — mirrors /offer and /accept. Sessions with no stored
+    // identity are only readable with a valid signed session token; everything
+    // else requires a matching identity handle (or the token).
     const ownership = assertSessionOwnership(bargainSession, {
       customerFingerprint: request.nextUrl.searchParams.get('customerFingerprint'),
       customerEmail: request.nextUrl.searchParams.get('customerEmail'),
       cartToken: request.nextUrl.searchParams.get('cartToken'),
+      tokenOk: verifySessionToken(bargainSession.id, request.nextUrl.searchParams.get('sessionToken')),
     })
     if (!ownership.ok) {
       return NextResponse.json({ message: ownership.reason }, { status: 403 })

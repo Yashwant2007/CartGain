@@ -238,6 +238,13 @@ function CartGainBargainWidget() {
         ? line.merchandise.id
         : null;
 
+      // Buyer identity (available when the app has protected customer data
+      // access). Sent so the server can bind the discount code to this customer
+      // — a shared screenshot then can't be redeemed by anyone else. Fields are
+      // absent for guest checkouts, in which case the code stays unbound.
+      const shopifyCustomerId = api.buyerIdentity?.customer?.current?.id || null;
+      const customerEmail = api.buyerIdentity?.email?.current || null;
+
       const response = await fetch(`https://cart-gain.com/api/bargain/checkout-accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -250,6 +257,8 @@ function CartGainBargainWidget() {
           discountPercent: Math.round((1 - finalPrice / originalPrice) * 100),
           code: discountCode,
           orderLevel: isThankYou,
+          shopifyCustomerId,
+          customerEmail,
         }),
       });
 

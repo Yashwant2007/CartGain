@@ -9,7 +9,7 @@ import {
 } from '../../services/bargain'
 import { extractPrice } from '../text'
 import { checkAbuse, clearAbuseState } from '../abuse'
-import { assertSessionOwnership } from '../session-bind'
+import { assertSessionOwnership, signSessionToken, verifySessionToken } from '../session-bind'
 import { neutralSignals } from '../behavior'
 
 const baseCtx = (over: Partial<NegotiationContext> = {}): NegotiationContext => ({
@@ -346,10 +346,47 @@ describe('Session ownership binding (anti-hijack / anti-farm)', () => {
     expect(r.ok).toBe(false)
   })
 
-  it('allows legacy / fully-anonymous sessions (nothing stored to verify)', () => {
+  it('rejects a fully-anonymous session without a signed session token', () => {
     expect(assertSessionOwnership(
       { customerFingerprint: null, customerEmail: null, cartToken: null },
       { customerFingerprint: 'whatever' },
+    ).ok).toBe(false)
+  })
+
+  it('allows a fully-anonymous session when the caller holds the session token', () => {
+    expect(assertSessionOwnership(
+      { customerFingerprint: null, customerEmail: null, cartToken: null },
+      { tokenOk: true },
     ).ok).toBe(true)
+  })
+
+  it('accepts the session token as a fallback for a bound session', () => {
+    expect(assertSessionOwnership(
+      { customerFingerprint: 'fp12345678', customerEmail: null, cartToken: null },
+      { customerFingerprint: 'other-fp', tokenOk: true },
+    ).ok).toBe(true)
+  })
+})
+
+// ════════════════════════════════════════════════════════════
+// SIGNED SESSION TOKEN — proof-of-origin for fully-anonymous
+// sessions, so a bare sessionId is never enough.
+// ════════════════════════════════════════════════════════════
+describe('Signed session token', () => {
+  it('round-trips a token for the exact session it was signed for', () => {
+    const token = signSessionToken('sess-abc')
+    expect(token).toBeTruthy()
+    expect(verifySessionToken('sess-abc', token)).toBe(true)
+  })
+
+  it('rejects a token presented for a different session', () => {
+    const token = signSessionToken('sess-abc')
+    expect(verifySessionToken('sess-xyz', token)).toBe(false)
+  })
+
+  it('rejects missing, empty and garbage tokens', () => {
+    expect(verifySessionToken('sess-abc', null)).toBe(false)
+    expect(verifySessionToken('sess-abc', '')).toBe(false)
+    expect(verifySessionToken('sess-abc', 'not-a-token')).toBe(false)
   })
 })

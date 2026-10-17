@@ -88,6 +88,7 @@ export const bargainOfferSchema = z.object({
   customerFingerprint: z.string().min(8, 'customerFingerprint is required').max(128).optional(),
   customerEmail: z.string().email().optional().or(z.literal('')),
   cartToken: z.string().max(200).optional(),
+  sessionToken: z.string().max(500).optional(),
 })
 
 export type BargainOfferInput = z.infer<typeof bargainOfferSchema>
@@ -97,6 +98,7 @@ export const bargainAcceptSchema = z.object({
   customerFingerprint: z.string().min(8, 'customerFingerprint is required').max(128).optional(),
   customerEmail: z.string().email().optional().or(z.literal('')),
   cartToken: z.string().max(200).optional(),
+  sessionToken: z.string().max(500).optional(),
 })
 
 export type BargainAcceptInput = z.infer<typeof bargainAcceptSchema>
@@ -109,6 +111,7 @@ export const bargainRecommendEventSchema = z.object({
   customerFingerprint: z.string().min(8, 'customerFingerprint is required').max(128).optional(),
   customerEmail: z.string().email().optional().or(z.literal('')),
   cartToken: z.string().max(200).optional(),
+  sessionToken: z.string().max(500).optional(),
 })
 
 export type BargainRecommendEventInput = z.infer<typeof bargainRecommendEventSchema>

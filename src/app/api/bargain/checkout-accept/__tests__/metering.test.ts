@@ -182,3 +182,35 @@ describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
     expect(recordDealOpsMock).not.toHaveBeenCalled()
   })
 })
+
+describe('POST /api/bargain/checkout-accept — buyer binding', () => {
+  it('binds the code to the customer when a gid id is supplied', async () => {
+    await POST(makeRequest({ shopifyCustomerId: 'gid://shopify/Customer/555' }))
+
+    const opts = mintMock.mock.calls[0][0]
+    // Normalized to the raw numeric id `buildCustomerSelection` expects.
+    expect(opts.shopifyCustomerId).toBe('555')
+  })
+
+  it('binds the code when a raw numeric customer id is supplied', async () => {
+    await POST(makeRequest({ shopifyCustomerId: '555' }))
+    expect(mintMock.mock.calls[0][0].shopifyCustomerId).toBe('555')
+  })
+
+  it('IGNORES a malformed customer id (never reaches the Shopify discount body)', async () => {
+    await POST(makeRequest({ shopifyCustomerId: 'gid://shopify/Customer/1) { evil' }))
+    expect(mintMock.mock.calls[0][0].shopifyCustomerId).toBeNull()
+  })
+
+  it('stores the customer email on the deal session when provided', async () => {
+    await POST(makeRequest({ customerEmail: 'buyer@example.com' }))
+    const created = prismaMock.bargainSession.create.mock.calls[0][0].data
+    expect(created.customerEmail).toBe('buyer@example.com')
+  })
+
+  it('drops a non-email value rather than persisting it', async () => {
+    await POST(makeRequest({ customerEmail: 'not-an-email' }))
+    const created = prismaMock.bargainSession.create.mock.calls[0][0].data
+    expect(created.customerEmail).toBeNull()
+  })
+})

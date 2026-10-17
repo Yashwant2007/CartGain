@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainRecommendEventSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
-import { assertSessionOwnership } from '@/lib/bargain/session-bind'
+import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
 import { track } from '@/lib/analytics/track'
 
 export const dynamic = 'force-dynamic'
@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
       customerFingerprint: data.customerFingerprint,
       customerEmail: data.customerEmail,
       cartToken: data.cartToken,
+      tokenOk: verifySessionToken(bargainSession.id, data.sessionToken),
     })
     if (!ownership.ok) {
       return NextResponse.json({ message: ownership.reason }, { status: 403 })

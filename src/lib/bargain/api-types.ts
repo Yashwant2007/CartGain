@@ -92,6 +92,9 @@ export type BargainStartBody = {
 
 export type BargainStartSuccess = {
   sessionId: string
+  /** Signed token bound to the session. Proof-of-origin the widget echoes on
+   *  every follow-up call so a leaked sessionId alone can't drive the session. */
+  sessionToken?: string
   session?: PublicBargainSession
   openingMessage: string
   expiresAt: string
@@ -106,6 +109,7 @@ export type BargainOfferBody = {
   customerFingerprint?: string | null
   cartToken?: string | null
   customerEmail?: string | null
+  sessionToken?: string | null
 }
 
 export type BargainOfferSuccess = {
@@ -147,6 +151,7 @@ export type BargainAcceptBody = {
   customerFingerprint?: string | null
   cartToken?: string | null
   customerEmail?: string | null
+  sessionToken?: string | null
 }
 
 export type BargainAcceptSuccess = {

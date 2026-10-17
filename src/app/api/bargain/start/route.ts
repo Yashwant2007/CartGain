@@ -8,6 +8,7 @@ import { fetchShopifyProductPrice } from '@/lib/shopify'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { getBargainGate, recordBargainSessionOp, BARGAIN_SESSIONS_EXHAUSTED } from '@/lib/bargain/gate'
 import { generateClaimToken } from '@/lib/bargain/purchase'
+import { signSessionToken } from '@/lib/bargain/session-bind'
 import { logDataAccess } from '@/lib/data-protection'
 import { track } from '@/lib/analytics/track'
 
@@ -176,6 +177,7 @@ export async function POST(request: NextRequest) {
       })
       return NextResponse.json({
         sessionId: existing.id,
+        sessionToken: signSessionToken(existing.id) ?? undefined,
         session: publicSession(existing),
         openingMessage: existing.messages[0]?.content ?? buildOpeningMessage({
           storeName: store.name,
@@ -212,6 +214,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           message: 'An active bargaining session already exists for this item. Please continue it.',
           sessionId: anonExisting.id,
+          sessionToken: signSessionToken(anonExisting.id) ?? undefined,
           existingSession: true,
         }, { status: 200 })
       }
@@ -325,6 +328,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       sessionId: bargainSession.id,
+      sessionToken: signSessionToken(bargainSession.id) ?? undefined,
       session: publicSession(bargainSession),
       openingMessage: openingReply,
       expiresAt: expiredAt.toISOString(),
