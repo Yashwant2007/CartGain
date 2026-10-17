@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
 import prisma from '@/lib/db'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
 import { computeMinPrice } from '@/lib/services/bargain'
@@ -6,6 +7,7 @@ import { fetchShopifyProductPrice, fetchShopifyProductDetail } from '@/lib/shopi
 import { buildExecutablePrice, clampOrderPercentForProduct } from '@/lib/financial-safety'
 import { validateOffer } from '@/lib/bargain/offer-validation'
 import { bargainCampaignStatus } from '@/lib/bargain/policy'
+import { getBargainGate, decideDealMode, recordBargainDealOps, BARGAIN_DEALS_EXHAUSTED } from '@/lib/bargain/gate'
 import { track } from '@/lib/analytics/track'
 import { redisIncr, redisExpire } from '@/lib/redis'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
@@ -72,7 +74,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, discountPercent, code, orderLevel, bulkQuantity } = body
 
-    if (!shopDomain || !originalPrice || !finalPrice || !code) {
+    if (
+      typeof shopDomain !== 'string' || !shopDomain ||
+      typeof code !== 'string' || !code || code.length > 100 ||
+      !originalPrice || !finalPrice
+    ) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400, headers })
     }
 
@@ -96,6 +102,18 @@ export async function POST(request: NextRequest) {
 
     const rawBulk = bulkQuantity != null ? Math.floor(Number(bulkQuantity)) : null
     const safeBulk = rawBulk != null && Number.isFinite(rawBulk) && rawBulk >= 1 ? rawBulk : null
+
+    // ── IDEMPOTENT REPLAY ──
+    // The client can retry with the SAME code (flaky network / double tap). A
+    // retried request must never mint a second Shopify code (Shopify would reject
+    // the duplicate and surface a 500) or double-meter the deal.
+    const existing = await prisma.bargainSession.findFirst({
+      where: { storeId: store.id, discountCode: code, status: 'accepted' },
+      select: { discountCode: true },
+    })
+    if (existing?.discountCode) {
+      return NextResponse.json({ success: true, code: existing.discountCode, status: 'created' }, { headers })
+    }
 
     // ── FINANCIAL SAFETY ──
     // This endpoint mints codes purely from client-supplied values (the Checkout
@@ -191,6 +209,25 @@ export async function POST(request: NextRequest) {
       finalPriceSafe = executable.finalPrice
     }
 
+    // ── PLAN GATE ──
+    // Deals are the metered/billed unit. Gate BEFORE minting so a store over its
+    // deal quota (and without overage) can never mint an unmetered code here —
+    // the exact leak the storefront accept path already closes.
+    const gate = await getBargainGate(store.id)
+    const dealMode = decideDealMode(gate)
+    if (dealMode === 'blocked_free' || dealMode === 'blocked_no_overage') {
+      return NextResponse.json({
+        message:
+          dealMode === 'blocked_free'
+            ? 'This store has reached its free bargain deal limit. Please ask the store to upgrade.'
+            : 'This store has reached its bargain deal limit. Overage billing is off for this store.',
+        code: BARGAIN_DEALS_EXHAUSTED,
+        planId: gate.planId,
+        mode: dealMode,
+        upgradeUrl: 'https://cart-gain.com/pricing',
+      }, { status: 402, headers })
+    }
+
     // Generate the discount code in Shopify
     const result = await generateBargainDiscountCode({
       store,
@@ -208,6 +245,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: result.error || 'Failed to create discount code' }, { status: 500, headers })
     }
 
+    // ── RECORD THE DEAL ──
+    // Create a BargainSession for this checkout-origin negotiation and meter the
+    // deal exactly like /api/bargain/accept: bump the plan meters, accrue rev
+    // share, and book the session-scoped rev-share event. Storing the issued code
+    // on the session lets orders/create attribute the purchase back to it (the
+    // code must actually appear on the order, so attribution cannot be faked).
+    // Atomic: the session row and its meter/rev-share ops commit together.
+    const sessionId = crypto.randomUUID()
+    await prisma.$transaction([
+      prisma.bargainSession.create({
+        data: {
+          id: sessionId,
+          storeId: store.id,
+          shopifyProductId: orderLevel ? '' : (shopifyProductId ?? ''),
+          variantId: orderLevel ? null : (variantId || null),
+          originalPrice: currentPrice,
+          currentOffer: finalPriceSafe,
+          finalPrice: finalPriceSafe,
+          bargainFloor: minPrice,
+          bulkQuantity: safeBulk,
+          discountCode: result.code,
+          status: 'accepted',
+          expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+      }),
+      ...recordBargainDealOps(gate, sessionId, currentPrice, finalPriceSafe, dealMode as 'included' | 'overage'),
+    ])
+
     // §36 funnel analytics — checkout-stage deal accepted (mini-cart/embedded
     // apps accept earlier via /api/bargain/accept; this event covers storefront
     // checkout origins). Fire-and-forget.
@@ -215,6 +280,11 @@ export async function POST(request: NextRequest) {
       name: 'cartgain_checkout_started',
       storeId: store.id,
       properties: { orderLevel: orderLevel === true },
+    })
+    await track({
+      name: 'cartgain_bargain_deal_accepted',
+      storeId: store.id,
+      properties: { source: 'checkout', orderLevel: orderLevel === true, dealMode },
     })
 
     return NextResponse.json({
