@@ -20,6 +20,7 @@ import {
 type AuthStep =
   | 'email'
   | 'password'
+  | 'two_factor'
   | 'google_only'
   | 'create_account'
   | 'verify_email'
@@ -129,6 +130,7 @@ function LoginContent() {
   const [step, setStep] = useState<AuthStep>('email')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [twoFactorCode, setTwoFactorCode] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [name, setName] = useState('')
   const [storeName, setStoreName] = useState('')
@@ -159,12 +161,18 @@ function LoginContent() {
         GoogleOnly: 'This account uses Google sign-in. Continue with Google below.',
         WrongPassword: 'Incorrect password. Please try again.',
         EmailNotVerified: 'Please verify your email before signing in. Check your inbox for the verification link.',
+        '2FARequired': 'Two-factor authentication is required. Enter your password and the 6-digit code from your authenticator app.',
+        '2FAInvalid': 'That two-factor code is invalid or expired. Please try again.',
         Default: 'Sign-in failed. Please try again.',
       }
       setError(msg[err] ?? msg.Default)
       // If Google-only, show the right step
       if (err === 'GoogleOnly') {
         setStep('google_only')
+      }
+      // 2FA-enabled account blocked from the OAuth path → password + code step.
+      if (err === '2FARequired') {
+        setStep('password')
       }
     }
 
@@ -220,15 +228,16 @@ function LoginContent() {
     }
   }, [email])
 
-  /* ── Step 2: Password login ────────────────────────────── */
-  const handlePasswordSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
+  /* ── Step 2: Password / 2FA login ──────────────────────── */
+  const signInWithCredentials = useCallback(async (code?: string) => {
     setError(null)
     setIsLoading(true)
     try {
       const result = await signIn('credentials', {
         email: email.trim().toLowerCase(),
         password,
+        // Only sent once the server has told us this account needs a TOTP code.
+        ...(code ? { code } : {}),
         redirect: false,
       })
       if (result?.error) {
@@ -245,6 +254,17 @@ function LoginContent() {
           setError('Please verify your email before signing in.')
           setStep('verify_email')
         }
+        else if (result.error === '2FARequired') {
+          setError('Enter the 6-digit code from your authenticator app.')
+          setStep('two_factor')
+        }
+        else if (result.error === '2FAInvalid') {
+          setError('That code is invalid or has expired. Please try again.')
+          setStep('two_factor')
+        }
+        else if (result.error === '2FAConfigError') {
+          setError('Two-factor authentication is misconfigured on this account. Contact support.')
+        }
         else setError('The email or password doesn\'t match. Please try again.')
       } else if (result?.ok) {
         const dest = safeCallbackUrl(sp.get('callbackUrl'))
@@ -257,6 +277,19 @@ function LoginContent() {
       setIsLoading(false)
     }
   }, [email, password, router, sp])
+
+  const handlePasswordSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault()
+    void signInWithCredentials()
+  }, [signInWithCredentials])
+
+  /* ── Step 3: Two-factor code ───────────────────────────── */
+  const handleTwoFactorSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault()
+    const code = twoFactorCode.replace(/\D/g, '').slice(0, 6)
+    if (code.length !== 6) { setError('Enter the 6-digit code from your authenticator app.'); return }
+    void signInWithCredentials(code)
+  }, [signInWithCredentials, twoFactorCode])
 
   /* ── Google sign-in ────────────────────────────────────── */
   const handleGoogle = useCallback(async (intent: 'signin' | 'signup') => {
@@ -310,8 +343,9 @@ function LoginContent() {
 
     setIsLoading(true)
     try {
-      // Derive a domain from storeName if needed (placeholder for onboarding)
-      const domain = `${storeName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '')}.myshopify.com`
+      // Do NOT fabricate a *.myshopify.com domain — the merchant has not
+      // connected a storefront yet, and claiming Shopify would mislabel the
+      // store. The server derives a neutral placeholder and platform 'custom'.
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -320,13 +354,17 @@ function LoginContent() {
           email: email.trim().toLowerCase(),
           password,
           storeName: storeName.trim(),
-          storeDomain: domain,
         }),
       })
       const data = await res.json()
       if (res.ok) {
         setStep('verify_email')
         setResendCooldown(60)
+        // The server tells us when it could not actually send the verification
+        // email — surface it instead of silently stranding the merchant.
+        if (data?.data?.emailSent === false) {
+          setToast({ message: 'We could not send the verification email. Use "Resend verification email" below.', type: 'error' })
+        }
       } else {
         setError(data.message || 'Registration failed. Please try again.')
       }
@@ -538,6 +576,51 @@ function LoginContent() {
               </div>
             </form>
           </>
+        )}
+
+        {/* ── STEP: Two-factor code ────────────────────────── */}
+        {step === 'two_factor' && (
+          <form onSubmit={handleTwoFactorSubmit} className="space-y-3">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-blue-600/20 border border-blue-500/30 rounded-xl flex items-center justify-center flex-shrink-0">
+                <ShieldCheck className="w-5 h-5 text-blue-400" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-white">Two-factor authentication</h2>
+                <p className="text-xs text-slate-400">Enter the 6-digit code from your authenticator app.</p>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="twoFactorCode" className="block text-xs font-medium text-slate-400 mb-1.5">Authentication code</label>
+              <input
+                id="twoFactorCode"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                autoFocus
+                disabled={isLoading}
+                className={`${inputCls} text-center font-mono text-lg tracking-[0.4em]`}
+                placeholder="000000"
+                value={twoFactorCode}
+                onChange={e => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              />
+            </div>
+
+            <button type="submit" disabled={isLoading || twoFactorCode.length !== 6} className={btnPrimary}>
+              {isLoading ? 'Verifying...' : 'Verify and sign in'}
+              {!isLoading && <ArrowRight className="w-4 h-4" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setStep('password'); setTwoFactorCode(''); setError(null) }}
+              className="w-full text-xs text-slate-500 hover:text-slate-300 transition"
+            >
+              ← Back
+            </button>
+          </form>
         )}
 
         {/* ── STEP: Google-only account ────────────────────── */}

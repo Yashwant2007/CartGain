@@ -118,6 +118,14 @@ model Store {
   webhookUrl      String?
   apiKey          String?
   apiSecret       String?
+  // Optional per-store webhook signing secret (encrypted at rest). Public
+  // Shopify apps sign every webhook with the app's client secret, so this is
+  // usually null and verification falls back to SHOPIFY_API_SECRET. It exists
+  // so a store backed by a custom/self-managed Shopify app — whose webhook
+  // secret differs from ours — can be verified against its OWN secret instead
+  // of trusting a globally-shared key. Binding verification to the shop closes
+  // replay/forgery across tenants when secrets are not globally shared.
+  webhookSecret   String?
   shopifyRefreshToken String?
   shopifyTokenExpiresAt DateTime?
   createdAt       DateTime  @default(now())

@@ -104,6 +104,11 @@ export async function PATCH(request: Request) {
       updateData.apiSecret = data.apiSecret ? encrypt(data.apiSecret) : null
       if (!data.apiSecret) disconnected = true
     }
+    // Per-store webhook signing secret is always encrypted at rest and never
+    // returned. Setting it binds Shopify webhook verification to this store.
+    if (data.webhookSecret !== undefined) {
+      updateData.webhookSecret = data.webhookSecret ? encrypt(data.webhookSecret) : null
+    }
     if (disconnected) {
       updateData.shopifyRefreshToken = null
       updateData.shopifyTokenExpiresAt = null

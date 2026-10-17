@@ -69,6 +69,8 @@ export const storeUpdateSchema = z.object({
   webhookUrl: z.string().url('Invalid webhook URL').optional().or(z.literal('')),
   apiKey: z.string().max(500).optional(),
   apiSecret: z.string().max(500).optional(),
+  // Optional per-store webhook signing secret (see Store.webhookSecret).
+  webhookSecret: z.string().max(500).optional(),
 })
 
 export type StoreUpdateInput = z.infer<typeof storeUpdateSchema>

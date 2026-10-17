@@ -129,19 +129,26 @@ function secretFingerprint(secret: string): string {
   return crypto.createHash('sha256').update(secret, 'utf8').digest('hex').slice(0, 16)
 }
 
-export function verifyShopifyWebhook(body: string, headers: Headers): boolean {
+export function verifyShopifyWebhook(body: string, headers: Headers, overrideSecret?: string | null): boolean {
   const hmacHeader = headers.get('x-shopify-hmac-sha256')
   // Trim: a value pasted into the Vercel dashboard often carries a trailing
   // newline. The OAuth query-HMAC and the body-HMAC would then disagree with
   // Shopify while both "look" configured.
-  const shopifySecret = process.env.SHOPIFY_API_SECRET?.trim()
+  // A per-store secret (when the shop is backed by a custom app) takes
+  // precedence over the app-wide secret — see Store.webhookSecret.
+  const shopifySecret = (overrideSecret?.trim() || process.env.SHOPIFY_API_SECRET?.trim()) || undefined
+  const secretSource = overrideSecret?.trim() ? 'store' : 'app'
 
   if (!hmacHeader || !shopifySecret) {
-    console.error(
-      `[shopify-webhook] REJECTED before comparison — ${
-        !hmacHeader ? 'missing X-Shopify-Hmac-Sha256 header' : 'SHOPIFY_API_SECRET is not configured'
-      }`,
-    )
+    // Distinguish the two sources so the operator knows WHICH secret to fix:
+    // an empty per-store secret falling through to a missing app secret is a
+    // different remediation than the app secret itself being unset.
+    const reason = !hmacHeader
+      ? 'missing X-Shopify-Hmac-Sha256 header'
+      : secretSource === 'store'
+        ? 'per-store webhook secret is not configured'
+        : 'SHOPIFY_API_SECRET is not configured'
+    console.error(`[shopify-webhook] REJECTED before comparison — ${reason}`)
     return false
   }
 
@@ -169,10 +176,12 @@ export function verifyShopifyWebhook(body: string, headers: Headers): boolean {
         `topic=${headers.get('x-shopify-topic') ?? 'unknown'} ` +
         `shop=${headers.get('x-shopify-shop-domain') ?? 'unknown'} ` +
         `bodyBytes=${Buffer.byteLength(body, 'utf8')} ` +
+        `secretSource=${secretSource} ` +
         `secretFp=${secretFingerprint(shopifySecret)} ` +
         `— a valid Shopify delivery failing here means the configured secret is not ` +
-        `this app's client secret (wrong app, stale value, or Vercel SHOPIFY_API_KEY ` +
-        `pointing at a different client_id than shopify.app.toml).`,
+        `the one Shopify signed with (wrong app, stale value, per-store secret ` +
+        `mismatch, or Vercel SHOPIFY_API_KEY pointing at a different client_id than ` +
+        `shopify.app.toml).`,
     )
     return false
   }

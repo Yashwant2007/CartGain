@@ -78,3 +78,31 @@ the DPA, Privacy Policy, Security Policy, Cookie Policy, and readiness doc.
 15. **Governing law & dispute seat** — DPA/ToS choose India / Bahadurgarh seat
     (legal drafts). Confirm this matches the entity's incorporation and target
     merchant base (EU merchants may request an EU seat).
+
+## F. External service configuration (must be done by the owner)
+
+16. **Transactional email DNS (SPF / DKIM / DMARC)** — verification and
+    password-reset emails only arrive if the FROM_EMAIL domain is verified with
+    the provider. Required before launch:
+    - Add the domain in the Resend dashboard and publish every DNS record it
+      shows: **SPF** (TXT on `@`), **DKIM** (CNAMEs), and a **DMARC** TXT record
+      on `_dmarc` (start with `p=none`, move to `p=quarantine` once aligned).
+    - Confirm BOTH `RESEND_API_KEY` **and** (recommended) the SMTP fallback
+      (`EMAIL_SERVER_HOST` / `EMAIL_SERVER_USER` / `EMAIL_SERVER_PASSWORD`) so a
+      single-provider failure cannot stop verification mail.
+    - The health endpoint reports `checks.email` (`resend`/`smtp`/`configured`)
+      so a missing provider is visible rather than silent.
+17. **Redis (`REDIS_URL`)** — optional locally, **required in production**.
+    Without it, rate limiting and the background queue are in-process and
+    per-instance, which multiplies the effective login/register rate limit by the
+    instance count and loses queued jobs on cold start. Confirm a managed Redis
+    (e.g. Upstash) is provisioned and `REDIS_URL` is set in Vercel.
+18. **Shopify per-store webhook signing secret** — each Store row can carry its
+    own `webhookSecret` (encrypted); when absent the app falls back to the app's
+    `SHOPIFY_API_SECRET`. For custom/self-signed shops, set the per-store secret
+    via the store settings (PATCH `/api/stores/current`) so cross-store replay is
+    impossible. Confirm the signing secret used by each connected shop.
+19. **2FA recovery** — enabling TOTP requires an account password (Google-only
+    accounts must set one first), and OAuth sign-in is intentionally blocked for
+    2FA-enabled accounts. Confirm the account-recovery/support path for a
+    merchant who loses both their authenticator and password.

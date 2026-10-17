@@ -48,6 +48,51 @@ export interface EmailOptions {
   from?: string
 }
 
+export interface EmailSendResult {
+  success: boolean
+  messageId?: string
+  error?: string
+  /** Which provider actually delivered (or was last tried) — never silent. */
+  channel?: string
+  /** True when the first configured provider failed and a later one succeeded. */
+  fellBack?: boolean
+}
+
+/**
+ * Reports which transactional-email providers are configured. Used by the
+ * health endpoint so a silent "no provider" state (or a Resend-only setup,
+ * where an unverified FROM_EMAIL domain silently drops mail) is visible instead
+ * of only surfacing when a merchant reports a missing email.
+ */
+export function getEmailProviderStatus(): {
+  resend: boolean
+  smtp: boolean
+  configured: boolean
+  fromDomain: string | null
+  warning?: string
+} {
+  // Read env fresh on every call (not the module singletons) so the health
+  // check reflects the CURRENT configuration — a redeployed var is picked up
+  // without a restart, and tests can assert behaviour without re-importing.
+  const from = process.env.FROM_EMAIL || fromEmail
+  const fromDomain = (from.split('@')[1] || '').toLowerCase() || null
+  const hasResend = Boolean(process.env.RESEND_API_KEY)
+  const hasSmtp = Boolean(
+    process.env.EMAIL_SERVER_HOST &&
+    process.env.EMAIL_SERVER_USER &&
+    process.env.EMAIL_SERVER_PASSWORD,
+  )
+  const configured = hasResend || hasSmtp
+  let warning: string | undefined
+  if (!configured) {
+    warning = 'No transactional email provider configured (set RESEND_API_KEY or EMAIL_SERVER_*).'
+  } else if (hasResend && !hasSmtp) {
+    // Resend only reliably delivers from a domain verified in their dashboard.
+    warning = `Only Resend is configured — verify ${fromDomain || 'the FROM_EMAIL domain'} in Resend (SPF/DKIM), or configure an SMTP fallback, or mail may be silently dropped.`
+  }
+  return { resend: hasResend, smtp: hasSmtp, configured, fromDomain, warning }
+}
+
 function sendViaResend({ to, subject, html, text, from }: Required<Pick<EmailOptions, 'to' | 'subject' | 'html' | 'from'>> & { text?: string }): Promise<{
   success: boolean
   messageId?: string
@@ -82,11 +127,7 @@ export async function sendEmail({
   html,
   text,
   from = `${fromName} <${fromEmail}>`,
-}: EmailOptions): Promise<{
-  success: boolean
-  messageId?: string
-  error?: string
-}> {
+}: EmailOptions): Promise<EmailSendResult> {
   const channels: { name: string; send: typeof sendViaResend }[] = []
   if (resend) channels.push({ name: 'resend', send: sendViaResend })
   if (smtpTransport) channels.push({ name: 'smtp', send: sendViaSmtp })
@@ -94,21 +135,39 @@ export async function sendEmail({
   if (channels.length === 0) {
     // Not configured — log for local dev, but report failure so analytics
     // never count an email that was never actually sent.
-    console.warn(`[EMAIL NOT SENT — no email provider configured] ${JSON.stringify(redactSensitive({ to, subject }))}`)
-    return { success: false, error: 'Email service not configured' }
+    console.error(`[EMAIL NOT SENT — no email provider configured] ${JSON.stringify(redactSensitive({ to, subject }))}`)
+    return { success: false, error: 'Email service not configured', channel: 'none' }
   }
 
-  for (const channel of channels) {
+  for (let i = 0; i < channels.length; i++) {
+    const channel = channels[i]
     try {
       const result = await channel.send({ to, subject, html, text, from })
-      if (result.success) return result
+      if (result.success) {
+        // Make delivery non-silent: name the provider, and flag when the first
+        // choice failed and a fallback carried the message (a signal that the
+        // primary provider needs attention).
+        const fellBack = i > 0
+        if (fellBack) {
+          console.warn(
+            `[EMAIL] primary provider (${channels[0].name}) failed — delivered via fallback (${channel.name}) to ${JSON.stringify(redactSensitive({ to }))}`,
+          )
+        } else {
+          console.info(`[EMAIL] delivered via ${channel.name} to ${JSON.stringify(redactSensitive({ to }))}`)
+        }
+        return { ...result, channel: channel.name, fellBack }
+      }
       console.warn(`[EMAIL] ${channel.name} failed for ${JSON.stringify(redactSensitive({ to }))}: ${result.error}`)
     } catch (error) {
       console.warn(`[EMAIL] ${channel.name} threw for ${JSON.stringify(redactSensitive({ to }))}:`, redactSensitive(error))
     }
   }
 
-  return { success: false, error: `All email providers failed (${channels.map((c) => c.name).join(', ')})` }
+  return {
+    success: false,
+    error: `All email providers failed (${channels.map((c) => c.name).join(', ')})`,
+    channel: 'failed',
+  }
 }
 
 export const EmailTemplates = {

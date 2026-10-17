@@ -5,6 +5,7 @@ import { sendVerificationEmail } from '@/lib/services/auth-emails'
 import { createFreeSubscription } from '@/lib/subscription'
 import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
+import { sendAlertOnError } from '@/lib/alerter'
 import {
   signupSchema,
   createErrorResponse,
@@ -13,6 +14,8 @@ import {
   generateRandomToken,
   hashToken,
   emailVerifyIdentifier,
+  deriveStorePlatform,
+  deriveSignupDomain,
   VERIFICATION_EXPIRES_IN,
 } from '@/lib/auth-utils'
 
@@ -66,9 +69,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { password, name, storeName, storeDomain } = validationResult.data
+    const { password, name, storeName } = validationResult.data
+    const requestedDomain = validationResult.data.storeDomain
+    const requestedPlatform = validationResult.data.platform
     // Canonicalize email so "A@B.com" and "a@b.com" cannot create two accounts.
     const email = validationResult.data.email.trim().toLowerCase()
+
+    // Never assume the store is on Shopify. A direct signup is 'custom' (no
+    // storefront connected yet) unless the supplied domain is a myshopify.com
+    // domain; an explicit platform from the client wins over inference.
+    const platform = deriveStorePlatform(requestedDomain, requestedPlatform)
+    const storeDomain = deriveSignupDomain(storeName, email, requestedDomain)
 
     // Case-insensitive duplicate check: the unique index alone would allow a
     // second account differing only by case.
@@ -105,7 +116,7 @@ export async function POST(request: NextRequest) {
           create: {
             name: storeName,
             domain: storeDomain,
-            platform: 'shopify',
+            platform,
             currency: 'USD',
             isActive: false, // Inactive until verified
           },
@@ -135,8 +146,24 @@ export async function POST(request: NextRequest) {
 
     const emailResult = await sendVerificationEmail(email, verificationToken)
 
+    // A failed verification email used to be swallowed with only a console
+    // line, so signup returned "success" while the merchant could never verify
+    // (and we never heard about it). Record it, alert, and tell the client so
+    // the resend path is surfaced instead of a silent dead end.
     if (!emailResult.success) {
-      console.error('Registration: failed to send verification email:', emailResult.error)
+      await captureError({
+        level: 'error',
+        component: 'auth',
+        operation: 'register_verification_email',
+        error: new Error(emailResult.error || 'Verification email failed to send'),
+        req: request,
+        persist: true,
+      }).catch(() => {})
+      await sendAlertOnError(
+        'Registration verification email failed',
+        new Error(`${emailResult.error || 'unknown email error'} (channel=${emailResult.channel || 'unknown'})`),
+        { email },
+      ).catch(() => {})
     }
 
     await track({
@@ -153,8 +180,13 @@ export async function POST(request: NextRequest) {
         {
           user: userWithoutPassword,
           verificationRequired: true,
+          // false → the client shows a warning and points the merchant at the
+          // resend action instead of pretending the email arrived.
+          emailSent: emailResult.success,
         },
-        'Account created successfully. Please verify your email.'
+        emailResult.success
+          ? 'Account created successfully. Please verify your email.'
+          : 'Account created, but we could not send the verification email. Use "Resend verification email" below.'
       ),
       { status: 201 }
     )

@@ -9,6 +9,7 @@ import prisma from '@/lib/db'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { loginSchema } from '@/lib/auth-utils'
 import { createFreeSubscription } from '@/lib/subscription'
+import { verifyTotpCode } from '@/lib/totp'
 
 // Server-side only - load bcrypt when needed
 let bcrypt: any = null;
@@ -60,6 +61,9 @@ const providers: any[] = [
     credentials: {
       email: { label: 'Email', type: 'email' },
       password: { label: 'Password', type: 'password' },
+      // Second factor. Supplied on the follow-up request once the server has
+      // told the client that this account requires a TOTP code.
+      code: { label: '2FA code', type: 'text' },
     },
     async authorize(credentials) {
       const parsed = loginSchema.safeParse(credentials)
@@ -109,6 +113,25 @@ const providers: any[] = [
       // email (the resend link is available on the login page).
       if (!user.emailVerified) {
         throw new Error('EmailNotVerified')
+      }
+
+      // Second factor. A password alone must never complete a sign-in for an
+      // account that has TOTP enabled. The first request (no code) is answered
+      // with 2FARequired so the client can prompt for the code; the follow-up
+      // carries `code` and is only accepted when it verifies. This runs AFTER
+      // the password check so an attacker cannot use it to probe 2FA state.
+      if (user.totpEnabled) {
+        if (!user.totpSecret) {
+          // Enabled flag without a secret is an inconsistent state — fail closed.
+          throw new Error('2FAConfigError')
+        }
+        const code = typeof credentials?.code === 'string' ? credentials.code.trim() : ''
+        if (!code) {
+          throw new Error('2FARequired')
+        }
+        if (!/^\d{6}$/.test(code) || !verifyTotpCode(user.totpSecret, code)) {
+          throw new Error('2FAInvalid')
+        }
       }
 
       return {
@@ -344,6 +367,14 @@ export const authOptions: NextAuthOptions = {
               return `/login?error=NoAccount`
             }
           } else {
+            // A Google OAuth round-trip cannot collect a TOTP. For accounts
+            // with 2FA enabled, block the OAuth session and route the merchant
+            // to the credentials login, which enforces the second factor.
+            // (2FA setup requires a password, so this path is always usable.)
+            if (existingUser.totpEnabled) {
+              return `/login?error=2FARequired&email=${encodeURIComponent(email)}`
+            }
+
             const isLinked = existingUser.accounts.some(
               a => a.provider === 'google'
             )
@@ -382,7 +413,9 @@ export const authOptions: NextAuthOptions = {
                   userId: existingUser.id,
                   name: existingUser.name || 'My Store',
                   domain: (email || '').split('@')[0] || 'store',
-                  platform: 'shopify',
+                  // Not on Shopify until the merchant connects a store — the
+                  // OAuth callback sets platform: 'shopify' when it does.
+                  platform: 'custom',
                   currency: 'USD',
                   timezone: 'UTC',
                 },
@@ -428,7 +461,9 @@ export const authOptions: NextAuthOptions = {
               userId: user.id,
               name: user.name || 'My Store',
               domain: user.email?.split('@')[0] || 'store',
-              platform: 'shopify',
+              // Direct/OAuth signups are not on Shopify until they connect a
+              // store; the OAuth callback upgrades platform to 'shopify' then.
+              platform: 'custom',
               currency: 'USD',
               timezone: 'UTC',
             },

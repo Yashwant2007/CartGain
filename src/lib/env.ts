@@ -32,9 +32,17 @@ export const OPTIONAL_AI_VARS: Record<string, string> = {
   AI_FALLBACK_MODEL: 'Fallback model id (default openai/gpt-oss-120b)',
 }
 
-const MESSAGING_VARS: Record<string, string> = {
-  FROM_EMAIL: 'Sender email for transactional emails',
-  RESEND_API_KEY: 'Resend API key for email delivery',
+// Optional operational/infrastructure variables. The app degrades gracefully
+// without them (Redis → in-process rate limiting/queue; SMTP → Resend-only;
+// WhatsApp inbound → dropped with a warning), but they are required for full
+// production behaviour, so they are reported rather than silently ignored.
+export const OPTIONAL_INFRA_VARS: Record<string, string> = {
+  REDIS_URL: 'Redis connection string (rate limiting + background queue)',
+  EMAIL_SERVER_HOST: 'SMTP fallback host for transactional email',
+  EMAIL_SERVER_USER: 'SMTP fallback username',
+  EMAIL_SERVER_PASSWORD: 'SMTP fallback password',
+  WHATSAPP_APP_SECRET: 'Meta app secret used to verify inbound WhatsApp webhooks',
+  WHATSAPP_VERIFY_TOKEN: 'Meta webhook verify token',
 }
 
 function missingNames(vars: Record<string, string>): string[] {
@@ -51,11 +59,40 @@ export function assertEnv(
   scope: 'core' | 'payments' | 'ai' | 'messaging',
   opts: { silent?: boolean } = {}
 ): string[] {
+  // Email can be served by Resend OR an SMTP relay. Requiring both wrongly
+  // fails a valid SMTP-only setup, so 'messaging' passes when EITHER channel
+  // is fully configured.
+  if (scope === 'messaging') {
+    const missing: string[] = []
+    if (!process.env.FROM_EMAIL) {
+      missing.push('FROM_EMAIL (Sender email for transactional emails)')
+    }
+    const hasResend = Boolean(process.env.RESEND_API_KEY)
+    const hasSmtp = Boolean(
+      process.env.EMAIL_SERVER_HOST &&
+      process.env.EMAIL_SERVER_USER &&
+      process.env.EMAIL_SERVER_PASSWORD,
+    )
+    if (!hasResend && !hasSmtp) {
+      missing.push(
+        'RESEND_API_KEY (Resend API key) — or a complete SMTP fallback ' +
+        '(EMAIL_SERVER_HOST + EMAIL_SERVER_USER + EMAIL_SERVER_PASSWORD)',
+      )
+    }
+    if (missing.length > 0 && !opts.silent) {
+      throw new Error(
+        `CartGain is not configured: missing required environment variable(s) for [messaging]:\n` +
+        missing.map(m => `  - ${m}`).join('\n') +
+        '\nAdd them to your environment (Vercel project settings or .env) and redeploy.'
+      )
+    }
+    return missing
+  }
+
   const vars: Record<string, string> =
     scope === 'core' ? CORE_VARS :
     scope === 'payments' ? PAYMENT_VARS :
-    scope === 'ai' ? AI_VARS :
-    MESSAGING_VARS
+    AI_VARS
 
   const missing = missingNames(vars)
   if (missing.length > 0 && !opts.silent) {

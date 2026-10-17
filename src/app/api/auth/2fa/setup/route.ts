@@ -16,6 +16,16 @@ export async function POST() {
 
     if (user.totpEnabled) return NextResponse.json({ error: '2FA is already enabled. Disable it first to reconfigure.' }, { status: 400 })
 
+    // Enabling 2FA disables the Google-only sign-in path (OAuth cannot collect a
+    // TOTP), so the account MUST have a password to fall back on — otherwise the
+    // merchant would lock themselves out. Require one to be set first.
+    if (!user.password) {
+      return NextResponse.json(
+        { error: 'Set a password on your account before enabling two-factor authentication.' },
+        { status: 400 }
+      )
+    }
+
     const secret = generateTotpSecret()
     const otpauthUrl = generateOtpauthUrl(secret, user.email)
     const qrCodeDataUrl = await generateQrCodeDataUrl(secret, user.email)

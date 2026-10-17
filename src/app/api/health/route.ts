@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { getQueue } from '@/lib/queue'
 import { getAiHealth } from '@/lib/ai-client'
+import { getEmailProviderStatus } from '@/lib/services/email'
 import { currentEnvironment, currentRelease } from '@/lib/observability/version'
 
 export const dynamic = 'force-dynamic'
@@ -21,6 +22,12 @@ interface HealthStatus {
       activeTier: 'primary' | 'fallback' | 'none'
       primary: { configured: boolean }
       fallback: { configured: boolean; tripped: boolean; model: string; baseUrl: string }
+    }
+    email: {
+      status: 'ok' | 'degraded'
+      resend: boolean
+      smtp: boolean
+      configured: boolean
     }
     version: string
   }
@@ -47,8 +54,17 @@ export async function GET() {
   const optionalVars = [
     'WHATSAPP_BUSINESS_TOKEN',
     'WHATSAPP_PHONE_NUMBER_ID',
+    'WHATSAPP_APP_SECRET',
+    'WHATSAPP_VERIFY_TOKEN',
     'JOB_SECRET',
     'ALERT_EMAIL',
+    // Redis is optional (rate-limiting/queue degrade to in-process fallbacks),
+    // but its absence changes behaviour, so surface it rather than keep it a
+    // silent configuration gap. SMTP is the email fallback path.
+    'REDIS_URL',
+    'EMAIL_SERVER_HOST',
+    'EMAIL_SERVER_USER',
+    'EMAIL_SERVER_PASSWORD',
   ]
 
   const requiredMissing: string[] = []
@@ -133,10 +149,23 @@ export async function GET() {
     },
   }
 
+  // Transactional email: with no provider configured every verification/reset
+  // and recovery email silently disappears. Resend-only setups also risk silent
+  // drops unless the FROM domain is verified, so report the configuration and a
+  // non-fatal warning (logged, never returned) without flipping overall status —
+  // same treatment as the other optional integrations.
+  const email = getEmailProviderStatus()
+  const emailStatus: HealthStatus['checks']['email'] = {
+    status: email.configured ? 'ok' : 'degraded',
+    resend: email.resend,
+    smtp: email.smtp,
+    configured: email.configured,
+  }
+
   const overall: HealthStatus['status'] =
     dbStatus.status === 'error' ? 'error' :
     requiredMissing.length > 0 || redisStatus.status === 'error' ? 'error' :
-    redisStatus.status === 'degraded' || aiStatus.status === 'degraded' ? 'degraded' :
+    redisStatus.status === 'degraded' || aiStatus.status === 'degraded' || emailStatus.status === 'degraded' ? 'degraded' :
     'ok'
 
   const body: HealthStatus = {
@@ -158,6 +187,7 @@ export async function GET() {
         optionalMissing: optionalMissing.length > 0,
       },
       ai: aiStatus,
+      email: emailStatus,
       version: '1.0.0',
     },
   }

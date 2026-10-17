@@ -10,7 +10,12 @@ export const signupSchema = z.object({
     .regex(/[0-9]/, 'Password must include a number'),
   name: z.string().min(2, 'Name must be at least 2 characters'),
   storeName: z.string().min(2, 'Store name must be at least 2 characters'),
-  storeDomain: z.string().url().or(z.string().regex(/^[a-z0-9.-]+\.[a-z]{2,}$/i, 'Invalid domain')),
+  // A store domain is optional — a merchant signing up directly (not via a
+  // platform OAuth install) usually has not connected a storefront yet. When
+  // absent we derive a neutral placeholder, and platform is inferred rather
+  // than assumed (see the register route).
+  storeDomain: z.string().url().or(z.string().regex(/^[a-z0-9.-]+\.[a-z]{2,}$/i, 'Invalid domain')).optional(),
+  platform: z.enum(['shopify', 'woocommerce', 'magento', 'bigcommerce', 'custom']).optional(),
 })
 
 export const loginSchema = z.object({
@@ -31,6 +36,32 @@ export const resetPasswordSchema = z.object({
     .regex(/[A-Z]/, 'Password must include an uppercase letter')
     .regex(/[0-9]/, 'Password must include a number'),
 })
+
+// ── Store platform inference at signup ────────────────────────────────────────
+// A direct (email/password) signup has NOT connected a storefront, so the app
+// must not claim the store runs on Shopify. Previously registration hardcoded
+// platform: 'shopify', which mislabels non-Shopify merchants and makes
+// platform-gated features behave incorrectly. Infer the platform from the
+// domain when one is given, otherwise 'custom' (unconnected).
+export type StorePlatform = 'shopify' | 'woocommerce' | 'magento' | 'bigcommerce' | 'custom'
+
+export function deriveStorePlatform(storeDomain?: string | null, explicit?: string | null): StorePlatform {
+  if (explicit) return explicit as StorePlatform
+  const domain = (storeDomain || '').trim().toLowerCase()
+  if (domain.endsWith('.myshopify.com')) return 'shopify'
+  return 'custom'
+}
+
+// Store.domain is NOT NULL, so a direct signup needs a placeholder until a real
+// storefront is connected. Prefer the merchant-supplied domain; otherwise use a
+// slug of the store name (never a fabricated *.myshopify.com domain, which would
+// falsely assert the store is on Shopify).
+export function deriveSignupDomain(storeName: string, email: string, storeDomain?: string | null): string {
+  const explicit = storeDomain?.trim().toLowerCase()
+  if (explicit) return explicit
+  const slug = storeName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return slug || email.trim().toLowerCase().split('@')[0] || 'store'
+}
 
 export type SignupInput = z.infer<typeof signupSchema>
 export type LoginInput = z.infer<typeof loginSchema>

@@ -74,8 +74,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: false }, { status: 200 })
   }
 
+  // Per-store webhook secret binding: when the shop backing this delivery has
+  // its own signing secret (custom/self-managed Shopify app), verify against
+  // THAT secret instead of the app-wide one. This binds each delivery to the
+  // store's own key, so a body signed for one shop can never be accepted for
+  // another. Falls back to SHOPIFY_API_SECRET when the store has none — the
+  // standard case for a public Shopify app. The header domain is only used as a
+  // lookup key here (nothing is trusted until the HMAC check passes).
+  let storeWebhookSecret: string | null = null
+  if (shopDomain !== 'unknown') {
+    try {
+      const boundStore = await prisma.store.findFirst({
+        where: { domain: { equals: shopDomain, mode: 'insensitive' } },
+        select: { webhookSecret: true },
+      })
+      if (boundStore?.webhookSecret) {
+        const { decrypt } = await import('@/lib/encryption')
+        storeWebhookSecret = decrypt(boundStore.webhookSecret)
+      }
+    } catch (e) {
+      console.error(`Webhook [${topic}] from ${shopDomain} — failed to resolve per-store webhook secret:`, e)
+    }
+  }
+
   // Verify signature FIRST — never process or trust unverified payloads.
-  if (!verifyShopifyWebhook(body, request.headers)) {
+  if (!verifyShopifyWebhook(body, request.headers, storeWebhookSecret)) {
     console.warn(`Webhook [${topic}] from ${shopDomain} — invalid signature rejected`)
     return NextResponse.json({ message: 'Invalid signature' }, { status: 401 })
   }
