@@ -163,10 +163,10 @@ export function MessageBubble({ m, t, currencySymbol, personaChip, isFinal }: {
             className={m.delivery === 'delivered' ? 'cg-tick cg-tick-in' : 'cg-tick'}
             role="img"
             aria-label={m.delivery === 'delivered' ? 'Delivered' : 'Sending'}
-            style={{ display: 'inline-flex', alignItems: 'center', marginLeft: 6, verticalAlign: -1 }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 7, verticalAlign: -1 }}
           >
             {m.delivery === 'delivered'
-              ? <Check size={12} strokeWidth={3} />
+              ? <><Check size={12} strokeWidth={3} /><span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.01em', color: 'rgba(255,255,255,0.82)' }}>Delivered</span></>
               : <Clock3 size={10} />}
           </span>
         )}

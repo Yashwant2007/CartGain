@@ -438,8 +438,9 @@ export default function StorefrontBargainWidget({
         @keyframes cgfMsgIn { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: translateY(0) } }
 
         .cgf-tick {
-          display: inline-flex; align-items: center; margin-left: 6px;
+          display: inline-flex; align-items: center; gap: 3px; margin-left: 6px;
           vertical-align: -1px; color: #c7d2fe; opacity: 0.55;
+          font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em;
           transition: color 0.2s ease, opacity 0.2s ease;
         }
         .cgf-tick-in {
@@ -535,7 +536,7 @@ export default function StorefrontBargainWidget({
                       aria-label={msg.delivery === 'delivered' ? 'Delivered' : 'Sending'}
                     >
                       {msg.delivery === 'delivered'
-                        ? <Check size={12} strokeWidth={3} />
+                        ? <><Check size={12} strokeWidth={3} /><span>Delivered</span></>
                         : <Clock3 size={10} />}
                     </span>
                   )}
