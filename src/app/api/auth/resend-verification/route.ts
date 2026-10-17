@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { sendVerificationEmail } from '@/lib/services/auth-emails'
 import {
   forgotPasswordSchema,
@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic'
 // it cannot be used to probe which emails exist.
 export async function POST(request: NextRequest) {
   const rate = await checkSimpleRateLimit(
-    `resend_verify_${request.headers.get('x-forwarded-for') || 'unknown'}`,
+    `resend_verify_${clientIp(request.headers)}`,
   )
   if (!rate.allowed) {
     return NextResponse.json(

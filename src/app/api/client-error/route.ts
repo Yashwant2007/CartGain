@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { captureError } from '@/lib/observability/logger'
-import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +19,7 @@ interface ClientErrorInput {
 // visible from the same surface as server errors. Public endpoint, rate limited
 // per IP, values truncated server-side regardless of what the client sends.
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  const ip = clientIp(req.headers)
   const rate = await checkSimpleRateLimit(`client_error_${ip}`)
   if (!rate.allowed) {
     return NextResponse.json({}, { status: 429 })

@@ -8,7 +8,7 @@ import { validateOffer } from '@/lib/bargain/offer-validation'
 import { bargainCampaignStatus } from '@/lib/bargain/policy'
 import { track } from '@/lib/analytics/track'
 import { redisIncr, redisExpire } from '@/lib/redis'
-import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     // returns a distinguishable below-floor rejection, so unbounded probing
     // could binary-search the merchant floor. The per-shop code budget (below)
     // does not cover rejections; this does.
-    const rate = await checkSimpleRateLimit(`bargain_checkout_${request.headers.get('x-forwarded-for') || 'unknown'}`)
+    const rate = await checkSimpleRateLimit(`bargain_checkout_${clientIp(request.headers)}`)
     if (!rate.allowed) {
       return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
         status: 429,

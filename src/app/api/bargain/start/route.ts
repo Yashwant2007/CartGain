@@ -5,7 +5,7 @@ import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerConte
 import { currencySymbolFor, CURRENCY_SYMBOLS } from '@/lib/bargain/i18n'
 import { buildGoalContextForNegotiation } from '@/lib/bargain/goals'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
-import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { getBargainGate, recordBargainSessionOp, BARGAIN_SESSIONS_EXHAUSTED } from '@/lib/bargain/gate'
 import { generateClaimToken } from '@/lib/bargain/purchase'
 import { logDataAccess } from '@/lib/data-protection'
@@ -43,7 +43,7 @@ function publicSession(s: any) {
 // POST /api/bargain/start — open a new bargain session (no auth — storefront)
 export async function POST(request: NextRequest) {
   try {
-    const rate = await checkSimpleRateLimit(`bargain_start_${request.headers.get('x-forwarded-for') || 'unknown'}`)
+    const rate = await checkSimpleRateLimit(`bargain_start_${clientIp(request.headers)}`)
     if (!rate.allowed) {
       return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
         status: 429,

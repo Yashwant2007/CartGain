@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { logWarn, logInfo } from '@/lib/observability/logger'
 import { parseWhatsAppEvents, isWhatsAppOptOutText } from '@/lib/whatsapp/inbound'
 
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const rate = await checkSimpleRateLimit(`webhook_whatsapp_${request.headers.get('x-forwarded-for') || 'unknown'}`)
+    const rate = await checkSimpleRateLimit(`webhook_whatsapp_${clientIp(request.headers)}`)
     if (!rate.allowed) {
       return NextResponse.json({ status: 'rate_limited' }, { status: 429 })
     }

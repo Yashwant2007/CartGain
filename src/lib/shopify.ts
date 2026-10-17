@@ -34,10 +34,30 @@ export function retryDelayMs(
   return Math.min(SHOPIFY_BASE_BACKOFF_MS * 2 ** attempt, SHOPIFY_MAX_BACKOFF_MS)
 }
 
+// Outbound Shopify Admin calls may only ever target a real Shopify host. The
+// store's `domain` is merchant-settable, so without this guard a merchant could
+// point it at an internal/attacker host and have the app send a live Shopify
+// access token there (SSRF + credential exfiltration). Matches *.myshopify.com
+// and the shared api.shopify.com token-exchange host.
+const ALLOWED_SHOPIFY_HOST = /(^|\.)myshopify\.com$|^api\.shopify\.com$/i
+
+export function assertAllowedShopifyHost(url: string): void {
+  let host: string
+  try {
+    host = new URL(url).hostname.toLowerCase()
+  } catch {
+    throw new Error('Blocked outbound Shopify request: invalid URL')
+  }
+  if (!ALLOWED_SHOPIFY_HOST.test(host)) {
+    throw new Error(`Blocked outbound Shopify request to disallowed host: ${host}`)
+  }
+}
+
 // fetch() wrapper with bounded retry/backoff for Shopify rate limits. Retries
 // reuse the caller's `init` (including its AbortSignal timeout) — status-based
 // throttling never trips that timeout, so the signal is still live.
 async function shopifyFetch(input: string, init: RequestInit = {}, retries = SHOPIFY_MAX_RETRIES): Promise<Response> {
+  assertAllowedShopifyHost(input)
   let res = await globalThis.fetch(input, init)
   let attempt = 0
   while (isRetryableStatus(res.status) && attempt < retries) {

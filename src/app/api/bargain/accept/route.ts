@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainAcceptSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
-import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { assertSessionOwnership } from '@/lib/bargain/session-bind'
 import { getBargainGate, decideDealMode, recordBargainDealOps, BARGAIN_DEALS_EXHAUSTED } from '@/lib/bargain/gate'
 import { computeMinPrice } from '@/lib/services/bargain'
@@ -20,7 +20,7 @@ const ACCEPTABLE_DECISIONS = new Set(['accept', 'counter'])
 // POST /api/bargain/accept — customer accepts the final price; generate Shopify discount code
 export async function POST(request: NextRequest) {
   try {
-    const rate = await checkSimpleRateLimit(`bargain_accept_${request.headers.get('x-forwarded-for') || 'unknown'}`)
+    const rate = await checkSimpleRateLimit(`bargain_accept_${clientIp(request.headers)}`)
     if (!rate.allowed) {
       return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
         status: 429,

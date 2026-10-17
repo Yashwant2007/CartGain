@@ -21,7 +21,7 @@ interface HealthStatus {
       status: 'ok' | 'degraded'
       activeTier: 'primary' | 'fallback' | 'none'
       primary: { configured: boolean }
-      fallback: { configured: boolean; tripped: boolean; model: string; baseUrl: string }
+      fallback: { configured: boolean; tripped: boolean }
     }
     email: {
       status: 'ok' | 'degraded'
@@ -141,11 +141,11 @@ export async function GET() {
     status: ai.activeTier === 'none' ? 'degraded' : 'ok',
     activeTier: ai.activeTier,
     primary: { configured: ai.primary.configured },
+    // /api/health is unauthenticated — never disclose the fallback provider's
+    // model name or base URL (that would fingerprint our AI vendor/keys).
     fallback: {
       configured: ai.fallback.configured,
       tripped: ai.fallback.tripped,
-      model: ai.fallback.model,
-      baseUrl: ai.fallback.baseUrl,
     },
   }
 

@@ -58,6 +58,38 @@ export interface EmailSendResult {
   fellBack?: boolean
 }
 
+// HTML-escape every value that reaches an email template. Recovery emails mix
+// customer-supplied checkout data (name), merchant catalog data (product name /
+// description / image) and LLM output (aiBody) into raw HTML — without escaping
+// any of it, a crafted product name or a prompt-injected AI body could inject
+// markup/links into a message that arrives from the merchant's trusted domain.
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+// Escape + preserve line breaks for free-text AI bodies.
+function escapeHtmlMultiline(value: unknown): string {
+  return escapeHtml(value).replace(/\r?\n/g, '<br>')
+}
+
+// Only allow http(s)/mailto URLs in href attributes; anything else becomes a
+// harmless no-op anchor.
+function safeHref(value: unknown): string {
+  const s = String(value ?? '').trim()
+  return /^(https?:|mailto:)/i.test(s) ? escapeHtml(s) : '#'
+}
+
+// Only allow http(s) image URLs; anything else yields no image.
+function safeImageSrc(value: unknown): string {
+  const s = String(value ?? '').trim()
+  return /^https?:\/\//i.test(s) ? escapeHtml(s) : ''
+}
+
 /**
  * Reports which transactional-email providers are configured. Used by the
  * health endpoint so a silent "no provider" state (or a Resend-only setup,
@@ -177,7 +209,7 @@ export const EmailTemplates = {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Complete Your Order at ${storeName}</title>
+  <title>Complete Your Order at ${escapeHtml(storeName)}</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1a1a2e; margin: 0; padding: 0; background: #f8fafc;">
   <div style="max-width: 600px; margin: 20px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.06);">
@@ -185,13 +217,13 @@ export const EmailTemplates = {
     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 32px 24px; text-align: center;">
       <div style="font-size: 48px; margin-bottom: 12px;">🛍️</div>
       <h1 style="color: #ffffff; font-size: 24px; margin: 0;">Your cart is still warm!</h1>
-      <p style="color: rgba(255,255,255,0.85); font-size: 16px; margin: 8px 0 0;">Hey ${customerName || 'there'}, don't let these gems slip away ✨</p>
+      <p style="color: rgba(255,255,255,0.85); font-size: 16px; margin: 8px 0 0;">Hey ${escapeHtml(customerName) || 'there'}, don't let these gems slip away ✨</p>
     </div>
 
     <div style="padding: 24px;">
-      ${aiBody || `
+      ${aiBody ? escapeHtmlMultiline(aiBody) : `
       <div style="font-size: 15px; line-height: 1.8; color: #475569; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid #f0f0f5;">
-        You've got a great eye, ${customerName || 'there'}! ✨<br>
+        You've got a great eye, ${escapeHtml(customerName) || 'there'}! ✨<br>
         The pieces you picked are carefully chosen — each one handpicked to bring something special. We've saved everything for you, so you can complete your look whenever you're ready.<br>
         Don't wait too long — the best finds always go fast. 💫
       </div>
@@ -199,17 +231,17 @@ export const EmailTemplates = {
       <h2 style="font-size: 18px; color: #1a1a2e; margin: 0 0 16px;">Items in your cart 🛒</h2>
       ${items.map((item: any) => `
         <div style="display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid #f0f0f5;">
-          <img src="${item.image || 'https://via.placeholder.com/80'}" alt="${item.name}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 12px; flex-shrink: 0;">
+          <img src="${safeImageSrc(item.image) || 'https://via.placeholder.com/80'}" alt="${escapeHtml(item.name)}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 12px; flex-shrink: 0;">
           <div style="flex: 1;">
-            <div style="font-weight: 600; font-size: 16px; color: #1a1a2e;">${item.name}</div>
-            ${item.description ? `<div style="font-size: 13px; color: #64748b; margin-top: 4px;">${item.description}</div>` : ''}
-            <div style="font-size: 14px; color: #667eea; font-weight: 600; margin-top: 6px;">${currencySymbol}${Number(item.price).toFixed(2)} × ${item.quantity || 1}</div>
+            <div style="font-weight: 600; font-size: 16px; color: #1a1a2e;">${escapeHtml(item.name)}</div>
+            ${item.description ? `<div style="font-size: 13px; color: #64748b; margin-top: 4px;">${escapeHtml(item.description)}</div>` : ''}
+            <div style="font-size: 14px; color: #667eea; font-weight: 600; margin-top: 6px;">${escapeHtml(currencySymbol)}${Number(item.price).toFixed(2)} × ${item.quantity || 1}</div>
           </div>
         </div>
       `).join('')}
 
       <div style="text-align: right; padding: 16px 0; font-size: 22px; font-weight: 700; color: #1a1a2e;">
-        Total: ${currencySymbol}${cartTotal.toFixed(2)}
+        Total: ${escapeHtml(currencySymbol)}${cartTotal.toFixed(2)}
       </div>
 
       <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 16px; margin: 16px 0; text-align: center;">
@@ -217,16 +249,16 @@ export const EmailTemplates = {
       </div>
 
       <div style="text-align: center; margin: 24px 0;">
-        <a href="${cartUrl}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; padding: 16px 48px; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);">
+        <a href="${safeHref(cartUrl)}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; padding: 16px 48px; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);">
           Complete Your Order →
         </a>
         <p style="font-size: 13px; color: #94a3b8; margin-top: 12px;">Secure checkout • Takes less than 2 minutes</p>
       </div>
 
       <div style="text-align: center; border-top: 1px solid #f0f0f5; padding-top: 20px; margin-top: 8px;">
-        <p style="font-size: 12px; color: #94a3b8; margin: 0 0 4px;">This email was sent because you started a checkout at <strong>${storeName}</strong>.</p>
-        <p style="font-size: 12px; color: #94a3b8; margin: 0 0 4px;"><a href="${unsubscribeUrl || `${cartUrl}?unsubscribe=true`}" style="color: #94a3b8;">Unsubscribe from recovery messages</a></p>
-        <p style="font-size: 12px; color: #94a3b8; margin: 0;">© ${new Date().getFullYear()} ${storeName}. All rights reserved.</p>
+        <p style="font-size: 12px; color: #94a3b8; margin: 0 0 4px;">This email was sent because you started a checkout at <strong>${escapeHtml(storeName)}</strong>.</p>
+        <p style="font-size: 12px; color: #94a3b8; margin: 0 0 4px;"><a href="${safeHref(unsubscribeUrl || `${cartUrl}?unsubscribe=true`)}" style="color: #94a3b8;">Unsubscribe from recovery messages</a></p>
+        <p style="font-size: 12px; color: #94a3b8; margin: 0;">© ${new Date().getFullYear()} ${escapeHtml(storeName)}. All rights reserved.</p>
       </div>
     </div>
   </div>
@@ -251,16 +283,16 @@ export const EmailTemplates = {
 <body>
   <div class="container">
     <h1>A Special Offer Just For You!</h1>
-    <p>Hi ${customerName || 'there'}, we noticed you left items in your cart. Here's ${discountPercent}% off to complete your order!</p>
+    <p>Hi ${escapeHtml(customerName) || 'there'}, we noticed you left items in your cart. Here's ${escapeHtml(discountPercent)}% off to complete your order!</p>
 
     <div class="discount-box">
       <div>Use code at checkout:</div>
-      <div class="discount-code">${discountCode}</div>
-      <div>Save ${currencySymbol}${(cartTotal * discountPercent / 100).toFixed(2)} instantly!</div>
+      <div class="discount-code">${escapeHtml(discountCode)}</div>
+      <div>Save ${escapeHtml(currencySymbol)}${(cartTotal * discountPercent / 100).toFixed(2)} instantly!</div>
     </div>
 
     <div style="text-align: center;">
-      <a href="${cartUrl}" class="cta-button">Claim Your Discount</a>
+      <a href="${safeHref(cartUrl)}" class="cta-button">Claim Your Discount</a>
     </div>
 
     <p style="text-align: center; color: #666; font-size: 14px;">
@@ -268,8 +300,8 @@ export const EmailTemplates = {
     </p>
 
     <div class="footer">
-      <p><a href="${unsubscribeUrl || `${cartUrl}?unsubscribe=true`}" style="color: #999;">Unsubscribe</a></p>
-      <p>© ${new Date().getFullYear()} ${storeName}. All rights reserved.</p>
+      <p><a href="${safeHref(unsubscribeUrl || `${cartUrl}?unsubscribe=true`)}" style="color: #999;">Unsubscribe</a></p>
+      <p>© ${new Date().getFullYear()} ${escapeHtml(storeName)}. All rights reserved.</p>
     </div>
   </div>
 </body>
@@ -290,11 +322,11 @@ export const EmailTemplates = {
 <body>
   <div class="container">
     <h1>Good News!</h1>
-    <p>Hi ${customerName || 'there'},</p>
-    <p><strong>${productName}</strong> is back in stock!</p>
-    <img src="${productImage}" alt="${productName}" class="product-image">
+    <p>Hi ${escapeHtml(customerName) || 'there'},</p>
+    <p><strong>${escapeHtml(productName)}</strong> is back in stock!</p>
+    <img src="${safeImageSrc(productImage)}" alt="${escapeHtml(productName)}" class="product-image">
     <br>
-    <a href="${cartUrl}" class="cta-button">Grab It Before It's Gone</a>
+    <a href="${safeHref(cartUrl)}" class="cta-button">Grab It Before It's Gone</a>
   </div>
 </body>
 </html>

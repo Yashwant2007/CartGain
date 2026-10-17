@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(request: Request) {
   const rate = await checkSimpleRateLimit(
-    `check_email_${request.headers.get('x-forwarded-for') || 'unknown'}`,
+    `check_email_${clientIp(request.headers)}`,
   )
   if (!rate.allowed) {
     return NextResponse.json(

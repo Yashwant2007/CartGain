@@ -28,6 +28,7 @@ jest.mock('@/lib/db', () => ({
 
 jest.mock('@/lib/rate-limit', () => ({
   checkSimpleRateLimit: jest.fn(async () => ({ allowed: true, retryAfter: 0 })),
+  clientIp: jest.fn(() => '1.2.3.4'),
 }))
 
 jest.mock('@/lib/shopify', () => ({

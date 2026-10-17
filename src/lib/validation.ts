@@ -60,9 +60,48 @@ export type ABTestCreateInput = z.infer<typeof abTestCreateSchema>
 
 // ── Store settings schemas ──
 
+// A store domain/host that is safe to derive outbound URLs from. Accepts either
+// a bare hostname or a full http(s) URL (the settings form defaults to
+// "https://mystore.com"), but rejects private/local hosts and IP literals so a
+// merchant cannot point server-side Shopify calls at an internal service or an
+// attacker host (SSRF / access-token exfiltration). See assertAllowedShopifyHost
+// in src/lib/shopify.ts for the outbound-request counterpart.
+const STORE_DOMAIN_RE =
+  /^(?:https?:\/\/)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?::\d{2,5})?(?:\/\S*)?$/i
+
+function isPrivateStoreHost(value: string): boolean {
+  const host = value
+    .replace(/^https?:\/\//i, '')
+    .split(/[/:?#]/)[0]
+    .toLowerCase()
+    .replace(/\.$/, '')
+  if (!host) return true
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    host.endsWith('.internal') ||
+    host.endsWith('.home.arpa')
+  ) {
+    return true
+  }
+  // IPv6 literal or any bare IPv4 literal — never a legitimate store host.
+  if (host.includes(':') || host.startsWith('[')) return true
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) return true
+  return false
+}
+
+export const storeDomainSchema = z
+  .string()
+  .trim()
+  .max(200)
+  .refine((v) => v === '' || (STORE_DOMAIN_RE.test(v) && !isPrivateStoreHost(v)), {
+    message: 'Must be a valid public store domain',
+  })
+
 export const storeUpdateSchema = z.object({
   name: nonEmptyString('Store name').min(2).max(100).optional(),
-  domain: z.string().max(200).optional(),
+  domain: storeDomainSchema.optional(),
   timezone: z.string().max(50).optional(),
   currency: z.enum(['INR', 'USD']).optional(),
   platform: z.enum(['shopify', 'woocommerce', 'magento', 'bigcommerce', 'custom']).optional(),

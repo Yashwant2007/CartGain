@@ -102,6 +102,9 @@ export async function GET(req: NextRequest) {
     //    in, store already exists).
     //  - no storeId → install-origin (App Install button) → auto-provision the
     //    User + Store + free Subscription from the shop owner and log them in.
+    // The state ALSO carries the shop it was minted for; the callback must
+    // confirm it matches the callback's shop or a state issued for one shop
+    // could be replayed to bind a different shop's credentials (cross-tenant).
     let storeId: string | null = null
     let installOrigin = false
     let embedHost: string | null = null
@@ -109,6 +112,9 @@ export async function GET(req: NextRequest) {
       const decoded = verifyOAuthState(state)
       if (!decoded) {
         throw new Error('Invalid state')
+      }
+      if (typeof decoded.shop !== 'string' || decoded.shop !== shop) {
+        throw new Error('State shop mismatch')
       }
       if (typeof decoded.storeId === 'string' && decoded.storeId) {
         storeId = decoded.storeId

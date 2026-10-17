@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
-import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { verifyOptOutToken, normalizeOptOutEmail, normalizeOptOutPhone } from '@/lib/opt-out'
 
 export const dynamic = 'force-dynamic'
@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
 // able to suppress contacts.
 export async function POST(request: NextRequest) {
   try {
-    const rate = await checkSimpleRateLimit(`bargain_optout_${request.headers.get('x-forwarded-for') || 'unknown'}`)
+    const rate = await checkSimpleRateLimit(`bargain_optout_${clientIp(request.headers)}`)
     if (!rate.allowed) {
       return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
         status: 429,

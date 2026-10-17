@@ -61,7 +61,10 @@ export async function POST(req: NextRequest) {
     const baseUrl = getAppBaseUrl(req)
     const redirectUri = `${baseUrl}/api/shopify/callback`
 
-    const state = signOAuthState({ storeId, userId: session.user.id })
+    // Bind the signed state to the exact shop it was issued for. The callback
+    // re-checks this, so a state minted for one shop cannot be used to complete
+    // an install for a different shop (cross-tenant takeover).
+    const state = signOAuthState({ storeId, userId: session.user.id, shop })
     if (!state) {
       return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 })
     }

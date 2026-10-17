@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { issueRetentionDiscount } from '@/lib/bargain/purchase'
 import { assertSessionOwnership } from '@/lib/bargain/session-bind'
 
@@ -15,7 +15,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const rate = await checkSimpleRateLimit(`bargain_session_${request.headers.get('x-forwarded-for') || 'unknown'}`)
+    const rate = await checkSimpleRateLimit(`bargain_session_${clientIp(request.headers)}`)
     if (!rate.allowed) {
       return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
         status: 429,

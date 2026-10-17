@@ -84,6 +84,20 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ message: 'No store found for this account' }, { status: 404 })
     }
 
+    // A Shopify store is always addressed by its *.myshopify.com host (that is
+    // what every Admin API call + access token relies on). Refuse to leave a
+    // Shopify store pointed anywhere else, even if only the platform or the
+    // domain was changed in this request — otherwise a stale/attacker domain
+    // could redirect outbound authenticated calls.
+    const effectivePlatform = data.platform ?? store.platform
+    const effectiveDomain = (data.domain ?? store.domain ?? '').replace(/^https?:\/\//i, '').split('/')[0]
+    if (effectivePlatform === 'shopify' && !/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(effectiveDomain)) {
+      return NextResponse.json(
+        { message: 'Shopify stores must use their *.myshopify.com domain' },
+        { status: 400 },
+      )
+    }
+
     const updateData: Record<string, any> = {}
     if (data.name !== undefined) updateData.name = data.name
     if (data.domain !== undefined) updateData.domain = data.domain

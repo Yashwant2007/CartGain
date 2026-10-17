@@ -69,6 +69,7 @@ const prismaMock = prisma as unknown as {
 
 jest.mock('@/lib/rate-limit', () => ({
   checkSimpleRateLimit: jest.fn(async () => ({ allowed: true, retryAfter: 0 })),
+  clientIp: jest.fn(() => '1.2.3.4'),
 }))
 
 // The model must never be reached for these assertions; if it is, the test

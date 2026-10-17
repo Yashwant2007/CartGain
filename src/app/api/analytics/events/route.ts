@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { track, CLIENT_FIREABLE_EVENTS } from '@/lib/analytics/track'
-import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 // limited, so a logged-in merchant can report lifecycle moments (onboarding
 // started/completed) without opening an arbitrary event-writing surface.
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  const ip = clientIp(req.headers)
   const rate = await checkSimpleRateLimit(`analytics_event_${ip}`)
   if (!rate.allowed) {
     return NextResponse.json({}, { status: 429 })

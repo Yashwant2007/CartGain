@@ -64,12 +64,17 @@ export function getOAuthStateSecret(): string | null {
 export function signOAuthState(payload: Record<string, unknown>): string | null {
   const secret = getOAuthStateSecret()
   if (!secret) return null
-  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  // Stamp every state with an issued-at so an old state cannot be replayed
+  // indefinitely (verifyOAuthState enforces a max age).
+  const body = Buffer.from(JSON.stringify({ ...payload, iat: Date.now() })).toString('base64url')
   const sig = crypto.createHmac('sha256', secret).update(body).digest('hex')
   return `${body}.${sig}`
 }
 
-export function verifyOAuthState(state: string): Record<string, unknown> | null {
+export function verifyOAuthState(
+  state: string,
+  maxAgeMs = 30 * 60 * 1000,
+): Record<string, unknown> | null {
   const secret = getOAuthStateSecret()
   if (!secret) return null
   const dotIndex = state.lastIndexOf('.')
@@ -82,7 +87,14 @@ export function verifyOAuthState(state: string): Record<string, unknown> | null 
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null
   try {
     const decoded = JSON.parse(Buffer.from(body, 'base64url').toString())
-    return decoded && typeof decoded === 'object' ? decoded as Record<string, unknown> : null
+    if (!decoded || typeof decoded !== 'object') return null
+    // Timestamp guard: a state without a valid, recent iat is rejected. This
+    // closes the "capture a legitimately-signed state and reuse it later" window.
+    const iat = (decoded as Record<string, unknown>).iat
+    if (typeof iat !== 'number' || !Number.isFinite(iat)) return null
+    if (Date.now() - iat > maxAgeMs) return null
+    if (Date.now() - iat < -60_000) return null // clock-skew guard
+    return decoded as Record<string, unknown>
   } catch {
     return null
   }

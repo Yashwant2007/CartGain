@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainOfferSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { negotiateStep, ruleBasedDecision, buildOpeningMessage, buildCustomerContext, computeMinPrice, retentionOffer, quotedFloor, type NegotiationContext } from '@/lib/services/bargain'
-import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { detectWalkout, extractQuantity, extractPrice } from '@/lib/bargain/text'
 import { assertSessionOwnership } from '@/lib/bargain/session-bind'
 import { uiText, currencySymbolFor } from '@/lib/bargain/i18n'
@@ -36,7 +36,7 @@ function recoEnabledForMessages(config: Partial<{ recommendationsEnabled: boolea
 // POST /api/bargain/offer — customer sends a message, AI responds
 export async function POST(request: NextRequest) {
   try {
-    const rate = await checkSimpleRateLimit(`bargain_offer_${request.headers.get('x-forwarded-for') || 'unknown'}`)
+    const rate = await checkSimpleRateLimit(`bargain_offer_${clientIp(request.headers)}`)
     if (!rate.allowed) {
       return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
         status: 429,

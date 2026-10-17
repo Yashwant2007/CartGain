@@ -54,13 +54,27 @@ const ALLOWED_EMBED_ORIGINS = new Set(['admin.shopify.com'])
 // providers; OAuth callbacks from Google/email). These never rely on a
 // merchant session cookie for authorization.
 const CSRF_EXEMPT_PREFIXES = [
-  '/api/bargain/', // storefront widget (arbitrary merchant store domains)
   '/api/webhooks/', // HMAC-verified provider callbacks
   '/api/shopify/', // OAuth install/callback + session-token endpoints
   '/api/auth/callback/', // OAuth provider callback
   '/api/health',
   '/api/opt-out', // public unsubscribe
   '/api/analytics/events', // public funnel events
+]
+
+// Public storefront/bargain endpoints nested under /api/bargain/ that run on
+// arbitrary merchant store domains and never authorize via the merchant session
+// cookie. Everything ELSE under /api/bargain/ (config, products, sessions,
+// demo, goals, catalog, …) IS session-authenticated and must stay CSRF-checked
+// — exempting the whole prefix let a cross-site POST rewrite a logged-in
+// merchant's bargain config/product floors.
+const CSRF_EXEMPT_BARGAIN = [
+  '/api/bargain/start',
+  '/api/bargain/offer',
+  '/api/bargain/accept',
+  '/api/bargain/checkout-accept',
+  '/api/bargain/recommend/event',
+  '/api/bargain/session', // read-only transcript
 ]
 
 function hasSessionCookie(req: NextRequest): boolean {
@@ -79,7 +93,12 @@ function isSameOriginRequest(req: NextRequest): boolean {
 }
 
 function isCsrfExempt(pathname: string): boolean {
-  return CSRF_EXEMPT_PREFIXES.some(prefix => pathname.startsWith(prefix))
+  return (
+    CSRF_EXEMPT_PREFIXES.some(prefix => pathname.startsWith(prefix)) ||
+    CSRF_EXEMPT_BARGAIN.some(
+      path => pathname === path || pathname.startsWith(`${path}/`),
+    )
+  )
 }
 
 export default async function middleware(

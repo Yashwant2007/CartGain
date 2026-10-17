@@ -1,4 +1,4 @@
-import { getAccessToken } from '@/lib/shopify'
+import { getAccessToken, assertAllowedShopifyHost } from '@/lib/shopify'
 
 // Shopify Admin GraphQL API version — kept in sync with the REST calls in
 // src/lib/shopify.ts and shopify.app.toml.
@@ -35,7 +35,9 @@ export async function shopifyGraphQL<T>(
   }
 
   try {
-    const res = await fetch(`https://${store.domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
+    const url = `https://${store.domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`
+    assertAllowedShopifyHost(url)
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { checkSimpleRateLimit } from '@/lib/rate-limit'
+import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { emailVerifyIdentifier, hashToken } from '@/lib/auth-utils'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {
-    const rate = await checkSimpleRateLimit(`verify_email_${req.headers.get('x-forwarded-for') || 'unknown'}`)
+    const rate = await checkSimpleRateLimit(`verify_email_${clientIp(req.headers)}`)
     if (!rate.allowed) {
       return NextResponse.redirect(new URL('/login?error=Too+many+attempts', req.url))
     }

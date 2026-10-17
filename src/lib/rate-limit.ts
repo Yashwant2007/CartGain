@@ -11,7 +11,7 @@ const SIMPLE_MAX_REQUESTS = 30
 
 // Take the first address from x-forwarded-for and validate it looks like an IP
 // so a spoofed/malformed header cannot be used to bypass or poison rate limits.
-function clientIp(headersList: Headers): string {
+export function clientIp(headersList: Headers): string {
   const raw = headersList.get('x-forwarded-for')?.split(',')[0]?.trim() || headersList.get('x-real-ip')?.trim() || 'unknown'
   const ipv4 = /^(\d{1,3}\.){3}\d{1,3}$/
   if (ipv4.test(raw)) return raw
