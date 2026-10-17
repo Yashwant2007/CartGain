@@ -116,6 +116,21 @@ export async function issueRetentionDiscount(sessionId: string): Promise<IssuedB
   if (price >= session.originalPrice) return null
 
   const code = generateBargainCode()
+
+  // Bind the retention code to the SAME Shopify customer the accept path would
+  // bind to. Without this the code falls back to Shopify's `customerSelection:
+  // { all: true }`, which any logged-in shopper holding the code could redeem —
+  // i.e. it would be usable outside the bargaining customer. Resolving the cart
+  // owner (when we know it) keeps the retention deal's "personal code" promise.
+  let shopifyCustomerId: string | null = null
+  if (session.cartToken) {
+    const cart = await prisma.cart.findUnique({
+      where: { storeId_cartId: { storeId: session.storeId, cartId: session.cartToken } },
+      select: { customerId: true },
+    })
+    shopifyCustomerId = cart?.customerId ?? null
+  }
+
   const result = await generateBargainDiscountCode({
     store: session.store,
     shopifyProductId: session.shopifyProductId,
@@ -128,6 +143,7 @@ export async function issueRetentionDiscount(sessionId: string): Promise<IssuedB
     cartToken: session.cartToken,
     bulkQuantity: session.bulkQuantity ?? 1,
     floorPrice: minPrice,
+    shopifyCustomerId,
   })
   if (result.status === 'failed') return null
 

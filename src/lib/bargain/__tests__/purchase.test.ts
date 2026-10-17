@@ -10,6 +10,7 @@ jest.mock('@/lib/db', () => ({
       updateMany: jest.fn(),
     },
     bargainMessage: { findFirst: jest.fn() },
+    cart: { findUnique: jest.fn() },
     $transaction: jest.fn(),
   },
 }))
@@ -159,6 +160,30 @@ describe('issueRetentionDiscount', () => {
 
     expect(await issueRetentionDiscount('sess1')).toBeNull()
     expect(prisma.bargainSession.update).not.toHaveBeenCalled()
+  })
+
+  it('binds the retention code to the cart\'s Shopify customer', async () => {
+    ;(prisma.bargainSession.findUnique as jest.Mock).mockResolvedValue(sessionFixture())
+    ;(prisma.bargainMessage.findFirst as jest.Mock).mockResolvedValue({ offeredPrice: 820 })
+    ;(prisma.bargainSession.update as jest.Mock).mockResolvedValue({})
+    ;(prisma.cart.findUnique as jest.Mock).mockResolvedValue({ customerId: 'cust_123' })
+
+    await issueRetentionDiscount('sess1')
+
+    const discountArg = (generateBargainDiscountCode as jest.Mock).mock.calls[0][0]
+    expect(discountArg.shopifyCustomerId).toBe('cust_123')
+  })
+
+  it('leaves the code unbound when the cart owner is unknown', async () => {
+    ;(prisma.bargainSession.findUnique as jest.Mock).mockResolvedValue(sessionFixture())
+    ;(prisma.bargainMessage.findFirst as jest.Mock).mockResolvedValue({ offeredPrice: 820 })
+    ;(prisma.bargainSession.update as jest.Mock).mockResolvedValue({})
+    ;(prisma.cart.findUnique as jest.Mock).mockResolvedValue(null)
+
+    await issueRetentionDiscount('sess1')
+
+    const discountArg = (generateBargainDiscountCode as jest.Mock).mock.calls[0][0]
+    expect(discountArg.shopifyCustomerId).toBeNull()
   })
 
   it('resurfaces an already-issued code (idempotent)', async () => {
