@@ -548,6 +548,13 @@ export default function BargainWidget({
     }
   }
 
+  // Flip the shopper's own bubble from the "sending" clock to a single delivered
+  // tick. Pure UI acknowledgement — it never claims more than "the server has
+  // the message".
+  function markMessageDelivered(id: string) {
+    setMessages(prev => prev.map(m => (m.id === id ? { ...m, delivery: 'delivered' } : m)))
+  }
+
   // Network hiccups get a warm, generic copy; server-sent messages (a too-low
   // price, a real expiry, …) are kept verbatim so customers never get a canned
   // reply that contradicts reality.
@@ -566,12 +573,18 @@ export default function BargainWidget({
     setLoading(true)
     setError(null)
     setNotice(null)
+    const localId = `c-${Date.now()}`
     setMessages(prev => [
       ...prev,
-      { id: `c-${Date.now()}`, role: 'customer', content: msg, offeredPrice: draftAmount, createdAt: new Date().toISOString() },
+      { id: localId, role: 'customer', content: msg, offeredPrice: draftAmount, createdAt: new Date().toISOString(), delivery: 'sending' },
     ])
     setInput('')
     setAtBottom(true)
+    // Optimistic delivery ack: flip the clock to a single tick almost
+    // immediately so the bubble reads "sent" while the assistant thinks — the
+    // same rhythm as a real messaging app. The finally block guarantees the tick
+    // lands even when the round-trip beats the timer.
+    const ackTimer = window.setTimeout(() => markMessageDelivered(localId), 180)
     try {
       const res = await fetch(`${apiBase}/api/bargain/offer`, {
         method: 'POST',
@@ -650,6 +663,8 @@ export default function BargainWidget({
       lastFailedRef.current = { kind: 'offer', payload: msg }
       setError(errorCopy(err))
     } finally {
+      window.clearTimeout(ackTimer)
+      markMessageDelivered(localId)
       setLoading(false)
       busyRef.current = false
     }
@@ -1779,7 +1794,11 @@ export default function BargainWidget({
         @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
         @keyframes cgPanelIn { from { opacity: 0; transform: translateY(10px) scale(0.985) } to { opacity: 1; transform: translateY(0) scale(1) } }
         @keyframes cgMsgIn { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: translateY(0) } }
-        @keyframes cgDotPulse { 0%, 60%, 100% { opacity: 0.35; transform: scale(0.9) } 30% { opacity: 1; transform: scale(1) } }
+        @keyframes cgDotPulse { 0%, 80%, 100% { opacity: 0.3; transform: translateY(0) scale(0.85) } 40% { opacity: 1; transform: translateY(-2px) scale(1) } }
+        @keyframes cgTickIn { 0% { opacity: 0; transform: scale(0.6) } 60% { transform: scale(1.12) } 100% { opacity: 1; transform: scale(1) } }
+        /* Single delivered tick on the shopper's own bubble. */
+        .cg-tick { color: rgba(255,255,255,0.55); opacity: 0.55; transition: color 0.2s ease, opacity 0.2s ease }
+        .cg-tick-in { color: #ffffff; opacity: 1; animation: cgTickIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) }
         @keyframes cgAttnPulse { 0% { box-shadow: 0 0 0 0 rgba(99,102,241,0.4) } 70% { box-shadow: 0 0 0 12px rgba(99,102,241,0) } 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0) } }
         @keyframes cgAttnFloat { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-5px) } }
 

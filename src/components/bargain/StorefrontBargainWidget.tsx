@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { ShoppingCart } from 'lucide-react'
+import { ShoppingCart, Check, Clock3 } from 'lucide-react'
 import { currencySymbolFor } from '@/lib/bargain/i18n'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { reciprocalCounter, isAbsurdOffer, absurdOfferReply, type NegotiationContext } from '@/lib/bargain/engine'
@@ -36,6 +36,20 @@ const PERSONA_DISPLAY: Record<string, string> = {
 
 function money(currency: string, n: number): string {
   return `${currencySymbolFor(currency)}${n.toFixed(2)}`
+}
+
+// Stable per-message id for React keys + optimistic delivery tracking.
+function uid(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+type ChatLine = {
+  role: string
+  content: string
+  price?: number
+  id: string
+  // 'sending' → the shopper's bubble shows a clock; 'delivered' → a single tick.
+  delivery: 'sending' | 'delivered'
 }
 
 type Props = {
@@ -74,7 +88,7 @@ export default function StorefrontBargainWidget({
   const variantId = !isCart ? (line.variantId || null) : null
 
   const [step, setStep] = useState<'intro' | 'chat' | 'deal' | 'rejected'>('intro')
-  const [messages, setMessages] = useState<{ role: string; content: string; price?: number }[]>([])
+  const [messages, setMessages] = useState<ChatLine[]>([])
   const [input, setInput] = useState('')
   const [attempts, setAttempts] = useState(0)
   const [persona, setPersona] = useState<'friendly' | 'strict' | 'playful'>(() =>
@@ -182,16 +196,33 @@ export default function StorefrontBargainWidget({
   // the model answers faster than that, hold the reply back for the remainder —
   // so a fast answer still feels typed, while a slow one is never padded.
   const minThinkingMs = (reply: string) =>
-    Math.min(1600, Math.max(650, reply.length * 12))
+    Math.min(900, Math.max(360, reply.length * 7))
+
+  const markDelivered = useCallback((id: string) => {
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, delivery: 'delivered' } : m)))
+  }, [])
+
+  const pushAi = useCallback((content: string, price?: number) => {
+    setMessages((prev) => [...prev, { role: 'ai', content, price, id: uid(), delivery: 'delivered' }])
+  }, [])
 
   const handleSend = async () => {
     if (!input.trim() || loading) return
     const userText = input.trim()
-    setMessages((prev) => [...prev, { role: 'customer', content: userText }])
+    const userMsgId = uid()
+    setMessages((prev) => [
+      ...prev,
+      { role: 'customer', content: userText, id: userMsgId, delivery: 'sending' },
+    ])
     setInput('')
     setLoading(true)
     setError(null)
     const startedAt = Date.now()
+    // Optimistic delivery ack: flip the clock to a single tick almost
+    // immediately so the bubble reads "sent" while the assistant thinks — the
+    // same rhythm as a real messaging app. The finally block guarantees the
+    // tick lands even when the round-trip resolves faster than the timer.
+    const ack = window.setTimeout(() => markDelivered(userMsgId), 180)
 
     try {
       const offer = extractPrice(userText)
@@ -248,7 +279,7 @@ export default function StorefrontBargainWidget({
         : undefined
       const wait = minThinkingMs(data.reply ?? '') - (Date.now() - startedAt)
       if (wait > 0) await new Promise((r) => setTimeout(r, wait))
-      setMessages((prev) => [...prev, { role: 'ai', content: data.reply, price: priceTag }])
+      pushAi(data.reply, priceTag)
       setAttempts(isAbsurdTurn ? attempts : nextAttempt)
 
       if (data.decision === 'accept') {
@@ -280,7 +311,7 @@ export default function StorefrontBargainWidget({
         const p = Math.max(minPrice, Math.round((lastCounter - stepSize) * 100) / 100)
         result = { reply: PersonaRetention[persona](p, (n) => money(currency, n)), decision: 'counter', counterOffer: p }
       } else if (isWalkout) {
-        setMessages((prev) => [...prev, { role: 'ai', content: PersonaFarewell[persona] }])
+        pushAi(PersonaFarewell[persona])
         setStep('rejected')
         setLoading(false)
         return
@@ -338,9 +369,11 @@ export default function StorefrontBargainWidget({
 
       const wait = minThinkingMs(result.reply) - (Date.now() - startedAt)
       if (wait > 0) await new Promise((r) => setTimeout(r, wait))
-      setMessages((prev) => [...prev, { role: 'ai', content: result.reply, price: result.counterOffer }])
+      pushAi(result.reply, result.counterOffer)
       setAttempts(nextAttempt)
     } finally {
+      window.clearTimeout(ack)
+      markDelivered(userMsgId)
       setLoading(false)
     }
   }
@@ -397,6 +430,43 @@ export default function StorefrontBargainWidget({
       role="region"
       aria-label="Price negotiation"
     >
+      {/* Scoped chat motion — namespaced so no Shopify theme CSS is touched.
+          A single delivered tick, a calm three-dot thinking pulse, and a soft
+          bubble entrance keep the negotiation feeling quick and professional. */}
+      <style>{`
+        .cgf-msg { animation: cgfMsgIn 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) }
+        @keyframes cgfMsgIn { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: translateY(0) } }
+
+        .cgf-tick {
+          display: inline-flex; align-items: center; margin-left: 6px;
+          vertical-align: -1px; color: #c7d2fe; opacity: 0.55;
+          transition: color 0.2s ease, opacity 0.2s ease;
+        }
+        .cgf-tick-in {
+          color: #ffffff; opacity: 1;
+          animation: cgfTickIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        @keyframes cgfTickIn {
+          0% { opacity: 0; transform: scale(0.6) }
+          60% { transform: scale(1.12) }
+          100% { opacity: 1; transform: scale(1) }
+        }
+
+        .cgf-dot {
+          width: 6px; height: 6px; border-radius: 999px; background: #818cf8;
+          animation: cgfDot 1.1s infinite ease-in-out;
+        }
+        @keyframes cgfDot {
+          0%, 80%, 100% { opacity: 0.3; transform: translateY(0) scale(0.85) }
+          40% { opacity: 1; transform: translateY(-2px) scale(1) }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .cgf-msg, .cgf-tick, .cgf-tick-in, .cgf-dot { animation: none !important; transition: none !important }
+          .cgf-tick { opacity: 1 }
+        }
+      `}</style>
+
       {step === 'intro' && (
         <div className="p-4 space-y-3">
           <div className="flex items-start gap-3">
@@ -446,33 +516,47 @@ export default function StorefrontBargainWidget({
           </div>
 
           <div className="space-y-2 max-h-56 overflow-y-auto" role="log" aria-live="polite" aria-label="Negotiation conversation">
-            {messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`rounded-lg px-3 py-2 text-xs leading-relaxed ${
-                  msg.role === 'customer'
-                    ? 'bg-indigo-600 text-white text-right ml-8'
-                    : 'bg-gray-100 text-gray-700 mr-8'
-                }`}
-              >
-                {msg.content}
-                {msg.price != null && (
-                  <span className={`block mt-1 ${msg.role === 'customer' ? 'text-indigo-200' : 'text-indigo-600'}`}>
-                    {msg.role === 'customer' ? 'Offered' : 'Counter'}: {money(currency, msg.price)}
-                  </span>
-                )}
-              </div>
-            ))}
+            {messages.map((msg) => {
+              const isCustomer = msg.role === 'customer'
+              return (
+                <div
+                  key={msg.id}
+                  className={`cgf-msg rounded-lg px-3 py-2 text-xs leading-relaxed ${
+                    isCustomer
+                      ? 'bg-indigo-600 text-white text-right ml-8'
+                      : 'bg-gray-100 text-gray-700 mr-8'
+                  }`}
+                >
+                  {msg.content}
+                  {isCustomer && (
+                    <span
+                      className={`cgf-tick ${msg.delivery === 'delivered' ? 'cgf-tick-in' : ''}`}
+                      role="img"
+                      aria-label={msg.delivery === 'delivered' ? 'Delivered' : 'Sending'}
+                    >
+                      {msg.delivery === 'delivered'
+                        ? <Check size={12} strokeWidth={3} />
+                        : <Clock3 size={10} />}
+                    </span>
+                  )}
+                  {msg.price != null && (
+                    <span className={`block mt-1 ${isCustomer ? 'text-indigo-200' : 'text-indigo-600'}`}>
+                      {isCustomer ? 'Offered' : 'Counter'}: {money(currency, msg.price)}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
             {loading && (
               <div
-                className="rounded-lg px-3 py-2 bg-gray-100 mr-8 inline-flex items-center gap-1"
+                className="cgf-msg rounded-lg px-3 py-2.5 bg-gray-100 mr-8 inline-flex items-center gap-1.5"
                 role="status"
-                aria-label="Assistant is typing"
+                aria-label="Assistant is thinking"
               >
-                <span className="sr-only">Assistant is typing</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" />
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '120ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '240ms' }} />
+                <span className="sr-only">Assistant is thinking</span>
+                <span className="cgf-dot" />
+                <span className="cgf-dot" style={{ animationDelay: '0.15s' }} />
+                <span className="cgf-dot" style={{ animationDelay: '0.3s' }} />
               </div>
             )}
           </div>

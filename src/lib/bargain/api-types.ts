@@ -39,6 +39,9 @@ export type BargainMessage = {
   content: string
   offeredPrice?: number | null
   createdAt?: string
+  // Client-only delivery annotation for the shopper's own bubble (never sent by
+  // the server). 'sending' shows a clock; 'delivered' shows a single tick.
+  delivery?: 'sending' | 'delivered'
 }
 
 /** Server-sourced presentation of a session. Never contains floor data. */
