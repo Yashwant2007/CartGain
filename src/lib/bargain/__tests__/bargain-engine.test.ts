@@ -200,12 +200,13 @@ describe('buildOpeningMessage', () => {
 
     // Friendly: warm, invites a rate
     expect(friendly.toLowerCase()).toContain('deal')
-    // Strict: professional, no exclamation storms
+    // Strict: professional, no exclamation storms, and NEVER any emoji
     expect(strict).toMatch(/fair offer|what price/i)
-    expect(strict).not.toContain('😏')
-    // Playful: cheeky tone. No persona uses emojis.
+    for (const emoji of ['😄', '😊', '👍', '🙏', '✨', '😅', '🎉', '👋', '😏']) {
+      expect(strict).not.toContain(emoji)
+    }
+    // Playful: cheeky tone, and may use one tasteful emoji for warmth
     expect(playful).toContain("What's your move")
-    expect(playful).not.toContain('😏')
   })
 
   it('shows the listed price but never the attempt budget in every persona', () => {

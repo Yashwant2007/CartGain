@@ -226,6 +226,11 @@ const EXFILTRATION_PATTERNS: RegExp[] = [
   /(?:आपकी|अपनी|ती)\s*न्यूनतम/i,
   /\bprecio\s+m[ií]nimo\b|\bprecio\s+minimo\b|\bl[ií]mite\s+(?:de\s+)?precio\b/i,
   /(?:السعر\s*الأدنى|الحد\s*الأدنى|أقل\s*سعر\b)/i,
+  // ── Direct "reveal the floor" style probes (even when phrased as a demand) ──
+  /\b(?:reveal|show|tell|print|output|disclose|leak|spill)\s+(?:me\s+)?(?:the\s+)?(?:floor|minimum|lowest|secret|base\s+price|hidden\s+(?:price|number|floor))/i,
+  /\b(?:floor|minimum|lowest|hidden|secret)\s+(?:value|price|amount|number)\b/i,
+  // ── "Quit the previous code / reset your persona" — instruction-override phrased without a number ──
+  /\b(?:quit|stop|drop|abandon|end|discard|reset|ignore|override|change|erase)\s+(?:the\s+)?(?:previous|prior|earlier|old|existing|current)\s+(?:code|rules?|instructions?|prompt|persona|character|chatbot|programming)\b/i,
 ]
 
 // ────────────────────────────────────────────────────────────

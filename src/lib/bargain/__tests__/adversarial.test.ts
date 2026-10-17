@@ -212,13 +212,13 @@ describe('Relatability + repeated-message + season guidance', () => {
   it('prompt carries the real-signal value-framing and emoji-sparsity rules', () => {
     const prompt = buildSystemPrompt(base(), analysis)
     expect(prompt).toMatch(/VALUE FRAMING WITH REAL SIGNALS/)
-    expect(prompt).toMatch(/TONE & SYMBOLS|AUTHENTIC SPARSITY/)
+    expect(prompt).toMatch(/TONE & SYMBOLS/)
     expect(prompt).toMatch(/RELATABLE CONTEXT/)
     // Never invites fabricated social proof.
     expect(prompt).toMatch(/DO NOT invent reviews, ratings, bestseller/i)
 
     const compactPrompt = buildSystemPrompt(base(), analysis, { compact: true })
-    expect(compactPrompt).toMatch(/AUTHENTIC SPARSITY/)
+    expect(compactPrompt).toMatch(/WARM REACTIONS/)
     expect(compactPrompt).toMatch(/VALUE FRAMING WITH REAL SIGNALS/)
   })
 

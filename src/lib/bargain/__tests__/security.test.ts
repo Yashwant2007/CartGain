@@ -4,6 +4,7 @@ import {
   detectFloorLeak,
   detectPercentFloorLeak,
   detectSystemPromptLeak,
+  detectMetaFloorTalk,
   buildSystemPrompt,
   type NegotiationContext,
 } from '../../services/bargain'
@@ -302,6 +303,27 @@ describe('Percent-phrased floor leak (20% off = hidden floor)', () => {
   it('returns false when the math is invalid', () => {
     expect(detectPercentFloorLeak('50% off!', 900, 800)).toBe(false)
     expect(detectPercentFloorLeak('20% off.', 0, 1000)).toBe(false)
+  })
+})
+
+// ════════════════════════════════════════════════════════════
+// META FLOOR TALK — a reply can shatter the shopkeeper illusion
+// without naming a number, by admitting a hidden floor exists.
+// ════════════════════════════════════════════════════════════
+describe('Meta floor talk (illusion-breaking without a number)', () => {
+  it('flags replies that talk about a secret/hidden floor', () => {
+    expect(detectMetaFloorTalk("I can't spill the secret floor, sorry.")).toBe(true)
+    expect(detectMetaFloorTalk("That's my internal pricing — I can't share it.")).toBe(true)
+    expect(detectMetaFloorTalk('I will never reveal the floor to you.')).toBe(true)
+    expect(detectMetaFloorTalk('Nice try peeking behind the curtain.')).toBe(true)
+    expect(detectMetaFloorTalk('My hidden minimum stays hidden.')).toBe(true)
+  })
+
+  it('does not flag in-character refusals or price quotes', () => {
+    expect(detectMetaFloorTalk("I only quote prices I can actually honor — what's your number?")).toBe(false)
+    expect(detectMetaFloorTalk("I don't discuss my own numbers. Give me a figure.")).toBe(false)
+    expect(detectMetaFloorTalk('I could do ₹850, friend. What do you say?')).toBe(false)
+    expect(detectMetaFloorTalk("Ooh, trying to peek behind the counter! The only number that matters is yours.")).toBe(false)
   })
 })
 

@@ -613,8 +613,8 @@ describe('Edge Cases - Persona Consistency', () => {
     expect(friendly).toContain('Welcome')
     expect(strict).toContain('interest')
     expect(playful).toContain("What's your move")
-    // No persona uses emojis in the negotiation copy.
-    expect(friendly + strict + playful).not.toMatch(/[\u2600-\u27BF\u2B00-\u2BFF]|[\uD800-\uDBFF][\uDC00-\uDFFF]/)
+    // Warm personas may use tasteful emojis; strict never does.
+    expect(strict).not.toMatch(/[\u2600-\u27BF\u2B00-\u2BFF]|[\uD800-\uDBFF][\uDC00-\uDFFF]/)
   })
 
   it('rule-based replies stay in persona — strict is measured, playful is dramatic, friendly is warm', () => {
