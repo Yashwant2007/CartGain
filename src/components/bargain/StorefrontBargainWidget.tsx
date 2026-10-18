@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { ShoppingCart, Check, Clock3 } from 'lucide-react'
+import { ShoppingCart, CheckCheck, Clock3 } from 'lucide-react'
 import { currencySymbolFor } from '@/lib/bargain/i18n'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { reciprocalCounter, isAbsurdOffer, absurdOfferReply, type NegotiationContext } from '@/lib/bargain/engine'
@@ -570,7 +570,7 @@ export default function StorefrontBargainWidget({
                       aria-label={msg.delivery === 'delivered' ? 'Delivered' : 'Sending'}
                     >
                       {msg.delivery === 'delivered'
-                        ? <><Check size={12} strokeWidth={3} /><span>Delivered</span></>
+                        ? <><CheckCheck size={13} strokeWidth={2.5} /><span>Delivered</span></>
                         : <Clock3 size={10} />}
                     </span>
                   )}

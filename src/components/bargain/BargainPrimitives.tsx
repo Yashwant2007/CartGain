@@ -6,7 +6,7 @@
 // clamped); the merchant floor never reaches these components.
 
 import type { ReactNode } from 'react'
-import { Tag, Zap, ShieldCheck, Loader2, ShoppingBag, Check, Clock3 } from 'lucide-react'
+import { Tag, Zap, ShieldCheck, Loader2, ShoppingBag, CheckCheck, Clock3 } from 'lucide-react'
 import type { UiKey } from '@/lib/bargain/i18n'
 import type { BargainDecision, BargainMessage, BargainRecommendation } from '@/lib/bargain/api-types'
 
@@ -166,7 +166,7 @@ export function MessageBubble({ m, t, currencySymbol, personaChip, isFinal }: {
             style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 7, verticalAlign: -1 }}
           >
             {m.delivery === 'delivered'
-              ? <><Check size={12} strokeWidth={3} /><span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.01em', color: 'rgba(255,255,255,0.82)' }}>Delivered</span></>
+              ? <><CheckCheck size={13} strokeWidth={2.5} /><span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.01em', color: 'rgba(255,255,255,0.82)' }}>Delivered</span></>
               : <Clock3 size={10} />}
           </span>
         )}
