@@ -82,6 +82,19 @@ export async function redisSetNX(key: string, value: string, ttlMs: number): Pro
   } catch { return false }
 }
 
+// Like redisSetNX but distinguishes "Redis unusable" (returns null) from a real
+// claim result (true = acquired, false = already held). Callers that must NOT
+// silently skip work when Redis is down use this, instead of treating an absent
+// Redis as "already claimed". See redisIncrOrNull for the same idea on counters.
+export async function redisSetNXOrNull(key: string, value: string, ttlMs: number): Promise<boolean | null> {
+  const r = getRedis()
+  if (!r) return null
+  try {
+    const result = await r.set(key, value, 'PX', ttlMs, 'NX')
+    return result === 'OK'
+  } catch { return null }
+}
+
 // Append to a Redis list, optionally trimming it to the newest `maxLen` entries.
 // Used for inbound event streams where every event matters (unlike redisSet,
 // which would overwrite the previous value).

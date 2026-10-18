@@ -19,11 +19,9 @@ import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS, resolvePlanId, g
 import { sendAlertOnError } from '@/lib/alerter'
 import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
-import { redisSetNX } from '@/lib/redis'
+import { isDuplicateOrder } from '@/lib/order-dedup'
 
 export const dynamic = 'force-dynamic'
-
-const DEDUP_TTL_MS = 60 * 60 * 1000
 
 // Webhooks must be acknowledged with a fast 2xx — Shopify treats slowness and
 // non-2xx (including 429) as a delivery failure and retries, which is exactly
@@ -33,15 +31,6 @@ const DEDUP_TTL_MS = 60 * 60 * 1000
 //   3. does all DB/network work asynchronously, isolated per job
 // There is deliberately NO IP-based rate limiting here: Shopify is a trusted
 // publisher that already retries+throttles, and 429 would itself be a failure.
-
-async function isDuplicateOrder(orderId: string): Promise<boolean> {
-  try {
-    const stored = await redisSetNX(`dedup:order:${orderId}`, '1', DEDUP_TTL_MS)
-    return !stored
-  } catch {
-    return false
-  }
-}
 
 function safeRun(label: string, fn: () => Promise<void>) {
   fn().catch(async (err) => {

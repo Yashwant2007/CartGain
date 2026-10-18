@@ -21,7 +21,10 @@ jest.mock('@/lib/db', () => ({
     store: { findFirst: jest.fn().mockResolvedValue(null) },
   },
 }))
-jest.mock('@/lib/redis', () => ({ redisSetNX: jest.fn().mockResolvedValue(false) }))
+jest.mock('@/lib/redis', () => ({
+  redisSetNX: jest.fn().mockResolvedValue(false),
+  redisSetNXOrNull: jest.fn().mockResolvedValue(false),
+}))
 jest.mock('@/lib/analytics/track', () => ({ track: jest.fn() }))
 jest.mock('@/lib/observability/logger', () => ({ captureError: jest.fn() }))
 jest.mock('@/lib/alerter', () => ({ sendAlertOnError: jest.fn() }))
