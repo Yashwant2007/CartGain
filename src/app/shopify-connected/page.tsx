@@ -8,6 +8,7 @@ export default function ShopifyConnectedPage() {
   const router = useRouter()
 
   useEffect(() => {
+    const wasOpenedByDashboard = !!window.opener
     if (window.opener) {
       // The opener is the CartGain dashboard tab — same origin as this page, so
       // target it explicitly instead of '*' (which leaks the message to any
@@ -16,8 +17,15 @@ export default function ShopifyConnectedPage() {
     }
 
     const t = setTimeout(() => {
-      router.replace('/dashboard/integrations?shopify_connected=true')
-    }, 2000)
+      // When this page was opened as the OAuth popup, the dashboard tab has
+      // already been told (postMessage) and refreshed itself. Navigating this
+      // popup to the integrations page would open a SECOND integrations tab
+      // that showed success while the original still looked disconnected — so
+      // close the popup instead. A direct visit (no opener) still lands on the
+      // integrations page.
+      if (wasOpenedByDashboard) window.close()
+      else router.replace('/dashboard/integrations?shopify_connected=true')
+    }, 1500)
 
     return () => clearTimeout(t)
   }, [router])

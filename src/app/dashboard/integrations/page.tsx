@@ -85,6 +85,16 @@ export default function IntegrationsPage() {
     return () => window.removeEventListener('message', handler)
   }, [loadStatus])
 
+  // Safety net for the OAuth popup: if the popup closes without delivering its
+  // postMessage (blocked message, browser quirk), refresh the connection state
+  // as soon as the merchant returns to this tab so the page never keeps showing
+  // the store as "not connected" after a successful connect.
+  useEffect(() => {
+    const onFocus = () => { if (popupRef.current) { popupRef.current = null; loadStatus() } }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [loadStatus])
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('shopify_connected') === 'true') {
