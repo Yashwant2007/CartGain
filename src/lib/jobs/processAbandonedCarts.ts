@@ -374,7 +374,11 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
     const customerPhone = cart.customerPhone?.replace(/\D/g, '')
 
     if (customerEmail && optedOutEmails.has(customerEmail)) return { sent: 0, failed: 0 }
-    if (customerPhone && !customerEmail && optedOutPhones.has(customerPhone)) return { sent: 0, failed: 0 }
+    // Opt-out is per-contact and channel-agnostic: a customer who unsubscribed
+    // on their phone must be suppressed even when we also hold their email.
+    // The old `!customerEmail` guard let any cart carrying both a phone-opted-out
+    // number AND an email slip through to WhatsApp.
+    if (customerPhone && optedOutPhones.has(customerPhone)) return { sent: 0, failed: 0 }
 
     const customerKey = (customerEmail || customerPhone || '').toLowerCase().trim()
     const customerCounts = customerKey ? customerMsgCounts.get(customerKey) : undefined
