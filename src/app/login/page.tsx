@@ -157,12 +157,19 @@ function LoginContent() {
       const msg: Record<string, string> = {
         OAuthAccountNotLinked: 'An account with this Google email already exists. Please sign in with your email and password instead.',
         OAuthCallback: 'Google sign-in was interrupted. Please try again.',
+        OAuthSignin: 'Google sign-in could not be started. Please try again.',
+        OAuthCreateAccount: 'Google could not create your account. Please try again.',
+        AccessDenied: 'Google sign-in was not approved. Allow CartGain access to continue.',
+        Configuration: 'Google sign-in is not fully configured on this deployment. Please use email sign-in or contact support.',
+        Verification: 'This sign-in link has expired or is already used. Please try again.',
+        AlreadySignedIn: 'A different account is currently signed in. Sign out first, then try again.',
         NoAccount: 'No account found with this email. Please create one.',
         GoogleOnly: 'This account uses Google sign-in. Continue with Google below.',
         WrongPassword: 'Incorrect password. Please try again.',
         EmailNotVerified: 'Please verify your email before signing in. Check your inbox for the verification link.',
         '2FARequired': 'Two-factor authentication is required. Enter your password and the 6-digit code from your authenticator app.',
         '2FAInvalid': 'That two-factor code is invalid or expired. Please try again.',
+        '2FAConfigError': 'Two-factor authentication is misconfigured on this account. Contact support.',
         Default: 'Sign-in failed. Please try again.',
       }
       setError(msg[err] ?? msg.Default)
