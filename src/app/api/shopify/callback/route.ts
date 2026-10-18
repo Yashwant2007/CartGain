@@ -43,6 +43,7 @@ async function mintSessionCookie(
     name?: string | null
     storeId: string
     requirePassword: boolean
+    tokenVersion: number
   }
 ): Promise<void> {
   const secret = process.env.NEXTAUTH_SECRET
@@ -56,6 +57,11 @@ async function mintSessionCookie(
       name: payload.name ?? undefined,
       storeId: payload.storeId,
       requirePassword: payload.requirePassword,
+      // Stamp the account's token version so this install-minted session is
+      // subject to the same revocation check as normal sign-ins (auth.ts jwt
+      // callback only enforces it when tokenVersion is a number — omitting it
+      // here let an install session survive a later password change/reset).
+      tokenVersion: payload.tokenVersion,
     },
     secret,
     maxAge: 30 * 24 * 60 * 60, // matches session.maxAge in src/lib/auth.ts
@@ -195,15 +201,30 @@ export async function GET(req: NextRequest) {
 
       // Don't hijack a shop that's already connected to a different CartGain
       // account (webhook/store lookups are domain-keyed).
-      const existingStore = await prisma.store.findFirst({ where: { domain: shop } })
-      if (existingStore && existingStore.userId !== user.id) {
+      const domainMatch = await prisma.store.findFirst({ where: { domain: shop } })
+      if (domainMatch && domainMatch.userId !== user.id) {
         return redirectWithCleanup('/dashboard/integrations?shopify_error=Store+already+linked+to+another+account', baseUrl)
       }
+
+      // Reuse the merchant's existing store row instead of creating a second
+      // one. A merchant who signed up on CartGain already owns a placeholder
+      // store, and every "current store" read resolves the account's OLDEST row
+      // (/api/stores/current, /api/integrations/status). Creating a fresh row
+      // here therefore left the connected Shopify store invisible while the
+      // dashboard kept showing the old placeholder as "not connected".
+      // Prefer an exact domain match; otherwise adopt the account's oldest
+      // store in place.
+      const existingStore =
+        domainMatch ??
+        (await prisma.store.findFirst({
+          where: { userId: user.id },
+          orderBy: { createdAt: 'asc' },
+        }))
 
       const store = existingStore
         ? await prisma.store.update({
             where: { id: existingStore.id },
-            data: { userId: user.id },
+            data: { userId: user.id, platform: 'shopify', domain: shop, isActive: true },
           })
         : await prisma.store.create({
             data: {
@@ -213,6 +234,7 @@ export async function GET(req: NextRequest) {
               domain: shop,
               currency: 'USD',
               timezone: 'UTC',
+              isActive: true,
             },
           })
       storeId = store.id
@@ -229,6 +251,10 @@ export async function GET(req: NextRequest) {
           apiSecret: encrypt(shop),
           platform: 'shopify',
           domain: shop,
+          // A store that just completed OAuth is live; make sure it isn't left
+          // inactive (signup creates stores inactive until email verification,
+          // and an inactive store is skipped by cart processing + bargaining).
+          isActive: true,
           ...(tokenData.refresh_token ? { shopifyRefreshToken: encrypt(tokenData.refresh_token) } : {}),
           ...(tokenExpiresAt ? { shopifyTokenExpiresAt: tokenExpiresAt } : {}),
         },
@@ -351,6 +377,7 @@ export async function GET(req: NextRequest) {
           name: user.name,
           storeId: store.id,
           requirePassword: !user.password,
+          tokenVersion: user.tokenVersion ?? 0,
         })
       } catch (sessionError) {
         console.error('Failed to mint session cookie:', sessionError)
