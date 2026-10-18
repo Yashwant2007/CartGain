@@ -1,14 +1,16 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import {
   BrainCircuit, TrendingUp, DollarSign, BarChart3, Target,
   Lightbulb, Sparkles, Zap, Award, FileText, Activity,
   Loader2, RefreshCw, ArrowUp, ArrowDown,
+  Bot, Shield, MessageSquare, Percent, CheckCircle2, Clock,
 } from 'lucide-react'
 
-type TabType = 'coach' | 'simulator' | 'benchmarks' | 'roi' | 'report'
+type TabType = 'coach' | 'salesperson' | 'simulator' | 'benchmarks' | 'roi' | 'report'
 
 export default function AIPage() {
   const { storeId, loading: resolving } = useResolvedStoreId()
@@ -37,6 +39,7 @@ export default function AIPage() {
 
   const tabs: Array<{ key: TabType; label: string; icon: any }> = [
     { key: 'coach', label: 'Revenue Coach', icon: Lightbulb },
+    { key: 'salesperson', label: 'AI Salesperson', icon: Bot },
     { key: 'simulator', label: 'Recovery Simulator', icon: TrendingUp },
     { key: 'benchmarks', label: 'Benchmarks', icon: Award },
     { key: 'roi', label: 'ROI Dashboard', icon: DollarSign },
@@ -87,6 +90,7 @@ export default function AIPage() {
 
       {/* Tab Content */}
       {activeTab === 'coach' && <RevenueCoach storeId={storeId} />}
+      {activeTab === 'salesperson' && <AISalesperson storeId={storeId} />}
       {activeTab === 'simulator' && <RecoverySimulator storeId={storeId} />}
       {activeTab === 'benchmarks' && <Benchmarks storeId={storeId} />}
       {activeTab === 'roi' && <ROIDashboard storeId={storeId} />}
@@ -532,6 +536,156 @@ function WeeklyReport({ storeId }: { storeId: string | null }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function AISalesperson({ storeId }: { storeId: string | null }) {
+  const [config, setConfig] = useState<any>(null)
+  const [summary, setSummary] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!storeId) return
+    const controller = new AbortController()
+    setLoading(true)
+    setError(null)
+    Promise.all([
+      fetch(`/api/bargain/config?storeId=${storeId}`, { signal: controller.signal })
+        .then(r => (r.ok ? r.json() : null))
+        .catch(() => null),
+      fetch(`/api/bargain/sessions?storeId=${storeId}&take=1`, { signal: controller.signal })
+        .then(r => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ])
+      .then(([cfg, sess]) => {
+        if (controller.signal.aborted) return
+        setConfig(cfg?.config ?? null)
+        setSummary(sess?.summary ?? null)
+        setLoading(false)
+      })
+      .catch(err => {
+        if (err?.name === 'AbortError') return
+        setError('Failed to load AI salesperson data')
+        setLoading(false)
+      })
+    return () => controller.abort()
+  }, [storeId])
+
+  if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-blue-400 animate-spin" /></div>
+  if (error) return <div className="border border-red-800/40 bg-red-900/20 rounded-xl px-4 py-3 text-center"><p className="text-red-300 text-sm">{error}</p></div>
+
+  const enabled = config?.enabled !== false
+  const total = summary?.totalSessions ?? 0
+  const accepted = summary?.accepted ?? 0
+  const winRate = summary?.winRate ?? 0
+  const avgOriginal = summary?.avgOriginalPrice ?? null
+  const avgFinal = summary?.avgFinalPrice ?? null
+  const avgDiscount =
+    avgOriginal && avgFinal != null && avgOriginal > 0
+      ? Math.round(((avgOriginal - avgFinal) / avgOriginal) * 1000) / 10
+      : null
+  const approvedPoints = config?.approvedSellingPoints?.length ?? 0
+  const disallowedClaims = config?.disallowedClaims?.length ?? 0
+  const recsOn =
+    config?.recommendationsEnabled !== false &&
+    (config?.alternativeRecommendationsEnabled !== false || config?.complementRecommendationsEnabled !== false)
+
+  const features: Array<{ icon: any; title: string; body: string }> = [
+    { icon: MessageSquare, title: 'Live 1:1 negotiation', body: 'Haggles with each shopper on the product page in real time, replying to offers and counter-offers turn by turn instead of sending one flat discount.' },
+    { icon: Shield, title: 'Floor protection', body: `Every offer is checked server-side against your minimum margin (${config?.minProfitPercent ?? 20}% by default) plus any per-product floor — the AI can never close a deal below your limit.` },
+    { icon: Bot, title: 'Persona & temperament', body: `Tone is set to "${config?.aiPersona ?? 'friendly_shopkeeper'}" with negotiation mode "${config?.negotiationMode ?? 'balanced'}", so deals match your brand and margin.` },
+    { icon: Sparkles, title: 'Multilingual', body: 'Auto-detects and replies in the shopper\'s language (Hindi, Hinglish, Tamil, Telugu, Bengali and more) for higher trust and reply rates.' },
+    { icon: Target, title: 'Daily goals & pacing', body: config?.goalEnabled ? `Pacing toward a ${config?.goalType ?? 'orders'} goal of ${config?.goalTarget ?? 10}, auto-adjusting how generous it is as the window progresses.` : 'Optional daily goals let the AI pace its generosity toward a target instead of discounting blindly.' },
+    { icon: Zap, title: 'Cross-sell built in', body: config?.recommendationsEnabled !== false ? 'Suggests alternatives and complementary products during negotiation to raise order value and capture what shoppers compare.' : 'Product recommendations are currently switched off in the Bargain settings.' },
+  ]
+
+  const improvements: Array<{ done: boolean; title: string; body: string }> = [
+    { done: enabled, title: 'Turn the AI salesperson on', body: enabled ? 'Enabled — every eligible visit can open a negotiation that gets recorded here.' : 'It is currently OFF, so no sessions are being recorded. Enable it in the Bargain dashboard to start collecting data.' },
+    { done: total > 0, title: 'Drive visitors into it', body: total > 0 ? `${total} session${total === 1 ? '' : 's'} recorded so far.` : 'No sessions yet. Add the storefront widget and mark products bargainable so shoppers can start making offers.' },
+    { done: approvedPoints > 0, title: 'Add vetted selling points', body: approvedPoints > 0 ? `${approvedPoints} approved claim${approvedPoints === 1 ? '' : 's'} give the AI truthful reasons to hold price.` : 'Add per-product selling points so the AI can defend price truthfully — you will then see which claims actually win deals.' },
+    { done: accepted > 0, title: 'Calibrate your floor', body: accepted > 0 ? `${accepted} deal${accepted === 1 ? '' : 's'} closed (${winRate}% win rate).` : 'No deals closed yet. If sessions keep ending in rejection, your floor or discount range may be too tight — review the rejected sessions.' },
+    { done: recsOn, title: 'Keep recommendations on', body: recsOn ? 'Alternatives and complements are on, so each session also records what shoppers consider alongside the negotiated item.' : 'Recommendations are off — turning them on adds cross-sell data to every recorded session.' },
+    { done: disallowedClaims > 0, title: 'List disallowed claims', body: disallowedClaims > 0 ? `${disallowedClaims} claim${disallowedClaims === 1 ? '' : 's'} blocked, keeping every logged conversation compliant.` : 'Recording claims the AI must never make keeps every logged conversation compliant and audit-safe.' },
+  ]
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <Bot className="w-5 h-5 text-blue-400" />
+          AI Salesperson
+        </h2>
+        <p className="text-sm text-blue-300/60 mt-1">
+          The bargaining agent that negotiates with shoppers instead of sending static discounts. Everything it does
+          is recorded, and better inputs produce sharper insights across this page.
+        </p>
+      </div>
+
+      <div className={`rounded-xl border p-4 ${enabled ? 'bg-emerald-900/10 border-emerald-500/30' : 'bg-amber-900/10 border-amber-500/30'}`}>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${enabled ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+            <span className="text-sm font-medium text-white">
+              {enabled ? 'Active — recording negotiations' : 'Disabled — not recording negotiations'}
+            </span>
+          </div>
+          <Link href="/dashboard/bargain" className="text-xs font-medium px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-500 text-white hover:shadow-lg hover:shadow-blue-500/40 transition">
+            Open Bargain settings
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
+          <MetricBox label="Sessions" value={String(total)} icon={MessageSquare} color="text-blue-400" />
+          <MetricBox label="Deals closed" value={String(accepted)} icon={CheckCircle2} color="text-emerald-400" />
+          <MetricBox label="Win rate" value={`${winRate}%`} icon={Target} color="text-cyan-400" />
+          <MetricBox label="Avg discount" value={avgDiscount != null ? `${avgDiscount}%` : '—'} icon={Percent} color="text-amber-400" />
+        </div>
+        {(!enabled || total === 0) && (
+          <p className="text-xs text-blue-300/50 mt-3 flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5" />
+            Insights sharpen as recorded sessions accumulate — the checklist below shows what to turn on.
+          </p>
+        )}
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold text-white mb-3">What the AI salesperson does</h3>
+        <div className="grid sm:grid-cols-2 gap-3">
+          {features.map(f => (
+            <div key={f.title} className="bg-slate-800/40 border border-blue-800/20 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <f.icon className="w-4 h-4 text-blue-400" />
+                <p className="text-sm font-medium text-white">{f.title}</p>
+              </div>
+              <p className="text-xs text-blue-300/60 leading-relaxed">{f.body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold text-white mb-3">How to improve your recorded data</h3>
+        <div className="space-y-2">
+          {improvements.map(item => (
+            <div key={item.title} className="flex items-start gap-3 bg-slate-800/40 border border-blue-800/20 rounded-xl p-4">
+              <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${item.done ? 'bg-emerald-900/40 text-emerald-400' : 'bg-amber-900/30 text-amber-400'}`}>
+                {item.done ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Zap className="w-3.5 h-3.5" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white">{item.title}</p>
+                <p className="text-xs text-blue-300/60 mt-0.5 leading-relaxed">{item.body}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-blue-300/40 mt-3">
+          Tip: the more detail you give the AI — floors, selling points, disallowed claims and goals — the more of each
+          negotiation is captured as structured data, which makes the Revenue Coach, Benchmarks and ROI insights
+          materially more accurate.
+        </p>
+      </div>
     </div>
   )
 }
