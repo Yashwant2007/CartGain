@@ -441,6 +441,11 @@ export async function fetchShopifyProductPrice(
       const variantIdNum = variantId.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
       const variant = product.variants.find((v: any) => String(v.id) === variantIdNum)
       if (variant?.price) return parseFloat(variant.price)
+      // A specific variant was requested but does not belong to this product.
+      // Returning another variant's price (e.g. variants[0]) would quote the
+      // wrong price and could weaken the negotiation floor — treat it as
+      // unknown so callers fall back to their own verified/default price.
+      return null
     }
 
     const price = product.variants[0].price
