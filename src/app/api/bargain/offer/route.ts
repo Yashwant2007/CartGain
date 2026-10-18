@@ -325,7 +325,10 @@ export async function POST(request: NextRequest) {
           }),
           prisma.bargainSession.update({
             where: { id: bargainSession.id },
-            data: { status: 'accepted', currentOffer: finalPrice, finalPrice },
+            // Stay ACTIVE: the engine "accept" is a proposal the shopper still
+            // has to confirm. Only POST /api/bargain/accept mints the code and
+            // closes the session.
+            data: { status: 'active', currentOffer: finalPrice, finalPrice },
           }),
         ])
         return NextResponse.json({
@@ -333,7 +336,7 @@ export async function POST(request: NextRequest) {
           decision: 'accept',
           counterOffer: finalPrice,
           finalPrice,
-          sessionStatus: 'accepted',
+          sessionStatus: 'active',
           sessionId: bargainSession.id,
           floorReached: true,
           attemptsUsed,
@@ -535,8 +538,12 @@ export async function POST(request: NextRequest) {
 
     const isNoConsumeTurn = isAbuseNoConsume || isAbsurdNoConsume
 
+    // An engine "accept" is the shopkeeper MEETING the shopper's number and
+    // inviting them to confirm — not a closed sale. The session stays ACTIVE so
+    // the shopper's tap can reach POST /api/bargain/accept, the only path that
+    // mints the discount code. Marking it 'accepted' here stranded the deal with
+    // no code (the accept route can only claim an active session).
     const sessionStatus =
-      result.decision === 'accept' ? 'accepted' :
       result.decision === 'reject' ? 'rejected' : 'active'
 
     // Roll back the attempt if the turn doesn't consume it

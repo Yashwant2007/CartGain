@@ -196,8 +196,12 @@ describe('offer route — attempt budget (chat must not cost an attempt)', () =>
     // 450 >= the 300 floor, so the budget running out must NOT throw the sale
     // away. It used to reply "you've used all your attempts" and lose it.
     expect(body.decision).toBe('accept')
-    expect(body.sessionStatus).toBe('accepted')
     expect(body.finalPrice).toBe(450)
+    // The session must remain ACTIVE: the shopper still has to tap Accept, and
+    // only POST /api/bargain/accept mints the code. Marking it 'accepted' here
+    // stranded the deal with no code (the accept route could only claim active
+    // sessions), so the customer hit "Cannot accept — session is accepted."
+    expect(body.sessionStatus).toBe('active')
     expect(body.reply).not.toMatch(/used all your attempts/i)
   })
 

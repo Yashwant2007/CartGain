@@ -256,8 +256,15 @@ export async function POST(request: NextRequest) {
 
     // ── ATOMIC CLAIM: only one acceptance wins the CAS. Prevents concurrent
     // double-accepts from double-metering the deal or issuing two codes.
+    // An 'accepted' row that still has NO code can only be a legacy session
+    // stranded by the old offer-path bug (the offer route now keeps the session
+    // active on a proposal). Claim it so the shopper isn't stuck forever.
     const claim = await prisma.bargainSession.updateMany({
-      where: { id: bargainSession.id, status: 'active' },
+      where: {
+        id: bargainSession.id,
+        status: { in: ['active', 'accepted'] },
+        discountCode: null,
+      },
       data: { status: 'accepting' },
     })
     if (claim.count === 0) {
