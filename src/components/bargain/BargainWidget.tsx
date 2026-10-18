@@ -134,6 +134,9 @@ export default function BargainWidget({
   const [messages, setMessages] = useState<BargainMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  // The "thinking" dots are held back until the delivered tick has landed, so
+  // the sequence reads naturally: message → delivered tick → thinking → reply.
+  const [showThinking, setShowThinking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [limit, setLimit] = useState<{ code: string; planId?: string; upgradeUrl?: string } | null>(null)
@@ -224,6 +227,10 @@ export default function BargainWidget({
   // In-flight guard: blocks double clicks / Enter / focus races beyond the
   // disabled-attribute timing window. One negotiation action at a time.
   const busyRef = useRef(false)
+  // Drives the message → tick → thinking → reply sequence without ever slowing
+  // the actual network round-trip.
+  const thinkingTimerRef = useRef<number | null>(null)
+  const thinkingShownAtRef = useRef(0)
   // Remembers the last FAILED action so "Try again" can replay exactly that
   // call — no double-submits, no lost offers.
   const lastFailedRef = useRef<{ kind: 'start' | 'offer' | 'accept'; payload?: string } | null>(null)
@@ -233,6 +240,14 @@ export default function BargainWidget({
   const t = (key: UiKey, vars?: Record<string, string | number>) => uiText(language, key, vars)
 
   const thinking = loading && decision !== 'accept'
+  const thinkingVisible = thinking && showThinking
+
+  // Send-sequence timing (see sendMessage): tick, then a beat, then thinking,
+  // then a length-scaled minimum thinking beat before the reply is revealed.
+  const TICK_MS = 180
+  const THINKING_DELAY_MS = 380
+  const minThinkingMs = (reply: string) => Math.min(1000, Math.max(460, reply.length * 6))
+  const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
   const personaChip = persona ? PERSONA_CHIP[persona] : undefined
   const savings = decision === 'accept' && finalPrice != null ? livePrice - finalPrice : null
 
@@ -350,7 +365,7 @@ export default function BargainWidget({
     if (Date.now() - lastInteractRef.current < 2500 && !atBottom) return
     const t = requestAnimationFrame(() => scrollToBottom())
     return () => cancelAnimationFrame(t)
-  }, [messages, thinking, atBottom, scrollToBottom])
+  }, [messages, thinkingVisible, atBottom, scrollToBottom])
 
   // Lock the host page from scrolling while the floating chat is open.
   useEffect(() => {
@@ -573,6 +588,7 @@ export default function BargainWidget({
     if (!sessionId || busyRef.current) return
     const msg = (text ?? input).trim()
     if (!msg) { setError('Type a message'); return }
+    busyRef.current = true
     setLoading(true)
     setError(null)
     setNotice(null)
@@ -583,11 +599,21 @@ export default function BargainWidget({
     ])
     setInput('')
     setAtBottom(true)
-    // Optimistic delivery ack: flip the clock to a single tick almost
-    // immediately so the bubble reads "sent" while the assistant thinks — the
-    // same rhythm as a real messaging app. The finally block guarantees the tick
-    // lands even when the round-trip beats the timer.
-    const ackTimer = window.setTimeout(() => markMessageDelivered(localId), 180)
+    // Human send rhythm: your bubble paints instantly, a single delivered tick
+    // lands almost immediately, the three-dot "thinking" bubble appears a beat
+    // later, and the reply is never yanked in faster than a typed pace. None of
+    // this slows the actual round-trip — it only sequences the reveal.
+    const ackTimer = window.setTimeout(() => markMessageDelivered(localId), TICK_MS)
+    setShowThinking(false)
+    thinkingShownAtRef.current = 0
+    const thinkingReady = new Promise<void>((resolve) => {
+      if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
+      thinkingTimerRef.current = window.setTimeout(() => {
+        thinkingShownAtRef.current = Date.now()
+        setShowThinking(true)
+        resolve()
+      }, THINKING_DELAY_MS)
+    })
     try {
       const res = await fetch(`${apiBase}/api/bargain/offer`, {
         method: 'POST',
@@ -643,6 +669,12 @@ export default function BargainWidget({
         }
         throw new Error(data.message ?? 'Bargain failed')
       }
+      // Reveal the reply only after the tick has landed and the thinking bubble
+      // has been visible for a natural beat — never slower than the network.
+      await thinkingReady
+      const seenFor = Date.now() - thinkingShownAtRef.current
+      const hold = minThinkingMs(data.reply) - seenFor
+      if (hold > 0) await wait(hold)
       setMessages(prev => [
         ...prev,
         {
@@ -667,7 +699,9 @@ export default function BargainWidget({
       setError(errorCopy(err))
     } finally {
       window.clearTimeout(ackTimer)
+      if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
       markMessageDelivered(localId)
+      setShowThinking(false)
       setLoading(false)
       busyRef.current = false
     }
@@ -1366,7 +1400,7 @@ export default function BargainWidget({
                 )}
 
                 {/* AI thinking indicator */}
-                {thinking && <TypingIndicator personaChip={personaChip} t={t} />}
+                {thinkingVisible && <TypingIndicator personaChip={personaChip} t={t} />}
 
                 {/* ── Accepted deal card — conversion hero ── */}
                 {decision === 'accept' && finalPrice != null && (
@@ -1721,16 +1755,16 @@ export default function BargainWidget({
                   />
                 </div>
 
-                {/* Primary CTA */}
+                {/* Primary CTA — stays a paper-plane even while the assistant
+                    is "thinking"; the three-dot bubble is the processing cue,
+                    so the button never turns into a buffering spinner. */}
                 <button
                   onClick={() => sendMessage()}
                   disabled={loading || !input.trim() || sessionEnded || !!busyRef.current}
                   aria-label={draftAmount != null ? t('makeOffer') : t('send')}
                   className="cg-btn cg-btn-send"
                 >
-                  {loading
-                    ? <Loader2 size={18} className="spin" style={{ animation: 'spin 1s linear infinite' }} />
-                    : <Send size={17} />}
+                  <Send size={17} />
                   {draftAmount != null
                     ? `${t('makeOffer')} · ${currencySymbol}${draftAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
                     : t('send')}

@@ -100,6 +100,14 @@ export default function StorefrontBargainWidget({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // The "thinking" dots are held back until the delivered tick has landed, so
+  // the sequence reads naturally: message → delivered tick → thinking → reply.
+  const [showThinking, setShowThinking] = useState(false)
+  const thinkingTimerRef = useRef<number | null>(null)
+  const thinkingShownAtRef = useRef(0)
+  // Synchronous in-flight guard: blocks a second Enter/click that lands before
+  // the `loading` state re-render, so a message is never sent twice.
+  const busyRef = useRef(false)
 
   const originalPrice = line.kind === 'cart' ? line.total : line.price
   const minPrice = Math.round(originalPrice * (1 - minProfitPercent / 100) * 100) / 100
@@ -191,12 +199,18 @@ export default function StorefrontBargainWidget({
     playful: 'Aw, really? No hard feelings! Come back anytime',
   }
 
-  // Human typing rhythm: the three-dot bubble should read as "thinking", never
-  // a flicker. We keep it visible for a short, length-scaled minimum and, when
-  // the model answers faster than that, hold the reply back for the remainder —
-  // so a fast answer still feels typed, while a slow one is never padded.
+  // Human send rhythm — the sequence should read like a real messaging app:
+  //   1. your bubble paints instantly (with a "sending" clock)
+  //   2. a single delivered tick lands almost immediately
+  //   3. the three-dot "thinking" bubble appears a beat later
+  //   4. the reply arrives, and is never yanked in faster than a typed pace
+  // The minimum is length-scaled so a one-word reply still feels considered,
+  // while a long one is never padded.
+  const TICK_MS = 180
+  const THINKING_DELAY_MS = 380
   const minThinkingMs = (reply: string) =>
-    Math.min(900, Math.max(360, reply.length * 7))
+    Math.min(1000, Math.max(460, reply.length * 6))
+  const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
 
   const markDelivered = useCallback((id: string) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, delivery: 'delivered' } : m)))
@@ -207,8 +221,9 @@ export default function StorefrontBargainWidget({
   }, [])
 
   const handleSend = async () => {
-    if (!input.trim() || loading) return
+    if (!input.trim() || loading || busyRef.current) return
     const userText = input.trim()
+    busyRef.current = true
     const userMsgId = uid()
     setMessages((prev) => [
       ...prev,
@@ -217,12 +232,24 @@ export default function StorefrontBargainWidget({
     setInput('')
     setLoading(true)
     setError(null)
-    const startedAt = Date.now()
     // Optimistic delivery ack: flip the clock to a single tick almost
     // immediately so the bubble reads "sent" while the assistant thinks — the
     // same rhythm as a real messaging app. The finally block guarantees the
     // tick lands even when the round-trip resolves faster than the timer.
-    const ack = window.setTimeout(() => markDelivered(userMsgId), 180)
+    const ack = window.setTimeout(() => markDelivered(userMsgId), TICK_MS)
+
+    // Hold the thinking bubble back until the tick has landed, then guarantee a
+    // minimum visible "typing" beat before the reply is revealed.
+    setShowThinking(false)
+    thinkingShownAtRef.current = 0
+    const thinkingReady = new Promise<void>((resolve) => {
+      if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
+      thinkingTimerRef.current = window.setTimeout(() => {
+        thinkingShownAtRef.current = Date.now()
+        setShowThinking(true)
+        resolve()
+      }, THINKING_DELAY_MS)
+    })
 
     try {
       const offer = extractPrice(userText)
@@ -277,8 +304,10 @@ export default function StorefrontBargainWidget({
       const priceTag = data.decision !== 'chat' && typeof data.counterOffer === 'number'
         ? data.counterOffer
         : undefined
-      const wait = minThinkingMs(data.reply ?? '') - (Date.now() - startedAt)
-      if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+      await thinkingReady
+      const seenFor = Date.now() - thinkingShownAtRef.current
+      const hold = minThinkingMs(data.reply ?? '') - seenFor
+      if (hold > 0) await wait(hold)
       pushAi(data.reply, priceTag)
       setAttempts(isAbsurdTurn ? attempts : nextAttempt)
 
@@ -367,14 +396,19 @@ export default function StorefrontBargainWidget({
         setStep('chat')
       }
 
-      const wait = minThinkingMs(result.reply) - (Date.now() - startedAt)
-      if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+      await thinkingReady
+      const seenFor = Date.now() - thinkingShownAtRef.current
+      const hold = minThinkingMs(result.reply) - seenFor
+      if (hold > 0) await wait(hold)
       pushAi(result.reply, result.counterOffer)
       setAttempts(nextAttempt)
     } finally {
       window.clearTimeout(ack)
+      if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
       markDelivered(userMsgId)
+      setShowThinking(false)
       setLoading(false)
+      busyRef.current = false
     }
   }
 
@@ -548,7 +582,7 @@ export default function StorefrontBargainWidget({
                 </div>
               )
             })}
-            {loading && (
+            {showThinking && (
               <div
                 className="cgf-msg rounded-lg px-3 py-2.5 bg-gray-100 mr-8 inline-flex items-center gap-1.5"
                 role="status"
@@ -576,9 +610,9 @@ export default function StorefrontBargainWidget({
               className={buttonCls}
               onClick={handleSend}
               disabled={!input.trim() || loading}
-              aria-label={loading ? 'Sending...' : 'Send offer'}
+              aria-label={loading ? 'Sending…' : 'Send offer'}
             >
-              {loading ? '…' : 'Send'}
+              Send
             </button>
           </div>
         </div>
