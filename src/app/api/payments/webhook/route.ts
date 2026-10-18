@@ -63,13 +63,21 @@ export async function POST(req: NextRequest) {
 
     const event = JSON.parse(body);
 
+    // Subscription lifecycle events all carry the SAME subscription entity id,
+    // so a bare-id dedup key collapsed every event after 'activated' (paused /
+    // halted / resumed / cancelled / completed) into a redelivery: the first one
+    // claimed the ledger row and the rest were acknowledged with a 200 without
+    // running their handler — so a cancelled plan stayed 'active' forever. Scope
+    // the key by event type: each distinct lifecycle transition is its own
+    // delivery.
+    const subscriptionId = event.payload?.subscription?.entity?.id
     const dedupKey =
       event.event === "payment.authorized" || event.event === "payment.captured"
         ? ["payment", event.payload?.payment?.entity?.id]
         : event.event === "payment_link.paid"
         ? ["payment_link", event.payload?.payment_link?.entity?.id]
-        : event.event.startsWith("subscription.")
-        ? ["subscription", event.payload?.subscription?.entity?.id]
+        : event.event.startsWith("subscription.") && subscriptionId
+        ? ["subscription", `${event.event}:${subscriptionId}`]
         : null
 
     if (dedupKey && dedupKey[1]) {
