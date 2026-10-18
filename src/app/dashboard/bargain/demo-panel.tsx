@@ -255,6 +255,40 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
 
   const attemptsLeft = Math.max(0, maxAttempts - attemptsUsed)
 
+  // The last price the shopkeeper actually put on the table — drives the
+  // explicit Accept button so the shopper can close the deal in one tap instead
+  // of having to type a number back.
+  const lastCounter = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m.role === 'ai' && m.offeredPrice != null) return m.offeredPrice
+    }
+    return null
+  }, [messages])
+
+  function acceptCounter(amount: number) {
+    if (ended || thinking) return
+    dealAcceptedRef.current = true
+    setMessages(prev => [...prev, {
+      role: 'ai',
+      content: `Done — ${'₹'}${amount.toFixed(2)} it is! Thanks for accepting.`,
+      offeredPrice: amount,
+    }])
+    setFinalPrice(amount)
+    setEnded('accepted')
+    setAiError(null)
+  }
+
+  function declineCounter() {
+    if (ended || thinking) return
+    setMessages(prev => [...prev, {
+      role: 'customer',
+      content: 'No thanks, that is still too high for me.',
+      offeredPrice: null,
+    }])
+    setEnded('abandoned')
+  }
+
   return (
     <div className="grid lg:grid-cols-3 gap-5">
       {/* Setup / compare */}
@@ -415,7 +449,10 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
           <div className="px-4 py-4 bg-emerald-900/20 border-t border-emerald-700/40 flex items-center gap-3">
             <CheckCircle2 className="w-6 h-6 text-emerald-400 flex-shrink-0" />
             <div className="text-sm font-semibold text-emerald-200">
-              Deal accepted at ₹{finalPrice.toFixed(2)} — customer saved ₹{(price - finalPrice).toFixed(2)}
+              Deal accepted at ₹{finalPrice.toFixed(2)}
+              {price - finalPrice > 0
+                ? ` — customer saved ₹${(price - finalPrice).toFixed(2)}`
+                : ' — at the listed price'}
             </div>
           </div>
         )}
@@ -433,6 +470,26 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
         {aiError && !ended && (
           <div className="px-4 py-2 bg-amber-900/20 border-t border-amber-700/40 text-[11px] text-amber-200">
             {aiError}
+          </div>
+        )}
+
+        {started && !ended && lastCounter != null && !thinking && (
+          <div className="p-3 border-t border-emerald-800/30 bg-emerald-900/10 flex items-center gap-2">
+            <span className="text-xs text-emerald-200/80 mr-auto">
+              The shopkeeper is at ₹{lastCounter.toFixed(2)} — your call:
+            </span>
+            <button
+              onClick={declineCounter}
+              className="px-3 py-1.5 text-xs rounded-lg border border-blue-800/40 text-blue-200 hover:bg-blue-900/40 transition active:scale-95"
+            >
+              Decline
+            </button>
+            <button
+              onClick={() => acceptCounter(lastCounter)}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition active:scale-95"
+            >
+              Accept ₹{lastCounter.toFixed(2)}
+            </button>
           </div>
         )}
 

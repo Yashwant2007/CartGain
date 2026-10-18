@@ -688,8 +688,14 @@ export default function BargainWidget({
           offeredPrice: data.counterOffer ?? null, createdAt: new Date().toISOString(),
         },
       ])
-      if (data.decision === 'accept' || data.decision === 'reject') {
-        setDecision(data.decision)
+      // An "accept" decision is the shopkeeper MEETING the shopper's number and
+      // asking them to confirm — the deal is not locked until they tap Accept
+      // (which mints the code via POST /api/bargain/accept). Only a terminal
+      // "reject" flips the widget into its ended state here; on accept the
+      // Accept bar stays visible off lastCounter and closing happens in
+      // acceptDeal().
+      if (data.decision === 'reject') {
+        setDecision('reject')
       }
       if (data.discountCode) setDiscountCode(data.discountCode)
       if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
@@ -1451,7 +1457,7 @@ export default function BargainWidget({
                       <ArrowRight size={16} style={{ color: '#94a3b8' }} />
                       <span style={{ fontWeight: 900, color: '#15803d', fontSize: 32, fontVariantNumeric: 'tabular-nums' }}>{currencySymbol}{finalPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
                     </div>
-                    {savings != null && (
+                    {savings != null && savings > 0 && (
                       <div style={{
                         display: 'inline-flex', alignItems: 'center', gap: 6,
                         background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', color: '#15803d',

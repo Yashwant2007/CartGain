@@ -406,11 +406,21 @@ export function ruleBasedDecision(
   const currencySymbol = ctx.currencySymbol
 
   if (boundedOffer >= minPrice) {
-    const accept: Record<Persona, string> = {
-      strict_negotiator: `Agreed at ${currencySymbol}${boundedOffer.toFixed(2)}. Confirm the acceptance and your discount code will be generated.`,
-      playful_friend: `DEAL! ${currencySymbol}${boundedOffer.toFixed(2)} — you absolute legend! Hit Accept and the magic code is yours.`,
-      friendly_shopkeeper: `It's a deal, friend! ${currencySymbol}${boundedOffer.toFixed(2)} works for me. Accept it and I'll sort your code right away.`,
-    }
+    // A shopper who offers the listed price (or more) has simply met the asking
+    // price — thank them without pretending it was a discounted "deal" (which
+    // would show a bogus "saved ₹0.00").
+    const atList = boundedOffer >= originalPrice
+    const accept: Record<Persona, string> = atList
+      ? {
+          strict_negotiator: `Understood — the listed ${currencySymbol}${boundedOffer.toFixed(2)} works. Confirm and I'll generate your code.`,
+          playful_friend: `Sold at the full ${currencySymbol}${boundedOffer.toFixed(2)} — no haggling required! Tap Accept and I'll grab your code.`,
+          friendly_shopkeeper: `That's the listed ${currencySymbol}${boundedOffer.toFixed(2)} — happy to get it sorted for you! Accept it and I'll bring up your code.`,
+        }
+      : {
+          strict_negotiator: `Agreed at ${currencySymbol}${boundedOffer.toFixed(2)}. Confirm the acceptance and your discount code will be generated.`,
+          playful_friend: `DEAL! ${currencySymbol}${boundedOffer.toFixed(2)} — you absolute legend! Hit Accept and the magic code is yours.`,
+          friendly_shopkeeper: `It's a deal, friend! ${currencySymbol}${boundedOffer.toFixed(2)} works for me. Accept it and I'll sort your code right away.`,
+        }
     return {
       reply: accept[persona] ?? accept.friendly_shopkeeper,
       decision: 'accept',

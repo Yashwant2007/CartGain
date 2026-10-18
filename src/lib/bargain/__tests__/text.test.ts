@@ -112,6 +112,18 @@ describe('extractQuantity', () => {
     expect(extractQuantity('give me a dozen of these')).toBe(12)
   })
 
+  it('detects word numbers ("three units", "buy two")', () => {
+    expect(extractQuantity('I am buying three units')).toBe(3)
+    expect(extractQuantity('can I get five pieces')).toBe(5)
+    expect(extractQuantity('I want two')).toBe(2)
+    expect(extractQuantity('a couple of these')).toBe(2)
+  })
+
+  it('does not read a duration word-number as a quantity', () => {
+    expect(extractQuantity('I need three days')).toBeNull()
+    expect(extractQuantity('take two weeks')).toBeNull()
+  })
+
   it('rejects quantity < 2', () => {
     expect(extractQuantity('buy 1')).toBeNull()
     expect(extractQuantity('take 0')).toBeNull()
@@ -217,5 +229,23 @@ describe('extractPrice', () => {
     // The customer's own bid is kept; first valid match still wins (unchanged).
     expect(extractPrice('I will give you 550, amazon has it for 400')).toBe(550)
     expect(extractPrice('my offer is 450, the other store wants 500')).toBe(450)
+  })
+
+  it('picks the shopper’s bid over a referenced/list price in the same message', () => {
+    expect(extractPrice('The price is ₹1000. Can you give it to me for ₹500?')).toBe(500)
+    expect(extractPrice('it costs ₹1000 but I will pay ₹700')).toBe(700)
+    expect(extractPrice('the price is 1000, my offer is 800')).toBe(800)
+  })
+
+  it('does NOT read a bare reference to the price as an offer', () => {
+    expect(extractPrice('Why should I buy this product for ₹1000 when cheaper products are available?')).toBeNull()
+    expect(extractPrice('the price is ₹1000')).toBeNull()
+    expect(extractPrice('it costs ₹1000')).toBeNull()
+    expect(extractPrice('Is ₹1000 a good price?')).toBeNull()
+  })
+
+  it('still reads genuine offer phrasings that happen to be questions', () => {
+    expect(extractPrice('how about ₹400?')).toBe(400)
+    expect(extractPrice('can you do ₹450?')).toBe(450)
   })
 })
