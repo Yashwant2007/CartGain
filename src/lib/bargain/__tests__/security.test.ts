@@ -176,6 +176,69 @@ describe('System-prompt floor hygiene (no literal floor in prompt)', () => {
 })
 
 // ════════════════════════════════════════════════════════════
+// AI SALESPERSON PLAYBOOK — the agent must SELL (discover, value,
+// objections, trade-up, honest urgency, closing), and when a daily
+// goal is active it must know exactly what the customer's widget
+// already shows them — while strategy/internal budgets stay
+// server-side.
+// ════════════════════════════════════════════════════════════
+describe('AI salesperson playbook (prompt contract)', () => {
+  const analysis = { behavior: 'first_timer' as const, offTopicCount: 0, concessionCount: 0, lastAIOffer: null, seriousness: 'casual' as const, signals: neutralSignals() }
+  const goal = {
+    strategy: 'AGGRESSIVE' as const,
+    mode: 'behind' as const,
+    goalType: 'revenue' as const,
+    closesAt: '2026-09-12T12:00:00.000Z',
+    targetValue: 100000,
+    achievedValue: 20000,
+    orderCount: 4,
+    progressPercent: 20,
+    campaignName: 'Monsoon',
+    campaignMessage: 'Best prices all weekend',
+  }
+
+  it('full prompt ships every salesperson move', () => {
+    const prompt = buildSystemPrompt(baseCtx(), analysis)
+    expect(prompt).toMatch(/PART 9: THE SALESPERSON PLAYBOOK/)
+    expect(prompt).toMatch(/1\) DISCOVER/)
+    expect(prompt).toMatch(/2\) SELL VALUE BEFORE YOU MOVE ON PRICE/)
+    expect(prompt).toMatch(/3\) HANDLE OBJECTIONS/)
+    expect(prompt).toMatch(/4\) TRADE UP AND ATTACH/)
+    expect(prompt).toMatch(/5\) ONLY REAL URGENCY & REAL PROOF/)
+    expect(prompt).toMatch(/6\) CLOSE/)
+    expect(prompt).toMatch(/7\) SAVE THE WALKOUT/)
+    expect(prompt).toMatch(/8\) AFTER THE DEAL/)
+  })
+
+  it('compact prompt keeps the condensed salesperson block', () => {
+    const prompt = buildSystemPrompt(baseCtx(), analysis, { compact: true })
+    expect(prompt).toMatch(/SELL, DON'T JUST DISCOUNT/)
+    expect(prompt).toMatch(/close with a summary/)
+    expect(prompt).toMatch(/never invent scarcity/)
+  })
+
+  it('with an active goal the prompt mirrors what the customer strip shows', () => {
+    const prompt = buildSystemPrompt(baseCtx({ goal }), analysis)
+    expect(prompt).toContain("showing them TODAY'S GOAL: ₹20,000 of ₹1,00,000 in sales (20%)")
+    expect(prompt).toMatch(/acknowledge it warmly and truthfully/)
+    expect(prompt).toMatch(/Campaign: Monsoon\./)
+  })
+
+  it('the goal block never reveals strategy, mode or internal budgets', () => {
+    const prompt = buildSystemPrompt(baseCtx({ goal }), analysis)
+    expect(prompt).toMatch(/STRATEGY and pacing mode are STRICTLY INTERNAL/)
+    expect(prompt).toMatch(/NEVER mention any system minimum, margin, attempt budget/)
+    expect(prompt).not.toContain('Your Floor:')
+    expect(prompt).not.toContain('₹800.00')
+  })
+
+  it('without an active goal no strip talk is injected', () => {
+    const prompt = buildSystemPrompt(baseCtx(), analysis)
+    expect(prompt).not.toMatch(/TODAY'S GOAL/)
+  })
+})
+
+// ════════════════════════════════════════════════════════════
 // ADVERSARIAL REAL-WORLD INPUTS that a normal customer may never
 // send but an attacker/prober will: role-confusion, floor gambling,
 // absurd anchors, non-negotiation chatter, flooding, gibberish,

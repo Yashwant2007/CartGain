@@ -21,6 +21,14 @@ export interface NegotiationGoalContext {
   closesAt?: string // ISO instant the real goal window closes (truthful urgency)
   campaignName?: string
   campaignMessage?: string
+  // ── Customer-visible progress for the widget's "Today's goal" strip ──
+  // Populated only while the goal window is active. These are the REAL target
+  // and the REAL ledger totals — never derived from (and never revealing) the
+  // floor, margin, attempt budget or the internal pacing strategy.
+  targetValue?: number
+  achievedValue?: number
+  orderCount?: number
+  progressPercent?: number // 0–100
 }
 
 export interface NegotiationContext {

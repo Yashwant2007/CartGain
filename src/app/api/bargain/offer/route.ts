@@ -11,7 +11,7 @@ import { logDataAccess } from '@/lib/data-protection'
 import { clampOfferToSafety } from '@/lib/bargain/engine'
 import { detectCouponMention, detectMultiProductRequest } from '@/lib/bargain/policy'
 import { walkoutOutcome } from '@/lib/bargain/negotiation-state'
-import { buildGoalContextForNegotiation } from '@/lib/bargain/goals'
+import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
 import { analyzeIntent } from '@/lib/bargain/intent'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
 import { searchRecommendations, recommendationReason, type RecommendationCard, type RecommendationReason, type RecommendationContext } from '@/lib/bargain/recommendations'
@@ -388,6 +388,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Daily-goal context, computed once: the engine uses it for strategy-aware
+    // replies, and the SAME context is projected (strategy/mode redacted via
+    // publicGoalView) into the response so the widget's goal strip tracks real
+    // progress each turn.
+    const goalCtx = await buildGoalContextForNegotiation(config, bargainSession.store.timezone, new Date())
+
     const ctx: NegotiationContext = {
       storeName: bargainSession.store.name,
       currencySymbol,
@@ -406,7 +412,7 @@ export async function POST(request: NextRequest) {
         cartToken: bargainSession.cartToken,
       }),
       customerOfferTrend,
-      goal: await buildGoalContextForNegotiation(config, bargainSession.store.timezone, new Date()),
+      goal: goalCtx,
       product: productCtx,
       intent: intentAnalysis,
       negotiationMode: (config.negotiationMode as NegotiationContext['negotiationMode']) ?? 'balanced',
@@ -746,6 +752,7 @@ export async function POST(request: NextRequest) {
       // renders it as a round meter. It is the post-transaction value, so an
       // abuse turn that was rolled back below is reported correctly.
       attemptsUsed: effectiveAttemptsUsed,
+      goal: publicGoalView(goalCtx),
       ...(isAbuseNoConsume ? { abuseDetected: true, abuseCategory: (result.metadata as any)?.category } : {}),
       ...(recommendations && recoReason
         ? {

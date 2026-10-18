@@ -11,6 +11,7 @@
 // that must also be safe on the client lives in engine.ts (re-exported).
 import prisma from '@/lib/db'
 import { track } from '@/lib/analytics/track'
+import type { BargainDemoGoal, BargainGoalView } from '@/lib/bargain/api-types'
 import {
   clampOfferToSafety,
   strategyAdjustedCounter,
@@ -254,9 +255,36 @@ export async function buildGoalContextForNegotiation(
     mode: pacing.mode,
     goalType: (config.goalType === 'revenue' ? 'revenue' : 'orders'),
     closesAt: config.goalEndTime!.toISOString(),
+    // Real progress for the widget's "Today's goal" strip (projected to
+    // customers via publicGoalView): the merchant's target and this store's
+    // own ledger. Internal strategy/mode are never projected out.
+    targetValue: Math.max(0, config.goalTarget ?? 0),
+    achievedValue: row?.achievedValue ?? 0,
+    orderCount: row?.orderCount ?? 0,
+    progressPercent: Math.round(pacing.progressPercent * 10) / 10,
     // Only truthful campaign context (window active) reaches the AI.
     ...(campaignActiveAt(config, now) && config.campaignName ? { campaignName: config.campaignName } : {}),
     ...(campaignActiveAt(config, now) && config.campaignMessage ? { campaignMessage: config.campaignMessage } : {}),
+  }
+}
+
+// ── Customer-facing projection ──────────────────────────────────────────────
+// The widget's "Today's goal" strip shows real progress, the real close time
+// and the merchant's own copy. The strategy, pacing mode and every internal
+// number are dropped right here, at the single exit point for client payloads.
+export function publicGoalView(
+  goal: NegotiationGoalContext | undefined,
+): BargainGoalView | undefined {
+  if (!goal) return undefined
+  return {
+    goalType: goal.goalType,
+    targetValue: Math.max(0, goal.targetValue ?? 0),
+    achievedValue: Math.max(0, goal.achievedValue ?? 0),
+    orderCount: Math.max(0, goal.orderCount ?? 0),
+    progressPercent: Math.max(0, Math.min(100, goal.progressPercent ?? 0)),
+    ...(goal.closesAt ? { closesAt: goal.closesAt } : {}),
+    ...(goal.campaignName ? { campaignName: goal.campaignName } : {}),
+    ...(goal.campaignMessage ? { campaignMessage: goal.campaignMessage } : {}),
   }
 }
 
@@ -317,6 +345,25 @@ export async function getGoalStatus(
     // merchant dashboard never represents an expired or future sale as live.
     campaignName: campaignActiveAt(config, now) ? config.campaignName : null,
     campaignMessage: campaignActiveAt(config, now) ? config.campaignMessage : null,
+  }
+}
+
+// GoalStatus → merchant-preview goal shape (adds the internal strategy chip
+// that publicGoalView strips). Only ever serialized BEHIND merchant auth —
+// /api/bargain/config GET and the session-gated /api/bargain/demo.
+export function demoGoalFromStatus(status: GoalStatus): BargainDemoGoal | undefined {
+  if (status.windowState !== 'active') return undefined
+  return {
+    goalType: status.goalType,
+    targetValue: Math.max(0, status.targetValue),
+    achievedValue: Math.max(0, status.achievedValue),
+    orderCount: Math.max(0, status.orderCount),
+    progressPercent: Math.max(0, Math.min(100, status.progressPercent)),
+    ...(status.closesAtISO ? { closesAt: status.closesAtISO } : {}),
+    ...(status.campaignName ? { campaignName: status.campaignName } : {}),
+    ...(status.campaignMessage ? { campaignMessage: status.campaignMessage } : {}),
+    strategy: status.strategy,
+    mode: status.mode,
   }
 }
 

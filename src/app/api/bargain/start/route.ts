@@ -3,7 +3,7 @@ import prisma from '@/lib/db'
 import { bargainStartSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerContext, SUPPORTED_LANGUAGES, type NegotiationContext } from '@/lib/services/bargain'
 import { currencySymbolFor, CURRENCY_SYMBOLS } from '@/lib/bargain/i18n'
-import { buildGoalContextForNegotiation } from '@/lib/bargain/goals'
+import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { getBargainGate, recordBargainSessionOp, BARGAIN_SESSIONS_EXHAUSTED } from '@/lib/bargain/gate'
@@ -143,6 +143,12 @@ export async function POST(request: NextRequest) {
     const now = new Date()
     const expiredAt = new Date(now.getTime() + config.sessionTimeout * 1000)
 
+    // Daily-goal context is shared by EVERY success shape this route returns
+    // (new session, returning session, anonymous duplicate) so the widget's
+    // "Today's goal" strip is populated from the very first frame. Computed
+    // once, right after the config load — strategy/mode stay server-side.
+    const goalCtx = await buildGoalContextForNegotiation(config, store.timezone, now)
+
     // Block duplicate active sessions for the same product+buyer (prevents attempt
     // abuse via incognito / new tabs / fresh browsers). The identifier is the
     // customer fingerprint (stable per-device+cart, see the storefront widget),
@@ -192,6 +198,7 @@ export async function POST(request: NextRequest) {
         }),
         expiresAt: existing.expiredAt.toISOString(),
         existingSession: true,
+        goal: publicGoalView(goalCtx),
       }, { status: 200 })
     }
 
@@ -216,6 +223,7 @@ export async function POST(request: NextRequest) {
           sessionId: anonExisting.id,
           sessionToken: signSessionToken(anonExisting.id) ?? undefined,
           existingSession: true,
+          goal: publicGoalView(goalCtx),
         }, { status: 200 })
       }
     }
@@ -255,7 +263,6 @@ export async function POST(request: NextRequest) {
     // Attach the daily-goal context so the OPENING message is also strategy-aware
     // (truthful campaign/urgency lines only — the strategy itself never reaches
     // the customer). Same context the offer step uses for every later turn.
-    const goalCtx = await buildGoalContextForNegotiation(config, store.timezone, new Date())
     if (goalCtx) ctx.goal = goalCtx
 
     // Try AI opening message, fall back to deterministic
@@ -333,6 +340,7 @@ export async function POST(request: NextRequest) {
       openingMessage: openingReply,
       expiresAt: expiredAt.toISOString(),
       returning,
+      goal: publicGoalView(goalCtx),
     }, { status: 201 })
   } catch (error) {
     const validationResponse = handleValidationError(error)

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import type { BargainConfig as BargainConfigRow } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
@@ -8,12 +9,20 @@ import {
   ruleBasedDecision,
   chatFallback,
   SUPPORTED_LANGUAGES,
+  NEGOTIATION_MODES,
   type Persona,
+  type BargainNegotiationMode,
   type NegotiationContext,
   type NegotiationResult,
 } from '@/lib/services/bargain'
 import { detectLanguage } from '@/lib/bargain/language'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
+import {
+  buildGoalContextForNegotiation,
+  publicGoalView,
+} from '@/lib/bargain/goals'
+import { analyzeIntent } from '@/lib/bargain/intent'
+import type { BargainDemoGoal } from '@/lib/bargain/api-types'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,16 +38,22 @@ const VALID_PERSONAS: Persona[] = ['friendly_shopkeeper', 'strict_negotiator', '
 // of truth: a storefront caller that does not pass an explicit persona — or
 // passes personaSource: 'store' — is always pinned to the merchant's saved
 // BargainConfig persona, so customers can never pick (or game) the mode.
-// Also returns the merchant's store so the demo can quote real catalog facts.
-async function resolveMerchantPersona(userId: string): Promise<{ persona: Persona; store: {
-  id: string; domain: string; currency: string; apiKey: string | null
-  shopifyRefreshToken: string | null; shopifyTokenExpiresAt: Date | null
-} | null }> {
+// Also returns the merchant's store (catalog facts) and the full BargainConfig
+// row so the AI salesperson gets the same daily-goal context as production.
+async function resolveMerchantPersona(userId: string): Promise<{
+  persona: Persona
+  config: BargainConfigRow | null
+  store: {
+    id: string; domain: string; currency: string; apiKey: string | null
+    timezone: string
+    shopifyRefreshToken: string | null; shopifyTokenExpiresAt: Date | null
+  } | null
+}> {
   const store = await prisma.store.findFirst({
     where: { userId },
     orderBy: { createdAt: 'asc' },
   })
-  if (!store) return { persona: 'friendly_shopkeeper', store: null }
+  if (!store) return { persona: 'friendly_shopkeeper', config: null, store: null }
   const config = await prisma.bargainConfig.upsert({
     where: { storeId: store.id },
     create: { storeId: store.id },
@@ -48,11 +63,13 @@ async function resolveMerchantPersona(userId: string): Promise<{ persona: Person
     persona: VALID_PERSONAS.includes(config.aiPersona as Persona)
       ? (config.aiPersona as Persona)
       : 'friendly_shopkeeper',
+    config,
     store: {
       id: store.id,
       domain: store.domain,
       currency: store.currency ?? 'INR',
       apiKey: store.apiKey,
+      timezone: store.timezone,
       shopifyRefreshToken: store.shopifyRefreshToken,
       shopifyTokenExpiresAt: store.shopifyTokenExpiresAt,
     },
@@ -145,6 +162,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── AI salesperson context ───────────────────────────────────────────
+    // Real daily-goal state (target, progress, true close time, campaign),
+    // the merchant's negotiation mode and the read on this message — exactly
+    // what the production storefront feeds the engine. This endpoint is
+    // merchant-session gated, so the RESPONSE may additionally carry the
+    // internal strategy/mode chip for the merchant's own live preview.
+    const goalCtx = merchant.config
+      ? await buildGoalContextForNegotiation(
+          merchant.config,
+          merchant.store?.timezone ?? null,
+          new Date(),
+        )
+      : undefined
+    const negotiationMode: BargainNegotiationMode | undefined =
+      merchant.config && (NEGOTIATION_MODES as readonly string[]).includes(merchant.config.negotiationMode)
+        ? (merchant.config.negotiationMode as BargainNegotiationMode)
+        : undefined
+    const intentAnalysis = analyzeIntent(message)
+
     const ctx: NegotiationContext = {
       storeName,
       currencySymbol,
@@ -159,6 +195,9 @@ export async function POST(request: NextRequest) {
       walkoutTriggered: body.walkoutTriggered === true,
       customerOfferTrend,
       customerContext: 'Sequential guided product demo on the CartGain site.',
+      goal: goalCtx,
+      intent: intentAnalysis,
+      ...(negotiationMode ? { negotiationMode } : {}),
     }
 
     // Real catalog facts for item demos: when the merchant's store + a real
@@ -202,6 +241,18 @@ export async function POST(request: NextRequest) {
         : { reply: chatFallback(message, ctx2, history.length), decision: 'chat', tactic: 'demo_fallback', sentiment: 'neutral' }
     }
 
+    // Merchant preview: the goal strip shows real progress plus the internal
+    // strategy chip driving this turn. publicGoalView is the single redaction
+    // point for client payloads; strategy/mode are added ONLY here, behind
+    // the merchant session check at the top of this handler.
+    const demoGoal: BargainDemoGoal | undefined = goalCtx
+      ? {
+          ...(publicGoalView(goalCtx)! as NonNullable<BargainDemoGoal>),
+          strategy: goalCtx.strategy,
+          mode: goalCtx.mode,
+        }
+      : undefined
+
     return NextResponse.json({
       reply: result.reply,
       decision: result.decision,
@@ -210,6 +261,7 @@ export async function POST(request: NextRequest) {
       sentiment: result.sentiment ?? 'neutral',
       persona,
       abuse: (result.metadata as any)?.abuse === true,
+      goal: demoGoal,
     })
   } catch (err: any) {
     console.error('[BARGAIN_DEMO]', err?.message ?? err)

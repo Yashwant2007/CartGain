@@ -11,10 +11,12 @@ import {
   netBargainGoalRefund,
   clampOfferToSafety,
   strategyAdjustedCounter,
+  publicGoalView,
+  demoGoalFromStatus,
   type GoalConfigLike,
 } from '../goals'
 import prismaImport from '@/lib/db'
-import type { NegotiationContext } from '../engine'
+import type { NegotiationContext, NegotiationGoalContext } from '../engine'
 
 jest.mock('@/lib/db', () => {
   const m = {
@@ -365,6 +367,111 @@ describe('buildGoalContextForNegotiation', () => {
     expect(ctx?.campaignName).toBeUndefined()
     expect(ctx?.campaignMessage).toBeUndefined()
     expect(ctx?.strategy).toBeDefined()
+  })
+
+  it('carries the customer-visible progress fields for the widget strip', async () => {
+    mockPrisma.bargainDailyGoal.findUnique.mockResolvedValue({ achievedValue: 20000, orderCount: 4 })
+    const ctx = await buildGoalContextForNegotiation({ ...activeConfig, storeId: 'store_1' } as any, 'UTC', now)
+    expect(ctx).toMatchObject({
+      targetValue: 100000,
+      achievedValue: 20000,
+      orderCount: 4,
+      progressPercent: 20,
+    })
+  })
+})
+
+// ════════════════════════════════════════════════════════════
+// Customer-facing projections — the ONLY shapes that leave the
+// server for a client payload.
+// ════════════════════════════════════════════════════════════
+describe('customer-facing goal projections', () => {
+  const fullGoal: NegotiationGoalContext = {
+    strategy: 'AGGRESSIVE',
+    mode: 'behind',
+    goalType: 'revenue',
+    closesAt: '2026-09-12T12:00:00.000Z',
+    campaignName: 'Monsoon',
+    campaignMessage: 'Best prices all weekend',
+    targetValue: 100000,
+    achievedValue: 20000,
+    orderCount: 4,
+    progressPercent: 20,
+  }
+
+  it('publicGoalView keeps real progress and strips every internal field', () => {
+    const view = publicGoalView(fullGoal)
+    expect(view).toEqual({
+      goalType: 'revenue',
+      targetValue: 100000,
+      achievedValue: 20000,
+      orderCount: 4,
+      progressPercent: 20,
+      closesAt: '2026-09-12T12:00:00.000Z',
+      campaignName: 'Monsoon',
+      campaignMessage: 'Best prices all weekend',
+    })
+    expect(view).not.toHaveProperty('strategy')
+    expect(view).not.toHaveProperty('mode')
+    expect(JSON.stringify(view)).not.toMatch(/AGGRESSIVE|behind/)
+  })
+
+  it('publicGoalView returns undefined when there is no active goal', () => {
+    expect(publicGoalView(undefined)).toBeUndefined()
+  })
+
+  it('publicGoalView clamps progress to 0–100 and floors negatives at 0', () => {
+    const view = publicGoalView({
+      ...fullGoal,
+      progressPercent: 140,
+      targetValue: -3,
+      achievedValue: -1,
+      orderCount: -2,
+    })
+    expect(view?.progressPercent).toBe(100)
+    expect(view?.targetValue).toBe(0)
+    expect(view?.achievedValue).toBe(0)
+    expect(view?.orderCount).toBe(0)
+  })
+
+  it('demoGoalFromStatus adds the strategy chip only while the window is active', async () => {
+    jest.clearAllMocks()
+    mockPrisma.bargainDailyGoal.upsert.mockResolvedValue({
+      storeId: 'store_1',
+      businessDate: '2026-09-12',
+      goalType: 'revenue',
+      targetValue: 100000,
+      achievedValue: 25000,
+      orderCount: 5,
+    })
+    const status = await getGoalStatus({ id: 'store_1', timezone: 'UTC' }, activeConfig, now)
+    const view = demoGoalFromStatus(status)
+    expect(view).toMatchObject({
+      targetValue: 100000,
+      achievedValue: 25000,
+      orderCount: 5,
+      progressPercent: 25,
+      strategy: 'AGGRESSIVE',
+      mode: 'behind',
+      closesAt: activeConfig.goalEndTime!.toISOString(),
+    })
+  })
+
+  it('demoGoalFromStatus is undefined outside the active window', async () => {
+    jest.clearAllMocks()
+    mockPrisma.bargainDailyGoal.upsert.mockResolvedValue({
+      businessDate: '2026-09-12',
+      goalType: 'orders',
+      targetValue: 10,
+      achievedValue: 5,
+      orderCount: 5,
+    })
+    const status = await getGoalStatus(
+      { id: 'store_1', timezone: 'UTC' },
+      activeConfig,
+      new Date('2026-09-12T06:00:00Z'),
+    )
+    expect(demoGoalFromStatus(status)).toBeUndefined()
   })
 })
 

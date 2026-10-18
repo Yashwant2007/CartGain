@@ -6,6 +6,7 @@ import { ShoppingCart, Package, Lock } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import BargainWidget, { type BargainItem } from '@/components/bargain/StorefrontBargainWidget'
+import type { BargainDemoGoal } from '@/lib/bargain/api-types'
 
 export default function BargainView() {
   return (
@@ -68,7 +69,10 @@ function PageContent() {
   // Merchant decides how the store bargains. Pull the saved store config so the
   // preview widget mirrors exactly what customers on the real storefront see.
   const { data: session } = useSession()
-  const [storeCfg, setStoreCfg] = useState<{ persona: string; language: string; maxAttempts: number; minProfitPercent: number }>({
+  const [storeCfg, setStoreCfg] = useState<{
+    persona: string; language: string; maxAttempts: number; minProfitPercent: number
+    goal?: BargainDemoGoal
+  }>({
     persona: 'friendly_shopkeeper',
     language: 'auto',
     maxAttempts: 3,
@@ -89,6 +93,7 @@ function PageContent() {
           language: typeof c.language === 'string' ? c.language : 'auto',
           maxAttempts: typeof c.maxAttempts === 'number' ? c.maxAttempts : 3,
           minProfitPercent: typeof c.minProfitPercent === 'number' ? c.minProfitPercent : 25,
+          goal: data.goal && typeof data.goal.targetValue === 'number' ? data.goal : undefined,
         })
       })
       .catch(() => {})
@@ -210,6 +215,7 @@ function PageContent() {
           language={storeCfg.language}
           maxAttempts={storeCfg.maxAttempts}
           minProfitPercent={storeCfg.minProfitPercent}
+          goal={storeCfg.goal}
         />
       </Shell>
     )
@@ -223,6 +229,7 @@ function PageContent() {
         currency={currency}
         line={line}
         checkoutUrl={checkoutUrl}
+        goal={storeCfg.goal}
       />
     </Shell>
   )

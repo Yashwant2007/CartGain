@@ -46,6 +46,7 @@ jest.mock('@/lib/services/bargain', () => {
 
 jest.mock('@/lib/bargain/goals', () => ({
   buildGoalContextForNegotiation: jest.fn(async () => null),
+  publicGoalView: jest.fn(() => undefined),
 }))
 
 jest.mock('@/lib/bargain/gate', () => ({

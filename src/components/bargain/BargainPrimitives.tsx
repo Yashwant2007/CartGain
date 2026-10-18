@@ -8,7 +8,7 @@
 import type { ReactNode } from 'react'
 import { Tag, Zap, ShieldCheck, Loader2, ShoppingBag, CheckCheck, Clock3 } from 'lucide-react'
 import type { UiKey } from '@/lib/bargain/i18n'
-import type { BargainDecision, BargainMessage, BargainRecommendation } from '@/lib/bargain/api-types'
+import type { BargainDecision, BargainMessage, BargainRecommendation, BargainDemoGoal, BargainGoalView } from '@/lib/bargain/api-types'
 
 export type UiText = (key: UiKey, vars?: Record<string, string | number>) => string
 
@@ -360,6 +360,149 @@ export function DealInfoPanel({ t, currencySymbol, originalPrice, finalPrice, de
         }}>
           <ShieldCheck size={13} style={{ color: '#16a34a', flexShrink: 0 }} />
           Price is guaranteed while you negotiate — it resets if you leave and come back.
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Daily goal strip ──────────────────────────────────────────────────────
+// "Today's goal" for the store running the AI salesperson: the REAL target and
+// the REAL ledger totals the SERVER sent (never derived client-side), plus the
+// truthful close time. `internal` (merchant live preview only) additionally
+// paints the pace and shows the strategy chip driving the agent — customers
+// only ever see plain progress numbers.
+export function GoalStrip({
+  goal,
+  currencySymbol,
+  internal = false,
+}: {
+  goal?: BargainDemoGoal | BargainGoalView | null
+  currencySymbol: string
+  internal?: boolean
+}) {
+  if (!goal || !(goal.targetValue > 0)) return null
+
+  const isRevenue = goal.goalType === 'revenue'
+  const done = isRevenue ? goal.achievedValue : goal.orderCount
+  const fmt = (n: number) =>
+    isRevenue ? `${currencySymbol}${Math.round(n).toLocaleString('en-IN')}` : String(Math.round(n))
+  const pct = Math.max(0, Math.min(100, goal.progressPercent || 0))
+
+  const preview = internal ? (goal as BargainDemoGoal) : null
+  let barFill = 'linear-gradient(90deg, #a5b4fc, #6366f1 60%, #4f46e5)'
+  if (preview?.mode === 'behind') barFill = 'linear-gradient(90deg, #fde68a, #f59e0b)'
+  else if (preview?.mode === 'ahead') barFill = 'linear-gradient(90deg, #86efac, #22c55e)'
+
+  const closesAt = goal.closesAt ? new Date(goal.closesAt) : null
+  const closeLabel =
+    closesAt && !Number.isNaN(closesAt.getTime())
+      ? closesAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+      : null
+  const campaignLine = goal.campaignMessage || goal.campaignName || null
+  const strategy = preview?.strategy && preview.strategy !== 'NORMAL' ? preview.strategy : null
+
+  return (
+    <div
+      className="cg-goal"
+      role="group"
+      aria-label={`Today's goal: ${fmt(done)} of ${fmt(goal.targetValue)}${
+        closeLabel ? `, closes ${closeLabel}` : ''
+      }`}
+      style={{
+        flexShrink: 0,
+        padding: '8px 16px 9px',
+        background: preview ? '#fffdf5' : '#ffffff',
+        borderTopLeftRadius: 12,
+        borderTopRightRadius: 12,
+        borderBottom: '1px solid #eef2f7',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          marginBottom: 6,
+        }}
+      >
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 10.5,
+            fontWeight: 700,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            color: '#94a3b8',
+            minWidth: 0,
+          }}
+        >
+          Today&apos;s goal
+          {strategy && (
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 800,
+                letterSpacing: '0.04em',
+                color: preview?.mode === 'behind' ? '#b45309' : '#4338ca',
+                background: preview?.mode === 'behind' ? '#fef3c7' : '#eef2ff',
+                border: `1px solid ${preview?.mode === 'behind' ? '#fde68a' : '#c7d2fe'}`,
+                borderRadius: 999,
+                padding: '1px 7px',
+              }}
+            >
+              {strategy}
+            </span>
+          )}
+        </span>
+        <span
+          style={{
+            fontSize: 11.5,
+            fontWeight: 800,
+            color: '#4f46e5',
+            fontVariantNumeric: 'tabular-nums',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {fmt(done)} / {fmt(goal.targetValue)}
+          {closeLabel && (
+            <span style={{ fontWeight: 700, color: '#b45309' }}>
+              {' '}· closes {closeLabel}
+            </span>
+          )}
+        </span>
+      </div>
+      <div
+        role="img"
+        aria-hidden="true"
+        style={{ position: 'relative', height: 6, borderRadius: 999, background: '#eef2f7', overflow: 'hidden' }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: `${pct}%`,
+            borderRadius: 999,
+            background: barFill,
+            transition: 'width 0.35s ease',
+          }}
+        />
+      </div>
+      {campaignLine && (
+        <div
+          style={{
+            marginTop: 5,
+            fontSize: 10.5,
+            color: '#94a3b8',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {campaignLine}
         </div>
       )}
     </div>

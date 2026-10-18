@@ -9,6 +9,7 @@ import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import { buildQuickOffers } from '@/lib/bargain/offers'
 import type {
   BargainAcceptSuccess,
+  BargainGoalView,
   BargainMessage,
   BargainOfferSuccess,
   BargainRecommendation,
@@ -22,6 +23,7 @@ import type {
 import {
   ChatSkeleton,
   DealInfoPanel,
+  GoalStrip,
   MessageBubble,
   PriceRail,
   ProductContextCard,
@@ -160,6 +162,9 @@ export default function BargainWidget({
   const [rejection, setRejection] = useState<BargainRejection | null>(null)
   const [activeTab, setActiveTab] = useState<'chat' | 'info'>('chat')
   const [recommendations, setRecommendations] = useState<BargainRecommendation[] | null>(null)
+  // Daily-goal strip (public view): real server progress + close time only.
+  // Seeded from /start, refreshed on every offer turn.
+  const [goal, setGoal] = useState<BargainGoalView | null>(null)
   const [atBottom, setAtBottom] = useState(true)
   const [announcer, setAnnouncer] = useState('')
   // Embed mode: a FIXED panel height. Never calc(100dvh — the iframe has no
@@ -517,6 +522,7 @@ export default function BargainWidget({
       if (data.sessionToken) setSessionToken(data.sessionToken)
       setExpiresAt(data.expiresAt ?? null)
       if (data.returning) setReturning(true)
+      if (data.goal) setGoal(data.goal)
       if (data.existingSession && data.session?.messages?.length) {
         const restored: BargainMessage[] = data.session.messages.map((m: BargainMessage) => ({
           id: m.id,
@@ -689,6 +695,7 @@ export default function BargainWidget({
       if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
       if (data.floorReached === true) setFloorReached(true)
       if (typeof data.attemptsUsed === 'number') setAttemptsUsed(data.attemptsUsed)
+      if (data.goal) setGoal(data.goal)
       if (data.finalPrice != null) setFinalPrice(data.finalPrice)
       if (Array.isArray(data.recommendations) && data.recommendations.length > 0) {
         setRecommendations(data.recommendations)
@@ -1299,6 +1306,9 @@ export default function BargainWidget({
               </div>
             </div>
           </div>
+
+          {/* ── Today's goal: real server progress (public projection) ── */}
+          <GoalStrip goal={goal} currencySymbol={currencySymbol} />
 
           {/* ── Price progress rail: listed → best on the table ── */}
           {showPriceRail && (

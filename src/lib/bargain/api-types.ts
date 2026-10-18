@@ -90,6 +90,34 @@ export type BargainStartBody = {
   language?: string | null
 }
 
+// ── Daily sales goal (customer-safe projection) ─────────────────────────────
+/** The store's daily sales target while its window is active, so the widget
+ *  can render a truthful "Today's goal" strip. Carries ONLY customer-safe
+ *  fields: the real target/progress, the real close time (for honest urgency)
+ *  and the merchant's own campaign copy. The internal strategy, pacing mode
+ *  and every floor/margin/attempt number stay server-side — the server
+ *  builds this shape via goals.publicGoalView(). */
+export type BargainGoalView = {
+  goalType: 'orders' | 'revenue'
+  targetValue: number
+  achievedValue: number
+  orderCount: number
+  /** 0–100: orders/target for an orders goal, value/target for revenue. */
+  progressPercent: number
+  /** ISO instant the real goal window closes (truthful urgency only). */
+  closesAt?: string
+  campaignName?: string
+  campaignMessage?: string
+}
+
+/** Live-demo variant: the merchant preview may also show the internal pacing
+ *  chip (strategy/mode) that is driving the agent RIGHT NOW. Never sent to a
+ *  customer — /api/bargain/demo is merchant-session gated. */
+export type BargainDemoGoal = BargainGoalView & {
+  strategy?: 'CONSERVATIVE' | 'NORMAL' | 'AGGRESSIVE' | 'CLOSING'
+  mode?: 'ahead' | 'on_track' | 'behind' | 'idle'
+}
+
 export type BargainStartSuccess = {
   sessionId: string
   /** Signed token bound to the session. Proof-of-origin the widget echoes on
@@ -100,6 +128,8 @@ export type BargainStartSuccess = {
   expiresAt: string
   returning?: boolean
   existingSession?: boolean
+  /** Active daily-goal view, when the store runs one. */
+  goal?: BargainGoalView
 }
 
 // ── Offer ────────────────────────────────────────────────────────────────
@@ -127,6 +157,8 @@ export type BargainOfferSuccess = {
    * (an abuse turn that does not consume an attempt is reported as rolled back).
    */
   attemptsUsed?: number
+  /** Active daily-goal view, refreshed alongside each turn (see BargainGoalView). */
+  goal?: BargainGoalView
   recommendations?: BargainRecommendation[]
   recommendationReason?: string
   abuseDetected?: boolean

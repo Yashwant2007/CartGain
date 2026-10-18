@@ -55,6 +55,9 @@ jest.mock('@/lib/bargain/product-fetcher', () => ({
 
 jest.mock('@/lib/bargain/goals', () => ({
   buildGoalContextForNegotiation: jest.fn(async () => ''),
+  // The response builder projects the goal for the widget's strip; with no
+  // goal context there is nothing to project.
+  publicGoalView: jest.fn(() => undefined),
 }))
 
 jest.mock('@/lib/shopify', () => ({

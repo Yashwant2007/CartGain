@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { bargainConfigUpsertSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
+import { getGoalStatus, demoGoalFromStatus } from '@/lib/bargain/goals'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +40,16 @@ export async function GET(request: NextRequest) {
         create: { storeId: resolvedStoreId, enabled: true },
         update: {},
       })
-      return NextResponse.json({ config, resolvedStoreId })
+      return NextResponse.json({
+        config,
+        resolvedStoreId,
+        // Active daily-goal preview (internal strategy chip included) so the
+        // live demo's goal strip is populated before the first message. Skipped
+        // entirely for stores that don't run goals — no ledger write on read.
+        goal: config.goalEnabled
+          ? demoGoalFromStatus(await getGoalStatus(fallback, config, new Date()))
+          : undefined,
+      })
     }
 
     const config = await prisma.bargainConfig.upsert({
@@ -48,7 +58,12 @@ export async function GET(request: NextRequest) {
       update: {},
     })
 
-    return NextResponse.json({ config })
+    return NextResponse.json({
+      config,
+      goal: config.goalEnabled
+        ? demoGoalFromStatus(await getGoalStatus(store, config, new Date()))
+        : undefined,
+    })
   } catch (error) {
     console.error('[BARGAIN_CONFIG_GET]', error)
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })

@@ -6,6 +6,8 @@ import { ShoppingCart, CheckCheck, Clock3 } from 'lucide-react'
 import { currencySymbolFor } from '@/lib/bargain/i18n'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { reciprocalCounter, isAbsurdOffer, absurdOfferReply, type NegotiationContext } from '@/lib/bargain/engine'
+import { GoalStrip } from '@/components/bargain/BargainPrimitives'
+import type { BargainDemoGoal } from '@/lib/bargain/api-types'
 
 type Line =
   | { kind: 'item'; id: string; variantId?: string | null; title: string; price: number; image?: string }
@@ -62,6 +64,8 @@ type Props = {
   persona?: string
   maxAttempts?: number
   minProfitPercent?: number
+  /** Active daily-goal preview (from /api/bargain/config or a demo turn). */
+  goal?: BargainDemoGoal
 }
 
 const PERSONA_MAP: Record<string, string> = {
@@ -80,6 +84,7 @@ export default function StorefrontBargainWidget({
   persona: personaProp,
   maxAttempts = 3,
   minProfitPercent = 25,
+  goal: goalProp,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -100,6 +105,12 @@ export default function StorefrontBargainWidget({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // Daily-goal strip: seeded from the config fetch, refreshed on every demo
+  // turn (progress/pace come only from the server).
+  const [goalState, setGoalState] = useState<BargainDemoGoal | undefined>(goalProp)
+  useEffect(() => {
+    if (goalProp) setGoalState(goalProp)
+  }, [goalProp])
   // The "thinking" dots are held back until the delivered tick has landed, so
   // the sequence reads naturally: message → delivered tick → thinking → reply.
   const [showThinking, setShowThinking] = useState(false)
@@ -291,6 +302,7 @@ export default function StorefrontBargainWidget({
       if (data.persona && ENGINE_TO_LOCAL[data.persona]) {
         setPersona(ENGINE_TO_LOCAL[data.persona])
       }
+      if (data.goal) setGoalState(data.goal)
 
       const nextAttempt = attempts + 1
       // A joke offer far below the floor gets a persona reply but must not burn
@@ -501,6 +513,17 @@ export default function StorefrontBargainWidget({
           .cgf-tick { opacity: 1 }
         }
       `}</style>
+
+      {/* Today's goal — merchant live preview: real server progress plus the
+          strategy chip driving the agent (customers never see that chip;
+          their storefront widget renders the public view of the same strip). */}
+      {(step === 'intro' || step === 'chat') && (
+        <GoalStrip
+          goal={goalState}
+          currencySymbol={currencySymbolFor(currency)}
+          internal
+        />
+      )}
 
       {step === 'intro' && (
         <div className="p-4 space-y-3">
