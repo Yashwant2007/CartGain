@@ -18,6 +18,37 @@ export function normalizeOptOutPhone(phone: string): string {
 
 export type OptOutContact = { email?: string | null; phone?: string | null }
 
+// Persists an opt-out for a store, normalizing the contact and refusing to
+// create a duplicate for an already-recorded identity. Shared by the public
+// opt-out endpoint and the inbound WhatsApp STOP webhook so both channels write
+// the exact same canonical row. A contact with neither email nor phone is a
+// no-op (there is nothing to suppress).
+export async function recordOptOut(
+  storeId: string,
+  contact: OptOutContact,
+  reason: string = 'customer_request',
+): Promise<void> {
+  const email = contact.email ? normalizeOptOutEmail(contact.email) : null
+  const phone = contact.phone ? normalizeOptOutPhone(contact.phone) : null
+  if (!email && !phone) return
+
+  const data: { storeId: string; reason: string; email?: string; phone?: string } = { storeId, reason }
+  if (email) data.email = email
+  if (phone) data.phone = phone
+
+  if (email) {
+    const existing = await prisma.optOut.findUnique({
+      where: { storeId_email: { storeId, email } },
+    })
+    if (!existing) await prisma.optOut.create({ data })
+  } else if (phone) {
+    const existing = await prisma.optOut.findUnique({
+      where: { storeId_phone: { storeId, phone } },
+    })
+    if (!existing) await prisma.optOut.create({ data })
+  }
+}
+
 export async function isContactOptedOut(storeId: string, contact: OptOutContact): Promise<boolean> {
   const email = contact.email ? normalizeOptOutEmail(contact.email) : null
   const phone = contact.phone ? normalizeOptOutPhone(contact.phone) : null

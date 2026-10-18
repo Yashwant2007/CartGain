@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
+import prisma from '@/lib/db'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { logWarn, logInfo } from '@/lib/observability/logger'
 import { parseWhatsAppEvents, isWhatsAppOptOutText } from '@/lib/whatsapp/inbound'
+import { resolveStoreIdByWhatsAppPhoneNumberId } from '@/lib/whatsapp/store-registry'
+import { recordOptOut } from '@/lib/opt-out'
+import { resolveWhatsAppAppSecret, resolveWhatsAppVerifyToken } from '@/lib/whatsapp/config'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,9 +27,9 @@ function verifyHubSignature(rawBody: string, signatureHeader: string | null): bo
     ? signatureHeader.slice('sha256='.length)
     : signatureHeader
   if (!/^[a-f0-9]{64}$/.test(expected)) return false
-  const appSecret = process.env.WHATSAPP_APP_SECRET
+  const appSecret = resolveWhatsAppAppSecret()
   if (!appSecret) {
-    logWarn('whatsapp', 'webhook_verify', 'WHATSAPP_APP_SECRET not configured — cannot verify X-Hub-Signature-256')
+    logWarn('whatsapp', 'webhook_verify', 'Meta app secret not configured (WHATSAPP_APP_SECRET / META_APP_SECRET / FACEBOOK_APP_SECRET) — cannot verify X-Hub-Signature-256')
     return false
   }
   const actual = crypto.createHmac('sha256', appSecret).update(rawBody, 'utf8').digest('hex')
@@ -38,10 +42,10 @@ export async function GET(request: NextRequest) {
     const token = request.nextUrl.searchParams.get('hub.verify_token')
     const challenge = request.nextUrl.searchParams.get('hub.challenge')
 
-    const expectedToken = process.env.WHATSAPP_VERIFY_TOKEN
+    const expectedToken = resolveWhatsAppVerifyToken()
 
     if (!expectedToken) {
-      logWarn('whatsapp', 'webhook_verify', 'WHATSAPP_VERIFY_TOKEN not configured on server')
+      logWarn('whatsapp', 'webhook_verify', 'WhatsApp verify token not configured (WHATSAPP_VERIFY_TOKEN / META_VERIFY_TOKEN / FACEBOOK_VERIFY_TOKEN)')
       return new NextResponse('Webhook not configured', { status: 500 })
     }
 
@@ -103,13 +107,43 @@ export async function POST(request: NextRequest) {
       } else {
         inboundMessages++
         if (isWhatsAppOptOutText(event.text)) {
-          // NOTE: mapping an inbound WhatsApp number → store needs a per-store
-          // phone_number_id registry (not yet modelled). Until then we surface
-          // the opt-out loudly instead of silently ignoring it.
-          logWarn('whatsapp', 'inbound_opt_out', 'Inbound WhatsApp opt-out keyword received', {
-            from: event.from,
-            phoneNumberId: event.phoneNumberId,
-          })
+          // Map the Meta phone_number_id back to the store that owns it, then
+          // persist the opt-out so the customer is suppressed on every channel.
+          // The previous behaviour only logged the keyword, so a STOP was never
+          // enforced and the customer kept receiving recoveries.
+          const storeId = await resolveStoreIdByWhatsAppPhoneNumberId(
+            prisma,
+            event.phoneNumberId,
+          ).catch(() => null)
+
+          if (storeId && event.from) {
+            const persisted = await recordOptOut(storeId, { phone: event.from })
+              .then(() => true)
+              .catch((error) => {
+                logWarn('whatsapp', 'inbound_opt_out', 'Failed to persist inbound WhatsApp opt-out', {
+                  from: event.from,
+                  phoneNumberId: event.phoneNumberId,
+                  storeId,
+                  error: error instanceof Error ? error.message : String(error),
+                })
+                return false
+              })
+            if (persisted) {
+              logInfo('whatsapp', 'inbound_opt_out', 'Inbound WhatsApp opt-out persisted', {
+                from: event.from,
+                phoneNumberId: event.phoneNumberId,
+                storeId,
+              })
+            }
+          } else {
+            // No phone_number_id mapped and the deployment owns zero/multiple
+            // active stores, so we cannot safely attribute the opt-out. Surface
+            // it loudly instead of silently dropping it.
+            logWarn('whatsapp', 'inbound_opt_out', 'Inbound WhatsApp opt-out received but no store could be resolved', {
+              from: event.from,
+              phoneNumberId: event.phoneNumberId,
+            })
+          }
         } else {
           logInfo('whatsapp', 'inbound_message', 'Inbound WhatsApp message received', {
             from: event.from,

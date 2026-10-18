@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
-import { verifyOptOutToken, normalizeOptOutEmail, normalizeOptOutPhone } from '@/lib/opt-out'
+import { verifyOptOutToken, recordOptOut } from '@/lib/opt-out'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,24 +22,6 @@ function confirmationHtml(contact: string): string {
 </body></html>`
 }
 
-async function recordOptOut(storeId: string, email: string | null, phone: string | null): Promise<void> {
-  const data: any = { storeId, reason: 'customer_request' }
-  if (email) data.email = normalizeOptOutEmail(email)
-  if (phone) data.phone = normalizeOptOutPhone(phone)
-
-  if (data.email) {
-    const existing = await prisma.optOut.findUnique({
-      where: { storeId_email: { storeId, email: data.email } },
-    })
-    if (!existing) await prisma.optOut.create({ data })
-  } else if (data.phone) {
-    const existing = await prisma.optOut.findUnique({
-      where: { storeId_phone: { storeId, phone: data.phone } },
-    })
-    if (!existing) await prisma.optOut.create({ data })
-  }
-}
-
 // GET /api/opt-out
 //   ?t=<signed token>  → public one-click unsubscribe from an email/WhatsApp link
 //   (no token)         → authenticated merchant view of the store's opt-out list
@@ -56,7 +38,7 @@ export async function GET(request: NextRequest) {
       if (!store) {
         return new NextResponse('Store not found.', { status: 404 })
       }
-      await recordOptOut(payload.storeId, payload.email ?? null, payload.phone ?? null)
+      await recordOptOut(payload.storeId, { email: payload.email ?? null, phone: payload.phone ?? null })
       return new NextResponse(confirmationHtml(payload.email || payload.phone || 'this contact'), {
         status: 200,
         headers: { 'content-type': 'text/html; charset=utf-8' },
@@ -160,7 +142,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404 })
     }
 
-    await recordOptOut(storeId, email, phone)
+    await recordOptOut(storeId, { email, phone })
     return NextResponse.json({ success: true, message: 'Opt-out recorded' })
   } catch (error) {
     console.error('Opt-out error:', error)

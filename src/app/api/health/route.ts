@@ -4,6 +4,7 @@ import { getQueue } from '@/lib/queue'
 import { getAiHealth } from '@/lib/ai-client'
 import { getEmailProviderStatus } from '@/lib/services/email'
 import { currentEnvironment, currentRelease } from '@/lib/observability/version'
+import { resolveWhatsAppAppSecret, resolveWhatsAppVerifyToken } from '@/lib/whatsapp/config'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,9 +78,16 @@ export async function GET() {
   // "degraded". Treating them as failures kept the endpoint permanently
   // "degraded", which trained everyone to ignore a signal that should mean
   // something.
+  // WhatsApp credentials may be supplied under Meta/Facebook alias names; the
+  // canonical names below are only "missing" when NO alias resolves.
+  const optionalResolvers: Record<string, () => string | undefined> = {
+    WHATSAPP_APP_SECRET: resolveWhatsAppAppSecret,
+    WHATSAPP_VERIFY_TOKEN: resolveWhatsAppVerifyToken,
+  }
   const optionalMissing: string[] = []
   for (const key of optionalVars) {
-    if (!process.env[key]) optionalMissing.push(key)
+    const value = optionalResolvers[key] ? optionalResolvers[key]() : process.env[key]
+    if (!value) optionalMissing.push(key)
   }
 
   // Secrets pasted into the Vercel dashboard frequently arrive with a

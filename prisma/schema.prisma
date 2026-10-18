@@ -126,6 +126,11 @@ model Store {
   // of trusting a globally-shared key. Binding verification to the shop closes
   // replay/forgery across tenants when secrets are not globally shared.
   webhookSecret   String?
+  // WhatsApp Cloud API business number id (Meta "phone_number_id"). Lets an
+  // inbound WhatsApp webhook — e.g. a customer replying STOP — map back to the
+  // store that owns the number so the opt-out is persisted against that store's
+  // contact list. Null until the number is registered for the store.
+  whatsappPhoneNumberId String? @unique
   shopifyRefreshToken String?
   shopifyTokenExpiresAt DateTime?
   createdAt       DateTime  @default(now())
