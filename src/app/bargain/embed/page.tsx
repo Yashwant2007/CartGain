@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import prisma from '@/lib/db'
 import { resolveActiveStoreIdByShopDomain } from '@/lib/stores/resolve-by-domain'
 import BargainWidget from '@/components/bargain/BargainWidget'
+import EmbedErrorBoundary from '@/components/bargain/EmbedErrorBoundary'
 
 export const dynamic = 'force-dynamic'
 
@@ -100,22 +101,24 @@ export default async function EmbedPage({
   return (
     <>
       <EmbedDocumentReset view={view} />
-      <BargainWidget
-        storeId={storeId as string}
-        shopifyProductId={shopifyProductId as string}
-        variantId={variantId}
-        originalPrice={price}
-        currency={currency}
-        productTitle={decodedTitle || 'this item'}
-        image={decodedImage}
-        language={language}
-        persona={persona}
-        maxAttempts={maxAttempts}
-        mode={mode}
-        linkout={sp('linkout')}
-        view={view}
-        embedded
-      />
+      <EmbedErrorBoundary>
+        <BargainWidget
+          storeId={storeId as string}
+          shopifyProductId={shopifyProductId as string}
+          variantId={variantId}
+          originalPrice={price}
+          currency={currency}
+          productTitle={decodedTitle || 'this item'}
+          image={decodedImage}
+          language={language}
+          persona={persona}
+          maxAttempts={maxAttempts}
+          mode={mode}
+          linkout={sp('linkout')}
+          view={view}
+          embedded
+        />
+      </EmbedErrorBoundary>
     </>
   )
 }
