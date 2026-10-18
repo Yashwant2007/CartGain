@@ -336,8 +336,33 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
   const { campaign, store, subscription, sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest, optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts } = config
 
   try {
+    // Resolve the A/B variant FIRST: its channels/delays/step-budget override the
+    // campaign defaults, and every decision below (step guard, delay guard,
+    // channel rotation) must use the variant's effective values. Previously the
+    // adjusted values were computed here but never read, so an A/B test changed
+    // nothing except the [AB:x] tag on the stored message record.
+    let abTestVariant: string | null = null
+    let effActiveChannels = [...activeChannels]
+    let effSendDelayMs = sendDelayMs
+    let effFollowUpDelayMs = followUpDelayMs
+    let effMaxMessages = maxMessages
+
+    if (abTest) {
+      abTestVariant = makeAbTestVariant(cart.id)
+      const variant = abTestVariant === 'A' ? abTest.variantA : abTest.variantB
+      if (variant && typeof variant === 'object') {
+        const cfg = variant as Record<string, any>
+        if (Array.isArray(cfg.channels) && cfg.channels.length > 0) effActiveChannels = cfg.channels
+        if (typeof cfg.sendDelay === 'number') effSendDelayMs = cfg.sendDelay * 60 * 1000
+        if (typeof cfg.followUpDelay === 'number') effFollowUpDelayMs = cfg.followUpDelay * 60 * 1000
+        if (typeof cfg.maxFollowUps === 'number') {
+          effMaxMessages = Math.min(effActiveChannels.length, cfg.maxFollowUps + 1)
+        }
+      }
+    }
+
     const step = cart.messages.length
-    if (step >= maxMessages) return { sent: 0, failed: 0 }
+    if (step >= effMaxMessages) return { sent: 0, failed: 0 }
 
     // Bargain-system integration hook: if this abandoned cart was linked to an
     // active bargain session, mark that session as `abandoned` so it shows up
@@ -351,14 +376,13 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
         .catch(() => {})
     }
 
-
-    const requiredDelayMs = sendDelayMs + step * followUpDelayMs
+    const requiredDelayMs = effSendDelayMs + step * effFollowUpDelayMs
     if (Date.now() - cart.abandonedAt.getTime() < requiredDelayMs) return { sent: 0, failed: 0 }
 
-    const scheduledChannel = activeChannels[step % activeChannels.length]
+    const scheduledChannel = effActiveChannels[step % effActiveChannels.length]
     const channelOrder = [
       scheduledChannel,
-      ...activeChannels.filter(c => c !== scheduledChannel),
+      ...effActiveChannels.filter(c => c !== scheduledChannel),
     ]
 
     const availableChannels = channelOrder.filter(c => {
@@ -403,24 +427,6 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
     const isOverageChannel = (ch: string): boolean => channelLimited(ch)
 
     if (channelsToProcess.length === 0) return { sent: 0, failed: 0 }
-
-    let abTestVariant: string | null = null
-    let adjActiveChannels = [...activeChannels]
-    let adjSendDelayMs = sendDelayMs
-    let adjFollowUpDelayMs = followUpDelayMs
-    let adjMaxMessages = maxMessages
-
-    if (abTest) {
-      abTestVariant = makeAbTestVariant(cart.id)
-      const variant = abTestVariant === 'A' ? abTest.variantA : abTest.variantB
-      if (variant && typeof variant === 'object') {
-        const cfg = variant as Record<string, any>
-        if (Array.isArray(cfg.channels)) adjActiveChannels = cfg.channels
-        if (typeof cfg.sendDelay === 'number') adjSendDelayMs = cfg.sendDelay * 60 * 1000
-        if (typeof cfg.followUpDelay === 'number') adjFollowUpDelayMs = cfg.followUpDelay * 60 * 1000
-        if (typeof cfg.maxFollowUps === 'number') adjMaxMessages = Math.min(adjActiveChannels.length, cfg.maxFollowUps + 1)
-      }
-    }
 
     const customerName = cart.customerName || 'Valued Customer'
     const rawItems = Array.isArray(cart.items) ? cart.items : []
@@ -562,7 +568,7 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
             cartId: cart.id,
             campaignId: campaign.id,
             channel: ch,
-            content: `Cart recovery message (step ${step + 1}/${maxMessages}) for ${customerName}${abTag}`,
+            content: `Cart recovery message (step ${step + 1}/${effMaxMessages}) for ${customerName}${abTag}`,
             status: sendSuccess ? 'sent' : 'failed',
             sentAt: sendSuccess ? now : null,
             // Email & WhatsApp delivery is fire-and-forget — mark as delivered
