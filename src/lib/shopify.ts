@@ -349,13 +349,16 @@ export async function setupShopifyWebhooks(
     // out of recognized revenue (see src/lib/attribution.ts).
     'orders/cancelled',
     'refunds/create',
-    // Uninstall / privacy lifecycle — required for Shopify app review and to
-    // honor data deletion obligations when a merchant uninstalls. These let the
-    // app purge the merchant's and their customers' data on schedule.
+    // Uninstall lifecycle — lets the app purge the merchant's data when they
+    // remove the app. This IS an Admin-API-registrable topic.
     'app/uninstalled',
-    'customers/data_request',
-    'customers/redact',
-    'shop/redact',
+    // NOTE: the three mandatory GDPR compliance topics (customers/data_request,
+    // customers/redact, shop/redact) are intentionally NOT registered here.
+    // Shopify rejects them on POST /admin/api/.../webhooks.json with a 404 —
+    // they are declared in shopify.app.toml under `compliance_topics` and
+    // registered by `shopify app deploy`. The webhook handler already accepts
+    // them (see src/app/api/webhooks/shopify/route.ts); the old code that POSTed
+    // them here only produced 404 noise on every reconnect.
     // Billing lifecycle — activates/cancels/expires the shop's app subscription
     // when the merchant approves, declines, or cancels from their Shopify admin.
     'app_subscriptions/update',

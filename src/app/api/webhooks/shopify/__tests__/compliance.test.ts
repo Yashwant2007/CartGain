@@ -50,6 +50,7 @@ function subscriptionBlocks(toml: string): { topics: string[]; complianceTopics:
 
 const blocks = subscriptionBlocks(APP_TOML)
 const complianceBlocks = blocks.filter((b) => b.complianceTopics.length > 0)
+const functionalTopics = blocks.flatMap((b) => b.topics)
 
 describe('check 3 — mandatory compliance webhooks are declared in the app config', () => {
   it('declares all three topics via compliance_topics', () => {
@@ -139,10 +140,17 @@ describe('check 3 — mandatory compliance webhooks are declared in the app conf
       global.fetch = (globalThis as any).__origFetch
     }
 
+    // Compliance topics must NOT be POSTed to the Admin API: Shopify rejects
+    // them there with a 404 on every reconnect. They are registered by
+    // `shopify app deploy` from the `compliance_topics` block in the TOML.
     for (const topic of COMPLIANCE_TOPICS) {
+      expect(created).not.toContain(topic)
+    }
+    // The functional topics the config declares ARE registered at runtime, so
+    // the two surfaces stay in sync.
+    for (const topic of functionalTopics) {
       expect(created).toContain(topic)
     }
-    // Every registration points at the same handler the config declares.
     expect(created.length).toBeGreaterThan(0)
   })
 })
