@@ -57,9 +57,6 @@ function widgetSrc(root){
 }
 function open(root){
   var d=ensureDrawer(),src=widgetSrc(root);if(!src)return;
-  /* The shopper is engaging — retire any pending dwell nudge for the session. */
-  dwellEngaged=true;
-  if(dwell)dwellStop();
   var reloading=false;
   if(d.frame.dataset.src!==src){d.frame.dataset.src=src;d.frame.setAttribute('src',src);lastSentVariant=null;reloading=true;}
   else if(d.frame.getAttribute('src')!==src){d.frame.setAttribute('src',src);lastSentVariant=null;reloading=true;}
@@ -150,130 +147,18 @@ function onVariantMaybe(){
 window.addEventListener('message',function(event){
   if(!event.data||typeof event.data!=='object')return;
   if(event.data.type==='cg_hello'){hideBoot();}
-  else if(event.data.type==='cg_empty'){hideBoot();dwellAbort();if(activeRoot)activeRoot.classList.add('is-hidden');close();}
-  else if(event.data.type==='cg_close'){hideBoot();if(dwell)dwellStop();close();}
+  else if(event.data.type==='cg_empty'){hideBoot();if(activeRoot)activeRoot.classList.add('is-hidden');close();}
+  else if(event.data.type==='cg_close'){hideBoot();close();}
 });
 function bindRoot(root){
   var opener=qs(root,'[data-cg-bargain-open]');if(!opener)return;
   opener.addEventListener('click',function(e){e.preventDefault();open(root);});
-}
-/* ── Product-page dwell nudge ──────────────────────────────────────────────
-   Soft engagement prompt. After a shopper stays on a product page for the
-   merchant-configured dwell time we gently pulse the launcher / CTA and show a
-   dismissible "want a better price?" bubble. It NEVER opens the drawer on its
-   own — the shopper must click. One reminder follows if it is still ignored.
-   Timing counts VISIBLE time only and stops for the session once the shopper
-   opens the drawer, dismisses the nudge, or the widget reports cg_empty. */
-var dwell=null,dwellStarted=false,dwellEngaged=false,DWELL_STORE='cg-dwell:v1:';
-function dwellKey(shop){return DWELL_STORE+shop+'|'+(window.location.pathname||'');}
-function sGet(k){try{return window.sessionStorage.getItem(k);}catch(e){return null;}}
-function sSet(k){try{window.sessionStorage.setItem(k,'1');}catch(e){}}
-function appOrigin(root){
-  var m=(root.getAttribute('data-cg-src')||'').match(/^(https?:\/\/[^\/]+)/);
-  return m?m[1]:'https://cart-gain.com';
-}
-function shopFromSrc(root){
-  var m=(root.getAttribute('data-cg-src')||'').match(/[?&]shop=([^&]+)/);
-  return m?decodeURIComponent(m[1]):'';
-}
-function removeNudge(root){
-  if(!root)return;
-  root.classList.remove('cg-bargain-nudge');
-  var b=root.querySelector('[data-cg-nudge]');
-  if(b&&b.parentNode)b.parentNode.removeChild(b);
-}
-function ensureBubble(root){
-  var b=root.querySelector('[data-cg-nudge]');if(b)return b;
-  b=document.createElement('div');
-  b.className='cg-bargain-nudge-bubble';b.setAttribute('data-cg-nudge','');
-  b.setAttribute('role','status');b.setAttribute('aria-live','polite');
-  var close=document.createElement('button');
-  close.type='button';close.className='cg-bargain-nudge-close';
-  close.setAttribute('data-cg-nudge-close','');close.setAttribute('aria-label','Dismiss');
-  close.innerHTML='&times;';
-  var title=document.createElement('p');title.className='cg-bargain-nudge-title';title.setAttribute('data-cg-nudge-title','');
-  var sub=document.createElement('p');sub.className='cg-bargain-nudge-sub';sub.setAttribute('data-cg-nudge-sub','');
-  var act=document.createElement('button');act.type='button';act.className='cg-bargain-nudge-cta';act.setAttribute('data-cg-nudge-open','');
-  b.appendChild(close);b.appendChild(title);b.appendChild(sub);b.appendChild(act);
-  root.appendChild(b);
-  close.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();dwellStop();});
-  act.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();dwellStop();open(root);});
-  return b;
-}
-function showDwell(reminder){
-  if(!dwell||!dwell.root)return;
-  var b=ensureBubble(dwell.root);
-  b.querySelector('[data-cg-nudge-title]').textContent=reminder?'Still thinking it over?':'Want a better price?';
-  b.querySelector('[data-cg-nudge-sub]').textContent=reminder
-    ?'Make an offer and see if we can meet your price.'
-    :'Tell us what you would pay - the store may say yes.';
-  b.querySelector('[data-cg-nudge-open]').textContent='Make an offer';
-  /* Retrigger the finite pulse animation on the root. */
-  dwell.root.classList.remove('cg-bargain-nudge');
-  void dwell.root.offsetWidth;
-  dwell.root.classList.add('cg-bargain-nudge');
-}
-function dwellStop(){
-  if(!dwell)return;
-  dwellEngaged=true;
-  if(dwell.timer)window.clearInterval(dwell.timer);
-  if(dwell.key)sSet(dwell.key);
-  removeNudge(dwell.root);
-  dwell=null;
-}
-function dwellAbort(){
-  if(!dwell)return;
-  if(dwell.timer)window.clearInterval(dwell.timer);
-  removeNudge(dwell.root);
-  dwell=null;
-}
-function dwellTick(){
-  if(!dwell||!dwell.timer)return;
-  var now=Date.now(),delta=now-dwell.last;dwell.last=now;
-  if(typeof document.visibilityState==='string'&&document.visibilityState!=='visible')return;
-  if(delta<0||delta>3000)delta=1000;
-  dwell.visible+=delta;
-  if(dwell.stage===0&&dwell.visible>=dwell.dwellMs){dwell.stage=1;showDwell(false);return;}
-  if(dwell.stage===1&&dwell.visible>=dwell.dwellMs+dwell.reminderMs){
-    dwell.stage=2;showDwell(true);
-    window.clearInterval(dwell.timer);dwell.timer=null;
-  }
-}
-function startDwell(root,cfg){
-  if(dwell||dwellEngaged)return;
-  var shop=root.getAttribute('data-cg-shop')||shopFromSrc(root);
-  var key=dwellKey(shop);
-  if(sGet(key))return;
-  var dwellSec=Math.max(5,parseInt(cfg&&cfg.dwellSeconds,10)||60);
-  var remSec=Math.max(5,parseInt(cfg&&cfg.reminderSeconds,10)||60);
-  dwell={root:root,key:key,shop:shop,dwellMs:dwellSec*1000,reminderMs:remSec*1000,visible:0,stage:0,last:Date.now(),timer:null};
-  dwell.timer=window.setInterval(dwellTick,1000);
-}
-function initDwell(){
-  if(dwellStarted)return;
-  var roots=document.querySelectorAll('[data-cg-bargain-root][data-cg-surface="product"]');
-  if(!roots.length)return;
-  var root=roots[0];
-  var shop=root.getAttribute('data-cg-shop')||shopFromSrc(root);
-  if(!shop)return;
-  dwellStarted=true;
-  if(sGet(dwellKey(shop)))return;
-  try{
-    fetch(appOrigin(root)+'/api/bargain/dwell-config?shop='+encodeURIComponent(shop),{credentials:'omit'})
-      .then(function(r){return r.ok?r.json():null;})
-      .then(function(cfg){if(cfg&&cfg.enabled)startDwell(root,cfg);})
-      .catch(function(){});
-  }catch(e){}
 }
 function bindAll(){
   var roots=document.querySelectorAll('[data-cg-bargain-root]');
   for(var i=0;i<roots.length;i++)bindRoot(roots[i]);
 }
 bindAll();
-initDwell();
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initDwell);
-else window.setTimeout(initDwell,0);
-window.addEventListener('load',initDwell);
 document.addEventListener('click',onVariantMaybe,true);
 document.addEventListener('change',onVariantMaybe,true);
 document.addEventListener('input',onVariantMaybe,true);
@@ -281,7 +166,6 @@ if(typeof MutationObserver!=='undefined'){
   var mo=new MutationObserver(function(){
     var unbound=document.querySelectorAll('[data-cg-bargain-root]:not([data-cg-bound])');
     for(var i=0;i<unbound.length;i++){unbound[i].setAttribute('data-cg-bound','true');bindRoot(unbound[i]);}
-    if(!dwellStarted)initDwell();
   });
   if(document.documentElement)mo.observe(document.documentElement,{childList:true,subtree:true});
 }
