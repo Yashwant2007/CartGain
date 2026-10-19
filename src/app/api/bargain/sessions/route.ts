@@ -71,11 +71,23 @@ export async function GET(request: NextRequest) {
         shopifyProductId: true,
         originalPrice: true,
         finalPrice: true,
+        purchasedOrderId: true,
+        purchaseValue: true,
       },
+    })
+
+    // Confirmed bargain sales billed to the merchant: the rev-share ledger is the
+    // source of truth (one row per accepted deal, netted by refund policy). Its
+    // sum is exactly what this store has accrued (and will be invoiced).
+    const revShare = await prisma.bargainRevenueShareEvent.aggregate({
+      where: { storeId, purchasedAt: { gte: since } },
+      _sum: { revShareAmount: true },
     })
 
     const byStatus: Record<string, number> = {}
     let accepted = 0
+    let purchased = 0
+    let purchasedRevenue = 0
     let revenueSaved = 0
     let finalPriceSum = 0
     let finalPriceCount = 0
@@ -86,6 +98,10 @@ export async function GET(request: NextRequest) {
 
     for (const s of allSessions) {
       byStatus[s.status] = (byStatus[s.status] ?? 0) + 1
+      if (s.purchasedOrderId) {
+        purchased++
+        purchasedRevenue += s.purchaseValue ?? 0
+      }
       if (s.status === 'accepted') {
         accepted++
         const saved = Math.max(0, s.originalPrice - (s.finalPrice ?? s.originalPrice))
@@ -130,6 +146,14 @@ export async function GET(request: NextRequest) {
       expired: byStatus.expired ?? 0,
       abandoned: byStatus.abandoned ?? 0,
       active: byStatus.active ?? 0,
+      // Confirmed sales: a bargain session whose code was used on a real order.
+      purchased,
+      purchasedRevenue: Math.round(purchasedRevenue * 100) / 100,
+      // Accepted → purchased conversion over the period (the funnel the merchant
+      // cares about: offers agreed that turned into paid orders).
+      conversionRate: totalSessions > 0 ? Math.round((purchased / totalSessions) * 1000) / 10 : 0,
+      // Rev share this store has accrued on those sales (what gets invoiced).
+      revShareAccrued: Math.round(((revShare._sum.revShareAmount ?? 0) as number) * 100) / 100,
       avgOriginalPrice: totalSessions > 0 ? Math.round((allSessions.reduce((a, s) => a + s.originalPrice, 0) / totalSessions) * 100) / 100 : null,
       avgFinalPrice: finalPriceCount > 0 ? Math.round((finalPriceSum / finalPriceCount) * 100) / 100 : null,
       winRate: totalSessions > 0 ? Math.round((accepted / totalSessions) * 1000) / 10 : 0,

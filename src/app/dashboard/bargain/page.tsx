@@ -21,6 +21,9 @@ import {
   Target,
   Timer,
   Gauge,
+  MousePointerClick,
+  ShoppingBag,
+  Receipt,
 } from 'lucide-react'
 import { DemoPanel } from './demo-panel'
 import { ProductCatalogPanel } from './product-catalog'
@@ -51,6 +54,9 @@ type BargainConfig = {
   recommendationsEnabled: boolean
   alternativeRecommendationsEnabled: boolean
   couponStackingEnabled: boolean
+  dwellNudgeEnabled: boolean
+  dwellSeconds: number
+  dwellReminderSeconds: number
 }
 
 // All supported negotiation languages (mirrors SUPPORTED_LANGUAGES in the engine).
@@ -122,6 +128,10 @@ type Summary = {
   expired: number
   abandoned: number
   active: number
+  purchased: number
+  purchasedRevenue: number
+  conversionRate: number
+  revShareAccrued: number
   avgOriginalPrice: number | null
   avgFinalPrice: number | null
   winRate: number
@@ -568,6 +578,51 @@ void fetchConfig()
                   </div>
                 </ConfigCard>
 
+                {/* Product-page dwell nudge */}
+                <ConfigCard
+                  className="lg:col-span-2"
+                  icon={MousePointerClick}
+                  title="Product-page nudge"
+                  description="Gently invite shoppers who linger on a product page to make an offer. Soft and dismissible — it never opens the drawer on its own."
+                >
+                  <ToggleRow
+                    title="Nudge shoppers who linger on a product page"
+                    description="After the dwell time, pulse the Bargain button and show a small “want a better price?” hint. The shopper must click to start a negotiation. Counts visible time only and stops as soon as they engage or dismiss."
+                    checked={configForm.dwellNudgeEnabled ?? true}
+                    onChange={v => setConfigForm({ ...configForm, dwellNudgeEnabled: v })}
+                  />
+                  {configForm.dwellNudgeEnabled && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field
+                        label="Dwell time (seconds)"
+                        hint="Visible seconds on the product page before the first gentle nudge."
+                      >
+                        <input
+                          type="number"
+                          min={5}
+                          max={600}
+                          value={configForm.dwellSeconds ?? 60}
+                          onChange={e => setConfigForm({ ...configForm, dwellSeconds: Math.min(600, Math.max(5, parseInt(e.target.value) || 60)) })}
+                          className={CONTROL_CLS}
+                        />
+                      </Field>
+                      <Field
+                        label="Reminder delay (seconds)"
+                        hint="If the first nudge is ignored, how long until one gentle reminder. After that it stays quiet for the visit."
+                      >
+                        <input
+                          type="number"
+                          min={5}
+                          max={600}
+                          value={configForm.dwellReminderSeconds ?? 60}
+                          onChange={e => setConfigForm({ ...configForm, dwellReminderSeconds: Math.min(600, Math.max(5, parseInt(e.target.value) || 60)) })}
+                          className={CONTROL_CLS}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </ConfigCard>
+
                 {/* Daily goal & campaign */}
                 <ConfigCard
                   className="lg:col-span-2"
@@ -757,7 +812,10 @@ void fetchConfig()
               <MetricCard icon={Users} label="Total Sessions" value={summary.totalSessions} color="text-blue-300" />
               <MetricCard icon={TrendingUp} label="Win Rate" value={`${summary.winRate}%`} color="text-emerald-300" />
               <MetricCard icon={Percent} label="Accepted" value={summary.accepted} color="text-emerald-300" />
+              <MetricCard icon={ShoppingBag} label="Bargain Sales" value={summary.purchased} color="text-emerald-300" />
+              <MetricCard icon={TrendingUp} label="Conversion" value={`${summary.conversionRate}%`} color="text-emerald-300" />
               <MetricCard icon={IndianRupee} label="Revenue Saved" value={`₹${summary.revenueSaved.toLocaleString('en-IN')}`} color="text-emerald-300" />
+              <MetricCard icon={Receipt} label="Rev Share Accrued" value={`₹${summary.revShareAccrued.toLocaleString('en-IN')}`} color="text-amber-300" />
               <MetricCard icon={BarChart3} label="Abandoned" value={summary.abandoned} color="text-amber-300" />
               </div>
 
