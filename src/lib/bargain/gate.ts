@@ -3,6 +3,15 @@ import type { Prisma } from '@prisma/client'
 import type { Plan } from '@/lib/payment'
 import { PLANS, PAID_PLAN_IDS, resolvePlanId, getPlan } from '@/lib/payment'
 
+// Usage window for the free allowance. Free/pending subscriptions are metered
+// per CALENDAR MONTH so the "resets each month" promise the widget makes is
+// actually true — the old design only cleared the counter inside the paid
+// revenue-share sweep, which is skipped for every invoice under ₹100 (i.e.
+// always, on Free), so a lifetime counter could show "used up" forever.
+function startOfUtcMonth(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0))
+}
+
 export const BARGAIN_SESSIONS_EXHAUSTED = 'bargain_sessions_exhausted'
 export const BARGAIN_DEALS_EXHAUSTED = 'bargain_deals_exhausted'
 
@@ -52,24 +61,40 @@ export async function getBargainGate(storeId: string): Promise<BargainGate> {
     })
   }
 
+  const isActive = subscription.status === 'active'
+  const planId = resolvePlanId(isActive ? subscription.plan : 'free')
+  const plan = getPlan(isActive ? subscription.plan : 'free') || PLANS.FREE
+  const isPaid = isActive && (PAID_PLAN_IDS as readonly string[]).includes(planId)
+
   // Only an ACTIVE subscription earns paid-plan quotas and overage. A row that
   // is pending (not yet paid), cancelled (merchant ended it at the gateway or
   // in Shopify admin), frozen, or expired falls back to the free-plan limits —
   // so a cancelled merchant can never keep farming paid deal overage they won't
   // be billed for. The billing sweep only invoices active subscriptions, so this
   // closing of the gate is what prevents the leak.
-  const isActive = subscription.status === 'active'
-  const planId = resolvePlanId(isActive ? subscription.plan : 'free')
-  const plan = getPlan(isActive ? subscription.plan : 'free') || PLANS.FREE
-  const isPaid = isActive && (PAID_PLAN_IDS as readonly string[]).includes(planId)
 
   // Overage is the plan's default behaviour for paid tiers ("40 deals included,
   // then ₹25/deal"). The DB flag still disables it for merchants who opted out
   // under the legacy model.
   const overageEnabled = isPaid && plan.bargainOverageDealPrice > 0 && subscription.overageEnabled
 
-  const sessionsRemaining = Math.max(0, plan.bargainSessions - subscription.bargainSessionsUsed)
-  const dealsRemaining = Math.max(0, plan.bargainDeals - subscription.bargainDealsUsed)
+  // Usage is measured PER STORE and counts real rows, not a mutable counter:
+  //  • Per store — one store's activity can never exhaust another store's
+  //    allowance (a shared workspace counter previously made a brand-new store
+  //    read "used up" the moment a sibling store hit the limit).
+  //  • Real rows — always self-consistent with what the dashboard/analytics
+  //    show and independent of the billing sweep.
+  //  • Window — paid plans meter within their billing period; free/pending
+  //    plans meter the current calendar month, so the allowance resets monthly.
+  const usageSince = isPaid ? subscription.currentPeriodStart : startOfUtcMonth(new Date())
+
+  const [sessionsUsed, dealsUsed] = await Promise.all([
+    prisma.bargainSession.count({ where: { storeId, startedAt: { gte: usageSince } } }),
+    prisma.bargainSession.count({ where: { storeId, status: 'accepted', startedAt: { gte: usageSince } } }),
+  ])
+
+  const sessionsRemaining = Math.max(0, plan.bargainSessions - sessionsUsed)
+  const dealsRemaining = Math.max(0, plan.bargainDeals - dealsUsed)
 
   return {
     storeId,
@@ -79,14 +104,14 @@ export async function getBargainGate(storeId: string): Promise<BargainGate> {
     plan,
     isPaid,
     overageEnabled,
-    sessionsUsed: subscription.bargainSessionsUsed,
+    sessionsUsed,
     sessionsLimit: plan.bargainSessions,
-    sessionsRemaining: sessionsRemaining <= 0 ? 0 : sessionsRemaining,
-    dealsUsed: subscription.bargainDealsUsed,
+    sessionsRemaining,
+    dealsUsed,
     dealsLimit: plan.bargainDeals,
-    dealsRemaining: dealsRemaining <= 0 ? 0 : dealsRemaining,
-    sessionsExhausted: subscription.bargainSessionsUsed >= plan.bargainSessions,
-    dealsExhausted: subscription.bargainDealsUsed >= plan.bargainDeals,
+    dealsRemaining,
+    sessionsExhausted: sessionsUsed >= plan.bargainSessions,
+    dealsExhausted: dealsUsed >= plan.bargainDeals,
   }
 }
 
