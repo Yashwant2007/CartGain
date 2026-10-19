@@ -403,13 +403,21 @@ function extractName(cart: any): string | null {
 }
 
 async function handleCartUpdate(data: any, store: any, domain: string) {
-  if (!data.id || !data.token) return
+  // Shopify API 2026-04 removed the `id` field from the `checkouts/create` and
+  // `checkouts/update` webhook payloads — only `token` remains (see the Shopify
+  // changelog "Removed Checkout ID from checkout and order webhooks"). The old
+  // guard required BOTH `id` and `token`, so every checkout webhook was dropped
+  // before it could be stored. Carts captured from `carts/update` carry no
+  // customer contact, so this silently left the recovery pipeline with NO email
+  // or phone to send to — the root cause of "no recovery messages". `token` is
+  // present on carts/* and checkouts/* alike and is the value we store as cartId.
+  if (!data.token) return
 
   const cart = data
   const customerId = data.customer?.id ? String(data.customer.id) : null
   const customerPhone = extractPhone(cart)
   const customerName = extractName(cart)
-  const customerEmail = cart.email || null
+  const customerEmail = cart.email || cart.customer?.email || null
 
   await logDataAccess({
     actorType: 'system',
@@ -425,6 +433,9 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
     },
   })
 
+  const items = normalizeShopifyItems(cart)
+  const totalValue = resolveCartTotal(cart, items)
+
   await prisma.cart.upsert({
     where: {
       storeId_cartId: {
@@ -433,8 +444,8 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
       },
     },
     update: {
-      items: normalizeShopifyItems(cart),
-      totalValue: cart.total_price ? parseFloat(cart.total_price) : 0,
+      items,
+      totalValue,
       ...(customerId ? { customerId } : {}),
       ...(customerEmail ? { customerEmail } : {}),
       ...(customerPhone ? { customerPhone } : {}),
@@ -444,8 +455,8 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
     create: {
       storeId: store.id,
       cartId: cart.token,
-      items: normalizeShopifyItems(cart),
-      totalValue: cart.total_price ? parseFloat(cart.total_price) : 0,
+      items,
+      totalValue,
       customerId,
       customerEmail,
       customerPhone,
@@ -453,6 +464,17 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
       currency: cart.currency || 'USD',
     },
   })
+}
+
+// Some payloads (notably `carts/update`) can omit or zero `total_price` even
+// when line items carry prices, which left recovered-cart value metrics at 0.
+// Prefer Shopify's total; fall back to summing the line items.
+function resolveCartTotal(cart: any, items: any[]): number {
+  if (cart.total_price != null && cart.total_price !== '') {
+    const parsed = parseFloat(cart.total_price)
+    if (!Number.isNaN(parsed)) return parsed
+  }
+  return items.reduce((sum, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 1), 0)
 }
 
 function normalizeShopifyItems(cart: any): any[] {
