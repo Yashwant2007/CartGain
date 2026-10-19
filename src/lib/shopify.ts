@@ -399,7 +399,10 @@ export async function fetchAbandonedCheckouts(
   limit: number = 50
 ): Promise<any[] | null> {
   try {
-    const url = `https://${shopDomain}/admin/api/2026-04/abandoned_checkouts.json?limit=${limit}`
+    // Shopify's abandoned-checkouts resource lives at `checkouts.json` (the
+    // list is returned under the `checkouts` key). The old `abandoned_checkouts`
+    // path/key never existed and produced a 404 on every cart-processing run.
+    const url = `https://${shopDomain}/admin/api/2026-04/checkouts.json?limit=${limit}`
     const response = await shopifyFetch(url, {
       headers: { 'X-Shopify-Access-Token': accessToken },
       signal: AbortSignal.timeout(10000),
@@ -407,12 +410,19 @@ export async function fetchAbandonedCheckouts(
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '(no body)')
-      console.error(`Shopify checkout fetch failed (${response.status}): ${errText}`)
-      if (response.status === 401) return null
+      // 401 means the token is dead and the store must reconnect — surface that
+      // to the caller. Everything else (403 missing scope, 404 no resource, 5xx)
+      // is an expected "no data" outcome: log a warning, never an error, so a
+      // quiet shop doesn't spam the error feed on every 5-minute cart sweep.
+      if (response.status === 401) {
+        console.warn(`Shopify checkout fetch unauthorized (401): ${errText}`)
+        return null
+      }
+      console.warn(`Shopify checkout fetch returned ${response.status}: ${errText}`)
       return []
     }
     const data = await response.json()
-    return data.abandoned_checkouts || []
+    return data.checkouts || []
   } catch (error) {
     console.error('Failed to fetch Shopify checkouts:', error)
     return []
