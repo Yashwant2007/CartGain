@@ -39,6 +39,10 @@ export const bargainConfigUpsertSchema = z.object({
   recommendationsEnabled: z.boolean().optional(),
   alternativeRecommendationsEnabled: z.boolean().optional(),
   couponStackingEnabled: z.boolean().optional(),
+  // ── Storefront engagement: product-page dwell nudge ──
+  dwellNudgeEnabled: z.boolean().optional(),
+  dwellSeconds: z.number().int().min(5).max(600).optional(),
+  dwellReminderSeconds: z.number().int().min(5).max(600).optional(),
 })
 
 export type BargainConfigUpsertInput = z.infer<typeof bargainConfigUpsertSchema>

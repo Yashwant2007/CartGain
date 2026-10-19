@@ -376,6 +376,15 @@ model BargainConfig {
   alternativeRecommendationsEnabled Boolean @default(true) // "also consider" suggestions
   complementRecommendationsEnabled  Boolean @default(true) // "you may also need" suggestions
   couponStackingEnabled             Boolean @default(false) // OFF: bargain discount code can never stack with a merchant promo/coupon code (spec §24)
+  // ── Storefront engagement: product-page dwell nudge ──
+  // Soft, non-blocking prompt for shoppers who linger on a product page. The
+  // theme controller reads these (via the public dwell-config endpoint) and
+  // pulses the launcher / shows a dismissible hint — it NEVER auto-opens the
+  // drawer. The timer counts VISIBLE time only and stops once the shopper opens
+  // the widget or dismisses the nudge for the session.
+  dwellNudgeEnabled    Boolean @default(true) // master toggle for the product-page dwell nudge
+  dwellSeconds         Int     @default(60)   // visible seconds on a product page before the first nudge
+  dwellReminderSeconds Int     @default(60)   // seconds after the first nudge before the reminder
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
