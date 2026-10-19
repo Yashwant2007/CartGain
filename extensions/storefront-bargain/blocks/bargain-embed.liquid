@@ -7,6 +7,7 @@
 {% endcomment %}
 
 {%- if block.settings.enable_product and template contains 'product' -%}
+  {%- assign cg_surface = 'product' -%}
   {%- assign v = product.selected_or_first_available_variant -%}
   {%- assign pprice = v.price | times: 1.0 | divided_by: 100 -%}
   {%- assign currency = cart.currency.iso_code | default: shop.currency -%}
@@ -24,6 +25,7 @@
     | append: '&currency=' | append: currency
     | append: '&image=' | append: img_enc -%}
 {%- elsif block.settings.enable_cart and template == 'cart' -%}
+  {%- assign cg_surface = 'cart' -%}
   {%- assign first_item = cart.items[0] -%}
   {%- if first_item -%}
     {%- assign iprice = first_item.final_price | times: 1.0 | divided_by: 100 -%}
@@ -46,6 +48,8 @@
 <div
   class="cg-bargain-embed cg-bargain-embed--{{ block.settings.position | default: 'bottom-right' }}"
   data-cg-bargain-root
+  data-cg-surface="{{ cg_surface | default: 'product' }}"
+  data-cg-shop="{{ shop.permanent_domain }}"
   data-cg-src="{{ widget_src | escape }}"
   data-cg-variant=""
   data-cg-variants=""
