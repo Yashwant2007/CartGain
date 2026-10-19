@@ -19,6 +19,12 @@ const LOG_RETENTION_DAYS = 180
 const TOKEN_RETENTION_DAYS = 7
 const EXPORT_RETENTION_DAYS = 180 // customer data exports deleted after 180 days
 
+// GET is accepted as an alias for POST so external schedulers (cron-job.org and
+// friends default to GET) can drive this job without a method-specific config.
+export async function GET(request: NextRequest) {
+  return POST(request)
+}
+
 export async function POST(request: NextRequest) {
   const authError = await requireJobAuth(request)
   if (authError) return authError
