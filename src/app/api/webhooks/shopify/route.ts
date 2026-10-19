@@ -33,7 +33,12 @@ export const dynamic = 'force-dynamic'
 // publisher that already retries+throttles, and 429 would itself be a failure.
 
 function safeRun(label: string, fn: () => Promise<void>) {
-  fn().catch(async (err) => {
+  // MUST return the promise so callers can `await` it. `waitUntil()` only keeps
+  // the function alive until the promise it is HANDED resolves — if the handler
+  // promise is fired-and-forgotten here, the waitUntil wrapper resolves at once
+  // and Vercel freezes the function before the DB write / message send finishes,
+  // silently dropping the event (webhook acks 200, nothing is stored).
+  return fn().catch(async (err) => {
     console.error(`Async ${label} error:`, err)
     try {
       await captureError({
@@ -144,35 +149,35 @@ export async function POST(request: NextRequest) {
 
     switch (topic) {
       case 'carts/update':
-        safeRun('cart update', () => handleCartUpdate(data, store, shopDomain))
+        await safeRun('cart update', () => handleCartUpdate(data, store, shopDomain))
         break
       case 'checkouts/create':
       case 'checkouts/update':
-        safeRun('checkout', () => handleCheckout(data, store, shopDomain))
+        await safeRun('checkout', () => handleCheckout(data, store, shopDomain))
         break
       case 'orders/create':
-        safeRun('order processing', () => processOrderCreate(data, store, shopDomain))
+        await safeRun('order processing', () => processOrderCreate(data, store, shopDomain))
         break
       case 'orders/cancelled':
-        safeRun('order cancelled netting', () => handleOrderCancelled(data, store, shopDomain))
+        await safeRun('order cancelled netting', () => handleOrderCancelled(data, store, shopDomain))
         break
       case 'refunds/create':
-        safeRun('order refund netting', () => handleRefundCreate(data, store, shopDomain))
+        await safeRun('order refund netting', () => handleRefundCreate(data, store, shopDomain))
         break
       case 'app/uninstalled':
-        safeRun('app uninstall purge', () => handleAppUninstalled(store))
+        await safeRun('app uninstall purge', () => handleAppUninstalled(store))
         break
       case 'shop/redact':
-        safeRun('shop redact purge', () => handleShopRedact(store))
+        await safeRun('shop redact purge', () => handleShopRedact(store))
         break
       case 'customers/redact':
-        safeRun('customer redact', () => handleCustomerRedact(data, store, shopDomain))
+        await safeRun('customer redact', () => handleCustomerRedact(data, store, shopDomain))
         break
       case 'customers/data_request':
-        safeRun('customer data request', () => handleCustomerDataRequest(data, store, shopDomain))
+        await safeRun('customer data request', () => handleCustomerDataRequest(data, store, shopDomain))
         break
       case 'app_subscriptions/update':
-        safeRun('app subscription update', () => handleAppSubscriptionUpdate(data, store, shopDomain))
+        await safeRun('app subscription update', () => handleAppSubscriptionUpdate(data, store, shopDomain))
         break
       default:
         console.log('Unhandled webhook topic:', topic)
