@@ -18,9 +18,12 @@ import { productContextToPromptBlock, type ProductContext } from '@/lib/bargain/
 import { shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
 import { analyzeSocialSignals, socialSignalsToPromptBlock, type SocialSignals } from '@/lib/bargain/behavior'
 
-// Model for the negotiation agent. Defaults to the full gpt-4o for best
-// negotiation quality; set BARGAIN_MODEL=gpt-4o-mini to cut OpenAI cost.
-const BARGAIN_MODEL = process.env.BARGAIN_MODEL || 'gpt-4o'
+// Negotiation model. Defaults to the fast, low-cost `gpt-4o-mini`, which the
+// schema's BargainConfig.aiModel also defaults to — `gpt-4o` added multi-second
+// latency to every customer turn for marginal quality gains. Override with
+// BARGAIN_MODEL=gpt-4o when a merchant explicitly wants the stronger model.
+// Resolved at call time (not module load) so per-request config/env applies.
+const DEFAULT_BARGAIN_MODEL = 'gpt-4o-mini'
 
 // Completion budget. Reasoning-model fallbacks (Groq `openai/gpt-oss-120b`)
 // spend hidden reasoning tokens out of this budget BEFORE emitting the JSON
@@ -174,6 +177,8 @@ export interface NegotiationContext {
   /** Trailing run of absurd lowballs (including the current one) so the persona
    *  reply can escalate instead of repeating the same canned line. */
   absurdStreak?: number
+  /** Per-store model override (from BargainConfig.aiModel). Falls back to BARGAIN_MODEL. */
+  aiModel?: string
 }
 
 export interface NegotiationResult {
@@ -2503,6 +2508,7 @@ export async function negotiateStep(
   }
   const ai = resolved.client
   const tier = resolved.tier
+  const model = ctx.aiModel?.trim() || process.env.BARGAIN_MODEL || DEFAULT_BARGAIN_MODEL
 
   // ── CONVERSATION ANALYSIS ──
   const conversationAnalysis = analyzeConversation(history, customerMessage, ctx)
@@ -2538,7 +2544,7 @@ export async function negotiateStep(
 
   try {
     const completion = await ai.chat.completions.create({
-      model: BARGAIN_MODEL,
+      model,
       messages,
       temperature: 0.85,
       max_completion_tokens: compact ? FALLBACK_MAX_TOKENS : BARGAIN_MAX_TOKENS,
@@ -2702,7 +2708,7 @@ export async function negotiateStep(
       tactic: typeof parsed.tactic === 'string' ? parsed.tactic : 'conversational',
       sentiment: typeof parsed.sentiment === 'string' ? parsed.sentiment : 'neutral',
       metadata: {
-        model: BARGAIN_MODEL,
+        model,
         usage: completion.usage,
         raw: parsed,
         recommendationsRequested: parsed.recommendationsRequested === true,

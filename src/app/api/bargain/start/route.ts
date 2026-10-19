@@ -262,6 +262,7 @@ export async function POST(request: NextRequest) {
       attemptsUsed: 0,
       maxAttempts: config.maxAttempts,
       persona: config.aiPersona as NegotiationContext['persona'],
+      aiModel: config.aiModel ?? undefined,
       productTitle: undefined,
       language,
       customerContext,

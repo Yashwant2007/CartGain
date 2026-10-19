@@ -405,6 +405,7 @@ export async function POST(request: NextRequest) {
       attemptsUsed,
       maxAttempts: config.maxAttempts,
       persona: config.aiPersona as NegotiationContext['persona'],
+      aiModel: config.aiModel ?? undefined,
       productTitle,
       bulkQuantity: bulkQuantity ?? undefined,
       walkoutTriggered: isWalkout,
@@ -570,57 +571,61 @@ export async function POST(request: NextRequest) {
     // Funnel analytics (prod-only; fire-and-forget inserts, never customer
     // message content). Record the deterministic intent/objection signals and
     // any below-floor offers so the merchant sees negotiation behavior.
+    // Fired concurrently — `track` inserts are independent, so awaiting them in
+    // parallel keeps the customer reply off the critical path's sum of round-trips.
+    const analyticsEvents: Promise<void>[] = []
     if (intentAnalysis.intent !== 'UNKNOWN' && intentAnalysis.intent !== 'GENERIC_CHAT') {
-      await track({
+      analyticsEvents.push(track({
         name: 'cartgain_intent_detected',
         storeId: bargainSession.storeId,
         properties: { intent: intentAnalysis.intent },
-      })
+      }))
     }
     if (intentAnalysis.objection) {
-      await track({
+      analyticsEvents.push(track({
         name: 'cartgain_objection_detected',
         storeId: bargainSession.storeId,
         properties: { objection: intentAnalysis.objection },
-      })
+      }))
     }
     if (intentAnalysis.intent === 'PRODUCT_QUESTION') {
-      await track({
+      analyticsEvents.push(track({
         name: 'cartgain_product_question',
         storeId: bargainSession.storeId,
         properties: { hasVerifiedContext: productCtx.fetchFailed === false && productCtx.description.length > 0 },
-      })
+      }))
     }
     if (customerOffer != null && customerOffer < minPrice) {
-      await track({
+      analyticsEvents.push(track({
         name: 'cartgain_offer_below_floor',
         storeId: bargainSession.storeId,
         properties: {},
-      })
+      }))
     }
     // §36 funnel analytics — every priced turn + the negotiation round counter.
     if (customerOffer != null) {
-      await track({
+      analyticsEvents.push(track({
         name: 'cartgain_customer_offer',
         storeId: bargainSession.storeId,
         properties: { aboveFloor: customerOffer >= minPrice },
-      })
-      await track({
+      }))
+      analyticsEvents.push(track({
         name: 'cartgain_negotiation_round',
         storeId: bargainSession.storeId,
         properties: { round: attemptsUsed, remaining: attemptsRemaining },
-      })
+      }))
     }
     // §24 — a coupon mention when stacking is disabled is a policy-relevant
     // signal worth seeing, even though the offer itself stays live (the ACCEPT
     // layer enforces the block).
     if (couponMentioned && !couponsAllowed) {
-      await track({
+      analyticsEvents.push(track({
         name: 'cartgain_coupon_stack_attempt_detected',
         storeId: bargainSession.storeId,
         properties: {},
-      })
+      }))
     }
+    await Promise.all(analyticsEvents)
     // §36 — terminal negotiation outcomes from THIS turn.
     if (result.decision === 'accept') {
       await track({
