@@ -63,14 +63,13 @@ export default function EmbeddedAuthBootstrap() {
     if (!isInShopifyEmbed()) return
     ran.current = true
 
-    let cancelled = false
     ;(async () => {
       try {
         await loadAppBridge()
         const shopify = (window as any).shopify
         if (!shopify?.idToken) return
         const token: string = await shopify.idToken()
-        if (!token || cancelled) return
+        if (!token) return
 
         const res = await fetch('/api/shopify/embed-auth', {
           method: 'POST',
@@ -78,7 +77,6 @@ export default function EmbeddedAuthBootstrap() {
           body: JSON.stringify({ token }),
         })
         const data = await res.json().catch(() => ({}))
-        if (cancelled) return
 
         if (res.ok && data.connected) {
           // Session cookie is now set — full reload so the app picks it up.
@@ -99,10 +97,6 @@ export default function EmbeddedAuthBootstrap() {
         // Non-fatal: fall back to the normal login UI.
       }
     })()
-
-    return () => {
-      cancelled = true
-    }
   }, [status])
 
   return null
