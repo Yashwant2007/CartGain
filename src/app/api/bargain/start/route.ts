@@ -143,6 +143,20 @@ export async function POST(request: NextRequest) {
     const now = new Date()
     const expiredAt = new Date(now.getTime() + config.sessionTimeout * 1000)
 
+    // Resolve the buyer from the cart token when the storefront could not hand
+    // us the customer's email (the drawer widget only carries the cart token).
+    // The cart row is populated by `carts/*` webhooks, so this binds the session
+    // to the real Shopify customer — buyer-bound discount codes + accurate
+    // purchase attribution — without putting PII in the public embed URL.
+    let customerEmail = data.customerEmail || null
+    if (!customerEmail && data.cartToken) {
+      const cart = await prisma.cart.findUnique({
+        where: { storeId_cartId: { storeId: data.storeId, cartId: data.cartToken } },
+        select: { customerEmail: true },
+      })
+      customerEmail = cart?.customerEmail ?? null
+    }
+
     // Daily-goal context is shared by EVERY success shape this route returns
     // (new session, returning session, anonymous duplicate) so the widget's
     // "Today's goal" strip is populated from the very first frame. Computed
@@ -158,11 +172,11 @@ export async function POST(request: NextRequest) {
     // always re-joins their existing session instead of minting fresh attempts.
     // Fully anonymous browsers without any identifier still get the per-store+
     // product singleton guard below.
-    const buyerId = data.customerFingerprint || (data.customerEmail ? `email:${data.customerEmail}` : null)
+    const buyerId = data.customerFingerprint || (customerEmail ? `email:${customerEmail}` : null)
     const identityClauses = [
       ...(data.customerFingerprint ? [{ customerFingerprint: data.customerFingerprint }] : []),
       ...(data.cartToken ? [{ cartToken: data.cartToken }] : []),
-      ...(data.customerEmail ? [{ customerEmail: data.customerEmail }] : []),
+      ...(customerEmail ? [{ customerEmail }] : []),
     ]
     const existing = await prisma.bargainSession.findFirst({
       where: {
@@ -234,11 +248,11 @@ export async function POST(request: NextRequest) {
       : (config.language || 'auto')
 
     const customerContext = await buildCustomerContext(data.storeId, {
-      customerEmail: data.customerEmail || null,
+      customerEmail: customerEmail || null,
       customerFingerprint: data.customerFingerprint || null,
       cartToken: data.cartToken || null,
     })
-    const returning = !!(customerContext && (data.customerEmail || data.customerFingerprint || data.cartToken))
+    const returning = !!(customerContext && (customerEmail || data.customerFingerprint || data.cartToken))
 
     const ctx: NegotiationContext = {
       storeName: store.name,
@@ -285,7 +299,7 @@ export async function POST(request: NextRequest) {
           cartToken: data.cartToken ?? null,
           shopifyProductId: data.shopifyProductId,
           variantId: data.variantId ?? null,
-          customerEmail: data.customerEmail || null,
+          customerEmail: customerEmail || null,
           customerPhone: data.customerPhone || null,
           customerFingerprint: data.customerFingerprint ?? null,
           originalPrice,
@@ -321,7 +335,7 @@ export async function POST(request: NextRequest) {
       purpose: 'price_negotiation_processing',
       metadata: {
         storeId: data.storeId,
-        customerEmail: data.customerEmail ?? null,
+        customerEmail: customerEmail ?? null,
         customerPhone: data.customerPhone ?? null,
       },
     })

@@ -43,6 +43,11 @@ export default async function EmbedPage({
   const title = sp('title')
   const image = sp('image')
   const mode = sp('mode') === 'cart' ? 'cart' : 'item'
+  // Buyer identity: the theme passes its cart token so the session can be bound
+  // to the real Shopify customer (buyer-bound discount codes + purchase
+  // attribution). The customer email is resolved server-side from that cart —
+  // we deliberately keep PII out of the iframe URL.
+  const cartToken = sp('cart_token') || undefined
   // Drawer mode: the theme controller hosts the iframe in a fixed right-side
   // drawer / full-screen mobile sheet and owns open/close + variant sync.
   const view = sp('view') === 'drawer' ? 'drawer' : 'inline'
@@ -114,6 +119,7 @@ export default async function EmbedPage({
           persona={persona}
           maxAttempts={maxAttempts}
           mode={mode}
+          cartToken={cartToken}
           linkout={sp('linkout')}
           view={view}
           embedded

@@ -23,7 +23,8 @@
     | append: '&title=' | append: title_enc
     | append: '&price=' | append: pprice
     | append: '&currency=' | append: currency
-    | append: '&image=' | append: img_enc -%}
+    | append: '&image=' | append: img_enc
+    | append: '&cart_token=' | append: cart.token -%}
 {%- elsif block.settings.enable_cart and template == 'cart' -%}
   {%- assign cg_surface = 'cart' -%}
   {%- assign first_item = cart.items[0] -%}
@@ -41,7 +42,8 @@
     | append: '&variant=' | append: first_item.variant.id
     | append: '&title=' | append: ititle
     | append: '&price=' | append: iprice
-    | append: '&image=' | append: iimg_enc -%}
+    | append: '&image=' | append: iimg_enc
+    | append: '&cart_token=' | append: cart.token -%}
 {%- endif -%}
 
 {%- if widget_src -%}
