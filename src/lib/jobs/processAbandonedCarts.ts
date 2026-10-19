@@ -652,6 +652,10 @@ export async function processAbandonedCarts(
       const cursorIdx = campaigns.findIndex(c => c.store.id === storeCursor)
       if (cursorIdx >= 0) {
         targetCampaigns = campaigns.slice(cursorIdx + 1)
+        // Wrap around: after the last store the next cycle must restart from the
+        // first, otherwise a single-store (or last-in-list) deployment sits idle
+        // until the Redis cursor TTL expires — recovery silently stalls.
+        if (targetCampaigns.length === 0) targetCampaigns = campaigns
       }
     }
 

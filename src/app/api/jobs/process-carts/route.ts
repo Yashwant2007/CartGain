@@ -12,6 +12,13 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const CURSOR_KEY = 'store_cursor'
+// The Shopify checkout-sync pass and the cart-processing pass advance through
+// DIFFERENT sets (sync = stores, processing = active campaigns). Sharing one
+// cursor made each passskip whatever the other just advanced to: the sync wrote
+// cursor = the synced store id, then `processAbandonedCarts` sliced all
+// campaigns *after* that store and processed nothing. With a single active
+// store every cycle processed ZERO carts. Two independent cursors fix it.
+const SYNC_CURSOR_KEY = 'checkout_sync_cursor'
 
 async function getStoreCursor(): Promise<string | undefined> {
   const redis = getRedis()
@@ -27,6 +34,23 @@ async function saveStoreCursor(cursor: string | undefined): Promise<void> {
   const redis = getRedis()
   if (redis) {
     await redisSet(CURSOR_KEY, cursor, 30 * 60 * 1000)
+  }
+}
+
+async function getSyncCursor(): Promise<string | undefined> {
+  const redis = getRedis()
+  if (redis) {
+    const cursor = await redisGet(SYNC_CURSOR_KEY)
+    if (cursor) return cursor
+  }
+  return undefined
+}
+
+async function saveSyncCursor(cursor: string | undefined): Promise<void> {
+  if (!cursor) return
+  const redis = getRedis()
+  if (redis) {
+    await redisSet(SYNC_CURSOR_KEY, cursor, 30 * 60 * 1000)
   }
 }
 
@@ -78,15 +102,15 @@ export async function GET(request: NextRequest) {
     if (!jobId) {
       let syncedCheckouts = 0
       try {
-        const cursor = await getStoreCursor()
+        const syncCursor = await getSyncCursor()
         const stores = await prisma.store.findMany({
           where: { platform: 'shopify', isActive: true, apiKey: { not: null } },
           select: { id: true, domain: true, apiKey: true, shopifyRefreshToken: true, shopifyTokenExpiresAt: true },
           orderBy: { id: 'asc' },
         })
         let targetStores = stores
-        if (cursor) {
-          const cursorIdx = stores.findIndex(s => s.id === cursor)
+        if (syncCursor) {
+          const cursorIdx = stores.findIndex(s => s.id === syncCursor)
           if (cursorIdx >= 0) targetStores = stores.slice(cursorIdx + 1)
         }
         const batch = targetStores.slice(0, 1)
@@ -97,7 +121,7 @@ export async function GET(request: NextRequest) {
           } else {
             syncedCheckouts = result
           }
-          await saveStoreCursor(batch[0].id)
+          await saveSyncCursor(batch[0].id)
         }
       } catch (err) {
         console.error('Shopify checkout sync error:', err)
