@@ -1,43 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import crypto from 'crypto'
 import prisma from '@/lib/db'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { verifyShopifySessionToken } from '@/lib/shopify-session-token'
 
 export const dynamic = 'force-dynamic'
-
-// Decode the Shopify App Bridge session token (JWT, HS256, signed with SHOPIFY_API_SECRET).
-// Claims: iss = shop domain (e.g. my-store.myshopify.com), sub = merchant id,
-// aud = app api key, exp/nbf/iat.
-function verifySessionToken(token: string): { shop: string } | null {
-  const secret = process.env.SHOPIFY_API_SECRET
-  if (!secret) return null
-
-  const parts = token.split('.')
-  if (parts.length !== 3) return null
-
-  const [headerB64, payloadB64, sigB64] = parts
-  const expected = crypto.createHmac('sha256', secret)
-    .update(`${headerB64}.${payloadB64}`)
-    .digest('base64url')
-
-  try {
-    const a = Buffer.from(sigB64)
-    const b = Buffer.from(expected)
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null
-    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString())
-    const now = Math.floor(Date.now() / 1000)
-    if (typeof payload.exp !== 'number' || payload.exp < now) return null
-    if (typeof payload.nbf === 'number' && payload.nbf > now) return null
-    const aud = process.env.SHOPIFY_API_KEY
-    if (aud && payload.aud !== aud) return null
-    if (typeof payload.iss !== 'string' || !payload.iss.endsWith('.myshopify.com')) return null
-    return { shop: payload.iss }
-  } catch {
-    return null
-  }
-}
 
 // POST /api/shopify/session-token
 // Body: { token } — App Bridge session token from an embedded app session.
@@ -64,7 +32,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'token is required' }, { status: 400 })
     }
 
-    const decoded = verifySessionToken(token)
+    const decoded = verifyShopifySessionToken(token)
     if (!decoded) {
       return NextResponse.json({ message: 'Invalid session token' }, { status: 401 })
     }

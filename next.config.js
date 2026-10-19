@@ -102,6 +102,16 @@ const nextConfig = {
           { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
         ],
       },
+      // The store-connect popup landing page must be able to detect/close via
+      // its opener: unlike the global `same-origin-allow-popups`, `unsafe-none`
+      // keeps the opener reference alive across the cross-origin Shopify hop.
+      {
+        source: '/shopify-connected',
+        headers: [
+          { key: 'Cross-Origin-Opener-Policy', value: 'unsafe-none' },
+          { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
+        ],
+      },
       // Auth callbacks need cross-origin for OAuth
       {
         source: '/api/auth/callback/:provider*',

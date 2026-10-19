@@ -8,24 +8,25 @@ export default function ShopifyConnectedPage() {
   const router = useRouter()
 
   useEffect(() => {
-    const wasOpenedByDashboard = !!window.opener
+    // The opener relationship is severed by Cross-Origin-Opener-Policy as soon
+    // as the popup navigates through Shopify's origin, so `window.opener` is
+    // usually null by the time we get here — deciding on it made the popup
+    // redirect itself to the integrations page and become a SECOND tab (the
+    // original tab still showing "not connected"). Instead, always tell the
+    // opener if we still have one, then try to close this window; only a direct
+    // visit (which cannot be script-closed) falls through to the redirect.
     if (window.opener) {
-      // The opener is the CartGain dashboard tab — same origin as this page, so
-      // target it explicitly instead of '*' (which leaks the message to any
-      // hosting window, including a malicious one under an opener redirect).
+      // Same-origin target only — never '*' (which would leak to any host).
       try { window.opener.postMessage('shopify_connected', window.location.origin) } catch {}
     }
 
+    // window.close() is a no-op for a non-script-opened window, so this timer is
+    // the direct-visit fallback; when the close succeeds the page is gone before
+    // it fires.
     const t = setTimeout(() => {
-      // When this page was opened as the OAuth popup, the dashboard tab has
-      // already been told (postMessage) and refreshed itself. Navigating this
-      // popup to the integrations page would open a SECOND integrations tab
-      // that showed success while the original still looked disconnected — so
-      // close the popup instead. A direct visit (no opener) still lands on the
-      // integrations page.
-      if (wasOpenedByDashboard) window.close()
-      else router.replace('/dashboard/integrations?shopify_connected=true')
+      router.replace('/dashboard/integrations?shopify_connected=true')
     }, 1500)
+    window.close()
 
     return () => clearTimeout(t)
   }, [router])

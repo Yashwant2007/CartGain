@@ -6,9 +6,9 @@ import { setupShopifyWebhooks } from '@/lib/shopify'
 import { generateCampaignSetup } from '@/lib/services/ai'
 import { verifyOAuthState, verifyShopifyCallbackHmac, isValidShopDomain } from '@/lib/shopify-oauth'
 import { createFreeSubscription } from '@/lib/subscription'
-import { encode } from 'next-auth/jwt'
 import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
+import { mintNextAuthSessionCookie } from '@/lib/session-cookie'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,11 +19,6 @@ const STALE_COOKIE_NAMES = [
   '__Secure-next-auth.pkce.code_verifier',
 ]
 
-// The live session cookie set by NextAuth (see src/lib/auth.ts cookies config).
-// Must match exactly, including the Partitioned (CHIPS) attribute so the
-// session survives inside Shopify's cross-site admin iframe.
-const SESSION_COOKIE_NAME = 'next-auth.session-token'
-
 function redirectWithCleanup(path: string, baseUrl: string): NextResponse {
   const res = NextResponse.redirect(new URL(path, baseUrl))
   for (const name of STALE_COOKIE_NAMES) {
@@ -33,46 +28,6 @@ function redirectWithCleanup(path: string, baseUrl: string): NextResponse {
     )
   }
   return res
-}
-
-async function mintSessionCookie(
-  res: NextResponse,
-  payload: {
-    sub: string
-    email: string
-    name?: string | null
-    storeId: string
-    requirePassword: boolean
-    tokenVersion: number
-  }
-): Promise<void> {
-  const secret = process.env.NEXTAUTH_SECRET
-  if (!secret) throw new Error('NEXTAUTH_SECRET not configured')
-
-  const sessionToken = await encode({
-    token: {
-      sub: payload.sub,
-      id: payload.sub,
-      email: payload.email,
-      name: payload.name ?? undefined,
-      storeId: payload.storeId,
-      requirePassword: payload.requirePassword,
-      // Stamp the account's token version so this install-minted session is
-      // subject to the same revocation check as normal sign-ins (auth.ts jwt
-      // callback only enforces it when tokenVersion is a number — omitting it
-      // here let an install session survive a later password change/reset).
-      tokenVersion: payload.tokenVersion,
-    },
-    secret,
-    maxAge: 30 * 24 * 60 * 60, // matches session.maxAge in src/lib/auth.ts
-  })
-
-  // Build the Set-Cookie by hand to guarantee the Partitioned attribute; the
-  // NextResponse cookies API types don't expose it consistently across versions.
-  res.headers.append(
-    'Set-Cookie',
-    `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionToken)}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=${30 * 24 * 60 * 60}`
-  )
 }
 
 export async function GET(req: NextRequest) {
@@ -371,7 +326,7 @@ export async function GET(req: NextRequest) {
 
       const res = redirectWithCleanup(target.pathname + target.search, baseUrl)
       try {
-        await mintSessionCookie(res, {
+        await mintNextAuthSessionCookie(res, {
           sub: user.id,
           email: user.email,
           name: user.name,
