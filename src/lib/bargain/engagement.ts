@@ -35,9 +35,8 @@ function clampSeconds(value: unknown, fallback: number): number {
  *
  * A missing config (unknown or inactive store, or a store that never opened the
  * bargain dashboard) is treated as disabled — the controller must never nudge
- * on a page CartGain does not own. The nudge is gated ONLY on
- * `dwellNudgeEnabled`: like the embed widget, which deliberately ignores the
- * `enabled` master toggle, a store whose widget is present can still nudge.
+ * on a page CartGain does not own. The nudge is OPT-IN: it fires only when the
+ * merchant has explicitly enabled `dwellNudgeEnabled` in Bargain settings.
  */
 export function publicDwellConfig(config: DwellConfigSource): DwellConfig {
   return {

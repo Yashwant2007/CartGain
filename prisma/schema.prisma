@@ -382,7 +382,7 @@ model BargainConfig {
   // pulses the launcher / shows a dismissible hint — it NEVER auto-opens the
   // drawer. The timer counts VISIBLE time only and stops once the shopper opens
   // the widget or dismisses the nudge for the session.
-  dwellNudgeEnabled    Boolean @default(true) // master toggle for the product-page dwell nudge
+  dwellNudgeEnabled    Boolean @default(false) // master toggle for the product-page dwell nudge
   dwellSeconds         Int     @default(60)   // visible seconds on a product page before the first nudge
   dwellReminderSeconds Int     @default(60)   // seconds after the first nudge before the reminder
   createdAt        DateTime @default(now())

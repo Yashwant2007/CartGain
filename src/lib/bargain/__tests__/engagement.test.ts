@@ -19,6 +19,11 @@ describe('publicDwellConfig', () => {
     expect(out.reminderSeconds).toBe(30)
   })
 
+  it('is opt-in: a config row without the flag stays disabled', () => {
+    expect(publicDwellConfig({}).enabled).toBe(false)
+    expect(publicDwellConfig({ dwellSeconds: 30, dwellReminderSeconds: 30 }).enabled).toBe(false)
+  })
+
   it('passes through enabled timings unchanged', () => {
     expect(publicDwellConfig({ dwellNudgeEnabled: true, dwellSeconds: 45, dwellReminderSeconds: 120 })).toEqual({
       enabled: true,
