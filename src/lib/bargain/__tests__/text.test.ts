@@ -248,4 +248,25 @@ describe('extractPrice', () => {
     expect(extractPrice('how about ₹400?')).toBe(400)
     expect(extractPrice('can you do ₹450?')).toBe(450)
   })
+
+  it('does NOT treat a criticised/named price as the shopper’s offer', () => {
+    // Regression: "714 is a little too much for this" was accepted as a $714
+    // offer. A number inside a complaint is the price being rejected, not a bid.
+    expect(extractPrice('714 is a little too much for this')).toBeNull()
+    expect(extractPrice('714 is little too much for this')).toBeNull()
+    expect(extractPrice('1500 is too much')).toBeNull()
+    expect(extractPrice('900 seems expensive')).toBeNull()
+    expect(extractPrice('₹1000 is expensive for this')).toBeNull()
+    expect(extractPrice('500 is way too high')).toBeNull()
+    expect(extractPrice('not worth 700')).toBeNull()
+  })
+
+  it('still finds a genuine bid that shares a message with a complaint', () => {
+    expect(extractPrice("500 is too much, I'll give 450")).toBe(450)
+    expect(extractPrice('500 is too much, I will give 450')).toBe(450)
+  })
+
+  it('still reads a real offer whose cue attaches to the number', () => {
+    expect(extractPrice("I'll pay 500, not too much more")).toBe(500)
+  })
 })

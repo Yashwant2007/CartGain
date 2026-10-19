@@ -137,6 +137,18 @@ const REFERENCE_PRICE_BEFORE =
 const REFERENCE_PRICE_AFTER =
   /^\s*(?:rupees?|rs\.?|inr|dollars?|bucks)?\s*(?:is|was|hai|a|an|the)?\s*(?:good|fair|reasonable|ok|okay|bad|high|low|expensive|cheap|pricey)?\s*(?:price|mrp|cost|rate|tag|worth|deal)\b/i
 
+// A number the shopper is COMPLAINING about ("714 is a little too much",
+// "900 seems steep", "1500 is expensive") is the price they are OBJECTING to —
+// not a bid. The criticism words sit right after the number, often behind a few
+// filler words ("is", "a little", "way"). Recognising this stops the engine from
+// treating a rejected price as an offer and "accepting" a figure the shopper
+// never proposed.
+const COMPLAINT_AFTER_RE =
+  /^[\s,.!—–-]*(?:(?:is|was|it'?s|that'?s|this(?:\s+is)?|seems?|sounds?|feels?|looks?|a\s+bit|a\s+little|a\s+tad|a\s+touch|little|bit|way|far|rather|quite|pretty|very|really|so|just|still|too)\b[\s,.!—–-]*){0,3}(?:too\s+(?:much|high|expensive|pricey|steep|costly)|expensive|pricey|costly|overpriced|steep|a\s+lot(?:\s+of\s+money)?|out\s+of\s+(?:my\s+)?(?:budget|range)|above\s+my\s+budget|beyond\s+my\s+budget|over\s+my\s+budget|more\s+than\s+i|not\s+worth|unaffordable)\b/i
+
+// Complaint language that PRECEDES the number ("not worth 900", "too much for 900").
+const COMPLAINT_BEFORE_RE = /\b(?:not\s+worth|too\s+much\s+for)\s*[₹$€£]?\s*$/i
+
 // ── Price extraction: pull the shopper's numeric offer out of free text ──
 export function extractPrice(text: string): number | null {
   // A leading minus before a number/currency means a negative/absurd "offer"
@@ -218,9 +230,19 @@ export function extractPrice(text: string): number | null {
     // Competitor comparison without a real bid nearby is context, not an offer.
     if (COMPARISON_CUE.test(around) && !BID_CUE.test(around)) continue
 
+    // Competitor comparison without a real bid nearby is context, not an offer.
+    if (COMPARISON_CUE.test(around) && !BID_CUE.test(around)) continue
+
+    // A commented-on price is an OBJECTION, not a bid — but only when no bid
+    // phrase is attached to THIS number. A bid cue elsewhere in the sentence
+    // belongs to another figure, so "500 is too much, I'll give 450" leaves 500
+    // as a complaint (dropped) and 450 as the real offer.
+    const bidNear = BID_CUE.test(before.slice(-30)) || BID_CUE.test(after.slice(0, 18))
+    const complaint = !bidNear && (COMPLAINT_AFTER_RE.test(after) || COMPLAINT_BEFORE_RE.test(before))
+
     scored.push({
       val: c.val,
-      reference: REFERENCE_PRICE_BEFORE.test(before) || REFERENCE_PRICE_AFTER.test(after),
+      reference: REFERENCE_PRICE_BEFORE.test(before) || REFERENCE_PRICE_AFTER.test(after) || complaint,
       bid: BID_CUE.test(around),
     })
   }

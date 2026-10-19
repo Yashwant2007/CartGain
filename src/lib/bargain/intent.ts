@@ -41,6 +41,8 @@ export interface IntentAnalysis {
   budget: number | null
   /** How the shopper framed the amount. */
   budgetType: BudgetType
+  /** True when the shopper is objecting to the price (not proposing to pay it). */
+  priceComplaint: boolean
   /** Rough product topic the shopper is after (e.g. "for oily skin"), if detectable. */
   need: string | null
 }
@@ -51,6 +53,9 @@ const RE = {
   comparison: /\b(elsewhere|other\s+(store|shop|site)|amazon|flipkart|myntra|meesho|walmart|competing|rival|compare(ing)?\s+price|got\s+it\s+for|saw\s+it\s+for|cheaper\s+somewhere)/i,
   productQuestion: /\b(material|made\s+of|ingredient|composition|sizes?|colour|color|warrant(y|ies)|guarantee|feature(s)?|specs?\b|specification|compatible|certif|measurement|dimensions?|weight|battery|usb|cotton|leather|capacity|speed|does\s+it\s+have|do\s+you\s+have|how\s+many|comes\s+with|included)/i,
   value: /\b(worth|value|good\s+product|is\s+this\s+(good|worth)|how\s+is\s+the\s+(quality|build)|better\s+than|what('s| is| do)\s+(i\s+)?get)/i,
+  // Objection language: the shopper is criticising the price, not bidding on it.
+  // Used to make sure a figure mentioned in a complaint is never read as an offer.
+  complaint: /\b(too\s+(?:much|high|expensive|pricey|steep|costly)|expensive|pricey|costly|overpriced|steep|a\s+lot(?:\s+of\s+(?:money|cash))?|out\s+of\s+(?:my\s+)?(?:budget|range)|above\s+my\s+budget|beyond\s+my\s+budget|not\s+worth|unaffordable|can'?t\s+afford)\b/i,
   purchaseReady: /\b(i'?ll\s+(take|buy|get|lock)|take\s+it\b|deal\s+done|checkout|order\s+it|buying\s+it|ready\s+to\s+order|let'?s\s+(do\s+it|lock|wrap\s+it|close)|lock\s+(it|this|the\s+deal)|finaliz(e|ing)|accept\s+the\s+(price|deal))/i,
   mismatch: /\b(not\s+my\s+size|different\s+(size|colour|color|variant)|need(ed|s)?\s+it\s+in|available\s+in\s+my|wrong\s+(size|variant)|only\s+(left|have)\s+in)/i,
   trust: /\b(original|genuine|authentic|real|fake|duplicate|trust\b|reviews?|rating|scam|legit|certified)/i,
@@ -127,6 +132,7 @@ export function analyzeIntent(message: string): IntentAnalysis {
   const comparisonIntent = hits('comparison', 'comparison_signal')
   const productQ = hits('productQuestion', 'product_question')
   const valueIntent = hits('value', 'value_signal')
+  const priceComplaint = hits('complaint', 'price_complaint')
   const purchaseIntent = hits('purchaseReady', 'purchase_signal')
   const mismatch = hits('mismatch', 'variant_mismatch')
   const trust = hits('trust', 'trust_signal')
@@ -147,12 +153,12 @@ export function analyzeIntent(message: string): IntentAnalysis {
   else if (recRequest) intent = 'RECOMMENDATION_REQUEST'
   else if (discovery) intent = 'PRODUCT_DISCOVERY'
   else if (budgetIntent || budget) intent = 'BUDGET_CONSTRAINT'
-  else if (priceIntent || isMoney) intent = 'PRICE_ONLY'
+  else if (priceIntent || isMoney || priceComplaint) intent = 'PRICE_ONLY'
   else if (valueIntent) intent = 'VALUE_UNCLEAR'
   else if (message.trim().length > 0) intent = 'GENERIC_CHAT'
 
   let objection: ShopperObjection = null
-  if (budgetIntent || priceIntent || isMoney) objection = 'PRICE'
+  if (budgetIntent || priceIntent || isMoney || priceComplaint) objection = 'PRICE'
   else if (mismatch) objection = 'FIT_VARIANT'
   else if (trust) objection = 'TRUST'
   else if (shipping) objection = 'SHIPPING_DELAY'
@@ -166,6 +172,7 @@ export function analyzeIntent(message: string): IntentAnalysis {
     offersPriceSignal: isMoney,
     budget: budget?.amount ?? null,
     budgetType: budget?.type ?? null,
+    priceComplaint,
     need,
   }
 }
@@ -203,6 +210,11 @@ export function shopperIntentToPromptBlock(analysis: IntentAnalysis): string {
   ]
   if (analysis.objection) {
     lines.push(`- Objection detected: ${OBJECTION_LABEL[analysis.objection]}`)
+  }
+  if (analysis.priceComplaint) {
+    lines.push(
+      `- The shopper is COMPLAINING about the price — they are NOT making an offer. Any figure in this message is the price they are objecting to. NEVER read it as their bid, NEVER echo it back as "you offered X", and NEVER accept it. Acknowledge the concern briefly, justify the value from verified facts, and propose a genuine counter (still above the listed-price gap you normally open with).`,
+    )
   }
   if (analysis.intent === 'PRODUCT_QUESTION') {
     lines.push(`- If the question is about a feature not in PRODUCT CONTEXT, admit you don't have verified details and point to the product page.`)

@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useSession, signOut } from 'next-auth/react'
-import { Zap, Send, Sparkles, MessageCircle, CheckCircle2, RotateCcw, ArrowRight, ShoppingBag, Lock, BadgeCheck, ShieldCheck } from 'lucide-react'
+import { Send, Sparkles, MessageCircle, CheckCircle2, RotateCcw, ArrowRight, ShoppingBag, Lock, BadgeCheck, ShieldCheck, Check, Copy, ExternalLink, CheckCheck, Clock3, Loader2, Store } from 'lucide-react'
 import {
   buildOpeningMessage,
   ruleBasedDecision,
@@ -16,11 +16,15 @@ import {
   type NegotiationResult,
 } from '@/lib/bargain/engine'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
+import { buildQuickOffers } from '@/lib/bargain/offers'
+import { currencySymbolFor } from '@/lib/bargain/i18n'
+import type { BargainRecommendation } from '@/lib/bargain/api-types'
 
 type ChatMsg = {
   role: 'customer' | 'ai'
   content: string
   offeredPrice?: number | null
+  delivery?: 'sending' | 'delivered'
 }
 
 type DemoProduct = {
@@ -28,6 +32,9 @@ type DemoProduct = {
   title: string
   price: number
   image: string
+  shopifyProductId?: string
+  variantId?: string
+  real?: boolean
 }
 
 const PRODUCTS: DemoProduct[] = [
@@ -50,6 +57,9 @@ const PRODUCTS: DemoProduct[] = [
     image: 'https://images.unsplash.com/photo-1570194065650-d99fb4bedf0a?w=400&h=400&fit=crop',
   },
 ]
+
+// Placeholder thumbnail for a real store product that has no image.
+const PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=400&h=400&fit=crop'
 
 const PERSONAS: { id: Persona; name: string; blurb: string }[] = [
   { id: 'friendly_shopkeeper', name: 'Alex — Friendly Shopkeeper', blurb: 'Warm, neighbourly, finds a way.' },
@@ -80,14 +90,15 @@ const FAREWELLS: Record<Persona, string> = {
 
 const SKIP_REPLIES: Record<Persona, string> = {
   friendly_shopkeeper:
-    "Of course — that is the simplest path. Your order at ₹PRICE is ready whenever you are.",
+    'Of course — that is the simplest path. Your order at ₹PRICE is ready whenever you are.',
   strict_negotiator:
     'A direct purchase at the listed price — no objections there. Your order at ₹PRICE is confirmed.',
   playful_friend:
     'Hey, the direct route works too. Your order at ₹PRICE is one click away.',
 }
 
-// Discount codes a real store would auto-generate (1-use, 24h) per product
+// Sample one-use codes a real store would auto-generate (1-use, 24h) per demo
+// product. Real store products instead mint a genuine Shopify code on accept.
 const DEMO_CODES: Record<string, string> = {
   serum: 'LUMINA-SERUM10',
   cream: 'LUMINA-GLASS5',
@@ -97,6 +108,8 @@ const DEMO_CODES: Record<string, string> = {
 // Profit margin the demo "merchant" protects — 25% off is the floor
 const DEMO_PROFIT_PERCENT = 25
 const MAX_ATTEMPTS = 3
+// Delay before the shopper's own bubble flips from a clock to a delivered tick.
+const TICK_MS = 550
 
 export default function DemoContent() {
   const { data: session, status } = useSession()
@@ -111,6 +124,20 @@ export default function DemoContent() {
   const [ended, setEnded] = useState<null | 'accepted' | 'rejected' | 'abandoned' | 'skipped'>(null)
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [alreadyUsed, setAlreadyUsed] = useState(false)
+  // Storefront-parity feature state: verified recommendation cards + the real
+  // one-use discount code minted on accept.
+  const [recommendations, setRecommendations] = useState<BargainRecommendation[]>([])
+  const [discountCode, setDiscountCode] = useState<string | null>(null)
+  const [codeStatus, setCodeStatus] = useState<'idle' | 'minting' | 'ready' | 'failed'>('idle')
+  const [copied, setCopied] = useState(false)
+  // Real-catalog context — populated only when the signed-in merchant has a
+  // connected Shopify store. Empty for everyone else (built-in demo products).
+  const [realProducts, setRealProducts] = useState<DemoProduct[]>([])
+  const [storeName, setStoreName] = useState('Lumina Beauty')
+  const [storeDomain, setStoreDomain] = useState<string | null>(null)
+  const [currencySymbol, setCurrencySymbol] = useState('₹')
+  const [catalogSource, setCatalogSource] = useState<'demo' | 'store'>('demo')
+
   const scrollRef = useRef<HTMLDivElement>(null)
   const sessionIdRef = useRef(0)
   // True once a deal was accepted in this exchange, so a stray follow-up chat
@@ -122,9 +149,25 @@ export default function DemoContent() {
     [product],
   )
 
+  const lastCounter = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m.role === 'ai' && m.offeredPrice != null) return m.offeredPrice
+    }
+    return null
+  }, [messages])
+
+  // Offer-suggestion chips — identical rules to the live storefront widget
+  // (server counter, then conservative percentages of the LISTED price; never
+  // floor-derived).
+  const quickOffers = useMemo(
+    () => buildQuickOffers({ lastCounter, listedPrice: product.price, sessionEnded: !!ended, decision: ended ? 'accept' : 'counter' }),
+    [lastCounter, product.price, ended],
+  )
+
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [messages, thinking])
+  }, [messages, thinking, recommendations])
 
   // Claim the one-time demo on mount — enforcement happens server-side
   useEffect(() => {
@@ -136,11 +179,43 @@ export default function DemoContent() {
       .catch(() => {})
   }, [])
 
+  // Pull the merchant's real catalog (if any). When a Shopify store is connected
+  // the demo can run on the merchant's OWN products — enabling verified product
+  // details, real recommendations and a real discount code. Otherwise this is a
+  // no-op and the built-in demo products stay.
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    let alive = true
+    fetch('/api/bargain/demo')
+      .then(r => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!alive || !data) return
+        if (typeof data.currency === 'string' && data.currency) setCurrencySymbol(currencySymbolFor(data.currency) || '₹')
+        if (typeof data.storeDomain === 'string' && data.storeDomain) setStoreDomain(data.storeDomain)
+        if (data.storeConnected && Array.isArray(data.products) && data.products.length > 0) {
+          const mapped: DemoProduct[] = data.products.map((p: any) => ({
+            id: `sp-${p.shopifyProductId}`,
+            title: typeof p.title === 'string' ? p.title : 'Product',
+            price: Number(p.price),
+            image: typeof p.image === 'string' && p.image ? p.image : PLACEHOLDER_IMG,
+            shopifyProductId: String(p.shopifyProductId),
+            variantId: p.variantId ? String(p.variantId) : undefined,
+            real: true,
+          }))
+          setRealProducts(mapped)
+          setCatalogSource('store')
+          setProduct(mapped[0])
+        }
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [status])
+
   // Start a fresh demo
   function start() {
     const ctx: NegotiationContext = {
-      storeName: 'Lumina Beauty',
-      currencySymbol: '₹',
+      storeName,
+      currencySymbol,
       originalPrice: product.price,
       minPrice,
       attemptsUsed: 0,
@@ -156,6 +231,10 @@ export default function DemoContent() {
     setEnded(null)
     setFinalPrice(null)
     setThinking(false)
+    setRecommendations([])
+    setDiscountCode(null)
+    setCodeStatus('idle')
+    setCopied(false)
     setStarted(true)
   }
 
@@ -169,10 +248,46 @@ export default function DemoContent() {
     setEnded(null)
     setFinalPrice(null)
     setThinking(false)
+    setRecommendations([])
+    setDiscountCode(null)
+    setCodeStatus('idle')
+    setCopied(false)
   }
 
   function replyDelay(len: number) {
     return 250 + Math.min(len, 120) * 0.6
+  }
+
+  // Flip every pending customer bubble to a delivered tick. Pure UI ack — it
+  // never claims more than "we have your message".
+  function markDelivered() {
+    setMessages(prev => prev.map(m => (m.role === 'customer' && m.delivery === 'sending' ? { ...m, delivery: 'delivered' } : m)))
+  }
+
+  // Mint a REAL one-use Shopify code for the merchant's own store. Only called
+  // when the demo runs on a real store product; every failure is swallowed so
+  // the demo still shows a sample code instead of dead-ending.
+  async function mintRealCode(originalPrice: number, dealPrice: number): Promise<string | null> {
+    if (!storeDomain || !product.shopifyProductId) return null
+    const code = `CG-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+    try {
+      const res = await fetch('/api/bargain/checkout-accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shopDomain: storeDomain,
+          shopifyProductId: product.shopifyProductId,
+          variantId: product.variantId,
+          originalPrice,
+          finalPrice: dealPrice,
+          discountPercent: Math.max(0, Math.round((1 - dealPrice / originalPrice) * 100)),
+          code,
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.success && typeof data.code === 'string') return data.code
+    } catch {}
+    return null
   }
 
   async function send() {
@@ -187,8 +302,8 @@ export default function DemoContent() {
     const exhausted = isOfferTurn && nextAttempt >= MAX_ATTEMPTS
 
     const ctx: NegotiationContext = {
-      storeName: 'Lumina Beauty',
-      currencySymbol: '₹',
+      storeName,
+      currencySymbol,
       originalPrice: product.price,
       minPrice,
       attemptsUsed,
@@ -235,6 +350,10 @@ export default function DemoContent() {
             walkoutTriggered: isWalkout,
             dealAccepted: dealAcceptedRef.current,
             finalPrice: newFinal ?? (ended === 'accepted' ? finalPrice : undefined),
+            // Verified product identity — the server quotes real facts, real
+            // recommendations and (on accept) a real code only when present.
+            shopifyProductId: product.shopifyProductId,
+            variantId: product.variantId,
           }),
         })
         const data = await res.json()
@@ -244,6 +363,9 @@ export default function DemoContent() {
           if (data.decision === 'accept') decision = 'accept'
           else if (data.decision === 'reject') decision = 'reject'
           else decision = 'counter'
+          if (Array.isArray(data.recommendations) && data.recommendations.length > 0) {
+            setRecommendations(data.recommendations)
+          }
         }
       } catch {}
 
@@ -269,7 +391,7 @@ export default function DemoContent() {
           decision = result.decision
         } else {
           const counter = reciprocalCounter({ ...ctx, attemptsUsed, lastCounter: lastAiOffer } as NegotiationContext)
-          reply = `What price did you have in mind? I could probably do ₹${counter.toFixed(2)} if you make me a fair offer.`
+          reply = `What price did you have in mind? I could probably do ${currencySymbol}${counter.toFixed(2)} if you make me a fair offer.`
           counterOffer = counter
         }
       }
@@ -287,7 +409,7 @@ export default function DemoContent() {
       decision = 'accept'
       counterOffer = offer
       dealAcceptedRef.current = true
-      reply = `${ctx.currencySymbol}${offer.toFixed(2)} works for me. Click Accept and I'll generate your discount code.`
+      reply = `${ctx.currencySymbol}${offer.toFixed(2)} works for me — generating your one-use discount code now.`
     } else if (exhausted && decision !== 'accept') {
       newEnded = 'rejected'
     } else if (decision === 'accept') {
@@ -298,10 +420,26 @@ export default function DemoContent() {
     if (decision === 'accept') dealAcceptedRef.current = true
 
     const sid = sessionIdRef.current
-    setMessages(prev => [...prev, { role: 'customer', content: userText, offeredPrice: offer }])
+    setMessages(prev => [...prev, { role: 'customer', content: userText, offeredPrice: offer, delivery: 'sending' }])
+    window.setTimeout(() => { if (sessionIdRef.current === sid) markDelivered() }, TICK_MS)
     setAttemptsUsed(nextAttempt)
     setInput('')
     setThinking(true)
+
+    // Deal closed → mint the code as early as possible so it's ready on reveal.
+    if (newEnded === 'accepted' && newFinal != null) {
+      if (product.real && product.shopifyProductId && storeDomain) {
+        setCodeStatus('minting')
+        void mintRealCode(product.price, newFinal).then((code) => {
+          if (sessionIdRef.current !== sid) return
+          if (code) { setDiscountCode(code); setCodeStatus('ready') }
+          else { setDiscountCode(`CG-${product.id.slice(-5).toUpperCase() || 'DEAL'}`); setCodeStatus('failed') }
+        })
+      } else {
+        setDiscountCode(DEMO_CODES[product.id] ?? 'DEAL')
+        setCodeStatus('ready')
+      }
+    }
 
     window.setTimeout(() => {
       if (sessionIdRef.current !== sid) return
@@ -314,11 +452,12 @@ export default function DemoContent() {
 
   function skipFullPrice() {
     if (ended || thinking) return
-    const reply = SKIP_REPLIES[persona].replace('₹PRICE', `₹${product.price}`)
+    const reply = SKIP_REPLIES[persona].replace('₹PRICE', `${currencySymbol}${product.price}`)
     const sid = sessionIdRef.current
-    setMessages(prev => [...prev, { role: 'customer', content: "Actually, I'll just buy it at the full price." }])
+    setMessages(prev => [...prev, { role: 'customer', content: "Actually, I'll just buy it at the full price.", delivery: 'sending' }])
     setInput('')
     setThinking(true)
+    window.setTimeout(() => { if (sessionIdRef.current === sid) markDelivered() }, TICK_MS)
     window.setTimeout(() => {
       if (sessionIdRef.current !== sid) return
       setMessages(prev => [...prev, { role: 'ai', content: reply }])
@@ -327,7 +466,20 @@ export default function DemoContent() {
     }, replyDelay(reply.length))
   }
 
+  function copyCode() {
+    if (!discountCode) return
+    navigator.clipboard?.writeText(discountCode)
+      .then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1500) })
+      .catch(() => {})
+  }
+
+  function chooseProduct(p: DemoProduct) {
+    setProduct(p)
+    reset()
+  }
+
   const attemptsLeft = Math.max(0, MAX_ATTEMPTS - attemptsUsed)
+  const pickerProducts = catalogSource === 'store' && realProducts.length > 0 ? realProducts : PRODUCTS
 
   if (alreadyUsed) {
     return (
@@ -357,19 +509,16 @@ export default function DemoContent() {
               alt="CartGain"
               width={32}
               height={32}
-              className="w-8 h-8 rounded-lg"
+              className="rounded"
             />
-            <span className="text-lg font-bold">CartGain</span>
-            <span className="hidden sm:inline-block ml-2 px-2 py-0.5 rounded-full text-xs bg-blue-900/50 text-blue-300 border border-blue-700/40">
-              Live Demo
-            </span>
+            <span className="font-bold text-lg">CartGain</span>
           </Link>
           {status === 'authenticated' ? (
             <div className="flex items-center gap-3">
-              <span className="hidden md:inline max-w-48 truncate text-xs text-blue-300/70">{session?.user?.email}</span>
+              <span className="text-xs text-blue-300/60 hidden sm:inline">{session?.user?.email}</span>
               <button
                 onClick={() => signOut({ callbackUrl: '/' })}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-blue-800/40 text-xs font-semibold rounded-lg transition active:scale-95"
+                className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-blue-800/30 transition"
               >
                 Sign out
               </button>
@@ -385,8 +534,7 @@ export default function DemoContent() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-        {/* Hero */}
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-900/40 border border-blue-700/40 text-blue-300 text-xs mb-4">
             <Sparkles className="w-3.5 h-3.5" />
@@ -397,7 +545,7 @@ export default function DemoContent() {
           </h1>
           <p className="text-blue-200/70 text-sm sm:text-base max-w-2xl mx-auto">
             Pick a product, a persona, and a language — or leave it on Auto and it mirrors whatever language you type in.
-            Talks in English, Hinglish, Hindi, Tamil, Telugu, Bengali, Marathi & Punjabi.
+            Talks in English, Hinglish, Hindi, Tamil, Telugu, Bengali, Marathi &amp; Punjabi.
             One live session per account, signed in and server-verified.
           </p>
           <p className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-blue-300/50">
@@ -412,19 +560,43 @@ export default function DemoContent() {
             <h3 className="text-sm font-semibold text-blue-200 mb-3 flex items-center gap-2">
               <ShoppingBag className="w-4 h-4" /> 1. Choose a product
             </h3>
-            <div className="space-y-2">
-              {PRODUCTS.map(p => (
+            {realProducts.length > 0 && (
+              <div className="flex gap-1 mb-3 p-0.5 rounded-lg bg-slate-950/60 border border-blue-800/30">
+                <button
+                  onClick={() => { setCatalogSource('store'); chooseProduct(realProducts[0]) }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded-md transition ${catalogSource === 'store' ? 'bg-blue-900/50 text-blue-100' : 'text-blue-300/70 hover:text-blue-200'}`}
+                >
+                  <Store className="w-3.5 h-3.5" /> Your store
+                </button>
+                <button
+                  onClick={() => { setCatalogSource('demo'); chooseProduct(PRODUCTS[0]) }}
+                  className={`flex-1 px-2 py-1.5 text-xs rounded-md transition ${catalogSource === 'demo' ? 'bg-blue-900/50 text-blue-100' : 'text-blue-300/70 hover:text-blue-200'}`}
+                >
+                  Sample
+                </button>
+              </div>
+            )}
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {pickerProducts.map(p => (
                 <button
                   key={p.id}
-                  onClick={() => { setProduct(p); reset() }}
+                  onClick={() => chooseProduct(p)}
                   className={`w-full flex items-center gap-3 p-2 rounded-lg transition text-left ${
                     product.id === p.id ? 'bg-blue-900/40 border border-blue-600/50' : 'hover:bg-slate-800/50 border border-transparent'
                   }`}
                 >
-                  <Image src={p.image} alt={p.title} width={40} height={40} className="rounded-md object-cover" />
+                  <Image
+                    src={p.image}
+                    alt={p.title}
+                    width={40}
+                    height={40}
+                    unoptimized
+                    loading="lazy"
+                    className="rounded-md object-cover"
+                  />
                   <div className="min-w-0">
                     <div className="text-sm font-medium truncate">{p.title}</div>
-                    <div className="text-xs text-blue-300/70">₹{p.price}</div>
+                    <div className="text-xs text-blue-300/70">{currencySymbol}{p.price.toLocaleString('en-IN')}</div>
                   </div>
                 </button>
               ))}
@@ -483,11 +655,15 @@ export default function DemoContent() {
               <div className="text-xs text-blue-300/70 space-y-1.5 mb-4">
                 <div className="flex justify-between">
                   <span>Listed price</span>
-                  <span className="font-mono text-white">₹{product.price}</span>
+                  <span className="font-mono text-white">{currencySymbol}{product.price}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Floor (hidden from customer)</span>
-                  <span className="font-mono text-amber-300">₹{minPrice}</span>
+                  {product.real ? (
+                    <span className="text-blue-200/60">from your store</span>
+                  ) : (
+                    <span className="font-mono text-amber-300">{currencySymbol}{minPrice}</span>
+                  )}
                 </div>
                 <div className="flex justify-between">
                   <span>Max attempts</span>
@@ -512,6 +688,14 @@ export default function DemoContent() {
             )}
           </div>
         </div>
+
+        {!started && (
+          <div className="text-center text-xs text-blue-300/60 mb-8">
+            {realProducts.length > 0
+              ? `Running on ${storeName}'s real catalog — verified product details, real recommendations and a real discount code on accept.`
+              : 'Using sample products. Connect a Shopify store and this demo runs on your real catalog — with a real discount code on accept.'}
+          </div>
+        )}
 
         {/* Chat panel */}
         {started && (
@@ -541,42 +725,151 @@ export default function DemoContent() {
               {messages.map((m, i) => (
                 <div key={i} className={`flex ${m.role === 'customer' ? 'justify-end' : 'justify-start'}`}>
                   <div
-                    className={`max-w-[80%] rounded-xl px-4 py-2.5 text-sm ${
+                    className={`max-w-[86%] px-3.5 py-2.5 text-sm ${
                       m.role === 'customer'
-                        ? 'bg-blue-600 text-white rounded-br-sm'
-                        : 'bg-slate-800 text-blue-100 rounded-bl-sm border border-blue-800/40'
+                        ? 'bg-primary-600 rounded-2xl rounded-br-md'
+                        : 'bg-slate-800 border border-blue-800/30 rounded-2xl rounded-bl-md text-blue-100'
                     }`}
                   >
-                    <div>{m.content}</div>
+                    {m.content}
+                    {m.role === 'customer' && (
+                      <span
+                        className="inline-flex items-center ml-1.5 align-[-2px]"
+                        aria-label={m.delivery === 'delivered' ? 'Delivered' : 'Sending'}
+                      >
+                        {m.delivery === 'delivered'
+                          ? <CheckCheck className="w-3.5 h-3.5 text-white/70" />
+                          : <Clock3 className="w-3 h-3 text-white/50" />}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
+
+              {/* Verified recommendation cards (only when a real store is connected) */}
+              {recommendations.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-[11px] font-semibold tracking-wide uppercase text-blue-300/70">
+                    You might also like
+                  </div>
+                  {recommendations.map(card => (
+                    <div key={card.productId} className="flex gap-3 p-2.5 bg-slate-950/50 border border-blue-800/30 rounded-xl">
+                      {card.imageUrl ? (
+                        <Image
+                          src={card.imageUrl}
+                          alt={card.title}
+                          width={48}
+                          height={48}
+                          unoptimized
+                          loading="lazy"
+                          className="rounded-md object-cover"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-md bg-blue-900/40 flex items-center justify-center shrink-0">
+                          <ShoppingBag className="w-5 h-5 text-blue-300" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-blue-100 line-clamp-2">{card.title}</div>
+                        <div className="flex items-baseline gap-2 mt-1 flex-wrap">
+                          <span className="text-sm font-bold text-emerald-300">
+                            {currencySymbolFor(card.currency) || currencySymbol}{card.price.toLocaleString('en-IN')}
+                          </span>
+                          {card.compareAtPrice != null && card.compareAtPrice > card.price && (
+                            <span className="text-xs text-blue-300/50 line-through">
+                              {currencySymbolFor(card.currency) || currencySymbol}{card.compareAtPrice.toLocaleString('en-IN')}
+                            </span>
+                          )}
+                          {card.onSale && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-900/40 text-emerald-300">On sale</span>
+                          )}
+                          {card.budgetFit === 'over' && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-900/40 text-amber-300">Over budget</span>
+                          )}
+                        </div>
+                        {card.productUrl && (
+                          <a
+                            href={card.productUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-300 hover:text-blue-200 underline underline-offset-2"
+                          >
+                            View product <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {thinking && (
                 <div className="flex justify-start">
-                  <div className="bg-slate-800 border border-blue-800/40 rounded-xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
+                  <div className="bg-slate-800 border border-blue-800/30 rounded-2xl rounded-bl-md px-4 py-3 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-300 animate-bounce" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-300 animate-bounce" style={{ animationDelay: '120ms' }} />
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-300 animate-bounce" style={{ animationDelay: '240ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-300 animate-bounce" style={{ animationDelay: '0.15s' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-300 animate-bounce" style={{ animationDelay: '0.3s' }} />
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Outcome banner */}
-            {ended === 'accepted' && finalPrice != null && (
-              <div className="px-4 py-4 bg-emerald-900/20 border-t border-emerald-700/40 flex items-center gap-3">
-                <CheckCircle2 className="w-6 h-6 text-emerald-400 flex-shrink-0" />
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-emerald-200">Deal accepted at ₹{finalPrice.toFixed(2)}!</div>
-                  <div className="text-xs text-emerald-300/80 mt-0.5">
-                    Customers save ₹{(product.price - finalPrice).toFixed(2)}. A 1-use, 24-hour discount code is
-                    auto-generated at checkout on a real store.
+            {/* Quick-offer chips — same rules as the live storefront widget */}
+            {!ended && quickOffers.length > 0 && (
+              <div className="px-4 pt-3 flex flex-wrap gap-2">
+                {quickOffers.map(v => (
+                  <button
+                    key={v}
+                    onClick={() => { setInput(String(v)) }}
+                    disabled={thinking}
+                    className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-blue-900/40 border border-blue-600/40 text-blue-100 hover:bg-primary-600 hover:border-primary-600 transition disabled:opacity-50"
+                  >
+                    {currencySymbol}{v.toLocaleString('en-IN')}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Outcome panels */}
+            {ended === 'accepted' && (
+              <div className="px-4 py-4 bg-emerald-900/20 border-t border-emerald-700/40">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-emerald-100">
+                        Deal agreed at {currencySymbol}{finalPrice?.toFixed(2)}
+                      </div>
+                      <div className="text-xs text-emerald-200/70">
+                        {product.real && codeStatus === 'ready'
+                          ? 'A real one-use code was created on your store via Shopify — apply it at checkout within 24h.'
+                          : codeStatus === 'minting'
+                          ? 'Creating your one-use discount code…'
+                          : 'A one-use code a real store would auto-issue (1 use · 24h).'}
+                      </div>
+                    </div>
                   </div>
+                  {codeStatus === 'minting' ? (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-900/40 border border-emerald-600/40 text-xs text-emerald-200">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Generating…
+                    </div>
+                  ) : discountCode ? (
+                    <button
+                      onClick={copyCode}
+                      title="Copy code"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-emerald-900/40 border border-emerald-600/40 rounded-lg font-mono text-xs text-emerald-200 hover:bg-emerald-900/60 transition"
+                    >
+                      <BadgeCheck className="w-4 h-4 text-emerald-400" />
+                      {discountCode}
+                      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  ) : null}
                 </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-900/40 border border-emerald-600/40 rounded-lg font-mono text-xs text-emerald-200">
-                  <BadgeCheck className="w-4 h-4 text-emerald-400" />
-                  {DEMO_CODES[product.id] ?? 'DEAL'}
-                </div>
+                {codeStatus === 'failed' && (
+                  <div className="mt-2 text-[11px] text-amber-300/80">
+                    Couldn&apos;t reach Shopify to mint a live code — showing a sample instead.
+                  </div>
+                )}
               </div>
             )}
             {ended === 'rejected' && (
@@ -605,7 +898,7 @@ export default function DemoContent() {
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') send() }}
-                    placeholder={`Make an offer (e.g. "₹${Math.round(product.price * 0.7)}" or "I will think about it")`}
+                    placeholder={`Make an offer (e.g. "${currencySymbol}${Math.round(product.price * 0.7)}" or "I will think about it")`}
                     className="flex-1 bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-blue-300/40 focus:outline-none focus:border-blue-500"
                     maxLength={300}
                   />
@@ -624,7 +917,7 @@ export default function DemoContent() {
                     className="text-xs text-blue-300/60 hover:text-blue-200 underline underline-offset-2 transition"
                     aria-label="Skip negotiation and buy at full price"
                   >
-                    Skip — buy at full price (₹{product.price})
+                    Skip — buy at full price ({currencySymbol}{product.price})
                   </button>
                 </div>
               </>
@@ -637,15 +930,15 @@ export default function DemoContent() {
           <div className="mt-4 text-xs text-blue-300/60 grid sm:grid-cols-3 gap-2">
             <div className="bg-slate-900/40 border border-blue-800/20 rounded-lg p-3">
               <div className="font-semibold text-blue-200 mb-1">Free / lowball</div>
-              Try &quot;₹0&quot; or &quot;free&quot; — see how the persona handles it.
+              Try &quot;free&quot; or a very low number — see how the persona handles it.
+            </div>
+            <div className="bg-slate-900/40 border border-blue-800/20 rounded-lg p-3">
+              <div className="font-semibold text-blue-200 mb-1">Just a complaint</div>
+              Try &quot;that&apos;s too expensive&quot; — the AI won&apos;t mistake it for an offer.
             </div>
             <div className="bg-slate-900/40 border border-blue-800/20 rounded-lg p-3">
               <div className="font-semibold text-blue-200 mb-1">Walkout threat</div>
               Try &quot;too expensive, I will leave&quot; — watch the retention offer.
-            </div>
-            <div className="bg-slate-900/40 border border-blue-800/20 rounded-lg p-3">
-              <div className="font-semibold text-blue-200 mb-1">Just above floor</div>
-              Try &quot;&#8377;{Math.ceil(minPrice + 20)}&quot; to see acceptance instantly.
             </div>
           </div>
         )}

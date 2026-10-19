@@ -8,6 +8,7 @@ import {
   negotiateStep,
   ruleBasedDecision,
   chatFallback,
+  computeMinPrice,
   SUPPORTED_LANGUAGES,
   NEGOTIATION_MODES,
   type Persona,
@@ -22,6 +23,14 @@ import {
   publicGoalView,
 } from '@/lib/bargain/goals'
 import { analyzeIntent } from '@/lib/bargain/intent'
+import { extractPrice } from '@/lib/bargain/text'
+import { fetchShopifyProducts } from '@/lib/shopify'
+import {
+  searchRecommendations,
+  recommendationReason,
+  type RecommendationCard,
+  type RecommendationContext,
+} from '@/lib/bargain/recommendations'
 import type { BargainDemoGoal } from '@/lib/bargain/api-types'
 
 export const dynamic = 'force-dynamic'
@@ -40,14 +49,17 @@ const VALID_PERSONAS: Persona[] = ['friendly_shopkeeper', 'strict_negotiator', '
 // BargainConfig persona, so customers can never pick (or game) the mode.
 // Also returns the merchant's store (catalog facts) and the full BargainConfig
 // row so the AI salesperson gets the same daily-goal context as production.
+type DemoStore = {
+  id: string; name: string; domain: string; currency: string; apiKey: string | null
+  platform: string
+  timezone: string
+  shopifyRefreshToken: string | null; shopifyTokenExpiresAt: Date | null
+}
+
 async function resolveMerchantPersona(userId: string): Promise<{
   persona: Persona
   config: BargainConfigRow | null
-  store: {
-    id: string; domain: string; currency: string; apiKey: string | null
-    timezone: string
-    shopifyRefreshToken: string | null; shopifyTokenExpiresAt: Date | null
-  } | null
+  store: DemoStore | null
 }> {
   const store = await prisma.store.findFirst({
     where: { userId },
@@ -66,13 +78,66 @@ async function resolveMerchantPersona(userId: string): Promise<{
     config,
     store: {
       id: store.id,
+      name: store.name,
       domain: store.domain,
       currency: store.currency ?? 'INR',
       apiKey: store.apiKey,
+      platform: store.platform,
       timezone: store.timezone,
       shopifyRefreshToken: store.shopifyRefreshToken,
       shopifyTokenExpiresAt: store.shopifyTokenExpiresAt,
     },
+  }
+}
+
+// GET /api/bargain/demo — demo context for the signed-in merchant: whether a
+// Shopify store is connected, its shop domain + currency, and a normalized
+// shortlist of the store's REAL products. /demo uses these so "describe this
+// product" is answered from the actual catalog, recommendations come from the
+// real store, and an accepted deal can mint a real discount code. Any failure
+// degrades to an empty list — the page then keeps its built-in demo products.
+export async function GET() {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+    }
+    const { store } = await resolveMerchantPersona(session.user.id)
+    if (!store || store.platform !== 'shopify') {
+      return NextResponse.json({ storeConnected: false, storeName: null, storeDomain: null, currency: 'INR', products: [] })
+    }
+    const { products, error } = await fetchShopifyProducts(store, { limit: 50 })
+    if (error) {
+      return NextResponse.json({ storeConnected: false, storeName: store.name, storeDomain: null, currency: store.currency, products: [], error })
+    }
+    const normalized = (products as any[])
+      .map((p) => {
+        const variants = Array.isArray(p?.variants) ? p.variants : []
+        const v = variants.find((x: any) => x?.available) ?? variants[0]
+        const price = v?.price != null ? Number(v.price) : NaN
+        const image = Array.isArray(p?.images) && p.images[0]?.src ? String(p.images[0].src) : null
+        if (p?.id == null || v?.id == null || !Number.isFinite(price) || price <= 0) return null
+        return {
+          shopifyProductId: String(p.id),
+          variantId: String(v.id),
+          title: typeof p.title === 'string' ? p.title.slice(0, 120) : 'Product',
+          price,
+          image,
+          available: v?.available !== false,
+        }
+      })
+      .filter(Boolean)
+      .slice(0, 50)
+    return NextResponse.json({
+      storeConnected: normalized.length > 0,
+      storeName: store.name,
+      storeDomain: store.domain,
+      currency: store.currency,
+      products: normalized,
+    })
+  } catch (err) {
+    console.error('[BARGAIN_DEMO_GET]', err)
+    return NextResponse.json({ storeConnected: false, storeName: null, storeDomain: null, currency: 'INR', products: [] })
   }
 }
 
@@ -133,9 +198,47 @@ export async function POST(request: NextRequest) {
     const currencySymbol = typeof body.currencySymbol === 'string' ? body.currencySymbol.slice(0, 4) : '₹'
     const bulkQuantity = typeof body.bulkQuantity === 'number' ? Math.round(clamp(body.bulkQuantity, 2, 1000)) : undefined
 
+    // Real product identity. When the /demo page runs against the merchant's own
+    // connected catalog it passes these, which unlocks verified product facts,
+    // real store recommendations and a real discount code at accept.
+    const shopifyProductId = typeof body.shopifyProductId === 'string' && body.shopifyProductId
+      ? body.shopifyProductId
+      : null
+    const variantId = typeof body.variantId === 'string' && body.variantId ? body.variantId : undefined
+
+    // Verified floor: against a REAL product on the merchant's own Shopify store,
+    // derive the floor server-side exactly like the live storefront instead of
+    // trusting the client's estimate. The demo is merchant-session gated, so
+    // quoting the merchant's own floor back is not a leak.
+    if (merchant.store && merchant.store.platform === 'shopify' && shopifyProductId) {
+      try {
+        const { minPrice: realMin } = await computeMinPrice({
+          storeId: merchant.store.id,
+          shopifyProductId,
+          originalPrice,
+          bulkQuantity,
+        })
+        if (Number.isFinite(realMin) && realMin > 0) minPrice = Math.min(realMin, originalPrice)
+      } catch (err: any) {
+        console.warn('[BARGAIN_DEMO] floor compute failed, using client estimate', err?.message ?? err)
+      }
+    }
+
+    // Deterministic read on the customer's message. Computed early because it
+    // also gates the defensive offer re-derivation below.
+    const intentAnalysis = analyzeIntent(message)
+
     let offer: number | null = typeof body.offer === 'number' ? body.offer : null
     if (offer != null) {
       offer = clamp(offer, 0, originalPrice)
+    }
+    // Defensive: a price complaint ("714 is a little too much") is an objection,
+    // never an offer — even if a stale client shipped one. When the message is a
+    // complaint, re-derive the offer from the text itself: this yields null for a
+    // bare complaint, and still finds a genuine bid in a mixed message
+    // ("500 is too much, I'll give 450" → 450).
+    if (intentAnalysis.priceComplaint) {
+      offer = extractPrice(message)
     }
 
     // Normalize + bound the replay history
@@ -174,12 +277,11 @@ export async function POST(request: NextRequest) {
           merchant.store?.timezone ?? null,
           new Date(),
         )
-      : undefined
+        : undefined
     const negotiationMode: BargainNegotiationMode | undefined =
       merchant.config && (NEGOTIATION_MODES as readonly string[]).includes(merchant.config.negotiationMode)
         ? (merchant.config.negotiationMode as BargainNegotiationMode)
         : undefined
-    const intentAnalysis = analyzeIntent(message)
 
     const ctx: NegotiationContext = {
       storeName,
@@ -205,16 +307,13 @@ export async function POST(request: NextRequest) {
     // vendor, stock) so "describe me this product" is answered from the actual
     // product — not a canned "can't verify" brush-off. Failures degrade to the
     // existing verified-details fallback instead of erroring the turn.
-    const shopifyProductId = typeof body.shopifyProductId === 'string' && body.shopifyProductId
-      ? body.shopifyProductId
-      : null
     if (merchant.store && shopifyProductId) {
       try {
         ctx.product = await buildProductContext({
           store: merchant.store,
           storeId: merchant.store.id,
           shopifyProductId,
-          variantId: typeof body.variantId === 'string' ? body.variantId : undefined,
+          variantId,
           currency: merchant.store.currency ?? 'INR',
           baseUrl: `https://${merchant.store.domain}`,
           fallbackTitle: productTitle ?? null,
@@ -241,6 +340,51 @@ export async function POST(request: NextRequest) {
         : { reply: chatFallback(message, ctx2, history.length), decision: 'chat', tactic: 'demo_fallback', sentiment: 'neutral' }
     }
 
+    // ── Product recommendation layer (demo parity) ──
+    // The same verified, sanitized catalog cards the live storefront attaches:
+    // only when the merchant's store is connected and the master + alternatives
+    // toggles are on, and this turn reads as a recovery signal (explicit ask,
+    // discovery, an under-floor budget or a lowball). Failures are swallowed —
+    // recommendations are a bonus, never a blocker.
+    let recommendations: RecommendationCard[] | null = null
+    let recommendationContext: RecommendationContext | null = null
+    const recoEnabled = merchant.config?.recommendationsEnabled === true
+      && merchant.config?.alternativeRecommendationsEnabled === true
+    if (recoEnabled && merchant.store) {
+      const reason = recommendationReason(
+        intentAnalysis.intent,
+        (result.metadata as any)?.recommendationsRequested === true,
+        intentAnalysis.budget ?? null,
+        offer ?? null,
+        minPrice,
+      )
+      if (reason) {
+        try {
+          const out = await searchRecommendations(
+            {
+              store: merchant.store,
+              shopifyProductId: shopifyProductId ?? '',
+              currency: merchant.store.currency,
+              budget: intentAnalysis.budget ?? null,
+              need: intentAnalysis.need ?? null,
+            },
+            fetchShopifyProducts,
+            originalPrice,
+          )
+          if (out.cards.length > 0) {
+            recommendations = out.cards
+            recommendationContext = {
+              budget: intentAnalysis.budget ?? null,
+              need: intentAnalysis.need ?? null,
+              reason,
+            }
+          }
+        } catch (err: any) {
+          console.warn('[BARGAIN_DEMO] recommendation fetch failed', err?.message ?? err)
+        }
+      }
+    }
+
     // Merchant preview: the goal strip shows real progress plus the internal
     // strategy chip driving this turn. publicGoalView is the single redaction
     // point for client payloads; strategy/mode are added ONLY here, behind
@@ -262,6 +406,9 @@ export async function POST(request: NextRequest) {
       persona,
       abuse: (result.metadata as any)?.abuse === true,
       goal: demoGoal,
+      ...(recommendations && recommendationContext
+        ? { recommendations, recommendationContext }
+        : {}),
     })
   } catch (err: any) {
     console.error('[BARGAIN_DEMO]', err?.message ?? err)

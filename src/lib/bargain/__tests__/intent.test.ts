@@ -53,6 +53,18 @@ describe('analyzeIntent', () => {
     const a = analyzeIntent("yes let's lock the deal, best price")
     expect(a.intent).toBe('PURCHASE_READY')
   })
+
+  it('flags a price complaint so a named price is not read as an offer', () => {
+    const a = analyzeIntent('714 is a little too much for this')
+    expect(a.priceComplaint).toBe(true)
+    expect(a.objection).toBe('PRICE')
+    expect(a.intent).toBe('PRICE_ONLY')
+  })
+
+  it('does not flag a genuine budget or a bid as a complaint', () => {
+    expect(analyzeIntent('my budget is 500').priceComplaint).toBe(false)
+    expect(analyzeIntent("i'll pay 450").priceComplaint).toBe(false)
+  })
 })
 
 describe('shopperIntentToPromptBlock', () => {
@@ -66,6 +78,11 @@ describe('shopperIntentToPromptBlock', () => {
     const block = shopperIntentToPromptBlock(analyzeIntent('does it have a warranty?'))
     expect(block).toContain('product-information question')
     expect(block).toContain('not in PRODUCT CONTEXT')
+  })
+
+  it('tells the model a price complaint is not an offer', () => {
+    const block = shopperIntentToPromptBlock(analyzeIntent('900 is too expensive'))
+    expect(block).toContain('COMPLAINING about the price')
   })
 })
 
