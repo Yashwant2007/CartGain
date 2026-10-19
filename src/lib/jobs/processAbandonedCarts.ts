@@ -135,16 +135,19 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
       where: { userId: campaign.userId },
     })
 
-    const isPaidUser = subscription && (PAID_PLAN_IDS as readonly string[]).includes(resolvePlanId(subscription.plan)) && subscription.status === 'active'
+    const isPaidUser = !!(subscription && (PAID_PLAN_IDS as readonly string[]).includes(resolvePlanId(subscription.plan)) && subscription.status === 'active')
 
+    // Cart overage: a paid merchant is never hard-stopped at their cart quota —
+    // carts recovered beyond it are recorded and billed (plan.bargainOverageCartPrice)
+    // on the next invoice. This is what makes "up to N recovered carts" a metered
+    // allowance rather than a silent hard cap. Free plans still hard-stop.
+    let cartOverageActive = false
     if (isPaidUser) {
       const plan = getPlan(subscription!.plan)
       const maxCarts = plan?.maxCarts ?? Infinity
-
       const cartsUsed = await getCartsUsedForStore(campaign.userId, subscription)
-      if (cartsUsed >= maxCarts && maxCarts !== Infinity) {
-        console.log(`⏸️ Store ${store.id}: plan limit ${maxCarts} reached. Skipping.`)
-        return { sent: 0, failed: 0 }
+      if (maxCarts !== Infinity && cartsUsed >= maxCarts) {
+        cartOverageActive = true
       }
     } else {
       const processedCarts = await prisma.message.groupBy({
@@ -220,6 +223,7 @@ let cursor: string | undefined
           campaign, store, subscription,
           sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest,
           optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts,
+          isPaidUser, cartOverageActive,
         }))
       )
 
@@ -259,6 +263,8 @@ type CartConfig = {
   optedOutPhones: Set<string>
   customerLimits: { email: number; whatsapp: number }
   customerMsgCounts: CustomerMsgCounts
+  isPaidUser: boolean
+  cartOverageActive: boolean
 }
 
 async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<CustomerMsgCounts> {
@@ -333,7 +339,7 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
 }
 
   async function processSingleCart(cart: any, config: CartConfig): Promise<{ sent: number; failed: number }> {
-  const { campaign, store, subscription, sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest, optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts } = config
+  const { campaign, store, subscription, sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest, optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts, isPaidUser, cartOverageActive } = config
 
   try {
     // Resolve the A/B variant FIRST: its channels/delays/step-budget override the
@@ -422,9 +428,21 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
       console.log(`📵 Customer ${redactSensitive(customerKey)}: reached limit for ${limitedChannels.join(', ')} (plan limit: ${JSON.stringify(customerLimits)})`)
     }
 
-    const overageEligible = subscription?.overageEnabled
+    // Overage is automatic for paid plans: once a customer hits the plan's
+    // per-customer per-channel cap, the extra messages are still sent and
+    // recorded on `overageMessages` for the next invoice (₹1 each). There is no
+    // merchant opt-in toggle — paid plans are metered, free plans hard-stop.
+    const overageEligible = isPaidUser
     const channelsToProcess = overageEligible ? availableChannels : allowedChannels
     const isOverageChannel = (ch: string): boolean => channelLimited(ch)
+
+    // A cart only owes cart-overage the first time it is messaged within the
+    // current billing period; follow-up cycles on the same cart are already
+    // counted in the period's cart usage.
+    const periodStartMs = subscription?.currentPeriodStart ? new Date(subscription.currentPeriodStart).getTime() : 0
+    const isNewCartInPeriod =
+      cartOverageActive &&
+      !cart.messages.some((m: any) => m.status === 'sent' && m.sentAt && new Date(m.sentAt).getTime() >= periodStartMs)
 
     if (channelsToProcess.length === 0) return { sent: 0, failed: 0 }
 
@@ -592,6 +610,13 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
               data: { overageMessages: { increment: 1 } },
             })
             subscription.overageMessages++
+          }
+          if (isNewCartInPeriod) {
+            await prisma.subscription.update({
+              where: { id: subscription.id },
+              data: { cartOverage: { increment: 1 } },
+            })
+            subscription.cartOverage = (subscription.cartOverage ?? 0) + 1
           }
         }
         const today = new Date(new Date().toDateString())

@@ -12,6 +12,18 @@ export interface BillingResult {
 }
 
 /**
+ * Whether a subscription's accrued amount should be invoiced this sweep.
+ * Overage (messages/deals/carts consumed beyond the plan) is always billed —
+ * the merchant already used the capacity. Pure revenue share waits for the
+ * ₹100 floor so tiny accruals don't generate noise invoices.
+ */
+export function shouldInvoice(invoiceAmount: number, overageAmount: number): boolean {
+  if (invoiceAmount <= 0) return false
+  if (overageAmount > 0) return true
+  return invoiceAmount >= 100
+}
+
+/**
  * Monthly revenue-share billing sweep.
  *
  * Runs daily at 2am. For each active subscription whose billing period has ended
@@ -82,7 +94,10 @@ export async function processRevenueShareBilling(): Promise<BillingResult> {
       const overageAmount = Math.round((overageMessagesAmount + bargainOverageAmount + cartOverageAmount) * 100) / 100
       const invoiceAmount = Math.round((revShareAmount + overageAmount) * 100) / 100
 
-      if (invoiceAmount < 100) {
+      // Any overage (messages / deals / carts consumed beyond the plan) is
+      // billed immediately — capacity was already used. Pure revenue share under
+      // ₹100 waits for the next sweep so tiny accruals never generate invoices.
+      if (!shouldInvoice(invoiceAmount, overageAmount)) {
         result.skipped++
         continue
       }

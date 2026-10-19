@@ -379,7 +379,7 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
               <Link href="/signup" className="inline-flex items-center gap-1.5 bg-blue-600 text-white font-semibold py-2 px-5 rounded-xl hover:bg-blue-500 transition text-sm shadow-lg shadow-blue-500/20">
                 Start Free Trial <ArrowRight className="w-4 h-4" />
               </Link>
-              <p className="text-[10px] text-blue-300/40 mt-2">2-min setup • No credit card • First 50 carts free</p>
+              <p className="text-[10px] text-blue-300/40 mt-2">2-min setup • First 50 carts free</p>
             </div>
           </div>
         )}

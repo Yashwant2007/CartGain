@@ -84,6 +84,7 @@ export async function GET(request: NextRequest) {
             cartsLimit: subscription.cartsLimit,
             overageEnabled: subscription.overageEnabled,
             overageMessages: subscription.overageMessages,
+            cartOverage: subscription.cartOverage,
             resolvedPlan: {
               id: resolvedPlan.id,
               name: resolvedPlan.name,

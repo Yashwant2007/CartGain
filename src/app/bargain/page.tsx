@@ -319,7 +319,7 @@ export default function BargainPage() {
           <div className="max-w-4xl mx-auto text-center">
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Put the negotiator to work on your checkout.</h2>
             <p className="text-lg text-blue-100/90 mb-8 max-w-2xl mx-auto">
-              Start free with 50 recovered carts. No credit card, no setup fees — your floor price stays safe from the first conversation.
+              Start free with 50 recovered carts — your floor price stays safe from the first conversation.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center">
               <Button isLink href="/signup" variant="primary">

@@ -440,7 +440,7 @@ export default function HomePage() {
                         </div>
                         <div>
                           <p className="font-semibold text-white text-sm sm:text-base">We earn when you do</p>
-                          <p className="text-blue-200 text-xs sm:text-sm">Revenue-share pricing — no setup fees, first 50 recovered carts free, no lock-in.</p>
+                          <p className="text-blue-200 text-xs sm:text-sm">Revenue-share pricing — first 50 recovered carts free, no lock-in.</p>
                         </div>
                       </div>
                     </div>
@@ -1034,7 +1034,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-2xl font-bold text-white mb-2">Start Free — {FREE_CARTS_THRESHOLD} Recovered Carts, ₹0</h3>
               <p className="text-blue-300/70 mb-6 max-w-xl mx-auto text-sm">
-                No credit card required. Recover your first {FREE_CARTS_THRESHOLD} abandoned carts completely free.
+                Recover your first {FREE_CARTS_THRESHOLD} abandoned carts completely free.
                 WhatsApp &amp; Email included today. Upgrade when you grow.
               </p>
               <div className="flex items-center justify-center gap-6 text-sm text-emerald-300/80 mb-6 flex-wrap">
@@ -1158,7 +1158,7 @@ export default function HomePage() {
                     </p>
                     <p className="flex items-start space-x-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                      <span>Per-customer message caps: <strong className="text-white">{PLANS.FREE.maxMessagesPerCustomer.email} Free</strong> / <strong className="text-white">{PLANS.GROWTH.maxMessagesPerCustomer.email} Growth</strong> / <strong className="text-white">{PLANS.PRO.maxMessagesPerCustomer.email} Pro</strong> per channel. Paid overage billing if you need more.</span>
+                      <span>Per-customer message caps: <strong className="text-white">{PLANS.FREE.maxMessagesPerCustomer.email} email + {PLANS.FREE.maxMessagesPerCustomer.whatsapp} WhatsApp on every plan</strong>. Past your plan&apos;s cart, deal or message limits we keep recovering — extra usage is billed automatically.</span>
                     </p>
                   </div>
                 </div>

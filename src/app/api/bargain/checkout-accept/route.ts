@@ -240,7 +240,7 @@ export async function POST(request: NextRequest) {
         message:
           dealMode === 'blocked_free'
             ? 'This store has reached its free bargain deal limit. Please ask the store to upgrade.'
-            : 'This store has reached its bargain deal limit. Overage billing is off for this store.',
+            : 'This store has reached its bargain deal limit. Please ask the store to upgrade or contact you directly.',
         code: BARGAIN_DEALS_EXHAUSTED,
         planId: gate.planId,
         mode: dealMode,

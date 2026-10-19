@@ -190,7 +190,7 @@ export default function PricingPage() {
 
                   {/* Plan meters — the heart of the unified model */}
                   <div className="space-y-0 mb-6">
-                    <MeterRow icon={<ShoppingCart className="w-4 h-4 text-cyan-400" />} label="Recovered carts" value={isEnterprise ? 'Unlimited' : fmt(plan.maxCarts)} />
+                    <MeterRow icon={<ShoppingCart className="w-4 h-4 text-cyan-400" />} label="Recovered carts" value={isEnterprise ? 'Unlimited' : fmt(plan.maxCarts)} hint={plan.bargainOverageCartPrice > 0 ? `then ${fmtCurrency(plan.bargainOverageCartPrice)}/extra cart` : plan.id === 'free' ? 'no overage — hard cap' : undefined} />
                     <MeterRow icon={<MessageSquare className="w-4 h-4 text-violet-400" />} label="Campaigns" value={isEnterprise ? 'Unlimited' : fmt(plan.maxCampaigns)} />
                     <MeterRow
                       icon={<Handshake className="w-4 h-4 text-emerald-400" />}
@@ -207,7 +207,8 @@ export default function PricingPage() {
                     <MeterRow
                       icon={<MessageSquare className="w-4 h-4 text-blue-400" />}
                       label="Msgs / customer"
-                      value={isEnterprise ? 'Unlimited' : `${fmt(plan.maxMessagesPerCustomer.email)}/channel`}
+                      value={`${fmt(plan.maxMessagesPerCustomer.email)} email + ${fmt(plan.maxMessagesPerCustomer.whatsapp)} WA`}
+                      hint={plan.id === 'free' ? 'hard cap' : plan.id === 'enterprise' ? undefined : 'then ₹1/extra msg'}
                     />
                     <MeterRow
                       icon={<Building2 className="w-4 h-4 text-cyan-400" />}
@@ -260,7 +261,7 @@ export default function PricingPage() {
                   </p>
                   <p className="flex items-start space-x-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                    <span>Per-customer message caps: <strong className="text-white">{PLANS.FREE.maxMessagesPerCustomer.email} Free</strong> / <strong className="text-white">{PLANS.GROWTH.maxMessagesPerCustomer.email} Growth</strong> / <strong className="text-white">{PLANS.PRO.maxMessagesPerCustomer.email} Pro</strong> per channel.</span>
+                    <span>Per-customer message caps: <strong className="text-white">{PLANS.FREE.maxMessagesPerCustomer.email} email + {PLANS.FREE.maxMessagesPerCustomer.whatsapp} WhatsApp on every plan</strong>. Go past your plan and we keep recovering — extra carts and messages are billed automatically on your next invoice.</span>
                   </p>
                 </div>
               </div>

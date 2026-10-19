@@ -779,7 +779,7 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
 function CreateCampaignModal({ onClose, onCreate, plan }: {
   onClose: () => void
   onCreate: (config: CreateCampaignConfig) => void
-  plan: { name: string; maxCampaigns: number; maxMessagesPerCustomer: { email: number; whatsapp: number } } | null
+  plan: { id: string; name: string; maxCampaigns: number; maxMessagesPerCustomer: { email: number; whatsapp: number } } | null
 }) {
   const [step, setStep] = useState(1)
   const [error, setError] = useState<string | null>(null)
@@ -1016,7 +1016,10 @@ function CreateCampaignModal({ onClose, onCreate, plan }: {
                         </div>
                         {totalMessages > Math.min(plan.maxMessagesPerCustomer.email, plan.maxMessagesPerCustomer.whatsapp) && (
                           <p className="text-amber-400 mt-2">
-                            Your sequence ({totalMessages} messages) may exceed your plan&apos;s per-customer limit. Go to <a href="/dashboard/subscription" className="underline">Subscription</a> to enable overage billing so excess messages are still sent.
+                            Your sequence ({totalMessages} messages) may exceed your plan&apos;s per-customer limit.{' '}
+                            {plan.id === 'free'
+                              ? <>Upgrade on the <a href="/dashboard/subscription" className="underline">Subscription</a> page so excess messages are still sent.</>
+                              : 'Excess messages are billed automatically as overage — you do not need to enable anything.'}
                           </p>
                         )}
                       </div>

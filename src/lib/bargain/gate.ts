@@ -74,9 +74,9 @@ export async function getBargainGate(storeId: string): Promise<BargainGate> {
   // closing of the gate is what prevents the leak.
 
   // Overage is the plan's default behaviour for paid tiers ("40 deals included,
-  // then ₹25/deal"). The DB flag still disables it for merchants who opted out
-  // under the legacy model.
-  const overageEnabled = isPaid && plan.bargainOverageDealPrice > 0 && subscription.overageEnabled
+  // then ₹25/deal"). It is automatic — no merchant opt-in toggle — so paid
+  // merchants keep accepting deals beyond quota and are billed for each one.
+  const overageEnabled = isPaid && plan.bargainOverageDealPrice > 0
 
   // Usage is measured PER STORE and counts real rows, not a mutable counter:
   //  • Per store — one store's activity can never exhaust another store's

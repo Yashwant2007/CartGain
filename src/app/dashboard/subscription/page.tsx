@@ -17,6 +17,7 @@ type SubscriptionData = {
   cartsLimit: number
   overageEnabled: boolean
   overageMessages: number
+  cartOverage?: number
 }
 
 type BillingInfo = {
@@ -64,7 +65,6 @@ export default function SubscriptionPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [activeCampaigns, setActiveCampaigns] = useState(0)
-  const [overageToggling, setOverageToggling] = useState(false)
   const [isYearly, setIsYearly] = useState(false)
 
   const abortFetchData = useRef<(() => void) | null>(null)
@@ -157,25 +157,6 @@ export default function SubscriptionPage() {
   const avgCartValue = monthlyRecoveredRevenue > 0 && recoveredCarts > 0 ? Math.round(monthlyRecoveredRevenue / recoveredCarts) : 1000
   const revSharePercent = currentPlan ? currentPlan.revSharePercent : 0
   const estimatedRevShare = revShareCarts * avgCartValue * (revSharePercent / 100)
-
-  const handleOverageToggle = async () => {
-    setOverageToggling(true)
-    try {
-      const target = !subscription?.overageEnabled
-      const res = await fetch('/api/subscription/overage', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: target }),
-      })
-      if (res.ok) {
-        setSubscription(prev => prev ? { ...prev, overageEnabled: target } : prev)
-      }
-    } catch {
-      console.error('Failed to toggle overage')
-    } finally {
-      setOverageToggling(false)
-    }
-  }
 
   const handleCancelSubscription = async () => {
     setCancelling(true)
@@ -527,7 +508,7 @@ export default function SubscriptionPage() {
               </p>
               <p className="flex items-start space-x-2">
                 <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                <span>Per-customer message caps: <strong className="text-white">{PLANS.FREE.maxMessagesPerCustomer.email} Free</strong> / <strong className="text-white">{PLANS.GROWTH.maxMessagesPerCustomer.email} Growth</strong> / <strong className="text-white">{PLANS.PRO.maxMessagesPerCustomer.email} Pro</strong> per channel. Paid overage billing if you need more.</span>
+                <span>Per-customer message caps: <strong className="text-white">{PLANS.FREE.maxMessagesPerCustomer.email} email + {PLANS.FREE.maxMessagesPerCustomer.whatsapp} WhatsApp</strong> per customer on every plan. Beyond that, paid plans keep sending and bill overage automatically.</span>
               </p>
             </div>
           </div>
@@ -537,45 +518,34 @@ export default function SubscriptionPage() {
       {/* Overage Billing Section */}
       {isPaidUser && currentPlan && (
         <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center">
-                <Percent className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-white">Overage Billing</h2>
-                <p className="text-sm text-blue-300/60">
-                  When a customer reaches their per-channel message limit, we can still send messages and bill you per overage message.
-                </p>
-              </div>
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center">
+              <Percent className="w-5 h-5 text-white" />
             </div>
-            <button
-              onClick={handleOverageToggle}
-              disabled={overageToggling}
-              aria-label="Toggle overage billing"
-              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all ${
-                subscription?.overageEnabled ? 'bg-cyan-500' : 'bg-slate-600'
-              } ${overageToggling ? 'opacity-60 cursor-wait' : 'cursor-pointer'}`}
-            >
-              <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-all ${
-                subscription?.overageEnabled ? 'translate-x-6' : 'translate-x-1'
-              }`} />
-            </button>
-          </div>
-
-          {subscription?.overageEnabled && subscription.overageMessages > 0 && (
-            <div className="bg-slate-700/40 border border-amber-500/30 rounded-lg p-4">
-              <p className="text-xs text-blue-300/80 font-medium mb-1">Overage Messages This Period</p>
-              <p className="text-xl font-bold text-amber-400">{subscription.overageMessages.toLocaleString('en-IN')}</p>
-              <p className="text-xs text-blue-300/60 mt-1">
-                These messages were sent beyond your plan&apos;s per-customer limits and will appear on your next invoice.
+            <div>
+              <h2 className="text-lg font-semibold text-white">Overage Billing</h2>
+              <p className="text-sm text-blue-300/60">
+                Automatic. When a customer or your store goes past the plan&apos;s limits, we keep recovering and bill the extra usage on your next invoice.
               </p>
             </div>
-          )}
+          </div>
 
-          {subscription?.overageEnabled && subscription.overageMessages === 0 && (
-            <p className="text-xs text-blue-300/50">No overage messages yet. Toggle on to allow sending beyond per-customer limits.</p>
-          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-slate-700/40 border border-amber-500/30 rounded-lg p-4">
+              <p className="text-xs text-blue-300/80 font-medium mb-1">Overage messages this period</p>
+              <p className="text-xl font-bold text-amber-400">{(subscription?.overageMessages ?? 0).toLocaleString('en-IN')}</p>
+              <p className="text-xs text-blue-300/60 mt-1">Messages sent beyond the per-customer cap.</p>
+            </div>
+            <div className="bg-slate-700/40 border border-amber-500/30 rounded-lg p-4">
+              <p className="text-xs text-blue-300/80 font-medium mb-1">Overage carts this period</p>
+              <p className="text-xl font-bold text-amber-400">{(subscription?.cartOverage ?? 0).toLocaleString('en-IN')}</p>
+              <p className="text-xs text-blue-300/60 mt-1">Carts recovered beyond your plan&apos;s cart allowance.</p>
+            </div>
+          </div>
+
+          <p className="text-xs text-blue-300/60 mt-3">
+            Overage is billed automatically on the next invoice — you never have to turn anything on.
+          </p>
         </div>
       )}
 
@@ -841,7 +811,7 @@ export default function SubscriptionPage() {
                 {/* Plan name & subtitle */}
                 <h3 className="text-lg font-bold text-white mb-0.5 mt-2">{plan.name}</h3>
                 <p className="text-xs text-blue-300/60 mb-4">
-                  {isFree ? 'First 50 carts free — no credit card' : `Up to ${plan.maxCarts.toLocaleString('en-IN')} carts/mo`}
+                  {isFree ? 'First 50 carts free' : `Up to ${plan.maxCarts.toLocaleString('en-IN')} carts/mo`}
                 </p>
 
                 {/* Price */}

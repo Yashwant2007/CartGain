@@ -263,7 +263,7 @@ export default function SignUpPage() {
 
           <div className="mb-8">
             <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Start Your Free Trial</h1>
-            <p className="text-sm sm:text-base text-blue-200">No credit card required. First cart recovered free.</p>
+            <p className="text-sm sm:text-base text-blue-200">First cart recovered free.</p>
           </div>
 
           {error && (

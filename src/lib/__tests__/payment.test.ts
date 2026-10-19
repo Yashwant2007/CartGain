@@ -39,3 +39,38 @@ describe('resolvePlanId / getPlan (canonical lowercase ids)', () => {
     expect(PLAN_IDS.PRO).toBe('pro')
   })
 })
+
+describe('unified messaging, campaigns & overage model', () => {
+  it('caps every plan (including Enterprise) at 3 email + 2 WhatsApp per customer', () => {
+    for (const plan of Object.values(PLANS)) {
+      expect(plan.maxMessagesPerCustomer).toEqual({ email: 3, whatsapp: 2 })
+    }
+  })
+
+  it('sets campaign limits Free 1 / Growth 5 / Pro 15 / Enterprise unlimited', () => {
+    expect(PLANS.FREE.maxCampaigns).toBe(1)
+    expect(PLANS.GROWTH.maxCampaigns).toBe(5)
+    expect(PLANS.PRO.maxCampaigns).toBe(15)
+    expect(PLANS.ENTERPRISE.maxCampaigns).toBe(Infinity)
+  })
+
+  it('no longer advertises a "No CartGain branding" perk on any plan', () => {
+    for (const plan of Object.values(PLANS)) {
+      for (const feature of plan.features) {
+        expect(feature.toLowerCase()).not.toContain('cartgain branding')
+      }
+    }
+  })
+
+  it('prices overage on paid plans so metering can actually bill it', () => {
+    // Paid plans: metered overage on carts and deals.
+    expect(PLANS.GROWTH.bargainOverageCartPrice).toBeGreaterThan(0)
+    expect(PLANS.PRO.bargainOverageCartPrice).toBeGreaterThan(0)
+    expect(PLANS.GROWTH.bargainOverageDealPrice).toBeGreaterThan(0)
+    expect(PLANS.PRO.bargainOverageDealPrice).toBeGreaterThan(0)
+    // Free stays a hard cap (no overage), Enterprise is unlimited/custom.
+    expect(PLANS.FREE.bargainOverageCartPrice).toBe(0)
+    expect(PLANS.FREE.bargainOverageDealPrice).toBe(0)
+    expect(PLANS.ENTERPRISE.maxCarts).toBe(Infinity)
+  })
+})
