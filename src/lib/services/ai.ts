@@ -47,7 +47,7 @@ Write a warm, personal recovery email using the customer's REAL data (their name
 
 Return valid JSON with these keys:
 - "subject": compelling subject line with 1 emoji (max 60 chars), personalized with their name or product.
-- "body": concise HTML inside a <div> with inline styles. 2-4 short sentences max. Mention 1-2 products by name. Use 1-2 emojis. Warm, human, never corporate. End with a one-line CTA. Do NOT include the cart URL — it will be added separately.
+- "body": 2-4 short, warm sentences as PLAIN TEXT ONLY — absolutely no HTML tags and no markdown (the email escapes all output, so any <div>/<b>/<br> would show up as literal characters). Use line breaks between thoughts. Mention 1-2 products by name. Use 1-2 emojis. Warm, human, never corporate. End with a one-line CTA. Do NOT include the cart URL — it will be added separately.
 ${ctx.discountCode ? `\nINCLUDE this discount offer prominently: code ${ctx.discountCode}${ctx.discountValue ? ` for ${ctx.discountValue}${ctx.discountType === 'percentage' ? '%' : ''} off` : ''}. Make it the main reason to return now.` : ''}`,
         },
         {
