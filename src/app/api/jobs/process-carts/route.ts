@@ -11,13 +11,13 @@ import { requireJobAuth } from '@/lib/job-auth'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const CURSOR_KEY = 'store_cursor'
+const CURSOR_KEY = 'campaign_cursor'
 // The Shopify checkout-sync pass and the cart-processing pass advance through
 // DIFFERENT sets (sync = stores, processing = active campaigns). Sharing one
-// cursor made each passskip whatever the other just advanced to: the sync wrote
-// cursor = the synced store id, then `processAbandonedCarts` sliced all
-// campaigns *after* that store and processed nothing. With a single active
-// store every cycle processed ZERO carts. Two independent cursors fix it.
+// cursor made each pass skip whatever the other just advanced to. Two
+// independent cursors fix it. The processing cursor stores a CAMPAIGN id (not
+// a store id): a store with duplicate active campaigns would otherwise pin the
+// rotation on the first duplicate forever.
 const SYNC_CURSOR_KEY = 'checkout_sync_cursor'
 
 async function getStoreCursor(): Promise<string | undefined> {

@@ -630,7 +630,7 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
 
 export async function processAbandonedCarts(
   limit = 25,
-  storeCursor?: string
+  campaignCursor?: string
 ): Promise<ProcessResult & { nextCursor?: string; storesProcessed: number }> {
   let messagesSent = 0
   let messagesFailed = 0
@@ -648,13 +648,19 @@ export async function processAbandonedCarts(
     })
 
     let targetCampaigns = campaigns
-    if (storeCursor) {
-      const cursorIdx = campaigns.findIndex(c => c.store.id === storeCursor)
+    if (campaignCursor) {
+      // The cursor is a CAMPAIGN id, not a store id. A store can legitimately
+      // have more than one active campaign (duplicate/legacy rows); keying on
+      // store id made `findIndex` match the FIRST duplicate and `slice(+1)`
+      // restart at the SECOND, so the cursor could never advance past that
+      // store — every later store (e.g. the only active one) was starved
+      // forever. Campaign ids are unique, so the rotation always advances.
+      const cursorIdx = campaigns.findIndex(c => c.id === campaignCursor)
       if (cursorIdx >= 0) {
         targetCampaigns = campaigns.slice(cursorIdx + 1)
-        // Wrap around: after the last store the next cycle must restart from the
-        // first, otherwise a single-store (or last-in-list) deployment sits idle
-        // until the Redis cursor TTL expires — recovery silently stalls.
+        // Wrap around: after the last campaign the next cycle must restart from
+        // the first, otherwise a single-campaign (or last-in-list) deployment
+        // sits idle until the Redis cursor TTL expires — recovery stalls.
         if (targetCampaigns.length === 0) targetCampaigns = campaigns
       }
     }
@@ -667,7 +673,7 @@ export async function processAbandonedCarts(
       const r = await Promise.allSettled([processStore(campaign, limit)])
       results.push(...r)
       if (r[0]?.status === 'fulfilled') storesProcessed++
-      nextCursor = campaign.store.id
+      nextCursor = campaign.id
     }
 
     for (const result of results) {
@@ -686,7 +692,7 @@ export async function processAbandonedCarts(
     if (storesProcessed > 0) {
       console.log(`✅ Processed ${processedCount} carts from 1 store (${messagesSent} sent, ${messagesFailed} failed) in ${elapsed}ms. Next cursor: ${nextCursor}`)
     } else {
-      console.log(`⏸️ No stores to process — ${campaigns.length} campaigns exist, cursor: ${storeCursor || 'start'}`)
+      console.log(`⏸️ No stores to process — ${campaigns.length} campaigns exist, cursor: ${campaignCursor || 'start'}`)
       nextCursor = undefined
     }
 
