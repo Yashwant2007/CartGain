@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ShoppingCart, Search, ArrowUpDown, Mail, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 
 type CartItem = {
   id: string
@@ -36,7 +37,7 @@ export default function CartsPage() {
     setLoading(true)
     setError(null)
     const controller = new AbortController()
-    fetch(`/api/carts?storeId=${storeId}`, { signal: controller.signal })
+    shopifySessionFetch(`/api/carts?storeId=${storeId}`, { signal: controller.signal })
       .then(res => {
         if (!res.ok) throw new Error('Failed to load carts')
         return res.json()

@@ -6,6 +6,7 @@ import { Plus, Copy, Edit2, Trash2, Play, Pause, BarChart3, Split, Trophy, Info 
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import { campaignCreateSchema, abTestCreateSchema } from '@/lib/validation'
 import { PLANS } from '@/lib/payment'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 
 type Campaign = {
   id: string
@@ -59,7 +60,7 @@ export default function CampaignsPage() {
 
         const [campaignsRes, subRes] = await Promise.all([
           fetch(`/api/campaigns?storeId=${storeId}`),
-          fetch('/api/subscription'),
+          shopifySessionFetch('/api/subscription'),
         ])
         if (!campaignsRes.ok) {
           throw new Error('Failed to load campaigns')
@@ -120,7 +121,7 @@ export default function CampaignsPage() {
       throw new Error(result.error.errors[0]?.message || 'Validation failed')
     }
 
-    const response = await fetch('/api/campaigns', {
+    const response = await shopifySessionFetch('/api/campaigns', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 import {
   Sparkles,
   Save,
@@ -176,7 +177,7 @@ export default function BargainDashboardPage() {
   async function fetchGoalStatus() {
     if (!storeId) return
     try {
-      const res = await fetch(`/api/bargain/goals/status?storeId=${storeId}`)
+      const res = await shopifySessionFetch(`/api/bargain/goals/status?storeId=${storeId}`)
       if (!res.ok) return
       const data = await res.json()
       setGoalStatus(data.status ?? null)
@@ -215,7 +216,7 @@ void fetchConfig()
     abortRef.current.push(() => controller.abort())
     try {
       setConfigMessage(null)
-      const res = await fetch(`/api/bargain/config?storeId=${storeId}`, { signal: controller.signal })
+      const res = await shopifySessionFetch(`/api/bargain/config?storeId=${storeId}`, { signal: controller.signal })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         if (res.status === 401) {
@@ -238,7 +239,7 @@ void fetchConfig()
     setSavingConfig(true)
     setConfigMessage(null)
     try {
-      const res = await fetch('/api/bargain/config', {
+      const res = await shopifySessionFetch('/api/bargain/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ storeId, ...configForm }),
@@ -265,7 +266,7 @@ void fetchConfig()
     const controller = new AbortController()
     abortRef.current.push(() => controller.abort())
     try {
-      const res = await fetch(`/api/bargain/sessions?storeId=${storeId}&take=50`, { signal: controller.signal })
+      const res = await shopifySessionFetch(`/api/bargain/sessions?storeId=${storeId}&take=50`, { signal: controller.signal })
       if (!res.ok) throw new Error('Failed to load sessions')
       const data = await res.json()
       setSessions(data.sessions || [])
@@ -283,7 +284,7 @@ void fetchConfig()
     setLoadingMessages(true)
     setMessagesError(null)
     try {
-      const res = await fetch(`/api/bargain/sessions/${id}`)
+      const res = await shopifySessionFetch(`/api/bargain/sessions/${id}`)
       if (!res.ok) throw new Error('Failed to load conversation')
       const data = await res.json()
       setSessionMessages(data.session?.messages || [])

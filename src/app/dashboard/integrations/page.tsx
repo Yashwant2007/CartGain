@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { CheckCircle2, XCircle, Settings, ExternalLink, Copy, Key, Webhook } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 
 type IntegrationItem = {
   id: string
@@ -56,7 +57,7 @@ export default function IntegrationsPage() {
     try {
       setLoadingData(true)
       setLoadError(null)
-      const res = await fetch('/api/integrations/status')
+      const res = await shopifySessionFetch('/api/integrations/status')
       if (!res.ok) throw new Error('Failed to load integrations')
       const data = await res.json()
       setStatus(data)
@@ -675,7 +676,7 @@ function CredentialModalComponent({
     setError(null)
 
     try {
-      const verifyRes = await fetch('/api/integrations/verify', {
+      const verifyRes = await shopifySessionFetch('/api/integrations/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ platform: modal.type, ...values }),

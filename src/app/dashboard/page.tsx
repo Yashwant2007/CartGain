@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 import {
   ShoppingCart,
   DollarSign,
@@ -477,7 +478,7 @@ function NotificationFeed({ isLoading, storeId, campaigns }: { isLoading: boolea
     const controller = new AbortController()
     const fetchNotifications = async () => {
       try {
-        const res = await fetch('/api/notifications', { signal: controller.signal })
+        const res = await shopifySessionFetch('/api/notifications', { signal: controller.signal })
         const data = await res.json()
         if (res.ok) setNotifications(data.notifications || [])
       } catch (err) {

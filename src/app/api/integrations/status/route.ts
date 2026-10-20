@@ -1,20 +1,20 @@
-import { getServerSession } from 'next-auth/next'
-import { NextResponse } from 'next/server'
-import { authOptions } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { getAuthContext } from '@/lib/embedded-auth'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const auth = await getAuthContext(req)
 
-    if (!session?.user?.id) {
+    if (!auth?.user?.id) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
+    const userId = auth.user.id
 
     const store = await prisma.store.findFirst({
-      where: { userId: session.user.id },
+      where: { userId },
       orderBy: { createdAt: 'asc' },
     })
 

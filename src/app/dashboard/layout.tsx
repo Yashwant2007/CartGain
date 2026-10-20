@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 import {
   LayoutDashboard,
   Megaphone,
@@ -49,7 +50,7 @@ function DashboardLayoutInner({
   useEffect(() => {
     if (status !== 'authenticated') return
     const controller = new AbortController()
-    fetch('/api/subscription', { signal: controller.signal })
+    shopifySessionFetch('/api/subscription', { signal: controller.signal })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data?.subscription) {

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { z } from 'zod'
 import { lookup } from 'dns/promises'
+import { getAuthContext } from '@/lib/embedded-auth'
 
 const verifySchema = z.object({
   platform: z.enum(['woocommerce', 'magento', 'bigcommerce', 'custom']),
@@ -117,9 +116,9 @@ async function verifyBigCommerce(domain: string, apiKey: string, apiSecret: stri
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await getAuthContext(req)
+    if (!auth?.user?.id) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
     const body = await req.json()

@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { PLANS } from '@/lib/payment'
 import {
@@ -8,15 +6,17 @@ import {
   shopifyBillingAvailability,
   reconcileShopifySubscriptionForUser,
 } from '@/lib/shopify-billing/service'
+import { getAuthContext } from '@/lib/embedded-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
+    const auth = await getAuthContext(request)
+    if (!auth?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const session = { user: { id: auth.user.id } } as any
 
     // Safety net: when Shopify redirects the merchant back after approving a
     // subscription, pull the authoritative state immediately instead of waiting

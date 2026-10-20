@@ -1,19 +1,19 @@
-import { getServerSession } from 'next-auth/next'
-import { NextResponse } from 'next/server'
-import { authOptions } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { encrypt, decrypt } from '@/lib/encryption'
 import { storeUpdateSchema, validateOrThrow, handleValidationError } from '@/lib/validation'
+import { getAuthContext } from '@/lib/embedded-auth'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const auth = await getAuthContext(req)
 
-    if (!session?.user?.id) {
+    if (!auth?.user?.id) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
+    const session = { user: { id: auth.user.id } } as any
 
     const store = await prisma.store.findFirst({
       where: {
@@ -64,13 +64,13 @@ export async function GET() {
   }
 }
 
-export async function PATCH(request: Request) {
+export async function PATCH(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.id) {
+    const auth = await getAuthContext(request)
+    if (!auth?.user?.id) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
+    const session = { user: { id: auth.user.id } } as any
 
     const body = await request.json()
     const data = validateOrThrow(storeUpdateSchema, body)

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { signOut } from 'next-auth/react'
 import { Bell, CreditCard, Shield, User, Key, ExternalLink } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 
 type SessionUser = {
   name?: string | null
@@ -48,7 +49,7 @@ export default function SettingsPage() {
         setLoadError(null)
 
         const [storeResponse, sessionResponse] = await Promise.all([
-          fetch('/api/stores/current'),
+          shopifySessionFetch('/api/stores/current'),
           fetch('/api/auth/session'),
         ])
 

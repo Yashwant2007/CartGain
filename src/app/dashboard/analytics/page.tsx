@@ -5,6 +5,7 @@ import { TrendingUp, DollarSign, ShoppingCart, MessageSquare, Calendar, BarChart
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { RevenueChart, ChannelPerformanceChart } from '@/components/dashboard/RevenueChart'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 
 type PeriodData = {
   overview: {
@@ -63,7 +64,7 @@ export default function AnalyticsPage() {
         setLoadingData(true)
         setLoadError(null)
 
-        const res = await fetch(`/api/analytics/overview?storeId=${storeId}&days=${days}`)
+        const res = await shopifySessionFetch(`/api/analytics/overview?storeId=${storeId}&days=${days}`)
         if (!res.ok) throw new Error('Failed to load analytics')
 
         const data = await res.json()

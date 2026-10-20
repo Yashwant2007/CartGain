@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 import {
   BrainCircuit, TrendingUp, DollarSign, BarChart3, Target,
   Lightbulb, Sparkles, Zap, Award, FileText, Activity,
@@ -24,7 +25,7 @@ export default function AIPage() {
     setLoading(true)
     setHealthError(null)
     const controller = new AbortController()
-    fetch(`/api/ai/health-score?storeId=${storeId}`, { signal: controller.signal })
+    shopifySessionFetch(`/api/ai/health-score?storeId=${storeId}`, { signal: controller.signal })
       .then(async r => {
         if (!r.ok) throw new Error('Failed to load health score')
         return r.json()
@@ -126,7 +127,7 @@ function RevenueCoach({ storeId }: { storeId: string | null }) {
     const controller = new AbortController()
     abortLoad.current = () => controller.abort()
     try {
-      const res = await fetch(`/api/ai/coach?storeId=${storeId}`, { signal: controller.signal })
+      const res = await shopifySessionFetch(`/api/ai/coach?storeId=${storeId}`, { signal: controller.signal })
       if (!res.ok) throw new Error('Failed to load suggestions')
       const data = await res.json()
       const fresh = data.suggestions || []
@@ -219,7 +220,7 @@ function RecoverySimulator({ storeId }: { storeId: string | null }) {
     if (!storeId) return
     setLoading(true)
     try {
-      const res = await fetch('/api/ai/simulator', {
+      const res = await shopifySessionFetch('/api/ai/simulator', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ storeId, improvements }),
@@ -319,7 +320,7 @@ function Benchmarks({ storeId }: { storeId: string | null }) {
   useEffect(() => {
     if (!storeId) return
     const controller = new AbortController()
-    fetch(`/api/ai/benchmarks?storeId=${storeId}`, { signal: controller.signal })
+    shopifySessionFetch(`/api/ai/benchmarks?storeId=${storeId}`, { signal: controller.signal })
       .then(async r => {
         if (!r.ok) throw new Error('Failed to load benchmark data')
         return r.json()
@@ -391,7 +392,7 @@ function ROIDashboard({ storeId }: { storeId: string | null }) {
   useEffect(() => {
     if (!storeId) return
     const controller = new AbortController()
-    fetch(`/api/ai/roi?storeId=${storeId}`, { signal: controller.signal })
+    shopifySessionFetch(`/api/ai/roi?storeId=${storeId}`, { signal: controller.signal })
       .then(async r => {
         if (!r.ok) throw new Error('Failed to load ROI data')
         return r.json()
@@ -456,7 +457,7 @@ function WeeklyReport({ storeId }: { storeId: string | null }) {
     const controller = new AbortController()
     abortLoad.current = () => controller.abort()
     try {
-      const res = await fetch(`/api/ai/weekly-report?storeId=${storeId}`, { signal: controller.signal })
+      const res = await shopifySessionFetch(`/api/ai/weekly-report?storeId=${storeId}`, { signal: controller.signal })
       if (!res.ok) throw new Error('Failed to load weekly report')
       const data = await res.json()
       setReport(data.report || data)

@@ -1,0 +1,93 @@
+# AGENTS.md — project memory for CARTGAIN / recoverflow
+
+Durable notes for agents working in this repo. Read this before starting work.
+
+## What this is
+CartGain — a Next.js 14.2 (App Router) + TypeScript + Prisma/Postgres SaaS for
+cart recovery + an AI "bargain" (negotiation) widget that installs into Shopify
+stores. Deploys on Vercel (`https://cart-gain.com`). Branch: `master`.
+Remote: `https://github.com/Yashwant2007/CartGain.git`.
+
+Platform: Windows (win32), shell is bash (Git Bash). Working dir:
+`C:\Users\Yashwant\Desktop\recoverflow`.
+
+## Commands
+- Dev: `npm run dev` · Test: `npm test` (jest) · Typecheck: `npm run typecheck`
+  (`tsc --noEmit`) · Lint: `npm run lint` (`next lint`) ·
+  Build: `npm run build` (`prisma generate && next build`).
+- Targeted tests: `npx jest src/lib/bargain src/app/api/bargain`.
+- Deploy web: `vercel --prod --yes` (aliases `https://cart-gain.com`; ~3 min).
+  Verify live: `curl -s https://cart-gain.com/api/health` → `"release"` must equal
+  `git rev-parse --short HEAD`. Health also checks db/redis/env/ai/email.
+- Deploy Shopify extension: `shopify app deploy --allow-updates --message "…"`
+  (builds + releases; success = "New version released to users"). No prompt.
+
+## Conventions & gotchas
+- Commit style: `type(scope): description` (lowercase, imperative).
+- Shell is broken for commit messages containing `"` or `₹`. Write the message to
+  a file and use `git commit -F <file>` (temp path:
+  `C:/Users/DEEPAN~1/AppData/Local/Temp/opencode/commit-*.txt`).
+- Shopify CLI churns the **tracked** `extensions/cart-gain-bargain/dist/*`
+  (checkout ext). ALWAYS `git checkout -- extensions/cart-gain-bargain/dist/`
+  after a Shopify build/deploy. Never commit that churn.
+- Prefer `--silent` / piping `head`/`tail` on noisy commands.
+- Vercel deploy env: DB + Redis must be reachable; `/api/health` `env.missing`
+  should be `[]`.
+
+## Shopify / billing facts
+- Shopify CLI authed as `cartgain192007@gmail.com` (org `224514645`).
+- Public app: title `CARTGAIN`, apiKey `67beb1794fab10553102c134b63e1277`, app id
+  `gid://shopify/App/390792151041`; config `shopify.app.toml`.
+- Custom app: client_id `850b64332c8925413d0d6d8d39ede515`
+  (`shopify.app.custom.toml`, app `CartGain Custom`, `custom.cart-gain.com`).
+- API version in use across `src/lib/shopify.ts`: `2026-04`.
+
+## Bargain system map (key files)
+- `src/lib/services/bargain.ts` (~2755 lines) — negotiation engine: personas,
+  `negotiateStep`, `ruleBasedDecision`, `buildSystemPrompt`, `COMPACT_MASTERY`
+  (~line 896), `NEGOTIATION_MASTERY` (~line 212), `computeMinPrice` (~1548).
+- `src/lib/bargain/text.ts` — `extractPrice` (complaint-aware), `detectWalkout`.
+- `src/lib/bargain/intent.ts` — `analyzeIntent`, `IntentAnalysis.priceComplaint`,
+  `shopperIntentToPromptBlock`.
+- `src/lib/bargain/recommendations.ts` — `searchRecommendations`,
+  `recommendationReason`; verified, sanitized catalog cards.
+- `src/lib/bargain/offers.ts` — `buildQuickOffers` (chips; never floor-derived).
+- `src/lib/bargain/engine.ts`, `goals.ts`, `discount.ts`, `product-fetcher.ts`,
+  `gate.ts`, `policy.ts`, `offer-validation.ts`.
+- `src/lib/shopify.ts` — Shopify REST helpers (`fetchShopifyProducts`,
+  `fetchAbandonedCheckouts`, `syncAbandonedCheckouts`, OAuth/token refresh).
+- Routes: `src/app/api/bargain/{offer,demo,checkout-accept,config,products,
+  products/catalog,accept,recommend/event}`.
+- UI: `BargainWidget.tsx` (1997 lines, real storefront embed `/bargain/embed`),
+  `StorefrontBargainWidget.tsx` (used by `/s/bargain`), `BargainPrimitives.tsx`
+  (shared presentational primitives), `src/app/demo/demo-content.tsx` (`/demo`).
+- `extensions/storefront-bargain/blocks/*.liquid` — theme extension app blocks.
+
+## Work log (most recent first)
+- `5e357075` fix(shopify): abandoned-checkouts endpoint. `fetchAbandonedCheckouts`
+  was calling a nonexistent `.../abandoned_checkouts.json` (key
+  `abandoned_checkouts`) → 404 every cart sweep. Now uses `checkouts.json` /
+  `data.checkouts`; non-401 failures log a warning (401 = reconnect). Deployed,
+  live release `5e35707`, health ok.
+- `bf26374d` feat(bargain): (a) complaint parsing — a bare complaint number
+  ("714 is too much") is no longer read as the shopper's bid (`extractPrice`,
+  `analyzeIntent.priceComplaint`, demo route re-derives offer, prompt no-bid +
+  professional-tone bullets); (b) `/demo` storefront parity — quick-offer chips,
+  delivered ticks, verified product details + server-side real floor, real
+  recommendation cards, and a real one-use discount code via `checkout-accept`
+  when a Shopify store is connected (sample fallback otherwise). tsc/lint clean,
+  bargain jest group 590 passed, production `next build` ok.
+- `9bc8209e` fix(theme-extension): migrate bargain block schema
+  `"templates": […]` → `"enabled_on": { "templates": […] }`; released public app
+  version `cartgain-36`.
+- `84bebbba` Overhaul unified pricing: universal message caps (email 3 / WhatsApp
+  2), campaign limits (Free 1 / Growth 5 / Pro 15 / Enterprise ∞), automatic paid
+  overage incl. cart overage; removed `/api/subscription/overage`; `shouldInvoice()`
+  extracted. Live/verified.
+
+## Open / watch items
+- `fetchShopifyCarts` (`/admin/api/2026-04/carts.json`) is not a real Shopify REST
+  resource and is only referenced by tests (`shopify-retry.test.ts`); production
+  cart sync uses `syncAbandonedCheckouts`. Fix it if it's ever wired in.
+- `/demo` real code/details only engage when the signed-in merchant has a connected
+  Shopify store; new-signup accounts get sample products + sample codes.
