@@ -234,11 +234,15 @@ export default function StorefrontBargainWidget({
   const handleSend = async () => {
     if (!input.trim() || loading || busyRef.current) return
     const userText = input.trim()
+    // Complaint-aware: the same parser the server runs. A message like
+    // "729 is too much" is not an offer, so the bubble must not tag it as one.
+    const offer = extractPrice(userText)
+    const isWalkout = detectWalkout(userText)
     busyRef.current = true
     const userMsgId = uid()
     setMessages((prev) => [
       ...prev,
-      { role: 'customer', content: userText, id: userMsgId, delivery: 'sending' },
+      { role: 'customer', content: userText, price: offer ?? undefined, id: userMsgId, delivery: 'sending' },
     ])
     setInput('')
     setLoading(true)
@@ -263,8 +267,6 @@ export default function StorefrontBargainWidget({
     })
 
     try {
-      const offer = extractPrice(userText)
-      const isWalkout = detectWalkout(userText)
       const history = messages.map((m) => ({
         role: m.role === 'customer' ? 'customer' : 'ai',
         content: m.content,
@@ -334,9 +336,6 @@ export default function StorefrontBargainWidget({
       }
     } catch (err: any) {
       console.warn('[StorefrontBargain] API failed, using local fallback:', err.message)
-      const userText = input.trim()
-      const offer = extractPrice(userText)
-      const isWalkout = detectWalkout(userText)
       const nextAttempt = attempts + 1
       const exhausted = nextAttempt >= maxAttempts
       const lastAiPrice = [...messages].reverse().find((m) => m.role === 'ai' && m.price != null)?.price ?? null

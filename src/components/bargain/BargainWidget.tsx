@@ -6,7 +6,7 @@ import {
   ShieldCheck, ArrowRight, Loader2, AlertCircle, RotateCcw,
 } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
-import { buildQuickOffers } from '@/lib/bargain/offers'
+import { buildQuickOffers, parseDraftOffer } from '@/lib/bargain/offers'
 import type {
   BargainAcceptSuccess,
   BargainGoalView,
@@ -302,16 +302,12 @@ export default function BargainWidget({
   const showRoundMeter = !sessionEnded && decision !== 'accept' && maxAttempts != null && maxAttempts > 0
   const showPriceRail = !sessionEnded && decision !== 'accept' && lastCounter != null
 
-  // First number typed anywhere in the message is the draft offer — it drives
-  // the CTA label ("Make offer · ₹X") and the optimistic bubble. Free text
-  // without a number is a chat message (product question / small talk) and is
-  // sent as-is; the backend extracts and clamps any amount it contains.
-  const draftAmount = (() => {
-    const cleaned = input.replace(/,/g, '')
-    const m = cleaned.match(/\d+(?:\.\d{1,2})?/)
-    const n = m != null ? parseFloat(m[0]) : NaN
-    return Number.isFinite(n) && n > 0 ? n : null
-  })()
+  // The shopper's offer, parsed with the SAME complaint-aware logic the server
+  // uses. A complaint ("729 is too much") is not an offer, so it must not read
+  // as "You offered ₹729" or light up the "Make offer · ₹X" CTA. Free text
+  // without a number (a question / small talk) stays a plain message; the
+  // backend still extracts and clamps any amount a genuine bid contains.
+  const draftAmount = parseDraftOffer(input)
 
   const unavailable = rejection != null && /UNAVAILABLE/i.test(rejection.reason)
 
@@ -601,7 +597,7 @@ export default function BargainWidget({
     const localId = `c-${Date.now()}`
     setMessages(prev => [
       ...prev,
-      { id: localId, role: 'customer', content: msg, offeredPrice: draftAmount, createdAt: new Date().toISOString(), delivery: 'sending' },
+      { id: localId, role: 'customer', content: msg, offeredPrice: parseDraftOffer(msg), createdAt: new Date().toISOString(), delivery: 'sending' },
     ])
     setInput('')
     setAtBottom(true)

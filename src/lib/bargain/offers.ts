@@ -9,8 +9,22 @@
  * computed here sits comfortably above it by construction.
  */
 import type { BargainDecision } from './api-types'
+import { extractPrice } from './text'
 
 export const QUICK_OFFER_DISCOUNTS = [11, 15] as const
+
+/**
+ * The amount the shopper is *offering* in a message, or null when the text is
+ * not an offer.
+ *
+ * This MUST use the same complaint-aware parser the server runs (`extractPrice`)
+ * so the optimistic bubble and the CTA label agree with the backend. The old
+ * first-number regex read "729 is too much" as an offer, so the storefront
+ * rendered "You offered ₹729" for a price the shopper was rejecting.
+ */
+export function parseDraftOffer(text: string): number | null {
+  return extractPrice(text)
+}
 
 export function buildQuickOffers(opts: {
   lastCounter: number | null

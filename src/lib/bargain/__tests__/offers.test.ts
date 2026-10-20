@@ -1,4 +1,4 @@
-import { buildQuickOffers } from '../offers'
+import { buildQuickOffers, parseDraftOffer } from '../offers'
 
 describe('buildQuickOffers (floor-safe offer suggestions)', () => {
   it('returns the server counter first when the negotiation is live', () => {
@@ -70,5 +70,30 @@ describe('buildQuickOffers (floor-safe offer suggestions)', () => {
       decision: 'idle',
     })
     expect(offers).toEqual([])
+  })
+})
+
+describe('parseDraftOffer (optimistic bubble + CTA label)', () => {
+  it('reads a plain number as the offer', () => {
+    expect(parseDraftOffer('700')).toBe(700)
+    expect(parseDraftOffer('₹700')).toBe(700)
+    expect(parseDraftOffer("I'll give 700")).toBe(700)
+  })
+
+  it('does NOT read a complaint as an offer', () => {
+    // Regression: "729 is too much" used to render as "You offered ₹729".
+    expect(parseDraftOffer('729 is too much')).toBeNull()
+    expect(parseDraftOffer('₹729 is too much')).toBeNull()
+    expect(parseDraftOffer('that is too expensive')).toBeNull()
+    expect(parseDraftOffer('1500 is a little too much for this')).toBeNull()
+  })
+
+  it('still finds a real bid inside a complaint', () => {
+    expect(parseDraftOffer("500 is too much, I'll give 450")).toBe(450)
+  })
+
+  it('returns null for non-offer chatter', () => {
+    expect(parseDraftOffer('do you ship to Pune?')).toBeNull()
+    expect(parseDraftOffer('thanks!')).toBeNull()
   })
 })
