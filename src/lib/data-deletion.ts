@@ -73,7 +73,9 @@ async function rawDelete(table: string, column: string, value: string): Promise<
   } catch (err: any) {
     // Table or column missing in older deployments — treat as no-op.
     if (err?.code === 'P2021' || err?.code === 'P2022') return 0
-    throw err
+    if (String(err?.message || '').includes('does not exist')) return 0
+    console.warn(`[rawDelete] skipping ${table}.${column}: ${err?.message}`)
+    return 0
   }
 }
 
