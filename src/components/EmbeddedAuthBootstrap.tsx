@@ -21,7 +21,8 @@ function loadAppBridge(): Promise<void> {
       let tries = 0
       const t = setInterval(() => {
         tries += 1
-        if ((window as any).shopify?.idToken || tries > 100) {
+        const w = (window as any)
+        if (w.shopify?.idToken || w.shopify?.config || tries > 200) {
           clearInterval(t)
           finish()
         }
@@ -66,6 +67,11 @@ export default function EmbeddedAuthBootstrap() {
     ;(async () => {
       try {
         await loadAppBridge()
+        const w = (window as any)
+        // Also try to wait a bit more
+        for (let i = 0; i < 30 && !w.shopify?.idToken; i++) {
+          await new Promise((r) => setTimeout(r, 100))
+        }
         const shopify = (window as any).shopify
         if (!shopify?.idToken) return
         const token: string = await shopify.idToken()
