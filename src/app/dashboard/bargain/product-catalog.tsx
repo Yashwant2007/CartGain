@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 import {
   Loader2,
   Search,
@@ -67,7 +68,7 @@ export function ProductCatalogPanel({
       const params = new URLSearchParams({ storeId })
       if (c) params.set('cursor', c)
       if (q.trim()) params.set('q', q.trim())
-      const res = await fetch(`/api/bargain/products/catalog?${params.toString()}`, { signal: controller.signal })
+      const res = await shopifySessionFetch(`/api/bargain/products/catalog?${params.toString()}`, { signal: controller.signal })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || 'Failed to load products')
       setCatalog(prev => (append ? [...prev, ...(data.products || [])] : data.products || []))
@@ -99,7 +100,7 @@ export function ProductCatalogPanel({
   }, [loadPage])
 
   async function upsertProduct(payload: Partial<OverrideShape> & { shopifyProductId: string }) {
-    const res = await fetch('/api/bargain/products', {
+    const res = await shopifySessionFetch('/api/bargain/products', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ storeId, ...payload }),
@@ -198,7 +199,7 @@ export function ProductCatalogPanel({
     setBusyId(id)
     setTxMsg(null)
     try {
-      const res = await fetch(`/api/bargain/products?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+      const res = await shopifySessionFetch(`/api/bargain/products?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete override')
       setCatalog(prev => prev.map(it => it.product.id === id ? { ...it, bargains: { enabled: true, minPrice: null, maxDiscountPercent: null } } : it))
       setTxMsg({ type: 'success', text: 'Cleared overrides — this product now uses global settings' })

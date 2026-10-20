@@ -11,6 +11,7 @@ import {
   ShoppingBag,
   Languages,
 } from 'lucide-react'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 import {
   buildOpeningMessage,
   ruleBasedDecision,
@@ -164,7 +165,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
     }))
 
     try {
-      const res = await fetch('/api/bargain/demo', {
+      const res = await shopifySessionFetch('/api/bargain/demo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

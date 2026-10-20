@@ -59,7 +59,7 @@ export default function CampaignsPage() {
         setLoadError(null)
 
         const [campaignsRes, subRes] = await Promise.all([
-          fetch(`/api/campaigns?storeId=${storeId}`),
+          shopifySessionFetch(`/api/campaigns?storeId=${storeId}`),
           shopifySessionFetch('/api/subscription'),
         ])
         if (!campaignsRes.ok) {
@@ -248,7 +248,7 @@ function CampaignCard({ campaign, onOpenABTest, stats }: { campaign: Campaign; o
     if (window.confirm('Are you sure you want to delete this campaign?')) {
       try {
         setIsDeleting(true)
-        const response = await fetch(`/api/campaigns/${campaign.id}`, {
+        const response = await shopifySessionFetch(`/api/campaigns/${campaign.id}`, {
           method: 'DELETE',
         })
         if (!response.ok) {
@@ -266,7 +266,7 @@ function CampaignCard({ campaign, onOpenABTest, stats }: { campaign: Campaign; o
 
   const handleToggleActive = async () => {
     try {
-      const response = await fetch(`/api/campaigns/${campaign.id}`, {
+      const response = await shopifySessionFetch(`/api/campaigns/${campaign.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !isActive }),
@@ -316,7 +316,7 @@ function CampaignCard({ campaign, onOpenABTest, stats }: { campaign: Campaign; o
             }} />
             <ActionButton icon={<Copy className="w-4 h-4" />} label="Duplicate" onClick={async () => {
               try {
-                const response = await fetch(`/api/campaigns/${campaign.id}/duplicate`, { method: 'POST' })
+                const response = await shopifySessionFetch(`/api/campaigns/${campaign.id}/duplicate`, { method: 'POST' })
                 if (response.ok) {
                   alert('Campaign duplicated successfully')
                   window.location.reload()
@@ -531,7 +531,7 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
     const controller = new AbortController()
     const fetchABTests = async () => {
       try {
-        const res = await fetch(`/api/campaigns/${campaign.id}/ab-tests`, { signal: controller.signal })
+        const res = await shopifySessionFetch(`/api/campaigns/${campaign.id}/ab-tests`, { signal: controller.signal })
         const data = await res.json()
         if (res.ok) setAbTests(data.abTests || [])
       } catch (err) {
@@ -574,7 +574,7 @@ function ABTestModal({ campaign, onClose }: { campaign: Campaign; onClose: () =>
 
     setSubmitting(true)
     try {
-      const res = await fetch(`/api/campaigns/${campaign.id}/ab-tests`, {
+      const res = await shopifySessionFetch(`/api/campaigns/${campaign.id}/ab-tests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(result.data),
