@@ -178,7 +178,6 @@ export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
   providers,
   secret: process.env.NEXTAUTH_SECRET,
-  trustHost: true,
   // NOTE: cookies use SameSite=None so they're sent to cross-site requests
   // from the embedded Shopify admin iframe (admin.shopify.com → cart-gain.com).
   // Lax cookies are withheld for iframe requests, which broke the session
