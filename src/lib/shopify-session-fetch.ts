@@ -4,37 +4,9 @@ async function getShopifyIdToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null
   const w = window as any
 
-  // Try cached first
   if (typeof w.__shopifySessionTokenCached === 'string' && w.__shopifySessionTokenCached) {
     return w.__shopifySessionTokenCached
   }
-
-  // Try to initialize app bridge ourselves if possible
-  try {
-    const { getShopifyEmbedParams } = await import('./shopify-embed')
-    const { host } = getShopifyEmbedParams()
-    if (host) {
-      try {
-        const createAppModule: any = await import('@shopify/app-bridge')
-        const createApp = createAppModule?.default || createAppModule?.createApp
-        if (createApp) {
-          const apiKey = (process.env.NEXT_PUBLIC_SHOPIFY_API_KEY as string) || '67beb1794fab10553102c134b63e1277'
-          const app = createApp({ apiKey, host, forceRedirect: false })
-          w.__shopifyAppBridgeInstance = app
-          try {
-            const utils: any = await import('@shopify/app-bridge-utils')
-            if (utils.getSessionToken) {
-              const token = await utils.getSessionToken(app)
-              if (typeof token === 'string' && token) {
-                w.__shopifySessionTokenCached = token
-                return token
-              }
-            }
-          } catch {}
-        }
-      } catch {}
-    }
-  } catch {}
 
   for (let attempts = 0; attempts < 400; attempts++) {
     try {
@@ -53,15 +25,6 @@ async function getShopifyIdToken(): Promise<string | null> {
       if (w.shopify?.auth?.getSessionToken && typeof w.shopify.auth.getSessionToken === 'function') {
         const t = await w.shopify.auth.getSessionToken()
         if (typeof t === 'string' && t) return t
-      }
-    } catch {}
-    try {
-      if (w.__shopifyAppBridgeInstance) {
-        const utils: any = await import('@shopify/app-bridge-utils')
-        if (utils.getSessionToken) {
-          const t = await utils.getSessionToken(w.__shopifyAppBridgeInstance)
-          if (typeof t === 'string' && t) return t
-        }
       }
     } catch {}
     try {
