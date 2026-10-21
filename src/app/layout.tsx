@@ -89,6 +89,10 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="CartGain" />
         
+        <link rel="canonical" href="https://cart-gain.com" />
+        <meta name="author" content="CartGain" />
+        <meta name="publisher" content="CartGain" />
+        
         {/* Schema.org Structured Data for SEO */}
         <Script
           id="schema-organization"
@@ -98,6 +102,7 @@ export default function RootLayout({
               '@context': 'https://schema.org',
               '@type': 'Organization',
               name: 'CartGain',
+              alternateName: 'CartGain AI',
               description: 'AI negotiation and abandoned cart recovery platform for e-commerce brands, using WhatsApp and Email',
               url: 'https://cart-gain.com',
               logo: 'https://cart-gain.com/logo.png',
@@ -109,7 +114,9 @@ export default function RootLayout({
                 '@type': 'ContactPoint',
                 contactType: 'Customer Support',
                 email: 'support@cart-gain.com',
+                availableLanguage: ['English'],
               },
+              foundingDate: '2024',
             }),
           }}
         />
@@ -162,7 +169,48 @@ export default function RootLayout({
                     text: 'You set a floor price per product or for your whole store. The AI negotiates within the range you define — from your asking price down to your floor — and never offers below it. Accepted deals generate a one-use, time-limited discount code bound to that cart.',
                   },
                 },
+                {
+                  '@type': 'Question',
+                  name: 'What is CartGain?',
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: 'CartGain is an AI-powered cart recovery and negotiation platform for e-commerce stores. It recovers abandoned carts via WhatsApp and Email, and uses AI to negotiate with price-sensitive shoppers while respecting your minimum margin.',
+                  },
+                },
+                {
+                  '@type': 'Question',
+                  name: 'Is CartGain for Shopify?',
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: 'CartGain integrates with Shopify stores to recover abandoned checkouts via WhatsApp and Email, and offers a storefront AI negotiation widget.',
+                  },
+                },
               ],
+            }),
+          }}
+        />
+        <Script
+          id="schema-software"
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'SoftwareApplication',
+              name: 'CartGain',
+              applicationCategory: 'BusinessApplication',
+              operatingSystem: 'Web',
+              offers: {
+                '@type': 'Offer',
+                price: '0',
+                priceCurrency: 'USD',
+                description: 'First 50 recovered carts free',
+              },
+              provider: {
+                '@type': 'Organization',
+                name: 'CartGain',
+              },
+              url: 'https://cart-gain.com',
+              description: 'AI negotiation and abandoned cart recovery platform for e-commerce stores',
             }),
           }}
         />

@@ -1,0 +1,25 @@
+# CartGain
+
+> AI-powered cart recovery and negotiation platform for e-commerce businesses.
+
+## Overview
+CartGain helps Shopify and e-commerce stores recover abandoned carts using AI-powered WhatsApp and Email campaigns, plus an AI negotiator that converts price-sensitive shoppers without cutting below your margin floor.
+
+## Key Features
+- AI Cart Recovery (WhatsApp + Email multi-channel)
+- AI Price Negotiation Widget
+- Smart targeting and automation
+- Revenue tracking and analytics
+- Built for Shopify stores
+
+## Links
+- Website: https://cart-gain.com
+- Pricing: https://cart-gain.com/pricing
+- Login: https://cart-gain.com/login
+- Signup: https://cart-gain.com/signup
+
+## Contact
+- Support: support@cart-gain.com
+
+## Company
+CartGain - AI negotiation & cart recovery for e-commerce
