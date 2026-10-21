@@ -1,16 +1,8 @@
 'use client'
 
-import { getAppBridgeSessionToken } from './shopify-app-bridge'
-
 async function getShopifyIdToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null
   const w = window as any
-
-  // Try App Bridge v3/v4 utils first
-  try {
-    const t = await getAppBridgeSessionToken()
-    if (typeof t === 'string' && t) return t
-  } catch {}
 
   for (let attempts = 0; attempts < 300; attempts++) {
     try {
