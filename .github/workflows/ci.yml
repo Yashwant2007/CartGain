@@ -15,6 +15,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # `prisma generate` refuses to run without a datasource url — the schema
+    # uses env("DATABASE_URL") / env("DIRECT_URL"). CI has no database
+    # credentials, so without these the generated client stays the untyped
+    # stub shipped by @prisma/client and every prisma.* call fails to
+    # typecheck (no exported members, "untyped function calls may not accept
+    # type arguments"). The values are never dialled — generate only needs
+    # them to be present and well formed.
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/cartgain?schema=public
+      DIRECT_URL: postgresql://ci:ci@localhost:5432/cartgain?schema=public
+
     steps:
       - uses: actions/checkout@v4
 
@@ -26,6 +37,12 @@ jobs:
 
       - name: Install
         run: npm ci
+
+      # Generate the client explicitly instead of relying on the
+      # @prisma/client postinstall hook, which silently keeps the stub when
+      # generation fails.
+      - name: Generate Prisma client
+        run: npx prisma generate
 
       - name: ESLint
         run: npm run lint
