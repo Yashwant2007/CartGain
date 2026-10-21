@@ -154,6 +154,7 @@ model Store {
   customerDataExports CustomerDataExport[]
   bargainDailyGoals        BargainDailyGoal[]
   bargainDailyGoalIncrements BargainDailyGoalIncrement[]
+  merchantVoice       MerchantVoice?
 
   @@unique([userId, domain])
   @@index([userId])
@@ -227,6 +228,21 @@ model Message {
   deliveredAt     DateTime?
   clickedAt       DateTime?
   convertedAt     DateTime?
+  // Which attempt of the recovery sequence this message is. Null for legacy
+  // rows. Together with the unique index below it makes the send path
+  // idempotent: a retried job cannot send the same step twice for a cart.
+  step            Int?
+  // The actual message that was sent (subject/body), so support and analytics
+  // can see what the customer received instead of a placeholder.
+  variant         String?   // which copy variant was used (experiment/analysis)
+  // The version of the prompt/rule set that produced this copy, so a merchant
+  // can always answer "which rules generated this message?".
+  promptVersion   String?
+  // Provider message id (WhatsApp wamid / Resend id / SMTP id). Delivery
+  // receipts arrive asynchronously and are matched back through this id, so
+  // "delivered" means the provider confirmed delivery — not "the API call
+  // did not throw".
+  providerId      String?
   createdAt       DateTime  @default(now())
 
   cart            Cart      @relation(fields: [cartId], references: [id], onDelete: Cascade)
@@ -235,6 +251,10 @@ model Message {
   @@index([cartId])
   @@index([campaignId])
   @@index([campaignId, sentAt])
+  @@index([providerId])
+  // One message per cart, channel and sequence step. Postgres allows multiple
+  // NULLs, so legacy rows (step = null) are unaffected.
+  @@unique([cartId, channel, step])
 }
 
 model RecoveredCart {
@@ -260,7 +280,12 @@ model RecoveredCart {
   // One order = one credit, ever. Guards double-credit when a single Shopify
   // order payload could be matched against multiple Cart rows (the cart-token
   // / checkout-token dual-family rows). Postgres allows multiple NULLs.
-  @@unique([shopifyOrderId])
+  //
+  // The constraint is scoped to the store on purpose: Shopify order ids are
+  // per-shop sequences, so a GLOBAL unique on `shopifyOrderId` made store B's
+  // order #1001 collide with store A's order #1001 — one store's refund then
+  // netted the other store's recovered revenue.
+  @@unique([storeId, shopifyOrderId])
 }
 
 model Analytics {
@@ -434,7 +459,7 @@ model BargainSession {
   claimToken        String?   @unique // opaque token for the post-bargain purchase-window link
   purchaseUrl       String?   // checkout link that applies the issued code (purchase window)
   purchasedAt       DateTime? // when an order confirmed using this bargain code
-  purchasedOrderId  String?   @unique // Shopify order id — idempotent purchase attribution
+  purchasedOrderId  String?   // Shopify order id — idempotent purchase attribution (scoped to the store: Shopify order ids are per-shop sequences)
   purchaseValue     Float?    // recognized net value of the bargain purchase
   attemptsUsed      Int       @default(0)
   status            String    @default("active") // active, accepted, rejected, expired, abandoned
@@ -453,6 +478,9 @@ model BargainSession {
   @@index([customerEmail])
   @@index([customerFingerprint])
   @@index([status])
+  // One order = one bargain purchase attribution, per store. Shopify order ids
+  // are per-shop sequences, so the constraint is store-scoped.
+  @@unique([storeId, purchasedOrderId])
   @@index([expiredAt])
 }
 
@@ -717,6 +745,35 @@ model MerchantConfig {
   paymentEnabledGateways      String[] @default([])
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  @@index([storeId])
+}
+
+model MerchantVoice {
+  id                String   @id @default(cuid())
+  storeId           String   @unique
+  // Voice preset the merchant starts from. Each preset is a coherent set of
+  // traits (tone, emoji density, humour, length) — not a separate prompt.
+  persona           String   @default("friendly") // friendly | premium | playful | minimal | expert
+  // Emoji policy. "off" forbids emoji entirely, "playful" allows them freely.
+  emojiIntensity    String   @default("balanced") // off | subtle | balanced | playful
+  humorLevel        String   @default("light") // none | light | playful
+  messageLength     String   @default("medium") // short | medium | long
+  assertiveness     String   @default("balanced") // soft | balanced | direct
+  // Preferred language for generated messages ("auto" = follow the customer).
+  language          String   @default("auto")
+  // Words the merchant never wants to see ("guarantee", "cheapest", ...).
+  bannedPhrases     String[] @default([])
+  // Phrases the merchant wants the copy to use.
+  approvedPhrases   String[] @default([])
+  // Optional sign-off appended to email copy.
+  signOff           String?
+  // Local-time send window. Messages are held (not sent) outside it.
+  quietHoursStart   Int?     // 0-23, store-local
+  quietHoursEnd     Int?     // 0-23, store-local
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
   @@index([storeId])

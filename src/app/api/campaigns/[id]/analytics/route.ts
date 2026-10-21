@@ -34,9 +34,14 @@ export async function GET(
       where: { campaignId: campaign.id },
     })
 
-    // Calculate message metrics
+    // Calculate message metrics.
+    //
+    // "Sent" means the provider accepted the message; "delivered" means the
+    // provider confirmed delivery. The two used to be the same expression, so
+    // the delivery rate was always 100% and a merchant could never see how
+    // many messages actually reached the inbox.
     const totalMessagesSent = messages.filter((m) => m.status === 'sent' || m.status === 'delivered').length
-    const totalMessagesDelivered = messages.filter((m) => m.status === 'sent' || m.status === 'delivered').length
+    const totalMessagesDelivered = messages.filter((m) => m.status === 'delivered').length
     const totalMessagesClicked = messages.filter((m) => m.clickedAt).length
     const totalMessagesConverted = messages.filter((m) => m.convertedAt).length
 

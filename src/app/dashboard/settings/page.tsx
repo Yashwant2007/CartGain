@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { signOut } from 'next-auth/react'
-import { Bell, CreditCard, Shield, User, Key, ExternalLink } from 'lucide-react'
+import { Bell, CreditCard, Shield, User, Key, ExternalLink, Sparkles } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 
@@ -98,6 +98,7 @@ export default function SettingsPage() {
         <nav className="flex space-x-8 overflow-x-auto">
           {[
             { id: 'general', name: 'General', icon: User },
+            { id: 'voice', name: 'Brand voice', icon: Sparkles },
             { id: 'notifications', name: 'Notifications', icon: Bell },
             { id: 'billing', name: 'Billing', icon: CreditCard },
             { id: 'security', name: 'Security', icon: Shield },
@@ -123,6 +124,7 @@ export default function SettingsPage() {
       {error && <div className="bg-slate-800/50 border border-red-700/30 rounded-xl p-6 text-sm text-red-300/80">{error}</div>}
 
       {activeTab === 'general' && <GeneralSettings store={store} onSave={setStore} />}
+      {activeTab === 'voice' && <BrandVoiceSettings storeId={storeId} />}
       {activeTab === 'notifications' && <NotificationSettings />}
       {activeTab === 'billing' && <BillingSettings />}
       {activeTab === 'security' && <SecuritySettings />}
@@ -130,6 +132,389 @@ export default function SettingsPage() {
     </div>
   )
 }
+
+
+type BrandVoiceForm = {
+  persona: string
+  emojiIntensity: string
+  humorLevel: string
+  messageLength: string
+  assertiveness: string
+  language: string
+  bannedPhrases: string[]
+  approvedPhrases: string[]
+  signOff: string
+  quietHoursStart: number | null
+  quietHoursEnd: number | null
+}
+
+const VOICE_OPTIONS_GLOBAL = {
+  personas: ['friendly', 'premium', 'playful', 'minimal', 'expert'],
+  emojiIntensities: ['off', 'subtle', 'balanced', 'playful'],
+  humorLevels: ['none', 'light', 'playful'],
+  messageLengths: ['short', 'medium', 'long'],
+  assertiveness: ['soft', 'balanced', 'direct'],
+}
+
+const VOICE_DEFAULTS: BrandVoiceForm = {
+  persona: 'friendly',
+  emojiIntensity: 'balanced',
+  humorLevel: 'light',
+  messageLength: 'medium',
+  assertiveness: 'balanced',
+  language: 'auto',
+  bannedPhrases: [],
+  approvedPhrases: [],
+  signOff: '',
+  quietHoursStart: null,
+  quietHoursEnd: null,
+}
+
+function humanizeOption(value: string): string {
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function BrandVoiceSettings({ storeId }: { storeId: string | null }) {
+  const [form, setForm] = useState<BrandVoiceForm>(VOICE_DEFAULTS)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [bannedDraft, setBannedDraft] = useState('')
+  const [approvedDraft, setApprovedDraft] = useState('')
+
+  useEffect(() => {
+    if (!storeId) return
+    const controller = new AbortController()
+    setLoading(true)
+    setLoadError(null)
+    shopifySessionFetch(`/api/merchant/config?storeId=${encodeURIComponent(storeId)}`, { signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Could not load brand voice')
+        const data = await res.json()
+        setForm({
+          persona: data.persona ?? VOICE_DEFAULTS.persona,
+          emojiIntensity: data.emojiIntensity ?? VOICE_DEFAULTS.emojiIntensity,
+          humorLevel: data.humorLevel ?? VOICE_DEFAULTS.humorLevel,
+          messageLength: data.messageLength ?? VOICE_DEFAULTS.messageLength,
+          assertiveness: data.assertiveness ?? VOICE_DEFAULTS.assertiveness,
+          language: data.language ?? VOICE_DEFAULTS.language,
+          bannedPhrases: Array.isArray(data.bannedPhrases) ? data.bannedPhrases : [],
+          approvedPhrases: Array.isArray(data.approvedPhrases) ? data.approvedPhrases : [],
+          signOff: data.signOff ?? '',
+          quietHoursStart: data.quietHoursStart ?? null,
+          quietHoursEnd: data.quietHoursEnd ?? null,
+        })
+      })
+      .catch((err) => {
+        if (err?.name !== 'AbortError') setLoadError(err.message || 'Could not load brand voice')
+      })
+      .finally(() => setLoading(false))
+    return () => controller.abort()
+  }, [storeId])
+
+  async function handleSave() {
+    if (!storeId) return
+    setSaving(true)
+    setMessage(null)
+    try {
+      const res = await shopifySessionFetch(`/api/merchant/config?storeId=${encodeURIComponent(storeId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.message || 'Could not save brand voice')
+      setMessage('Brand voice saved — future messages will follow it.')
+    } catch (err: any) {
+      setMessage(err?.message || 'Could not save brand voice')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function addPhrase(kind: 'bannedPhrases' | 'approvedPhrases') {
+    const draft = kind === 'bannedPhrases' ? bannedDraft : approvedDraft
+    const phrase = draft.trim()
+    if (!phrase) return
+    setForm((prev) => ({
+      ...prev,
+      [kind]: Array.from(new Set([...prev[kind], phrase])).slice(0, 25),
+    }))
+    if (kind === 'bannedPhrases') setBannedDraft('')
+    else setApprovedDraft('')
+  }
+
+  function removePhrase(kind: 'bannedPhrases' | 'approvedPhrases', phrase: string) {
+    setForm((prev) => ({ ...prev, [kind]: prev[kind].filter((p) => p !== phrase) }))
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6">
+        <div className="flex items-start gap-3">
+          <Sparkles className="w-5 h-5 text-cyan-300 mt-0.5" />
+          <div>
+            <h2 className="text-lg font-semibold text-white">Brand voice</h2>
+            <p className="text-sm text-blue-300/80 mt-1">
+              How CartGain writes for your store. The same voice is used for recovery emails, WhatsApp
+              messages and AI replies. Prices, discounts and consent are always enforced separately.
+            </p>
+          </div>
+        </div>
+
+        {loadError && <p className="mt-4 text-sm text-red-300/80">{loadError}</p>}
+        {loading ? (
+          <p className="mt-4 text-sm text-blue-300/80">Loading brand voice...</p>
+        ) : (
+          <div className="mt-6 space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-blue-200 mb-2">Personality</label>
+              <div className="flex flex-wrap gap-2">
+                {VOICE_OPTIONS_GLOBAL.personas.map((persona) => (
+                  <button
+                    key={persona}
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, persona }))}
+                    className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                      form.persona === persona
+                        ? 'border-cyan-400 bg-cyan-400/10 text-cyan-200'
+                        : 'border-blue-700/40 text-blue-300/70 hover:border-blue-600'
+                    }`}
+                  >
+                    {humanizeOption(persona)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <VoiceSelect
+                label="Emoji"
+                value={form.emojiIntensity}
+                options={VOICE_OPTIONS_GLOBAL.emojiIntensities}
+                onChange={(value) => setForm((prev) => ({ ...prev, emojiIntensity: value }))}
+              />
+              <VoiceSelect
+                label="Humour"
+                value={form.humorLevel}
+                options={VOICE_OPTIONS_GLOBAL.humorLevels}
+                onChange={(value) => setForm((prev) => ({ ...prev, humorLevel: value }))}
+              />
+              <VoiceSelect
+                label="Message length"
+                value={form.messageLength}
+                options={VOICE_OPTIONS_GLOBAL.messageLengths}
+                onChange={(value) => setForm((prev) => ({ ...prev, messageLength: value }))}
+              />
+              <VoiceSelect
+                label="Tone"
+                value={form.assertiveness}
+                options={VOICE_OPTIONS_GLOBAL.assertiveness}
+                onChange={(value) => setForm((prev) => ({ ...prev, assertiveness: value }))}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-blue-200 mb-2">Language</label>
+              <input
+                type="text"
+                value={form.language}
+                onChange={(event) => setForm((prev) => ({ ...prev, language: event.target.value }))}
+                placeholder="auto"
+                className="w-full md:w-64 bg-slate-900/60 border border-blue-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-blue-400/40 focus:outline-none focus:border-cyan-400"
+              />
+              <p className="text-xs text-blue-400/60 mt-1">Use &quot;auto&quot; to follow the customer&apos;s language.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <PhraseEditor
+                label="Never use these words"
+                hint="Hard-blocked by the message validator."
+                phrases={form.bannedPhrases}
+                draft={bannedDraft}
+                setDraft={setBannedDraft}
+                onAdd={() => addPhrase('bannedPhrases')}
+                onRemove={(phrase) => removePhrase('bannedPhrases', phrase)}
+              />
+              <PhraseEditor
+                label="Prefer these words"
+                hint="Used when they fit naturally."
+                phrases={form.approvedPhrases}
+                draft={approvedDraft}
+                setDraft={setApprovedDraft}
+                onAdd={() => addPhrase('approvedPhrases')}
+                onRemove={(phrase) => removePhrase('approvedPhrases', phrase)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-blue-200 mb-2">Sign-off (email)</label>
+              <input
+                type="text"
+                value={form.signOff}
+                onChange={(event) => setForm((prev) => ({ ...prev, signOff: event.target.value }))}
+                placeholder="The team at Your Store"
+                className="w-full md:w-96 bg-slate-900/60 border border-blue-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-blue-400/40 focus:outline-none focus:border-cyan-400"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-blue-200 mb-2">Quiet hours</label>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-blue-300/70">
+                <span>Do not send between</span>
+                <select
+                  value={form.quietHoursStart ?? ''}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      quietHoursStart: event.target.value === '' ? null : Number(event.target.value),
+                    }))
+                  }
+                  className="bg-slate-900/60 border border-blue-700/40 rounded-lg px-2 py-1.5 text-white"
+                >
+                  <option value="">Off</option>
+                  {Array.from({ length: 24 }, (_, hour) => (
+                    <option key={hour} value={hour}>{String(hour).padStart(2, '0')}:00</option>
+                  ))}
+                </select>
+                <span>and</span>
+                <select
+                  value={form.quietHoursEnd ?? ''}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      quietHoursEnd: event.target.value === '' ? null : Number(event.target.value),
+                    }))
+                  }
+                  className="bg-slate-900/60 border border-blue-700/40 rounded-lg px-2 py-1.5 text-white"
+                >
+                  <option value="">Off</option>
+                  {Array.from({ length: 24 }, (_, hour) => (
+                    <option key={hour} value={hour}>{String(hour).padStart(2, '0')}:00</option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-xs text-blue-400/60 mt-1">
+                Carts stay queued and are picked up after the window — nothing is lost.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving || !storeId}
+                className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-900 font-semibold text-sm transition-colors"
+              >
+                {saving ? 'Saving...' : 'Save brand voice'}
+              </button>
+              {message && <p className="text-sm text-blue-300/80">{message}</p>}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function VoiceSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-blue-200 mb-2">{label}</label>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full bg-slate-900/60 border border-blue-700/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-400"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {humanizeOption(option)}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+function PhraseEditor({
+  label,
+  hint,
+  phrases,
+  draft,
+  setDraft,
+  onAdd,
+  onRemove,
+}: {
+  label: string
+  hint: string
+  phrases: string[]
+  draft: string
+  setDraft: (value: string) => void
+  onAdd: () => void
+  onRemove: (phrase: string) => void
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-blue-200 mb-2">{label}</label>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              onAdd()
+            }
+          }}
+          maxLength={80}
+          className="flex-1 bg-slate-900/60 border border-blue-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-blue-400/40 focus:outline-none focus:border-cyan-400"
+          placeholder="Add a word or phrase"
+        />
+        <button
+          type="button"
+          onClick={onAdd}
+          className="px-3 py-2 rounded-lg border border-blue-700/40 text-sm text-blue-200 hover:border-cyan-400"
+        >
+          Add
+        </button>
+      </div>
+      <p className="text-xs text-blue-400/60 mt-1">{hint}</p>
+      {phrases.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {phrases.map((phrase) => (
+            <span
+              key={phrase}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-900/40 border border-blue-700/40 text-xs text-blue-200"
+            >
+              {phrase}
+              <button
+                type="button"
+                onClick={() => onRemove(phrase)}
+                className="text-blue-400 hover:text-red-300"
+                aria-label={`Remove ${phrase}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 
 function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSave: (store: StoreSettings | null) => void }) {
   const [form, setForm] = useState({

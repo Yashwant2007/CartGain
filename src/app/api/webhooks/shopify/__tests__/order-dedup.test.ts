@@ -36,4 +36,19 @@ describe('isDuplicateOrder — Redis outage must not drop orders', () => {
     setMock.mockResolvedValue(false)
     await expect(isDuplicateOrder('order-1')).resolves.toBe(true)
   })
+
+  it('scopes the dedupe key to the store', async () => {
+    // Shopify order ids are per-shop sequences: a global key made store B's
+    // order #1001 look like a replay of store A's order #1001 and dropped a
+    // real order.
+    setMock.mockResolvedValue(true)
+    await isDuplicateOrder('1001', 'store-a')
+    await isDuplicateOrder('1001', 'store-b')
+    const keys = setMock.mock.calls.map((c) => c[0])
+    expect(keys).toContain('dedup:order:store-a:1001')
+    expect(keys).toContain('dedup:order:store-b:1001')
+    // The store-scoped keys are distinct, so a duplicate order id in another
+    // store cannot be swallowed.
+    expect(keys.filter((k) => k.includes('1001'))).toHaveLength(2)
+  })
 })

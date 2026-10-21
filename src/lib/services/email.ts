@@ -203,7 +203,7 @@ export async function sendEmail({
 }
 
 export const EmailTemplates = {
-  abandoned: (customerName: string, items: any[], cartTotal: number, cartUrl: string, storeName: string, currencySymbol = '₹', aiBody?: string, unsubscribeUrl?: string) => `
+  abandoned: (customerName: string, items: any[], cartTotal: number, cartUrl: string, storeName: string, currencySymbol = '₹', aiBody?: string, unsubscribeUrl?: string, opts?: { emoji?: boolean }) => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -215,20 +215,19 @@ export const EmailTemplates = {
   <div style="max-width: 600px; margin: 20px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.06);">
 
     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 32px 24px; text-align: center;">
-      <div style="font-size: 48px; margin-bottom: 12px;">🛍️</div>
-      <h1 style="color: #ffffff; font-size: 24px; margin: 0;">Your cart is still warm!</h1>
-      <p style="color: rgba(255,255,255,0.85); font-size: 16px; margin: 8px 0 0;">Hey ${escapeHtml(customerName) || 'there'}, don't let these gems slip away ✨</p>
+      ${opts?.emoji === false ? '' : '<div style="font-size: 48px; margin-bottom: 12px;">🛍️</div>'}
+      <h1 style="color: #ffffff; font-size: 24px; margin: 0;">Your cart is still saved</h1>
+      <p style="color: rgba(255,255,255,0.85); font-size: 16px; margin: 8px 0 0;">Hey ${escapeHtml(customerName) || 'there'}, your items are waiting whenever you're ready.</p>
     </div>
 
     <div style="padding: 24px;">
       ${aiBody ? escapeHtmlMultiline(aiBody) : `
       <div style="font-size: 15px; line-height: 1.8; color: #475569; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid #f0f0f5;">
-        You've got a great eye, ${escapeHtml(customerName) || 'there'}! ✨<br>
-        The pieces you picked are carefully chosen — each one handpicked to bring something special. We've saved everything for you, so you can complete your look whenever you're ready.<br>
-        Don't wait too long — the best finds always go fast. 💫
+        Hi ${escapeHtml(customerName) || 'there'}, your items are still in your cart.<br>
+        We've saved everything for you, so you can pick up where you left off whenever you're ready.
       </div>
       `}
-      <h2 style="font-size: 18px; color: #1a1a2e; margin: 0 0 16px;">Items in your cart 🛒</h2>
+      <h2 style="font-size: 18px; color: #1a1a2e; margin: 0 0 16px;">Items in your cart${opts?.emoji === false ? '' : ' 🛒'}</h2>
       ${items.map((item: any) => `
         <div style="display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid #f0f0f5;">
           <img src="${safeImageSrc(item.image) || 'https://via.placeholder.com/80'}" alt="${escapeHtml(item.name)}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 12px; flex-shrink: 0;">
@@ -242,10 +241,6 @@ export const EmailTemplates = {
 
       <div style="text-align: right; padding: 16px 0; font-size: 22px; font-weight: 700; color: #1a1a2e;">
         Total: ${escapeHtml(currencySymbol)}${cartTotal.toFixed(2)}
-      </div>
-
-      <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 16px; margin: 16px 0; text-align: center;">
-        <p style="margin: 0; color: #dc2626; font-weight: 500;">⏳ Items in your cart are in high demand and may sell out soon!</p>
       </div>
 
       <div style="text-align: center; margin: 24px 0;">

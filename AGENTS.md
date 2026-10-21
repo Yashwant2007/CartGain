@@ -64,6 +64,35 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 - `extensions/storefront-bargain/blocks/*.liquid` — theme extension app blocks.
 
 ## Work log (most recent first)
+- `feat(conversation): shared human-like copy layer, honest recovery, brand
+  voice, truthful delivery/analytics`. New `src/lib/conversation/` — one voice
+  model (`voice.ts` personas/emoji/humour/length/assertiveness/language/
+  banned+approved phrases), trusted-fact contract (`facts.ts`), deterministic
+  validator (`validate.ts`), stable variants + quiet hours (`variety.ts`),
+  versioned facts-only prompts (`prompts.ts`), and a generator that validates
+  model output, retries once, then falls back to a fact-only template
+  (`generate.ts`). Recovery now composes through it (`recovery.ts`), so the old
+  hardcoded prompts/fallbacks that invented "bestsellers", "everyone's obsessed",
+  "selling out nationwide" and "last chance" are gone (`generateEmailContent`/
+  `generateWhatsAppContent` deleted; `EmailTemplates.abandoned` de-fabricated).
+  Brand voice API `GET/PUT/DELETE /api/merchant/config` + Settings → "Brand
+  voice" tab (persona, emoji, humour, length, tone, language, vocabulary,
+  sign-off, quiet hours). Data integrity: store-scoped unique indexes
+  (`RecoveredCart(storeId, shopifyOrderId)`, `BargainSession(storeId,
+  purchasedOrderId)`), store-scoped Redis dedupe key, store-scoped refund
+  lookup, `Message(step, variant, providerId, promptVersion)` with
+  `@@unique(cartId, channel, step)` + claim-before-send idempotency (stale
+  pending rows retried, failed sends retryable at the same step). Delivery is
+  now truthful: send = `sent`, `delivered` only from provider receipts (WhatsApp
+  status webhook + new signed Resend webhook `/api/webhooks/email`); analytics
+  delivery rate/chart revenue/avg conversion time/store attribution fixed
+  (`status='delivered'`, net revenue by `recoveredAt`, DISTINCT ON per cart,
+  explicit `storeId`). New `/api/analytics/bargain` funnel (started →
+  negotiated → offered → accepted → code → purchased). Migration
+  `20261021170000_store_scoped_orders_and_merchant_voice` applied. Tests: new
+  `src/lib/conversation/__tests__/*`, email-webhook signature tests,
+  delivery-rate + events store-scope tests → 98 suites / 1156 tests, lint, tsc,
+  build green.
 - `fix(shopify): initialize App Bridge script and attach Bearer session tokens`.
   Root cause of the embedded-auth failures: the ID-token validator compared the
   token's `dest` claim (the SHOP origin, e.g. `https://shop.myshopify.com`)

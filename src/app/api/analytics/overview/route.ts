@@ -9,35 +9,71 @@ const WHATSAPP_RATE = 0.86
 const EMAIL_RATE = 0
 const BATCH_SIZE = 500
 
+// The chart mixes two clocks by design — an abandonment happens on the day the
+// cart was left, a recovery is booked on the day the order came in — so the
+// two series are aggregated separately and merged by day.
+//
+// Revenue comes from RecoveredCart.netRevenue (the canonical, refund-netted
+// figure used everywhere else in the product). The previous version summed
+// Cart.totalValue, i.e. the GROSS value of the abandoned cart, which meant
+// the chart could not agree with overview.revenueRecovered / netRevenue.
 async function computeChartData(storeId: string, startDate: Date, endDate: Date) {
-  const rows = await prisma.$queryRawUnsafe<Array<{
-    date: Date
-    abandoned: bigint
-    recovered: bigint
-    revenue: number
-  }>>(
-    `SELECT
-      DATE("abandonedAt") as date,
-      COUNT(*) FILTER (WHERE "abandonedAt" >= $2 AND "abandonedAt" < $3) as abandoned,
-      COUNT(*) FILTER (WHERE "isRecovered" = true AND "recoveredAt" >= $2 AND "recoveredAt" < $3) as recovered,
-      COALESCE(SUM("totalValue") FILTER (WHERE "isRecovered" = true AND "recoveredAt" >= $2 AND "recoveredAt" < $3), 0) as revenue
-    FROM "Cart"
-    WHERE "storeId" = $1
-      AND "abandonedAt" >= $2
-      AND "abandonedAt" < $3
-    GROUP BY DATE("abandonedAt")
-    ORDER BY DATE("abandonedAt") ASC`,
-    storeId,
-    startDate,
-    endDate
-  )
+  const [abandonedRows, recoveredRows] = await Promise.all([
+    prisma.$queryRawUnsafe<Array<{ date: Date; abandoned: bigint }>>(
+      `SELECT
+        DATE("abandonedAt") as date,
+        COUNT(*) as abandoned
+      FROM "Cart"
+      WHERE "storeId" = $1
+        AND "abandonedAt" >= $2
+        AND "abandonedAt" < $3
+      GROUP BY DATE("abandonedAt")
+      ORDER BY DATE("abandonedAt") ASC`,
+      storeId,
+      startDate,
+      endDate
+    ),
+    prisma.$queryRawUnsafe<Array<{ date: Date; recovered: bigint; revenue: number }>>(
+      `SELECT
+        DATE("recoveredAt") as date,
+        COUNT(*) as recovered,
+        COALESCE(SUM("netRevenue"), 0) as revenue
+      FROM "RecoveredCart"
+      WHERE "storeId" = $1
+        AND "recoveredAt" >= $2
+        AND "recoveredAt" < $3
+      GROUP BY DATE("recoveredAt")
+      ORDER BY DATE("recoveredAt") ASC`,
+      storeId,
+      startDate,
+      endDate
+    ),
+  ])
 
-  return rows.map((r: any) => ({
-    date: new Date(r.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
-    revenue: Number(r.revenue),
-    recoveredCarts: Number(r.recovered),
-    abandonedCarts: Number(r.abandoned),
-  }))
+  const byDay = new Map<string, { revenue: number; recoveredCarts: number; abandonedCarts: number }>()
+  const ensure = (date: Date) => {
+    const key = date.toISOString().slice(0, 10)
+    if (!byDay.has(key)) {
+      byDay.set(key, { revenue: 0, recoveredCarts: 0, abandonedCarts: 0 })
+    }
+    return byDay.get(key)!
+  }
+
+  for (const row of abandonedRows) ensure(new Date(row.date)).abandonedCarts = Number(row.abandoned)
+  for (const row of recoveredRows) {
+    const entry = ensure(new Date(row.date))
+    entry.recoveredCarts = Number(row.recovered)
+    entry.revenue = Number(row.revenue)
+  }
+
+  return Array.from(byDay.entries())
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, value]) => ({
+      date: new Date(`${key}T00:00:00Z`).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+      revenue: value.revenue,
+      recoveredCarts: value.recoveredCarts,
+      abandonedCarts: value.abandonedCarts,
+    }))
 }
 
 async function computeChannelStats(storeId: string, startDate: Date, endDate: Date) {
@@ -51,7 +87,7 @@ async function computeChannelStats(storeId: string, startDate: Date, endDate: Da
     `SELECT
       channel,
       COUNT(*) as sent,
-      COUNT(*) FILTER (WHERE status IN ('delivered', 'sent')) as delivered,
+      COUNT(*) FILTER (WHERE status = 'delivered') as delivered,
       COUNT(*) FILTER (WHERE "clickedAt" IS NOT NULL) as clicked,
       COUNT(*) FILTER (WHERE "convertedAt" IS NOT NULL) as converted
     FROM "Message"
@@ -134,7 +170,7 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
       clicked: bigint
     }>>(
       `SELECT
-        COUNT(*) FILTER (WHERE status IN ('delivered', 'sent')) as delivered,
+        COUNT(*) FILTER (WHERE status = 'delivered') as delivered,
         COUNT(*) FILTER (WHERE "clickedAt" IS NOT NULL) as clicked
       FROM "Message"
       WHERE "campaignId" IN (SELECT id FROM "Campaign" WHERE "storeId" = $1)
@@ -168,23 +204,30 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
     .filter((c: any) => c.sent > 0)
     .sort((a: any, b: any) => b.revenue - a.revenue)[0] || null
 
-  const conversionTimes = await prisma.$queryRawUnsafe<Array<{ hours: number }>>(
-    `SELECT
-      EXTRACT(EPOCH FROM (rc."recoveredAt" - m."sentAt")) / 3600 as hours
-    FROM "RecoveredCart" rc
-    JOIN "Message" m ON m."cartId" = rc."cartId" AND m.status = 'sent'
-    WHERE rc."storeId" = $1
-      AND rc."recoveredAt" >= $2
-      AND rc."recoveredAt" < $3
-      AND m."sentAt" < rc."recoveredAt"
-    ORDER BY m."sentAt" DESC
-    LIMIT 1`,
+  // One row per recovered cart: the message that drove the recovery is the
+  // most recent message sent before the recovery (the same rule the
+  // attribution gate uses). The previous query had `LIMIT 1`, so it averaged a
+  // SINGLE row — the metric was effectively "the last recovery's delay".
+  const conversionTimes = await prisma.$queryRawUnsafe<Array<{ hours: number | null }>>(
+    `SELECT AVG(hours) as hours
+    FROM (
+      SELECT DISTINCT ON (rc."cartId")
+        EXTRACT(EPOCH FROM (rc."recoveredAt" - m."sentAt")) / 3600 as hours
+      FROM "RecoveredCart" rc
+      JOIN "Message" m ON m."cartId" = rc."cartId" AND m.status IN ('sent', 'delivered')
+      WHERE rc."storeId" = $1
+        AND rc."recoveredAt" >= $2
+        AND rc."recoveredAt" < $3
+        AND m."sentAt" <= rc."recoveredAt"
+      ORDER BY rc."cartId", m."sentAt" DESC
+    ) t`,
     storeId,
     startDate,
     endDate
   )
 
-  const validTimes = conversionTimes.filter((t: any) => t.hours >= 0).map((t: any) => t.hours)
+  const avgHours = conversionTimes[0]?.hours
+  const validTimes = avgHours === null || avgHours === undefined ? [] : [Number(avgHours)]
   const avgConversionTime = validTimes.length > 0
     ? validTimes.reduce((a: any, b: any) => a + b, 0) / validTimes.length
     : null
@@ -217,7 +260,9 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
       messagesClicked: totalClicked,
       totalCosts: Number(totalCosts.toFixed(2)),
       roi: Number(roi.toFixed(2)),
-      avgOrderValue: cartsRecovered > 0 ? ((revenue._sum.recoveredValue ?? 0) / cartsRecovered) : 0,
+      // Net basis, consistent with `netRevenue` on the same card (the old
+      // value divided GROSS recovered value by the order count).
+      avgOrderValue: cartsRecovered > 0 ? (netRevenue / cartsRecovered) : 0,
     },
     chartData,
     channelStats: channelBreakdown,

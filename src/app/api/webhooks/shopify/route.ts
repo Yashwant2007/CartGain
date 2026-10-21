@@ -139,7 +139,9 @@ export async function POST(request: NextRequest) {
     if (topic === 'orders/create') {
       const orderId = data.id
       if (orderId) {
-        const dup = await isDuplicateOrder(String(orderId))
+        // Store-scoped: Shopify order ids are per-shop sequences, so a global
+        // marker made another store's identical order id look like a replay.
+        const dup = await isDuplicateOrder(String(orderId), store.id)
         if (dup) {
           console.log(`Duplicate order ${orderId} from ${shopDomain} — skipping`)
           return
@@ -720,8 +722,10 @@ interface AccrueParams {
 // (cumulative across refunds/create webhooks and full on orders/cancelled).
 // References: Day 8–10 revenue-engine adversarial testing, findings E3.
 async function applyRefundToRecoveredCart(store: any, shopifyOrderId: string, refundAmount: number, reason: 'refund' | 'cancelled') {
-  const recovered = await prisma.recoveredCart.findUnique({
-    where: { shopifyOrderId },
+  // Store-scoped lookup: Shopify order ids are per-shop sequences, so a global
+  // lookup let store B's refund net store A's recovered revenue.
+  const recovered = await prisma.recoveredCart.findFirst({
+    where: { storeId: store.id, shopifyOrderId },
     include: { revenueShareEvent: true },
   })
   if (!recovered) return

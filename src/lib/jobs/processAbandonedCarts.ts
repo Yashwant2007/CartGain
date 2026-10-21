@@ -4,8 +4,14 @@ import { sendEmail, EmailTemplates } from '@/lib/services/email'
 import { buildOptOutUrl } from '@/lib/opt-out'
 import { sanitizePhoneNumber } from '@/lib/utils'
 import { sendWhatsAppMessage, WhatsAppTemplates } from '@/lib/services/whatsapp'
-import { generateEmailContent, generateWhatsAppContent, generatePersonalizedDiscount } from '@/lib/services/ai'
-import type { CartContext, PersonalizedDiscount } from '@/lib/services/ai'
+import { generatePersonalizedDiscount } from '@/lib/services/ai'
+import type { PersonalizedDiscount } from '@/lib/services/ai'
+import { composeRecoveryMessage, singleLineMessage } from '@/lib/conversation/recovery'
+import type { ConversationDiscount } from '@/lib/conversation/facts'
+import { isWithinQuietHours } from '@/lib/conversation/variety'
+import { resolveVoice } from '@/lib/conversation/voice'
+import type { BrandVoice } from '@/lib/conversation/voice'
+import { loadStoreVoiceSettings } from '@/lib/conversation/store'
 import { releaseLock } from '@/lib/job-lock'
 import { redisSetNX, redisIncr, redisGet, redisExpire, getRedis } from '@/lib/redis'
 import { FREE_CARTS_THRESHOLD, PLANS, PAID_PLAN_IDS, resolvePlanId, getPlan } from '@/lib/payment'
@@ -175,6 +181,12 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
     let maxMessages = Math.min(channels.length, campaign.maxFollowUps + 1)
     let activeChannels = [...channels]
     const currencySymbol = getCurrencySymbol(store.currency)
+    // Brand voice + quiet hours are loaded once per store per cycle. A DB
+    // failure degrades to the default voice rather than blocking recovery.
+    const voiceSettings = await loadStoreVoiceSettings(store.id).catch(() => null)
+    const voice = voiceSettings ?? resolveVoice(null)
+    const quietHoursStart = voiceSettings?.quietHoursStart ?? null
+    const quietHoursEnd = voiceSettings?.quietHoursEnd ?? null
 
     const abTest = await prisma.aBTest.findFirst({
       where: { campaignId: campaign.id, isCompleted: false },
@@ -224,6 +236,7 @@ let cursor: string | undefined
           sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest,
           optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts,
           isPaidUser, cartOverageActive,
+          voice, quietHoursStart, quietHoursEnd,
         }))
       )
 
@@ -265,6 +278,9 @@ type CartConfig = {
   customerMsgCounts: CustomerMsgCounts
   isPaidUser: boolean
   cartOverageActive: boolean
+  voice: BrandVoice
+  quietHoursStart: number | null
+  quietHoursEnd: number | null
 }
 
 async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<CustomerMsgCounts> {
@@ -339,7 +355,7 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
 }
 
   async function processSingleCart(cart: any, config: CartConfig): Promise<{ sent: number; failed: number }> {
-  const { campaign, store, subscription, sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest, optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts, isPaidUser, cartOverageActive } = config
+  const { campaign, store, subscription, sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest, optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts, isPaidUser, cartOverageActive, voice, quietHoursStart, quietHoursEnd } = config
 
   try {
     // Resolve the A/B variant FIRST: its channels/delays/step-budget override the
@@ -367,8 +383,20 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
       }
     }
 
-    const step = cart.messages.length
+    // A step only counts once a message for it was ACCEPTED by the provider.
+    // Using the raw message count meant a failed send consumed the step, so
+    // the sequence moved on and the customer never got a retry.
+    const completedMessages = cart.messages.filter((m: any) => m.status === 'sent' || m.status === 'delivered')
+    const step = completedMessages.length
     if (step >= effMaxMessages) return { sent: 0, failed: 0 }
+
+    // Quiet hours: never message a customer inside the merchant's local quiet
+    // window. The cart stays eligible and is picked up after the window.
+    if (
+      isWithinQuietHours(new Date(), { start: quietHoursStart ?? -1, end: quietHoursEnd ?? -1 })
+    ) {
+      return { sent: 0, failed: 0 }
+    }
 
     // Bargain-system integration hook: if this abandoned cart was linked to an
     // active bargain session, mark that session as `abandoned` so it shows up
@@ -392,7 +420,9 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
     ]
 
     const availableChannels = channelOrder.filter(c => {
-      if (cart.messages.some((m: any) => m.channel === c)) return false
+      // A channel is "used" only when a message on it was actually accepted.
+      // A failed attempt must stay retryable (same step, same row).
+      if (cart.messages.some((m: any) => m.channel === c && (m.status === 'sent' || m.status === 'delivered'))) return false
       if (c === 'email') return Boolean(cart.customerEmail)
       if (c === 'whatsapp') return Boolean(cart.customerPhone)
       return false
@@ -492,115 +522,191 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
 
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
 
-    const cartCtx: CartContext = {
-      customerName,
-      items: cartItems,
-      storeName: store.name,
-      total: cart.totalValue,
-      currencySymbol,
-      cartUrl: '',
-      discountCode,
-      discountValue,
-      discountType,
-    }
+    const appUrlBase = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
+
+    // The offer is whatever the pricing layer authorised above — the copy layer
+    // may DESCRIBE it, never invent or alter it.
+    const authorisedDiscount: ConversationDiscount | null =
+      discountCode && typeof discountValue === 'number'
+        ? {
+            code: discountCode,
+            value: discountValue,
+            type:
+              discountType === 'percentage'
+                ? 'percentage'
+                : discountType === 'free_shipping'
+                  ? 'free_shipping'
+                  : 'fixed',
+          }
+        : null
+
+    // Previous copy sent to this cart, so step N does not repeat step N-1.
+    const previousMessage =
+      completedMessages
+        .slice()
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
+        ?.content ?? null
 
     let globalSendSuccess = false
     for (const ch of channelsToProcess) {
-      const cartUrl = `${appUrl}/r/${cart.id}?c=${ch}`
-      cartCtx.cartUrl = cartUrl
+      const cartUrl = `${appUrlBase}/r/${cart.id}?c=${ch}`
+
+      // ── Idempotency ────────────────────────────────────────────────────
+      // One row per (cart, channel, step). A fresh 'pending' row belongs to a
+      // concurrent worker; a sent/delivered row was already accepted. A stale
+      // pending row (>10 min) or a failed row is reused, so a retry sends
+      // exactly once.
+      const existingMessage: any = cart.messages.find((m: any) => m.channel === ch && m.step === step)
+      if (existingMessage && (existingMessage.status === 'sent' || existingMessage.status === 'delivered')) {
+        continue
+      }
+      const stalePending =
+        existingMessage?.status === 'pending' &&
+        Date.now() - new Date(existingMessage.createdAt).getTime() > 10 * 60 * 1000
+      if (existingMessage?.status === 'pending' && !stalePending) {
+        continue
+      }
 
       let sendSuccess = false
       let error = ''
+      let providerId: string | undefined
 
       try {
-        switch (ch) {
-          case 'email': {
-            let aiSubject: string | undefined
-            let aiBody: string | undefined
-            if (campaign.aiOptimized) {
-              const ai = await generateEmailContent(cartCtx, store.id)
-              if (ai) {
-                aiSubject = ai.subject
-                aiBody = ai.body
-              }
-            }
-            const emailHtml = EmailTemplates.abandoned(customerName, cartItems, cart.totalValue, cartUrl, store.name, currencySymbol, aiBody, buildOptOutUrl(appUrl, { storeId: store.id, email: cart.customerEmail }))
-            const emailResult = await sendEmail({
-              to: cart.customerEmail!,
-              subject: aiSubject || `🛍️ ${customerName}, your ${store.name} cart is waiting!`,
-              html: emailHtml,
-              text: aiBody
-                ? `🛍️ ${customerName}, complete your order: ${cartUrl}`
-                : `🛍️ ${customerName}, your cart from ${store.name} is still warm! ${formatProductList(cartItems)} — Total: ${formattedTotal}. Complete your order: ${cartUrl}`,
-            })
-            sendSuccess = emailResult.success
-            if (!sendSuccess) error = emailResult.error || 'Unknown error'
-            break
-          }
+        // ── Compose (validated) copy ────────────────────────────────────
+        const composed = await composeRecoveryMessage({
+          storeId: store.id,
+          storeName: store.name,
+          currencySymbol,
+          customerName,
+          items: cartItems.map((item: any) => ({
+            name: item.name,
+            price: Number(item.price) || 0,
+            quantity: Number(item.quantity) || 1,
+            description: item.description,
+          })),
+          total: cart.totalValue,
+          cartUrl,
+          discount: authorisedDiscount,
+          channel: ch as 'email' | 'whatsapp',
+          step,
+          voice,
+          previousMessage,
+        })
 
-          case 'whatsapp': {
-            const firstImage = getFirstProductImage(cartItems)
-            const templateStep = Math.min(step, 2)
-
-            const templateMap = [
-              WhatsAppTemplates.abandoned_cart,
-              WhatsAppTemplates.abandoned_cart_followup,
-              WhatsAppTemplates.abandoned_cart_urgent,
-            ]
-
-            let bodyContent: string
-            if (campaign.aiOptimized) {
-              const ai = await generateWhatsAppContent(cartCtx, templateStep, store.id)
-              bodyContent = ai?.body || fallbackBodyContent(customerName, cartItems, formattedTotal, templateStep, campaign)
-            } else {
-              bodyContent = fallbackBodyContent(customerName, cartItems, formattedTotal, templateStep, campaign)
-            }
-
-            const discountLine = discountCode
-              ? `✨ ${discountValue}${discountType === 'percentage' ? '%' : discountType === 'free_shipping' ? ' free shipping' : ''} off with code ${discountCode}`
-              : ''
-
-            const template = templateMap[templateStep]
-            const params = template.generateParams(customerName, bodyContent, discountLine, firstImage, cartUrl)
-            const whatsappResult = await sendWhatsAppMessage({
-              to: sanitizePhoneNumber(cart.customerPhone!),
-              templateName: template.name,
-              templateParams: params,
-            })
-            sendSuccess = whatsappResult.success
-            if (!sendSuccess) error = whatsappResult.error || 'Unknown error'
-            break
-          }
+        // ── Claim the step BEFORE sending ───────────────────────────────
+        let messageId: string
+        const claim = {
+          cartId: cart.id,
+          campaignId: campaign.id,
+          channel: ch,
+          step,
+          content: composed.body,
+          status: 'pending',
+          sentAt: null,
+          deliveredAt: null,
+          variant: composed.variant,
+          promptVersion: composed.promptVersion,
+          providerId: null,
         }
+        try {
+          if (existingMessage) {
+            await prisma.message.update({
+              where: { id: existingMessage.id },
+              data: { ...claim, createdAt: new Date() },
+            })
+            messageId = existingMessage.id
+          } else {
+            const created = await prisma.message.create({ data: claim })
+            messageId = created.id
+          }
+        } catch (claimErr: any) {
+          if (claimErr?.code === 'P2002') {
+            // Another worker claimed this cart/channel/step first.
+            continue
+          }
+          throw claimErr
+        }
+
+        if (composed.source === 'fallback' && composed.issues.some((i) => i.severity === 'block')) {
+          console.warn(
+            `[recovery] copy validator blocked model output for cart ${cart.id} (${ch}); sent fact-only template`,
+          )
+        }
+
+        if (ch === 'email') {
+          const emailHtml = EmailTemplates.abandoned(
+            customerName,
+            cartItems,
+            cart.totalValue,
+            cartUrl,
+            store.name,
+            currencySymbol,
+            composed.body,
+            buildOptOutUrl(appUrlBase, { storeId: store.id, email: cart.customerEmail }),
+            { emoji: voice.emojiIntensity !== 'off' },
+          )
+          const emailResult = await sendEmail({
+            to: cart.customerEmail!,
+            subject: composed.subject || `${customerName}, your cart is still saved`,
+            html: emailHtml,
+            text: composed.body,
+          })
+          sendSuccess = emailResult.success
+          providerId = emailResult.messageId
+          if (!sendSuccess) error = emailResult.error || 'Unknown error'
+        } else {
+          const firstImage = getFirstProductImage(cartItems)
+          const templateStep = Math.min(step, 2)
+          const templateMap = [
+            WhatsAppTemplates.abandoned_cart,
+            WhatsAppTemplates.abandoned_cart_followup,
+            WhatsAppTemplates.abandoned_cart_urgent,
+          ]
+          const discountLine = authorisedDiscount
+            ? `Use code ${authorisedDiscount.code} for ${
+                authorisedDiscount.type === 'percentage'
+                  ? `${authorisedDiscount.value}% off`
+                  : authorisedDiscount.type === 'free_shipping'
+                    ? 'free shipping'
+                    : `${currencySymbol}${authorisedDiscount.value} off`
+              }`
+            : ''
+
+          const template = templateMap[templateStep]
+          const params = template.generateParams(
+            customerName,
+            singleLineMessage(composed.body),
+            discountLine,
+            firstImage,
+            cartUrl,
+          )
+          const whatsappResult = await sendWhatsAppMessage({
+            to: sanitizePhoneNumber(cart.customerPhone!),
+            templateName: template.name,
+            templateParams: params,
+          })
+          sendSuccess = whatsappResult.success
+          providerId = whatsappResult.messageId
+          if (!sendSuccess) error = whatsappResult.error || 'Unknown error'
+        }
+
+        // ── Record the real outcome ────────────────────────────────────
+        // 'sent' means the provider accepted it. 'delivered' is set only by a
+        // provider delivery receipt (WhatsApp status webhook / email webhook).
+        await prisma.message.update({
+          where: { id: messageId },
+          data: {
+            status: sendSuccess ? 'sent' : 'failed',
+            sentAt: sendSuccess ? new Date() : null,
+            providerId: providerId ?? null,
+          },
+        })
       } catch (err: any) {
         console.error(`Error sending ${ch} for cart ${cart.id}:`, err?.message || err)
         error = err.message
       }
 
-      const abTag = abTestVariant ? ` [AB:${abTestVariant}]` : ''
-      let messageSaved = false
-      try {
-        const now = new Date()
-        await prisma.message.create({
-          data: {
-            cartId: cart.id,
-            campaignId: campaign.id,
-            channel: ch,
-            content: `Cart recovery message (step ${step + 1}/${effMaxMessages}) for ${customerName}${abTag}`,
-            status: sendSuccess ? 'sent' : 'failed',
-            sentAt: sendSuccess ? now : null,
-            // Email & WhatsApp delivery is fire-and-forget — mark as delivered
-            // immediately on successful send so delivery-rate metrics reflect reality.
-            // WhatsApp server-side delivery confirmation can later refine via webhook.
-            deliveredAt: sendSuccess ? now : null,
-          },
-        })
-        messageSaved = true
-      } catch (msgErr) {
-        console.error(`Failed to save message record for cart ${cart.id} (${ch}):`, msgErr)
-      }
-
-      if (sendSuccess && messageSaved) {
+      if (sendSuccess) {
         globalSendSuccess = true
         if (subscription) {
           await incrementCartsUsedCounter(campaign.userId, subscription.id)
@@ -642,7 +748,7 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
         })
         break
       } else {
-        console.error(`Failed to send ${ch} message for cart ${cart.id}: ${error || 'message record not saved'}`)
+        console.error(`Failed to send ${ch} message for cart ${cart.id}: ${error || 'unknown error'}`)
       }
     }
 
@@ -726,26 +832,4 @@ export async function processAbandonedCarts(
     console.error('Fatal error in processAbandonedCarts:', err)
     return { processedCarts: processedCount, messagesSent, messagesFailed, nextCursor, storesProcessed }
   }
-}
-
-function fallbackBodyContent(
-  customerName: string,
-  cartItems: { name: string; price: number }[],
-  formattedTotal: string,
-  step: number,
-  campaign: any,
-): string {
-  const productList = cartItems.slice(0, 2).map(i => i.name).join(' and ')
-  const restCount = cartItems.length - 2
-  const productLine = restCount > 0
-    ? `${productList} & ${restCount} more`
-    : productList || 'your items'
-
-  const fallbacks = [
-    `${customerName}, you've got incredible taste ✨ ${productLine} looks absolutely stunning — we saved it all for you. Just one tap and it's yours 🚚`,
-    `${productLine} is our #1 bestseller this month 💫 People are loving it — and we saved your picks before they sell out. Don't miss yours 👉`,
-    `${customerName}, your ${productLine} won't wait forever ⏳ Stock is moving fast and this deal ends soon. Last chance to grab what's yours 🏃‍♂️`,
-  ]
-
-  return fallbacks[step] || fallbacks[0]
 }

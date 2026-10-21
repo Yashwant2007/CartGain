@@ -100,6 +100,33 @@ export async function POST(request: NextRequest) {
 
       if (event.kind === 'status') {
         delivered++
+        // Match the receipt back to the message that produced it. Until this
+        // existed, `status = 'delivered'` was set optimistically at send time,
+        // so the delivery metric was always 100% and a failed delivery was
+        // invisible. A receipt is the only thing that may mark a message
+        // delivered.
+        if (event.wamid) {
+          const storeId = await resolveStoreIdByWhatsAppPhoneNumberId(
+            prisma,
+            event.phoneNumberId,
+          ).catch(() => null)
+          const where = {
+            providerId: event.wamid,
+            ...(storeId ? { cart: { storeId } } : {}),
+          }
+          if (event.status === 'delivered' || event.status === 'read') {
+            await prisma.message
+              .updateMany({
+                where: { ...where, deliveredAt: null },
+                data: { status: 'delivered', deliveredAt: new Date() },
+              })
+              .catch(() => {})
+          } else if (event.status === 'failed') {
+            await prisma.message
+              .updateMany({ where, data: { status: 'failed' } })
+              .catch(() => {})
+          }
+        }
         logInfo('whatsapp', 'delivery_status', `WhatsApp delivery status: ${event.status}`, {
           wamid: event.wamid,
           status: event.status,

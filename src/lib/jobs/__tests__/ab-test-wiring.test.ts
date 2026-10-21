@@ -24,7 +24,12 @@ jest.mock('@/lib/db', () => ({
     subscription: { findFirst: jest.fn(), update: jest.fn() },
     aBTest: { findFirst: jest.fn() },
     cart: { findMany: jest.fn() },
-    message: { findMany: jest.fn(), groupBy: jest.fn(), create: jest.fn() },
+    message: {
+      findMany: jest.fn(),
+      groupBy: jest.fn(),
+      create: jest.fn(async () => ({ id: 'message-1' })),
+      update: jest.fn(async () => ({})),
+    },
     analytics: { upsert: jest.fn(async () => ({})) },
   },
 }))
@@ -65,8 +70,6 @@ jest.mock('@/lib/services/whatsapp', () => {
 })
 
 jest.mock('@/lib/services/ai', () => ({
-  generateEmailContent: jest.fn(),
-  generateWhatsAppContent: jest.fn(),
   generatePersonalizedDiscount: jest.fn(),
 }))
 
@@ -177,7 +180,7 @@ describe('processAbandonedCarts — A/B variant config is applied', () => {
       .mockResolvedValueOnce([
         cart({
           customerEmail: 'buyer@example.com',
-          messages: [{ channel: 'whatsapp' }],
+          messages: [{ channel: 'whatsapp', status: 'sent', step: 0 }],
         }),
       ])
       .mockResolvedValue([])

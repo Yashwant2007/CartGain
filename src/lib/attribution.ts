@@ -17,7 +17,9 @@
 //   5. The order was placed by the same store (cross-tenant never matches — cart
 //      rows are scoped by (storeId, cartId)).
 //   6. The order has never been credited before (one credit per shopifyOrderId —
-//      enforced by the unique index on RecoveredCart.shopifyOrderId).
+//      enforced by the store-scoped unique index on
+//      RecoveredCart.(storeId, shopifyOrderId); Shopify order ids are per-shop
+//      sequences, so the constraint must not be global).
 //
 // Revenue definition (what "recovered revenue" means):
 //   recoveredRevenue = netRevenue = max(0, grossOrderTotal − orderDiscounts)
