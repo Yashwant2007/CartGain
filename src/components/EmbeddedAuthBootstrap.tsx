@@ -3,6 +3,10 @@
 import { useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { isInShopifyEmbed, getShopifyEmbedParams } from '@/lib/shopify-embed'
+import {
+  getShopifyIdToken,
+  installShopifyAuthFetchPatch,
+} from '@/lib/shopify-session-fetch'
 
 // The App Bridge runtime is server-rendered into the document head (see
 // src/app/layout.tsx) — it MUST NOT be injected from here: the CDN bundle
@@ -14,42 +18,11 @@ import { isInShopifyEmbed, getShopifyEmbedParams } from '@/lib/shopify-embed'
 // app. We use it to authenticate the embedded admin session without any
 // Google round-trip and without depending on a third-party cookie surviving
 // the admin iframe.
-const APP_BRIDGE_READY_TIMEOUT_MS = 8000
-const APP_BRIDGE_POLL_MS = 50
-
-type AppBridgeGlobal = {
-  idToken?: () => Promise<string>
-  config?: { shop?: string; apiKey?: string }
-}
-
-function getAppBridge(): AppBridgeGlobal | undefined {
-  if (typeof window === 'undefined') return undefined
-  return (window as unknown as { shopify?: AppBridgeGlobal }).shopify
-}
-
-/**
- * Resolves the App Bridge session token, waiting (briefly) for App Bridge to
- * finish booting. App Bridge assigns `idToken` asynchronously, so a direct
- * call right after page load can miss it.
- */
-async function getAppBridgeToken(): Promise<string | null> {
-  const deadline = Date.now() + APP_BRIDGE_READY_TIMEOUT_MS
-
-  while (Date.now() < deadline) {
-    const bridge = getAppBridge()
-    if (bridge && typeof bridge.idToken === 'function') {
-      try {
-        const token = await bridge.idToken()
-        if (typeof token === 'string' && token) return token
-      } catch {
-        // The host did not hand out a token — give up quietly.
-        return null
-      }
-    }
-    await new Promise((r) => setTimeout(r, APP_BRIDGE_POLL_MS))
-  }
-  return null
-}
+//
+// The token lookup is bounded (see src/lib/shopify-session-fetch.ts): when
+// the admin never answers, App Bridge's own idToken() blocks for a full
+// minute. Waiting for that would freeze the embedded app, so we give up long
+// before and let the request go out unauthenticated instead.
 
 function embedUrl(path: string): string {
   const { shop, host } = getShopifyEmbedParams()
@@ -80,9 +53,13 @@ export default function EmbeddedAuthBootstrap() {
     if (!isInShopifyEmbed()) return
     ran.current = true
 
+    // Make sure every /api request of this page carries the ID token, even
+    // the ones that use a plain fetch().
+    installShopifyAuthFetchPatch()
+
     ;(async () => {
       try {
-        const token = await getAppBridgeToken()
+        const token = await getShopifyIdToken()
         if (!token) return
 
         const res = await fetch('/api/shopify/embed-auth', {

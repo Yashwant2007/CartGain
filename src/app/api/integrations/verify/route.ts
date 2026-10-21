@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { lookup } from 'dns/promises'
-import { getAuthContext } from '@/lib/embedded-auth'
+import { getAuthContext, unauthorizedResponse } from '@/lib/embedded-auth'
 
 const verifySchema = z.object({
   platform: z.enum(['woocommerce', 'magento', 'bigcommerce', 'custom']),
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await getAuthContext(req)
     if (!auth?.user?.id) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      return unauthorizedResponse()
     }
 
     const body = await req.json()

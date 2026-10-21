@@ -29,12 +29,51 @@ export const APP_BRIDGE_CDN_SRC = 'https://cdn.shopify.com/shopifycloud/app-brid
 // Request header set by the middleware for embedded (admin iframe) requests.
 export const SHOPIFY_EMBED_HEADER = 'x-shopify-embed'
 export const SHOPIFY_EMBED_SHOP_HEADER = 'x-shopify-shop'
+export const SHOPIFY_EMBED_HOST_HEADER = 'x-shopify-host'
 
 // A Shopify shop domain: <store>.myshopify.com
 const SHOP_DOMAIN_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i
 
 export function isValidShopDomain(domain: string | null | undefined): domain is string {
   return typeof domain === 'string' && SHOP_DOMAIN_RE.test(domain)
+}
+
+/**
+ * The `host` parameter Shopify appends to the app URL. It is a base64 encoded
+ * admin host (e.g. "MS4yMjMuMjU0LjU4" -> "3.23.254.58") and App Bridge
+ * decodes it to learn which admin origin it is talking to.
+ */
+export function isValidShopifyHost(host: string | null | undefined): host is string {
+  if (typeof host !== 'string' || !host) return false
+  if (!/^[A-Za-z0-9+/=_-]+$/.test(host)) return false
+  try {
+    const decoded = Buffer.from(
+      host.replace(/-/g, '+').replace(/_/g, '/'),
+      'base64'
+    ).toString('utf8')
+    return decoded.length > 0
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The embed context of the current request: which shop and which admin host
+ * the page is running for. The App Bridge bundle reads these from the URL,
+ * but the URL loses them on client-side navigations and on some redirects —
+ * so we also hand them to the bundle as `shopify-shop` / `shopify-host` meta
+ * tags, which it merges into its configuration.
+ */
+export function getShopifyEmbedContext(
+  headers: Pick<Headers, 'get'> | null | undefined
+): { shop?: string; host?: string } {
+  if (!headers) return {}
+  const shop = headers.get(SHOPIFY_EMBED_SHOP_HEADER) || undefined
+  const host = headers.get(SHOPIFY_EMBED_HOST_HEADER) || undefined
+  return {
+    shop: isValidShopDomain(shop) ? shop : undefined,
+    host: isValidShopifyHost(host) ? host : undefined,
+  }
 }
 
 /**

@@ -44,28 +44,43 @@ function verifyShopifyInstallHmac(query: URLSearchParams): boolean {
 // (no CartGain login wall in between). The callback auto-provisions a User +
 // Store + free Subscription from the shop owner and lands them in the app.
 export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url)
-    const shop = searchParams.get('shop')
+  const { searchParams } = new URL(req.url)
+  const shop = searchParams.get('shop')
+  const host = searchParams.get('host')
+  const embedded = searchParams.get('embedded') === '1'
 
+  // Errors must not dump the merchant on the public marketing site: that
+  // page is static and has no App Bridge runtime, so the embedded app would
+  // be dead in the admin frame. Send embedded requests to the (dynamic)
+  // sign-in page instead, keeping the embed context.
+  const fail = (code: string) => {
+    if (embedded && isValidShopDomain(shop)) {
+      const target = new URL('/login', req.url)
+      target.searchParams.set('error', code)
+      target.searchParams.set('shop', shop as string)
+      if (host) target.searchParams.set('host', host)
+      return NextResponse.redirect(target)
+    }
+    return NextResponse.redirect(new URL(`/?error=${code}`, req.url))
+  }
+
+  try {
     if (!shop || !isValidShopDomain(shop)) {
-      return NextResponse.redirect(new URL('/?error=invalid_shop', req.url))
+      return fail('invalid_shop')
     }
 
     const secretConfigured = Boolean(process.env.SHOPIFY_API_SECRET)
     if (!secretConfigured) {
       console.error('[Shopify Install] SHOPIFY_API_SECRET is not configured — refusing install')
-      return NextResponse.redirect(new URL('/?error=not_configured', req.url))
+      return fail('not_configured')
     }
 
     const valid = verifyShopifyInstallHmac(searchParams)
     if (!valid) {
-      return NextResponse.redirect(new URL('/?error=invalid_signature', req.url))
+      return fail('invalid_signature')
     }
 
     const baseUrl = getAppBaseUrl(req)
-    const host = searchParams.get('host')
-    const embedded = searchParams.get('embedded') === '1'
 
     // Short-circuit: when Shopify re-opens an installed app in the admin iframe
     // we must NOT re-run OAuth. If the merchant is already authenticated and the
@@ -112,7 +127,7 @@ export async function GET(req: NextRequest) {
     // flow, distinct from a dashboard-driven "connect" state (which has one).
     const state = signOAuthState({ shop, host, embedded })
     if (!state) {
-      return NextResponse.redirect(new URL('/?error=not_configured', req.url))
+      return fail('not_configured')
     }
 
     const redirectUri = `${baseUrl}/api/shopify/callback`
@@ -132,6 +147,6 @@ export async function GET(req: NextRequest) {
     return res
   } catch (error) {
     console.error('Shopify install error:', error)
-    return NextResponse.redirect(new URL('/?error=install_failed', req.url))
+    return fail('install_failed')
   }
 }

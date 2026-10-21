@@ -64,6 +64,25 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 - `extensions/storefront-bargain/blocks/*.liquid` — theme extension app blocks.
 
 ## Work log (most recent first)
+- `fix(shopify): initialize App Bridge script and attach Bearer session tokens`.
+  Root cause of the embedded-auth failures: the ID-token validator compared the
+  token's `dest` claim (the SHOP origin, e.g. `https://shop.myshopify.com`)
+  with our own app origin, so every valid token was rejected. Shopify's spec
+  (docs "ID tokens") is `iss=https://{shop}.myshopify.com/admin`,
+  `dest=https://{shop}.myshopify.com`, and the two hostnames must match — the
+  validator now enforces that, plus `aud` against the client id, and takes an
+  optional `expectedShop`. Client side: `shopify.idToken()` blocks for 60s when
+  the admin never answers, so the lookup is bounded (4s bridge wait + 6s token
+  timeout, 10s cache, in-flight dedupe) and every same-origin `/api` request
+  carries `Authorization: Bearer <id token>` — dashboard pages use
+  `shopifySessionFetch`, a global `fetch` patch covers plain `fetch()` calls.
+  A 401 answered with `X-Shopify-Retry-Invalid-Session-Request` triggers one
+  retry with a fresh token (Shopify's documented contract) and the API routes
+  now set that header on their 401s. The App Bridge bundle additionally gets
+  the shop and admin host as `shopify-shop` / `shopify-host` meta tags, so the
+  runtime survives navigations that drop the query string. The install route
+  keeps embedded failures inside the app frame (`/login?error=…`) instead of
+  dropping the merchant on the static marketing site.
 - `ad9b26df` fix(shopify): App Bridge now loads for SIGNED-IN merchants and the
   session token is always exchanged. Root cause: next-auth's `withAuth` returns
   `undefined` for an authorized request (it only returns a response when it

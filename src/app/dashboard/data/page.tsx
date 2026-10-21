@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 import {
   ShieldCheck,
   Download,
@@ -51,7 +52,7 @@ export default function DataProtectionPage() {
     setLoading(true)
     setPageError(null)
     try {
-      const res = await fetch(`/api/data-protection?storeId=${storeId}`)
+      const res = await shopifySessionFetch(`/api/data-protection?storeId=${storeId}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || 'Failed to load data')
       setExports(data.exports || [])

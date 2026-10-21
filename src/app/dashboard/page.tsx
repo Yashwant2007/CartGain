@@ -95,7 +95,7 @@ export default function DashboardPage() {
 
       const safeFetch = async (url: string) => {
         try {
-          const res = await fetch(url)
+          const res = await shopifySessionFetch(url)
           if (!res.ok) {
             const body = await res.json().catch(() => ({}))
             return { error: body.message || `Status ${res.status}` }

@@ -553,10 +553,10 @@ function AISalesperson({ storeId }: { storeId: string | null }) {
     setLoading(true)
     setError(null)
     Promise.all([
-      fetch(`/api/bargain/config?storeId=${storeId}`, { signal: controller.signal })
+      shopifySessionFetch(`/api/bargain/config?storeId=${storeId}`, { signal: controller.signal })
         .then(r => (r.ok ? r.json() : null))
         .catch(() => null),
-      fetch(`/api/bargain/sessions?storeId=${storeId}&take=1`, { signal: controller.signal })
+      shopifySessionFetch(`/api/bargain/sessions?storeId=${storeId}&take=1`, { signal: controller.signal })
         .then(r => (r.ok ? r.json() : null))
         .catch(() => null),
     ])

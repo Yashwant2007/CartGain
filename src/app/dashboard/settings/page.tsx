@@ -50,7 +50,7 @@ export default function SettingsPage() {
 
         const [storeResponse, sessionResponse] = await Promise.all([
           shopifySessionFetch('/api/stores/current'),
-          fetch('/api/auth/session'),
+          shopifySessionFetch('/api/auth/session'),
         ])
 
         if (!storeResponse.ok) {
@@ -206,7 +206,7 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
       setSaving(true)
       setMessage(null)
 
-      const response = await fetch('/api/stores/current', {
+      const response = await shopifySessionFetch('/api/stores/current', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -249,7 +249,7 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
         throw new Error('Store not found')
       }
 
-      const res = await fetch('/api/shopify/connect', {
+      const res = await shopifySessionFetch('/api/shopify/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shop: shopifyShop, storeId }),
@@ -460,7 +460,7 @@ function NotificationSettings() {
     const controller = new AbortController()
     const load = async () => {
       try {
-        const res = await fetch('/api/settings/notifications', { signal: controller.signal })
+        const res = await shopifySessionFetch('/api/settings/notifications', { signal: controller.signal })
         if (!res.ok) throw new Error('Failed to load notification preferences')
         const data = await res.json()
         if (data.prefs) setSettings(data.prefs)
@@ -480,7 +480,7 @@ function NotificationSettings() {
     setSettings(updated)
     setSaving(true); setMessage(null)
     try {
-      const res = await fetch('/api/settings/notifications', {
+      const res = await shopifySessionFetch('/api/settings/notifications', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
@@ -561,7 +561,7 @@ function SecuritySettings() {
     if (passwords.new.length < 8) { setPasswordError('Password must be at least 8 characters'); return }
     try {
       setChangingPassword(true)
-      const res = await fetch('/api/auth/change-password', {
+      const res = await shopifySessionFetch('/api/auth/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPassword: passwords.current, newPassword: passwords.new }),
@@ -587,7 +587,7 @@ function SecuritySettings() {
   const handleStart2FASetup = async () => {
     setTwoFactorError(null); setShow2FASetup(true); setSetupStep('loading')
     try {
-      const res = await fetch('/api/auth/2fa/setup', { method: 'POST' })
+      const res = await shopifySessionFetch('/api/auth/2fa/setup', { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to start setup')
       setQrCodeUrl(data.qrCodeUrl)
@@ -603,7 +603,7 @@ function SecuritySettings() {
     if (setupCode.length !== 6) { setTwoFactorError('Enter the 6-digit code from your authenticator app'); return }
     setTwoFactorError(null); setTwoFactorLoading(true)
     try {
-      const res = await fetch('/api/auth/2fa/verify', {
+      const res = await shopifySessionFetch('/api/auth/2fa/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: setupCode }),
@@ -628,7 +628,7 @@ function SecuritySettings() {
     if (disableCode.length !== 6) { setTwoFactorError('Enter your 6-digit code'); return }
     setTwoFactorError(null); setTwoFactorLoading(true)
     try {
-      const res = await fetch('/api/auth/2fa/disable', {
+      const res = await shopifySessionFetch('/api/auth/2fa/disable', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: disableCode }),
@@ -649,7 +649,7 @@ function SecuritySettings() {
     if (deleteConfirm !== 'DELETE') return
     try {
       setDeletingAccount(true); setDeleteError(null)
-      const res = await fetch('/api/auth/delete-account', { method: 'DELETE' })
+      const res = await shopifySessionFetch('/api/auth/delete-account', { method: 'DELETE' })
       if (!res.ok) {
         let msg = 'Failed to delete account'
         try { const d = await res.json(); if (d?.message) msg = d.message } catch {}
@@ -866,7 +866,7 @@ function APISettings({ store }: { store: StoreSettings | null }) {
     abortLoadKeys.current = () => controller.abort()
     try {
       setLoading(true)
-      const res = await fetch('/api/keys', { signal: controller.signal })
+      const res = await shopifySessionFetch('/api/keys', { signal: controller.signal })
       if (!res.ok) throw new Error('Failed to load API keys')
       const data = await res.json()
       if (data.keys) setKeys(data.keys)
@@ -915,7 +915,7 @@ function APISettings({ store }: { store: StoreSettings | null }) {
     if (newKeyPermissions.length === 0) { setError('Select at least one permission'); return }
     setError(null); setGenerating(true)
     try {
-      const res = await fetch('/api/keys', {
+      const res = await shopifySessionFetch('/api/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -938,7 +938,7 @@ function APISettings({ store }: { store: StoreSettings | null }) {
 
   const handleRevoke = async (id: string) => {
     try {
-      const res = await fetch(`/api/keys/${id}`, { method: 'DELETE' })
+      const res = await shopifySessionFetch(`/api/keys/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to revoke')
       setKeys(keys.filter(k => k.id !== id))
       setShowRevokeConfirm(null)

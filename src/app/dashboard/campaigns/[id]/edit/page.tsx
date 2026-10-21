@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { ArrowLeft, Save } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import { campaignUpdateSchema } from '@/lib/validation'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 
 type Campaign = {
   id: string
@@ -52,7 +53,7 @@ export default function EditCampaignPage() {
 
       try {
         setLoading(true)
-        const response = await fetch(`/api/campaigns/${campaignId}`, { signal: controller.signal })
+        const response = await shopifySessionFetch(`/api/campaigns/${campaignId}`, { signal: controller.signal })
         if (!response.ok) {
           if (response.status === 404) {
             setError('Campaign not found')
@@ -120,7 +121,7 @@ export default function EditCampaignPage() {
       setSaving(true)
       setError(null)
 
-      const response = await fetch(`/api/campaigns/${campaignId}`, {
+      const response = await shopifySessionFetch(`/api/campaigns/${campaignId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(result.data),

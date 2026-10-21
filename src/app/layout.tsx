@@ -8,6 +8,7 @@ import EmbeddedAuthBootstrap from '@/components/EmbeddedAuthBootstrap'
 import {
   APP_BRIDGE_CDN_SRC,
   getShopifyApiKey,
+  getShopifyEmbedContext,
   isShopifyEmbedRequest,
 } from '@/lib/shopify-app-bridge'
 
@@ -92,8 +93,11 @@ export default async function RootLayout({
   // routes opt back into static rendering with `dynamic = 'force-static'`
   // (their headers come back empty, which is exactly what we want there).
   let embedRequest = false
+  let embedContext: { shop?: string; host?: string } = {}
   try {
-    embedRequest = isShopifyEmbedRequest(await headers())
+    const requestHeaders = await headers()
+    embedRequest = isShopifyEmbedRequest(requestHeaders)
+    embedContext = getShopifyEmbedContext(requestHeaders)
   } catch {
     embedRequest = false
   }
@@ -110,6 +114,16 @@ export default async function RootLayout({
                 The script must be a plain, blocking <script> — the CDN bundle
                 aborts itself when the tag is async/defer/module. */}
             <meta name="shopify-api-key" content={shopifyApiKey} />
+            {/* The bundle also needs the shop (and the admin host) to talk to
+                Shopify. It normally reads them from the URL, but the URL loses
+                them on client-side navigations and on some redirects — the
+                meta tags keep the runtime configured. */}
+            {embedContext.shop ? (
+              <meta name="shopify-shop" content={embedContext.shop} />
+            ) : null}
+            {embedContext.host ? (
+              <meta name="shopify-host" content={embedContext.host} />
+            ) : null}
             {/* eslint-disable-next-line @next/next/no-sync-scripts -- Shopify's
                 App Bridge bundle refuses to initialise unless the tag is a
                 plain, synchronous script tag. */}

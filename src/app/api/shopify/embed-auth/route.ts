@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { verifyShopifySessionToken } from '@/lib/shopify-session-token'
 import { mintNextAuthSessionCookie } from '@/lib/session-cookie'
+import { readShopifyIdToken, RETRY_INVALID_SESSION_HEADER } from '@/lib/embedded-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,16 +35,18 @@ export async function POST(request: NextRequest) {
     // `Authorization: Bearer <token>`. Accept it so the flow works even when
     // the client cannot call `shopify.idToken()` itself.
     if (!token) {
-      const authHeader = request.headers.get('authorization') || request.headers.get('Authorization')
-      if (authHeader?.startsWith('Bearer ')) token = authHeader.slice(7)
+      token = readShopifyIdToken(request) || ''
     }
     if (!token) {
       return NextResponse.json({ message: 'token is required' }, { status: 400 })
     }
 
-    const decoded = verifyShopifySessionToken(token, { expectedDest: request.nextUrl.origin })
+    const decoded = verifyShopifySessionToken(token)
     if (!decoded) {
-      return NextResponse.json({ message: 'Invalid session token' }, { status: 401 })
+      const res = NextResponse.json({ message: 'Invalid session token' }, { status: 401 })
+      // Ask App Bridge for a fresh token and let it retry the exchange.
+      res.headers.set(RETRY_INVALID_SESSION_HEADER, '1')
+      return res
     }
 
     const store = await prisma.store.findFirst({

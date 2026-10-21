@@ -6,7 +6,7 @@ import {
   shopifyBillingAvailability,
   reconcileShopifySubscriptionForUser,
 } from '@/lib/shopify-billing/service'
-import { getAuthContext } from '@/lib/embedded-auth'
+import { getAuthContext, unauthorizedResponse } from '@/lib/embedded-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await getAuthContext(request)
     if (!auth?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorizedResponse()
     }
     const session = { user: { id: auth.user.id } } as any
 

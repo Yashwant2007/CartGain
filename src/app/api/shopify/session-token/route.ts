@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/lib/auth'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { verifyShopifySessionToken } from '@/lib/shopify-session-token'
+import { readShopifyIdToken, RETRY_INVALID_SESSION_HEADER } from '@/lib/embedded-auth'
 
 export const dynamic = 'force-dynamic'
 
 // POST /api/shopify/session-token
-// Body: { token } — App Bridge session token from an embedded app session.
+// Body: { token } — App Bridge ID token from an embedded app session.
 // Returns the store id the shop maps to (if it exists), so embedded clients can
 // resolve their store without a redirect-based OAuth round trip.
+//
+// The ID token IS the authentication here: it is signed by Shopify with our
+// app secret and names the shop it was minted for, so it proves the caller
+// is a staff member of that shop. No session cookie is required — the admin
+// iframe is a cross-site context where cookies are not reliable.
 export async function POST(request: NextRequest) {
   try {
     const rateLimitResult = await checkRateLimit('shopify-session-token', {
@@ -21,24 +25,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Too many requests. Please try again later.' }, { status: 429 })
     }
 
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
-    }
-
     const body = await request.json().catch(() => ({}))
-    const token = typeof body.token === 'string' ? body.token : ''
+    let token = typeof body.token === 'string' ? body.token : ''
+    if (!token) {
+      token = readShopifyIdToken(request) || ''
+    }
     if (!token) {
       return NextResponse.json({ message: 'token is required' }, { status: 400 })
     }
 
     const decoded = verifyShopifySessionToken(token)
     if (!decoded) {
-      return NextResponse.json({ message: 'Invalid session token' }, { status: 401 })
+      const res = NextResponse.json({ message: 'Invalid session token' }, { status: 401 })
+      // Ask App Bridge to mint a fresh token and retry the request.
+      res.headers.set(RETRY_INVALID_SESSION_HEADER, '1')
+      return res
     }
 
     const store = await prisma.store.findFirst({
-      where: { domain: decoded.shop, userId: session.user.id },
+      where: {
+        domain: { equals: decoded.shop, mode: 'insensitive' },
+        platform: 'shopify',
+      },
       select: { id: true, name: true, domain: true, platform: true, isActive: true },
     })
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
-import { getAuthContext } from '@/lib/embedded-auth'
+import { getAuthContext, unauthorizedResponse } from '@/lib/embedded-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     const auth = await getAuthContext(req)
 
     if (!auth?.user?.id) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      return unauthorizedResponse()
     }
     const userId = auth.user.id
 

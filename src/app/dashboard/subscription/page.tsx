@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { Check, Shield, Percent, Zap, FileText, Download, ToggleLeft, Mail, MessageSquare } from 'lucide-react'
 import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/payment'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 
 type SubscriptionData = {
   id: string
@@ -74,8 +75,8 @@ export default function SubscriptionPage() {
     abortFetchData.current = () => controller.abort()
     try {
       const [subRes, overviewRes] = await Promise.all([
-        fetch('/api/subscription', { signal: controller.signal }),
-        fetch('/api/analytics/overview', { signal: controller.signal }),
+        shopifySessionFetch('/api/subscription', { signal: controller.signal }),
+        shopifySessionFetch('/api/analytics/overview', { signal: controller.signal }),
       ])
 
       if (subRes.ok) {
@@ -162,7 +163,7 @@ export default function SubscriptionPage() {
     setCancelling(true)
     setCancelError(null)
     try {
-      const res = await fetch('/api/subscription/cancel', { method: 'POST' })
+      const res = await shopifySessionFetch('/api/subscription/cancel', { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to cancel')
       setShowCancelConfirm(false)
@@ -182,7 +183,7 @@ export default function SubscriptionPage() {
       const plan = PLANS[planKey]
       if (!plan || plan.price === 0) return
 
-      const res = await fetch('/api/payment/create-subscription', {
+      const res = await shopifySessionFetch('/api/payment/create-subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: plan.id, period: billing }),
@@ -571,7 +572,7 @@ export default function SubscriptionPage() {
                 setGeneratingInvoice(true)
                 setInvoiceMsg(null)
                 try {
-                  const res = await fetch('/api/invoices', { method: 'POST' })
+                  const res = await shopifySessionFetch('/api/invoices', { method: 'POST' })
                   const data = await res.json()
                   if (res.ok) {
                     setInvoiceMsg('Invoice generated successfully')

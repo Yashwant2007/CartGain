@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { encrypt, decrypt } from '@/lib/encryption'
 import { storeUpdateSchema, validateOrThrow, handleValidationError } from '@/lib/validation'
-import { getAuthContext } from '@/lib/embedded-auth'
+import { getAuthContext, unauthorizedResponse } from '@/lib/embedded-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const auth = await getAuthContext(req)
 
     if (!auth?.user?.id) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      return unauthorizedResponse()
     }
     const session = { user: { id: auth.user.id } } as any
 
@@ -68,7 +68,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const auth = await getAuthContext(request)
     if (!auth?.user?.id) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      return unauthorizedResponse()
     }
     const session = { user: { id: auth.user.id } } as any
 

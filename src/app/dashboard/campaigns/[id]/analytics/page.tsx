@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { ArrowLeft, TrendingUp } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
+import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 
 type CampaignAnalytics = {
   id: string
@@ -42,7 +43,7 @@ export default function CampaignAnalyticsPage() {
 
       try {
         setLoading(true)
-        const response = await fetch(`/api/campaigns/${campaignId}/analytics`, { signal: controller.signal })
+        const response = await shopifySessionFetch(`/api/campaigns/${campaignId}/analytics`, { signal: controller.signal })
         if (!response.ok) {
           if (response.status === 404) {
             setError('Campaign not found')

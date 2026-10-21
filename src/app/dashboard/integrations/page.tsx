@@ -114,7 +114,7 @@ export default function IntegrationsPage() {
     const shopifyIntegration = status?.integrations.find(i => i.id === 'shopify')
     if (!shopifyIntegration?.connected) return
     setShopifyHealth(null)
-    fetch('/api/shopify/health')
+    shopifySessionFetch('/api/shopify/health')
       .then(async r => {
         if (!r.ok) return
         const data = await r.json()
@@ -127,12 +127,12 @@ export default function IntegrationsPage() {
   useEffect(() => {
     if (!status?.store || status.integrations.find(i => i.id === 'shopify')?.connected) return
 
-    fetch('/api/shopify/pending-install')
+    shopifySessionFetch('/api/shopify/pending-install')
       .then(async r => {
         if (!r.ok) return
         const { shop }: { shop: string | null } = await r.json()
         if (!shop) return
-        const res = await fetch('/api/shopify/connect', {
+        const res = await shopifySessionFetch('/api/shopify/connect', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ shop, storeId: status.store.id }),
@@ -163,7 +163,7 @@ export default function IntegrationsPage() {
   }, [shopifyModal])
 
   const updatePlatform = async (platform: string, data: Record<string, string>) => {
-    const res = await fetch('/api/stores/current', {
+    const res = await shopifySessionFetch('/api/stores/current', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ platform, ...data }),
@@ -191,7 +191,7 @@ export default function IntegrationsPage() {
       if (!domain) throw new Error('Please enter your Shopify store name.')
       domain = `${domain}.myshopify.com`
 
-      const res = await fetch('/api/shopify/connect', {
+      const res = await shopifySessionFetch('/api/shopify/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shop: domain, storeId: status.store.id }),

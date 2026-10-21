@@ -3,7 +3,9 @@ import { NextFetchEvent, NextRequest, NextResponse } from 'next/server'
 import {
   SHOPIFY_EMBED_HEADER,
   SHOPIFY_EMBED_SHOP_HEADER,
+  SHOPIFY_EMBED_HOST_HEADER,
   isValidShopDomain,
+  isValidShopifyHost,
 } from '@/lib/shopify-app-bridge'
 
 const auth = withAuth({
@@ -106,6 +108,13 @@ function markShopifyEmbedRequest(req: NextRequest): Headers | null {
   if (!isValidShopDomain(shop)) return null
   req.headers.set(SHOPIFY_EMBED_HEADER, '1')
   req.headers.set(SHOPIFY_EMBED_SHOP_HEADER, shop)
+  // App Bridge needs the admin host to know which origin it is talking to.
+  // It is also handed to the bundle as a meta tag, so the runtime keeps
+  // working when the URL later loses the parameter.
+  const host = req.nextUrl.searchParams.get('host')
+  if (isValidShopifyHost(host)) {
+    req.headers.set(SHOPIFY_EMBED_HOST_HEADER, host)
+  }
   return new Headers(req.headers)
 }
 

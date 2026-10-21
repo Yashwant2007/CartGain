@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { Prisma } from '@prisma/client'
 import { currencySymbolFor } from '@/lib/bargain/i18n'
-import { getAuthContext } from '@/lib/embedded-auth'
+import { getAuthContext, unauthorizedResponse } from '@/lib/embedded-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   try {
     const auth = await getAuthContext(req)
     if (!auth?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return unauthorizedResponse()
     }
     const userId = auth.user.id
     const session = { user: { id: userId } } as any
