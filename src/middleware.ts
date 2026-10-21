@@ -210,12 +210,22 @@ export default async function middleware(
   }
 
   const response = await auth(req, event)
-  if (response) {
-    preserveEmbedParamsOnRedirect(req, response)
-    clearStaleCookies(response.headers)
-    if (embedHeaders && !response.headers.get('location')) {
-      withRequestHeaders(response, embedHeaders)
-    }
+
+  // next-auth's withAuth returns `undefined` for an AUTHORIZED request (it
+  // only returns a response when it wants to redirect). The middleware still
+  // has to hand a response back, and that response is what carries the
+  // request-header override — without it the embed flag never reaches the
+  // render and the App Bridge runtime is missing from the app UI.
+  if (!response) {
+    const next = NextResponse.next()
+    if (embedHeaders) withRequestHeaders(next, embedHeaders)
+    return next
+  }
+
+  preserveEmbedParamsOnRedirect(req, response)
+  clearStaleCookies(response.headers)
+  if (embedHeaders && !response.headers.get('location')) {
+    withRequestHeaders(response, embedHeaders)
   }
   return response
 }

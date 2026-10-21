@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import prisma from '@/lib/db'
+import { authOptions } from '@/lib/auth'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { verifyShopifySessionToken } from '@/lib/shopify-session-token'
 import { mintNextAuthSessionCookie } from '@/lib/session-cookie'
@@ -60,6 +62,14 @@ export async function POST(request: NextRequest) {
     })
     if (!user) {
       return NextResponse.json({ connected: false, needsInstall: true, shop: decoded.shop })
+    }
+
+    // Never hand the embedded shop to a different CartGain account than the
+    // one already signed in in this browser: that would silently swap the
+    // merchant's session. Report the mismatch and leave the session alone.
+    const current = await getServerSession(authOptions)
+    if (current?.user?.id && current.user.id !== user.id) {
+      return NextResponse.json({ connected: false, mismatch: true, shop: decoded.shop })
     }
 
     const res = NextResponse.json({

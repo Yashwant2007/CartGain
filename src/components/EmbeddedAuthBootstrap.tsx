@@ -60,17 +60,23 @@ function embedUrl(path: string): string {
   return `${path}${qs ? `?${qs}` : ''}`
 }
 
-// Mounted once at the root. When the app runs inside the Shopify admin iframe
-// and no CartGain session exists yet, it exchanges an App Bridge session token
-// for a session cookie and reloads into the dashboard. On the normal website
-// (not embedded) it is a no-op.
+// Mounted once at the root. Whenever the app runs inside the Shopify admin
+// iframe it exchanges an App Bridge session token for a CartGain session:
+//  - no session yet → the token signs the merchant in and the app reloads
+//    into the dashboard
+//  - session already → the token is still exchanged, because Shopify's
+//    "session tokens for user authentication" requirement is satisfied by the
+//    app actually sending the session token with its requests
+// On the normal website (not embedded) it is a no-op.
 export default function EmbeddedAuthBootstrap() {
   const { status } = useSession()
   const ran = useRef(false)
 
   useEffect(() => {
     if (ran.current) return
-    if (status !== 'unauthenticated') return
+    // Wait for the session state to settle: we need to know whether the
+    // merchant is signed in before deciding to reload the page.
+    if (status === 'loading') return
     if (!isInShopifyEmbed()) return
     ran.current = true
 
@@ -85,10 +91,19 @@ export default function EmbeddedAuthBootstrap() {
           body: JSON.stringify({ token }),
         })
         const data = await res.json().catch(() => ({}))
+        if (!res.ok) return
 
-        if (res.ok && data.connected) {
-          // Session cookie is now set — full reload so the app picks it up.
-          window.location.replace(embedUrl('/dashboard'))
+        if (data.connected) {
+          // The session cookie is now set — full reload so the app picks it up.
+          if (status === 'unauthenticated') {
+            window.location.replace(embedUrl('/dashboard'))
+          }
+          return
+        }
+
+        if (data.mismatch) {
+          // The embedded shop belongs to a different CartGain account than
+          // the signed-in one — never swap the session silently.
           return
         }
 
