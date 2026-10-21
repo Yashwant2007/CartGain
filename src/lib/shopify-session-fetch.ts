@@ -1,11 +1,18 @@
 'use client'
 
+import { getAppBridgeSessionToken } from './shopify-app-bridge'
+
 async function getShopifyIdToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null
   const w = window as any
 
-  for (let attempts = 0; attempts < 200; attempts++) {
-    // Try many possible paths
+  // Try App Bridge v3/v4 utils first
+  try {
+    const t = await getAppBridgeSessionToken()
+    if (typeof t === 'string' && t) return t
+  } catch {}
+
+  for (let attempts = 0; attempts < 300; attempts++) {
     try {
       if (w.shopify?.idToken && typeof w.shopify.idToken === 'function') {
         const t = await w.shopify.idToken()
@@ -31,20 +38,8 @@ async function getShopifyIdToken(): Promise<string | null> {
       }
     } catch {}
     try {
-      if (w.ShopifyAppBridge?.idToken && typeof w.ShopifyAppBridge.idToken === 'function') {
-        const t = await w.ShopifyAppBridge.idToken()
-        if (typeof t === 'string' && t) return t
-      }
-    } catch {}
-    try {
       if (w.ShopifyAppBridge?.auth?.getSessionToken && typeof w.ShopifyAppBridge.auth.getSessionToken === 'function') {
         const t = await w.ShopifyAppBridge.auth.getSessionToken()
-        if (typeof t === 'string' && t) return t
-      }
-    } catch {}
-    try {
-      if (w.app?.idToken && typeof w.app.idToken === 'function') {
-        const t = await w.app.idToken()
         if (typeof t === 'string' && t) return t
       }
     } catch {}
@@ -55,7 +50,7 @@ async function getShopifyIdToken(): Promise<string | null> {
       }
     } catch {}
 
-    await new Promise((r) => setTimeout(r, 30))
+    await new Promise((r) => setTimeout(r, 20))
   }
   return null
 }
