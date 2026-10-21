@@ -64,6 +64,19 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 - `extensions/storefront-bargain/blocks/*.liquid` — theme extension app blocks.
 
 ## Work log (most recent first)
+- `ad9b26df` fix(shopify): App Bridge now loads for SIGNED-IN merchants and the
+  session token is always exchanged. Root cause: next-auth's `withAuth` returns
+  `undefined` for an authorized request (it only returns a response when it
+  redirects), so the middleware's `if (response)` branch — the one that
+  forwards the embed request header — never ran for a logged-in merchant and
+  the App Bridge runtime was missing from the app UI. The middleware now builds
+  the response itself when `withAuth` returns nothing. Second fix: the
+  session-token exchange only ran while logged out, so no token was ever sent
+  once signed in; the bootstrap now exchanges it in every embedded context and
+  the embed-auth route refuses to swap the session of a different account.
+  Verified locally with a signed session cookie: embedded `/dashboard` has the
+  CDN script + `shopify-api-key` meta, non-embedded `/dashboard` and the
+  public site have neither. Deployed, live release `ad9b26d`.
 - `4849605a` feat(shopify): App Bridge from the Shopify CDN + session-token auth
   (Partner Dashboard requirements). The CDN bundle aborts unless the tag is a
   plain blocking `<script>` on Shopify's CDN and unless `shopify-api-key` +
