@@ -64,6 +64,20 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 - `extensions/storefront-bargain/blocks/*.liquid` — theme extension app blocks.
 
 ## Work log (most recent first)
+- `4849605a` feat(shopify): App Bridge from the Shopify CDN + session-token auth
+  (Partner Dashboard requirements). The CDN bundle aborts unless the tag is a
+  plain blocking `<script>` on Shopify's CDN and unless `shopify-api-key` +
+  `shop` config exist, so the script is now server-rendered into `<head>` for
+  embedded requests only (`src/app/layout.tsx` + `src/middleware.ts`:
+  `?shop=*.myshopify.com` → `x-shopify-embed` request header). Public routes
+  moved into `src/app/(site)/` with `force-static` so the marketing site stays
+  static; `/login` and `/setup` stay outside it (dynamic) so an embedded
+  merchant can be signed in with `shopify.idToken()`. Auth redirects now keep
+  `?shop`/`?host`. Session-token verification checks `iss`/`dest`/`aud`.
+  Verified live: release `4849605`, `/api/health` `shopify.apiKeyFingerprint`
+  `aa96ee963d36` (= public app `67beb1794fab10553102c134b63e1277`),
+  `appBridgeReady: true`, embedded login HTML has the meta + CDN script,
+  public pages have neither.
 - `5e357075` fix(shopify): abandoned-checkouts endpoint. `fetchAbandonedCheckouts`
   was calling a nonexistent `.../abandoned_checkouts.json` (key
   `abandoned_checkouts`) → 404 every cart sweep. Now uses `checkouts.json` /
@@ -86,6 +100,10 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   extracted. Live/verified.
 
 ## Open / watch items
+- Partner Dashboard "App Bridge from CDN" / "session tokens" checks are only
+  confirmed by Shopify's scanner (it loads the app in the admin iframe); the
+  code side is verified (script + meta served in `<head>`, token exchanged via
+  `/api/shopify/embed-auth`), the dashboard verdict still has to be observed.
 - `fetchShopifyCarts` (`/admin/api/2026-04/carts.json`) is not a real Shopify REST
   resource and is only referenced by tests (`shopify-retry.test.ts`); production
   cart sync uses `syncAbandonedCheckouts`. Fix it if it's ever wired in.
