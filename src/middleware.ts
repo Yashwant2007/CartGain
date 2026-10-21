@@ -1,5 +1,10 @@
 import { withAuth, NextRequestWithAuth } from 'next-auth/middleware'
 import { NextFetchEvent, NextRequest, NextResponse } from 'next/server'
+import {
+  SHOPIFY_EMBED_HEADER,
+  SHOPIFY_EMBED_SHOP_HEADER,
+  isValidShopDomain,
+} from '@/lib/shopify-app-bridge'
 
 const auth = withAuth({
   callbacks: {
@@ -81,6 +86,64 @@ function hasSessionCookie(req: NextRequest): boolean {
   return SESSION_COOKIE_NAMES.some(name => Boolean(req.cookies.get(name)?.value))
 }
 
+// ─── Shopify embedded-app detection ─────────────────────────────────────────
+// The Shopify admin loads the app inside an iframe and always appends
+// `?shop=<store>.myshopify.com` (plus `?host=`) to the app URL. That is the
+// only trustworthy signal that a request originates from the embedded app:
+// a client-supplied header would let any visitor pull the App Bridge runtime
+// into the public site, where it aborts (no shop) or redirects the visitor
+// into the Shopify admin.
+//
+// The answer is forwarded to the React tree as a request header so the root
+// layout can render the App Bridge <script> into the document head for
+// embedded requests only.
+//
+// Returns the headers to hand downstream: Next.js only propagates request
+// header changes to the render when they are passed explicitly through
+// `NextResponse.next({ request: { headers } })`.
+function markShopifyEmbedRequest(req: NextRequest): Headers | null {
+  const shop = req.nextUrl.searchParams.get('shop')
+  if (!isValidShopDomain(shop)) return null
+  req.headers.set(SHOPIFY_EMBED_HEADER, '1')
+  req.headers.set(SHOPIFY_EMBED_SHOP_HEADER, shop)
+  return new Headers(req.headers)
+}
+
+// Forward the (possibly modified) request headers to the next handler.
+function withRequestHeaders(response: Response, headers: Headers): Response {
+  const overridden: string[] = []
+  headers.forEach((value, key) => {
+    response.headers.set(`x-middleware-request-${key}`, value)
+    overridden.push(key)
+  })
+  if (overridden.length > 0) {
+    response.headers.set('x-middleware-override-headers', overridden.join(','))
+  }
+  return response
+}
+
+// The auth redirect drops the query string, which would strip the embed
+// context (?shop=…&host=…) from the sign-in page. Without it the sign-in page
+// is not recognised as an embedded request, so it would not load App Bridge
+// and the merchant could not be signed in with a session token.
+function preserveEmbedParamsOnRedirect(req: NextRequest, response: Response): void {
+  const location = response.headers.get('location')
+  if (!location) return
+  const shop = req.nextUrl.searchParams.get('shop')
+  if (!isValidShopDomain(shop)) return
+
+  try {
+    const url = new URL(location, req.url)
+    if (url.searchParams.has('shop')) return
+    url.searchParams.set('shop', shop)
+    const host = req.nextUrl.searchParams.get('host')
+    if (host && !url.searchParams.has('host')) url.searchParams.set('host', host)
+    response.headers.set('location', url.toString())
+  } catch {
+    // leave the redirect untouched
+  }
+}
+
 function isSameOriginRequest(req: NextRequest): boolean {
   const source = req.headers.get('origin') || req.headers.get('referer')
   if (!source) return false
@@ -125,12 +188,34 @@ export default async function middleware(
       return blocked
     }
 
+    // Forward the trace id to the route handler — a mutated request header
+    // only reaches the handler when it is passed on explicitly.
+    withRequestHeaders(response, new Headers(req.headers))
+    return response
+  }
+
+  // The admin iframe always carries ?shop= — remember that before the auth
+  // check so the root layout can render the App Bridge runtime for embedded
+  // requests (see markShopifyEmbedRequest).
+  const embedHeaders = markShopifyEmbedRequest(req)
+
+  // The sign-in page is the one page the auth wrapper must not protect (it
+  // would redirect to itself). It still needs the embed context so an embedded
+  // merchant can be signed in with an App Bridge session token.
+  if (req.nextUrl.pathname === '/login') {
+    const response = NextResponse.next()
+    clearStaleCookies(response.headers)
+    if (embedHeaders) withRequestHeaders(response, embedHeaders)
     return response
   }
 
   const response = await auth(req, event)
   if (response) {
+    preserveEmbedParamsOnRedirect(req, response)
     clearStaleCookies(response.headers)
+    if (embedHeaders && !response.headers.get('location')) {
+      withRequestHeaders(response, embedHeaders)
+    }
   }
   return response
 }
@@ -138,7 +223,9 @@ export default async function middleware(
 export const config = {
   // /setup is the post-signup onboarding step — protect it server-side too so a
   // logged-out visitor hitting the URL directly is sent to /login instead of a
-  // client-side redirect flicker inside the page. /api runs through the same
+  // client-side redirect flicker inside the page. /login is matched so an
+  // embedded (Shopify admin) sign-in page can load App Bridge and exchange a
+  // session token for a CartGain session. /api runs through the same
   // middleware only for trace-id injection (auth stays inside each route).
-  matcher: ['/dashboard/:path*', '/setup', '/api/:path*'],
+  matcher: ['/dashboard/:path*', '/setup', '/login', '/api/:path*'],
 }

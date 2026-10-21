@@ -14,8 +14,13 @@ export async function getAuthContext(req: NextRequest) {
         select: { id: true, email: true, name: true },
       })
       if (user) {
+        // Scope the store to the one the session was issued for. A merchant
+        // can own several shops; the session carries the active one.
+        const sessionStoreId = session.user.storeId
         const store = await prisma.store.findFirst({
-          where: { userId: user.id },
+          where: sessionStoreId
+            ? { id: sessionStoreId, userId: user.id }
+            : { userId: user.id },
           orderBy: { createdAt: 'asc' },
           select: { id: true, domain: true, platform: true },
         })
@@ -31,7 +36,7 @@ export async function getAuthContext(req: NextRequest) {
     const authHeader = req.headers.get('authorization') || req.headers.get('Authorization')
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.slice(7)
-      const decoded = verifyShopifySessionToken(token)
+      const decoded = verifyShopifySessionToken(token, { expectedDest: req.nextUrl.origin })
       if (decoded?.shop) {
         const store = await prisma.store.findFirst({
           where: { domain: { equals: decoded.shop, mode: 'insensitive' }, platform: 'shopify', apiKey: { not: null } },

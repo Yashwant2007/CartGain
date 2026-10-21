@@ -26,12 +26,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}))
-    const token = typeof body.token === 'string' ? body.token : ''
+    let token = typeof body.token === 'string' ? body.token : ''
+
+    // App Bridge also puts the session token on every same-origin request as
+    // `Authorization: Bearer <token>`. Accept it so the flow works even when
+    // the client cannot call `shopify.idToken()` itself.
+    if (!token) {
+      const authHeader = request.headers.get('authorization') || request.headers.get('Authorization')
+      if (authHeader?.startsWith('Bearer ')) token = authHeader.slice(7)
+    }
     if (!token) {
       return NextResponse.json({ message: 'token is required' }, { status: 400 })
     }
 
-    const decoded = verifyShopifySessionToken(token)
+    const decoded = verifyShopifySessionToken(token, { expectedDest: request.nextUrl.origin })
     if (!decoded) {
       return NextResponse.json({ message: 'Invalid session token' }, { status: 401 })
     }

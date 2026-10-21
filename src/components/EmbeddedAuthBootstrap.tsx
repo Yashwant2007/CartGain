@@ -4,41 +4,51 @@ import { useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { isInShopifyEmbed, getShopifyEmbedParams } from '@/lib/shopify-embed'
 
-// Shopify's App Bridge is served from the Shopify CDN and exposes
-// `window.shopify.idToken()` — a short-lived JWT signed for this app. We use it
-// to authenticate the embedded admin session without any Google round-trip and
-// without depending on a third-party cookie surviving the admin iframe.
-const APP_BRIDGE_SRC = 'https://cdn.shopify.com/shopifycloud/app-bridge.js'
+// The App Bridge runtime is server-rendered into the document head (see
+// src/app/layout.tsx) — it MUST NOT be injected from here: the CDN bundle
+// aborts itself when the tag is async/defer/module, and it needs the
+// `shopify-api-key` meta tag that only the server can render for the
+// embedded request.
+//
+// App Bridge exposes `shopify.idToken()` — a short-lived JWT signed for this
+// app. We use it to authenticate the embedded admin session without any
+// Google round-trip and without depending on a third-party cookie surviving
+// the admin iframe.
+const APP_BRIDGE_READY_TIMEOUT_MS = 8000
+const APP_BRIDGE_POLL_MS = 50
 
-function loadAppBridge(): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve()
-  if ((window as any).shopify?.idToken) return Promise.resolve()
+type AppBridgeGlobal = {
+  idToken?: () => Promise<string>
+  config?: { shop?: string; apiKey?: string }
+}
 
-  return new Promise<void>((resolve) => {
-    const finish = () => resolve()
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${APP_BRIDGE_SRC}"]`)
-    const waitForShopify = () => {
-      let tries = 0
-      const t = setInterval(() => {
-        tries += 1
-        const w = (window as any)
-        if (w.shopify?.idToken || w.shopify?.config || tries > 200) {
-          clearInterval(t)
-          finish()
-        }
-      }, 50)
+function getAppBridge(): AppBridgeGlobal | undefined {
+  if (typeof window === 'undefined') return undefined
+  return (window as unknown as { shopify?: AppBridgeGlobal }).shopify
+}
+
+/**
+ * Resolves the App Bridge session token, waiting (briefly) for App Bridge to
+ * finish booting. App Bridge assigns `idToken` asynchronously, so a direct
+ * call right after page load can miss it.
+ */
+async function getAppBridgeToken(): Promise<string | null> {
+  const deadline = Date.now() + APP_BRIDGE_READY_TIMEOUT_MS
+
+  while (Date.now() < deadline) {
+    const bridge = getAppBridge()
+    if (bridge && typeof bridge.idToken === 'function') {
+      try {
+        const token = await bridge.idToken()
+        if (typeof token === 'string' && token) return token
+      } catch {
+        // The host did not hand out a token — give up quietly.
+        return null
+      }
     }
-    if (existing) {
-      waitForShopify()
-      return
-    }
-    const s = document.createElement('script')
-    s.src = APP_BRIDGE_SRC
-    s.async = true
-    s.onload = waitForShopify
-    s.onerror = finish
-    document.head.appendChild(s)
-  })
+    await new Promise((r) => setTimeout(r, APP_BRIDGE_POLL_MS))
+  }
+  return null
 }
 
 function embedUrl(path: string): string {
@@ -66,15 +76,7 @@ export default function EmbeddedAuthBootstrap() {
 
     ;(async () => {
       try {
-        await loadAppBridge()
-        const w = (window as any)
-        // Also try to wait a bit more
-        for (let i = 0; i < 30 && !w.shopify?.idToken; i++) {
-          await new Promise((r) => setTimeout(r, 100))
-        }
-        const shopify = (window as any).shopify
-        if (!shopify?.idToken) return
-        const token: string = await shopify.idToken()
+        const token = await getAppBridgeToken()
         if (!token) return
 
         const res = await fetch('/api/shopify/embed-auth', {

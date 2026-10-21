@@ -1,9 +1,15 @@
 import type { Metadata, Viewport } from 'next'
 import Script from 'next/script'
+import { headers } from 'next/headers'
 import './globals.css'
 import Providers from './providers'
 import { ClientErrorBoundary } from './components/ClientErrorBoundary'
 import EmbeddedAuthBootstrap from '@/components/EmbeddedAuthBootstrap'
+import {
+  APP_BRIDGE_CDN_SRC,
+  getShopifyApiKey,
+  isShopifyEmbedRequest,
+} from '@/lib/shopify-app-bridge'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -72,15 +78,44 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Only requests that come from the Shopify admin iframe get the App Bridge
+  // runtime. The CDN bundle aborts without a shop domain and redirects
+  // top-level visitors into the admin, so loading it on the public marketing
+  // site would break the site itself.
+  //
+  // Reading a request header makes the whole tree dynamic, so the public
+  // routes opt back into static rendering with `dynamic = 'force-static'`
+  // (their headers come back empty, which is exactly what we want there).
+  let embedRequest = false
+  try {
+    embedRequest = isShopifyEmbedRequest(await headers())
+  } catch {
+    embedRequest = false
+  }
+
+  const shopifyApiKey = embedRequest ? getShopifyApiKey() : undefined
+
   return (
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
+        {shopifyApiKey ? (
+          <>
+            {/* App Bridge (Next) reads its configuration from these tags.
+                The script must be a plain, blocking <script> — the CDN bundle
+                aborts itself when the tag is async/defer/module. */}
+            <meta name="shopify-api-key" content={shopifyApiKey} />
+            {/* eslint-disable-next-line @next/next/no-sync-scripts -- Shopify's
+                App Bridge bundle refuses to initialise unless the tag is a
+                plain, synchronous script tag. */}
+            <script src={APP_BRIDGE_CDN_SRC} />
+          </>
+        ) : null}
         <meta name="theme-color" content="#1e293b" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

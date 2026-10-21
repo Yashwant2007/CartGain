@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import StatusBadge from '@/components/dashboard/StatusBadge'
 import { PAID_PLAN_IDS, FREE_CARTS_THRESHOLD } from '@/lib/plan-constants'
+import { getShopifyEmbedParams } from '@/lib/shopify-embed'
 
 function DashboardLayoutInner({
   children,
@@ -37,6 +38,16 @@ function DashboardLayoutInner({
   const router = useRouter()
   const { data: session, status } = useSession()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Keep the Shopify embed context (?shop=…&host=…) on internal links so a
+  // hard reload of any dashboard page is still recognised as an embedded
+  // request — that is what makes the server render the App Bridge runtime.
+  // Resolved after mount to keep server and client markup identical.
+  const [embedParams, setEmbedParams] = useState<{ shop?: string; host?: string }>({})
+
+  useEffect(() => {
+    setEmbedParams(getShopifyEmbedParams())
+  }, [])
 
   const [subStatus, setSubStatus] = useState<{ isFree: boolean; isExhausted: boolean; cartsUsed: number; cartsRemaining: number } | null>(null)
   const [subLoading, setSubLoading] = useState(true)
@@ -105,6 +116,15 @@ function DashboardLayoutInner({
 
   const closeSidebar = () => setSidebarOpen(false)
 
+  const embedHref = (href: string) => {
+    if (!embedParams.shop && !embedParams.host) return href
+    const params = new URLSearchParams()
+    if (embedParams.shop) params.set('shop', embedParams.shop)
+    if (embedParams.host) params.set('host', embedParams.host)
+    const qs = params.toString()
+    return qs ? `${href}${href.includes('?') ? '&' : '?'}${qs}` : href
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
       {/* Mobile sidebar backdrop */}
@@ -121,7 +141,7 @@ function DashboardLayoutInner({
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 border-b border-blue-800/30">
-            <Link href="/dashboard" className="flex items-center space-x-2 group min-h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded" onClick={closeSidebar}>
+            <Link href={embedHref('/dashboard')} className="flex items-center space-x-2 group min-h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded" onClick={closeSidebar}>
               <Image
                 src="/favicon-32x32.png"
                 alt="CartGain"
@@ -147,7 +167,7 @@ function DashboardLayoutInner({
               return (
                 <Link
                   key={item.name}
-                  href={item.href}
+                  href={embedHref(item.href)}
                   onClick={closeSidebar}
                   className={`flex items-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-200 min-h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
                     isActive
@@ -226,7 +246,7 @@ function DashboardLayoutInner({
                 </div>
               </div>
               <Link
-                href={'/dashboard/subscription'}
+                href={embedHref('/dashboard/subscription')}
                 className="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap bg-gradient-to-r from-red-500 to-orange-500 text-white hover:shadow-lg hover:shadow-red-500/50 transition-all flex-shrink-0"
               >
                 Upgrade Now
@@ -246,7 +266,7 @@ function DashboardLayoutInner({
                 </div>
               </div>
               <Link
-                href={'/dashboard/subscription'}
+                href={embedHref('/dashboard/subscription')}
                 className="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg hover:shadow-amber-500/50 transition-all flex-shrink-0"
               >
                 View Plans

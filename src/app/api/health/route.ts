@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
+import crypto from 'crypto'
 import prisma from '@/lib/db'
 import { getQueue } from '@/lib/queue'
 import { getAiHealth } from '@/lib/ai-client'
 import { getEmailProviderStatus } from '@/lib/services/email'
 import { currentEnvironment, currentRelease } from '@/lib/observability/version'
 import { resolveWhatsAppAppSecret, resolveWhatsAppVerifyToken } from '@/lib/whatsapp/config'
+import { getShopifyApiKey } from '@/lib/shopify-app-bridge'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,6 +31,14 @@ interface HealthStatus {
       resend: boolean
       smtp: boolean
       configured: boolean
+    }
+    shopify: {
+      // Which app this deployment talks to. The client id is public (it ships
+      // in the embedded app's HTML) but a fingerprint keeps the endpoint free
+      // of configuration details while still making "the wrong app is
+      // configured" diagnosable from the outside.
+      apiKeyFingerprint: string | null
+      appBridgeReady: boolean
     }
     version: string
   }
@@ -170,6 +180,15 @@ export async function GET() {
     configured: email.configured,
   }
 
+  // Which Shopify app this deployment is configured for. The client id is
+  // public information (it is rendered into the embedded app's HTML), so a
+  // short fingerprint is enough to tell "the wrong app is wired up" from the
+  // outside without dumping configuration details.
+  const shopifyApiKey = getShopifyApiKey()
+  const shopifyApiKeyFingerprint = shopifyApiKey
+    ? crypto.createHash('sha256').update(shopifyApiKey, 'utf8').digest('hex').slice(0, 12)
+    : null
+
   const overall: HealthStatus['status'] =
     dbStatus.status === 'error' ? 'error' :
     requiredMissing.length > 0 || redisStatus.status === 'error' ? 'error' :
@@ -196,6 +215,10 @@ export async function GET() {
       },
       ai: aiStatus,
       email: emailStatus,
+      shopify: {
+        apiKeyFingerprint: shopifyApiKeyFingerprint,
+        appBridgeReady: Boolean(shopifyApiKey),
+      },
       version: '1.0.0',
     },
   }
