@@ -1,6 +1,7 @@
 'use client'
 
 import createApp from '@shopify/app-bridge'
+// @ts-ignore
 import { getSessionToken } from '@shopify/app-bridge-utils'
 import { getShopifyEmbedParams } from './shopify-embed'
 
