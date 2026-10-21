@@ -4,43 +4,58 @@ async function getShopifyIdToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null
   const w = window as any
 
-  // Try multiple locations over time
-  for (let attempts = 0; attempts < 150; attempts++) {
-    // Direct shopify global
-    if (w.shopify?.idToken && typeof w.shopify.idToken === 'function') {
-      try {
+  for (let attempts = 0; attempts < 200; attempts++) {
+    // Try many possible paths
+    try {
+      if (w.shopify?.idToken && typeof w.shopify.idToken === 'function') {
         const t = await w.shopify.idToken()
-        if (t) return t
-      } catch {}
-    }
-    if (w.shopify?.auth?.idToken && typeof w.shopify.auth.idToken === 'function') {
-      try {
+        if (typeof t === 'string' && t) return t
+      }
+    } catch {}
+    try {
+      if (w.shopify?.auth?.idToken && typeof w.shopify.auth.idToken === 'function') {
         const t = await w.shopify.auth.idToken()
-        if (t) return t
-      } catch {}
-    }
-    // Shopify.App pattern
-    if (w.Shopify?.App?.idToken && typeof w.Shopify.App.idToken === 'function') {
-      try {
+        if (typeof t === 'string' && t) return t
+      }
+    } catch {}
+    try {
+      if (w.shopify?.auth?.getSessionToken && typeof w.shopify.auth.getSessionToken === 'function') {
+        const t = await w.shopify.auth.getSessionToken()
+        if (typeof t === 'string' && t) return t
+      }
+    } catch {}
+    try {
+      if (w.Shopify?.App?.idToken && typeof w.Shopify.App.idToken === 'function') {
         const t = await w.Shopify.App.idToken()
-        if (t) return t
-      } catch {}
-    }
-    if (w.ShopifyAppBridge?.idToken && typeof w.ShopifyAppBridge.idToken === 'function') {
-      try {
+        if (typeof t === 'string' && t) return t
+      }
+    } catch {}
+    try {
+      if (w.ShopifyAppBridge?.idToken && typeof w.ShopifyAppBridge.idToken === 'function') {
         const t = await w.ShopifyAppBridge.idToken()
-        if (t) return t
-      } catch {}
-    }
-    // app instance patterns
-    if (w.app?.idToken && typeof w.app.idToken === 'function') {
-      try {
+        if (typeof t === 'string' && t) return t
+      }
+    } catch {}
+    try {
+      if (w.ShopifyAppBridge?.auth?.getSessionToken && typeof w.ShopifyAppBridge.auth.getSessionToken === 'function') {
+        const t = await w.ShopifyAppBridge.auth.getSessionToken()
+        if (typeof t === 'string' && t) return t
+      }
+    } catch {}
+    try {
+      if (w.app?.idToken && typeof w.app.idToken === 'function') {
         const t = await w.app.idToken()
-        if (t) return t
-      } catch {}
-    }
+        if (typeof t === 'string' && t) return t
+      }
+    } catch {}
+    try {
+      if (w.app?.auth?.getSessionToken && typeof w.app.auth.getSessionToken === 'function') {
+        const t = await w.app.auth.getSessionToken()
+        if (typeof t === 'string' && t) return t
+      }
+    } catch {}
 
-    await new Promise((r) => setTimeout(r, 40))
+    await new Promise((r) => setTimeout(r, 30))
   }
   return null
 }
