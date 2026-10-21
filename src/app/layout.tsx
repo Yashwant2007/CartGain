@@ -4,6 +4,7 @@ import './globals.css'
 import Providers from './providers'
 import { ClientErrorBoundary } from './components/ClientErrorBoundary'
 import EmbeddedAuthBootstrap from '@/components/EmbeddedAuthBootstrap'
+import SessionTokenProvider from '@/components/SessionTokenProvider'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -219,6 +220,7 @@ export default function RootLayout({
         <ClientErrorBoundary>
           <Providers>
             <EmbeddedAuthBootstrap />
+            <SessionTokenProvider />
             {children}
           </Providers>
         </ClientErrorBoundary>
