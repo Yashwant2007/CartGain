@@ -4,6 +4,7 @@ import './globals.css'
 import Providers from './providers'
 import { ClientErrorBoundary } from './components/ClientErrorBoundary'
 import EmbeddedAuthBootstrap from '@/components/EmbeddedAuthBootstrap'
+import AppBridgeInit from '@/components/AppBridgeInit'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -171,6 +172,7 @@ export default function RootLayout({
         <ClientErrorBoundary>
           <Providers>
             <EmbeddedAuthBootstrap />
+            <AppBridgeInit />
             {children}
           </Providers>
         </ClientErrorBoundary>
