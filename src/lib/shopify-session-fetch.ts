@@ -1,26 +1,21 @@
 'use client'
 
-import { isInShopifyEmbed } from './shopify-embed'
-
 export async function shopifySessionFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers)
 
   if (typeof window !== 'undefined') {
     const w = window as any
-    let shopify = w.shopify
+    let shopify: any = w.shopify
 
-    // Try to wait for App Bridge to be available
-    if (!shopify?.idToken) {
-      for (let attempts = 0; attempts < 50; attempts++) {
-        shopify = (window as any).shopify
-        if (shopify?.idToken) break
-        await new Promise((r) => setTimeout(r, 100))
+    // Wait for App Bridge to be available
+    for (let attempts = 0; attempts < 100; attempts++) {
+      shopify = w.shopify
+      if (shopify?.idToken && typeof shopify.idToken === 'function') break
+      if ((w as any).Shopify?.App?.idToken && typeof (w as any).Shopify.App.idToken === 'function') {
+        shopify = (w as any).Shopify.App
+        break
       }
-    }
-
-    // Also check alternative references
-    if (!shopify?.idToken && (window as any).Shopify?.App) {
-      shopify = (window as any).Shopify?.App
+      await new Promise((r) => setTimeout(r, 50))
     }
 
     if (shopify?.idToken && typeof shopify.idToken === 'function') {
@@ -30,7 +25,7 @@ export async function shopifySessionFetch(input: RequestInfo | URL, init: Reques
           headers.set('Authorization', `Bearer ${token}`)
         }
       } catch (err) {
-        // ignore - will fallback to cookie auth
+        // ignore
       }
     }
   }
