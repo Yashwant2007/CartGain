@@ -150,6 +150,40 @@ export async function sendWhatsAppMessage({
   }
 }
 
+/**
+ * Fetch the phone number's own metadata with the configured token. This proves
+ * whether WHATSAPP_PHONE_NUMBER_ID belongs to the WhatsApp Business Account
+ * that issued WHATSAPP_BUSINESS_TOKEN — a mismatch is the usual cause of a bare
+ * (#100) OAuthException on /messages.
+ */
+export async function getWhatsAppAccountInfo(): Promise<{
+  ok: boolean
+  status: number
+  body: unknown
+}> {
+  const cleanEnv = (value: string | undefined): string =>
+    (value || '').replace(/^\s*["']|["']\s*$/g, '').trim()
+  const phoneNumberId = cleanEnv(process.env.WHATSAPP_PHONE_NUMBER_ID)
+  const accessToken = cleanEnv(process.env.WHATSAPP_BUSINESS_TOKEN).replace(/^Bearer\s+/i, '')
+  const graphVersion = process.env.WHATSAPP_API_VERSION || 'v22.0'
+
+  if (!phoneNumberId || !accessToken) {
+    return { ok: false, status: 0, body: { error: 'WhatsApp env vars are missing' } }
+  }
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/${graphVersion}/${phoneNumberId}` +
+        '?fields=display_phone_number,verified_name,quality_rating,account_mode,name_status,code_verification_status,platform_type',
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(10000) },
+    )
+    const body = await response.json()
+    return { ok: response.ok, status: response.status, body }
+  } catch (error: any) {
+    return { ok: false, status: 0, body: { error: error?.message || 'request failed' } }
+  }
+}
+
 // ─── 3 CORE WHATSAPP TEMPLATES ───
 // Register these bodies in Meta Business Manager (WhatsApp Manager → Message
 // templates) and keep the names/languages in sync with the env vars below.

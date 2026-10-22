@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { sendWhatsAppMessage, WhatsAppTemplates } from '@/lib/services/whatsapp'
+import { sendWhatsAppMessage, WhatsAppTemplates, getWhatsAppAccountInfo } from '@/lib/services/whatsapp'
 import { buildRecoveryLink } from '@/lib/recovery/links'
 import { requireJobAuth } from '@/lib/job-auth'
 
@@ -28,6 +28,16 @@ export async function POST(request: NextRequest) {
     const phone = typeof body.phone === 'string' ? body.phone.trim() : ''
     if (!phone) {
       return NextResponse.json({ error: 'phone is required' }, { status: 400 })
+    }
+
+    if (String(body.mode || '').toLowerCase() === 'whoami') {
+      const info = await getWhatsAppAccountInfo()
+      return NextResponse.json({
+        success: info.ok,
+        mode: 'whoami',
+        httpStatus: info.status,
+        account: info.body,
+      })
     }
 
     if (String(body.mode || '').toLowerCase() === 'text') {
