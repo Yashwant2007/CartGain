@@ -17,6 +17,15 @@ function render(opts?: Parameters<typeof EmailTemplates.abandoned>[8]) {
 }
 
 describe('EmailTemplates.abandoned — recovery email', () => {
+  it('shows the product photo captured (or resolved) for each item', () => {
+    const html = render()
+    expect(html).toContain('src="https://cdn.example/s.png"')
+    expect(html).toContain('alt="Sneaker"')
+
+    const noImage = EmailTemplates.abandoned('Priya', [{ name: 'Sneaker', price: 100, quantity: 1 }], 100, 'https://x', 'Acme')
+    expect(noImage).not.toContain('<img src="undefined"')
+  })
+
   it('renders only truthful, neutral copy by default', () => {
     const html = render()
     expect(html).toContain('Your cart is still saved')
