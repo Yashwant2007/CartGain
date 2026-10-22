@@ -65,6 +65,25 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `fix(whatsapp): prove the send path is blocked by the token, not the
+  payload`. `POST /api/jobs/test-whatsapp` gained `mode:"probe"` (text, body-only
+  `en`, body-only `en_US`, named params, body+url button) and `whoami` now
+  returns the phone-number id's own metadata plus `debug_token` scopes
+  (`token.canSend`), `subscribed_apps`, and the WABA discovered by walking
+  `me/businesses → owned_whatsapp_business_accounts → phone_numbers` (the
+  phone-number node has no `whatsapp_business_account` field). Result: the
+  number is healthy (`+91 73558 49689`, LIVE, name APPROVED, quality GREEN) and
+  even a **plain text** message answers `(#100) Invalid parameter / OAuthException`
+  → `WHATSAPP_BUSINESS_TOKEN` lacks `whatsapp_business_messaging` (it can still
+  read the number). Fix belongs in Meta: regenerate a System-user token with
+  `whatsapp_business_messaging` + `whatsapp_business_management` and reassign
+  `WHATSAPP_BUSINESS_TOKEN` in Vercel. Code side: body parameters now support
+  the NAMED template format (`WHATSAPP_TEMPLATE_PARAM_FORMAT=named`,
+  `WHATSAPP_TEMPLATE_PARAM_NAMES=name,body,discount`) because WhatsApp Manager
+  defaults new templates to `{{name}}/{{body}}/{{discount}}`. Prod DB check:
+  email step 0 is `sent` with a Resend id, WhatsApp step 0/1 rows are `failed`
+  (same 100) — so only the WhatsApp credential is missing.
+
 - `feat(recovery): personal offers, no greeting stutter, template introspection`.
   The WhatsApp `{{3}}` offer line is now personalised: "<Name>, your <product>
   gets 10% off — code GAINxxxxxx: <checkout link> — or name your price:
