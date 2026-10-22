@@ -136,16 +136,27 @@ export async function sendWhatsAppMessage({
 
     let attempt = await post(body)
 
-    // One compatibility retry. Meta's wording is opaque, so translate the two
-    // version/approval mismatches we can actually fix:
+    // Compatibility retries. Meta's wording is opaque, so translate the two
+    // approval mismatches we can actually fix:
     //   132001 = template not found for that language → try en_US
-    //   132000/131008 = component/param mismatch → retry body-only
+    //   132000/131008 = component/param mismatch → drop the header first, then
+    //   (only if it still fails) drop the button too. Dropping everything at
+    //   once would break an approved dynamic URL button.
     if (!attempt.ok && templateName) {
-      const code = attempt.json?.error?.code
-      if (code === 132001) {
+      const codeOf = () => attempt.json?.error?.code
+      if (codeOf() === 132001) {
         body.template.language.code = 'en_US'
         attempt = await post(body)
-      } else if (code === 132000 || code === 131008) {
+      }
+      if (codeOf() === 132000 || codeOf() === 131008) {
+        const components: any[] = body.template?.components || []
+        const withoutHeader = components.filter((c) => c.type !== 'header')
+        if (withoutHeader.length !== components.length) {
+          body.template.components = withoutHeader
+          attempt = await post(body)
+        }
+      }
+      if (codeOf() === 132000 || codeOf() === 131008) {
         const components: any[] = body.template?.components || []
         const bodyOnly = components.filter((c) => c.type === 'body')
         if (bodyOnly.length !== components.length) {
