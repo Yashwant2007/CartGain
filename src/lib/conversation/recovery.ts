@@ -91,3 +91,25 @@ export async function composeRecoveryMessage(input: RecoveryCartInput): Promise<
 export function singleLineMessage(body: string): string {
   return body.replace(/\s*\n+\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
 }
+
+/**
+ * WhatsApp templates already greet the customer ({{1}} is the name), so a body
+ * that opens with its own greeting stutters: "HURRY!! Priya, last chance ...
+ * Hi Priya, your ...". Strip the leading greeting for that channel only.
+ */
+export function stripLeadingGreeting(body: string, customerName?: string | null): string {
+  const first = (customerName || '').split(' ')[0]?.trim()
+  const patterns: RegExp[] = [
+    /^(hi|hey|hello|yo|dear)\s+[^,!.?]{1,30},\s*/i,
+    /^(hi|hey|hello|yo|dear)\s+[^,!.?]{1,30}[.!]\s+/i,
+  ]
+  if (first) {
+    const safe = first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    patterns.unshift(new RegExp(`^${safe}\\s*[,!—-]\\s*`, 'i'))
+  }
+  for (const pattern of patterns) {
+    const stripped = body.replace(pattern, '')
+    if (stripped !== body && stripped.trim().length > 0) return stripped.trim()
+  }
+  return body
+}

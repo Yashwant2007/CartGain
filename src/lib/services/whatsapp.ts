@@ -207,14 +207,50 @@ export async function getWhatsAppAccountInfo(): Promise<{
     return { ok: false, status: 0, body: { error: 'WhatsApp env vars are missing' } }
   }
 
+  const get = async (path: string): Promise<{ ok: boolean; status: number; body: any }> => {
+    try {
+      const response = await fetch(`https://graph.facebook.com/${graphVersion}/${path}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(10000),
+      })
+      const body = await response.json().catch(() => ({}))
+      return { ok: response.ok, status: response.status, body }
+    } catch (error: any) {
+      return { ok: false, status: 0, body: { error: error?.message || 'request failed' } }
+    }
+  }
+
   try {
-    const response = await fetch(
-      `https://graph.facebook.com/${graphVersion}/${phoneNumberId}` +
-        '?fields=display_phone_number,verified_name,quality_rating,account_mode,name_status,code_verification_status,platform_type',
-      { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(10000) },
+    const account = await get(
+      `${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,account_mode,name_status,code_verification_status,platform_type`,
     )
-    const body = await response.json()
-    return { ok: response.ok, status: response.status, body }
+
+    // The WABA that owns this number, and the templates approved inside it.
+    // This is what tells us the exact template names and language codes.
+    const wabaRes = await get(`${phoneNumberId}/whatsapp_business_account`)
+    const wabaId = wabaRes.ok ? wabaRes.body?.data?.[0]?.id || null : null
+    const templatesRes = wabaId
+      ? await get(`${wabaId}/message_templates?limit=100&fields=name,status,language,category,parameter_format`)
+      : { ok: false, status: 0, body: null }
+
+    return {
+      ok: account.ok,
+      status: account.status,
+      body: {
+        account: account.body,
+        wabaId,
+        wabaLookup: wabaId ? 'ok' : wabaRes.body,
+        templates: templatesRes.ok
+          ? (templatesRes.body?.data || []).map((t: any) => ({
+              name: t.name,
+              status: t.status,
+              language: t.language,
+              category: t.category,
+              parameterFormat: t.parameter_format,
+            }))
+          : templatesRes.body,
+      },
+    }
   } catch (error: any) {
     return { ok: false, status: 0, body: { error: error?.message || 'request failed' } }
   }

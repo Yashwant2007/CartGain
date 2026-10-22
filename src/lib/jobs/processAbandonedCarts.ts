@@ -6,7 +6,7 @@ import { sanitizePhoneNumber } from '@/lib/utils'
 import { sendWhatsAppMessage, WhatsAppTemplates } from '@/lib/services/whatsapp'
 import { resolveRecoveryOffer } from '@/lib/recovery/offer'
 import { buildRecoveryLink } from '@/lib/recovery/links'
-import { composeRecoveryMessage, singleLineMessage } from '@/lib/conversation/recovery'
+import { composeRecoveryMessage, singleLineMessage, stripLeadingGreeting } from '@/lib/conversation/recovery'
 import type { ConversationDiscount } from '@/lib/conversation/facts'
 import { isWithinQuietHours } from '@/lib/conversation/variety'
 import { resolveVoice } from '@/lib/conversation/voice'
@@ -665,14 +665,21 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             : ''
           const checkoutLink = linkFor('whatsapp', 'checkout')
           const bargainLink = linkFor('whatsapp', 'bargain')
+          // Personal offer line: the customer's name, the product they chose
+          // and their own single-use code. No invented urgency, no generic
+          // "USE CODE" blast.
+          const firstName = (customerName || '').split(' ')[0]?.trim()
+          const greetingPrefix = firstName ? `${firstName}, ` : ''
+          const productSummary = formatProductList(cartItems, 2)
           const offerLine = authorisedDiscount
-            ? `Use code ${authorisedDiscount.code} for ${offerValueLabel}: ${checkoutLink} — or name your price: ${bargainLink}`
-            : `Finish your order: ${checkoutLink} — or name your price: ${bargainLink}`
+            ? `${greetingPrefix}your ${productSummary} gets ${offerValueLabel} — code ${authorisedDiscount.code}: ${checkoutLink} — or name your price: ${bargainLink}`
+            : `${greetingPrefix}your ${productSummary} is still saved — finish your order: ${checkoutLink} — or name your price: ${bargainLink}`
 
           const template = templateMap[templateStep]
           const params = template.generateParams(
             customerName,
-            singleLineMessage(composed.body),
+            // The template greets with {{1}}; a body that greets again stutters.
+            singleLineMessage(stripLeadingGreeting(composed.body, customerName)),
             offerLine,
             firstImage,
             {

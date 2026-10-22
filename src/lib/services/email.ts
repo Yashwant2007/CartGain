@@ -253,7 +253,7 @@ export const EmailTemplates = {
 
       ${opts?.offer ? `
       <div style="margin: 8px 0 20px; padding: 18px; border: 2px dashed #c7d2fe; border-radius: 14px; background: #eef2ff; text-align: center;">
-        <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #6366f1; font-weight: 700;">Your personal offer</div>
+        <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #6366f1; font-weight: 700;">${escapeHtml(customerName || 'Your')} personal offer</div>
         <div style="font-size: 26px; font-weight: 800; color: #312e81; letter-spacing: 2px; margin: 6px 0;">${escapeHtml(opts.offer.code)}</div>
         <div style="font-size: 14px; color: #475569;">
           ${opts.offer.type === 'percentage'

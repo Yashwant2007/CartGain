@@ -65,6 +65,20 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(recovery): personal offers, no greeting stutter, template introspection`.
+  The WhatsApp `{{3}}` offer line is now personalised: "<Name>, your <product>
+  gets 10% off — code GAINxxxxxx: <checkout link> — or name your price:
+  <bargain link>", and `{{2}}` no longer greets the customer a second time
+  (the template already says `{{1}}`) via
+  `stripLeadingGreeting` — "HURRY!! Priya, last chance ⏳ Hi Priya, ..." became
+  "... Priya, your Sneaker gets 10% off". Email's coupon band is titled
+  "<Name>'s personal offer". Prompt `recovery-v3` now asks for item-specific,
+  concrete, lightly humorous copy (names the actual product, one reason to
+  return, one clear next step) while the validator still blocks invented
+  claims. `GET /api/jobs/test-whatsapp?mode=whoami` now also returns the WABA
+  id and the approved template list (name/status/language/parameter_format),
+  which is the fastest way to align template names and language codes.
+
 - `fix(whatsapp): match the merchant's approved template names and button`.
   The approved WABA templates are `cart_reminders`, `cart_followup`,
   `cart_urgent` (English) with `{{1}}` name, `{{2}}` body, `{{3}}` offer and a
