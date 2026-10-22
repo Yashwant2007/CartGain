@@ -238,7 +238,7 @@ export const EmailTemplates = {
       <h2 style="font-size: 18px; color: #1a1a2e; margin: 0 0 16px;">Items in your cart${opts?.emoji === false ? '' : ' 🛒'}</h2>
       ${items.map((item: any) => `
         <div style="display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid #f0f0f5;">
-          <img src="${safeImageSrc(item.image) || 'https://via.placeholder.com/80'}" alt="${escapeHtml(item.name)}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 12px; flex-shrink: 0;">
+          ${safeImageSrc(item.image) ? `<img src="${safeImageSrc(item.image)}" alt="${escapeHtml(item.name)}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 12px; flex-shrink: 0;">` : ''}
           <div style="flex: 1;">
             <div style="font-weight: 600; font-size: 16px; color: #1a1a2e;">${escapeHtml(item.name)}</div>
             ${item.description ? `<div style="font-size: 13px; color: #64748b; margin-top: 4px;">${escapeHtml(item.description)}</div>` : ''}

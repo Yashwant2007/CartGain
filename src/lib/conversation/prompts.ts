@@ -13,7 +13,7 @@
 import { ConversationFacts } from './facts'
 import { BrandVoice, maxEmojis, maxWords, voicePromptBlock } from './voice'
 
-export const CONVERSATION_PROMPT_VERSION = 'recovery-v2'
+export const CONVERSATION_PROMPT_VERSION = 'recovery-v3'
 
 export type ConversationStage = 'reminder_1' | 'reminder_2' | 'reminder_3'
 
@@ -68,6 +68,18 @@ ${voicePromptBlock(voice)}
 
 TASK
 ${STAGE_OBJECTIVE[stage]}
+
+STYLE (how it should read)
+- Make it feel personal: name the actual item(s) the customer chose ("the linen shirt you picked") instead of "your items".
+- Use concrete, sensory detail ONLY from the item name/description above; never add benefits, materials or claims that are not there.
+- One warm, specific reason to come back (it is saved, the offer is theirs, checkout takes a minute) — not a list.
+- ${
+  voice.humorLevel === 'none'
+    ? 'Keep the tone straight.'
+    : 'One light, situational joke or playful aside at most, and only if it lands naturally.'
+}
+- Sound like a person who works at the store, not a marketing robot: contractions, short sentences, no exclamation-mark stacking.
+- End with one clear next step (finish checkout, or make an offer if the FACTS include that link).
 
 FACTS (the ONLY things you are allowed to state)
 ${factsBlock(facts)}
