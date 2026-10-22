@@ -31,6 +31,7 @@ interface HealthStatus {
       resend: boolean
       smtp: boolean
       configured: boolean
+      deliveryWebhook: boolean
     }
     shopify: {
       // Which app this deployment talks to. The client id is public (it ships
@@ -75,6 +76,9 @@ export async function GET() {
     'REDIS_URL',
     'EMAIL_SERVER_HOST',
     'EMAIL_SERVER_USER',
+    // Without it the delivery webhook answers 401 and email rows never leave
+    // "sent", so it is reported (never fatal) like the other integrations.
+    'RESEND_WEBHOOK_SECRET',
     'EMAIL_SERVER_PASSWORD',
   ]
 
@@ -178,6 +182,7 @@ export async function GET() {
     resend: email.resend,
     smtp: email.smtp,
     configured: email.configured,
+    deliveryWebhook: Boolean(process.env.RESEND_WEBHOOK_SECRET),
   }
 
   // Which Shopify app this deployment is configured for. The client id is
