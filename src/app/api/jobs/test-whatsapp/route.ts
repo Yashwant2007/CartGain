@@ -26,10 +26,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}))
     const phone = typeof body.phone === 'string' ? body.phone.trim() : ''
-    if (!phone) {
-      return NextResponse.json({ error: 'phone is required' }, { status: 400 })
-    }
 
+    // whoami needs no recipient — it only inspects the configured number/token.
     if (String(body.mode || '').toLowerCase() === 'whoami') {
       const info = await getWhatsAppAccountInfo()
       return NextResponse.json({
@@ -38,6 +36,10 @@ export async function POST(request: NextRequest) {
         httpStatus: info.status,
         account: info.body,
       })
+    }
+
+    if (!phone) {
+      return NextResponse.json({ error: 'phone is required' }, { status: 400 })
     }
 
     if (String(body.mode || '').toLowerCase() === 'text') {
