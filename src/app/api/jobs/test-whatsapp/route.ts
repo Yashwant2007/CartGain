@@ -93,10 +93,22 @@ export async function POST(request: NextRequest) {
       templateLanguage: language,
     })
 
+    const rawId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim()
+    const cleanId = rawId.replace(/^\s*["']|["']\s*$/g, '').trim()
+
     return NextResponse.json({
       success: result.success,
       templateName: template.name,
       language: language || process.env.WHATSAPP_TEMPLATE_LANG || 'en',
+      // Non-secret config checks: a quoted/padded id or a short token is the
+      // usual cause of a bare (#100) from Meta.
+      config: {
+        phoneNumberId: cleanId ? `${cleanId.slice(0, 3)}...${cleanId.slice(-3)} (${cleanId.length} chars)` : 'MISSING',
+        phoneNumberIdHadQuotesOrPadding: rawId !== cleanId,
+        tokenLength: (process.env.WHATSAPP_BUSINESS_TOKEN || '').trim().length,
+        graphVersion: process.env.WHATSAPP_API_VERSION || 'v22.0',
+        templateLanguage: process.env.WHATSAPP_TEMPLATE_LANG || 'en',
+      },
       // Compare this with the approved structure in WhatsApp Manager.
       componentsSent: {
         bodyParams: params.body?.length ?? 0,

@@ -34,8 +34,12 @@ export async function sendWhatsAppMessage({
   /** Raw parsed Meta response - only returned to the test route. */
   providerResponse?: unknown
 }> {
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
-  const accessToken = process.env.WHATSAPP_BUSINESS_TOKEN
+  // Vercel/env files often keep the quotes or a trailing newline; both make
+  // the Graph call fail with a cryptic (#100)/OAuth error.
+  const cleanEnv = (value: string | undefined): string =>
+    (value || '').replace(/^\s*["']|["']\s*$/g, '').trim()
+  const phoneNumberId = cleanEnv(process.env.WHATSAPP_PHONE_NUMBER_ID)
+  const accessToken = cleanEnv(process.env.WHATSAPP_BUSINESS_TOKEN).replace(/^Bearer\s+/i, '')
 
   if (!phoneNumberId || !accessToken) {
     console.warn('WhatsApp not configured — set WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_BUSINESS_TOKEN')
