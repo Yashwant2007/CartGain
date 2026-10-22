@@ -108,8 +108,23 @@ export async function POST(request: NextRequest) {
     const rawId = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim()
     const cleanId = rawId.replace(/^\s*["']|["']\s*$/g, '').trim()
 
+    const providerError: any = (result.providerResponse as any)?.error
+    const diagnosis =
+      result.success
+        ? 'Message accepted by Meta.'
+        : providerError?.code === 100 && providerError?.type === 'OAuthException'
+          ? 'Meta rejected the request at the auth/parameter layer, before template logic. Usually one of: (1) WHATSAPP_PHONE_NUMBER_ID is not a phone-number id (it may be a WABA/business id) - run mode=whoami to check; (2) the token does not control that phone number; (3) the token lacks the whatsapp_business_messaging permission.'
+          : providerError?.code === 132001
+            ? 'Template name not found for that language. Run mode=whoami and use the exact language code of the approved template.'
+            : providerError?.code === 132000 || providerError?.code === 131008
+              ? 'Component/parameter mismatch with the approved template.'
+              : providerError?.code === 190
+                ? 'The access token is invalid or expired.'
+                : 'See error/errorDetails from Meta.'
+
     return NextResponse.json({
       success: result.success,
+      diagnosis,
       templateName: template.name,
       language: language || process.env.WHATSAPP_TEMPLATE_LANG || 'en',
       // Non-secret config checks: a quoted/padded id or a short token is the
