@@ -117,22 +117,47 @@ export async function sendWhatsAppMessage({
     // Graph versions are sunset on a schedule; v18 is long dead and answers
     // cryptic (#100) errors. Keep this current (override with env if needed).
     const graphVersion = process.env.WHATSAPP_API_VERSION || 'v22.0'
-    const response = await fetch(
-      `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(10000),
-      }
-    )
+    const post = async (payload: any) => {
+      const response = await fetch(
+        `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(10000),
+        }
+      )
+      const json = await response.json().catch(() => ({}))
+      return { ok: response.ok, json }
+    }
 
-    const data = await response.json()
+    let attempt = await post(body)
+
+    // One compatibility retry. Meta's wording is opaque, so translate the two
+    // version/approval mismatches we can actually fix:
+    //   132001 = template not found for that language → try en_US
+    //   132000/131008 = component/param mismatch → retry body-only
+    if (!attempt.ok && templateName) {
+      const code = attempt.json?.error?.code
+      if (code === 132001) {
+        body.template.language.code = 'en_US'
+        attempt = await post(body)
+      } else if (code === 132000 || code === 131008) {
+        const components: any[] = body.template?.components || []
+        const bodyOnly = components.filter((c) => c.type === 'body')
+        if (bodyOnly.length !== components.length) {
+          body.template.components = bodyOnly
+          attempt = await post(body)
+        }
+      }
+    }
+
+    const data = attempt.json
     const messageId = data?.messages?.[0]?.id
-    if (response.ok && messageId) {
+    if (attempt.ok && messageId) {
       return { success: true, messageId, providerResponse: data }
     }
     return {
@@ -267,7 +292,7 @@ export const WhatsAppTemplates: Record<string, { name: string; generateParams: T
    * Button (static): Complete Purchase → https://cart-gain.com/r/{{1}}
    */
   abandoned_cart: {
-    name: process.env.WHATSAPP_TEMPLATE_REMINDER || 'abandoned_cart_reminder',
+    name: process.env.WHATSAPP_TEMPLATE_REMINDER || 'cart_reminders',
     generateParams: (customerName, bodyContent, offerLine, productImage, context) =>
       buildTemplate(
         customerName,
@@ -296,7 +321,7 @@ export const WhatsAppTemplates: Record<string, { name: string; generateParams: T
    * Button (static): Complete Order → https://cart-gain.com/r/{{1}}
    */
   abandoned_cart_followup: {
-    name: process.env.WHATSAPP_TEMPLATE_FOLLOWUP || 'abandoned_cart_followup',
+    name: process.env.WHATSAPP_TEMPLATE_FOLLOWUP || 'cart_followup',
     generateParams: (customerName, bodyContent, offerLine, productImage, context) =>
       buildTemplate(
         customerName,
@@ -325,7 +350,7 @@ export const WhatsAppTemplates: Record<string, { name: string; generateParams: T
    * Button (static): Complete Now → https://cart-gain.com/r/{{1}}
    */
   abandoned_cart_urgent: {
-    name: process.env.WHATSAPP_TEMPLATE_FINAL || 'abandoned_cart_urgent',
+    name: process.env.WHATSAPP_TEMPLATE_FINAL || 'cart_urgent',
     generateParams: (customerName, bodyContent, offerLine, productImage, context) =>
       buildTemplate(
         customerName,

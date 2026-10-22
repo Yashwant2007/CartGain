@@ -65,6 +65,21 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `fix(whatsapp): match the merchant's approved template names and button`.
+  The approved WABA templates are `cart_reminders`, `cart_followup`,
+  `cart_urgent` (English) with `{{1}}` name, `{{2}}` body, `{{3}}` offer and a
+  DYNAMIC url button, plus the merchant's own static copy/footer. Code now
+  defaults to those names (env-overridable) and sends the button suffix when
+  `WHATSAPP_TEMPLATE_BUTTON_BASE` is set — it is set in production to
+  `https://cart-gain.com/r/`. One compatibility retry translates opaque Meta
+  errors: `132001` retries with `en_US`, `132000`/`131008` retries body-only.
+  Graph API bumped to `v22.0` (v18 is sunset; it answers a bare `#100`), env
+  values are stripped of quotes/whitespace/`Bearer `, and test-whatsapp gained
+  `mode:"whoami"` (reads the phone number's own metadata) plus `mode:"text"`.
+  Note: the approved static copy carries urgency ("HURRY", "last chance") —
+  that is merchant-approved template text; our validator still forbids the
+  model from inventing claims in `{{2}}`.
+
 - `feat(analytics): wire the bargain funnel into the dashboard`. The
   `/api/analytics/bargain` endpoint (started → negotiated → offered → accepted →
   issued → purchased, average discount, end-to-end rate, revenue) was live but
