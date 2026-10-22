@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { addCartProcessingJob } from '@/lib/queue/processor'
 import { processAbandonedCarts } from '@/lib/jobs/processAbandonedCarts'
 import { initializeQueues } from '@/lib/queue/init'
 import { sendAlertOnError } from '@/lib/alerter'
@@ -61,25 +60,19 @@ export async function POST(request: NextRequest) {
   try {
     initializeQueues().catch(() => {})
 
-    try {
-      const job = await addCartProcessingJob()
-      return NextResponse.json({
-        message: 'Cart processing job queued',
-        jobId: job.id,
-        status: 'queued',
-      })
-    } catch {
-      const cursor = await getStoreCursor()
-      const result = await processAbandonedCarts(25, cursor)
-      if (result.nextCursor) {
-        await saveStoreCursor(result.nextCursor)
-      }
-      return NextResponse.json({
-        message: 'Carts processed directly',
-        status: 'processed',
-        result,
-      })
+    // Process inline. The Redis queue only helps when a worker is running, and
+    // no worker is deployed on Vercel — enqueueing returned "queued" while
+    // nothing ever drained the queue, so recovery silently stopped.
+    const cursor = await getStoreCursor()
+    const result = await processAbandonedCarts(25, cursor)
+    if (result.nextCursor) {
+      await saveStoreCursor(result.nextCursor)
     }
+    return NextResponse.json({
+      message: 'Carts processed',
+      status: 'processed',
+      result,
+    })
   } catch (error) {
     console.error('Process carts job error:', error)
     sendAlertOnError('Cart processing cron', error).catch(() => {})

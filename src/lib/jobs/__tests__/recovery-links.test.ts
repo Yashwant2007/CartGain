@@ -97,6 +97,12 @@ function cart(over: Record<string, any> = {}) {
   }
 }
 
+afterEach(() => {
+  delete process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER
+  delete process.env.WHATSAPP_TEMPLATE_BUTTON_BASE
+  delete process.env.WHATSAPP_TEMPLATE_HEADER_IMAGE_URL
+})
+
 beforeEach(() => {
   jest.clearAllMocks()
   process.env.NEXT_PUBLIC_APP_URL = 'https://cart-gain.com'
@@ -169,6 +175,60 @@ describe('recovery message wiring', () => {
     expect(opts.offer).toMatchObject({ code: 'SAVE10', value: 10, type: 'percentage' })
     expect(opts.checkoutUrl).toBe('https://cart-gain.com/r/cart-1?c=email&to=checkout&code=SAVE10')
     expect(opts.bargainUrl).toBe('https://cart-gain.com/r/cart-1?c=email&to=bargain')
+  })
+
+  it('always sends the image header the approved template declares', async () => {
+    process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER = 'true'
+
+    await processAbandonedCarts(25)
+
+    const header = lastWhatsAppParams().header
+    expect(header).toEqual({ type: 'image', imageUrl: 'https://cart-gain.com/logo.png' })
+  })
+
+  it('prefers the cart product photo over the brand fallback', async () => {
+    process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER = 'true'
+    prismaMock.cart.findMany.mockReset()
+    prismaMock.cart.findMany
+      .mockResolvedValueOnce([
+        cart({ items: [{ name: 'Sneaker', price: 100, quantity: 1, image: 'https://cdn.shopify.com/sneaker.png' }] }),
+      ])
+      .mockResolvedValue([])
+
+    await processAbandonedCarts(25)
+
+    expect(lastWhatsAppParams().header).toEqual({
+      type: 'image',
+      imageUrl: 'https://cdn.shopify.com/sneaker.png',
+    })
+  })
+
+  it('sends only the dynamic button suffix, never a full url', async () => {
+    process.env.WHATSAPP_TEMPLATE_BUTTON_BASE = 'https://cart-gain.com/r/'
+
+    await processAbandonedCarts(25)
+
+    expect(lastWhatsAppParams().buttons).toEqual([
+      { type: 'url', text: 'Complete Purchase', url: 'cart-1?c=whatsapp' },
+    ])
+  })
+
+  it('processes every eligible store in one sweep instead of exactly one', async () => {
+    prismaMock.campaign.findMany.mockResolvedValue([
+      campaign({ id: 'camp-1', store: { id: 'store-1', currency: 'INR', timezone: 'UTC', name: 'A', domain: 'a.myshopify.com' } }),
+      campaign({ id: 'camp-2', store: { id: 'store-2', currency: 'INR', timezone: 'UTC', name: 'B', domain: 'b.myshopify.com' } }),
+    ])
+    prismaMock.cart.findMany.mockReset()
+    prismaMock.cart.findMany
+      .mockResolvedValueOnce([cart({ id: 'cart-1' })])
+      .mockResolvedValueOnce([cart({ id: 'cart-2' })])
+      .mockResolvedValue([])
+
+    const result = await processAbandonedCarts(25)
+
+    expect(result.storesProcessed).toBe(2)
+    expect(sendWhatsAppMock).toHaveBeenCalledTimes(2)
+    expect(result.nextCursor).toBeUndefined()
   })
 
   it('does not send the cart a runnable offer when the store is disconnected', async () => {

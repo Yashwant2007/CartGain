@@ -804,8 +804,17 @@ export async function processAbandonedCarts(
       }
     }
 
-    // Process only 1 store per cycle to stay within timeout
-    const batch = targetCampaigns.slice(0, 1)
+    // Process as many stores as fit in the time budget instead of exactly one.
+    // A single store per invocation starved every other merchant whenever the
+    // trigger slipped (GitHub schedules are frequently late), so recovery
+    // stalled for hours. The route's maxDuration is 60s; leave headroom.
+    const budgetMs = Number(process.env.CART_SWEEP_BUDGET_MS || 35000)
+    const batch: typeof targetCampaigns = []
+    for (const campaign of targetCampaigns) {
+      if (batch.length > 0 && Date.now() - startTime > budgetMs) break
+      batch.push(campaign)
+    }
+    const finishedRotation = batch.length === targetCampaigns.length
     const results: PromiseSettledResult<{ sent: number; failed: number }>[] = []
 
     for (const campaign of batch) {
@@ -814,6 +823,9 @@ export async function processAbandonedCarts(
       if (r[0]?.status === 'fulfilled') storesProcessed++
       nextCursor = campaign.id
     }
+    // A completed rotation restarts from the top next run; only a budget cut
+    // keeps a cursor, so no store is skipped or double-served.
+    if (finishedRotation) nextCursor = undefined
 
     for (const result of results) {
       if (result.status === 'fulfilled') {
@@ -829,7 +841,7 @@ export async function processAbandonedCarts(
 
     const elapsed = Date.now() - startTime
     if (storesProcessed > 0) {
-      console.log(`✅ Processed ${processedCount} carts from 1 store (${messagesSent} sent, ${messagesFailed} failed) in ${elapsed}ms. Next cursor: ${nextCursor}`)
+      console.log(`✅ Processed ${processedCount} carts from ${storesProcessed} store(s) (${messagesSent} sent, ${messagesFailed} failed) in ${elapsed}ms. Next cursor: ${nextCursor ?? 'restart'}`)
     } else {
       console.log(`⏸️ No stores to process — ${campaigns.length} campaigns exist, cursor: ${campaignCursor || 'start'}`)
       nextCursor = undefined
