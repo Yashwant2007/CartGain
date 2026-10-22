@@ -72,10 +72,20 @@ export async function sendWhatsAppMessage({
       }
 
       if (templateParams?.body?.length) {
+        // Templates created in WhatsApp Manager default to NAMED parameters
+        // ({{name}}, {{body}}, {{discount}}); positional {{1}} templates use
+        // the plain shape. Sending the wrong one is a 132000/100 rejection.
+        const namedFormat =
+          (process.env.WHATSAPP_TEMPLATE_PARAM_FORMAT || '').trim().toLowerCase() === 'named'
+        const paramNames = (process.env.WHATSAPP_TEMPLATE_PARAM_NAMES || 'name,body,discount')
+          .split(',')
+          .map((name) => name.trim())
+          .filter(Boolean)
         components.push({
           type: 'body',
-          parameters: templateParams.body.map((param) => ({
+          parameters: templateParams.body.map((param, index) => ({
             type: 'text',
+            ...(namedFormat ? { parameter_name: paramNames[index] || `param${index + 1}` } : {}),
             text: param,
           })),
         })
@@ -253,6 +263,28 @@ export async function runProbe(
       },
     },
     {
+      label: `template ${templateName} named params (name/body/discount)`,
+      payload: {
+        messaging_product: 'whatsapp',
+        to: recipient,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: 'en' },
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', parameter_name: 'name', text: 'Test' },
+                { type: 'text', parameter_name: 'body', text: 'Your cart is saved.' },
+                { type: 'text', parameter_name: 'discount', text: 'Use code SAVE10' },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    {
       label: `template ${templateName} body + url button (en)`,
       payload: {
         messaging_product: 'whatsapp',
@@ -325,8 +357,6 @@ export async function getWhatsAppAccountInfo(): Promise<{
       `${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,account_mode,name_status,code_verification_status,platform_type`,
     )
 
-    // The WABA that owns this number, and the templates approved inside it.
-    // This is what tells us the exact template names and language codes.
     // Which apps may send on this number, and what the token can actually do.
     const subscribed = await get(`${phoneNumberId}/subscribed_apps`)
     const tokenInfo = await get(`debug_token?input_token=${encodeURIComponent(accessToken)}`)
@@ -340,7 +370,21 @@ export async function getWhatsAppAccountInfo(): Promise<{
       canSend: scopes.includes('whatsapp_business_messaging'),
       canManage: scopes.includes('whatsapp_business_management'),
     }
-    const wabaId = null
+    // The phone-number node does not expose its WABA, so walk
+    // me → businesses → owned WhatsApp accounts and match this number's id.
+    let wabaId: string | null = null
+    const businessesRes = await get('me/businesses?fields=id,name')
+    for (const business of businessesRes.body?.data || []) {
+      const owned = await get(`${business.id}/owned_whatsapp_business_accounts?fields=id,name`)
+      for (const waba of owned.body?.data || []) {
+        const numbers = await get(`${waba.id}/phone_numbers?fields=id,display_phone_number,status`)
+        if ((numbers.body?.data || []).some((n: any) => String(n.id) === phoneNumberId)) {
+          wabaId = String(waba.id)
+          break
+        }
+      }
+      if (wabaId) break
+    }
     const templatesRes = wabaId
       ? await get(`${wabaId}/message_templates?limit=100&fields=name,status,language,category,parameter_format,components`)
       : { ok: false, status: 0, body: null }
@@ -351,7 +395,9 @@ export async function getWhatsAppAccountInfo(): Promise<{
       body: {
         account: account.body,
         wabaId,
-        wabaLookup: 'not supported on the phone-number node',
+        wabaLookup: wabaId
+          ? 'matched via business → owned WhatsApp accounts'
+          : 'no business in this token owns the number',
         token: tokenSummary,
         subscribedApps: subscribed.ok ? subscribed.body?.data : subscribed.body,
         templates: templatesRes.ok
