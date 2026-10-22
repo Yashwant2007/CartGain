@@ -27,6 +27,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}))
     const phone = typeof body.phone === 'string' ? body.phone.trim() : ''
 
+    if (String(body.mode || '').toLowerCase() === 'probe') {
+      const target = typeof body.phone === 'string' ? body.phone.trim() : ''
+      if (!target) return NextResponse.json({ error: 'phone is required for probe' }, { status: 400 })
+
+      const { runProbe } = await import('@/lib/services/whatsapp')
+      const results = await runProbe(target, {
+        templateName:
+          typeof body.template === 'string' && body.template ? body.template : 'cart_reminders',
+      })
+      return NextResponse.json({ success: results.some((r) => r.ok), mode: 'probe', results })
+    }
+
     // whoami needs no recipient — it only inspects the configured number/token.
     if (String(body.mode || '').toLowerCase() === 'whoami') {
       const info = await getWhatsAppAccountInfo()

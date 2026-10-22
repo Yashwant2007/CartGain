@@ -187,6 +187,108 @@ export async function sendWhatsAppMessage({
 }
 
 /**
+ * Try the small set of payload shapes we can send, and report which one Meta
+ * accepts. Used to diagnose an approval/auth mismatch in one call instead of
+ * guessing: a text message proves the token can send, a body-only template
+ * proves the template is usable, and the button variant proves the dynamic
+ * URL parameter matches.
+ */
+export async function runProbe(
+  to: string,
+  opts?: { templateName?: string },
+): Promise<Array<{ label: string; ok: boolean; code?: number; subcode?: number; message?: string; details?: string }>> {
+  const cleanEnv = (value: string | undefined): string =>
+    (value || '').replace(/^\s*["']|["']\s*$/g, '').trim()
+  const phoneNumberId = cleanEnv(process.env.WHATSAPP_PHONE_NUMBER_ID)
+  const accessToken = cleanEnv(process.env.WHATSAPP_BUSINESS_TOKEN).replace(/^Bearer\s+/i, '')
+  const graphVersion = process.env.WHATSAPP_API_VERSION || 'v22.0'
+  const templateName = opts?.templateName || 'cart_reminders'
+  const recipient = formatWhatsAppPhone(to)
+
+  const post = async (payload: any) => {
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(15000),
+        },
+      )
+      const json = await response.json().catch(() => ({}))
+      return { ok: response.ok, json }
+    } catch (error: any) {
+      return { ok: false, json: { error: { message: error?.message || 'request failed' } } }
+    }
+  }
+
+  const bodyParams = [
+    { type: 'text', text: 'Test' },
+    { type: 'text', text: 'Your cart is saved and this is a template check from CartGain.' },
+    { type: 'text', text: 'Use code SAVE10 for 10% off' },
+  ]
+
+  const variants: Array<{ label: string; payload: any }> = [
+    {
+      label: 'text message',
+      payload: { messaging_product: 'whatsapp', to: recipient, type: 'text', text: { body: 'CartGain test message.' } },
+    },
+    {
+      label: `template ${templateName} body-only (en)`,
+      payload: {
+        messaging_product: 'whatsapp',
+        to: recipient,
+        type: 'template',
+        template: { name: templateName, language: { code: 'en' }, components: [{ type: 'body', parameters: bodyParams }] },
+      },
+    },
+    {
+      label: `template ${templateName} body-only (en_US)`,
+      payload: {
+        messaging_product: 'whatsapp',
+        to: recipient,
+        type: 'template',
+        template: { name: templateName, language: { code: 'en_US' }, components: [{ type: 'body', parameters: bodyParams }] },
+      },
+    },
+    {
+      label: `template ${templateName} body + url button (en)`,
+      payload: {
+        messaging_product: 'whatsapp',
+        to: recipient,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: 'en' },
+          components: [
+            { type: 'body', parameters: bodyParams },
+            { type: 'button', sub_type: 'url', index: 0, parameters: [{ type: 'text', text: 'probe-cart-id' }] },
+          ],
+        },
+      },
+    },
+  ]
+
+  const results: Array<{ label: string; ok: boolean; code?: number; subcode?: number; message?: string; details?: string }> = []
+  for (const variant of variants) {
+    const attempt = await post(variant.payload)
+    const error = attempt.json?.error
+    results.push({
+      label: variant.label,
+      ok: attempt.ok && Boolean(attempt.json?.messages?.[0]?.id),
+      code: error?.code,
+      subcode: error?.error_subcode,
+      message: error?.message,
+      details: error?.error_data?.details,
+    })
+    // A successful text send proves the credentials; no need to keep poking.
+    if (variant.label === 'text message' && attempt.ok) break
+  }
+  return results
+}
+
+/**
  * Fetch the phone number's own metadata with the configured token. This proves
  * whether WHATSAPP_PHONE_NUMBER_ID belongs to the WhatsApp Business Account
  * that issued WHATSAPP_BUSINESS_TOKEN — a mismatch is the usual cause of a bare
@@ -222,13 +324,13 @@ export async function getWhatsAppAccountInfo(): Promise<{
 
   try {
     const account = await get(
-      `${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,account_mode,name_status,code_verification_status,platform_type`,
+      `${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,account_mode,name_status,code_verification_status,platform_type,whatsapp_business_account`,
     )
 
     // The WABA that owns this number, and the templates approved inside it.
     // This is what tells us the exact template names and language codes.
-    const wabaRes = await get(`${phoneNumberId}/whatsapp_business_account`)
-    const wabaId = wabaRes.ok ? wabaRes.body?.data?.[0]?.id || null : null
+    const wabaField: any = account.body?.whatsapp_business_account
+    const wabaId = typeof wabaField === 'string' ? wabaField : wabaField?.id || null
     const templatesRes = wabaId
       ? await get(`${wabaId}/message_templates?limit=100&fields=name,status,language,category,parameter_format`)
       : { ok: false, status: 0, body: null }
@@ -239,7 +341,7 @@ export async function getWhatsAppAccountInfo(): Promise<{
       body: {
         account: account.body,
         wabaId,
-        wabaLookup: wabaId ? 'ok' : wabaRes.body,
+        wabaLookup: wabaId ? 'ok' : 'not returned (needs whatsapp_business_management)',
         templates: templatesRes.ok
           ? (templatesRes.body?.data || []).map((t: any) => ({
               name: t.name,
