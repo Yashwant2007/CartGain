@@ -12,6 +12,8 @@ out/
 .env.production
 .env.production.local
 .env*.verify
+.env.vercel
+.env.prod
 .env.local*
 !.env.example
 
