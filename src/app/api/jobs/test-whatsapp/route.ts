@@ -6,15 +6,18 @@ import { requireJobAuth } from '@/lib/job-auth'
 export const dynamic = 'force-dynamic'
 
 /**
- * Send the real recovery template to a phone number and report Meta's raw
- * answer. This is how you verify that the approved template, its three body
- * variables and the optional URL button line up with what we send.
+ * Send a real recovery template to a phone number and report Meta's raw
+ * answer, including the component shape and the diagnostics
+ * (code / subcode / details / trace id) needed to fix an approval mismatch.
  *
  * Auth: the job secret (`Authorization: Bearer $JOB_SECRET` or `x-job-secret`).
  *
- *   curl -sS -X POST https://cart-gain.com/api/jobs/test-whatsapp \
- *     -H "Authorization: Bearer $JOB_SECRET" -H 'content-type: application/json' \
- *     -d '{"phone":"+919999999999","template":"reminder","code":"SAVE10","value":10}'
+ *   POST /api/jobs/test-whatsapp
+ *   { "phone": "+919999999999", "template": "reminder", "code": "SAVE10", "value": 10 }
+ *
+ * Optional: "language" (defaults to WHATSAPP_TEMPLATE_LANG/en),
+ *           "mode": "text" to send a plain-text message (checks the token and
+ *           number without touching the template).
  */
 export async function POST(request: NextRequest) {
   const authError = await requireJobAuth(request)
@@ -25,6 +28,23 @@ export async function POST(request: NextRequest) {
     const phone = typeof body.phone === 'string' ? body.phone.trim() : ''
     if (!phone) {
       return NextResponse.json({ error: 'phone is required' }, { status: 400 })
+    }
+
+    if (String(body.mode || '').toLowerCase() === 'text') {
+      const result = await sendWhatsAppMessage({
+        to: phone,
+        content: 'CartGain test message - your WhatsApp credentials are working.',
+      })
+      return NextResponse.json({
+        success: result.success,
+        mode: 'text',
+        messageId: result.messageId,
+        error: result.error,
+        errorCode: result.errorCode,
+        errorSubcode: result.errorSubcode,
+        errorDetails: result.errorDetails,
+        traceId: result.traceId,
+      })
     }
 
     const which = String(body.template || 'reminder').toLowerCase()
@@ -64,24 +84,35 @@ export async function POST(request: NextRequest) {
       },
     )
 
+    const language = typeof body.language === 'string' && body.language ? body.language : undefined
+
     const result = await sendWhatsAppMessage({
       to: phone,
       templateName: template.name,
       templateParams: params,
+      templateLanguage: language,
     })
 
     return NextResponse.json({
       success: result.success,
       templateName: template.name,
-      // Grouped so you can compare with Meta's approved structure.
+      language: language || process.env.WHATSAPP_TEMPLATE_LANG || 'en',
+      // Compare this with the approved structure in WhatsApp Manager.
       componentsSent: {
         bodyParams: params.body?.length ?? 0,
+        body: params.body,
         header: params.header ? params.header.type : 'none',
         footer: 'none (static footer lives in the template)',
         button: params.buttons?.length ? 'url (dynamic suffix)' : 'none',
       },
       messageId: result.messageId,
       error: result.error,
+      errorCode: result.errorCode,
+      errorSubcode: result.errorSubcode,
+      errorDetails: result.errorDetails,
+      traceId: result.traceId,
+      // Meta's full answer helps when the message alone is generic (#100).
+      providerResponse: result.providerResponse,
     })
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error?.message || 'failed' }, { status: 500 })

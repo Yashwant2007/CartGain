@@ -26,6 +26,13 @@ export async function sendWhatsAppMessage({
   success: boolean
   messageId?: string
   error?: string
+  /** Meta diagnostics, surfaced by the authenticated test endpoint. */
+  errorCode?: number
+  errorSubcode?: number
+  errorDetails?: string
+  traceId?: string
+  /** Raw parsed Meta response - only returned to the test route. */
+  providerResponse?: unknown
 }> {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
   const accessToken = process.env.WHATSAPP_BUSINESS_TOKEN
@@ -39,7 +46,6 @@ export async function sendWhatsAppMessage({
     const formattedTo = formatWhatsAppPhone(to)
     const body: any = {
       messaging_product: 'whatsapp',
-      recipient_type: 'individual',
       to: formattedTo,
     }
 
@@ -104,8 +110,11 @@ export async function sendWhatsAppMessage({
       body.text = { body: content || '' }
     }
 
+    // Graph versions are sunset on a schedule; v18 is long dead and answers
+    // cryptic (#100) errors. Keep this current (override with env if needed).
+    const graphVersion = process.env.WHATSAPP_API_VERSION || 'v22.0'
     const response = await fetch(
-      `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+      `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`,
       {
         method: 'POST',
         headers: {
@@ -120,11 +129,16 @@ export async function sendWhatsAppMessage({
     const data = await response.json()
     const messageId = data?.messages?.[0]?.id
     if (response.ok && messageId) {
-      return { success: true, messageId }
+      return { success: true, messageId, providerResponse: data }
     }
     return {
       success: false,
       error: data?.error?.message || 'Failed to send WhatsApp message',
+      errorCode: data?.error?.code,
+      errorSubcode: data?.error?.error_subcode,
+      errorDetails: data?.error?.error_data?.details,
+      traceId: data?.error?.fbtrace_id,
+      providerResponse: data,
     }
   } catch (error: any) {
     console.error('WhatsApp send error:', error)
