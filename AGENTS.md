@@ -65,6 +65,39 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `fix(recovery): the WhatsApp header is the product photo, and a reminder
+  round hits WhatsApp AND email`. Two real bugs, found by auditing the path
+  instead of the UI: (a) Shopify sends the line-item photo as `image_url`
+  (`checkouts/*` and the REST sync) but both capture mappers read only
+  `image?.src || image`, so every cart stored `image: undefined` and the
+  mandatory template header fell back to `https://cart-gain.com/logo.png`;
+  (b) the job sent at most one message per cart per sweep and counted every
+  accepted message as a "step", so a two-channel campaign reminded on
+  WhatsApp and pushed the email hours later — and single-channel campaigns
+  were capped at exactly one message because the budget was
+  `min(channels, maxFollowUps + 1)`. Now `src/lib/shopify-line-items.ts`
+  normalises `image_url` / `image.src` / gid ids / product_id / variant_id /
+  sku for both capture paths; `src/lib/recovery/product-image.ts` resolves a
+  missing photo from `GET products/{id}.json` (Redis + in-memory cache, 7d,
+  401 never cached), the job persists the resolved photo onto the cart items
+  so later rounds and the email reuse it, and the sender retries once with
+  the fallback image only when Meta rejects the photo (131053/132012).
+  Image headers are on by default (the approved templates declare one).
+  Steps are now ROUNDS: a round is complete only when every reachable
+  channel has an accepted message for it, idempotency is per
+  (channel, round), and `maxRounds = maxFollowUps` (1..5). Verified live with
+  a synthetic cart (product id + no image): the log line said
+  `[recovery] cart=… whatsapp header=product-photo`, the WhatsApp wamid
+  arrived with the snowboard photo, the cart items were persisted with the
+  Shopify CDN URL, and the email for the same round was `delivered` via the
+  Resend webhook (providerId `01a163e4-…`) — the first real proof that the
+  email receipt path works end to end. `Message(step)` remains 0/0 for the
+  two channels. Tests 109 suites / 1235. **Still missing:**
+  `WHATSAPP_APP_SECRET` is unset, so Meta's inbound/status webhooks are
+  answered 401 (delivery receipts and STOP replies never land) — set it from
+  Meta → App settings → Basic. `/api/health.checks.whatsapp` now reports
+  `appSecret` / `verifyToken` booleans.
+
 - `feat(jobs): dual trigger — Supabase pg_cron drives the sweep, GitHub is the
   fallback`. Vercel **Hobby rejects any sub-daily cron** (`*/5` fails the
   deploy: "Hobby accounts are limited to daily cron jobs"), and GitHub's

@@ -33,6 +33,13 @@ interface HealthStatus {
       configured: boolean
       deliveryWebhook: boolean
     }
+    whatsapp: {
+      // Inbound/status webhooks are verified with the Meta app secret. Without
+      // it Meta's delivery receipts and customer replies are rejected (401),
+      // so recovery messages stay "sent" and STOP replies are not recorded.
+      appSecret: boolean
+      verifyToken: boolean
+    }
     shopify: {
       // Which app this deployment talks to. The client id is public (it ships
       // in the embedded app's HTML) but a fingerprint keeps the endpoint free
@@ -185,6 +192,11 @@ export async function GET() {
     deliveryWebhook: Boolean(process.env.RESEND_WEBHOOK_SECRET),
   }
 
+  const whatsappStatus: HealthStatus['checks']['whatsapp'] = {
+    appSecret: Boolean(resolveWhatsAppAppSecret()),
+    verifyToken: Boolean(resolveWhatsAppVerifyToken()),
+  }
+
   // Which Shopify app this deployment is configured for. The client id is
   // public information (it is rendered into the embedded app's HTML), so a
   // short fingerprint is enough to tell "the wrong app is wired up" from the
@@ -220,6 +232,7 @@ export async function GET() {
       },
       ai: aiStatus,
       email: emailStatus,
+      whatsapp: whatsappStatus,
       shopify: {
         apiKeyFingerprint: shopifyApiKeyFingerprint,
         appBridgeReady: Boolean(shopifyApiKey),
