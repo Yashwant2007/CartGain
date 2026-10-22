@@ -584,7 +584,13 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           campaignId: campaign.id,
           channel: ch,
           step,
-          content: composed.body,
+          // Store what the customer actually receives: WhatsApp gets the
+          // single-line body with the redundant greeting stripped (the
+          // template already greets with {{1}}), email gets the full body.
+          content:
+            ch === 'whatsapp'
+              ? singleLineMessage(stripLeadingGreeting(composed.body, customerName))
+              : composed.body,
           status: 'pending',
           sentAt: null,
           deliveredAt: null,

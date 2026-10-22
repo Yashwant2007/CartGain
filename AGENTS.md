@@ -65,6 +65,30 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(whatsapp): live delivery + a sweep that actually covers every store`.
+  Root cause of the `(#100)` was **the recipient**: sending to our own business
+  number (`+91 73558 49689`) is rejected; the same token and payload deliver to
+  a normal number (`+918708718426`). The approved templates also declare an
+  **IMAGE header**, so `(#132012) header: expected IMAGE, received UNKNOWN`
+  hit every cart without a product photo — the sender now always sends a
+  header, falling back to `WHATSAPP_TEMPLATE_HEADER_IMAGE_URL` (default
+  `https://cart-gain.com/logo.png`). Working shape, verified with `wamid`:
+  image header + 3 positional body params + url button, language `en`.
+  `mode:"probe"` now tests exactly that and accepts a caller-supplied
+  `accessToken`/`phoneNumberId`/`headerImageUrl`; `whoami` accepts `wabaId`
+  (the phone-number node has no WABA field and `me/businesses` is empty for a
+  system user that is not tied to a portfolio). Sweep reliability: one store
+  per invocation starved everyone else whenever the trigger slipped (GitHub
+  ran the 5-min schedule **once in 2.5h**), so `processAbandonedCarts` now
+  processes as many campaigns as fit `CART_SWEEP_BUDGET_MS` (default 35s) and
+  keeps a cursor only when the rotation was cut short. `POST /api/jobs/
+  process-carts` no longer enqueues into a Bull queue that has no worker on
+  Vercel (it returned "queued" and nothing drained it) — it processes inline
+  like GET. The DB now stores the text actually sent (WhatsApp: stripped
+  single-line body). Verified end to end: sweep answer
+  `{"storesProcessed":3,"messagesSent":1}` and a WhatsApp row
+  `status:"sent"` with a real `wamid`. Tests 104 suites / 1206.
+
 - `fix(whatsapp): prove the send path is blocked by the token, not the
   payload`. `POST /api/jobs/test-whatsapp` gained `mode:"probe"` (text, body-only
   `en`, body-only `en_US`, named params, body+url button) and `whoami` now
