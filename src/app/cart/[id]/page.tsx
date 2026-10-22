@@ -25,7 +25,14 @@ function getSymbol(currency: string): string {
   return CURRENCY_SYMBOLS[currency?.toUpperCase()] || currency || '₹'
 }
 
-export default async function CartRecoveryPage({ params }: { params: { id: string } }) {
+export default async function CartRecoveryPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string }
+  searchParams?: { focus?: string }
+}) {
+  const focusBargain = searchParams?.focus === 'bargain'
   const cart = await prisma.cart.findUnique({
     where: { id: params.id },
     include: { store: true },
@@ -96,7 +103,9 @@ export default async function CartRecoveryPage({ params }: { params: { id: strin
         )}
 
         {/* Bargain Widget - Visible at cart recovery checkout */}
+        <div id="bargain" />
         <BargainWidget
+          defaultOpen={focusBargain}
           storeId={storeId}
           shopifyProductId={items?.[0]?.shopifyProductId || ''}
           originalPrice={perItemPrice}

@@ -101,6 +101,12 @@ type Props = {
    * never unmounts — the controller keeps the same iframe alive.
    */
   view?: 'inline' | 'drawer'
+  /**
+   * Open the negotiation panel on mount. Used by recovery links
+   * (`/cart/<id>?focus=bargain`) so "name your price" lands on the offer, not
+   * on a collapsed launcher.
+   */
+  defaultOpen?: boolean
 }
 
 const PERSONA_CHIP: Record<string, { label: string; emoji: string }> = {
@@ -128,8 +134,9 @@ export default function BargainWidget({
   mode,
   maxAttempts,
   view = 'inline',
+  defaultOpen,
 }: Props) {
-  const [open, setOpen] = useState<boolean>(isEmbed)
+  const [open, setOpen] = useState<boolean>(defaultOpen ?? isEmbed)
   const [minimised, setMinimised] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [sessionToken, setSessionToken] = useState<string | null>(null)

@@ -203,7 +203,15 @@ export async function sendEmail({
 }
 
 export const EmailTemplates = {
-  abandoned: (customerName: string, items: any[], cartTotal: number, cartUrl: string, storeName: string, currencySymbol = '₹', aiBody?: string, unsubscribeUrl?: string, opts?: { emoji?: boolean }) => `
+  abandoned: (customerName: string, items: any[], cartTotal: number, cartUrl: string, storeName: string, currencySymbol = '₹', aiBody?: string, unsubscribeUrl?: string, opts?: {
+    emoji?: boolean
+    /** The merchant-authorised offer. Rendered only when a real code exists. */
+    offer?: { code: string; value: number; type: 'percentage' | 'fixed' | 'free_shipping' } | null
+    /** Store checkout with the discount applied (falls back to cartUrl). */
+    checkoutUrl?: string
+    /** Opens the negotiation panel so the shopper can name their price. */
+    bargainUrl?: string
+  }) => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -243,11 +251,32 @@ export const EmailTemplates = {
         Total: ${escapeHtml(currencySymbol)}${cartTotal.toFixed(2)}
       </div>
 
+      ${opts?.offer ? `
+      <div style="margin: 8px 0 20px; padding: 18px; border: 2px dashed #c7d2fe; border-radius: 14px; background: #eef2ff; text-align: center;">
+        <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #6366f1; font-weight: 700;">Your personal offer</div>
+        <div style="font-size: 26px; font-weight: 800; color: #312e81; letter-spacing: 2px; margin: 6px 0;">${escapeHtml(opts.offer.code)}</div>
+        <div style="font-size: 14px; color: #475569;">
+          ${opts.offer.type === 'percentage'
+            ? `${escapeHtml(String(opts.offer.value))}% off this cart`
+            : opts.offer.type === 'free_shipping'
+              ? 'Free shipping on this order'
+              : `${escapeHtml(currencySymbol)}${Number(opts.offer.value).toFixed(2)} off this cart`}
+          — applied automatically through the button below.
+        </div>
+      </div>
+      ` : ''}
+
       <div style="text-align: center; margin: 24px 0;">
-        <a href="${safeHref(cartUrl)}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; padding: 16px 48px; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);">
+        <a href="${safeHref(opts?.checkoutUrl || cartUrl)}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; padding: 16px 48px; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);">
           Complete Your Order →
         </a>
         <p style="font-size: 13px; color: #94a3b8; margin-top: 12px;">Secure checkout • Takes less than 2 minutes</p>
+        ${opts?.bargainUrl ? `
+        <a href="${safeHref(opts.bargainUrl)}" style="display: inline-block; margin-top: 6px; padding: 12px 28px; border: 2px solid #a5b4fc; color: #4f46e5; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 14px;">
+          Prefer to name your price? Make an offer →
+        </a>
+        <p style="font-size: 13px; color: #94a3b8; margin-top: 8px;">Tell us what works for you — we usually meet you there.</p>
+        ` : ''}
       </div>
 
       <div style="text-align: center; border-top: 1px solid #f0f0f5; padding-top: 20px; margin-top: 8px;">

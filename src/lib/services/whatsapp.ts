@@ -11,6 +11,8 @@ export interface WhatsAppMessageOptions {
   mediaUrl?: string
   templateName?: string
   templateParams?: WhatsAppTemplateParams
+  /** Template language code approved in Meta (defaults to WHATSAPP_TEMPLATE_LANG or 'en'). */
+  templateLanguage?: string
 }
 
 export async function sendWhatsAppMessage({
@@ -19,6 +21,7 @@ export async function sendWhatsAppMessage({
   mediaUrl,
   templateName,
   templateParams,
+  templateLanguage,
 }: WhatsAppMessageOptions): Promise<{
   success: boolean
   messageId?: string
@@ -90,7 +93,7 @@ export async function sendWhatsAppMessage({
 
       body.template = {
         name: templateName,
-        language: { code: 'en' },
+        language: { code: templateLanguage || process.env.WHATSAPP_TEMPLATE_LANG || 'en' },
         components,
       }
     } else if (mediaUrl) {
@@ -130,14 +133,67 @@ export async function sendWhatsAppMessage({
 }
 
 // ─── 3 CORE WHATSAPP TEMPLATES ───
-// Register these exact bodies in Meta Business Manager.
-// Variable mapping:  {{1}} = name | {{2}} = AI body text | {{3}} = discount line (empty if none)
-// All templates include CartGain footer + single URL button.
+// Register these bodies in Meta Business Manager (WhatsApp Manager → Message
+// templates) and keep the names/languages in sync with the env vars below.
+//
+// Body variable mapping (identical for all three, so one approved template can
+// be swapped for another without changing code):
+//   {{1}} = customer first name        (never empty — falls back to "there")
+//   {{2}} = AI-written body line       (validated, single line)
+//   {{3}} = offer line                 (code + 10% off + bargain link; never empty)
+//
+// The template's URL button should be approved as a STATIC url pointing at
+// https://cart-gain.com/r/  with a dynamic suffix {{1}} = cart id (e.g.
+// https://cart-gain.com/r/{{1}}). When WHATSAPP_TEMPLATE_BUTTON_BASE is set we
+// send that suffix; otherwise no button component is sent and the approved
+// static button stays as-is. This is why `buttonUrlSuffix` exists — sending a
+// FULL url in a url-button parameter produces a broken double-url.
 
-export const WhatsAppTemplates = {
+export type WhatsAppTemplateContext = {
+  /** Dynamic suffix for a url button configured as `<base>/{{1}}`. */
+  buttonUrlSuffix?: string
+}
+
+type TemplateBuilder = (
+  customerName: string,
+  bodyContent: string,
+  offerLine: string,
+  productImage?: string,
+  context?: WhatsAppTemplateContext,
+) => WhatsAppTemplateParams
+
+function nonEmpty(value: string | undefined, fallback: string): string {
+  const trimmed = (value ?? '').replace(/\s+/g, ' ').trim()
+  return trimmed || fallback
+}
+
+function buildTemplate(
+  customerName: string,
+  bodyContent: string,
+  offerLine: string,
+  productImage: string | undefined,
+  context: WhatsAppTemplateContext | undefined,
+  fallbackOfferLine: string,
+): WhatsAppTemplateParams {
+  const params: WhatsAppTemplateParams = {
+    header: productImage ? { type: 'image', imageUrl: productImage } : undefined,
+    body: [
+      nonEmpty(customerName, 'there'),
+      nonEmpty(bodyContent, 'Your cart is still saved and ready whenever you are.'),
+      nonEmpty(offerLine, fallbackOfferLine),
+    ],
+    footer: 'Powered by CartGain — cart-gain.com',
+  }
+  if (context?.buttonUrlSuffix) {
+    params.buttons = [{ type: 'url', text: 'Complete Purchase', url: context.buttonUrlSuffix }]
+  }
+  return params
+}
+
+export const WhatsAppTemplates: Record<string, { name: string; generateParams: TemplateBuilder }> = {
   /**
-   * ── REMINDER (Step 0, +1h after abandonment) ──
-   * Warm validation. Desire. Gentle nudge.
+   * ── REMINDER (step 0, +1h after abandonment) ──
+   * Warm, low-pressure: what they picked, one next step.
    *
    * Meta body:
    *   Hey {{1}} 👋
@@ -146,107 +202,80 @@ export const WhatsAppTemplates = {
    *
    *   {{3}}
    *
-   *   Tap below to make it yours ✨
+   *   Tap below to pick up where you left off ✨
    *
    * Footer: Powered by CartGain — cart-gain.com
-   * Button: 🛒 Complete Purchase
+   * Button (static): Complete Purchase → https://cart-gain.com/r/{{1}}
    */
   abandoned_cart: {
-    name: 'abandoned_cart_reminder',
-    generateParams: (
-      customerName: string,
-      bodyContent: string,
-      discountLine: string,
-      productImage: string | undefined,
-      cartUrl: string,
-    ): WhatsAppTemplateParams => ({
-      header: productImage
-        ? { type: 'image', imageUrl: productImage }
-        : undefined,
-      body: [
-        customerName || 'there',
+    name: process.env.WHATSAPP_TEMPLATE_REMINDER || 'abandoned_cart_reminder',
+    generateParams: (customerName, bodyContent, offerLine, productImage, context) =>
+      buildTemplate(
+        customerName,
         bodyContent,
-        discountLine,
-      ],
-      footer: 'Powered by CartGain \u2014 cart-gain.com',
-      buttons: [{ type: 'url', text: '\uD83D\uDED2 Complete Purchase', url: cartUrl }],
-    }),
+        offerLine,
+        productImage,
+        context,
+        'Your items are saved — tap below to pick up where you left off.',
+      ),
   },
 
   /**
-   * ── FOLLOW-UP (Step 1, +4h after abandonment) ──
-   * Social proof. Scarcity. Warmer nudge.
+   * ── FOLLOW-UP (step 1, +4h after abandonment) ──
+   * Acknowledges the pause, repeats the offer once if there is one.
    *
    * Meta body:
-   *   {{1}}, still thinking? \uD83D\uDCAB
+   *   {{1}}, still thinking it over? 💫
    *
    *   {{2}}
    *
    *   {{3}}
    *
-   *   Still reserved just for you 👉
+   *   Your cart is right here whenever you're ready 👉
    *
    * Footer: Powered by CartGain — cart-gain.com
-   * Button: 👉 Complete Order
+   * Button (static): Complete Order → https://cart-gain.com/r/{{1}}
    */
   abandoned_cart_followup: {
-    name: 'abandoned_cart_followup',
-    generateParams: (
-      customerName: string,
-      bodyContent: string,
-      discountLine: string,
-      productImage: string | undefined,
-      cartUrl: string,
-    ): WhatsAppTemplateParams => ({
-      header: productImage
-        ? { type: 'image', imageUrl: productImage }
-        : undefined,
-      body: [
-        `${customerName}, still thinking? \uD83D\uDCAB`,
+    name: process.env.WHATSAPP_TEMPLATE_FOLLOWUP || 'abandoned_cart_followup',
+    generateParams: (customerName, bodyContent, offerLine, productImage, context) =>
+      buildTemplate(
+        customerName,
         bodyContent,
-        discountLine,
-      ],
-      footer: 'Powered by CartGain \u2014 cart-gain.com',
-      buttons: [{ type: 'url', text: '\uD83D\uDC49 Complete Order', url: cartUrl }],
-    }),
+        offerLine,
+        productImage,
+        context,
+        'Still deciding? Your cart is right here, and we are happy to talk price.',
+      ),
   },
 
   /**
-   * ── URGENT (Step 2, +24h after abandonment) ──
-   * Loss aversion. Time sensitivity. Final call.
+   * ── FINAL (step 2, +24h after abandonment) ──
+   * Says plainly that this is the last message. No false urgency.
    *
    * Meta body:
-   *   {{1}}, last chance \u23F3
+   *   {{1}}, last note from us ✌️
    *
    *   {{2}}
    *
    *   {{3}}
    *
-   *   Act now before it's gone 🏃‍♂️
+   *   We won't keep messaging you about this cart.
    *
    * Footer: Powered by CartGain — cart-gain.com
-   * Button: 🏃‍♂️ Complete Now
+   * Button (static): Complete Now → https://cart-gain.com/r/{{1}}
    */
   abandoned_cart_urgent: {
-    name: 'abandoned_cart_urgent',
-    generateParams: (
-      customerName: string,
-      bodyContent: string,
-      discountLine: string,
-      productImage: string | undefined,
-      cartUrl: string,
-    ): WhatsAppTemplateParams => ({
-      header: productImage
-        ? { type: 'image', imageUrl: productImage }
-        : undefined,
-      body: [
-        `${customerName}, last chance \u23F3`,
+    name: process.env.WHATSAPP_TEMPLATE_FINAL || 'abandoned_cart_urgent',
+    generateParams: (customerName, bodyContent, offerLine, productImage, context) =>
+      buildTemplate(
+        customerName,
         bodyContent,
-        discountLine,
-      ],
-      footer: 'Powered by CartGain \u2014 cart-gain.com',
-      buttons: [{ type: 'url', text: '\uD83C\uDFC3\u200D\u2642\uFE0F Complete Now', url: cartUrl }],
-    }),
+        offerLine,
+        productImage,
+        context,
+        'This is our last message about this cart — your items stay saved if you come back.',
+      ),
   },
 }
 

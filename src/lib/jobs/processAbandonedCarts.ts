@@ -4,8 +4,8 @@ import { sendEmail, EmailTemplates } from '@/lib/services/email'
 import { buildOptOutUrl } from '@/lib/opt-out'
 import { sanitizePhoneNumber } from '@/lib/utils'
 import { sendWhatsAppMessage, WhatsAppTemplates } from '@/lib/services/whatsapp'
-import { generatePersonalizedDiscount } from '@/lib/services/ai'
-import type { PersonalizedDiscount } from '@/lib/services/ai'
+import { resolveRecoveryOffer } from '@/lib/recovery/offer'
+import { buildRecoveryLink } from '@/lib/recovery/links'
 import { composeRecoveryMessage, singleLineMessage } from '@/lib/conversation/recovery'
 import type { ConversationDiscount } from '@/lib/conversation/facts'
 import { isWithinQuietHours } from '@/lib/conversation/variety'
@@ -329,31 +329,6 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
   return counts
 }
 
-async function getCustomerHistory(customerIdentifier: string | undefined, storeId: string): Promise<{ totalOrders: number; totalAbandons: number; lifetimeValue: number }> {
-  if (!customerIdentifier) return { totalOrders: 0, totalAbandons: 0, lifetimeValue: 0 }
-  try {
-    const customer = await prisma.customer.findFirst({
-      where: {
-        storeId,
-        OR: [
-          { email: customerIdentifier },
-          { phone: customerIdentifier.replace(/\D/g, '') },
-        ],
-      },
-      include: { customerInsights: { take: 1, orderBy: { updatedAt: 'desc' } } },
-    })
-    if (!customer) return { totalOrders: 0, totalAbandons: 0, lifetimeValue: 0 }
-    const insight = customer.customerInsights[0]
-    return {
-      totalOrders: customer.totalOrders || 0,
-      totalAbandons: insight?.totalAbandons || 0,
-      lifetimeValue: insight?.lifetimeValue || 0,
-    }
-  } catch {
-    return { totalOrders: 0, totalAbandons: 0, lifetimeValue: 0 }
-  }
-}
-
   async function processSingleCart(cart: any, config: CartConfig): Promise<{ sent: number; failed: number }> {
   const { campaign, store, subscription, sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest, optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts, isPaidUser, cartOverageActive, voice, quietHoursStart, quietHoursEnd } = config
 
@@ -481,29 +456,29 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
     const cartItems = rawItems as { name: string; description?: string; price: number; quantity: number; image?: string }[]
     const formattedTotal = `${currencySymbol}${cart.totalValue.toFixed(2)}`
 
-    let discountCode: string | undefined
-    let discountValue: number | undefined
-    let discountType: string | undefined
-    if (campaign.discountEnabled) {
-      try {
-        const customerHistory = await getCustomerHistory(cart.customerEmail || cart.customerPhone, store.id)
-        const personalized: PersonalizedDiscount = await generatePersonalizedDiscount(
-          customerName,
-          cart.totalValue,
-          customerHistory,
-          store.name,
-          40,
-          store.id,
-        )
-        discountCode = personalized.code
-        discountValue = personalized.value
-        discountType = personalized.type
-      } catch {
-        discountCode = campaign.discountCode || undefined
-        discountValue = campaign.discountValue || undefined
-        discountType = campaign.discountType || undefined
-      }
-    }
+    // ── The offer ──────────────────────────────────────────────────────────
+    // Resolved from MERCHANT configuration before any copy is written. A code
+    // is only used when it actually exists in the store (campaign code or a
+    // freshly created Shopify discount); otherwise the message goes out with
+    // no offer rather than a code that fails at checkout.
+    const offer = await resolveRecoveryOffer({
+      campaign: {
+        discountEnabled: campaign.discountEnabled,
+        discountType: campaign.discountType,
+        discountValue: campaign.discountValue,
+        discountCode: campaign.discountCode,
+      },
+      store,
+      cartId: cart.id,
+      cartTotal: cart.totalValue,
+    }).catch((err) => {
+      console.error('Recovery offer resolution failed:', err?.message || err)
+      return null
+    })
+
+    const discountCode: string | undefined = offer?.code
+    const discountValue: number | undefined = offer?.value
+    const discountType: string | undefined = offer?.type
 
     await logDataAccess({
       actorType: 'system',
@@ -519,8 +494,6 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
         cartHasPhone: Boolean(cart.customerPhone),
       },
     })
-
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
 
     const appUrlBase = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
 
@@ -540,6 +513,17 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
           }
         : null
 
+    // Deterministic, pre-recorded links for every channel. `checkout` goes
+    // through our redirect and then to the store with the code applied.
+    const linkFor = (ch: string, kind: 'cart' | 'bargain' | 'checkout') =>
+      buildRecoveryLink({
+        appUrl: appUrlBase,
+        cartId: cart.id,
+        channel: ch === 'email' ? 'email' : 'whatsapp',
+        kind,
+        discountCode: kind === 'checkout' ? authorisedDiscount?.code : null,
+      })
+
     // Previous copy sent to this cart, so step N does not repeat step N-1.
     const previousMessage =
       completedMessages
@@ -549,7 +533,7 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
 
     let globalSendSuccess = false
     for (const ch of channelsToProcess) {
-      const cartUrl = `${appUrlBase}/r/${cart.id}?c=${ch}`
+      const cartUrl = linkFor(ch, 'cart')
 
       // ── Idempotency ────────────────────────────────────────────────────
       // One row per (cart, channel, step). A fresh 'pending' row belongs to a
@@ -643,7 +627,12 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
             currencySymbol,
             composed.body,
             buildOptOutUrl(appUrlBase, { storeId: store.id, email: cart.customerEmail }),
-            { emoji: voice.emojiIntensity !== 'off' },
+            {
+              emoji: voice.emojiIntensity !== 'off',
+              offer: authorisedDiscount,
+              checkoutUrl: linkFor('email', 'checkout'),
+              bargainUrl: linkFor('email', 'bargain'),
+            },
           )
           const emailResult = await sendEmail({
             to: cart.customerEmail!,
@@ -662,23 +651,35 @@ async function getCustomerHistory(customerIdentifier: string | undefined, storeI
             WhatsAppTemplates.abandoned_cart_followup,
             WhatsAppTemplates.abandoned_cart_urgent,
           ]
-          const discountLine = authorisedDiscount
-            ? `Use code ${authorisedDiscount.code} for ${
-                authorisedDiscount.type === 'percentage'
-                  ? `${authorisedDiscount.value}% off`
-                  : authorisedDiscount.type === 'free_shipping'
-                    ? 'free shipping'
-                    : `${currencySymbol}${authorisedDiscount.value} off`
-              }`
+
+          // {{3}} is the offer line. It always carries a working link: the
+          // store checkout with the code applied (when there is a code) and the
+          // negotiation link. Without an offer it still carries a live link, so
+          // the variable is never empty and the shopper always has a next step.
+          const offerValueLabel = authorisedDiscount
+            ? authorisedDiscount.type === 'percentage'
+              ? `${authorisedDiscount.value}% off`
+              : authorisedDiscount.type === 'free_shipping'
+                ? 'free shipping'
+                : `${currencySymbol}${authorisedDiscount.value} off`
             : ''
+          const checkoutLink = linkFor('whatsapp', 'checkout')
+          const bargainLink = linkFor('whatsapp', 'bargain')
+          const offerLine = authorisedDiscount
+            ? `Use code ${authorisedDiscount.code} for ${offerValueLabel}: ${checkoutLink} — or name your price: ${bargainLink}`
+            : `Finish your order: ${checkoutLink} — or name your price: ${bargainLink}`
 
           const template = templateMap[templateStep]
           const params = template.generateParams(
             customerName,
             singleLineMessage(composed.body),
-            discountLine,
+            offerLine,
             firstImage,
-            cartUrl,
+            {
+              buttonUrlSuffix: process.env.WHATSAPP_TEMPLATE_BUTTON_BASE
+                ? `${cart.id}?c=wa`
+                : undefined,
+            },
           )
           const whatsappResult = await sendWhatsAppMessage({
             to: sanitizePhoneNumber(cart.customerPhone!),

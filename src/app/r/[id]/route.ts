@@ -1,24 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { buildStoreCheckoutLink, isSafeDiscountCode } from '@/lib/recovery/links'
 
 export const dynamic = 'force-dynamic'
 
 /**
  * Click-tracking redirect for recovery messages.
  *
- *   /r/<cartId>?c=<channel>
+ *   /r/<cartId>?c=<channel>[&to=cart|bargain|checkout][&code=<discount>]
  *
  * Stamps `clickedAt` on the most recent SENT message for this cart (+channel),
- * bumps the daily `messagesClicked` analytics, then forwards the customer to the
- * branded cart page. This is what powers provable per-channel attribution
- * ("WhatsApp drove X clicks → Y recoveries"). Tracking failures never block the
- * redirect — the customer always reaches their cart.
+ * bumps the daily `messagesClicked` analytics, then forwards the customer to
+ * the right place:
+ *
+ *   (default)  → our branded cart page: items, checkout button, bargain widget
+ *   to=bargain → the same page with the negotiation panel open
+ *   to=checkout→ the store's own cart/checkout with the discount pre-applied
+ *
+ * This is what powers provable per-channel attribution ("WhatsApp drove X
+ * clicks → Y recoveries"). Tracking failures never block the redirect — the
+ * customer always reaches their cart.
  */
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const cartId = params.id
   const channel = req.nextUrl.searchParams.get('c') || undefined
+  const to = req.nextUrl.searchParams.get('to')
+  const requestedCode = req.nextUrl.searchParams.get('code')
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/$/, '')
-  const destination = `${appUrl}/cart/${cartId}`
+
+  let cart: { id: string; cartId: string; store: { domain: string } } | null = null
+  try {
+    cart = await prisma.cart.findUnique({
+      where: { id: cartId },
+      select: { id: true, cartId: true, store: { select: { domain: true } } },
+    })
+  } catch (err) {
+    console.error('Recovery redirect cart lookup failed (redirect continues):', err)
+  }
+
+  let destination: string
+  if (to === 'checkout' && cart?.store?.domain) {
+    destination = buildStoreCheckoutLink({
+      domain: cart.store.domain,
+      shopifyCartId: cart.cartId,
+      discountCode: isSafeDiscountCode(requestedCode) ? requestedCode : null,
+    })
+  } else if (to === 'bargain') {
+    destination = `${appUrl}/cart/${cartId}?focus=bargain#bargain`
+  } else {
+    destination = `${appUrl}/cart/${cartId}`
+  }
 
   try {
     const message = await prisma.message.findFirst({
@@ -37,17 +68,17 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         data: { clickedAt: new Date() },
       })
 
-      const cart = await prisma.cart.findUnique({
+      const trackedCart = await prisma.cart.findUnique({
         where: { id: cartId },
         include: { store: true },
       })
 
-      if (cart?.store) {
+      if (trackedCart?.store) {
         const today = new Date(new Date().toDateString())
         await prisma.analytics.upsert({
-          where: { userId_date: { userId: cart.store.userId, date: today } },
+          where: { userId_date: { userId: trackedCart.store.userId, date: today } },
           update: { messagesClicked: { increment: 1 } },
-          create: { userId: cart.store.userId, date: today, messagesClicked: 1 },
+          create: { userId: trackedCart.store.userId, date: today, messagesClicked: 1 },
         })
       }
     }

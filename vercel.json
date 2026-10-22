@@ -1,6 +1,8 @@
 {
   "buildCommand": "npm run vercel-build",
-  "regions": ["bom1"],
+  "regions": [
+    "bom1"
+  ],
   "env": {
     "NODE_ENV": "production"
   },
@@ -12,6 +14,10 @@
     {
       "path": "/api/health",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/jobs/process-carts",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
