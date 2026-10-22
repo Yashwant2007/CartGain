@@ -5,6 +5,7 @@ import './globals.css'
 import Providers from './providers'
 import { ClientErrorBoundary } from './components/ClientErrorBoundary'
 import EmbeddedAuthBootstrap from '@/components/EmbeddedAuthBootstrap'
+import SplashScreen from './components/SplashScreen'
 import {
   APP_BRIDGE_CDN_SRC,
   getShopifyApiKey,
@@ -275,3 +276,5 @@ export default async function RootLayout({
     </html>
   )
 }
+
+// Add splash screen

@@ -1,19 +1,23 @@
 {
-  "buildCommand": "npm run vercel-build",
-  "regions": [
-    "bom1"
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  },
   "crons": [
     {
       "path": "/api/jobs/data-retention",
       "schedule": "0 3 * * *"
     },
     {
-      "path": "/api/health",
+      "path": "/api/jobs/health-check",
       "schedule": "0 6 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "src/app/api/jobs/process-carts/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/analytics/bargain/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/bargain/sessions/route.ts": {
+      "maxDuration": 60
+    }
+  }
 }

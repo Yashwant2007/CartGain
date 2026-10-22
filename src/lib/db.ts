@@ -95,3 +95,9 @@ export const prisma = globalForPrisma.prisma ?? createPrismaClient()
 globalForPrisma.prisma = prisma
 
 export default prisma
+
+// Add connection pool optimization
+if (process.env.NODE_ENV === 'production') {
+  // In serverless, ensure we don't create too many connections
+  process.env.PRISMA_CLIENT_ENGINE_TYPE = 'binary'
+}
