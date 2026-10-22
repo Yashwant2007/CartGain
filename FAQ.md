@@ -100,6 +100,43 @@ manual `workflow_dispatch` also available). It needs a repository secret
 and disables schedules after 60 days of repository inactivity — re-enable it if
 recovery goes quiet.
 
+### Primary scheduler: Supabase `pg_cron` (no Vercel Pro needed)
+
+Vercel **Hobby** refuses any cron that runs more than once a day, and GitHub's
+scheduler is best-effort (it can skip hours). The production Supabase database
+therefore calls the sweep directly every 5 minutes:
+
+```sql
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+select vault.create_secret('<JOB_SECRET>', 'cartgain_job_secret');
+
+create or replace function public.cartgain_sweep() returns bigint
+language plpgsql security definer set search_path = public, net, vault as $$
+declare token text; req bigint;
+begin
+  select decrypted_secret into token from vault.decrypted_secrets
+   where name = 'cartgain_job_secret' limit 1;
+  select net.http_get(
+    url := 'https://cart-gain.com/api/jobs/process-carts',
+    headers := jsonb_build_object('Authorization', 'Bearer ' || token),
+    timeout_milliseconds := 120000) into req;
+  return req;
+end $$;
+
+select cron.schedule('cartgain-sweep', '*/5 * * * *', 'select public.cartgain_sweep()');
+select cron.schedule('cartgain-net-cleanup', '25 3 * * *',
+  $$delete from net._http_response where created < now() - interval '2 days'$$);
+```
+
+The secret never appears in `cron.job`. Both this job and the GitHub workflow
+call the same endpoint; whichever runs first claims a 4-minute Redis slot and
+the other returns `status: "skipped"`, so the sweep runs once per slot no matter
+how many triggers exist. Inspect it with
+`select * from cron.job_run_details order by start_time desc limit 5;` and
+`select status_code, content from net._http_response order by id desc limit 5;`.
+
 No Redis URL is required for either option.
 ## 7. Email delivery receipts (Resend webhook)
 

@@ -65,6 +65,24 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(jobs): dual trigger — Supabase pg_cron drives the sweep, GitHub is the
+  fallback`. Vercel **Hobby rejects any sub-daily cron** (`*/5` fails the
+  deploy: "Hobby accounts are limited to daily cron jobs"), and GitHub's
+  scheduler ran the 5-minute workflow **once in 4 hours**. The production
+  database (Supabase, PG 17) now runs the sweep for real: extensions
+  `pg_cron` + `pg_net` created, the job secret stored with `vault.create_secret`
+  (never in `cron.job`), and `public.cartgain_sweep()` (SECURITY DEFINER)
+  issues `net.http_get('https://cart-gain.com/api/jobs/process-carts')` with
+  the Bearer header and a 120s timeout. `cron.schedule('cartgain-sweep',
+  '*/5 * * * *', 'select public.cartgain_sweep()')` fired on time and the
+  endpoint answered 200. `cron.schedule('cartgain-net-cleanup', '25 3 * * *')`
+  prunes `net._http_response` after 2 days. Both triggers hit the same route,
+  so `claimSweepSlot()` (`src/lib/jobs/sweep-slot.ts`, Redis `SET NX`,
+  4-minute TTL) makes the second one a 200 `{"status":"skipped"}` instead of a
+  duplicate sweep — and it still runs when Redis is absent/down. The GitHub
+  workflow stays as-is for the case where the DB/job is paused. Do not put the
+  5-minute cron back in `vercel.json` until the Vercel project is on Pro.
+
 - `feat(whatsapp): live delivery + a sweep that actually covers every store`.
   Root cause of the `(#100)` was **the recipient**: sending to our own business
   number (`+91 73558 49689`) is rejected; the same token and payload deliver to
