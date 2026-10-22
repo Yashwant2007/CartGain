@@ -282,8 +282,6 @@ export async function runProbe(
       message: error?.message,
       details: error?.error_data?.details,
     })
-    // A successful text send proves the credentials; no need to keep poking.
-    if (variant.label === 'text message' && attempt.ok) break
   }
   return results
 }
