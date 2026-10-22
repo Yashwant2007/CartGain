@@ -32,16 +32,28 @@ export async function POST(request: NextRequest) {
       if (!target) return NextResponse.json({ error: 'phone is required for probe' }, { status: 400 })
 
       const { runProbe } = await import('@/lib/services/whatsapp')
+      // A caller-supplied token/number lets us test "what would the OTHER app's
+      // token do?" without touching the deployment env. Never logged.
       const results = await runProbe(target, {
         templateName:
           typeof body.template === 'string' && body.template ? body.template : 'cart_reminders',
+        accessToken: typeof body.accessToken === 'string' ? body.accessToken : undefined,
+        phoneNumberId: typeof body.phoneNumberId === 'string' ? body.phoneNumberId : undefined,
       })
-      return NextResponse.json({ success: results.some((r) => r.ok), mode: 'probe', results })
+      return NextResponse.json({
+        success: results.some((r) => r.ok),
+        mode: 'probe',
+        using: body.accessToken ? 'caller-supplied token' : 'deployment token',
+        results,
+      })
     }
 
     // whoami needs no recipient — it only inspects the configured number/token.
     if (String(body.mode || '').toLowerCase() === 'whoami') {
-      const info = await getWhatsAppAccountInfo()
+      const info = await getWhatsAppAccountInfo({
+        wabaId: typeof body.wabaId === 'string' ? body.wabaId.trim() : undefined,
+        accessToken: typeof body.accessToken === 'string' ? body.accessToken : undefined,
+      })
       return NextResponse.json({
         success: info.ok,
         mode: 'whoami',

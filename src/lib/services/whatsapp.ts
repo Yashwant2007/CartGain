@@ -205,12 +205,12 @@ export async function sendWhatsAppMessage({
  */
 export async function runProbe(
   to: string,
-  opts?: { templateName?: string },
+  opts?: { templateName?: string; accessToken?: string; phoneNumberId?: string },
 ): Promise<Array<{ label: string; ok: boolean; code?: number; subcode?: number; message?: string; details?: string }>> {
   const cleanEnv = (value: string | undefined): string =>
     (value || '').replace(/^\s*["']|["']\s*$/g, '').trim()
-  const phoneNumberId = cleanEnv(process.env.WHATSAPP_PHONE_NUMBER_ID)
-  const accessToken = cleanEnv(process.env.WHATSAPP_BUSINESS_TOKEN).replace(/^Bearer\s+/i, '')
+  const phoneNumberId = cleanEnv(opts?.phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID)
+  const accessToken = cleanEnv(opts?.accessToken || process.env.WHATSAPP_BUSINESS_TOKEN).replace(/^Bearer\s+/i, '')
   const graphVersion = process.env.WHATSAPP_API_VERSION || 'v22.0'
   const templateName = opts?.templateName || 'cart_reminders'
   const recipient = formatWhatsAppPhone(to)
@@ -324,7 +324,12 @@ export async function runProbe(
  * that issued WHATSAPP_BUSINESS_TOKEN — a mismatch is the usual cause of a bare
  * (#100) OAuthException on /messages.
  */
-export async function getWhatsAppAccountInfo(): Promise<{
+export async function getWhatsAppAccountInfo(opts?: {
+  /** Copy this from WhatsApp Manager when the token cannot enumerate businesses. */
+  wabaId?: string
+  /** Test a different token (e.g. the app's temporary one) without redeploying. */
+  accessToken?: string
+}): Promise<{
   ok: boolean
   status: number
   body: unknown
@@ -332,7 +337,10 @@ export async function getWhatsAppAccountInfo(): Promise<{
   const cleanEnv = (value: string | undefined): string =>
     (value || '').replace(/^\s*["']|["']\s*$/g, '').trim()
   const phoneNumberId = cleanEnv(process.env.WHATSAPP_PHONE_NUMBER_ID)
-  const accessToken = cleanEnv(process.env.WHATSAPP_BUSINESS_TOKEN).replace(/^Bearer\s+/i, '')
+  const accessToken = cleanEnv(opts?.accessToken || process.env.WHATSAPP_BUSINESS_TOKEN).replace(
+    /^Bearer\s+/i,
+    '',
+  )
   const graphVersion = process.env.WHATSAPP_API_VERSION || 'v22.0'
 
   if (!phoneNumberId || !accessToken) {
@@ -357,8 +365,6 @@ export async function getWhatsAppAccountInfo(): Promise<{
       `${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,account_mode,name_status,code_verification_status,platform_type`,
     )
 
-    // Which apps may send on this number, and what the token can actually do.
-    const subscribed = await get(`${phoneNumberId}/subscribed_apps`)
     const tokenInfo = await get(`debug_token?input_token=${encodeURIComponent(accessToken)}`)
     const scopes: string[] = tokenInfo.body?.data?.scopes || []
     const tokenSummary = {
@@ -370,21 +376,30 @@ export async function getWhatsAppAccountInfo(): Promise<{
       canSend: scopes.includes('whatsapp_business_messaging'),
       canManage: scopes.includes('whatsapp_business_management'),
     }
-    // The phone-number node does not expose its WABA, so walk
-    // me → businesses → owned WhatsApp accounts and match this number's id.
-    let wabaId: string | null = null
-    const businessesRes = await get('me/businesses?fields=id,name')
-    for (const business of businessesRes.body?.data || []) {
-      const owned = await get(`${business.id}/owned_whatsapp_business_accounts?fields=id,name`)
-      for (const waba of owned.body?.data || []) {
-        const numbers = await get(`${waba.id}/phone_numbers?fields=id,display_phone_number,status`)
-        if ((numbers.body?.data || []).some((n: any) => String(n.id) === phoneNumberId)) {
-          wabaId = String(waba.id)
-          break
+    // The phone-number node does not expose its WABA, so try the explicit id,
+    // then walk me → businesses → owned WhatsApp accounts to match the number.
+    let wabaId: string | null = opts?.wabaId ? String(opts.wabaId) : null
+    const lookupErrors: string[] = []
+    if (!wabaId) {
+      const businessesRes = await get('me/businesses?fields=id,name')
+      if (!businessesRes.ok) lookupErrors.push(`me/businesses: ${businessesRes.body?.error?.message}`)
+      for (const business of businessesRes.body?.data || []) {
+        const owned = await get(`${business.id}/owned_whatsapp_business_accounts?fields=id,name`)
+        if (!owned.ok) lookupErrors.push(`${business.id}: ${owned.body?.error?.message}`)
+        for (const waba of owned.body?.data || []) {
+          const numbers = await get(`${waba.id}/phone_numbers?fields=id,display_phone_number,status`)
+          if ((numbers.body?.data || []).some((n: any) => String(n.id) === phoneNumberId)) {
+            wabaId = String(waba.id)
+            break
+          }
         }
+        if (wabaId) break
       }
-      if (wabaId) break
     }
+    const subscribed = wabaId ? await get(`${wabaId}/subscribed_apps`) : null
+    const wabaNumbers = wabaId
+      ? await get(`${wabaId}/phone_numbers?fields=id,display_phone_number,status,platform_type`)
+      : null
     const templatesRes = wabaId
       ? await get(`${wabaId}/message_templates?limit=100&fields=name,status,language,category,parameter_format,components`)
       : { ok: false, status: 0, body: null }
@@ -396,10 +411,18 @@ export async function getWhatsAppAccountInfo(): Promise<{
         account: account.body,
         wabaId,
         wabaLookup: wabaId
-          ? 'matched via business → owned WhatsApp accounts'
-          : 'no business in this token owns the number',
+          ? opts?.wabaId
+            ? 'from the wabaId you supplied'
+            : 'matched via business → owned WhatsApp accounts'
+          : 'not discoverable — supply "wabaId" (WhatsApp Manager → account overview)',
+        wabaLookupErrors: lookupErrors,
+        wabaNumbers: wabaNumbers?.ok ? wabaNumbers.body?.data : wabaNumbers?.body,
         token: tokenSummary,
-        subscribedApps: subscribed.ok ? subscribed.body?.data : subscribed.body,
+        subscribedApps: subscribed
+          ? subscribed.ok
+            ? subscribed.body?.data
+            : subscribed.body
+          : 'unknown (no wabaId)',
         templates: templatesRes.ok
           ? (templatesRes.body?.data || []).map((t: any) => {
               const body = (t.components || []).find((c: any) => c.type === 'BODY')
