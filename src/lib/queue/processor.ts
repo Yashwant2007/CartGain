@@ -12,6 +12,7 @@ function registerProcessor() {
 
   try {
     const queue = getQueue()
+    if (!queue) return
 
     queue.process(async (job: any) => {
       console.log(`Processing job ${job.id} (${job.data.action}) at ${new Date().toISOString()}`)
@@ -43,15 +44,10 @@ function registerProcessor() {
 export async function scheduleCartProcessing() {
   try {
     const queue = getQueue()
+    if (!queue) return
 
     // Register processor first
     registerProcessor()
-
-    // NOTE: deliberately no removeRepeatableByKey cleanup here. Bull dedupes
-    // repeatable jobs by their `key` across instances, so re-adding is a no-op
-    // for existing schedules. Removing + re-adding on every cold start (every
-    // cron invocation is a fresh serverless instance) disrupts in-flight jobs
-    // in other instances and produces "Missing lock"/"stalled" errors.
 
     // Cart processing — every 5 minutes
     await queue.add(
@@ -79,13 +75,17 @@ export async function scheduleCartProcessing() {
     console.log('✅ Revenue share billing scheduled: Daily at 02:00')
   } catch (error: any) {
     console.error('Failed to schedule cart processing:', error.message)
-    // Don't throw - allow app to continue
   }
 }
 
 export async function addCartProcessingJob() {
   try {
     const queue = getQueue()
+    if (!queue) {
+      // Fallback to direct processing
+      const { processAbandonedCarts } = await import('@/lib/jobs/processAbandonedCarts')
+      return await processAbandonedCarts(25)
+    }
     registerProcessor()
 
     const job = await queue.add({ action: 'process_carts' })

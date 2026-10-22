@@ -21,9 +21,6 @@ function hasValidRedisConfig(): boolean {
   return !!process.env.REDIS_HOST && process.env.REDIS_HOST !== 'localhost'
 }
 
-// Parse a redis:// or rediss:// connection string into ioredis options.
-// ioredis options objects have no `url` key — host/port/password must be
-// extracted explicitly (rediss:// URIs also need tls: {}).
 function parseRedisUrl(url: string): {
   host: string
   port: number
@@ -50,10 +47,6 @@ function getCartQueue(): any {
   if (!queueInstance && Bull && hasValidRedisConfig()) {
     try {
       const redisUrl = process.env.REDIS_URL
-      // Bull passes the redis option straight to ioredis. A connection string
-      // (redis:// or rediss://) must be given as a string — wrapping it in an
-      // options object ({ url }) is silently ignored and ioredis falls back to
-      // localhost:6379. ioredis enables TLS automatically for rediss:// URIs.
       const redisConfig = redisUrl
         ? { maxRetriesPerRequest: null, enableReadyCheck: false, ...parseRedisUrl(redisUrl) }
         : {
@@ -66,18 +59,14 @@ function getCartQueue(): any {
       queueInstance = new Bull('process-carts', {
         redis: redisConfig,
         settings: {
-          // Serverless workers can run up to Vercel's maxDuration (60s) — the
-          // lock must outlive the whole run or Bull marks jobs "stalled" and
-          // retries them, causing duplicate processing. Bull renews the lock
-          // automatically on lockRenewTime while a job is being processed.
-          lockDuration: 120000,
-          lockRenewTime: 30000,
+          lockDuration: 300000, // 5 minutes
+          lockRenewTime: 60000,
+          maxStalledCount: 0, // Don't stall/retry stuck jobs
         },
         defaultJobOptions: {
-          attempts: 3,
-          backoff: { type: 'exponential', delay: 2000 },
+          attempts: 1, // No retries to avoid duplicates
           removeOnComplete: true,
-          removeOnFail: false,
+          removeOnFail: true,
         },
       })
       setupQueueListeners()
@@ -134,4 +123,8 @@ export function setupQueueListeners() {
   queue.on('active', (job: any) => console.log(`Job ${job.id} is processing...`))
   queue.on('connect', () => console.log('Queue connected to Redis'))
   queue.on('ready', () => console.log('Queue ready'))
+  queue.on('stalled', (job: any) => {
+    console.warn(`Job ${job.id} stalled - removing to prevent duplicates`)
+    job.remove().catch(() => {})
+  })
 }
