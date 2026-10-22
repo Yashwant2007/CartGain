@@ -82,18 +82,25 @@ Without it:
 
 ---
 
-## 6. Vercel Cron (Replaces Redis)
+## 6. Cart sweep scheduling (Replaces Redis)
 
-Added to `vercel.json` — no Redis needed:
+Cart processing runs every 5 minutes. On Vercel **Pro** add it to `vercel.json`:
 
 ```json
-"crons": [{
-  "path": "/api/jobs/process-carts",
-  "schedule": "*/5 * * * *"
-}]
+"crons": [{ "path": "/api/jobs/process-carts", "schedule": "*/5 * * * *" }]
 ```
 
-Runs cart processing every 5 minutes via Vercel Cron (Pro plan). No Redis URL required in env vars.
+Vercel auto-attaches `Authorization: Bearer $CRON_SECRET` to cron requests (or
+`JOB_SECRET`, both are accepted by the route).
+
+On the **Hobby** plan Vercel refuses sub-daily crons, so the sweep is driven by
+`.github/workflows/process-carts.yml` instead (GitHub Actions `*/5 * * * *`,
+manual `workflow_dispatch` also available). It needs a repository secret
+`JOB_SECRET` matching the production env var. GitHub can run a few minutes late
+and disables schedules after 60 days of repository inactivity — re-enable it if
+recovery goes quiet.
+
+No Redis URL is required for either option.
 Now here's the pitch as if you're selling to your first merchant
 "You're leaving money on the table every single hour."
 

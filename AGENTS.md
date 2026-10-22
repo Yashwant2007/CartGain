@@ -64,6 +64,30 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 - `extensions/storefront-bargain/blocks/*.liquid` — theme extension app blocks.
 
 ## Work log (most recent first)
+
+- `feat(recovery): real offers, working links, WhatsApp templates and a live
+  cart sweep`. Offers are resolved from merchant config *before* copy is
+  written (`src/lib/recovery/offer.ts`): the campaign code when set, otherwise a
+  real single-use Shopify discount minted for that cart (`GAIN<hash>`,
+  deterministic/retry-safe, usageLimit 1, 7-day TTL); if Shopify can't create it
+  the message ships with no offer instead of a fake code. The AI-invented
+  "personalised discount" path is gone from the job. Every link is now a tracked
+  `/r/<cartId>?c=<ch>&to=cart|bargain|checkout[&code=]` redirect
+  (`src/lib/recovery/links.ts`, `src/app/r/[id]/route.ts`) that records the click
+  then routes to the cart page, the bargain widget (`/cart/<id>?focus=bargain#bargain`,
+  `BargainWidget defaultOpen`), or the store checkout with the code applied
+  (`/discount/<code>?redirect=/cart/<token>`). Email got a coupon band + primary
+  checkout CTA + "name your price" secondary CTA; WhatsApp templates now carry
+  three never-empty variables (name, AI body, offer line with both links), no
+  fabricated "last chance" text, suffix-only opt-in button, env-overridable
+  names/language (`WHATSAPP_TEMPLATE_REMINDER|FOLLOWUP|FINAL|LANG|BUTTON_BASE`).
+  Scheduling: Vercel **Hobby** rejects `*/5` crons (deploy fails), so
+  `.github/workflows/process-carts.yml` pings `/api/jobs/process-carts` every 5
+  minutes with `Authorization: Bearer $JOB_SECRET` — the repo secret must match
+  the Vercel env var or the sweep never runs. Deployed `bc355ec`; live redirects
+  verified (cart → 302 /cart, bargain → 302 ?focus=bargain#bargain, checkout →
+  302 `https://<store>/discount/<code>?redirect=%2Fcart%2F<token>`). Tests:
+  104 suites / 1200 tests, lint/tsc/build green.
 - `feat(conversation): shared human-like copy layer, honest recovery, brand
   voice, truthful delivery/analytics`. New `src/lib/conversation/` — one voice
   model (`voice.ts` personas/emoji/humour/length/assertiveness/language/
