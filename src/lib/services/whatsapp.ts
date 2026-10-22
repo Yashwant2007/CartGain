@@ -330,7 +330,7 @@ export async function getWhatsAppAccountInfo(): Promise<{
     const wabaField: any = account.body?.whatsapp_business_account
     const wabaId = typeof wabaField === 'string' ? wabaField : wabaField?.id || null
     const templatesRes = wabaId
-      ? await get(`${wabaId}/message_templates?limit=100&fields=name,status,language,category,parameter_format`)
+      ? await get(`${wabaId}/message_templates?limit=100&fields=name,status,language,category,parameter_format,components`)
       : { ok: false, status: 0, body: null }
 
     return {
@@ -341,13 +341,35 @@ export async function getWhatsAppAccountInfo(): Promise<{
         wabaId,
         wabaLookup: wabaId ? 'ok' : 'not returned (needs whatsapp_business_management)',
         templates: templatesRes.ok
-          ? (templatesRes.body?.data || []).map((t: any) => ({
-              name: t.name,
-              status: t.status,
-              language: t.language,
-              category: t.category,
-              parameterFormat: t.parameter_format,
-            }))
+          ? (templatesRes.body?.data || []).map((t: any) => {
+              const body = (t.components || []).find((c: any) => c.type === 'BODY')
+              const header = (t.components || []).find((c: any) => c.type === 'HEADER')
+              const buttons = (t.components || []).find((c: any) => c.type === 'BUTTONS')
+              const variables = Array.from(
+                new Set(
+                  String(body?.text || '')
+                    .split(/\{\{([^}]+)\}\}/)
+                    .filter((_: string, i: number) => i % 2 === 1),
+                ),
+              )
+              return {
+                name: t.name,
+                status: t.status,
+                language: t.language,
+                category: t.category,
+                parameterFormat: t.parameter_format,
+                bodyText: body?.text,
+                variableTokens: variables,
+                headerFormat: header?.format || 'NONE',
+                bodyExample: body?.example?.body_params,
+                buttons: (buttons?.buttons || []).map((b: any) => ({
+                  type: b.type,
+                  text: b.text,
+                  url: b.url,
+                  example: b.example,
+                })),
+              }
+            })
           : templatesRes.body,
       },
     }
