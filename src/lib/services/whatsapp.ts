@@ -205,7 +205,12 @@ export async function sendWhatsAppMessage({
  */
 export async function runProbe(
   to: string,
-  opts?: { templateName?: string; accessToken?: string; phoneNumberId?: string },
+  opts?: {
+    templateName?: string
+    accessToken?: string
+    phoneNumberId?: string
+    headerImageUrl?: string
+  },
 ): Promise<Array<{ label: string; ok: boolean; code?: number; subcode?: number; message?: string; details?: string }>> {
   const cleanEnv = (value: string | undefined): string =>
     (value || '').replace(/^\s*["']|["']\s*$/g, '').trim()
@@ -239,31 +244,32 @@ export async function runProbe(
     { type: 'text', text: 'Use code SAVE10 for 10% off' },
   ]
 
+  const imageUrl =
+    opts?.headerImageUrl || process.env.WHATSAPP_TEMPLATE_HEADER_IMAGE_URL || 'https://cart-gain.com/logo.png'
+  const imageHeader = {
+    type: 'header',
+    parameters: [{ type: 'image', image: { link: imageUrl } }],
+  }
+  const button = {
+    type: 'button',
+    sub_type: 'url',
+    index: 0,
+    parameters: [{ type: 'text', text: 'probe-cart-id' }],
+  }
+  const positional = bodyParams
+  const named = [
+    { type: 'text', parameter_name: 'name', text: 'Test' },
+    { type: 'text', parameter_name: 'body', text: 'Your cart is saved and this is a template check from CartGain.' },
+    { type: 'text', parameter_name: 'discount', text: 'Use code SAVE10 for 10% off' },
+  ]
+
   const variants: Array<{ label: string; payload: any }> = [
     {
       label: 'text message',
       payload: { messaging_product: 'whatsapp', to: recipient, type: 'text', text: { body: 'CartGain test message.' } },
     },
     {
-      label: `template ${templateName} body-only (en)`,
-      payload: {
-        messaging_product: 'whatsapp',
-        to: recipient,
-        type: 'template',
-        template: { name: templateName, language: { code: 'en' }, components: [{ type: 'body', parameters: bodyParams }] },
-      },
-    },
-    {
-      label: `template ${templateName} body-only (en_US)`,
-      payload: {
-        messaging_product: 'whatsapp',
-        to: recipient,
-        type: 'template',
-        template: { name: templateName, language: { code: 'en_US' }, components: [{ type: 'body', parameters: bodyParams }] },
-      },
-    },
-    {
-      label: `template ${templateName} named params (name/body/discount)`,
+      label: `template ${templateName} image header + positional body (en)`,
       payload: {
         messaging_product: 'whatsapp',
         to: recipient,
@@ -271,21 +277,12 @@ export async function runProbe(
         template: {
           name: templateName,
           language: { code: 'en' },
-          components: [
-            {
-              type: 'body',
-              parameters: [
-                { type: 'text', parameter_name: 'name', text: 'Test' },
-                { type: 'text', parameter_name: 'body', text: 'Your cart is saved.' },
-                { type: 'text', parameter_name: 'discount', text: 'Use code SAVE10' },
-              ],
-            },
-          ],
+          components: [imageHeader, { type: 'body', parameters: positional }],
         },
       },
     },
     {
-      label: `template ${templateName} body + url button (en)`,
+      label: `template ${templateName} image header + named body (en)`,
       payload: {
         messaging_product: 'whatsapp',
         to: recipient,
@@ -293,10 +290,20 @@ export async function runProbe(
         template: {
           name: templateName,
           language: { code: 'en' },
-          components: [
-            { type: 'body', parameters: bodyParams },
-            { type: 'button', sub_type: 'url', index: 0, parameters: [{ type: 'text', text: 'probe-cart-id' }] },
-          ],
+          components: [imageHeader, { type: 'body', parameters: named }],
+        },
+      },
+    },
+    {
+      label: `template ${templateName} image header + positional body + url button (en)`,
+      payload: {
+        messaging_product: 'whatsapp',
+        to: recipient,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: 'en' },
+          components: [imageHeader, { type: 'body', parameters: positional }, button],
         },
       },
     },
@@ -511,8 +518,13 @@ function buildTemplate(
   const wantsImageHeader = ['1', 'true', 'yes'].includes(
     (process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER || '').toLowerCase(),
   )
+  // The approved templates declare an IMAGE header, so the parameter is
+  // mandatory on every send — a cart item without a photo must fall back to a
+  // brand image instead of omitting the header (Meta answers #132012).
+  const headerImage =
+    productImage || process.env.WHATSAPP_TEMPLATE_HEADER_IMAGE_URL || 'https://cart-gain.com/logo.png'
   const params: WhatsAppTemplateParams = {
-    header: wantsImageHeader && productImage ? { type: 'image', imageUrl: productImage } : undefined,
+    header: wantsImageHeader ? { type: 'image', imageUrl: headerImage } : undefined,
     body: [
       nonEmpty(customerName, 'there'),
       nonEmpty(bodyContent, 'Your cart is still saved and ready whenever you are.'),

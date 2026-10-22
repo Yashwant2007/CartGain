@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
           typeof body.template === 'string' && body.template ? body.template : 'cart_reminders',
         accessToken: typeof body.accessToken === 'string' ? body.accessToken : undefined,
         phoneNumberId: typeof body.phoneNumberId === 'string' ? body.phoneNumberId : undefined,
+        headerImageUrl: typeof body.headerImageUrl === 'string' ? body.headerImageUrl : undefined,
       })
       return NextResponse.json({
         success: results.some((r) => r.ok),
