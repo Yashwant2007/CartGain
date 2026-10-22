@@ -6,6 +6,7 @@ import { syncAbandonedCheckouts } from '@/lib/shopify'
 import { getRedis, redisSet, redisGet } from '@/lib/redis'
 import prisma from '@/lib/db'
 import { requireJobAuth } from '@/lib/job-auth'
+import { claimSweepSlot } from '@/lib/jobs/sweep-slot'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -60,6 +61,14 @@ export async function POST(request: NextRequest) {
   try {
     initializeQueues().catch(() => {})
 
+    // Cron and GitHub Actions both fire this endpoint; only one sweep per slot.
+    if (!(await claimSweepSlot())) {
+      return NextResponse.json({
+        message: 'Skipped — another sweep claimed this slot',
+        status: 'skipped',
+      })
+    }
+
     // Process inline. The Redis queue only helps when a worker is running, and
     // no worker is deployed on Vercel — enqueueing returned "queued" while
     // nothing ever drained the queue, so recovery silently stopped.
@@ -93,6 +102,14 @@ export async function GET(request: NextRequest) {
     const jobId = request.nextUrl.searchParams.get('jobId')
 
     if (!jobId) {
+      // Cron and GitHub Actions both fire this endpoint; only one sweep per slot.
+      if (!(await claimSweepSlot())) {
+        return NextResponse.json({
+          message: 'Skipped — another sweep claimed this slot',
+          status: 'skipped',
+        })
+      }
+
       let syncedCheckouts = 0
       try {
         const syncCursor = await getSyncCursor()
