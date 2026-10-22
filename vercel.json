@@ -14,10 +14,6 @@
     {
       "path": "/api/health",
       "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/jobs/process-carts",
-      "schedule": "*/5 * * * *"
     }
   ]
 }
