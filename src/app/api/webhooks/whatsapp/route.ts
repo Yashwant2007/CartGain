@@ -87,24 +87,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Persist every event to a bounded, append-only list so none are lost
-    // (the previous single `redisSet` key silently overwrote all but the last
-    // event). Status events update delivery tracking; inbound messages are the
-    // customer's reply channel and may carry an opt-out.
     const { redisLPush } = await import('@/lib/redis')
     const receivedAt = new Date().toISOString()
     let delivered = 0
+    let read = 0
     let inboundMessages = 0
 
     for (const event of events) {
       await redisLPush('whatsapp:inbound', JSON.stringify({ receivedAt, ...event }), 500).catch(() => {})
 
       if (event.kind === 'status') {
-        delivered++
-        // Match the receipt back to the message that produced it. Until this
-        // existed, `status = 'delivered'` was set optimistically at send time,
-        // so the delivery metric was always 100% and a failed delivery was
-        // invisible. A receipt is the only thing that may mark a message
-        // delivered.
+        if (event.status === 'delivered') delivered++
+        if (event.status === 'read') read++
+        // Match the receipt back to the message that produced it
         if (event.wamid) {
           const storeId = await resolveStoreIdByWhatsAppPhoneNumberId(
             prisma,
@@ -114,10 +109,17 @@ export async function POST(request: NextRequest) {
             providerId: event.wamid,
             ...(storeId ? { cart: { storeId } } : {}),
           }
-          if (event.status === 'delivered' || event.status === 'read') {
+          if (event.status === 'read') {
             await prisma.message
               .updateMany({
-                where: { ...where, deliveredAt: null },
+                where,
+                data: { status: 'read', deliveredAt: new Date() },
+              })
+              .catch(() => {})
+          } else if (event.status === 'delivered') {
+            await prisma.message
+              .updateMany({
+                where: { ...where, status: { not: 'read' } },
                 data: { status: 'delivered', deliveredAt: new Date() },
               })
               .catch(() => {})
@@ -134,10 +136,6 @@ export async function POST(request: NextRequest) {
       } else {
         inboundMessages++
         if (isWhatsAppOptOutText(event.text)) {
-          // Map the Meta phone_number_id back to the store that owns it, then
-          // persist the opt-out so the customer is suppressed on every channel.
-          // The previous behaviour only logged the keyword, so a STOP was never
-          // enforced and the customer kept receiving recoveries.
           const storeId = await resolveStoreIdByWhatsAppPhoneNumberId(
             prisma,
             event.phoneNumberId,
@@ -163,9 +161,6 @@ export async function POST(request: NextRequest) {
               })
             }
           } else {
-            // No phone_number_id mapped and the deployment owns zero/multiple
-            // active stores, so we cannot safely attribute the opt-out. Surface
-            // it loudly instead of silently dropping it.
             logWarn('whatsapp', 'inbound_opt_out', 'Inbound WhatsApp opt-out received but no store could be resolved', {
               from: event.from,
               phoneNumberId: event.phoneNumberId,
@@ -180,7 +175,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ status: 'ok', statuses: delivered, messages: inboundMessages })
+    return NextResponse.json({ status: 'ok', statuses: delivered + read, messages: inboundMessages, delivered, read })
   } catch {
     return NextResponse.json({ status: 'error' }, { status: 400 })
   }
