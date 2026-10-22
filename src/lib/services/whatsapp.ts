@@ -322,13 +322,25 @@ export async function getWhatsAppAccountInfo(): Promise<{
 
   try {
     const account = await get(
-      `${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,account_mode,name_status,code_verification_status,platform_type,whatsapp_business_account`,
+      `${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,account_mode,name_status,code_verification_status,platform_type`,
     )
 
     // The WABA that owns this number, and the templates approved inside it.
     // This is what tells us the exact template names and language codes.
-    const wabaField: any = account.body?.whatsapp_business_account
-    const wabaId = typeof wabaField === 'string' ? wabaField : wabaField?.id || null
+    // Which apps may send on this number, and what the token can actually do.
+    const subscribed = await get(`${phoneNumberId}/subscribed_apps`)
+    const tokenInfo = await get(`debug_token?input_token=${encodeURIComponent(accessToken)}`)
+    const scopes: string[] = tokenInfo.body?.data?.scopes || []
+    const tokenSummary = {
+      appId: tokenInfo.body?.data?.app_id,
+      type: tokenInfo.body?.data?.type,
+      isValid: tokenInfo.body?.data?.is_valid,
+      expiresAt: tokenInfo.body?.data?.expires_at === 0 ? 'never' : tokenInfo.body?.data?.expires_at,
+      scopes,
+      canSend: scopes.includes('whatsapp_business_messaging'),
+      canManage: scopes.includes('whatsapp_business_management'),
+    }
+    const wabaId = null
     const templatesRes = wabaId
       ? await get(`${wabaId}/message_templates?limit=100&fields=name,status,language,category,parameter_format,components`)
       : { ok: false, status: 0, body: null }
@@ -339,7 +351,9 @@ export async function getWhatsAppAccountInfo(): Promise<{
       body: {
         account: account.body,
         wabaId,
-        wabaLookup: wabaId ? 'ok' : 'not returned (needs whatsapp_business_management)',
+        wabaLookup: 'not supported on the phone-number node',
+        token: tokenSummary,
+        subscribedApps: subscribed.ok ? subscribed.body?.data : subscribed.body,
         templates: templatesRes.ok
           ? (templatesRes.body?.data || []).map((t: any) => {
               const body = (t.components || []).find((c: any) => c.type === 'BODY')
