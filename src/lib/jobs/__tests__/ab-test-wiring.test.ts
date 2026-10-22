@@ -167,20 +167,24 @@ describe('processAbandonedCarts — A/B variant config is applied', () => {
 
   it('applies the variant maxFollowUps: a follow-up blocked by the variant sends nothing', async () => {
     prismaMock.campaign.findMany.mockResolvedValue([
-      baseCampaign({ channels: ['whatsapp', 'email'], maxFollowUps: 1 }),
+      baseCampaign({ channels: ['whatsapp', 'email'], maxFollowUps: 2 }),
     ])
     prismaMock.aBTest.findFirst.mockResolvedValue({
       id: 'ab-2',
-      variantA: { maxFollowUps: 0 },
-      variantB: { maxFollowUps: 0 },
+      variantA: { maxFollowUps: 1 },
+      variantB: { maxFollowUps: 1 },
     })
-    // step = 1 (one message already sent). The variant budget is 1, so the
-    // follow-up must be skipped; the campaign budget (2) would have allowed it.
+    // Round 0 is complete (both channels accepted a message), so this is
+    // round 1. The variant allows only one round, so the follow-up must be
+    // skipped; the campaign budget (two rounds) would have allowed it.
     prismaMock.cart.findMany
       .mockResolvedValueOnce([
         cart({
           customerEmail: 'buyer@example.com',
-          messages: [{ channel: 'whatsapp', status: 'sent', step: 0 }],
+          messages: [
+            { channel: 'whatsapp', status: 'sent', step: 0 },
+            { channel: 'email', status: 'sent', step: 0 },
+          ],
         }),
       ])
       .mockResolvedValue([])

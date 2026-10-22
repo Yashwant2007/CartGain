@@ -179,7 +179,12 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
     const channels = (campaign.channels.length > 0 ? campaign.channels : ['whatsapp', 'email']).filter((c: string) => c !== 'sms')
     let sendDelayMs = campaign.sendDelay * 60 * 1000
     let followUpDelayMs = campaign.followUpDelay * 60 * 1000
-    let maxMessages = Math.min(channels.length, campaign.maxFollowUps + 1)
+    // One "round" touches every usable channel (WhatsApp AND email on the
+    // first round, then the follow-up round). The old budget counted messages,
+    // so a two-channel campaign could only ever send two messages: the email
+    // reminder was pushed hours later and the per-channel caps (email 3 /
+    // WhatsApp 2) were unreachable.
+    let maxRounds = Math.max(1, Math.min(5, campaign.maxFollowUps))
     let activeChannels = [...channels]
     const currencySymbol = getCurrencySymbol(store.currency)
     // Brand voice + quiet hours are loaded once per store per cycle. A DB
@@ -234,7 +239,7 @@ let cursor: string | undefined
       const cartResults = await Promise.allSettled(
         candidates.map(cart => processSingleCart(cart, {
           campaign, store, subscription,
-          sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest,
+          sendDelayMs, followUpDelayMs, maxRounds, activeChannels, currencySymbol, abTest,
           optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts,
           isPaidUser, cartOverageActive,
           voice, quietHoursStart, quietHoursEnd,
@@ -269,7 +274,7 @@ type CartConfig = {
   subscription: any
   sendDelayMs: number
   followUpDelayMs: number
-  maxMessages: number
+  maxRounds: number
   activeChannels: string[]
   currencySymbol: string
   abTest: any
@@ -331,7 +336,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
 }
 
   async function processSingleCart(cart: any, config: CartConfig): Promise<{ sent: number; failed: number }> {
-  const { campaign, store, subscription, sendDelayMs, followUpDelayMs, maxMessages, activeChannels, currencySymbol, abTest, optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts, isPaidUser, cartOverageActive, voice, quietHoursStart, quietHoursEnd } = config
+  const { campaign, store, subscription, sendDelayMs, followUpDelayMs, maxRounds, activeChannels, currencySymbol, abTest, optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts, isPaidUser, cartOverageActive, voice, quietHoursStart, quietHoursEnd } = config
 
   try {
     // Resolve the A/B variant FIRST: its channels/delays/step-budget override the
@@ -343,7 +348,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     let effActiveChannels = [...activeChannels]
     let effSendDelayMs = sendDelayMs
     let effFollowUpDelayMs = followUpDelayMs
-    let effMaxMessages = maxMessages
+    let effMaxRounds = maxRounds
 
     if (abTest) {
       abTestVariant = makeAbTestVariant(cart.id)
@@ -354,7 +359,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         if (typeof cfg.sendDelay === 'number') effSendDelayMs = cfg.sendDelay * 60 * 1000
         if (typeof cfg.followUpDelay === 'number') effFollowUpDelayMs = cfg.followUpDelay * 60 * 1000
         if (typeof cfg.maxFollowUps === 'number') {
-          effMaxMessages = Math.min(effActiveChannels.length, cfg.maxFollowUps + 1)
+          effMaxRounds = Math.max(1, Math.min(5, cfg.maxFollowUps))
         }
       }
     }
@@ -363,8 +368,30 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     // Using the raw message count meant a failed send consumed the step, so
     // the sequence moved on and the customer never got a retry.
     const completedMessages = cart.messages.filter((m: any) => m.status === 'sent' || m.status === 'delivered')
-    const step = completedMessages.length
-    if (step >= effMaxMessages) return { sent: 0, failed: 0 }
+    // A round is complete only when EVERY channel we can reach the customer on
+    // has an accepted message for it. Counting individual messages made the
+    // second channel count as a follow-up round and stalled multi-channel
+    // campaigns after the first touch.
+    const reachableChannels = effActiveChannels.filter(
+      (c: string) =>
+        (c === 'email' && Boolean(cart.customerEmail)) ||
+        (c === 'whatsapp' && Boolean(cart.customerPhone)),
+    )
+    const channelsByStep = new Map<number, Set<string>>()
+    for (const m of completedMessages) {
+      const set = channelsByStep.get(m.step) ?? new Set<string>()
+      set.add(m.channel)
+      channelsByStep.set(m.step, set)
+    }
+    let step = 0
+    while (
+      step < 25 &&
+      reachableChannels.length > 0 &&
+      reachableChannels.every((c: string) => channelsByStep.get(step)?.has(c))
+    ) {
+      step++
+    }
+    if (step >= effMaxRounds) return { sent: 0, failed: 0 }
 
     // Quiet hours: never message a customer inside the merchant's local quiet
     // window. The cart stays eligible and is picked up after the window.
@@ -398,7 +425,18 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     const availableChannels = channelOrder.filter(c => {
       // A channel is "used" only when a message on it was actually accepted.
       // A failed attempt must stay retryable (same step, same row).
-      if (cart.messages.some((m: any) => m.channel === c && (m.status === 'sent' || m.status === 'delivered'))) return false
+      // Idempotency is per (cart, channel, step): a channel that already sent
+      // this round is skipped, but stays eligible for the next round.
+      if (
+        cart.messages.some(
+          (m: any) =>
+            m.channel === c &&
+            m.step === step &&
+            (m.status === 'sent' || m.status === 'delivered'),
+        )
+      ) {
+        return false
+      }
       if (c === 'email') return Boolean(cart.customerEmail)
       if (c === 'whatsapp') return Boolean(cart.customerPhone)
       return false
@@ -543,7 +581,8 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
         ?.content ?? null
 
-    let globalSendSuccess = false
+    let roundSent = 0
+    let roundFailed = 0
     for (const ch of channelsToProcess) {
       const cartUrl = linkFor(ch, 'cart')
 
@@ -739,7 +778,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       }
 
       if (sendSuccess) {
-        globalSendSuccess = true
+        roundSent++
         if (subscription) {
           await incrementCartsUsedCounter(campaign.userId, subscription.id)
           if (isOverageChannel(ch)) {
@@ -778,13 +817,14 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             step,
           },
         })
-        break
+        continue
       } else {
+        roundFailed++
         console.error(`Failed to send ${ch} message for cart ${cart.id}: ${error || 'unknown error'}`)
       }
     }
 
-    return { sent: globalSendSuccess ? 1 : 0, failed: globalSendSuccess ? 0 : 1 }
+    return { sent: roundSent, failed: roundFailed }
   } catch (err: any) {
     console.error(`Unexpected error processing cart ${cart.id}:`, err?.message || err)
     return { sent: 0, failed: 1 }
