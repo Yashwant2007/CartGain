@@ -2,9 +2,12 @@ name: Process abandoned carts
 
 # Vercel Hobby does not allow sub-daily cron jobs, so the recovery job is
 # driven from GitHub Actions instead. It hits the same authenticated endpoint
-# Vercel Cron would (the route already accepts `Authorization: Bearer
-# $JOB_SECRET`). Requires the repository secret `JOB_SECRET` to match the
-# production env var of the same name.
+# Vercel Cron would (the route accepts `Authorization: Bearer $JOB_SECRET`).
+# Requires the repository secret `JOB_SECRET` to match the production env var
+# of the same name.
+#
+# GET also pulls the store's abandoned checkouts from Shopify before running
+# the sends, so carts still flow even if the webhook subscription is missing.
 #
 # Note: GitHub schedules run at best every ~5 minutes (often a few minutes
 # late) and are disabled after 60 days without repository activity.
@@ -23,18 +26,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Trigger the cart-processing sweep
+      - name: Sync abandoned checkouts and run the recovery sweep
         env:
           JOB_SECRET: ${{ secrets.JOB_SECRET }}
         run: |
           if [ -z "$JOB_SECRET" ]; then
-            echo "::error::Repository secret JOB_SECRET is not set — cart recovery cannot run."
+            echo "::error::Repository secret JOB_SECRET is not set - cart recovery cannot run."
             exit 1
           fi
           status=$(curl -sS -o /tmp/response.json -w '%{http_code}' \
-            -X POST https://cart-gain.com/api/jobs/process-carts \
+            https://cart-gain.com/api/jobs/process-carts \
             -H "Authorization: Bearer ${JOB_SECRET}" \
-            -H 'content-type: application/json' \
             --max-time 60)
           echo "HTTP ${status}"
           cat /tmp/response.json || true
