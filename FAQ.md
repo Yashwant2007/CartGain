@@ -101,6 +101,23 @@ and disables schedules after 60 days of repository inactivity — re-enable it i
 recovery goes quiet.
 
 No Redis URL is required for either option.
+## 7. Email delivery receipts (Resend webhook)
+
+"Sent" means Resend accepted the message; "delivered" comes only from Resend's
+own receipt. Wire it once:
+
+1. resend.com → **Webhooks** → **Add Endpoint**
+2. URL: `https://cart-gain.com/api/webhooks/email`
+3. Events: `email.delivered`, `email.bounced`, `email.complained`
+   (`email.delivery_delayed` and the rest are ignored safely)
+4. Copy the endpoint's **Signing Secret** (`whsec_…`) into Vercel as
+   `RESEND_WEBHOOK_SECRET` (Production) and redeploy.
+
+`GET /api/health` lists it under optional env; the route answers `401` to
+unsigned requests by design. Delivery, bounce and spam-complaint events then
+flip the matching `Message` row (matched on `Message.providerId` = Resend
+`email_id`) to `delivered` or `failed`. Nothing is guessed at send time.
+
 Now here's the pitch as if you're selling to your first merchant
 "You're leaving money on the table every single hour."
 
