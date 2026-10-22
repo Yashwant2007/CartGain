@@ -8,10 +8,6 @@
   },
   "crons": [
     {
-      "path": "/api/jobs/process-carts",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/jobs/data-retention",
       "schedule": "0 3 * * *"
     },
