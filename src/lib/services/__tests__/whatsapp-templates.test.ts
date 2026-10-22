@@ -35,20 +35,37 @@ describe('WhatsApp recovery templates', () => {
     expect(params.footer).toBeUndefined()
   })
 
-  it('sends an image header only when the approved template declares one', () => {
+  it('sends the image header by default (the approved templates declare one)', () => {
     const prev = process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER
     delete process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER
     expect(
       WhatsAppTemplates.abandoned_cart.generateParams('Priya', 'Body', 'Offer', 'https://img.test/a.jpg').header,
-    ).toBeUndefined()
+    ).toEqual({ type: 'image', imageUrl: 'https://img.test/a.jpg' })
 
-    process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER = 'true'
+    process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER = 'false'
     expect(
       WhatsAppTemplates.abandoned_cart.generateParams('Priya', 'Body', 'Offer', 'https://img.test/a.jpg').header,
-    ).toEqual({ type: 'image', imageUrl: 'https://img.test/a.jpg' })
+    ).toBeUndefined()
 
     if (prev === undefined) delete process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER
     else process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER = prev
+  })
+
+  it('uses the product photo, never the brand logo, when one is available', () => {
+    const prev = process.env.WHATSAPP_TEMPLATE_HEADER_IMAGE_URL
+    process.env.WHATSAPP_TEMPLATE_HEADER_IMAGE_URL = 'https://cart-gain.com/logo.png'
+    const params = WhatsAppTemplates.abandoned_cart.generateParams(
+      'Priya',
+      'Body',
+      'Offer',
+      'https://cdn.shopify.com/s/files/1/1/1/products/board.jpg?v=2',
+    )
+    expect(params.header).toEqual({
+      type: 'image',
+      imageUrl: 'https://cdn.shopify.com/s/files/1/1/1/products/board.jpg?v=2',
+    })
+    if (prev === undefined) delete process.env.WHATSAPP_TEMPLATE_HEADER_IMAGE_URL
+    else process.env.WHATSAPP_TEMPLATE_HEADER_IMAGE_URL = prev
   })
 
   it('sends no button component by default (approved template keeps its own)', () => {

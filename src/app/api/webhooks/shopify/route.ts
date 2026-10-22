@@ -3,6 +3,7 @@ import { waitUntil } from '@vercel/functions'
 import prisma from '@/lib/db'
 import { logDataAccess } from '@/lib/data-protection'
 import { verifyShopifyWebhook } from '@/lib/shopify'
+import { normalizeShopifyLineItems } from '@/lib/shopify-line-items'
 import { purgeStoreData, redactCustomer } from '@/lib/data-deletion'
 import {
   collectCustomerData,
@@ -440,7 +441,7 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
     },
   })
 
-  const items = normalizeShopifyItems(cart)
+  const items = normalizeShopifyLineItems(cart.line_items || cart.items)
   const totalValue = resolveCartTotal(cart, items)
 
   await prisma.cart.upsert({
@@ -482,18 +483,6 @@ function resolveCartTotal(cart: any, items: any[]): number {
     if (!Number.isNaN(parsed)) return parsed
   }
   return items.reduce((sum, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 1), 0)
-}
-
-function normalizeShopifyItems(cart: any): any[] {
-  const raw = cart.line_items || cart.items || []
-  if (!Array.isArray(raw)) return []
-  return raw.map((item: any) => ({
-    name: item.title || item.name || 'Item',
-    description: item.variant_title || undefined,
-    price: item.price != null ? parseFloat(item.price) : 0,
-    quantity: item.quantity || 1,
-    image: item.image?.src || item.image || undefined,
-  }))
 }
 
 async function handleCheckout(data: any, store: any, domain: string) {

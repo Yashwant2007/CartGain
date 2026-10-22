@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { normalizeShopifyLineItems } from './shopify-line-items'
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000 // refresh 5 min before expiry
 
@@ -650,13 +651,7 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
     const token = checkout.token || checkout.cart_token
     if (!token || !checkout.id) continue
 
-    const lineItems = (checkout.line_items || []).map((item: any) => ({
-      name: item.title || item.name || 'Item',
-      description: item.variant_title || undefined,
-      price: item.price != null ? parseFloat(item.price) : 0,
-      quantity: item.quantity || 1,
-      image: item.image?.src || item.image || undefined,
-    }))
+    const lineItems = normalizeShopifyLineItems(checkout.line_items)
 
     const phone = checkout.phone || checkout.billing_address?.phone || checkout.shipping_address?.phone || checkout.customer?.phone || null
     const firstName = checkout.billing_address?.first_name || checkout.shipping_address?.first_name || checkout.customer?.first_name || ''

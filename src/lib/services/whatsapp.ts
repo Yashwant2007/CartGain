@@ -146,6 +146,32 @@ export async function sendWhatsAppMessage({
 
     let attempt = await post(body)
 
+    // A product photo we cannot hand Meta (webp upload, temporarily
+    // unreachable CDN) must not sink the whole recovery: replace ONLY the
+    // header image with the configured brand fallback and retry once. This
+    // runs before the component retries below (which drop the header, and the
+    // approved templates all require one).
+    if (!attempt.ok && templateName) {
+      const err = attempt.json?.error
+      const code = err?.code
+      const message = String(err?.message || '')
+      const imageProblem =
+        code === 131053 ||
+        code === 132012 ||
+        /header|image/i.test(message)
+      const header = (body.template?.components || []).find((c: any) => c.type === 'header')
+      const currentImage = header?.parameters?.[0]?.image?.link
+      const fallbackImage =
+        process.env.WHATSAPP_TEMPLATE_HEADER_IMAGE_URL || 'https://cart-gain.com/logo.png'
+      if (imageProblem && currentImage && currentImage !== fallbackImage) {
+        header.parameters[0].image.link = fallbackImage
+        console.warn(
+          `WhatsApp rejected the product image (${code || 'unknown'}) — retrying with the fallback image`,
+        )
+        attempt = await post(body)
+      }
+    }
+
     // Compatibility retries. Meta's wording is opaque, so translate the two
     // approval mismatches we can actually fix:
     //   132001 = template not found for that language → try en_US
@@ -515,7 +541,10 @@ function buildTemplate(
   context: WhatsAppTemplateContext | undefined,
   fallbackOfferLine: string,
 ): WhatsAppTemplateParams {
-  const wantsImageHeader = ['1', 'true', 'yes'].includes(
+  // The merchant's approved templates declare an IMAGE header, so sending one
+  // is the default; `false` disables it for a template that has no header
+  // (the sender also drops the header automatically on a 132000 mismatch).
+  const wantsImageHeader = !['0', 'false', 'no'].includes(
     (process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER || '').toLowerCase(),
   )
   // The approved templates declare an IMAGE header, so the parameter is

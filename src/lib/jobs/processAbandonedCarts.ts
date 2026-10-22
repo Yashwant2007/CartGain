@@ -5,6 +5,7 @@ import { buildOptOutUrl } from '@/lib/opt-out'
 import { sanitizePhoneNumber } from '@/lib/utils'
 import { sendWhatsAppMessage, WhatsAppTemplates } from '@/lib/services/whatsapp'
 import { resolveRecoveryOffer } from '@/lib/recovery/offer'
+import { enrichCartItemsWithImages } from '@/lib/recovery/product-image'
 import { buildRecoveryLink } from '@/lib/recovery/links'
 import { composeRecoveryMessage, singleLineMessage, stripLeadingGreeting } from '@/lib/conversation/recovery'
 import type { ConversationDiscount } from '@/lib/conversation/facts'
@@ -452,8 +453,19 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     if (channelsToProcess.length === 0) return { sent: 0, failed: 0 }
 
     const customerName = cart.customerName || 'Valued Customer'
-    const rawItems = Array.isArray(cart.items) ? cart.items : []
-    const cartItems = rawItems as { name: string; description?: string; price: number; quantity: number; image?: string }[]
+    const rawItems = Array.isArray(cart.items) ? (cart.items as any[]) : []
+    // Captures made before images were stored carry no photo (and older
+    // checkouts only had `image_url`, which the old mapper ignored). Resolve
+    // the product's real photo now — by product id when needed — so both the
+    // email thumbnails and the WhatsApp header show what the shopper left
+    // behind instead of the CartGain logo.
+    const enriched = await enrichCartItemsWithImages(store, rawItems)
+    if (enriched.changed) {
+      prisma.cart
+        .update({ where: { id: cart.id }, data: { items: enriched.items as any } })
+        .catch(() => {})
+    }
+    const cartItems = enriched.items as { name: string; description?: string; price: number; quantity: number; image?: string; productId?: string }[]
     const formattedTotal = `${currencySymbol}${cart.totalValue.toFixed(2)}`
 
     // ── The offer ──────────────────────────────────────────────────────────
@@ -651,6 +663,12 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           if (!sendSuccess) error = emailResult.error || 'Unknown error'
         } else {
           const firstImage = getFirstProductImage(cartItems)
+          // A CartGain-logo header means the product photo could not be
+          // resolved (no captured image and no product id to look up). Log the
+          // outcome so "why is the logo on my message" is answerable from logs.
+          console.log(
+            `[recovery] cart=${cart.id} whatsapp header=${firstImage ? 'product-photo' : 'fallback-image'}`,
+          )
           const templateStep = Math.min(step, 2)
           const templateMap = [
             WhatsAppTemplates.abandoned_cart,
