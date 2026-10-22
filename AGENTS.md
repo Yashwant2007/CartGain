@@ -65,6 +65,13 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(analytics): wire the bargain funnel into the dashboard`. The
+  `/api/analytics/bargain` endpoint (started → negotiated → offered → accepted →
+  issued → purchased, average discount, end-to-end rate, revenue) was live but
+  unused by the UI; the Analytics page now loads it alongside `overview` and
+  renders the six stages with per-stage conversion, avg discount, purchase rate
+  and bargain revenue. Endpoint failures never break the main analytics view.
+
 - `fix(whatsapp): send only the components the approved template declares`.
   Recovery sends were passing a footer component (static footers must never be
   sent as parameters) and an image header whenever the cart had a product

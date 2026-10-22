@@ -45,11 +45,34 @@ type PeriodData = {
   }
 }
 
+type BargainFunnel = {
+  windowDays: number
+  funnel: {
+    started: number
+    negotiated: number
+    offered: number
+    accepted: number
+    issued: number
+    purchased: number
+    revenue: number
+  }
+  rates: {
+    negotiationRate: number
+    offerRate: number
+    acceptRate: number
+    codeRate: number
+    purchaseRate: number
+    endToEndRate: number
+  }
+  averageDiscountPercent: number
+}
+
 export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState('30d')
   const { storeId, loading: resolvingStore, error: storeError } = useResolvedStoreId()
   const [current, setCurrent] = useState<PeriodData | null>(null)
   const [previous, setPrevious] = useState<PeriodData | null>(null)
+  const [bargain, setBargain] = useState<BargainFunnel | null>(null)
   const [loadingData, setLoadingData] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const days = dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90
@@ -72,6 +95,17 @@ export default function AnalyticsPage() {
         if (!cancelled) {
           setCurrent(data.current)
           setPrevious(data.previous)
+        }
+
+        // Bargain funnel is a separate, independently failing endpoint.
+        const bargainRes = await shopifySessionFetch(
+          `/api/analytics/bargain?storeId=${storeId}&days=${days}`
+        ).catch(() => null)
+        if (bargainRes?.ok) {
+          const funnel = await bargainRes.json().catch(() => null)
+          if (!cancelled) setBargain(funnel)
+        } else if (!cancelled) {
+          setBargain(null)
         }
       } catch (error) {
         if (!cancelled) {
@@ -295,6 +329,54 @@ export default function AnalyticsPage() {
             <p className="text-sm">No channel data yet. Start a campaign to see performance.</p>
           </div>
         ) : null}
+      </div>
+
+      <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Bargain Funnel</h3>
+            <p className="text-sm text-blue-300/60">
+              {dateRangeLabel} &bull; Negotiation sessions on your storefront widget
+            </p>
+          </div>
+          {bargain && (
+            <div className="text-right">
+              <div className="text-sm text-blue-300/60">Avg. discount</div>
+              <div className="text-xl font-semibold text-cyan-300">{bargain.averageDiscountPercent}%</div>
+            </div>
+          )}
+        </div>
+        {bargain && bargain.funnel.started > 0 ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {[
+              { label: 'Started', value: bargain.funnel.started, rate: 100 },
+              { label: 'Negotiated', value: bargain.funnel.negotiated, rate: bargain.rates.negotiationRate },
+              { label: 'Offer made', value: bargain.funnel.offered, rate: bargain.rates.offerRate },
+              { label: 'Accepted', value: bargain.funnel.accepted, rate: bargain.rates.acceptRate },
+              { label: 'Code issued', value: bargain.funnel.issued, rate: bargain.rates.codeRate },
+              { label: 'Purchased', value: bargain.funnel.purchased, rate: bargain.rates.purchaseRate },
+            ].map((stage) => (
+              <div key={stage.label} className="bg-slate-900/40 border border-blue-700/30 rounded-lg p-4">
+                <div className="text-xs uppercase tracking-wide text-blue-300/60">{stage.label}</div>
+                <div className="text-2xl font-bold text-white mt-1">{stage.value.toLocaleString('en-IN')}</div>
+                <div className="text-xs text-cyan-300/80 mt-1">{stage.rate}% of started</div>
+              </div>
+            ))}
+            <div className="col-span-2 md:col-span-3 lg:col-span-6 flex flex-wrap items-center justify-between gap-2 border-t border-blue-700/30 pt-4 mt-1">
+              <span className="text-sm text-blue-300/70">
+                Ended in a paid order: <span className="font-semibold text-emerald-300">{bargain.rates.endToEndRate}%</span>
+              </span>
+              <span className="text-sm text-blue-300/70">
+                Bargain revenue: <span className="font-semibold text-emerald-300">&#8377;{bargain.funnel.revenue.toLocaleString('en-IN')}</span>
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-10 text-blue-300/50">
+            <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-40" />
+            <p className="text-sm">No bargain sessions in this period.</p>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
