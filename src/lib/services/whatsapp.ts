@@ -142,12 +142,16 @@ export async function sendWhatsAppMessage({
 //   {{2}} = AI-written body line       (validated, single line)
 //   {{3}} = offer line                 (code + 10% off + bargain link; never empty)
 //
-// The template's URL button should be approved as a STATIC url pointing at
-// https://cart-gain.com/r/  with a dynamic suffix {{1}} = cart id (e.g.
-// https://cart-gain.com/r/{{1}}). When WHATSAPP_TEMPLATE_BUTTON_BASE is set we
-// send that suffix; otherwise no button component is sent and the approved
-// static button stays as-is. This is why `buttonUrlSuffix` exists — sending a
-// FULL url in a url-button parameter produces a broken double-url.
+// IMPORTANT — components must match the APPROVED template exactly. Meta
+// rejects the entire send with (#132000) when we pass a component the template
+// does not declare. Therefore:
+//   * body is ALWAYS sent (the 3 variables above);
+//   * a header image is only sent when WHATSAPP_TEMPLATE_IMAGE_HEADER=true
+//     (i.e. the approved template has an IMAGE header);
+//   * a static footer is never sent as a parameter — it lives in the template;
+//   * the URL button is only sent when WHATSAPP_TEMPLATE_BUTTON_BASE is set,
+//     which means the approved button is dynamic (https://cart-gain.com/r/{{1}}).
+//     Sending a FULL url as the button parameter produces a broken double-url.
 
 export type WhatsAppTemplateContext = {
   /** Dynamic suffix for a url button configured as `<base>/{{1}}`. */
@@ -175,14 +179,17 @@ function buildTemplate(
   context: WhatsAppTemplateContext | undefined,
   fallbackOfferLine: string,
 ): WhatsAppTemplateParams {
+  const wantsImageHeader = ['1', 'true', 'yes'].includes(
+    (process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER || '').toLowerCase(),
+  )
   const params: WhatsAppTemplateParams = {
-    header: productImage ? { type: 'image', imageUrl: productImage } : undefined,
+    header: wantsImageHeader && productImage ? { type: 'image', imageUrl: productImage } : undefined,
     body: [
       nonEmpty(customerName, 'there'),
       nonEmpty(bodyContent, 'Your cart is still saved and ready whenever you are.'),
       nonEmpty(offerLine, fallbackOfferLine),
     ],
-    footer: 'Powered by CartGain — cart-gain.com',
+    // No footer component: the approved template's footer is static text.
   }
   if (context?.buttonUrlSuffix) {
     params.buttons = [{ type: 'url', text: 'Complete Purchase', url: context.buttonUrlSuffix }]

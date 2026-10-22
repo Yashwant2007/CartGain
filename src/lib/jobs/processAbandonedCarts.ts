@@ -677,7 +677,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             firstImage,
             {
               buttonUrlSuffix: process.env.WHATSAPP_TEMPLATE_BUTTON_BASE
-                ? `${cart.id}?c=wa`
+                ? `${cart.id}?c=whatsapp`
                 : undefined,
             },
           )

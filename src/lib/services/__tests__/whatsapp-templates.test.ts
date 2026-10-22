@@ -30,6 +30,27 @@ describe('WhatsApp recovery templates', () => {
     }
   )
 
+  it('never sends a footer component (the approved footer is static text)', () => {
+    const params = WhatsAppTemplates.abandoned_cart.generateParams('Priya', 'Body', 'Offer', 'https://img.test/a.jpg')
+    expect(params.footer).toBeUndefined()
+  })
+
+  it('sends an image header only when the approved template declares one', () => {
+    const prev = process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER
+    delete process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER
+    expect(
+      WhatsAppTemplates.abandoned_cart.generateParams('Priya', 'Body', 'Offer', 'https://img.test/a.jpg').header,
+    ).toBeUndefined()
+
+    process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER = 'true'
+    expect(
+      WhatsAppTemplates.abandoned_cart.generateParams('Priya', 'Body', 'Offer', 'https://img.test/a.jpg').header,
+    ).toEqual({ type: 'image', imageUrl: 'https://img.test/a.jpg' })
+
+    if (prev === undefined) delete process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER
+    else process.env.WHATSAPP_TEMPLATE_IMAGE_HEADER = prev
+  })
+
   it('sends no button component by default (approved template keeps its own)', () => {
     const params = WhatsAppTemplates.abandoned_cart.generateParams('Priya', 'Body', 'Offer')
     expect(params.buttons).toBeUndefined()

@@ -65,6 +65,17 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `fix(whatsapp): send only the components the approved template declares`.
+  Recovery sends were passing a footer component (static footers must never be
+  sent as parameters) and an image header whenever the cart had a product
+  image; Meta rejects the whole message with `(#132000)` on any component the
+  template does not declare. Header image is now opt-in
+  (`WHATSAPP_TEMPLATE_IMAGE_HEADER=true`), the footer component is gone, and the
+  URL button is still suffix-only behind `WHATSAPP_TEMPLATE_BUTTON_BASE`. New
+  job-authenticated `POST /api/jobs/test-whatsapp` sends any of the three
+  templates to a number and returns Meta's raw answer plus the component shape
+  actually sent — use it to verify approval. CI workflow now calls GET so each
+  run also syncs the store's abandoned checkouts.
 - `feat(recovery): real offers, working links, WhatsApp templates and a live
   cart sweep`. Offers are resolved from merchant config *before* copy is
   written (`src/lib/recovery/offer.ts`): the campaign code when set, otherwise a
