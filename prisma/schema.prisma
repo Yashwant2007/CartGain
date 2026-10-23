@@ -223,7 +223,9 @@ model Message {
   campaignId      String
   channel         String    // sms, whatsapp, email, push
   content         String
-  status          String    @default("pending") // pending, sent, delivered, failed
+  // skipped = the channel can never deliver to this contact (number not on
+  // WhatsApp, template rejected); the round advances via another channel.
+  status          String    @default("pending") // pending, sent, delivered, failed, skipped
   sentAt          DateTime?
   deliveredAt     DateTime?
   clickedAt       DateTime?

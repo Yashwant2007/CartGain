@@ -4,6 +4,7 @@ import { sendEmail, EmailTemplates } from '@/lib/services/email'
 import { buildOptOutUrl } from '@/lib/opt-out'
 import { sanitizePhoneNumber } from '@/lib/utils'
 import { sendWhatsAppMessage, WhatsAppTemplates } from '@/lib/services/whatsapp'
+import { isConfigWhatsAppFailure, isPermanentWhatsAppFailure } from '@/lib/whatsapp/errors'
 import { resolveRecoveryOffer } from '@/lib/recovery/offer'
 import { enrichCartItemsWithImages } from '@/lib/recovery/product-image'
 import { buildRecoveryLink } from '@/lib/recovery/links'
@@ -369,16 +370,22 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     // the sequence moved on and the customer never got a retry.
     const completedMessages = cart.messages.filter((m: any) => m.status === 'sent' || m.status === 'delivered')
     // A round is complete only when EVERY channel we can reach the customer on
-    // has an accepted message for it. Counting individual messages made the
-    // second channel count as a follow-up round and stalled multi-channel
-    // campaigns after the first touch.
+    // is settled for it: accepted (`sent`/`delivered`) or deliberately
+    // `skipped` because the channel can never deliver to this contact (number
+    // not on WhatsApp, template rejected) and the email fallback took over.
+    // Counting individual messages made the second channel count as a
+    // follow-up round and stalled multi-channel campaigns after the first
+    // touch; a permanently failing channel used to wedge the round forever.
+    const roundSettledMessages = cart.messages.filter(
+      (m: any) => m.status === 'sent' || m.status === 'delivered' || m.status === 'skipped',
+    )
     const reachableChannels = effActiveChannels.filter(
       (c: string) =>
         (c === 'email' && Boolean(cart.customerEmail)) ||
         (c === 'whatsapp' && Boolean(cart.customerPhone)),
     )
     const channelsByStep = new Map<number, Set<string>>()
-    for (const m of completedMessages) {
+    for (const m of roundSettledMessages) {
       const set = channelsByStep.get(m.step) ?? new Set<string>()
       set.add(m.channel)
       channelsByStep.set(m.step, set)
@@ -424,7 +431,8 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
 
     const availableChannels = channelOrder.filter(c => {
       // A channel is "used" only when a message on it was actually accepted.
-      // A failed attempt must stay retryable (same step, same row).
+      // A failed attempt must stay retryable (same step, same row), unless it
+      // was marked `skipped` (permanently undeliverable for this contact).
       // Idempotency is per (cart, channel, step): a channel that already sent
       // this round is skipped, but stays eligible for the next round.
       if (
@@ -432,7 +440,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           (m: any) =>
             m.channel === c &&
             m.step === step &&
-            (m.status === 'sent' || m.status === 'delivered'),
+            (m.status === 'sent' || m.status === 'delivered' || m.status === 'skipped'),
         )
       ) {
         return false
@@ -583,7 +591,23 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
 
     let roundSent = 0
     let roundFailed = 0
-    for (const ch of channelsToProcess) {
+    // Channels are processed from a queue so a failed WhatsApp send can add
+    // email as a fallback in the SAME round instead of waiting for a later
+    // sweep (or never, when WhatsApp is the only scheduled channel).
+    const sendQueue = [...channelsToProcess]
+    const settledThisSweep = new Set<string>()
+    const emailSettledThisRound = (): boolean =>
+      settledThisSweep.has('email') ||
+      cart.messages.some(
+        (m: any) =>
+          m.channel === 'email' &&
+          m.step === step &&
+          (m.status === 'sent' || m.status === 'delivered' || m.status === 'skipped'),
+      )
+
+    while (sendQueue.length > 0) {
+      const ch = sendQueue.shift()!
+      if (settledThisSweep.has(ch)) continue
       const cartUrl = linkFor(ch, 'cart')
 
       // ── Idempotency ────────────────────────────────────────────────────
@@ -592,7 +616,12 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       // pending row (>10 min) or a failed row is reused, so a retry sends
       // exactly once.
       const existingMessage: any = cart.messages.find((m: any) => m.channel === ch && m.step === step)
-      if (existingMessage && (existingMessage.status === 'sent' || existingMessage.status === 'delivered')) {
+      if (
+        existingMessage &&
+        (existingMessage.status === 'sent' ||
+          existingMessage.status === 'delivered' ||
+          existingMessage.status === 'skipped')
+      ) {
         continue
       }
       const stalePending =
@@ -605,6 +634,8 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       let sendSuccess = false
       let error = ''
       let providerId: string | undefined
+      let messageId = ''
+      let whatsappFailure: Parameters<typeof isPermanentWhatsAppFailure>[0] | null = null
 
       try {
         // ── Compose (validated) copy ────────────────────────────────────
@@ -629,7 +660,6 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         })
 
         // ── Claim the step BEFORE sending ───────────────────────────────
-        let messageId: string
         const claim = {
           cartId: cart.id,
           campaignId: campaign.id,
@@ -758,7 +788,15 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           })
           sendSuccess = whatsappResult.success
           providerId = whatsappResult.messageId
-          if (!sendSuccess) error = whatsappResult.error || 'Unknown error'
+          if (!sendSuccess) {
+            error = whatsappResult.error || 'Unknown error'
+            whatsappFailure = {
+              errorCode: whatsappResult.errorCode,
+              errorSubcode: whatsappResult.errorSubcode,
+              error: whatsappResult.error,
+              errorDetails: whatsappResult.errorDetails,
+            }
+          }
         }
 
         // ── Record the real outcome ────────────────────────────────────
@@ -779,6 +817,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
 
       if (sendSuccess) {
         roundSent++
+        settledThisSweep.add(ch)
         if (subscription) {
           await incrementCartsUsedCounter(campaign.userId, subscription.id)
           if (isOverageChannel(ch)) {
@@ -821,6 +860,43 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       } else {
         roundFailed++
         console.error(`Failed to send ${ch} message for cart ${cart.id}: ${error || 'unknown error'}`)
+
+        // ── WhatsApp → email fallback (same round) ─────────────────────
+        // WhatsApp delivery can fail for reasons email does not share: the
+        // number is not on WhatsApp, the approved template does not match, or
+        // the Meta credential is currently broken. If the merchant enabled
+        // email, reach the shopper on it in THIS round instead of leaving the
+        // reminder to a later sweep (or never).
+        if (ch === 'whatsapp' && whatsappFailure) {
+          const permanent = isPermanentWhatsAppFailure(whatsappFailure)
+          const configProblem = isConfigWhatsAppFailure(whatsappFailure)
+          if (permanent || configProblem) {
+            settledThisSweep.add('whatsapp')
+            // A permanently undeliverable channel must not wedge the round:
+            // mark it skipped so the sequence advances. A credential problem
+            // stays `failed` and is retried after the merchant fixes Meta.
+            if (permanent && messageId) {
+              await prisma.message
+                .update({ where: { id: messageId }, data: { status: 'skipped' } })
+                .catch(() => {})
+            }
+            // A fallback is about reachability, not campaign setup: even a
+            // WhatsApp-only campaign may email a shopper whose number cannot
+            // receive WhatsApp at all. The plan's per-customer email cap and
+            // the email opt-out still apply.
+            const emailAllowed =
+              Boolean(cart.customerEmail) &&
+              (!channelLimited('email') || overageEligible) &&
+              !emailSettledThisRound()
+            if (emailAllowed) {
+              console.warn(
+                `[recovery] cart=${cart.id} whatsapp unavailable for round ${step} ` +
+                  `(${whatsappFailure.errorCode ?? whatsappFailure.error ?? 'unknown'}) — sending email fallback`,
+              )
+              sendQueue.push('email')
+            }
+          }
+        }
       }
     }
 
