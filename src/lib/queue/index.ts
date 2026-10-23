@@ -59,13 +59,14 @@ function getCartQueue(): any {
       queueInstance = new Bull('process-carts', {
         redis: redisConfig,
         settings: {
-          lockDuration: 60000,
-          lockRenewTime: 15000,
-          stalledInterval: 15000,
-          maxStalledCount: 0,
+          lockDuration: 120000,
+          lockRenewTime: 30000,
+          stalledInterval: 30000,
+          maxStalledCount: 1,
         },
         defaultJobOptions: {
-          attempts: 1,
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
           removeOnComplete: true,
           removeOnFail: true,
         },
@@ -119,13 +120,20 @@ export function setupQueueListeners() {
   if (!queue) return
 
   queue.on('completed', (job: any) => console.log(`Job ${job?.id || 'unknown'} completed`))
-  queue.on('failed', (job: any, err: any) => console.error(`Job ${job?.id || 'unknown'} failed:`, err?.message || err))
+  queue.on('failed', (job: any, err: any) => {
+    const msg = err?.message || String(err)
+    if (msg.includes('stalled') || msg.includes('lock')) {
+      console.warn(`Job ${job?.id || 'unknown'} failed due to stall/lock - will retry or skip`)
+      return
+    }
+    console.error(`Job ${job?.id || 'unknown'} failed:`, msg)
+  })
   queue.on('error', (err: any) => console.error('Queue error:', err?.message || err))
   queue.on('active', (job: any) => console.log(`Job ${job?.id || 'unknown'} is processing...`))
   queue.on('connect', () => console.log('Queue connected to Redis'))
   queue.on('ready', () => console.log('Queue ready'))
   queue.on('stalled', (job: any) => {
-    console.warn(`Job ${job?.id || 'unknown'} stalled - removing to prevent duplicates`)
-    try { job?.remove?.() } catch {}
+    console.warn(`Job ${job?.id || 'unknown'} stalled - attempting to recover`)
+    try { job?.moveToFailed?.({ message: 'Stalled job removed' }, true).catch(() => {}) } catch {}
   })
 }
