@@ -98,10 +98,6 @@ async function createShopifyCode(opts: {
       customerSelection: { all: true },
       combinesWith: { orderDiscounts: false, productDiscounts: true, shippingDiscounts: false },
       customerGets: {
-        value:
-          opts.type === 'percentage'
-            ? { percentage: opts.value }
-            : { discountAmount: { amount: opts.value, appliesOnEachItem: false } },
         items: { all: true },
       },
       summary:
@@ -114,7 +110,7 @@ async function createShopifyCode(opts: {
   if (opts.type === 'percentage') {
     variables.basicCodeDiscount.customerGets.value = { percentage: opts.value }
   } else {
-    variables.basicCodeDiscount.customerGets.value = { discountAmount: { amount: opts.value, appliesOnEachItem: false } }
+    variables.basicCodeDiscount.customerGets.value = { discountAmount: { amount: Number(opts.value), appliesOnEachItem: false } }
   }
 
   if (opts.minimumSubtotal && opts.minimumSubtotal > 0) {
