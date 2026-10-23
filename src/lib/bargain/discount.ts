@@ -19,17 +19,11 @@ export type GeneratedBargainDiscount = {
   code: string
   status: 'created' | 'pending' | 'failed'
   error?: string
-  // Customer binding: if set, the code can only be used by this customer
   customerEmail?: string
   cartToken?: string
 }
 
-// Shopify `customerSelection` for a discount. When we hold a Shopify customer id
-// we bind the code to that customer so a shared screenshot cannot be redeemed by
-// anyone else. Without a customer identity we can only scope it to "all
-// customers" — the code is still single-use globally (usageLimit 1,
-// appliesOncePerCustomer true), but it is NOT customer-bound, so treat it as
-// confidential rather than shareable.
+// Shopify `customerSelection` for a discount.
 export function buildCustomerSelection(
   shopifyCustomerId?: string | null,
 ): { all: true } | { customers: { add: string[] } } {
@@ -43,22 +37,6 @@ export function buildCustomerSelection(
 
 /**
  * Create a Shopify discountCodeBasic for an accepted bargain.
- * - Usage limit: 1 (globally, per Shopify)
- * - 24h expiry
- * - scope 'product' | 'variant': applies to specific product/variant with
- *   `percentage` off the original price, bringing the customer to `finalPrice`.
- * - scope 'order' (default when no product given): applies percentage off the
- *   whole order — used by the Thank-you "next order" bargain.
- * - CRITICAL — FINANCIAL SAFETY (see src/lib/financial-safety.ts):
- *   The discount percent is the EXACT percent derived from
- *   (originalPrice, finalPrice, floorPrice) in integer minor units. It is never
- *   rounded to an integer (integer rounding could drop the charged price below
- *   the merchant floor). The `minimumSubtotal` is bound to
- *   `originalPrice * bulkQuantity` so a bulk-negotiated per-unit price CANNOT be
- *   applied to a 1-unit purchase below the single-unit floor.
- * - Customer binding: when `shopifyCustomerId` is supplied the code is bound to
- *   that customer (only they can redeem it). Otherwise it is single-use globally
- *   but not customer-bound — see buildCustomerSelection.
  */
 export async function generateBargainDiscountCode(opts: {
   store: Store
@@ -77,8 +55,6 @@ export async function generateBargainDiscountCode(opts: {
   const { store, shopifyProductId, variantId, originalPrice, finalPrice, code, customerEmail, cartToken } = opts
   const bulkQuantity = Math.max(1, Math.floor(opts.bulkQuantity ?? 1))
 
-  // Re-derive the percent and re-verify the floor in minor units — the discount
-  // generator NEVER trusts a rounded percent from the caller.
   const discountPercent = exactPercentOff(originalPrice, finalPrice)
   const floorMinor = toMinorUnits(opts.floorPrice ?? 0)
   if (opts.floorPrice != null && floorMinor > 0) {
@@ -95,7 +71,6 @@ export async function generateBargainDiscountCode(opts: {
       ? 'product'
       : 'order'
 
-  // Shop domain must be `<shop>.myshopify.com` for GraphQL API
   const shopDomain = store.domain.includes('.')
     ? store.domain
     : `${store.domain}.myshopify.com`
@@ -112,9 +87,6 @@ export async function generateBargainDiscountCode(opts: {
   }
 
   if (!accessToken) {
-    // Not Shopify-connected — code stored locally, merchant can sync later.
-    // Return the code UNCHANGED: never append the customer identity to it (that
-    // produced bogus codes like `CG-ABC:me@x.com:` that no checkout could use).
     return {
       code,
       status: 'pending',
@@ -122,8 +94,6 @@ export async function generateBargainDiscountCode(opts: {
     }
   }
 
-  // GraphQL discountCodeBasicCreate mutation (Customer-facing Shopify admin)
-  // Note: requires `write_discounts` access scope on the merchant's app.
   const ONE_DAY = 24 * 60 * 60
   const startsAt = new Date().toISOString()
   const expiresAt = new Date(Date.now() + ONE_DAY * 1000).toISOString()
@@ -134,10 +104,15 @@ export async function generateBargainDiscountCode(opts: {
   const mutation = `
     mutation discountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
       discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
-        codeDiscount {
-          ... on DiscountCodeBasic {
-            codes(first: 1) {
-              edges { node { code } }
+        codeDiscountNode {
+          id
+          codeDiscount {
+            ... on DiscountCodeBasic {
+              codes(first: 1) {
+                nodes {
+                  code
+                }
+              }
             }
           }
         }
@@ -155,16 +130,33 @@ export async function generateBargainDiscountCode(opts: {
       usageLimit: 1,
       appliesOncePerCustomer: true,
       customerSelection: buildCustomerSelection(opts.shopifyCustomerId),
-      eligibleProducts: scope === 'product' ? { productsV2: { productsToAdd: [productGid!] } } : undefined,
-      variants: scope === 'variant' ? { productVariantsToAdd: [variantGid!] } : undefined,
-      value: {
-        percentage: discountPercent,
+      combinesWith: { orderDiscounts: false, productDiscounts: true, shippingDiscounts: false },
+      customerGets: {
+        value: {
+          percentage: discountPercent,
+        },
+        items: {
+          all: scope === 'order',
+          ...(scope === 'product' && productGid ? { products: { productsToAdd: [productGid] } } : {}),
+          ...(scope === 'variant' && variantGid ? { productVariants: { productsToAdd: [] } } : {}),
+        },
       },
-      // FINANCIAL SAFETY: min subtotal bound to the negotiated quantity so a
-      // bulk-negotiated unit price can't be applied to a smaller basket.
       minimumSubtotal,
-      summary: `Bargain deal: ${discountPercent}% off (${store.currency} ${finalPrice.toFixed(2)} from ${store.currency} ${originalPrice.toFixed(2)})`,
     },
+  }
+
+  if (scope === 'product' && productGid) {
+    ;(variables.basicCodeDiscount.customerGets.items as any) = {
+      products: { productsToAdd: [productGid] },
+    }
+  } else if (scope === 'variant' && variantGid) {
+    ;(variables.basicCodeDiscount.customerGets.items as any) = {
+      productVariants: { productsToAdd: [variantGid] },
+    }
+  } else {
+    ;(variables.basicCodeDiscount.customerGets.items as any) = {
+      all: true,
+    }
   }
 
   try {
@@ -182,12 +174,9 @@ export async function generateBargainDiscountCode(opts: {
         error: userErrors[0].message || 'Shopify rejected the discount code',
       }
     }
-    // Customer binding is applied via customerSelection above (when we hold a
-    // Shopify customer id). There is no additional metafield step — Shopify has
-    // no supported metafield that restricts a code to an email/cart token, so we
-    // do not pretend otherwise.
+    const createdCode = data?.discountCodeBasicCreate?.codeDiscountNode?.codeDiscount?.codes?.nodes?.[0]?.code || code
     return {
-      code,
+      code: createdCode,
       status: 'created',
       ...(customerEmail ? { customerEmail } : {}),
       ...(cartToken ? { cartToken } : {}),

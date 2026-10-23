@@ -1,32 +1,14 @@
 /**
  * Recovery offers — resolve the discount a recovery message is allowed to
  * promise.
- *
- * The old code asked the model for a "personalised code" and pasted it into
- * the message. That code was never created in the store, so the shopper was
- * sent to a checkout that rejected it — the single most expensive bug in the
- * recovery funnel (it looks like an offer, then fails at payment).
- *
- * Now the offer is resolved BEFORE any copy is written, from merchant
- * configuration only:
- *
- *   1. campaign.discountEnabled = false            → no offer, no code, no line
- *   2. campaign.discountCode set                   → the merchant's own code
- *   3. enabled, no code                            → mint a real single-use
- *                                                    Shopify code for this cart
- *                                                    (deterministic, so a retry
- *                                                    reuses it)
- *
- * If Shopify cannot create the code we return null: the message is then sent
- * WITHOUT an offer. Truthful beats "luring".
  */
+
 import crypto from 'crypto'
 import { getAccessToken } from '@/lib/shopify'
 import { queryShopifyGraphQL } from '@/lib/shopify-graphql'
 import { ConversationDiscount } from '@/lib/conversation/facts'
 
 export type RecoveryOffer = ConversationDiscount & {
-  /** 'campaign' = merchant-created code, 'minted' = created by us for this cart. */
   source: 'campaign' | 'minted'
 }
 
@@ -48,10 +30,6 @@ type ShopifyStore = {
 const MAX_PERCENT = 90
 const CODE_TTL_DAYS = 7
 
-/**
- * Stable per-cart code. Same cart → same code, so a retried job (or a second
- * channel) never mints a second discount for the same shopper.
- */
 export function buildRecoveryCode(cartId: string): string {
   const digest = crypto.createHash('sha256').update(cartId).digest('hex').toUpperCase()
   return `GAIN${digest.slice(0, 6)}`
@@ -69,10 +47,6 @@ function normalizeOffer(
   return { value: Math.min(MAX_PERCENT, Math.max(1, Math.round(raw))), type: 'percentage' }
 }
 
-/**
- * Create the code in Shopify. Returns false when the store is not connected or
- * Shopify rejected it, so the caller sends no offer instead of a fake one.
- */
 async function createShopifyCode(opts: {
   store: ShopifyStore
   code: string
@@ -98,13 +72,22 @@ async function createShopifyCode(opts: {
   const mutation = `
     mutation recoveryDiscountCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
       discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
-        codeDiscount { ... on DiscountCodeBasic { codes(first: 1) { edges { node { code } } } } }
+        codeDiscountNode {
+          id
+          codeDiscount {
+            ... on DiscountCodeBasic {
+              codes(first: 1) {
+                nodes { code }
+              }
+            }
+          }
+        }
         userErrors { field message code }
       }
     }
   `
 
-  const variables = {
+  const variables: any = {
     basicCodeDiscount: {
       title: `Cart recovery ${opts.code}`,
       code: opts.code,
@@ -113,13 +96,14 @@ async function createShopifyCode(opts: {
       usageLimit: 1,
       appliesOncePerCustomer: true,
       customerSelection: { all: true },
-      value:
-        opts.type === 'percentage'
-          ? { percentage: opts.value }
-          : { discountAmount: { amount: opts.value, appliesOnEachItem: false } },
-      ...(opts.minimumSubtotal && opts.minimumSubtotal > 0
-        ? { minimumSubtotal: Math.round(opts.minimumSubtotal * 100) / 100 }
-        : {}),
+      combinesWith: { orderDiscounts: false, productDiscounts: true, shippingDiscounts: false },
+      customerGets: {
+        value:
+          opts.type === 'percentage'
+            ? { percentage: opts.value }
+            : { discountAmount: { amount: opts.value, appliesOnEachItem: false } },
+        items: { all: true },
+      },
       summary:
         opts.type === 'percentage'
           ? `Cart recovery offer: ${opts.value}% off`
@@ -127,45 +111,69 @@ async function createShopifyCode(opts: {
     },
   }
 
+  if (opts.minimumSubtotal && opts.minimumSubtotal > 0) {
+    variables.basicCodeDiscount.minimumSubtotal = Math.round(opts.minimumSubtotal * 100) / 100
+  }
+
   try {
     const data = await queryShopifyGraphQL<any>(shop, token, mutation, variables)
     const errors: Array<{ message?: string; code?: string }> =
       data?.discountCodeBasicCreate?.userErrors ?? []
     if (errors.length === 0) return true
-    // A retry (or a concurrent worker) may have created the deterministic code
-    // already — that is success, not failure.
     return errors.every((e) => `${e.code ?? ''} ${e.message ?? ''}`.toLowerCase().includes('already'))
   } catch {
     return false
   }
 }
 
-/**
- * Resolve the offer for one cart. `null` means: send no offer at all.
- */
 export async function resolveRecoveryOffer(opts: {
-  campaign: RecoveryCampaignConfig
   store: ShopifyStore
   cartId: string
-  cartTotal: number
+  campaignConfig?: RecoveryCampaignConfig
+  campaign?: RecoveryCampaignConfig
+  cartValue?: number | null
+  cartTotal?: number | null
 }): Promise<RecoveryOffer | null> {
-  const normalized = normalizeOffer(opts.campaign)
-  if (!normalized) return null
+  const config = opts.campaignConfig || opts.campaign
+  if (!config) return null
+  const { store, cartId } = opts
+  const cartValue = opts.cartValue ?? opts.cartTotal ?? null
 
-  const merchantCode = (opts.campaign.discountCode || '').trim()
-  if (merchantCode) {
-    return { code: merchantCode, value: normalized.value, type: normalized.type, source: 'campaign' }
+  if (!config.discountEnabled) {
+    return null
   }
 
-  const code = buildRecoveryCode(opts.cartId)
-  const created = await createShopifyCode({
-    store: opts.store,
-    code,
-    value: normalized.value,
-    type: normalized.type,
-    minimumSubtotal: opts.cartTotal,
-  })
-  if (!created) return null
+  if (config.discountCode && config.discountCode.trim()) {
+    const norm = normalizeOffer(config)
+    if (!norm) return null
+    return {
+      code: config.discountCode.trim(),
+      value: norm.value,
+      type: norm.type,
+      source: 'campaign',
+    }
+  }
 
-  return { code, value: normalized.value, type: normalized.type, source: 'minted' }
+  const norm = normalizeOffer(config)
+  if (!norm) return null
+
+  const code = buildRecoveryCode(cartId)
+  const ok = await createShopifyCode({
+    store,
+    code,
+    value: norm.value,
+    type: norm.type,
+    minimumSubtotal: cartValue ?? undefined,
+  })
+
+  if (!ok) {
+    return null
+  }
+
+  return {
+    code,
+    value: norm.value,
+    type: norm.type,
+    source: 'minted',
+  }
 }
