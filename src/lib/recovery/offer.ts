@@ -99,18 +99,16 @@ async function createShopifyCode(opts: {
       combinesWith: { orderDiscounts: false, productDiscounts: true, shippingDiscounts: false },
       customerGets: {
         items: { all: true },
+        value:
+          opts.type === 'percentage'
+            ? { percentage: opts.value }
+            : { discountAmount: { amount: Number(opts.value), appliesOnEachItem: false } },
       },
       summary:
         opts.type === 'percentage'
           ? `Cart recovery offer: ${opts.value}% off`
           : `Cart recovery offer: ${opts.value} off`,
     },
-  }
-
-  if (opts.type === 'percentage') {
-    variables.basicCodeDiscount.customerGets.value = { percentage: opts.value }
-  } else {
-    variables.basicCodeDiscount.customerGets.value = { discountAmount: { amount: Number(opts.value), appliesOnEachItem: false } }
   }
 
   if (opts.minimumSubtotal && opts.minimumSubtotal > 0) {
