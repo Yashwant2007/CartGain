@@ -111,6 +111,12 @@ async function createShopifyCode(opts: {
     },
   }
 
+  if (opts.type === 'percentage') {
+    variables.basicCodeDiscount.customerGets.value = { percentage: opts.value }
+  } else {
+    variables.basicCodeDiscount.customerGets.value = { discountAmount: { amount: opts.value, appliesOnEachItem: false } }
+  }
+
   if (opts.minimumSubtotal && opts.minimumSubtotal > 0) {
     variables.basicCodeDiscount.minimumSubtotal = Math.round(opts.minimumSubtotal * 100) / 100
   }
