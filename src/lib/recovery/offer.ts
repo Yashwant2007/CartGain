@@ -87,6 +87,11 @@ async function createShopifyCode(opts: {
     }
   `
 
+  const value =
+    opts.type === 'percentage'
+      ? { percentage: opts.value }
+      : { discountAmount: { amount: Number(opts.value), appliesOnEachItem: false } }
+
   const variables: any = {
     basicCodeDiscount: {
       title: `Cart recovery ${opts.code}`,
@@ -97,12 +102,10 @@ async function createShopifyCode(opts: {
       appliesOncePerCustomer: true,
       customerSelection: { all: true },
       combinesWith: { orderDiscounts: false, productDiscounts: true, shippingDiscounts: false },
+      value,
       customerGets: {
         items: { all: true },
-        value:
-          opts.type === 'percentage'
-            ? { percentage: opts.value }
-            : { discountAmount: { amount: Number(opts.value), appliesOnEachItem: false } },
+        value,
       },
       summary:
         opts.type === 'percentage'
