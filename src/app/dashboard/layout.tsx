@@ -137,7 +137,7 @@ function DashboardLayoutInner({
       )}
 
       {/* Sidebar - hidden on mobile, shown on lg and up */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900/95 border-r border-blue-800/30 transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 sm:w-64 bg-slate-900/95 border-r border-blue-800/30 transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 border-b border-blue-800/30">
@@ -276,9 +276,38 @@ function DashboardLayoutInner({
         )}
 
         {/* Page content - with responsive padding */}
-        <main className="p-3 sm:p-4 md:p-6 lg:p-8 min-h-[calc(100vh-3.5rem)] sm:min-h-[calc(100vh-4rem)]">
+        <main className="p-3 sm:p-4 md:p-6 lg:p-8 min-h-[calc(100vh-3.5rem)] sm:min-h-[calc(100vh-4rem)] pb-24 lg:pb-8">
           {children}
         </main>
+
+        {/* Mobile Bottom Navigation */}
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-sm border-t border-blue-800/40" style={{paddingBottom:'env(safe-area-inset-bottom)'}}>
+          <div className="grid grid-cols-5 gap-1 px-1 py-1">
+            {[
+              { name: 'Home', href: '/dashboard', icon: LayoutDashboard },
+              { name: 'Campaigns', href: '/dashboard/campaigns', icon: Megaphone },
+              { name: 'Bargain', href: '/dashboard/bargain', icon: Sparkles },
+              { name: 'Carts', href: '/dashboard/carts', icon: ShoppingCart },
+              { name: 'More', href: '#more', icon: Menu },
+            ].map((item) => {
+              if (item.name === 'More') {
+                return (
+                  <button key={item.name} onClick={() => setSidebarOpen(true)} className="flex flex-col items-center justify-center py-1.5 px-1 min-h-[56px] text-blue-300/70 hover:text-blue-300 active:scale-95 transition-all" aria-label="Open menu">
+                    <item.icon className="w-5 h-5 mb-0.5" />
+                    <span className="text-[10px] font-medium truncate max-w-full">{item.name}</span>
+                  </button>
+                )
+              }
+              const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+              return (
+                <Link key={item.name} href={embedHref(item.href)} className={"flex flex-col items-center justify-center py-1.5 px-1 min-h-[56px] transition-all active:scale-95 " + (isActive ? 'text-blue-400' : 'text-blue-300/70 hover:text-blue-300')}>
+                  <item.icon className="w-5 h-5 mb-0.5" />
+                  <span className="text-[10px] font-medium truncate max-w-full">{item.name}</span>
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
       </div>
     </div>
   )

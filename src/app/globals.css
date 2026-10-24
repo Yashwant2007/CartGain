@@ -416,3 +416,23 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #a1a1a1;
 }
+
+/* Mobile safe area support */
+@supports (padding: max(0px)) {
+  .safe-area-inset-bottom {
+    padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Prevent horizontal overflow on mobile */
+html, body {
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Touch-friendly targets */
+@media (max-width: 1024px) {
+  button, a, input, select, textarea {
+    min-height: 44px;
+  }
+}
