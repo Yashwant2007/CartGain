@@ -193,7 +193,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-3 xs:gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-white">Dashboard</h1>
           <p className="text-blue-300 text-sm sm:text-base mt-1">Track your cart recovery performance</p>
@@ -206,7 +206,7 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4 lg:gap-6">
         <MetricCard title="Carts Abandoned" value={stats.cartsAbandoned.toLocaleString()} change={changes.cartsAbandoned} trend={changes.cartsAbandoned.startsWith('+') ? 'up' : 'down'} icon={<ShoppingCart className="w-6 h-6" />} color="primary" changeSuffix="from last month" loading={isLoading} />
         <MetricCard title="Carts Recovered" value={stats.cartsRecovered.toLocaleString()} change={changes.cartsRecovered} trend={changes.cartsRecovered.startsWith('+') ? 'up' : 'down'} icon={<DollarSign className="w-6 h-6" />} color="green" changeSuffix="from last month" loading={isLoading} />
         <MetricCard title="Revenue Recovered" value={`₹${stats.revenueRecovered.toLocaleString()}`} change={changes.revenueRecovered} trend={changes.revenueRecovered.startsWith('+') ? 'up' : 'down'} icon={<TrendingUp className="w-6 h-6" />} color="accent" changeSuffix="from last month" loading={isLoading} />
