@@ -9,7 +9,7 @@ interface BrandIntroProps {
   maxDuration?: number
 }
 
-export default function BrandIntro({ onComplete, minDuration = 900, maxDuration = 1400 }: BrandIntroProps) {
+export default function BrandIntro({ onComplete, minDuration = 1600, maxDuration = 2400 }: BrandIntroProps) {
   const [stage, setStage] = useState<'logo' | 'expand' | 'tagline' | 'exit'>('logo')
   const [show, setShow] = useState(true)
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
@@ -44,12 +44,12 @@ export default function BrandIntro({ onComplete, minDuration = 900, maxDuration 
     // Stage 1: Logo appears (250-350ms)
     const timer1 = setTimeout(() => {
       setStage('expand')
-    }, 300)
+    }, 450)
 
     // Stage 2: Expand to wordmark (350-500ms more, total ~650-800ms)
     const timer2 = setTimeout(() => {
       setStage('tagline')
-    }, 750)
+    }, 1100)
 
     // Stage 3: Tagline revealed, then exit (200-300ms more)
     const timer3 = setTimeout(() => {
@@ -109,7 +109,7 @@ export default function BrandIntro({ onComplete, minDuration = 900, maxDuration 
       <div className="relative flex flex-col items-center justify-center px-4 w-full max-w-md">
         <div className="flex items-center justify-center">
           <div
-            className={`relative transition-all duration-500 ease-out ${
+            className={`relative transition-all duration-700 ease-out ${
               stage === 'logo' 
                 ? 'scale-90 opacity-0' 
                 : stage === 'exit'
@@ -149,7 +149,7 @@ export default function BrandIntro({ onComplete, minDuration = 900, maxDuration 
         </div>
 
         <div
-          className={`mt-6 text-center transition-all duration-400 ease-out ${
+          className={`mt-6 text-center transition-all duration-600 ease-out ${
             stage === 'tagline' || stage === 'exit'
               ? 'opacity-100 translate-y-0'
               : 'opacity-0 translate-y-2'
