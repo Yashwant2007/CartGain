@@ -436,3 +436,17 @@ html, body {
     min-height: 44px;
   }
 }
+
+/* Performance optimizations for smooth transitions */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button, a {
+  touch-action: manipulation;
+}
+
+nav a, nav button {
+  will-change: color, background-color;
+}

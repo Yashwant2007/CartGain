@@ -29,7 +29,7 @@ export function MetricCard({
   }
 
   return (
-    <div className="bg-slate-800/50 border border-blue-700/30 rounded-lg sm:rounded-xl p-4 sm:p-6 backdrop-blur-sm hover:border-blue-700/60 transition-all duration-200 h-full min-h-28">
+    <div className="min-h-[80px] bg-slate-800/50 border border-blue-700/30 rounded-lg sm:rounded-xl p-4 sm:p-6 backdrop-blur-sm hover:border-blue-700/60 transition-all duration-200 h-full min-h-28">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <p className="text-xs sm:text-sm text-blue-300/80 mb-2 truncate">{title}</p>

@@ -137,7 +137,7 @@ function DashboardLayoutInner({
       )}
 
       {/* Sidebar - hidden on mobile, shown on lg and up */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-72 sm:w-64 bg-slate-900/95 border-r border-blue-800/30 transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 sm:w-64 bg-slate-900/95 border-r border-blue-800/30 transform transition-transform duration-150 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6 border-b border-blue-800/30">
@@ -169,7 +169,7 @@ function DashboardLayoutInner({
                   key={item.name}
                   href={embedHref(item.href)}
                   onClick={closeSidebar}
-                  className={`flex items-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-150 min-h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
+                  className={`flex items-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium rounded-lg transition-colors duration-150 min-h-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 ${
                     isActive
                       ? 'bg-blue-900/40 text-blue-300 border border-blue-700/50 shadow-md'
                       : 'text-blue-200 hover:bg-slate-800/40 hover:border hover:border-blue-700/30 active:scale-95'
