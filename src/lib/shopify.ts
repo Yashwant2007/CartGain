@@ -10,7 +10,7 @@ const SHOPIFY_MAX_BACKOFF_MS = 30_000
 // Shopify returns 429 (throttled) with a Retry-After header, and transient 5xx
 // during incidents. Without backing off we hammer the API, extend the throttle
 // window and fail recoveries that would have succeeded a second later.
-function isRetryableStatus(status: number): boolean {
+export function isRetryableStatus(status: number): boolean {
   return status === 429 || status === 430 || (status >= 500 && status < 600)
 }
 
@@ -634,6 +634,13 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
 
   if (checkouts === null) {
     console.error(`🚫 Auth failed for ${store.domain} — token is deprecated or invalid. Store needs to reconnect from Integrations page.`)
+    try {
+      const prisma = (await import('@/lib/db')).default
+      await prisma.store.update({
+        where: { id: store.id },
+        data: { isActive: false },
+      }).catch(() => {})
+    } catch {}
     return -1
   }
 

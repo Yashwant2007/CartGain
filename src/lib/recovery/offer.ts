@@ -90,36 +90,36 @@ async function createShopifyCode(opts: {
   const value =
     opts.type === 'percentage'
       ? { percentage: opts.value }
-      : { discountAmount: { amount: Number(opts.value), appliesOnEachItem: false } }
+      : { discountAmount: { amount: Number(opts.value.toFixed(2)), appliesOnEachItem: false } }
 
-  const variables: any = {
-    basicCodeDiscount: {
-      title: `Cart recovery ${opts.code}`,
-      code: opts.code,
-      startsAt: now.toISOString(),
-      endsAt: endsAt.toISOString(),
-      usageLimit: 1,
-      appliesOncePerCustomer: true,
-      customerSelection: { all: true },
-      combinesWith: { orderDiscounts: false, productDiscounts: true, shippingDiscounts: false },
+  const basicCodeDiscount: any = {
+    title: `Cart recovery ${opts.code}`,
+    code: opts.code,
+    startsAt: now.toISOString(),
+    endsAt: endsAt.toISOString(),
+    usageLimit: 1,
+    appliesOncePerCustomer: true,
+    customerSelection: { all: true },
+    combinesWith: { orderDiscounts: false, productDiscounts: true, shippingDiscounts: false },
+    value,
+    customerGets: {
+      items: { all: true },
       value,
-      customerGets: {
-        items: { all: true },
-        value,
-      },
-      summary:
-        opts.type === 'percentage'
-          ? `Cart recovery offer: ${opts.value}% off`
-          : `Cart recovery offer: ${opts.value} off`,
     },
+    summary:
+      opts.type === 'percentage'
+        ? `Cart recovery offer: ${opts.value}% off`
+        : `Cart recovery offer: ${opts.value.toFixed(2)} off`,
   }
 
   if (opts.minimumSubtotal && opts.minimumSubtotal > 0) {
-    variables.basicCodeDiscount.minimumSubtotal = Math.round(opts.minimumSubtotal * 100) / 100
+    basicCodeDiscount.minimumSubtotal = Math.round(opts.minimumSubtotal * 100) / 100
   }
 
   try {
-    const data = await queryShopifyGraphQL<any>(shop, token, mutation, variables)
+    const data = await queryShopifyGraphQL<any>(shop, token, mutation, {
+      basicCodeDiscount,
+    })
     const errors: Array<{ message?: string; code?: string }> =
       data?.discountCodeBasicCreate?.userErrors ?? []
     if (errors.length === 0) return true

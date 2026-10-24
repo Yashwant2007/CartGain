@@ -9,14 +9,41 @@ export interface RateLimitConfig {
 const SIMPLE_WINDOW_MS = 60_000
 const SIMPLE_MAX_REQUESTS = 30
 
-// Take the first address from x-forwarded-for and validate it looks like an IP
-// so a spoofed/malformed header cannot be used to bypass or poison rate limits.
-export function clientIp(headersList: Headers): string {
-  const raw = headersList.get('x-forwarded-for')?.split(',')[0]?.trim() || headersList.get('x-real-ip')?.trim() || 'unknown'
+// Prefer the most trusted proxy headers on Vercel/edge (x-real-ip, cf-connecting-ip),
+// and only trust x-forwarded-for as a LAST resort because clients can spoof it.
+// Still validate the result to avoid poisoning keys.
+function isIp(value: string): boolean {
   const ipv4 = /^(\d{1,3}\.){3}\d{1,3}$/
-  if (ipv4.test(raw)) return raw
+  if (ipv4.test(value)) {
+    const parts = value.split('.').map((p) => Number(p))
+    if (parts.every((n) => n >= 0 && n <= 255)) return true
+    return false
+  }
   const ipv6 = /^[0-9a-fA-F:]{2,45}$/
-  if (ipv6.test(raw)) return raw
+  if (ipv6.test(value)) return true
+  return false
+}
+
+export function clientIp(headersList: Headers): string {
+  const trusted = [
+    headersList.get('x-real-ip'),
+    headersList.get('cf-connecting-ip'),
+    headersList.get('true-client-ip'),
+  ]
+  for (const candidate of trusted) {
+    const v = candidate?.trim()
+    if (v && isIp(v)) return v
+  }
+  const forwarded = headersList.get('x-forwarded-for')
+  if (forwarded) {
+    // On trusted proxies, the leftmost entry can be spoofed. Walk from right to
+    // left to find the first valid IP that is likely not the client-spoofed one,
+    // or fall back to 'unknown' if we cannot identify a trusted hop.
+    const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean)
+    for (let i = parts.length - 1; i >= 0; i -= 1) {
+      if (isIp(parts[i])) return parts[i]
+    }
+  }
   return 'unknown'
 }
 

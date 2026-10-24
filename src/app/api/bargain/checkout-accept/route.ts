@@ -11,6 +11,7 @@ import { getBargainGate, decideDealMode, recordBargainDealOps, BARGAIN_DEALS_EXH
 import { track } from '@/lib/analytics/track'
 import { redisIncr, redisExpire } from '@/lib/redis'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
+import { normalizeShopDomain, shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
 
 export const dynamic = 'force-dynamic'
 
@@ -102,11 +103,25 @@ export async function POST(request: NextRequest) {
         ? customerEmail
         : null
 
-    // Find store by domain (domain is not unique alone, use findFirst)
-    const cleanDomain = shopDomain.replace('.myshopify.com', '')
-    const store = await prisma.store.findFirst({
-      where: { domain: cleanDomain },
-    })
+    // Find the store by its Shopify domain. Domain is not proof of ownership
+    // (signup can park an unconnected row on any domain), so the lookup requires
+    // a real OAuth connection and matches both the permanent domain and the bare
+    // legacy handle.
+    const cleanDomain = normalizeShopDomain(shopDomain)
+    const domainCandidates = shopDomainCandidates(cleanDomain)
+    const matches = await Promise.all(
+      domainCandidates.map((domain) =>
+        prisma.store.findFirst({
+          where: {
+            domain: { equals: domain, mode: 'insensitive' },
+            platform: 'shopify',
+            apiKey: { not: null },
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+      ),
+    )
+    const store = matches.find((s) => s !== null) ?? null
 
     if (!store) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404, headers })

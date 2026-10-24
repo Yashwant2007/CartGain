@@ -8,15 +8,41 @@
 // store. The exact full-domain match is authoritative; the only fallback is an
 // exact bare-handle match for legacy rows that stored the handle instead of the
 // full permanent domain.
+//
+// A domain is also NOT proof of ownership: signup stores whatever domain the
+// visitor types (and only marks it active after email verification), so an
+// attacker can park a row on a victim shop's domain. Domain-keyed lookups must
+// therefore also require the Shopify connection itself (`platform: shopify` +
+// a stored access token). Unconnected placeholder rows can never win.
 
 export interface StoreDomainLookup {
   store: {
     findFirst: (args: {
-      where: { isActive: boolean; domain: string }
+      where: {
+        isActive: boolean
+        domain: string
+        platform: 'shopify'
+        apiKey: { not: null }
+      }
       orderBy: { createdAt: 'asc' }
       select: { id: true }
     }) => Promise<{ id: string } | null>
   }
+}
+
+// Domains we may have stored for a shop: the full permanent domain and, for
+// legacy rows, the bare handle. Never substring-match.
+export function shopDomainCandidates(shop: string): string[] {
+  const normalized = normalizeShopDomain(shop)
+  if (!normalized) return []
+  const candidates = [normalized]
+  if (normalized.endsWith('.myshopify.com')) {
+    const handle = normalized.slice(0, -'.myshopify.com'.length)
+    if (handle) candidates.push(handle)
+  } else if (!normalized.includes('.')) {
+    candidates.push(`${normalized}.myshopify.com`)
+  }
+  return candidates
 }
 
 export function normalizeShopDomain(shop: string): string {
@@ -30,23 +56,27 @@ export async function resolveActiveStoreIdByShopDomain(
   const normalizedShop = normalizeShopDomain(shop)
   if (!normalizedShop) return null
 
+  const connected = {
+    isActive: true,
+    platform: 'shopify' as const,
+    apiKey: { not: null } as const,
+  }
+
   const byFullDomain = await client.store.findFirst({
-    where: { isActive: true, domain: normalizedShop },
+    where: { ...connected, domain: normalizedShop },
     orderBy: { createdAt: 'asc' },
     select: { id: true },
   })
   if (byFullDomain) return byFullDomain.id
 
-  if (normalizedShop.endsWith('.myshopify.com')) {
-    const handle = normalizedShop.slice(0, -'.myshopify.com'.length)
-    if (handle) {
-      const byHandle = await client.store.findFirst({
-        where: { isActive: true, domain: handle },
-        orderBy: { createdAt: 'asc' },
-        select: { id: true },
-      })
-      if (byHandle) return byHandle.id
-    }
+  for (const candidate of shopDomainCandidates(normalizedShop)) {
+    if (candidate === normalizedShop) continue
+    const match = await client.store.findFirst({
+      where: { ...connected, domain: candidate },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    })
+    if (match) return match.id
   }
 
   return null

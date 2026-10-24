@@ -1,6 +1,7 @@
 import prisma from '@/lib/db'
 import { logDataAccess } from '@/lib/data-protection'
 import { normalizeCustomerId } from '@/lib/data-export'
+import { shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
 
 // Centralized deletion helpers used by the Shopify lifecycle webhooks
 // (app/uninstalled, customers/redact, shop/redact) and the account-deletion flow.
@@ -148,9 +149,25 @@ export async function purgeStoreData(store: {
 
 /**
  * Locate the store by shop domain (used by the lifecycle webhooks).
+ *
+ * Domain alone is not ownership: signup allows parking any domain on an
+ * unconnected row. Lifecycle/redaction requests must only ever target a store
+ * that actually completed Shopify OAuth, or an attacker could get a victim's
+ * data purged (or their own squatted row treated as the shop).
  */
 export async function findStoreByDomain(shopDomain: string) {
-  return prisma.store.findFirst({ where: { domain: shopDomain } })
+  for (const domain of shopDomainCandidates(shopDomain)) {
+    const store = await prisma.store.findFirst({
+      where: {
+        domain: { equals: domain, mode: 'insensitive' },
+        platform: 'shopify',
+        apiKey: { not: null },
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (store) return store
+  }
+  return null
 }
 
 /**
@@ -169,7 +186,7 @@ export async function redactCustomer(
   customerEmail?: string | null,
   customerPhone?: string | null,
 ): Promise<{ affected: number }> {
-  const store = await prisma.store.findFirst({ where: { domain: shopDomain } })
+  const store = await findStoreByDomain(shopDomain)
   if (!store) return { affected: 0 }
 
   const storeId = store.id

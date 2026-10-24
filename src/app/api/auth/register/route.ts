@@ -6,6 +6,7 @@ import { createFreeSubscription } from '@/lib/subscription'
 import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
 import { sendAlertOnError } from '@/lib/alerter'
+import { shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
 import {
   signupSchema,
   createErrorResponse,
@@ -96,6 +97,30 @@ export async function POST(request: NextRequest) {
         ),
         { status: 409 }
       )
+    }
+
+    // A shop domain is public information; signup must not let a second account
+    // claim the domain of a store that is ALREADY connected to CartGain. The
+    // connection is the ownership proof (the request itself proves nothing).
+    for (const domain of shopDomainCandidates(storeDomain)) {
+      const linked = await prisma.store.findFirst({
+        where: {
+          domain: { equals: domain, mode: 'insensitive' },
+          platform: 'shopify',
+          apiKey: { not: null },
+        },
+        select: { id: true },
+      })
+      if (linked) {
+        return NextResponse.json(
+          createErrorResponse(
+            AUTH_ERROR_CODES.USER_EXISTS,
+            'This store is already connected to another CartGain account. Sign in to that account or use a different store.',
+            409
+          ),
+          { status: 409 }
+        )
+      }
     }
 
     // Generate email verification token

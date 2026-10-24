@@ -121,42 +121,37 @@ export async function generateBargainDiscountCode(opts: {
     }
   `
 
-  const variables = {
-    basicCodeDiscount: {
-      title: `Bargain ${code}`,
-      code,
-      startsAt,
-      endsAt: expiresAt,
-      usageLimit: 1,
-      appliesOncePerCustomer: true,
-      customerSelection: buildCustomerSelection(opts.shopifyCustomerId),
-      combinesWith: { orderDiscounts: false, productDiscounts: true, shippingDiscounts: false },
-      customerGets: {
-        value: {
-          percentage: discountPercent,
-        },
-        items: {
-          all: scope === 'order',
-          ...(scope === 'product' && productGid ? { products: { productsToAdd: [productGid] } } : {}),
-          ...(scope === 'variant' && variantGid ? { productVariants: { productsToAdd: [] } } : {}),
-        },
-      },
-      minimumSubtotal,
+  const discountValue = {
+    percentage: discountPercent,
+  }
+
+  const basicCodeDiscount: any = {
+    title: `Bargain ${code}`,
+    code,
+    startsAt,
+    endsAt: expiresAt,
+    usageLimit: 1,
+    appliesOncePerCustomer: true,
+    customerSelection: buildCustomerSelection(opts.shopifyCustomerId),
+    combinesWith: { orderDiscounts: false, productDiscounts: true, shippingDiscounts: false },
+    value: discountValue,
+    customerGets: {
+      value: discountValue,
+      items: scope === 'order' ? { all: true } : {},
     },
+    minimumSubtotal,
   }
 
   if (scope === 'product' && productGid) {
-    ;(variables.basicCodeDiscount.customerGets.items as any) = {
-      products: { productsToAdd: [productGid] },
-    }
+    basicCodeDiscount.customerGets.items = { products: { productsToAdd: [productGid] } }
   } else if (scope === 'variant' && variantGid) {
-    ;(variables.basicCodeDiscount.customerGets.items as any) = {
-      productVariants: { productsToAdd: [variantGid] },
-    }
+    basicCodeDiscount.customerGets.items = { productVariants: { productsToAdd: [variantGid] } }
   } else {
-    ;(variables.basicCodeDiscount.customerGets.items as any) = {
-      all: true,
-    }
+    basicCodeDiscount.customerGets.items = { all: true }
+  }
+
+  const variables = {
+    basicCodeDiscount,
   }
 
   try {

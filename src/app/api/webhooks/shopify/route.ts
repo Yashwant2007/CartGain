@@ -21,6 +21,7 @@ import { sendAlertOnError } from '@/lib/alerter'
 import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
 import { isDuplicateOrder } from '@/lib/order-dedup'
+import { shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +33,25 @@ export const dynamic = 'force-dynamic'
 //   3. does all DB/network work asynchronously, isolated per job
 // There is deliberately NO IP-based rate limiting here: Shopify is a trusted
 // publisher that already retries+throttles, and 429 would itself be a failure.
+
+// A shop domain is only a lookup key, never proof of ownership. Signup lets a
+// visitor park any domain on an inactive row, so webhooks must resolve ONLY a
+// store that actually completed Shopify OAuth (platform + stored access token).
+// Otherwise a squatted row could receive another merchant's order/customer data.
+async function findConnectedStoreByShopDomain(shopDomain: string) {
+  for (const domain of shopDomainCandidates(shopDomain)) {
+    const store = await prisma.store.findFirst({
+      where: {
+        domain: { equals: domain, mode: 'insensitive' },
+        platform: 'shopify',
+        apiKey: { not: null },
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (store) return store
+  }
+  return null
+}
 
 function safeRun(label: string, fn: () => Promise<void>) {
   // MUST return the promise so callers can `await` it. `waitUntil()` only keeps
@@ -79,10 +99,7 @@ export async function POST(request: NextRequest) {
   let storeWebhookSecret: string | null = null
   if (shopDomain !== 'unknown') {
     try {
-      const boundStore = await prisma.store.findFirst({
-        where: { domain: { equals: shopDomain, mode: 'insensitive' } },
-        select: { webhookSecret: true },
-      })
+      const boundStore = await findConnectedStoreByShopDomain(shopDomain)
       if (boundStore?.webhookSecret) {
         const { decrypt } = await import('@/lib/encryption')
         storeWebhookSecret = decrypt(boundStore.webhookSecret)
@@ -131,7 +148,7 @@ export async function POST(request: NextRequest) {
   console.log(`Webhook [${topic}] from ${resolvedDomain} — acked (async processing)`)
 
   waitUntil((async () => {
-    const store = await prisma.store.findFirst({ where: { domain: resolvedDomain } })
+    const store = await findConnectedStoreByShopDomain(resolvedDomain)
     if (!store) {
       console.log(`No store found for domain ${resolvedDomain} — dropping event`)
       return

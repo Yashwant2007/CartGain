@@ -1,6 +1,7 @@
 import {
   resolveActiveStoreIdByShopDomain,
   normalizeShopDomain,
+  shopDomainCandidates,
   type StoreDomainLookup,
 } from '../resolve-by-domain'
 
@@ -9,7 +10,9 @@ import {
 // is what makes the regression meaningful — if the implementation ever passes a
 // `contains`/`endsWith` clause, the stub won't fuzzy-match, just like a real
 // exact-only query would not.
-function makeClient(stores: Array<{ id: string; domain: string; isActive?: boolean }>): {
+function makeClient(
+  stores: Array<{ id: string; domain: string; isActive?: boolean; connected?: boolean }>,
+): {
   client: StoreDomainLookup
   queriedDomains: string[]
 } {
@@ -18,9 +21,13 @@ function makeClient(stores: Array<{ id: string; domain: string; isActive?: boole
     store: {
       findFirst: async ({ where }) => {
         queriedDomains.push(where.domain)
-        const hit = stores.find(
-          (s) => (s.isActive ?? true) === where.isActive && s.domain === where.domain,
-        )
+        const hit = stores.find((s) => {
+          const isActiveOk = (s.isActive ?? true) === where.isActive
+          const platformOk = where.platform === 'shopify'
+          const connectedRequired = where.apiKey && Object.keys(where.apiKey).includes('not')
+          const connectedOk = connectedRequired ? (s.connected ?? true) === true : (s.connected ?? true) === false
+          return isActiveOk && platformOk && connectedOk && s.domain === where.domain
+        })
         return hit ? { id: hit.id } : null
       },
     },
@@ -71,6 +78,31 @@ describe('resolveActiveStoreIdByShopDomain', () => {
     )
   })
 
+  it('ignores an unconnected signup placeholder on the same domain', async () => {
+    // Domain squatting: anyone can sign up with a victim shop's domain and get
+    // an active (email-verified) row. Only a row with a real Shopify access
+    // token may resolve, or the storefront/webhooks would bind to the attacker.
+    const { client } = makeClient([
+      { id: 'store-squat', domain: 'acme.myshopify.com', connected: false },
+    ])
+    await expect(resolveActiveStoreIdByShopDomain(client, 'acme.myshopify.com')).resolves.toBeNull()
+  })
+
+  it('still resolves the connected store when a squatter row exists', async () => {
+    const { client } = makeClient([
+      { id: 'store-squat', domain: 'acme.myshopify.com', connected: false },
+      { id: 'store-real', domain: 'acme.myshopify.com', connected: true },
+    ])
+    await expect(resolveActiveStoreIdByShopDomain(client, 'acme.myshopify.com')).resolves.toBe(
+      'store-real',
+    )
+  })
+
+  it('accepts a bare handle for a row stored as the full permanent domain', async () => {
+    const { client } = makeClient([{ id: 'store-a', domain: 'acme.myshopify.com' }])
+    await expect(resolveActiveStoreIdByShopDomain(client, 'acme')).resolves.toBe('store-a')
+  })
+
   it('returns null when nothing matches', async () => {
     const { client } = makeClient([{ id: 'store-a', domain: 'other.myshopify.com' }])
     await expect(resolveActiveStoreIdByShopDomain(client, 'acme.myshopify.com')).resolves.toBeNull()
@@ -83,5 +115,14 @@ describe('resolveActiveStoreIdByShopDomain', () => {
 
   it('normalizeShopDomain strips scheme-less www and lowercases', () => {
     expect(normalizeShopDomain('WWW.Shop.MyShopify.com')).toBe('shop.myshopify.com')
+  })
+
+  it('shopDomainCandidates includes both the full domain and the bare handle', () => {
+    expect(shopDomainCandidates('acme.myshopify.com')).toEqual([
+      'acme.myshopify.com',
+      'acme',
+    ])
+    expect(shopDomainCandidates('acme')).toEqual(['acme', 'acme.myshopify.com'])
+    expect(shopDomainCandidates('shop.example.com')).toEqual(['shop.example.com'])
   })
 })

@@ -4,9 +4,6 @@ import { processRevenueShareBilling } from '@/lib/jobs/processRevenueShareBillin
 
 let processorRegistered = false
 
-/**
- * Register job processor - only once
- */
 function registerProcessor() {
   if (processorRegistered) return
 
@@ -15,22 +12,21 @@ function registerProcessor() {
     if (!queue) return
 
     queue.process(async (job: any) => {
-      console.log(`Processing job ${job.id} (${job.data.action}) at ${new Date().toISOString()}`)
+      console.log(`Processing job ${job.id} (${job.data?.action}) at ${new Date().toISOString()}`)
 
       try {
-        if (job.data.action === 'process_billing') {
+        if (job.data?.action === 'process_billing') {
           const result = await processRevenueShareBilling()
           console.log(`Job ${job.id} billing result:`, result)
           return { success: true, timestamp: new Date().toISOString(), result }
         }
 
-        // Default: cart processing
         const result = await processAbandonedCarts(25)
         console.log(`Job ${job.id} carts result:`, result)
         return { success: true, timestamp: new Date().toISOString(), result }
       } catch (error: any) {
         console.error(`Job ${job.id} failed:`, error.message)
-        throw new Error(`Job ${job.data.action} failed: ${error.message}`)
+        throw new Error(`Job ${job.data?.action} failed: ${error.message}`)
       }
     })
 
@@ -46,28 +42,33 @@ export async function scheduleCartProcessing() {
     const queue = getQueue()
     if (!queue) return
 
-    // Register processor first
     registerProcessor()
 
-    // Cart processing — every 5 minutes
+    // Remove old repeatable jobs to avoid lock issues
+    try {
+      const repeatableJobs = await queue.getRepeatableJobs()
+      for (const job of repeatableJobs) {
+        await queue.removeRepeatableByKey(job.key).catch(() => {})
+      }
+    } catch {}
+
     await queue.add(
       { action: 'process_carts' },
       {
         repeat: {
           cron: '*/5 * * * *',
-          key: 'process-carts-every-5-min',
         },
+        jobId: 'process-carts-recurring',
       }
     )
 
-    // Revenue-share billing — daily at 02:00
     await queue.add(
       { action: 'process_billing' },
       {
         repeat: {
           cron: '0 2 * * *',
-          key: 'process-billing-daily',
         },
+        jobId: 'process-billing-daily',
       }
     )
 
@@ -82,13 +83,12 @@ export async function addCartProcessingJob() {
   try {
     const queue = getQueue()
     if (!queue) {
-      // Fallback to direct processing
       const { processAbandonedCarts } = await import('@/lib/jobs/processAbandonedCarts')
       return await processAbandonedCarts(25)
     }
     registerProcessor()
 
-    const job = await queue.add({ action: 'process_carts' })
+    const job = await queue.add({ action: 'process_carts' }, { attempts: 1 })
     console.log(`Added cart processing job: ${job.id}`)
     return job
   } catch (error: any) {

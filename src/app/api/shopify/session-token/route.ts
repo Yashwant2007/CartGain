@@ -46,6 +46,9 @@ export async function POST(request: NextRequest) {
       where: {
         domain: { equals: decoded.shop, mode: 'insensitive' },
         platform: 'shopify',
+        // An unconnected signup row may claim this domain; only the store that
+        // actually completed OAuth is the shop's store.
+        apiKey: { not: null },
       },
       select: { id: true, name: true, domain: true, platform: true, isActive: true },
     })

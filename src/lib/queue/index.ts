@@ -59,16 +59,16 @@ function getCartQueue(): any {
       queueInstance = new Bull('process-carts', {
         redis: redisConfig,
         settings: {
-          lockDuration: 120000,
-          lockRenewTime: 30000,
-          stalledInterval: 30000,
-          maxStalledCount: 1,
+          lockDuration: 600000, // 10 minutes
+          lockRenewTime: 120000, // renew every 2 minutes
+          stalledInterval: 120000,
+          maxStalledCount: 3,
         },
         defaultJobOptions: {
-          attempts: 2,
-          backoff: { type: 'exponential', delay: 5000 },
-          removeOnComplete: true,
-          removeOnFail: true,
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 15000 },
+          removeOnComplete: 100,
+          removeOnFail: 100,
         },
       })
       setupQueueListeners()
@@ -122,18 +122,29 @@ export function setupQueueListeners() {
   queue.on('completed', (job: any) => console.log(`Job ${job?.id || 'unknown'} completed`))
   queue.on('failed', (job: any, err: any) => {
     const msg = err?.message || String(err)
-    if (msg.includes('stalled') || msg.includes('lock')) {
+    if (msg.includes('stalled') || msg.includes('lock') || msg.includes('Missing lock') || msg.includes('missing lock')) {
       console.warn(`Job ${job?.id || 'unknown'} failed due to stall/lock - will retry or skip`)
       return
     }
     console.error(`Job ${job?.id || 'unknown'} failed:`, msg)
   })
-  queue.on('error', (err: any) => console.error('Queue error:', err?.message || err))
+  queue.on('error', (err: any) => {
+    const msg = err?.message || String(err)
+    if (msg.includes('Missing lock') || msg.includes('missing lock')) {
+      console.warn('Queue lock error (non-fatal):', msg)
+      return
+    }
+    console.error('Queue error:', msg)
+  })
   queue.on('active', (job: any) => console.log(`Job ${job?.id || 'unknown'} is processing...`))
   queue.on('connect', () => console.log('Queue connected to Redis'))
   queue.on('ready', () => console.log('Queue ready'))
   queue.on('stalled', (job: any) => {
     console.warn(`Job ${job?.id || 'unknown'} stalled - attempting to recover`)
-    try { job?.moveToFailed?.({ message: 'Stalled job removed' }, true).catch(() => {}) } catch {}
+    try { 
+      if (typeof job?.moveToFailed === 'function') {
+        job.moveToFailed({ message: 'Stalled job removed' }, true).catch(() => {}) 
+      }
+    } catch {}
   })
 }

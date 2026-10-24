@@ -1,7 +1,7 @@
 // Prisma Schema for CartGain
 generator client {
-  provider        = "prisma-client-js"
-  binaryTargets   = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x"]
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -12,22 +12,22 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  password      String?
-  name          String?
-  image         String?
-  emailVerified DateTime?
-  totpSecret    String?
-  totpEnabled   Boolean   @default(false)
+  id                String    @id @default(cuid())
+  email             String    @unique
+  password          String?
+  name              String?
+  image             String?
+  emailVerified     DateTime?
+  totpSecret        String?
+  totpEnabled       Boolean   @default(false)
   notificationPrefs Json?
   // Revocation counter for JWT sessions. Bumped on password change/reset so any
   // token minted before the change (which carries the old value) is rejected.
-  tokenVersion  Int       @default(0)
+  tokenVersion      Int       @default(0)
   // Audit: when the account password was last set/changed.
   passwordChangedAt DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   accounts      Account[]
   sessions      Session[]
@@ -99,7 +99,7 @@ model CustomerDataExport {
   requestedAt       DateTime @default(now())
   createdAt         DateTime @default(now())
 
-  store    Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@index([storeId])
   @@index([storeId, status])
@@ -107,17 +107,17 @@ model CustomerDataExport {
 }
 
 model Store {
-  id              String    @id @default(cuid())
-  userId          String
-  name            String
-  platform        String    // shopify, woocommerce, magento, bigcommerce, custom
-  domain          String
-  currency        String    @default("USD")
-  timezone        String    @default("UTC")
-  isActive        Boolean   @default(true)
-  webhookUrl      String?
-  apiKey          String?
-  apiSecret       String?
+  id                    String    @id @default(cuid())
+  userId                String
+  name                  String
+  platform              String // shopify, woocommerce, magento, bigcommerce, custom
+  domain                String
+  currency              String    @default("USD")
+  timezone              String    @default("UTC")
+  isActive              Boolean   @default(true)
+  webhookUrl            String?
+  apiKey                String?
+  apiSecret             String?
   // Optional per-store webhook signing secret (encrypted at rest). Public
   // Shopify apps sign every webhook with the app's client secret, so this is
   // usually null and verification falls back to SHOPIFY_API_SECRET. It exists
@@ -125,36 +125,39 @@ model Store {
   // secret differs from ours — can be verified against its OWN secret instead
   // of trusting a globally-shared key. Binding verification to the shop closes
   // replay/forgery across tenants when secrets are not globally shared.
-  webhookSecret   String?
+  webhookSecret         String?
   // WhatsApp Cloud API business number id (Meta "phone_number_id"). Lets an
   // inbound WhatsApp webhook — e.g. a customer replying STOP — map back to the
   // store that owns the number so the opt-out is persisted against that store's
   // contact list. Null until the number is registered for the store.
-  whatsappPhoneNumberId String? @unique
-  shopifyRefreshToken String?
+  whatsappPhoneNumberId String?   @unique
+  shopifyRefreshToken   String?
   shopifyTokenExpiresAt DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  carts               Cart[]
-  campaigns           Campaign[]
-  recoveredCarts      RecoveredCart[]
-  optOuts             OptOut[]
-  revenueShareEvents  RevenueShareEvent[]
-  bargainRevenueShareEvents BargainRevenueShareEvent[]
-  merchantConfig      MerchantConfig?
-  rtoRiskScores       RtoRiskScore[]
-  pincodeStats        PincodeStats[]
-  codNudges           CodNudge[]
-  customers           Customer[]
-  bargainConfig       BargainConfig?
-  bargainProducts     BargainProduct[]
-  bargainSessions     BargainSession[]
-  customerDataExports CustomerDataExport[]
-  bargainDailyGoals        BargainDailyGoal[]
+  user                       User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  carts                      Cart[]
+  campaigns                  Campaign[]
+  recoveredCarts             RecoveredCart[]
+  optOuts                    OptOut[]
+  revenueShareEvents         RevenueShareEvent[]
+  bargainRevenueShareEvents  BargainRevenueShareEvent[]
+  merchantConfig             MerchantConfig?
+  rtoRiskScores              RtoRiskScore[]
+  pincodeStats               PincodeStats[]
+  codNudges                  CodNudge[]
+  customers                  Customer[]
+  bargainConfig              BargainConfig?
+  bargainProducts            BargainProduct[]
+  bargainSessions            BargainSession[]
+  customerDataExports        CustomerDataExport[]
+  bargainDailyGoals          BargainDailyGoal[]
   bargainDailyGoalIncrements BargainDailyGoalIncrement[]
-  merchantVoice       MerchantVoice?
+  merchantVoice              MerchantVoice?
+  BehavioralEvent            BehavioralEvent[]
+  CustomerIdentity           CustomerIdentity[]
+  RecoveryJourney            RecoveryJourney[]
 
   @@unique([userId, domain])
   @@index([userId])
@@ -162,54 +165,54 @@ model Store {
 }
 
 model Campaign {
-  id              String    @id @default(cuid())
+  id              String   @id @default(cuid())
   storeId         String
   name            String
-  isActive        Boolean   @default(false)
-  channels        String[]  // sms, whatsapp, email, push
-  aiOptimized     Boolean   @default(true)
-  discountEnabled Boolean   @default(false)
-  discountType    String?   // percentage, fixed
+  isActive        Boolean  @default(false)
+  channels        String[] // sms, whatsapp, email, push
+  aiOptimized     Boolean  @default(true)
+  discountEnabled Boolean  @default(false)
+  discountType    String? // percentage, fixed
   discountValue   Int?
   discountCode    String?
-  sendDelay       Int       @default(15) // minutes
-  followUpDelay   Int       @default(180) // minutes
-  maxFollowUps    Int       @default(2)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  sendDelay       Int      @default(15) // minutes
+  followUpDelay   Int      @default(180) // minutes
+  maxFollowUps    Int      @default(2)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  store           Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId          String
-  messages        Message[]
-  abTests         ABTest[]
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   String
+  messages Message[]
+  abTests  ABTest[]
 
   @@index([storeId])
   @@index([storeId, isActive])
 }
 
 model Cart {
-  id              String    @id @default(cuid())
-  storeId         String
-  cartId          String    // External cart ID
-  customerId      String?
-  customerEmail   String?
-  customerPhone   String?
-  customerName    String?
-  items           Json
-  totalValue      Float
-  currency        String    @default("USD")
-  isRecovered     Boolean   @default(false)   // true ONLY when WE recovered it (attributed) — drives credit/billing/reporting
-  recoveredAt     DateTime?
-  recoveredVia    String?   // sms, whatsapp, email, push
-  convertedAt     DateTime? // set when an order is placed for this cart (any source) — stops further messaging, NOT a credit
-  abandonedAt     DateTime  @default(now())
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  storeId       String
+  cartId        String // External cart ID
+  customerId    String?
+  customerEmail String?
+  customerPhone String?
+  customerName  String?
+  items         Json
+  totalValue    Float
+  currency      String    @default("USD")
+  isRecovered   Boolean   @default(false) // true ONLY when WE recovered it (attributed) — drives credit/billing/reporting
+  recoveredAt   DateTime?
+  recoveredVia  String? // sms, whatsapp, email, push
+  convertedAt   DateTime? // set when an order is placed for this cart (any source) — stops further messaging, NOT a credit
+  abandonedAt   DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  store           Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  messages        Message[]
-  recoveredCart   RecoveredCart?
+  store         Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  messages      Message[]
+  recoveredCart RecoveredCart?
 
   @@unique([storeId, cartId])
   @@index([storeId])
@@ -218,67 +221,66 @@ model Cart {
 }
 
 model Message {
-  id              String    @id @default(cuid())
-  cartId          String
-  campaignId      String
-  channel         String    // sms, whatsapp, email, push
-  content         String
+  id            String    @id @default(cuid())
+  cartId        String
+  campaignId    String
+  channel       String // sms, whatsapp, email, push
+  content       String
   // skipped = the channel can never deliver to this contact (number not on
   // WhatsApp, template rejected); the round advances via another channel.
-  status          String    @default("pending") // pending, sent, delivered, failed, skipped
-  sentAt          DateTime?
-  deliveredAt     DateTime?
-  clickedAt       DateTime?
-  convertedAt     DateTime?
+  status        String    @default("pending") // pending, sent, delivered, failed, skipped
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  clickedAt     DateTime?
+  convertedAt   DateTime?
   // Which attempt of the recovery sequence this message is. Null for legacy
   // rows. Together with the unique index below it makes the send path
   // idempotent: a retried job cannot send the same step twice for a cart.
-  step            Int?
+  step          Int?
   // The actual message that was sent (subject/body), so support and analytics
   // can see what the customer received instead of a placeholder.
-  variant         String?   // which copy variant was used (experiment/analysis)
+  variant       String? // which copy variant was used (experiment/analysis)
   // The version of the prompt/rule set that produced this copy, so a merchant
   // can always answer "which rules generated this message?".
-  promptVersion   String?
+  promptVersion String?
   // Provider message id (WhatsApp wamid / Resend id / SMTP id). Delivery
   // receipts arrive asynchronously and are matched back through this id, so
   // "delivered" means the provider confirmed delivery — not "the API call
   // did not throw".
-  providerId      String?
-  createdAt       DateTime  @default(now())
+  providerId    String?
+  createdAt     DateTime  @default(now())
 
-  cart            Cart      @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  cart     Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
+  // One message per cart, channel and sequence step. Postgres allows multiple
+  // NULLs, so legacy rows (step = null) are unaffected.
+  @@unique([cartId, channel, step])
   @@index([cartId])
   @@index([campaignId])
   @@index([campaignId, sentAt])
   @@index([providerId])
-  // One message per cart, channel and sequence step. Postgres allows multiple
-  // NULLs, so legacy rows (step = null) are unaffected.
-  @@unique([cartId, channel, step])
 }
 
 model RecoveredCart {
-  id              String    @id @default(cuid())
-  storeId         String
-  cartId          String    @unique
-  recoveredValue  Float
-  recoveredAt     DateTime  @default(now())
-  channel         String
-  discountUsed    Boolean   @default(false)
-  discountAmount  Float     @default(0)
-  netRevenue      Float
-  shopifyOrderId  String?
+  id             String   @id @default(cuid())
+  storeId        String
+  cartId         String   @unique
+  recoveredValue Float
+  recoveredAt    DateTime @default(now())
+  channel        String
+  discountUsed   Boolean  @default(false)
+  discountAmount Float    @default(0)
+  netRevenue     Float
+  shopifyOrderId String?
   // Refund netting — recognized revenue is `netRevenue` after cumulative refunds.
-  refundStatus    String    @default("none") // none | partially_refunded | fully_refunded
-  totalRefunded   Float     @default(0)      // cumulative gross refunded across webhooks
+  refundStatus   String   @default("none") // none | partially_refunded | fully_refunded
+  totalRefunded  Float    @default(0) // cumulative gross refunded across webhooks
 
   store             Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
   cart              Cart               @relation(fields: [cartId], references: [id], onDelete: Cascade, map: "fk_cart")
   revenueShareEvent RevenueShareEvent?
 
-  @@index([storeId])
   // One order = one credit, ever. Guards double-credit when a single Shopify
   // order payload could be matched against multiple Cart rows (the cart-token
   // / checkout-token dual-family rows). Postgres allows multiple NULLs.
@@ -288,83 +290,84 @@ model RecoveredCart {
   // order #1001 collide with store A's order #1001 — one store's refund then
   // netted the other store's recovered revenue.
   @@unique([storeId, shopifyOrderId])
+  @@index([storeId])
 }
 
 model Analytics {
-  id              String    @id @default(cuid())
-  userId          String
-  date            DateTime  @default(now())
-  cartsAbandoned  Int       @default(0)
-  cartsRecovered  Int       @default(0)
-  revenueRecovered Float    @default(0)
-  messagesSent    Int       @default(0)
-  messagesDelivered Int     @default(0)
-  messagesClicked Int       @default(0)
-  smsCount        Int       @default(0)
-  whatsappCount   Int       @default(0)
-  emailCount      Int       @default(0)
-  pushCount       Int       @default(0)
+  id                String   @id @default(cuid())
+  userId            String
+  date              DateTime @default(now())
+  cartsAbandoned    Int      @default(0)
+  cartsRecovered    Int      @default(0)
+  revenueRecovered  Float    @default(0)
+  messagesSent      Int      @default(0)
+  messagesDelivered Int      @default(0)
+  messagesClicked   Int      @default(0)
+  smsCount          Int      @default(0)
+  whatsappCount     Int      @default(0)
+  emailCount        Int      @default(0)
+  pushCount         Int      @default(0)
   // Bargain-window outcomes, tracked separately from cart recovery.
-  bargainPurchases Int      @default(0) // count of purchases completed via a bargain code
-  bargainRevenue   Float    @default(0) // net value sealed by the negotiated window
+  bargainPurchases  Int      @default(0) // count of purchases completed via a bargain code
+  bargainRevenue    Float    @default(0) // net value sealed by the negotiated window
 
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
   @@index([userId])
 }
 
 model ABTest {
-  id              String    @id @default(cuid())
-  campaignId      String
-  name            String
-  variantA        Json      // Configuration for variant A
-  variantB        Json      // Configuration for variant B
-  winner          String?   // A or B
-  isCompleted     Boolean   @default(false)
-  createdAt       DateTime  @default(now())
+  id          String   @id @default(cuid())
+  campaignId  String
+  name        String
+  variantA    Json // Configuration for variant A
+  variantB    Json // Configuration for variant B
+  winner      String? // A or B
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
 
-  campaign        Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@index([campaignId])
 }
 
 model Subscription {
-  id              String    @id @default(cuid())
-  userId          String
-  customerId      String    // Razorpay/Stripe customer ID
-  subscriptionId  String?   // Razorpay/Stripe subscription ID
+  id                    String   @id @default(cuid())
+  userId                String
+  customerId            String // Razorpay/Stripe customer ID
+  subscriptionId        String? // Razorpay/Stripe subscription ID
   // Which billing provider owns this subscription. "razorpay" is the direct /
   // custom-app track; "shopify" is the App Store track, where Shopify is the
   // merchant of record and charges the shop (App Store policy 3.0.5).
-  provider        String    @default("razorpay")
-  shopDomain      String?   // Shopify shop that owns a provider="shopify" subscription
-  shopifySubscriptionId String? @unique // Shopify AppSubscription gid (gid://shopify/AppSubscription/…)
+  provider              String   @default("razorpay")
+  shopDomain            String? // Shopify shop that owns a provider="shopify" subscription
+  shopifySubscriptionId String?  @unique // Shopify AppSubscription gid (gid://shopify/AppSubscription/…)
   shopifyLineItemId     String? // usage line item gid, used for revenue-share usage charges
-  plan            String    // free, starter, pro, enterprise
-  status          String    @default("active")
-  currentPeriodStart DateTime
-  currentPeriodEnd DateTime
-  smsCredits      Int       @default(100)
-  smsCreditsUsed  Int       @default(0)
-  cartsUsedInPeriod Int    @default(0)    // Materialized counter — avoids expensive groupBy every cycle
-  cartsLimit      Int       @default(0)   // Snapshot of plan.maxCarts at period start (0 = unlimited)
-  revenueShareAccrued  Float @default(0)  // Rev share accrued in current period
-  revenueSharePaid     Float @default(0)  // Total rev share paid over lifetime
-  overageEnabled  Boolean   @default(false) // Merchant opted into overage billing
-  overageMessages Int       @default(0)     // Messages sent beyond per-customer per-channel limits this period
-  bargainSessionsUsed Int   @default(0)     // Bargain sessions started this period
-  bargainDealsUsed    Int   @default(0)     // Accepted bargain deals this period
-  bargainOverageDeals Int  @default(0)      // Accepted deals billed as overage this period
-  bargainAccrued      Float @default(0)     // Rev share accrued on bargain deals this period
-  bargainAccruedValue Float @default(0)     // Recovered value (final prices) of accepted deals this period
-  cartOverage         Int   @default(0)     // Carts recovered beyond plan quota this period (paid plans only)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  plan                  String // free, starter, pro, enterprise
+  status                String   @default("active")
+  currentPeriodStart    DateTime
+  currentPeriodEnd      DateTime
+  smsCredits            Int      @default(100)
+  smsCreditsUsed        Int      @default(0)
+  cartsUsedInPeriod     Int      @default(0) // Materialized counter — avoids expensive groupBy every cycle
+  cartsLimit            Int      @default(0) // Snapshot of plan.maxCarts at period start (0 = unlimited)
+  revenueShareAccrued   Float    @default(0) // Rev share accrued in current period
+  revenueSharePaid      Float    @default(0) // Total rev share paid over lifetime
+  overageEnabled        Boolean  @default(false) // Merchant opted into overage billing
+  overageMessages       Int      @default(0) // Messages sent beyond per-customer per-channel limits this period
+  bargainSessionsUsed   Int      @default(0) // Bargain sessions started this period
+  bargainDealsUsed      Int      @default(0) // Accepted bargain deals this period
+  bargainOverageDeals   Int      @default(0) // Accepted deals billed as overage this period
+  bargainAccrued        Float    @default(0) // Rev share accrued on bargain deals this period
+  bargainAccruedValue   Float    @default(0) // Recovered value (final prices) of accepted deals this period
+  cartOverage           Int      @default(0) // Carts recovered beyond plan quota this period (paid plans only)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  invoices            Invoice[]
-  revenueShareEvents  RevenueShareEvent[]
+  user                      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoices                  Invoice[]
+  revenueShareEvents        RevenueShareEvent[]
   bargainRevenueShareEvents BargainRevenueShareEvent[]
 
   @@unique([userId])
@@ -374,126 +377,126 @@ model Subscription {
 // ── Bargain System Models (AI Negotiation at Checkout) ──
 
 model BargainConfig {
-  id               String   @id @default(cuid())
-  storeId          String   @unique
-  enabled          Boolean  @default(true)
-  maxAttempts      Int      @default(3)
-  aiModel          String   @default("gpt-4o-mini")
-  aiPersona        String   @default("friendly_shopkeeper") // friendly_shopkeeper, strict_negotiator, playful_friend
-  language         String   @default("auto") // auto, en, hinglish, hi, ta, te, bn, mr, gu, kn, ml, pa, or
-  minProfitPercent Float    @default(20)  // global fallback floor (% margin to protect)
-  sessionTimeout   Int      @default(300) // seconds
+  id                                String    @id @default(cuid())
+  storeId                           String    @unique
+  enabled                           Boolean   @default(true)
+  maxAttempts                       Int       @default(3)
+  aiModel                           String    @default("gpt-4o-mini")
+  aiPersona                         String    @default("friendly_shopkeeper") // friendly_shopkeeper, strict_negotiator, playful_friend
+  language                          String    @default("auto") // auto, en, hinglish, hi, ta, te, bn, mr, gu, kn, ml, pa, or
+  minProfitPercent                  Float     @default(20) // global fallback floor (% margin to protect)
+  sessionTimeout                    Int       @default(300) // seconds
   // ── AI Salesperson: daily goal + dynamic strategy ──
-  goalEnabled      Boolean  @default(false)
-  goalType         String   @default("orders") // orders | revenue
-  goalTarget       Float    @default(10)
-  goalStartTime    DateTime?  // goal window open (absolute instant; shown in merchant tz)
-  goalEndTime      DateTime?  // goal window close (absolute instant)
-  goalTimezone     String?    // IANA tz for business-day bucketing; falls back to store.timezone
-  dynamicStrategyEnabled Boolean @default(false) // auto-pacing (CONSERVATIVE/NORMAL/AGGRESSIVE/CLOSING) — OFF unless merchant opts in
-  campaignName     String?
-  campaignStart    DateTime?
-  campaignEnd      DateTime?
-  campaignMessage  String? // merchant-written, truthful context the AI may truthfully reference
+  goalEnabled                       Boolean   @default(false)
+  goalType                          String    @default("orders") // orders | revenue
+  goalTarget                        Float     @default(10)
+  goalStartTime                     DateTime? // goal window open (absolute instant; shown in merchant tz)
+  goalEndTime                       DateTime? // goal window close (absolute instant)
+  goalTimezone                      String? // IANA tz for business-day bucketing; falls back to store.timezone
+  dynamicStrategyEnabled            Boolean   @default(false) // auto-pacing (CONSERVATIVE/NORMAL/AGGRESSIVE/CLOSING) — OFF unless merchant opts in
+  campaignName                      String?
+  campaignStart                     DateTime?
+  campaignEnd                       DateTime?
+  campaignMessage                   String? // merchant-written, truthful context the AI may truthfully reference
   // ── AI Salesperson: merchant-controlled negotiation + product intelligence ──
-  negotiationMode  String   @default("balanced") // conservative | balanced | flexible — merchant's chosen bargain temperament
-  approvedSellingPoints String[] @default([]) // merchant-vetted claims the AI may use ("machine-washable", "7-day replacement")
-  disallowedClaims      String[] @default([]) // claims NEVER passed to the AI (unverified review/medical/beauty claims)
-  recommendationsEnabled            Boolean @default(true) // master toggle for cross-sell suggestions
-  alternativeRecommendationsEnabled Boolean @default(true) // "also consider" suggestions
-  complementRecommendationsEnabled  Boolean @default(true) // "you may also need" suggestions
-  couponStackingEnabled             Boolean @default(false) // OFF: bargain discount code can never stack with a merchant promo/coupon code (spec §24)
+  negotiationMode                   String    @default("balanced") // conservative | balanced | flexible — merchant's chosen bargain temperament
+  approvedSellingPoints             String[]  @default([]) // merchant-vetted claims the AI may use ("machine-washable", "7-day replacement")
+  disallowedClaims                  String[]  @default([]) // claims NEVER passed to the AI (unverified review/medical/beauty claims)
+  recommendationsEnabled            Boolean   @default(true) // master toggle for cross-sell suggestions
+  alternativeRecommendationsEnabled Boolean   @default(true) // "also consider" suggestions
+  complementRecommendationsEnabled  Boolean   @default(true) // "you may also need" suggestions
+  couponStackingEnabled             Boolean   @default(false) // OFF: bargain discount code can never stack with a merchant promo/coupon code (spec §24)
   // ── Storefront engagement: product-page dwell nudge ──
   // Soft, non-blocking prompt for shoppers who linger on a product page. The
   // theme controller reads these (via the public dwell-config endpoint) and
   // pulses the launcher / shows a dismissible hint — it NEVER auto-opens the
   // drawer. The timer counts VISIBLE time only and stops once the shopper opens
   // the widget or dismisses the nudge for the session.
-  dwellNudgeEnabled    Boolean @default(false) // master toggle for the product-page dwell nudge
-  dwellSeconds         Int     @default(60)   // visible seconds on a product page before the first nudge
-  dwellReminderSeconds Int     @default(60)   // seconds after the first nudge before the reminder
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  dwellNudgeEnabled                 Boolean   @default(false) // master toggle for the product-page dwell nudge
+  dwellSeconds                      Int       @default(60) // visible seconds on a product page before the first nudge
+  dwellReminderSeconds              Int       @default(60) // seconds after the first nudge before the reminder
+  createdAt                         DateTime  @default(now())
+  updatedAt                         DateTime  @updatedAt
 
-  store    Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@index([storeId])
 }
 
 model BargainProduct {
-  id                String   @id @default(cuid())
-  storeId           String
-  shopifyProductId  String
-  variantId         String?
-  productTitle      String?
-  minPrice          Float?   // absolute floor price
-  minProfitPercent  Float?   // overrides global
-  maxDiscountPercent Int?    // e.g. 30 means never discount more than 30% off
-  isBargainable     Boolean  @default(true)
+  id                    String   @id @default(cuid())
+  storeId               String
+  shopifyProductId      String
+  variantId             String?
+  productTitle          String?
+  minPrice              Float? // absolute floor price
+  minProfitPercent      Float? // overrides global
+  maxDiscountPercent    Int? // e.g. 30 means never discount more than 30% off
+  isBargainable         Boolean  @default(true)
   approvedSellingPoints String[] @default([]) // per-product merchant-vetted selling points
   disallowedClaims      String[] @default([]) // per-product claims never passed to the AI
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  store   Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([storeId, shopifyProductId])
   @@index([storeId])
 }
 
 model BargainSession {
-  id                String    @id @default(cuid())
-  storeId           String
-  cartToken         String?   // links to an abandoned cart if customer leaves
-  shopifyProductId  String
-  variantId         String?
-  customerEmail     String?
-  customerPhone     String?
-  customerFingerprint String?   // stable per-device/cart hash — prevents resets via incognito/new tabs
-  originalPrice     Float
-  currentOffer      Float     // latest offer from customer
-  finalPrice        Float?    // agreed price (null = no deal)
-  bargainFloor      Float?    // merchant floor the deal was checked against at accept (server-derived snapshot)
-  bulkQuantity      Int?      // quantity the discount code is bound to (null = single unit)
-  discountCode      String?   // Shopify discount code if accepted
-  discountCodeCustomerEmail String?   // email the code was bound to (prevents sharing)
-  discountCodeCartToken String?    // cartToken the code was bound to (prevents sharing)
-  claimToken        String?   @unique // opaque token for the post-bargain purchase-window link
-  purchaseUrl       String?   // checkout link that applies the issued code (purchase window)
-  purchasedAt       DateTime? // when an order confirmed using this bargain code
-  purchasedOrderId  String?   // Shopify order id — idempotent purchase attribution (scoped to the store: Shopify order ids are per-shop sequences)
-  purchaseValue     Float?    // recognized net value of the bargain purchase
-  attemptsUsed      Int       @default(0)
-  status            String    @default("active") // active, accepted, rejected, expired, abandoned
-  language          String    @default("auto") // auto, en, hinglish, hi, ta, te, bn, mr, gu, kn, ml, pa, or
-  startedAt         DateTime  @default(now())
-  expiredAt         DateTime
-  updatedAt         DateTime @updatedAt
-  createdAt         DateTime  @default(now())
+  id                        String    @id @default(cuid())
+  storeId                   String
+  cartToken                 String? // links to an abandoned cart if customer leaves
+  shopifyProductId          String
+  variantId                 String?
+  customerEmail             String?
+  customerPhone             String?
+  customerFingerprint       String? // stable per-device/cart hash — prevents resets via incognito/new tabs
+  originalPrice             Float
+  currentOffer              Float // latest offer from customer
+  finalPrice                Float? // agreed price (null = no deal)
+  bargainFloor              Float? // merchant floor the deal was checked against at accept (server-derived snapshot)
+  bulkQuantity              Int? // quantity the discount code is bound to (null = single unit)
+  discountCode              String? // Shopify discount code if accepted
+  discountCodeCustomerEmail String? // email the code was bound to (prevents sharing)
+  discountCodeCartToken     String? // cartToken the code was bound to (prevents sharing)
+  claimToken                String?   @unique // opaque token for the post-bargain purchase-window link
+  purchaseUrl               String? // checkout link that applies the issued code (purchase window)
+  purchasedAt               DateTime? // when an order confirmed using this bargain code
+  purchasedOrderId          String? // Shopify order id — idempotent purchase attribution (scoped to the store: Shopify order ids are per-shop sequences)
+  purchaseValue             Float? // recognized net value of the bargain purchase
+  attemptsUsed              Int       @default(0)
+  status                    String    @default("active") // active, accepted, rejected, expired, abandoned
+  language                  String    @default("auto") // auto, en, hinglish, hi, ta, te, bn, mr, gu, kn, ml, pa, or
+  startedAt                 DateTime  @default(now())
+  expiredAt                 DateTime
+  updatedAt                 DateTime  @updatedAt
+  createdAt                 DateTime  @default(now())
 
-  store    Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store    Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
   messages BargainMessage[]
 
+  // One order = one bargain purchase attribution, per store. Shopify order ids
+  // are per-shop sequences, so the constraint is store-scoped.
+  @@unique([storeId, purchasedOrderId])
   @@index([storeId])
   @@index([storeId, status])
   @@index([cartToken])
   @@index([customerEmail])
   @@index([customerFingerprint])
   @@index([status])
-  // One order = one bargain purchase attribution, per store. Shopify order ids
-  // are per-shop sequences, so the constraint is store-scoped.
-  @@unique([storeId, purchasedOrderId])
   @@index([expiredAt])
 }
 
 model BargainMessage {
-  id            String   @id @default(cuid())
-  sessionId     String
-  role          String   // customer, ai, system
-  content       String
-  offeredPrice  Float?   // if customer made an offer
-  metadata      Json?    // ai reasoning, sentiment, tactic used, etc
-  createdAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  sessionId    String
+  role         String // customer, ai, system
+  content      String
+  offeredPrice Float? // if customer made an offer
+  metadata     Json? // ai reasoning, sentiment, tactic used, etc
+  createdAt    DateTime @default(now())
 
   session BargainSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
@@ -511,15 +514,15 @@ model BargainMessage {
 model BargainDailyGoal {
   id            String   @id @default(cuid())
   storeId       String
-  businessDate  String   // merchant-local calendar day, YYYY-MM-DD
-  goalType      String   // snapshot of config at day creation: orders | revenue
-  targetValue   Float    // snapshot of config at day creation
+  businessDate  String // merchant-local calendar day, YYYY-MM-DD
+  goalType      String // snapshot of config at day creation: orders | revenue
+  targetValue   Float // snapshot of config at day creation
   achievedValue Float    @default(0) // recognized net (revenue) or confirmed orders
   orderCount    Int      @default(0) // confirmed (not fully refunded) orders
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  store    Store                     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store      Store                       @relation(fields: [storeId], references: [id], onDelete: Cascade)
   increments BargainDailyGoalIncrement[]
 
   @@unique([storeId, businessDate])
@@ -534,40 +537,40 @@ model BargainDailyGoal {
 model BargainDailyGoalIncrement {
   id             String   @id @default(cuid())
   storeId        String
-  businessDate   String   // must match the BargainDailyGoal row's business day
+  businessDate   String // must match the BargainDailyGoal row's business day
   shopifyOrderId String   @unique
-  goalType       String   // snapshot of the type at attribution: orders | revenue
-  orderAmount    Float    // recognized net revenue at attribution
+  goalType       String // snapshot of the type at attribution: orders | revenue
+  orderAmount    Float // recognized net revenue at attribution
   refundedAmount Float    @default(0)
   createdAt      DateTime @default(now())
 
-  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  goal BargainDailyGoal @relation(fields: [storeId, businessDate], references: [storeId, businessDate], onDelete: Cascade)
+  store Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  goal  BargainDailyGoal @relation(fields: [storeId, businessDate], references: [storeId, businessDate], onDelete: Cascade)
 
   @@unique([storeId, shopifyOrderId])
   @@index([storeId, businessDate])
 }
 
 model Invoice {
-  id                  String    @id @default(cuid())
-  userId              String
-  subscriptionId      String
-  amount              Float
-  status              String    @default("pending") // pending, paid, overdue, cancelled
-  periodStart         DateTime
-  periodEnd           DateTime
-  dueDate             DateTime
-  paidAt              DateTime?
-  paidVia             String?   // razorpay, manual
-  paymentRef          String?   // Razorpay payment ID
-  razorpayOrderId     String?   // Razorpay order ID for rev-share payment
+  id                    String    @id @default(cuid())
+  userId                String
+  subscriptionId        String
+  amount                Float
+  status                String    @default("pending") // pending, paid, overdue, cancelled
+  periodStart           DateTime
+  periodEnd             DateTime
+  dueDate               DateTime
+  paidAt                DateTime?
+  paidVia               String? // razorpay, manual
+  paymentRef            String? // Razorpay payment ID
+  razorpayOrderId       String? // Razorpay order ID for rev-share payment
   razorpayPaymentLinkId String? // Razorpay payment link ID
-  paymentLinkUrl      String?   // Short URL sent to merchant
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  paymentLinkUrl        String? // Short URL sent to merchant
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  subscription        Subscription        @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  revenueShareEvents  RevenueShareEvent[]
+  subscription              Subscription               @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  revenueShareEvents        RevenueShareEvent[]
   bargainRevenueShareEvents BargainRevenueShareEvent[]
 
   @@index([subscriptionId])
@@ -582,8 +585,8 @@ model Invoice {
 // the correctness backstop.
 model WebhookEvent {
   id          String   @id @default(cuid())
-  namespace   String   // payment, payment_link, subscription
-  entityId    String   // Razorpay entity id (payment id, subscription id, ...)
+  namespace   String // payment, payment_link, subscription
+  entityId    String // Razorpay entity id (payment id, subscription id, ...)
   processedAt DateTime @default(now())
 
   @@unique([namespace, entityId])
@@ -598,12 +601,12 @@ model WebhookEvent {
 // store purge (they are sanitized and contain no customer data).
 model ErrorLog {
   id          String   @id @default(cuid())
-  level       String   // info | warn | error | critical
-  component   String   // webhook | billing | oauth | dashboard | frontend | ...
-  operation   String   // human-readable operation that failed
+  level       String // info | warn | error | critical
+  component   String // webhook | billing | oauth | dashboard | frontend | ...
+  operation   String // human-readable operation that failed
   message     String   @db.Text
   stack       String?  @db.Text
-  signature   String   // grouping key: component::operation::error-name
+  signature   String // grouping key: component::operation::error-name
   method      String?
   path        String?
   statusCode  Int?
@@ -627,8 +630,8 @@ model ErrorLog {
 // erased for privacy without pulling relational cascades through the funnel.
 model ProductEvent {
   id          String   @id @default(cuid())
-  name        String   // e.g. cartgain_shopify_oauth_completed
-  environment String   // development | preview | production
+  name        String // e.g. cartgain_shopify_oauth_completed
+  environment String // development | preview | production
   release     String?
   userId      String?
   storeId     String?
@@ -642,21 +645,21 @@ model ProductEvent {
 }
 
 model RevenueShareEvent {
-  id                  String    @id @default(cuid())
+  id                  String   @id @default(cuid())
   subscriptionId      String
-  cartId              String    @unique // one event per recovered cart — idempotency guard
+  cartId              String   @unique // one event per recovered cart — idempotency guard
   storeId             String
   shopifyOrderId      String?
-  grossAmount         Float     // recoveredValue (order total before CartGain discount)
-  discountAmount      Float     @default(0)
-  netAmount           Float     // grossAmount - discountAmount (rev share base)
-  revSharePercent     Float     // rate locked at event time
-  revShareAmount      Float     // netAmount × revSharePercent / 100
+  grossAmount         Float // recoveredValue (order total before CartGain discount)
+  discountAmount      Float    @default(0)
+  netAmount           Float // grossAmount - discountAmount (rev share base)
+  revSharePercent     Float // rate locked at event time
+  revShareAmount      Float // netAmount × revSharePercent / 100
   channel             String
   attributedMessageId String?
   recoveredAt         DateTime
-  invoiceId           String?   // null = pending billing; set when invoiced
-  createdAt           DateTime  @default(now())
+  invoiceId           String? // null = pending billing; set when invoiced
+  createdAt           DateTime @default(now())
 
   subscription  Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
   recoveredCart RecoveredCart @relation(fields: [cartId], references: [cartId])
@@ -674,24 +677,24 @@ model RevenueShareEvent {
 // are anchored to a negotiation session. sessionId is unique — one event per
 // accepted deal — giving the same idempotency guard as cartId on RevenueShareEvent.
 model BargainRevenueShareEvent {
-  id                String   @id @default(cuid())
-  subscriptionId    String
-  sessionId         String   @unique
-  storeId           String
-  shopifyProductId  String?
-  grossAmount       Float    // originalPrice (pre-discount) — recovered value base
-  discountAmount    Float    @default(0)
-  netAmount         Float    // finalPrice — rev share base
-  revSharePercent   Float    // rate locked at event time
-  revShareAmount    Float    // netAmount × revSharePercent / 100
-  shopifyOrderId    String?  // order that confirmed the deal (null until purchased)
-  purchasedAt       DateTime? // when the deal's purchase was confirmed
-  invoiceId         String?  // null = pending billing; set when invoiced
-  createdAt         DateTime @default(now())
+  id               String    @id @default(cuid())
+  subscriptionId   String
+  sessionId        String    @unique
+  storeId          String
+  shopifyProductId String?
+  grossAmount      Float // originalPrice (pre-discount) — recovered value base
+  discountAmount   Float     @default(0)
+  netAmount        Float // finalPrice — rev share base
+  revSharePercent  Float // rate locked at event time
+  revShareAmount   Float // netAmount × revSharePercent / 100
+  shopifyOrderId   String? // order that confirmed the deal (null until purchased)
+  purchasedAt      DateTime? // when the deal's purchase was confirmed
+  invoiceId        String? // null = pending billing; set when invoiced
+  createdAt        DateTime  @default(now())
 
-  subscription     Subscription      @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  store            Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  invoice          Invoice?          @relation(fields: [invoiceId], references: [id])
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  store        Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  invoice      Invoice?     @relation(fields: [invoiceId], references: [id])
 
   @@index([subscriptionId])
   @@index([subscriptionId, invoiceId])
@@ -700,30 +703,30 @@ model BargainRevenueShareEvent {
 }
 
 model ApiKey {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
   name        String
-  key         String   @unique
+  key         String    @unique
   prefix      String
   permissions String[]
   lastUsedAt  DateTime?
   expiresAt   DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model OptOut {
-  id          String   @id @default(cuid())
-  storeId     String
-  email       String?
-  phone       String?
-  reason      String?
-  optedOutAt  DateTime @default(now())
+  id         String   @id @default(cuid())
+  storeId    String
+  email      String?
+  phone      String?
+  reason     String?
+  optedOutAt DateTime @default(now())
 
-  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([storeId, email])
   @@unique([storeId, phone])
@@ -733,64 +736,67 @@ model OptOut {
 // ── RTO / COD-Fraud Reduction Models ──
 
 model MerchantConfig {
-  id                          String   @id @default(cuid())
-  storeId                     String   @unique
-  rtoReductionEnabled         Boolean  @default(false)
-  paymentRecoveryEnabled      Boolean  @default(false)
-  rtoWeights                  Json     @default("{}")
-  rtoThresholds               Json     @default("{}")
-  rtoIncentive                Float    @default(0)
-  rtoEnabledCategories        String[] @default([])
-  paymentRetrySchedule        Json     @default("{}")
-  paymentChannelPriority      String[] @default([])
-  paymentIncentive            Float    @default(0)
-  paymentEnabledGateways      String[] @default([])
-  createdAt                   DateTime @default(now())
-  updatedAt                   DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  storeId                String   @unique
+  rtoReductionEnabled    Boolean  @default(false)
+  paymentRecoveryEnabled Boolean  @default(false)
+  rtoWeights             Json     @default("{}")
+  rtoThresholds          Json     @default("{}")
+  rtoIncentive           Float    @default(0)
+  rtoEnabledCategories   String[] @default([])
+  paymentRetrySchedule   Json     @default("{}")
+  paymentChannelPriority String[] @default([])
+  paymentIncentive       Float    @default(0)
+  paymentEnabledGateways String[] @default([])
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
   @@index([storeId])
 }
 
 model MerchantVoice {
-  id                String   @id @default(cuid())
-  storeId           String   @unique
+  id              String   @id @default(cuid())
+  storeId         String   @unique
   // Voice preset the merchant starts from. Each preset is a coherent set of
   // traits (tone, emoji density, humour, length) — not a separate prompt.
-  persona           String   @default("friendly") // friendly | premium | playful | minimal | expert
+  persona         String   @default("friendly") // friendly | premium | playful | minimal | expert
   // Emoji policy. "off" forbids emoji entirely, "playful" allows them freely.
-  emojiIntensity    String   @default("balanced") // off | subtle | balanced | playful
-  humorLevel        String   @default("light") // none | light | playful
-  messageLength     String   @default("medium") // short | medium | long
-  assertiveness     String   @default("balanced") // soft | balanced | direct
+  emojiIntensity  String   @default("balanced") // off | subtle | balanced | playful
+  humorLevel      String   @default("light") // none | light | playful
+  messageLength   String   @default("medium") // short | medium | long
+  assertiveness   String   @default("balanced") // soft | balanced | direct
   // Preferred language for generated messages ("auto" = follow the customer).
-  language          String   @default("auto")
+  language        String   @default("auto")
   // Words the merchant never wants to see ("guarantee", "cheapest", ...).
-  bannedPhrases     String[] @default([])
+  bannedPhrases   String[] @default([])
   // Phrases the merchant wants the copy to use.
-  approvedPhrases   String[] @default([])
+  approvedPhrases String[] @default([])
   // Optional sign-off appended to email copy.
-  signOff           String?
+  signOff         String?
   // Local-time send window. Messages are held (not sent) outside it.
-  quietHoursStart   Int?     // 0-23, store-local
-  quietHoursEnd     Int?     // 0-23, store-local
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  quietHoursStart Int? // 0-23, store-local
+  quietHoursEnd   Int? // 0-23, store-local
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
   @@index([storeId])
 }
 
 model RtoRiskScore {
-  id          String   @id @default(cuid())
-  orderId     String
-  storeId     String
-  score       Int
-  band        String
-  reasons     Json
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  orderId   String
+  storeId   String
+  score     Int
+  band      String
+  reasons   Json
+  createdAt DateTime @default(now())
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
   @@unique([storeId, orderId])
   @@index([storeId])
   @@index([storeId, score])
@@ -798,36 +804,38 @@ model RtoRiskScore {
 }
 
 model PincodeStats {
-  id          String   @id @default(cuid())
-  storeId     String?
-  pincode     String
-  orders      Int      @default(0)
-  codOrders   Int      @default(0)
-  codRtos     Int      @default(0)
-  rtoRate     Float    @default(0)
-  codRtoRate  Float    @default(0)
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  storeId    String?
+  pincode    String
+  orders     Int      @default(0)
+  codOrders  Int      @default(0)
+  codRtos    Int      @default(0)
+  rtoRate    Float    @default(0)
+  codRtoRate Float    @default(0)
+  updatedAt  DateTime @updatedAt
 
-  store       Store?   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store Store? @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
   @@unique([storeId, pincode])
   @@index([storeId])
   @@index([pincode])
 }
 
 model CodNudge {
-  id            String    @id @default(cuid())
-  orderId       String
-  storeId       String
-  channel       String
-  status        String    @default("pending")
-  linkToken     String    @unique
-  incentive     Float     @default(0)
-  riskScore     Int?
-  convertedAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  orderId     String
+  storeId     String
+  channel     String
+  status      String    @default("pending")
+  linkToken   String    @unique
+  incentive   Float     @default(0)
+  riskScore   Int?
+  convertedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
   @@unique([storeId, orderId, channel])
   @@index([storeId])
   @@index([storeId, status])
@@ -846,14 +854,15 @@ model Customer {
   cancellations   Int       @default(0)
   firstOrderAt    DateTime?
   lastOrderAt     DateTime?
-  intentType      String?   // returning, new, loyal, price_sensitive, window_shopper, high_value
-  intentScore     Float?    // confidence score 0-1
+  intentType      String? // returning, new, loyal, price_sensitive, window_shopper, high_value
+  intentScore     Float? // confidence score 0-1
   intentUpdatedAt DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store            Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
   customerInsights CustomerInsight[]
+
   @@unique([storeId, customerId])
   @@index([storeId])
   @@index([storeId, email])
@@ -864,17 +873,18 @@ model CustomerInsight {
   id              String   @id @default(cuid())
   storeId         String
   customerId      String
-  intentType      String   // returning, new, loyal, price_sensitive, window_shopper, high_value
-  intentScore     Float    // confidence 0-1
+  intentType      String // returning, new, loyal, price_sensitive, window_shopper, high_value
+  intentScore     Float // confidence 0-1
   lifetimeValue   Float?
   avgOrderValue   Float?
   totalAbandons   Int      @default(0)
   totalRecoveries Int      @default(0)
-  preferences     Json?    // channel preferences, category preferences
+  preferences     Json? // channel preferences, category preferences
   detectedAt      DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
   @@unique([storeId, customerId])
   @@index([storeId])
   @@index([storeId, intentType])
@@ -884,12 +894,12 @@ model AiSuggestion {
   id          String   @id @default(cuid())
   storeId     String
   userId      String
-  type        String   // revenue_coach, weekly_report, campaign_tip
+  type        String // revenue_coach, weekly_report, campaign_tip
   title       String
   description String   @db.Text
-  impact      String?  // high, medium, low
-  metrics     Json?    // projected impact metrics
-  data        Json?    // additional structured data
+  impact      String? // high, medium, low
+  metrics     Json? // projected impact metrics
+  data        Json? // additional structured data
   isRead      Boolean  @default(false)
   isActioned  Boolean  @default(false)
   createdAt   DateTime @default(now())
@@ -899,36 +909,36 @@ model AiSuggestion {
 }
 
 model AiReport {
-  id          String   @id @default(cuid())
-  storeId     String
-  userId      String
-  type        String   // weekly, monthly
-  periodStart DateTime
-  periodEnd   DateTime
-  title       String
-  summary     String   @db.Text
-  metrics     Json     // key metrics snapshot
-  insights    Json     // array of insight objects
+  id              String   @id @default(cuid())
+  storeId         String
+  userId          String
+  type            String // weekly, monthly
+  periodStart     DateTime
+  periodEnd       DateTime
+  title           String
+  summary         String   @db.Text
+  metrics         Json // key metrics snapshot
+  insights        Json // array of insight objects
   recommendations Json // array of recommendation objects
-  isRead      Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  isRead          Boolean  @default(false)
+  createdAt       DateTime @default(now())
 
   @@index([storeId, periodStart, periodEnd])
   @@index([userId, createdAt])
 }
 
 model CartPrediction {
-  id              String   @id @default(cuid())
-  cartId          String   @unique
-  storeId         String
-  probabilityScore Float   // 0-100
-  predictedValue  Float?   // expected recovery value
-  intentType      String?  // predicted customer intent
+  id                 String   @id @default(cuid())
+  cartId             String   @unique
+  storeId            String
+  probabilityScore   Float // 0-100
+  predictedValue     Float? // expected recovery value
+  intentType         String? // predicted customer intent
   discountSuggestion Json? // recommended discount
-  bestChannel     String?  // predicted best channel
-  features        Json?    // feature values used for prediction
-  modelVersion    String   @default("1.0")
-  createdAt       DateTime @default(now())
+  bestChannel        String? // predicted best channel
+  features           Json? // feature values used for prediction
+  modelVersion       String   @default("1.0")
+  createdAt          DateTime @default(now())
 
   @@index([storeId])
   @@index([storeId, probabilityScore])
@@ -937,21 +947,22 @@ model CartPrediction {
 // ── Payment-Failure Recovery Models ──
 
 model PaymentAttempt {
-  id                String   @id @default(cuid())
-  merchantId        String
-  orderRef          String
-  gateway           String
-  gatewayEventId    String   @unique
-  amount            Float
-  currency          String   @default("INR")
-  status            String   @default("failed")
-  failureReasonRaw  String?
-  failureCategory   String?
-  retryable         Boolean  @default(true)
-  gatewayResponse   Json?
-  createdAt         DateTime @default(now())
+  id               String   @id @default(cuid())
+  merchantId       String
+  orderRef         String
+  gateway          String
+  gatewayEventId   String   @unique
+  amount           Float
+  currency         String   @default("INR")
+  status           String   @default("failed")
+  failureReasonRaw String?
+  failureCategory  String?
+  retryable        Boolean  @default(true)
+  gatewayResponse  Json?
+  createdAt        DateTime @default(now())
 
   paymentRecoveryCampaigns PaymentRecoveryCampaign[]
+
   @@index([merchantId])
   @@index([merchantId, orderRef])
   @@index([merchantId, createdAt])
@@ -959,20 +970,129 @@ model PaymentAttempt {
 }
 
 model PaymentRecoveryCampaign {
-  id                String    @id @default(cuid())
-  attemptId         String
-  channel           String
-  status            String    @default("pending")
-  resumeLinkToken   String?   @unique
-  retryCount        Int       @default(0)
-  nextRetryAt       DateTime?
-  recoveredAt       DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  attemptId       String
+  channel         String
+  status          String    @default("pending")
+  resumeLinkToken String?   @unique
+  retryCount      Int       @default(0)
+  nextRetryAt     DateTime?
+  recoveredAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  attempt           PaymentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  attempt PaymentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
   @@index([attemptId])
   @@index([status])
   @@index([nextRetryAt])
   @@index([resumeLinkToken])
+}
+
+model BehavioralEvent {
+  id         String   @id @default(cuid())
+  storeId    String
+  sessionId  String?
+  customerId String?
+  email      String?
+  phone      String?
+  eventType  String // product_viewed, product_engagement_threshold_reached, cart_item_added, cart_updated, checkout_started, checkout_abandoned, payment_failed, payment_cancelled, order_paid, order_cancelled, product_viewed_again
+  productId  String?
+  variantId  String?
+  cartId     String?
+  checkoutId String?
+  orderId    String?
+  properties Json?
+  ip         String?
+  userAgent  String?
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, eventType, occurredAt])
+  @@index([storeId, cartId])
+  @@index([storeId, checkoutId])
+  @@index([storeId, customerId])
+  @@index([email])
+  @@index([phone])
+  @@index([sessionId])
+}
+
+model CustomerIdentity {
+  id                String    @id @default(cuid())
+  storeId           String
+  shopifyCustomerId String?
+  email             String?
+  phone             String?
+  consentEmail      Boolean   @default(false)
+  consentWhatsApp   Boolean   @default(false)
+  consentSms        Boolean   @default(false)
+  consentSource     String?
+  consentAt         DateTime?
+  optedOutAt        DateTime?
+  suppressed        Boolean   @default(false)
+  lastSeenAt        DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, shopifyCustomerId])
+  @@index([storeId, email])
+  @@index([storeId, phone])
+}
+
+model RecoveryJourney {
+  id                 String    @id @default(cuid())
+  storeId            String
+  customerIdentityId String?
+  sessionId          String?
+  cartId             String?
+  checkoutId         String?
+  productId          String?
+  journeyType        String // product_browse, add_to_cart, checkout_abandon, payment_failed
+  status             String    @default("OBSERVED")
+  priority           Int       @default(0)
+  scheduledFor       DateTime?
+  lastProcessedAt    DateTime?
+  reasonCode         String?
+  metadata           Json?
+  convertedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  store     Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  reminders RecoveryReminder[]
+
+  @@index([storeId, status, scheduledFor])
+  @@index([storeId, cartId])
+  @@index([storeId, checkoutId])
+  @@index([customerIdentityId])
+}
+
+model RecoveryReminder {
+  id             String    @id @default(cuid())
+  journeyId      String
+  storeId        String
+  channel        String // email, whatsapp
+  status         String    @default("pending")
+  scheduledFor   DateTime
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  failedAt       DateTime?
+  providerId     String?
+  reasonCode     String?
+  attemptCount   Int       @default(0)
+  idempotencyKey String?
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  journey RecoveryJourney @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+
+  @@unique([idempotencyKey])
+  @@index([storeId, status, scheduledFor])
+  @@index([journeyId])
+  @@index([providerId])
 }

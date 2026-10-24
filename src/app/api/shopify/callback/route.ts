@@ -9,6 +9,7 @@ import { createFreeSubscription } from '@/lib/subscription'
 import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
 import { mintNextAuthSessionCookie } from '@/lib/session-cookie'
+import { shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,23 @@ const STALE_COOKIE_NAMES = [
   '__Secure-next-auth.csrf-token',
   '__Secure-next-auth.pkce.code_verifier',
 ]
+
+// Only a completed OAuth connection is evidence that this account owns the
+// shop. Unconnected signup placeholders on the same domain are not a claim.
+async function findConnectedStoreByShopDomain(shop: string) {
+  for (const domain of shopDomainCandidates(shop)) {
+    const store = await prisma.store.findFirst({
+      where: {
+        domain: { equals: domain, mode: 'insensitive' },
+        platform: 'shopify',
+        apiKey: { not: null },
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (store) return store
+  }
+  return null
+}
 
 function redirectWithCleanup(path: string, baseUrl: string): NextResponse {
   const res = NextResponse.redirect(new URL(path, baseUrl))
@@ -154,9 +172,11 @@ export async function GET(req: NextRequest) {
       }
       provisionedUserId = user.id
 
-      // Don't hijack a shop that's already connected to a different CartGain
-      // account (webhook/store lookups are domain-keyed).
-      const domainMatch = await prisma.store.findFirst({ where: { domain: shop } })
+      // Don't hijack a shop that's already CONNECTED to a different CartGain
+      // account. An unconnected signup placeholder on the same domain is not a
+      // claim of ownership (anyone can type a shop domain), so it must not block
+      // the real shop from installing; domain-keyed lookups ignore it.
+      const domainMatch = await findConnectedStoreByShopDomain(shop)
       if (domainMatch && domainMatch.userId !== user.id) {
         return redirectWithCleanup('/dashboard/integrations?shopify_error=Store+already+linked+to+another+account', baseUrl)
       }
@@ -239,7 +259,7 @@ export async function GET(req: NextRequest) {
     try {
       const targetStore = storeId
         ? await prisma.store.findUnique({ where: { id: storeId } })
-        : await prisma.store.findFirst({ where: { domain: shop } })
+        : await findConnectedStoreByShopDomain(shop)
 
       if (targetStore) {
         const existingCampaigns = await prisma.campaign.count({ where: { storeId: targetStore.id } })
