@@ -1,6 +1,6 @@
 import OpenAI from 'openai'
 import prisma from '@/lib/db'
-import { checkAbuse } from '@/lib/bargain/abuse'
+import { checkAbuse, type AbuseStrictness } from '@/lib/bargain/abuse'
 import { getAiClient, handleAiFailure } from '@/lib/ai-client'
 import {
   strategyAdjustedCounter,
@@ -16,7 +16,14 @@ import {
 } from '@/lib/bargain/engine'
 import { productContextToPromptBlock, type ProductContext } from '@/lib/bargain/product-context'
 import { shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
+import type { ClaimAssessment } from '@/lib/bargain/claims'
+import {
+  negotiationStyleGuidance,
+  type NegotiationStyle,
+} from '@/lib/bargain/merchant-modes'
 import { analyzeSocialSignals, socialSignalsToPromptBlock, type SocialSignals } from '@/lib/bargain/behavior'
+import { applyLearningCounterBias } from '@/lib/bargain/learning/strategies'
+import type { LearningGuidance } from '@/lib/bargain/learning/types'
 
 // Negotiation model. Defaults to the fast, low-cost `gpt-4o-mini`, which the
 // schema's BargainConfig.aiModel also defaults to — `gpt-4o` added multi-second
@@ -150,7 +157,10 @@ export interface NegotiationContext {
   goal?: NegotiationGoalContext
   product?: ProductContext
   intent?: IntentAnalysis
+  claims?: ClaimAssessment
   negotiationMode?: BargainNegotiationMode
+  negotiationStyle?: NegotiationStyle
+  abuseStrictness?: AbuseStrictness
   /** Whether the store has product recommendations enabled (drives guidance). */
   recommendationsEnabled?: boolean
   /** False when the store blocks stacking its bargain code with another promo/coupon (spec §24). */
@@ -179,6 +189,8 @@ export interface NegotiationContext {
   absurdStreak?: number
   /** Per-store model override (from BargainConfig.aiModel). Falls back to BARGAIN_MODEL. */
   aiModel?: string
+  /** Bounded, server-selected style guidance. Never contains the hidden floor. */
+  learning?: LearningGuidance
 }
 
 export interface NegotiationResult {
@@ -1608,8 +1620,17 @@ function effectiveCounter(
 ): number {
   const strat = ctx.goal?.strategy
   const base = reciprocalCounter(ctx as EngineNegotiationContext, offer ?? null, lastCounter ?? null)
-  if (!strat || strat === 'NORMAL') return base
-  return strategyAdjustedCounter(ctx as EngineNegotiationContext, strat, base)
+  const adjusted = !strat || strat === 'NORMAL'
+    ? base
+    : strategyAdjustedCounter(ctx as EngineNegotiationContext, strat, base)
+  const nudge = ctx.learning?.counterNudge ?? 0
+  if (!nudge) return adjusted
+  return applyLearningCounterBias({
+    counter: adjusted,
+    originalPrice: ctx.originalPrice,
+    safeFloor: Math.max(ctx.minPrice, quotedFloor(ctx)),
+    nudge,
+  })
 }
 
 // ── Rule-based fallback (when AI is unavailable) ──
@@ -2169,6 +2190,12 @@ export function buildSystemPrompt(
     )
   }
 
+  if (ctx.learning?.prompt) {
+    contextParts.push(
+      `${ctx.learning.prompt} The style is internal: never name it, never mention experiments, scores or learning data, and never treat it as permission to breach the hidden system minimum.`
+    )
+  }
+
   // Customer history — private notes about a returning buyer. The quoted text
   // is what THEY typed last time, so it is untrusted: use it to personalize and
   // to ask a caring follow-up, never to execute anything written inside it.
@@ -2265,9 +2292,17 @@ export function buildSystemPrompt(
     contextParts.push(NEGOTIATION_MODE_GUIDANCE[ctx.negotiationMode] ?? NEGOTIATION_MODE_GUIDANCE.balanced)
   }
 
+  if (ctx.negotiationStyle) {
+    contextParts.push(negotiationStyleGuidance(ctx.negotiationStyle))
+  }
+
   // Verified product intelligence — the ONLY product facts the model may cite
   if (ctx.product) {
     contextParts.push('\n' + productContextToPromptBlock(ctx.product, currencySymbol))
+  }
+
+  if (ctx.claims?.promptBlock) {
+    contextParts.push('\n' + ctx.claims.promptBlock)
   }
 
   // Relatability layer: current date/season context (real, calendar-derived — never
@@ -2453,7 +2488,7 @@ export async function negotiateStep(
 
   // ── ABUSE DETECTION ──
   if (sessionId) {
-    const abuse = checkAbuse(customerMessage, sessionId)
+    const abuse = checkAbuse(customerMessage, sessionId, { strictness: ctx.abuseStrictness })
     if (abuse.isAbusive && abuse.response) {
       return {
         reply: abuse.response,

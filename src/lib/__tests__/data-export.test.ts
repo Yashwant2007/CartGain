@@ -6,6 +6,7 @@ const mockPrisma = {
   customer: { findMany: jest.fn() },
   bargainSession: { findMany: jest.fn() },
   optOut: { findMany: jest.fn() },
+  customerIdentity: { findMany: jest.fn() },
   customerDataExport: {
     create: jest.fn(),
     update: jest.fn(),
@@ -109,6 +110,28 @@ describe('collectCustomerData', () => {
     mockPrisma.optOut.findMany.mockResolvedValue([
       { id: 'oo1', email: 'a@test.com', phone: null, reason: 'asked', optedOutAt: new Date() },
     ])
+    mockPrisma.customerIdentity.findMany.mockResolvedValue([
+      {
+        id: 'id1',
+        phone: '+919000000000',
+        email: 'a@test.com',
+        name: 'A',
+        shopifyCustomerId: '9001',
+        consentWhatsApp: true,
+        consentEmail: true,
+        consentSms: false,
+        whatsappConsentAt: new Date('2026-01-01'),
+        whatsappConsentSource: 'whatsapp_keyword',
+        emailConsentAt: null,
+        emailConsentSource: null,
+        optedOutAt: null,
+        suppressed: false,
+        lastContactedAt: new Date('2026-01-02'),
+        lastChannel: 'whatsapp',
+        lastSeenAt: new Date('2026-01-02'),
+        createdAt: new Date('2026-01-01'),
+      },
+    ])
 
     const payload = (await collectCustomerData({
       storeId: 'store_1',
@@ -116,12 +139,23 @@ describe('collectCustomerData', () => {
       email: 'A@TEST.com',
     })) as Record<string, any>
 
-    expect(payload!.counts).toEqual({ carts: 1, customers: 1, bargainSessions: 1, optOuts: 1 })
+    expect(payload!.counts).toEqual({
+      carts: 1,
+      customers: 1,
+      bargainSessions: 1,
+      optOuts: 1,
+      identities: 1,
+    })
     expect(payload.carts[0].cartId).toBe('tok_abc')
     expect(payload.carts[0].recoveredValue).toBe(95)
     expect(payload.customers[0].shopifyCustomerId).toBe('9001')
     expect(payload.bargainSessions[0].discountCode).toBe('SAVE15')
     expect(payload.optOuts[0].reason).toBe('asked')
+    expect(payload.identities[0]).toMatchObject({
+      consentWhatsApp: true,
+      whatsappConsentSource: 'whatsapp_keyword',
+      lastChannel: 'whatsapp',
+    })
 
     // The email was normalized to lowercase for matching.
     const cartCall = mockPrisma.cart.findMany.mock.calls[0][0]
@@ -133,6 +167,7 @@ describe('collectCustomerData', () => {
     mockPrisma.customer.findMany.mockResolvedValue([])
     mockPrisma.bargainSession.findMany.mockResolvedValue([])
     mockPrisma.optOut.findMany.mockResolvedValue([])
+    mockPrisma.customerIdentity.findMany.mockResolvedValue([])
 
     await collectCustomerData({ storeId: 'store_1', shopifyCustomerId: '444' })
 

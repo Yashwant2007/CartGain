@@ -27,3 +27,11 @@ export function resolveWhatsAppVerifyToken(): string | undefined {
 export function resolveWhatsAppPhoneNumberId(): string | undefined {
   return firstNonEmpty(['WHATSAPP_PHONE_NUMBER_ID', 'META_PHONE_NUMBER_ID'])
 }
+
+export function resolveWhatsAppAccessToken(): string | undefined {
+  return firstNonEmpty(['WHATSAPP_BUSINESS_TOKEN', 'META_WHATSAPP_TOKEN', 'WHATSAPP_ACCESS_TOKEN'])
+}
+
+export function isWhatsAppConfigured(): boolean {
+  return Boolean(resolveWhatsAppPhoneNumberId() && resolveWhatsAppAccessToken())
+}

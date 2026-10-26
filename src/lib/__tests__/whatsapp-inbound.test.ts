@@ -1,4 +1,8 @@
-import { parseWhatsAppEvents, isWhatsAppOptOutText } from '@/lib/whatsapp/inbound'
+import {
+  parseWhatsAppEvents,
+  isWhatsAppOptInText,
+  isWhatsAppOptOutText,
+} from '@/lib/whatsapp/inbound'
 
 describe('whatsapp inbound parsing', () => {
   it('flattens messages and statuses across entries/changes', () => {
@@ -49,5 +53,15 @@ describe('whatsapp inbound parsing', () => {
     expect(isWhatsAppOptOutText('cancel')).toBe(true)
     expect(isWhatsAppOptOutText('stop texting me about shoes')).toBe(false)
     expect(isWhatsAppOptOutText('hello there')).toBe(false)
+  })
+
+  it('grants opt-in only for unambiguous keywords', () => {
+    expect(isWhatsAppOptInText(' START ')).toBe(true)
+    expect(isWhatsAppOptInText('unstop')).toBe(true)
+    expect(isWhatsAppOptInText('subscribe')).toBe(true)
+    expect(isWhatsAppOptInText('yes')).toBe(false)
+    expect(isWhatsAppOptInText('haan')).toBe(false)
+    expect(isWhatsAppOptInText('i agree')).toBe(false)
+    expect(isWhatsAppOptInText('yes please send it')).toBe(false)
   })
 })

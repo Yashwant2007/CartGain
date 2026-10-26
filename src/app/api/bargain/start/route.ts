@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainStartSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerContext, SUPPORTED_LANGUAGES, type NegotiationContext } from '@/lib/services/bargain'
+import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
 import { currencySymbolFor, CURRENCY_SYMBOLS } from '@/lib/bargain/i18n'
 import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
@@ -266,6 +267,9 @@ export async function POST(request: NextRequest) {
       productTitle: undefined,
       language,
       customerContext,
+      negotiationMode: (config.negotiationMode as NegotiationContext['negotiationMode']) ?? 'balanced',
+      ...(isNegotiationStyle(config.negotiationStyle) ? { negotiationStyle: config.negotiationStyle } : {}),
+      abuseStrictness: isAbuseStrictness(config.abuseStrictness) ? config.abuseStrictness : 'standard',
     }
 
     // Optional product title from override

@@ -77,10 +77,30 @@ export async function resolveCustomerIdentity(opts: {
   return null
 }
 
-export async function canSendToIdentity(identity: any): Promise<{ ok: boolean; reason?: string }> {
+export async function canSendToIdentity(
+  identity: any,
+  channel?: 'email' | 'whatsapp' | 'sms',
+): Promise<{ ok: boolean; reason?: string }> {
   if (!identity) return { ok: false, reason: 'no_identity' }
   if (identity.suppressed) return { ok: false, reason: 'suppressed' }
   if (identity.optedOutAt) return { ok: false, reason: 'opted_out' }
+  if (channel === 'whatsapp' && identity.consentWhatsApp !== true) {
+    return { ok: false, reason: 'no_whatsapp_consent' }
+  }
+  if (channel === 'email' && identity.consentEmail !== true) {
+    return { ok: false, reason: 'no_email_consent' }
+  }
+  if (channel === 'sms' && identity.consentSms !== true) {
+    return { ok: false, reason: 'no_sms_consent' }
+  }
+  if (
+    channel === undefined &&
+    identity.consentWhatsApp !== true &&
+    identity.consentEmail !== true &&
+    identity.consentSms !== true
+  ) {
+    return { ok: false, reason: 'no_consent' }
+  }
   return { ok: true }
 }
 

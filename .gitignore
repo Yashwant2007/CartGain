@@ -80,4 +80,5 @@ region
 *.part4
 
 .env*.local
-
+# opencode session notes
+.opencode-session-context.md

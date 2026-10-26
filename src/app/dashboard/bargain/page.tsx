@@ -28,6 +28,12 @@ import {
 } from 'lucide-react'
 import { DemoPanel } from './demo-panel'
 import { ProductCatalogPanel } from './product-catalog'
+import {
+  ABUSE_STRICTNESS_LABELS,
+  ABUSE_STRICTNESS_VALUES,
+  NEGOTIATION_STYLE_LABELS,
+  NEGOTIATION_STYLE_VALUES,
+} from '@/lib/bargain/merchant-modes'
 
 type BargainConfig = {
   id: string
@@ -50,6 +56,8 @@ type BargainConfig = {
   campaignStart: string | null
   campaignEnd: string | null
   negotiationMode: string
+  negotiationStyle: string | null
+  abuseStrictness: string
   approvedSellingPoints: string[]
   disallowedClaims: string[]
   recommendationsEnabled: boolean
@@ -478,6 +486,29 @@ void fetchConfig()
                       <option value="conservative">Conservative · protect margin, concede slowly</option>
                       <option value="balanced">Balanced · fair deals (recommended)</option>
                       <option value="flexible">Flexible · closing-focused, moves faster</option>
+                    </select>
+                  </Field>
+                  <Field label="Service style" hint="Optional merchant mode for tone and pacing. Pricing limits and truthfulness rules always win.">
+                    <select
+                      value={configForm.negotiationStyle ?? ''}
+                      onChange={e => setConfigForm({ ...configForm, negotiationStyle: e.target.value || null })}
+                      className={CONTROL_CLS}
+                    >
+                      <option value="">Inherit from persona</option>
+                      {NEGOTIATION_STYLE_VALUES.map(style => (
+                        <option key={style} value={style}>{NEGOTIATION_STYLE_LABELS[style]}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Abuse tolerance" hint="How quickly the bot stops engaging with repeated disrespect. Security and floor protection never relax.">
+                    <select
+                      value={configForm.abuseStrictness ?? 'standard'}
+                      onChange={e => setConfigForm({ ...configForm, abuseStrictness: e.target.value })}
+                      className={CONTROL_CLS}
+                    >
+                      {ABUSE_STRICTNESS_VALUES.map(level => (
+                        <option key={level} value={level}>{ABUSE_STRICTNESS_LABELS[level]}</option>
+                      ))}
                     </select>
                   </Field>
                   <Field label="Default language" hint="Auto mirrors the customer’s language. Pick one to always reply in that language.">

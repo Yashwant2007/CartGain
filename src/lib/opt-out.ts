@@ -1,5 +1,6 @@
 import prisma from '@/lib/db'
 import { generateSecureToken, verifySecureToken } from '@/lib/links'
+import { cancelPendingRecoveryForContact, suppressRecipient } from '@/lib/recovery/recipients'
 
 // ── Opt-out: normalization + enforcement ──
 //
@@ -32,21 +33,32 @@ export async function recordOptOut(
   const phone = contact.phone ? normalizeOptOutPhone(contact.phone) : null
   if (!email && !phone) return
 
-  const data: { storeId: string; reason: string; email?: string; phone?: string } = { storeId, reason }
-  if (email) data.email = email
-  if (phone) data.phone = phone
-
+  // Record each identifier we hold. The old else-if stopped at email, so a
+  // contact with both email and phone was never on the phone opt-out list and a
+  // later phone-only capture could still be messaged.
   if (email) {
     const existing = await prisma.optOut.findUnique({
       where: { storeId_email: { storeId, email } },
     })
-    if (!existing) await prisma.optOut.create({ data })
-  } else if (phone) {
+    if (!existing) await prisma.optOut.create({ data: { storeId, reason, email } })
+  }
+  if (phone) {
     const existing = await prisma.optOut.findUnique({
       where: { storeId_phone: { storeId, phone } },
     })
-    if (!existing) await prisma.optOut.create({ data })
+    if (!existing) await prisma.optOut.create({ data: { storeId, reason, phone } })
   }
+
+  // Opt-out is not just a list row: it must revoke the stored consent and stop
+  // any reminder that has not reached the provider. Without this a queued
+  // WhatsApp row would still be sent after a STOP, because the live job only
+  // checked the OptOut table when it started a round.
+  await suppressRecipient(storeId, { email, phone }, new Date()).catch((err) => {
+    console.warn(`[opt-out] could not suppress recipient ${email || phone}:`, err?.message || err)
+  })
+  await cancelPendingRecoveryForContact(storeId, { email, phone }, 'opted_out').catch((err) => {
+    console.warn(`[opt-out] could not cancel pending recovery for ${email || phone}:`, err?.message || err)
+  })
 }
 
 export async function isContactOptedOut(storeId: string, contact: OptOutContact): Promise<boolean> {

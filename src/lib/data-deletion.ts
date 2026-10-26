@@ -13,6 +13,11 @@ import { shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
 // Models that hold a storeId column and should be cleared when a store is purged.
 // Order matters: child rows that reference other rows are deleted first.
 const STORE_SCOPED_MODELS = [
+  'BargainLearningEvent',
+  'BargainLearningOutcome',
+  'BargainLearningArmStat',
+  'BargainLearningAudit',
+  'BargainLearningConfig',
   'BargainMessage',
   'BargainSession',
   'BargainProduct',
@@ -35,6 +40,10 @@ const STORE_SCOPED_MODELS = [
   'ABTest',
   'BargainRevenueShareEvent',
   'CustomerDataExport',
+  'RecoveryReminder',
+  'RecoveryJourney',
+  'CustomerIdentity',
+  'BehavioralEvent',
   // Observability/analytics rows scoped by storeId — removed so an uninstall
   // or shop/redact does not leave orphan rows behind.
   'ProductEvent',
@@ -233,6 +242,52 @@ export async function redactCustomer(
     await prisma.cart.delete({ where: { id: cart.id } })
     affected++
   }
+
+  // Recipient registry + behavioural journeys. These hold the consent record
+  // and the queue; leaving them behind would keep a "redacted" person eligible
+  // for a future WhatsApp send.
+  const identities = await prisma.customerIdentity.findMany({
+    where: {
+      storeId,
+      OR: [
+        ...idVariants.map((id) => ({ shopifyCustomerId: id })),
+        ...(customerEmail ? [{ email: customerEmail.toLowerCase().trim() }] : []),
+        ...(customerPhone ? [{ phone: customerPhone.replace(/\D/g, '') }, { phone: `+${customerPhone.replace(/\D/g, '')}` }] : []),
+      ],
+    },
+    select: { id: true },
+  })
+  if (identities.length > 0) {
+    const identityIds = identities.map((i) => i.id)
+    const journeys = await prisma.recoveryJourney.findMany({
+      where: { storeId, customerIdentityId: { in: identityIds } },
+      select: { id: true },
+    })
+    if (journeys.length > 0) {
+      await prisma.recoveryReminder.deleteMany({
+        where: { journeyId: { in: journeys.map((j) => j.id) } },
+      })
+      await prisma.recoveryJourney.deleteMany({
+        where: { id: { in: journeys.map((j) => j.id) } },
+      })
+    }
+    affected += await prisma.customerIdentity
+      .deleteMany({ where: { id: { in: identityIds } } })
+      .then((r) => r.count)
+  }
+
+  await prisma.behavioralEvent
+    .deleteMany({
+      where: {
+        storeId,
+        OR: [
+          ...idVariants.map((id) => ({ customerId: id })),
+          ...(customerEmail ? [{ email: customerEmail.toLowerCase().trim() }] : []),
+          ...(customerPhone ? [{ phone: customerPhone.replace(/\D/g, '') }] : []),
+        ],
+      },
+    })
+    .catch(() => {})
 
   // Customer profile + derived insight rows.
   const cust = await prisma.customer.findFirst({

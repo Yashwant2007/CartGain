@@ -92,14 +92,27 @@ export async function processRecoveryJourneys(limit = 50) {
       }
 
       let didSend = false
-      if (phone) {
+      const whatsappGate = await canSendToIdentity(identity, 'whatsapp')
+      if (phone && whatsappGate.ok) {
         try {
+          const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com').replace(/\/$/, '')
+          const firstName = (identity?.name || 'there').split(' ')[0]
           const result = await sendWhatsAppMessage({
             to: phone,
-            templateName: process.env.WHATSAPP_TEMPLATE_REMINDER || 'cart_reminder',
-            languageCode: process.env.WHATSAPP_TEMPLATE_LANG || 'en',
-            components: [],
-          } as any)
+            templateName: process.env.WHATSAPP_TEMPLATE_REMINDER || 'cart_reminders',
+            templateParams: {
+              header: {
+                type: 'image',
+                imageUrl:
+                  process.env.WHATSAPP_TEMPLATE_HEADER_IMAGE_URL || 'https://cart-gain.com/logo.png',
+              },
+              body: [
+                firstName,
+                'Your cart is still saved — finish your order when you are ready.',
+                `${appUrl}/cart/${journey.cartId || ''}`,
+              ],
+            },
+          })
           if ((result as any)?.success || (result as any)?.messageId || (result as any)?.wamid) {
             didSend = true
             await prisma.recoveryReminder.create({

@@ -1,21 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { processRecoveryJourneys } from '@/lib/jobs/processRecoveryJourneys'
+import { requireJobAuth } from '@/lib/job-auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-function verifyJobAuth(req: NextRequest): boolean {
-  const authHeader = req.headers.get('authorization')
-  const secret = process.env.JOB_SECRET
-  if (!secret) return true
-  if (authHeader === `Bearer ${secret}`) return true
-  const token = req.nextUrl.searchParams.get('token')
-  return token === secret
+// This is the legacy behavioural-journey sender. The live recovery engine is
+// `process-abandoned-carts`; keeping a second sender enabled by default would
+// duplicate messages and bypass its round/consent accounting. It is opt-in and
+// still requires the shared job secret.
+function journeysEnabled(): boolean {
+  return process.env.ENABLE_BEHAVIORAL_JOURNEYS === 'true'
 }
 
 export async function GET(req: NextRequest) {
-  if (!verifyJobAuth(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const authError = await requireJobAuth(req)
+  if (authError) return authError
+  if (!journeysEnabled()) {
+    return NextResponse.json({
+      ok: true,
+      disabled: true,
+      reason: 'Set ENABLE_BEHAVIORAL_JOURNEYS=true to use the legacy sender',
+    })
   }
   try {
     const result = await processRecoveryJourneys(100)

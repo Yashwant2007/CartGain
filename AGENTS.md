@@ -65,6 +65,113 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(bargain): claim checks, merchant negotiation styles, and learning
+  quarantine`. Added a deterministic truth layer (`src/lib/bargain/claims.ts`)
+  that classifies customer claims across competitor prices, prior purchases/
+  promises, order proof, product features, listed prices, promotions, inventory,
+  policy and merchant authorization. The taxonomy is now
+  verified/supported/unverified/contradicted/outdated/ambiguous/unverifiable/
+  malicious, and every claim carries provenance (`source`, `scope`, `verified`,
+  `evidenceVersion`). The prompt gets a compact untrusted-claim block; raw
+  hostile text is never echoed and product contradictions use verified product
+  data / `disallowedClaims` (arbitrary merchant phrases included). Added
+  `src/lib/bargain/merchant-modes.ts` with six merchant styles
+  (`friendly_playful`, `professional_premium`, `firm_negotiator`, `value_first`,
+  `budget_advisor`, `strict_policy`) and three abuse tolerances
+  (`lenient`/`standard`/`strict`), exposed in the Bargain dashboard. Style
+  guidance is additive only when `BargainConfig.negotiationStyle` is set, so
+  existing merchants keep their exact prior behavior; strictness only changes
+  repeated-abuse escalation, never the security checks. `abuse.ts` gained a
+  pure `classifyManipulationRisk` plus strike escalation for profanity/
+  jailbreak/injection/exfiltration, including manager/owner authority claims.
+  Learning integrity: manipulation on an `/offer` or demo turn sets
+  `BargainSession.learningQuarantined`, skips arm selection, writes outcomes
+  with `reward=0` for audit, reverses stats if a session was previously trained,
+  and never blocks a verified purchase attribution. A new
+  `learning/integrity.ts` gate rejects missing scope/keys, cross-tenant
+  sessions, production/demo environment mismatches, demo commercial outcomes
+  and invalid strategies; manipulation is quarantined, not globally rejected.
+  `/offer` and demo also write no-raw-text `quarantined` audit events (claim
+  category/status/provenance only). Schema/migration
+  `20261026140000_add_bargain_modal_safety_integrity` adds
+  `BargainConfig.negotiationStyle/abuseStrictness`,
+  `BargainSession.learningQuarantined`, `BargainLearningOutcome.quarantined`,
+  and is applied to production (columns verified, 8 configs intact). Verified:
+  Jest **124 suites / 1381 tests**, tsc, lint and production build green. The
+  safety build was deployed to Vercel (`/api/health` ok, DB/Redis/AI/email ok);
+  the latest claim-status/provenance/integrity changes are local-only. The
+  working tree is still uncommitted, so `/api/health.release` remains
+  `5ebce39`; `whatsapp.appSecret` is still false.
+
+- `feat(bargain): adaptive negotiation learning layer end to end`. Added the
+  additive `BargainLearning*` schema (config, events, outcomes, arm stats,
+  audit) plus `BargainSession.environment/learning*` fields; migration
+  `20261026130000_add_bargain_learning_agent` is applied to production. The
+  engine stays authoritative: learning adds a bounded internal prompt block and
+  a ±5% counter nudge clamped above the hidden floor, never a new pricing path.
+  New pure modules `src/lib/bargain/learning/{types,strategies,features,reward,
+  selector}.ts` cover eligibility, context bucketing, refund-aware rewards and a
+  deterministic Thompson selector with a global fallback, trust threshold and
+  exploration cap. Server modules `service.ts` and `outcomes.ts` fail open when
+  the models/Redis are unavailable, keep shadow selections untrained, and make
+  event/outcome writes idempotent. `/api/bargain/offer` selects once on the
+  first meaningful turn (not on generic chat), persists the arm, and records
+  turn evidence; demo uses an isolated `environment='demo'` partition and a
+  stable client `learningSessionId`. Accept, purchase attribution, Shopify
+  refunds/cancellations and a daily finalization job settle outcomes; the job
+  runs from `vercel.json` plus a GitHub fallback workflow. Merchant controls:
+  `GET/POST/DELETE /api/merchant/bargain-learning` (validated, audit-logged,
+  store-scoped) and Settings → “Bargain learning” with shadow/active mode,
+  strategy allow/block lists, reward weights and evidence table. Retention:
+  learning events honour per-store `eventRetentionDays` (default 180),
+  outcomes/session-linked data are pruned at 90 days, and deletion/export now
+  include the new models. Verified: `prisma validate`, migration deploy, Jest
+  **122 suites / 1350 tests**, tsc, lint and production build green; deployed to
+  Vercel (health `ok`, DB/Redis/AI/email ok; `whatsapp.appSecret` still false).
+  Seeded default config rows for the existing 8 stores: live learning stays off
+  (`enabled=false`, `shadowMode=true`) while `/demo` learning is on. Live smoke
+  test with a temporary verified merchant: the authenticated config GET answered
+  `configured:false, mode:baseline`, POST saved config, `/api/bargain/demo`
+  returned a demo-mode selection and persisted two learning events plus
+  `__global__`/context arm pulls; the temporary user/store was deleted
+  (`provider=db`, cascade cleanup verified). Demo turns record pull evidence
+  only, so demo arms gain no purchase reward and can explore but will not become
+  “trusted” until real storefront purchases settle outcomes. The working tree is
+  still uncommitted, so `/api/health.release` remains `5ebce39`.
+
+- `feat(recovery): consent-gated WhatsApp recipients, retries, and template
+  formatting`. Added a `CustomerIdentity` recipient registry (explicit
+  `consentWhatsApp`/`consentEmail`, provenance timestamps, sticky suppression),
+  a fail-closed eligibility gate (`src/lib/recovery/eligibility.ts`), and the
+  job now loads consent for the batch once, skips suppressed/opted-out carts on
+  BOTH channels, and never sends WhatsApp without an identity. Failed sends get
+  exponential backoff (`attempts`, `lastAttemptAt`, 5 tries / 5m base / 6h cap,
+  env `RECOVERY_MAX_SEND_ATTEMPTS`/`RECOVERY_RETRY_BASE_MS`) and an atomic
+  claim (`message.updateMany` on the previous status) prevents duplicate sends.
+  STOP persists OptOut rows for email AND phone, cancels pending work, and
+  suppresses the identity; START records explicit consent. Inbound opt-in
+  keywords are narrowed to START/UNSTOP/SUBSCRIBE/OPTIN/OPT-IN/OPT IN (ambiguous
+  "yes/agree" removed). Shopify `customers/create|update` sync identities and
+  order-create cancels pending recovery. New dashboard `/dashboard/recipients`
+  + `/api/recipients` + `/api/integrations/whatsapp` let a merchant see consent
+  and map the store's WhatsApp phone-number id (needed for inbound STOP/START).
+  WhatsApp formatting: `src/lib/recovery/offer-line.ts` builds the `{{3}}`
+  offer line (name, product, discount, code, checkout URL, bargain URL) with
+  bounded product text so neither URL is ever truncated; `{{1}}` name and
+  `{{2}}` AI body are whitespace-normalised and `{{`-escaped. Template send
+  now resolves `WHATSAPP_BUSINESS_TOKEN` / `WHATSAPP_ACCESS_TOKEN` /
+  `META_WHATSAPP_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID` / `META_PHONE_NUMBER_ID`
+  through `src/lib/whatsapp/config.ts`. Tests pin: component order
+  header→body→button, positional vs named (`name,body,discount`) params, both
+  links and their order, non-empty params, whitespace/URL preservation, image
+  fallback, alias credentials, email font stack/viewport/CTA order. Jest 116
+  suites / 1300 tests, tsc, lint, build green. Migration
+  `20261026000000_recipient_consent_and_send_attempts` is now applied to the
+  production Supabase DB, and the code is live on Vercel (`/api/health` release
+  `5ebce39`, database ok, `whatsapp.configured: true`). Local `.env` still has
+  placeholder WhatsApp values (token length 7, phone `1234…`) so live Meta
+  calls must use the Vercel env.
+
 - `fix(recovery): the WhatsApp header is the product photo, and a reminder
   round hits WhatsApp AND email`. Two real bugs, found by auditing the path
   instead of the UI: (a) Shopify sends the line-item photo as `image_url`
@@ -326,6 +433,15 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   extracted. Live/verified.
 
 ## Open / watch items
+- New stores do not get a `BargainLearningConfig` row automatically, so
+  `/demo` learning stays off for them until the merchant opens Settings →
+  Bargain learning and saves (the existing 8 stores were seeded). Production
+  learning is deliberately off until enabled there.
+- Production `/api/health` reports `checks.whatsapp.appSecret: false` even though
+  `verifyToken` and `configured` are true. Set `WHATSAPP_APP_SECRET` (or
+  `META_APP_SECRET`/`FACEBOOK_APP_SECRET`) in Vercel from Meta → App settings →
+  Basic, or inbound STOP/START and delivery receipts will answer 401. Local
+  `.env` WhatsApp credentials are placeholders, not the live Meta token.
 - Partner Dashboard "App Bridge from CDN" / "session tokens" checks are only
   confirmed by Shopify's scanner (it loads the app in the admin iframe); the
   code side is verified (script + meta served in `<head>`, token exchanged via

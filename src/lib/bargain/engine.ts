@@ -2,6 +2,8 @@
 // Safe to import from client components (no Prisma, no OpenAI).
 // Re-exported by services/bargain.ts for server-side use.
 
+import type { LearningGuidance } from './learning/types'
+
 export type Persona = 'friendly_shopkeeper' | 'strict_negotiator' | 'playful_friend'
 
 export const SUPPORTED_LANGUAGES = ['auto', 'en', 'hinglish', 'hi', 'ta', 'te', 'bn', 'mr', 'gu', 'kn', 'ml', 'pa', 'or'] as const
@@ -60,6 +62,8 @@ export interface NegotiationContext {
    *  instead of parroting the same joke line every turn. Callers with history
    *  set it; engines without it fall back to offer-based variation. */
   absurdStreak?: number
+  /** Bounded, server-selected style guidance. Never contains the hidden floor. */
+  learning?: LearningGuidance
 }
 
 export interface NegotiationResult {

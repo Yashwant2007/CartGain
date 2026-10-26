@@ -65,3 +65,23 @@ describe('EmailTemplates.abandoned — recovery email', () => {
     expect(render()).not.toContain('name your price')
   })
 })
+
+describe('EmailTemplates.abandoned — layout', () => {
+  it('uses the shared system font stack and a mobile viewport', () => {
+    const html = render()
+    expect(html).toContain('name="viewport" content="width=device-width, initial-scale=1.0"')
+    expect(html).toContain("font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, Helvetica, Arial, sans-serif")
+    expect(html).toContain('max-width: 600px')
+  })
+
+  it('aligns the checkout CTA before the bargain CTA', () => {
+    const html = render({
+      checkoutUrl: 'https://cart-gain.com/r/cart_1?c=email&to=checkout',
+      bargainUrl: 'https://cart-gain.com/r/cart_1?c=email&to=bargain',
+    })
+    const checkout = html.indexOf('Complete Your Order')
+    const bargain = html.indexOf('name your price')
+    expect(checkout).toBeGreaterThan(-1)
+    expect(bargain).toBeGreaterThan(checkout)
+  })
+})

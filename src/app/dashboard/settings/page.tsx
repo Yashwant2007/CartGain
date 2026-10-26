@@ -3,7 +3,8 @@
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { signOut } from 'next-auth/react'
-import { Bell, CreditCard, Shield, User, Key, ExternalLink, Sparkles } from 'lucide-react'
+import { Bell, Brain, CreditCard, Shield, User, Key, ExternalLink, Sparkles } from 'lucide-react'
+import { BargainLearningSettings } from './bargain-learning-settings'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 
@@ -99,6 +100,7 @@ export default function SettingsPage() {
           {[
             { id: 'general', name: 'General', icon: User },
             { id: 'voice', name: 'Brand voice', icon: Sparkles },
+            { id: 'learning', name: 'Bargain learning', icon: Brain },
             { id: 'notifications', name: 'Notifications', icon: Bell },
             { id: 'billing', name: 'Billing', icon: CreditCard },
             { id: 'security', name: 'Security', icon: Shield },
@@ -125,6 +127,7 @@ export default function SettingsPage() {
 
       {activeTab === 'general' && <GeneralSettings store={store} onSave={setStore} />}
       {activeTab === 'voice' && <BrandVoiceSettings storeId={storeId} />}
+      {activeTab === 'learning' && <BargainLearningSettings storeId={storeId} />}
       {activeTab === 'notifications' && <NotificationSettings />}
       {activeTab === 'billing' && <BillingSettings />}
       {activeTab === 'security' && <SecuritySettings />}

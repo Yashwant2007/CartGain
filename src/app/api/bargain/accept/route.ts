@@ -12,6 +12,7 @@ import { buildExecutablePrice } from '@/lib/financial-safety'
 import { validateOffer } from '@/lib/bargain/offer-validation'
 import { bargainCampaignStatus, couponMentionedInMessages } from '@/lib/bargain/policy'
 import { track } from '@/lib/analytics/track'
+import { recordLearningAcceptance } from '@/lib/bargain/learning/outcomes'
 
 export const dynamic = 'force-dynamic'
 
@@ -390,6 +391,8 @@ export async function POST(request: NextRequest) {
         },
       }),
     ])
+
+    await recordLearningAcceptance(bargainSession.id)
 
     return NextResponse.json({
       sessionId: bargainSession.id,

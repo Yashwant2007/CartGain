@@ -158,6 +158,11 @@ model Store {
   BehavioralEvent            BehavioralEvent[]
   CustomerIdentity           CustomerIdentity[]
   RecoveryJourney            RecoveryJourney[]
+  bargainLearningConfig      BargainLearningConfig?
+  bargainLearningEvents      BargainLearningEvent[]
+  bargainLearningOutcomes    BargainLearningOutcome[]
+  bargainLearningArmStats    BargainLearningArmStat[]
+  bargainLearningAudits      BargainLearningAudit[]
 
   @@unique([userId, domain])
   @@index([userId])
@@ -248,6 +253,13 @@ model Message {
   // "delivered" means the provider confirmed delivery — not "the API call
   // did not throw".
   providerId    String?
+  // Delivery engine bookkeeping. attempts counts provider calls (not rounds) so
+  // transient failures can be retried with backoff instead of being treated as
+  // "sent". reasonCode is the last eligibility/provider failure and is surfaced
+  // in the dashboard so a silent skip is explainable.
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime?
+  reasonCode    String?
   createdAt     DateTime  @default(now())
 
   cart     Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
@@ -260,6 +272,7 @@ model Message {
   @@index([campaignId])
   @@index([campaignId, sentAt])
   @@index([providerId])
+  @@index([status, lastAttemptAt])
 }
 
 model RecoveredCart {
@@ -400,6 +413,8 @@ model BargainConfig {
   campaignMessage                   String? // merchant-written, truthful context the AI may truthfully reference
   // ── AI Salesperson: merchant-controlled negotiation + product intelligence ──
   negotiationMode                   String    @default("balanced") // conservative | balanced | flexible — merchant's chosen bargain temperament
+  negotiationStyle                  String? // friendly_playful | professional_premium | firm_negotiator | value_first | budget_advisor | strict_policy
+  abuseStrictness                   String    @default("standard") // lenient | standard | strict — tolerance for repeated disrespect (security layers never relax)
   approvedSellingPoints             String[]  @default([]) // merchant-vetted claims the AI may use ("machine-washable", "7-day replacement")
   disallowedClaims                  String[]  @default([]) // claims NEVER passed to the AI (unverified review/medical/beauty claims)
   recommendationsEnabled            Boolean   @default(true) // master toggle for cross-sell suggestions
@@ -469,13 +484,23 @@ model BargainSession {
   attemptsUsed              Int       @default(0)
   status                    String    @default("active") // active, accepted, rejected, expired, abandoned
   language                  String    @default("auto") // auto, en, hinglish, hi, ta, te, bn, mr, gu, kn, ml, pa, or
+  environment               String    @default("production") // production, demo
+  learningStrategy          String?
+  learningStrategyVersion   String?
+  learningContextKey        String?
+  learningMode              String? // baseline, shadow, active, demo
+  learningShadowStrategy    String?
+  learningMaxRounds         Int?
+  learningQuarantined       Boolean   @default(false) // manipulation/injection evidence must never train the selector
   startedAt                 DateTime  @default(now())
   expiredAt                 DateTime
   updatedAt                 DateTime  @updatedAt
   createdAt                 DateTime  @default(now())
 
-  store    Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  messages BargainMessage[]
+  store             Store                     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  messages          BargainMessage[]
+  learningEvents    BargainLearningEvent[]
+  learningOutcome   BargainLearningOutcome?
 
   // One order = one bargain purchase attribution, per store. Shopify order ids
   // are per-shop sequences, so the constraint is store-scoped.
@@ -502,6 +527,147 @@ model BargainMessage {
 
   @@index([sessionId])
   @@index([createdAt])
+}
+
+model BargainLearningConfig {
+  id                    String    @id @default(cuid())
+  storeId               String    @unique
+  enabled               Boolean   @default(false)
+  shadowMode            Boolean   @default(true)
+  demoEnabled           Boolean   @default(true)
+  version               String    @default("v1")
+  explorationRate       Float     @default(0.15)
+  minSamplesPerArm      Int       @default(30)
+  attributionWindowDays Int       @default(7)
+  eventRetentionDays    Int       @default(180)
+  rewardConversion      Float     @default(0.4)
+  rewardMargin          Float     @default(0.3)
+  rewardExperience      Float     @default(0.2)
+  rewardEfficiency      Float     @default(0.1)
+  allowedStrategies     String[]  @default([])
+  blockedStrategies     String[]  @default([])
+  promoStrategyEnabled  Boolean   @default(false)
+  lastFinalizedAt       DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+}
+
+model BargainLearningEvent {
+  id                     String   @id @default(cuid())
+  storeId                String
+  sessionId              String?
+  environment            String   @default("production")
+  eventType              String
+  strategy               String
+  baselineStrategy       String?
+  strategyVersion        String
+  contextKey             String
+  mode                   String
+  intent                 String?
+  objection              String?
+  offerBucket            String?
+  budgetBucket           String?
+  recommendationEligible Boolean  @default(false)
+  value                  Float?
+  dedupeKey              String   @unique
+  properties             Json?
+  createdAt              DateTime @default(now())
+
+  store   Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  session BargainSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, environment, createdAt])
+  @@index([storeId, strategy, createdAt])
+  @@index([sessionId])
+}
+
+model BargainLearningOutcome {
+  id                 String    @id @default(cuid())
+  outcomeKey         String    @unique
+  storeId            String
+  sessionId          String?   @unique
+  environment        String    @default("production")
+  strategy           String
+  strategyVersion    String
+  contextKey         String
+  mode               String
+  originalPrice      Float
+  finalPrice         Float?
+  floorPrice         Float?
+  rounds             Int       @default(0)
+  accepted           Boolean   @default(false)
+  purchased          Boolean   @default(false)
+  purchaseValue      Float?
+  refundedAmount     Float     @default(0)
+  shopifyOrderId     String?
+  reward             Float     @default(0)
+  rewardConversion   Float     @default(0)
+  rewardMargin       Float     @default(0)
+  rewardExperience   Float     @default(0)
+  rewardEfficiency   Float     @default(0)
+  rewardApplied      Float     @default(0)
+  quarantined        Boolean   @default(false)
+  acceptedAt         DateTime?
+  purchasedAt        DateTime?
+  finalizedAt        DateTime?
+  lastRewardAt       DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  store   Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  session BargainSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, shopifyOrderId])
+  @@index([storeId, environment, createdAt])
+  @@index([storeId, strategy, createdAt])
+  @@index([sessionId])
+}
+
+model BargainLearningArmStat {
+  id              String    @id @default(cuid())
+  storeId         String
+  environment     String
+  strategyVersion String
+  contextKey      String
+  strategy        String
+  pulls           Int       @default(0)
+  outcomes        Int       @default(0)
+  accepted        Int       @default(0)
+  purchased       Int       @default(0)
+  rewardSum       Float     @default(0)
+  rewardSqSum     Float     @default(0)
+  alpha           Float     @default(1)
+  beta            Float     @default(1)
+  lastRewardAt    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, environment, strategyVersion, contextKey, strategy], map: "BargainLearningArmStat_key")
+  @@index([storeId, environment, contextKey])
+}
+
+model BargainLearningAudit {
+  id           String   @id @default(cuid())
+  storeId      String
+  actorType    String
+  actorId      String?
+  action       String
+  resourceType String
+  resourceId   String?
+  before       Json?
+  after        Json?
+  reason       String?
+  createdAt    DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, createdAt])
 }
 
 // ── AI Salesperson: daily goal ledger ────────────────────────────────────────
@@ -1023,16 +1189,25 @@ model CustomerIdentity {
   id                String    @id @default(cuid())
   storeId           String
   shopifyCustomerId String?
+  name              String?
   email             String?
   phone             String?
+  // Consent is explicit and per channel. A Shopify SMS/marketing flag is NOT
+  // treated as WhatsApp consent; only an explicit keyword/opt-in form sets it.
   consentEmail      Boolean   @default(false)
   consentWhatsApp   Boolean   @default(false)
   consentSms        Boolean   @default(false)
   consentSource     String?
   consentAt         DateTime?
+  emailConsentAt    DateTime?
+  emailConsentSource String?
+  whatsappConsentAt DateTime?
+  whatsappConsentSource String?
   optedOutAt        DateTime?
   suppressed        Boolean   @default(false)
   lastSeenAt        DateTime  @default(now())
+  lastContactedAt   DateTime?
+  lastChannel       String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -1041,6 +1216,7 @@ model CustomerIdentity {
   @@unique([storeId, shopifyCustomerId])
   @@index([storeId, email])
   @@index([storeId, phone])
+  @@index([storeId, consentWhatsApp, suppressed])
 }
 
 model RecoveryJourney {

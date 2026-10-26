@@ -46,6 +46,10 @@ api_version = "2026-04"
   # recognized revenue (see src/lib/attribution.ts).
   "orders/cancelled",
   "refunds/create",
+  # Customer identity sync — registers names/phones/emails for the recovery
+  # recipient registry. It never grants WhatsApp consent (that is explicit).
+  "customers/create",
+  "customers/update",
   "app/uninstalled",
   "app_subscriptions/update"
 ]

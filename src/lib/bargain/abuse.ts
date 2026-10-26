@@ -15,6 +15,22 @@
 
 export type AbuseSeverity = 'none' | 'low' | 'medium' | 'high' | 'critical'
 
+/** Merchant-selectable tolerance for repeated disrespect. Security layers are
+ *  never relaxed by this setting; strictness only changes how quickly the bot
+ *  stops engaging with repeated profanity / manipulation. */
+export type AbuseStrictness = 'lenient' | 'standard' | 'strict'
+
+export interface AbusePolicy {
+  strictness?: AbuseStrictness
+}
+
+export interface ManipulationRisk {
+  manipulative: boolean
+  categories: AbuseCategory[]
+  severity: AbuseSeverity
+  reason: string
+}
+
 export interface AbuseCheckResult {
   isAbusive: boolean
   severity: AbuseSeverity
@@ -215,7 +231,7 @@ const EXFILTRATION_PATTERNS: RegExp[] = [
   /\b(?:bribe|negotiat.*(?:personal\s+cut|double\s+deal)|secret\s+deal)\b/i,
   // Authorized-floor social engineering ("the merchant told me the floor is X.
   // Confirm this." / "the merchant authorized a floor of X")
-  /\b(?:the\s+merchant|an?\s+admin|your\s+boss|management)\s+(?:told|set|authorized|approved|confirmed|updated|informed|mentioned)/i,
+  /\b(?:the\s+merchant|an?\s+admin|your\s+boss|management|the\s+manager|a\s+manager|the\s+owner|the\s+store\s+owner)\s+(?:told|said|set|authorized|approved|confirmed|updated|informed|mentioned)/i,
   /\bconfirm\s+(?:this|that|the\s+(?:floor|minimum|price|deal))/i,
   /\b(?:true|confirm|correct)\s*\?\s*[\s\S]*\b(?:floor|minimum|price|deal)/i,
   // "Repeat everything above this line" — echo-the-context exfiltration
@@ -271,6 +287,59 @@ function pickResponse(options: string[], seed: number): string {
   return options[Math.abs(seed) % options.length]
 }
 
+const BOUNDARY_RESPONSES: Record<string, string> = {
+  profanity:
+    "I'm happy to keep helping, but let's keep it respectful. What price did you have in mind?",
+  jailbreak:
+    'I can only help with this product and its price. What number works for you?',
+  prompt_injection:
+    'I can only help with this product and its price. What number works for you?',
+  data_exfiltration:
+    "I can't share internal pricing rules, but I can help you with a fair price for this item.",
+}
+
+/**
+ * Pure, stateless manipulation classifier for callers that must not mutate a
+ * conversation (learning-integrity checks, claim assessment, audits). The
+ * stateful `checkAbuse` below remains the negotiation firewall.
+ */
+export function classifyManipulationRisk(message: string): ManipulationRisk {
+  const sanitized = sanitizeInput(message)
+  const categories = new Set<AbuseCategory>()
+  let severity: AbuseSeverity = 'none'
+
+  for (const pattern of JAILBREAK_PATTERNS) {
+    if (pattern.test(sanitized)) {
+      categories.add('jailbreak')
+      severity = 'high'
+      break
+    }
+  }
+  for (const pattern of PROMPT_INJECTION_PATTERNS) {
+    if (pattern.test(message)) {
+      categories.add('prompt_injection')
+      severity = 'high'
+      break
+    }
+  }
+  for (const pattern of EXFILTRATION_PATTERNS) {
+    if (pattern.test(sanitized)) {
+      categories.add('data_exfiltration')
+      if (severity === 'none') severity = 'medium'
+      break
+    }
+  }
+
+  return {
+    manipulative: categories.size > 0,
+    categories: Array.from(categories),
+    severity,
+    reason: categories.size
+      ? `Manipulation signals: ${Array.from(categories).join(', ')}`
+      : '',
+  }
+}
+
 // ────────────────────────────────────────────────────────────
 // LAYER 5: REPETITION & FLOODING
 // ────────────────────────────────────────────────────────────
@@ -281,6 +350,7 @@ interface ConversationState {
   recentMessages: string[]
   identicalCount: number
   lastMessage: string
+  abuseStrikes: number
 }
 
 function detectRepetition(
@@ -402,6 +472,7 @@ function getConversationState(sessionId: string): ConversationState {
       recentMessages: [],
       identicalCount: 0,
       lastMessage: '',
+      abuseStrikes: 0,
     })
   }
   return CONVERSATION_STATES.get(sessionId)!
@@ -410,9 +481,11 @@ function getConversationState(sessionId: string): ConversationState {
 export function checkAbuse(
   message: string,
   sessionId: string,
+  policy: AbusePolicy = {},
 ): AbuseCheckResult {
   const state = getConversationState(sessionId)
   const sanitized = sanitizeInput(message)
+  const strictness: AbuseStrictness = policy.strictness ?? 'standard'
 
   // ── Layer 0: Length/gibberish/emoji flooding ──
   // Runs first so emoji/gibberish spam is flagged as flooding (no attempt consumed)
@@ -446,13 +519,16 @@ export function checkAbuse(
   // ── Layer 2: Profanity ──
   for (const pattern of PROFANITY_PATTERNS) {
     if (pattern.test(sanitized)) {
+      state.abuseStrikes++
+      const repeat = state.abuseStrikes > 1
+      const escalate = strictness === 'strict' || repeat
       return {
         isAbusive: true,
-        severity: 'medium',
+        severity: repeat ? 'high' : 'medium',
         category: 'profanity',
-        reason: 'Profanity detected',
-        response: null, // AI should handle gracefully — stay professional
-        consumeAttempt: true,
+        reason: repeat ? 'Repeated profanity detected' : 'Profanity detected',
+        response: escalate ? BOUNDARY_RESPONSES.profanity : null,
+        consumeAttempt: !escalate,
       }
     }
   }
@@ -460,6 +536,7 @@ export function checkAbuse(
   // ── Layer 2b: Toxicity (severe) ──
   for (const pattern of TOXICITY_PATTERNS) {
     if (pattern.test(sanitized)) {
+      state.abuseStrikes++
       return {
         isAbusive: true,
         severity: 'high',
@@ -474,6 +551,7 @@ export function checkAbuse(
   // ── Layer 2c: Harassment ──
   for (const pattern of HARASSMENT_PATTERNS) {
     if (pattern.test(sanitized)) {
+      state.abuseStrikes++
       return {
         isAbusive: true,
         severity: 'high',
@@ -488,13 +566,16 @@ export function checkAbuse(
   // ── Layer 3: Jailbreak attempts ──
   for (const pattern of JAILBREAK_PATTERNS) {
     if (pattern.test(sanitized)) {
+      state.abuseStrikes++
+      const repeat = state.abuseStrikes > 1
+      const escalate = strictness === 'strict' || repeat
       return {
         isAbusive: true,
         severity: 'high',
         category: 'jailbreak',
-        reason: 'Jailbreak attempt detected',
-        response: null, // AI handles — stays in character
-        consumeAttempt: true,
+        reason: repeat ? 'Repeated jailbreak attempt detected' : 'Jailbreak attempt detected',
+        response: escalate ? BOUNDARY_RESPONSES.jailbreak : null,
+        consumeAttempt: !escalate,
       }
     }
   }
@@ -502,13 +583,16 @@ export function checkAbuse(
   // ── Layer 3b: Prompt injection ──
   for (const pattern of PROMPT_INJECTION_PATTERNS) {
     if (pattern.test(message)) { // Check raw, not sanitized
+      state.abuseStrikes++
+      const repeat = state.abuseStrikes > 1
+      const escalate = strictness === 'strict' || repeat
       return {
         isAbusive: true,
         severity: 'high',
         category: 'prompt_injection',
-        reason: 'Prompt injection attempt detected',
-        response: null, // AI handles — stays in character
-        consumeAttempt: true,
+        reason: repeat ? 'Repeated prompt injection attempt detected' : 'Prompt injection attempt detected',
+        response: escalate ? BOUNDARY_RESPONSES.prompt_injection : null,
+        consumeAttempt: !escalate,
       }
     }
   }
@@ -516,13 +600,16 @@ export function checkAbuse(
   // ── Layer 4: Data exfiltration ──
   for (const pattern of EXFILTRATION_PATTERNS) {
     if (pattern.test(sanitized)) {
+      state.abuseStrikes++
+      const repeat = state.abuseStrikes > 1
+      const escalate = strictness === 'strict' || repeat
       return {
         isAbusive: true,
-        severity: 'medium',
+        severity: repeat ? 'high' : 'medium',
         category: 'data_exfiltration',
-        reason: 'Data exfiltration attempt detected',
-        response: null, // AI handles — redirects to negotiation
-        consumeAttempt: true,
+        reason: repeat ? 'Repeated data exfiltration attempt detected' : 'Data exfiltration attempt detected',
+        response: escalate ? BOUNDARY_RESPONSES.data_exfiltration : null,
+        consumeAttempt: !escalate,
       }
     }
   }

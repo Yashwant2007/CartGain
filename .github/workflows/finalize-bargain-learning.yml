@@ -1,0 +1,39 @@
+name: Finalize bargain learning
+
+# Settles bargain-learning outcomes whose attribution window has elapsed.
+# The Vercel cron is the primary trigger; this is the fallback for projects
+# where Vercel Cron is not provisioned with CRON_SECRET. Finalization is
+# idempotent, so running both is safe.
+
+on:
+  schedule:
+    - cron: '15 4 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: finalize-bargain-learning
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Finalize stale outcomes
+        env:
+          JOB_SECRET: ${{ secrets.JOB_SECRET }}
+        run: |
+          if [ -z "$JOB_SECRET" ]; then
+            echo "::error::Repository secret JOB_SECRET is not set - learning finalization cannot run."
+            exit 1
+          fi
+          status=$(curl -sS -o /tmp/response.json -w '%{http_code}' \
+            https://cart-gain.com/api/jobs/finalize-bargain-learning \
+            -H "Authorization: Bearer ${JOB_SECRET}" \
+            --max-time 60)
+          echo "HTTP ${status}"
+          cat /tmp/response.json || true
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Bargain-learning finalization failed with HTTP ${status}"
+            exit 1
+          fi

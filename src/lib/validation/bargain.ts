@@ -34,6 +34,15 @@ export const bargainConfigUpsertSchema = z.object({
   campaignMessage: z.string().max(250).nullable().optional(),
   // ── AI Salesperson: negotiation mode + product intelligence ──
   negotiationMode: z.enum(['conservative', 'balanced', 'flexible']).optional(),
+  negotiationStyle: z.enum([
+    'friendly_playful',
+    'professional_premium',
+    'firm_negotiator',
+    'value_first',
+    'budget_advisor',
+    'strict_policy',
+  ]).nullable().optional(),
+  abuseStrictness: z.enum(['lenient', 'standard', 'strict']).optional(),
   approvedSellingPoints: CLAIM_LIST.optional(),
   disallowedClaims: CLAIM_LIST.optional(),
   recommendationsEnabled: z.boolean().optional(),

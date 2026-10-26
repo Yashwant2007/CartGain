@@ -1,3 +1,6 @@
+import { sanitizeTemplateText } from '@/lib/whatsapp/template'
+import { resolveWhatsAppAccessToken, resolveWhatsAppPhoneNumberId } from '@/lib/whatsapp/config'
+
 export interface WhatsAppTemplateParams {
   header?: { type: 'image'; imageUrl: string } | { type: 'text'; text: string }
   body?: string[]
@@ -38,8 +41,8 @@ export async function sendWhatsAppMessage({
   // the Graph call fail with a cryptic (#100)/OAuth error.
   const cleanEnv = (value: string | undefined): string =>
     (value || '').replace(/^\s*["']|["']\s*$/g, '').trim()
-  const phoneNumberId = cleanEnv(process.env.WHATSAPP_PHONE_NUMBER_ID)
-  const accessToken = cleanEnv(process.env.WHATSAPP_BUSINESS_TOKEN).replace(/^Bearer\s+/i, '')
+  const phoneNumberId = cleanEnv(resolveWhatsAppPhoneNumberId())
+  const accessToken = cleanEnv(resolveWhatsAppAccessToken()).replace(/^Bearer\s+/i, '')
 
   if (!phoneNumberId || !accessToken) {
     console.warn('WhatsApp not configured — set WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_BUSINESS_TOKEN')
@@ -65,7 +68,7 @@ export async function sendWhatsAppMessage({
           ]
         } else {
           headerParam.parameters = [
-            { type: 'text', text: templateParams.header.text },
+            { type: 'text', text: sanitizeTemplateText(templateParams.header.text, 60) },
           ]
         }
         components.push(headerParam)
@@ -86,7 +89,7 @@ export async function sendWhatsAppMessage({
           parameters: templateParams.body.map((param, index) => ({
             type: 'text',
             ...(namedFormat ? { parameter_name: paramNames[index] || `param${index + 1}` } : {}),
-            text: param,
+            text: sanitizeTemplateText(param),
           })),
         })
       }
@@ -94,7 +97,7 @@ export async function sendWhatsAppMessage({
       if (templateParams?.footer) {
         components.push({
           type: 'footer',
-          parameters: [{ type: 'text', text: templateParams.footer }],
+          parameters: [{ type: 'text', text: sanitizeTemplateText(templateParams.footer, 60) }],
         })
       }
 
@@ -105,8 +108,8 @@ export async function sendWhatsAppMessage({
             sub_type: btn.type === 'url' ? 'url' : 'quick_reply',
             index: idx,
             parameters: btn.type === 'url'
-              ? [{ type: 'text', text: btn.url || '' }]
-              : [{ type: 'payload', payload: btn.text }],
+              ? [{ type: 'text', text: sanitizeTemplateText(btn.url || '', 2000) }]
+              : [{ type: 'payload', payload: sanitizeTemplateText(btn.text, 256) }],
           })
         })
       }
@@ -240,8 +243,8 @@ export async function runProbe(
 ): Promise<Array<{ label: string; ok: boolean; code?: number; subcode?: number; message?: string; details?: string }>> {
   const cleanEnv = (value: string | undefined): string =>
     (value || '').replace(/^\s*["']|["']\s*$/g, '').trim()
-  const phoneNumberId = cleanEnv(opts?.phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID)
-  const accessToken = cleanEnv(opts?.accessToken || process.env.WHATSAPP_BUSINESS_TOKEN).replace(/^Bearer\s+/i, '')
+  const phoneNumberId = cleanEnv(opts?.phoneNumberId || resolveWhatsAppPhoneNumberId())
+  const accessToken = cleanEnv(opts?.accessToken || resolveWhatsAppAccessToken()).replace(/^Bearer\s+/i, '')
   const graphVersion = process.env.WHATSAPP_API_VERSION || 'v22.0'
   const templateName = opts?.templateName || 'cart_reminders'
   const recipient = formatWhatsAppPhone(to)
@@ -369,8 +372,8 @@ export async function getWhatsAppAccountInfo(opts?: {
 }> {
   const cleanEnv = (value: string | undefined): string =>
     (value || '').replace(/^\s*["']|["']\s*$/g, '').trim()
-  const phoneNumberId = cleanEnv(process.env.WHATSAPP_PHONE_NUMBER_ID)
-  const accessToken = cleanEnv(opts?.accessToken || process.env.WHATSAPP_BUSINESS_TOKEN).replace(
+  const phoneNumberId = cleanEnv(resolveWhatsAppPhoneNumberId())
+  const accessToken = cleanEnv(opts?.accessToken || resolveWhatsAppAccessToken()).replace(
     /^Bearer\s+/i,
     '',
   )

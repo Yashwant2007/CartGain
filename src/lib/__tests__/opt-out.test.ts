@@ -1,4 +1,5 @@
 import {
+  recordOptOut,
   isContactOptedOut,
   signOptOutToken,
   verifyOptOutToken,
@@ -10,13 +11,39 @@ import prisma from '@/lib/db'
 
 jest.mock('@/lib/db', () => ({
   __esModule: true,
-  default: { optOut: { findFirst: jest.fn() } },
+  default: {
+    optOut: { findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn() },
+    cart: { findMany: jest.fn() },
+    customerIdentity: {
+      findMany: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+    recoveryJourney: { updateMany: jest.fn() },
+    recoveryReminder: { updateMany: jest.fn() },
+    message: { updateMany: jest.fn() },
+  },
 }))
 
-const prismaMock = prisma as unknown as { optOut: { findFirst: jest.Mock } }
+const prismaMock = prisma as any
 
 describe('opt-out helpers', () => {
-  beforeEach(() => jest.clearAllMocks())
+  beforeEach(() => {
+    jest.clearAllMocks()
+    prismaMock.optOut.findUnique.mockResolvedValue(null)
+    prismaMock.optOut.create.mockResolvedValue({})
+    prismaMock.cart.findMany.mockResolvedValue([])
+    prismaMock.customerIdentity.findMany.mockResolvedValue([])
+    prismaMock.customerIdentity.create.mockResolvedValue({ id: 'i1' })
+    prismaMock.customerIdentity.update.mockResolvedValue({})
+    prismaMock.customerIdentity.updateMany.mockResolvedValue({ count: 0 })
+    prismaMock.customerIdentity.deleteMany.mockResolvedValue({ count: 0 })
+    prismaMock.recoveryJourney.updateMany.mockResolvedValue({ count: 0 })
+    prismaMock.recoveryReminder.updateMany.mockResolvedValue({ count: 0 })
+    prismaMock.message.updateMany.mockResolvedValue({ count: 0 })
+  })
 
   it('normalizes email and phone to the stored canonical forms', () => {
     expect(normalizeOptOutEmail('  A@B.COM ')).toBe('a@b.com')
@@ -37,6 +64,18 @@ describe('opt-out helpers', () => {
         where: { storeId: 's1', OR: [{ email: 'a@b.com' }, { phone: '9876543210' }] },
       }),
     )
+  })
+
+  it('records BOTH identifiers when a contact has email and phone', async () => {
+    await recordOptOut('s1', { email: 'A@B.com', phone: '+91 98765 43210' }, 'merchant_request')
+
+    expect(prismaMock.optOut.create).toHaveBeenCalledWith({
+      data: { storeId: 's1', reason: 'merchant_request', email: 'a@b.com' },
+    })
+    expect(prismaMock.optOut.create).toHaveBeenCalledWith({
+      data: { storeId: 's1', reason: 'merchant_request', phone: '919876543210' },
+    })
+    expect(prismaMock.optOut.create).toHaveBeenCalledTimes(2)
   })
 
   it('signs and verifies an opt-out token', () => {

@@ -33,8 +33,25 @@ const OPT_OUT_KEYWORDS = new Set([
   'band karo',
 ])
 
+// Unambiguous "message me" keywords. Generic replies ("yes", "haan", "agree")
+// are deliberately excluded: without the outbound prompt they answer, treating
+// them as consent would turn an ordinary product question into a WhatsApp
+// opt-in.
+const OPT_IN_KEYWORDS = new Set([
+  'start',
+  'unstop',
+  'subscribe',
+  'optin',
+  'opt-in',
+  'opt in',
+])
+
 export function isWhatsAppOptOutText(text: string): boolean {
   return OPT_OUT_KEYWORDS.has(text.trim().toLowerCase())
+}
+
+export function isWhatsAppOptInText(text: string): boolean {
+  return OPT_IN_KEYWORDS.has(text.trim().toLowerCase())
 }
 
 // Flattens a Meta webhook body into discrete message/status events across every

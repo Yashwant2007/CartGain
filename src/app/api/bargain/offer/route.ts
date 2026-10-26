@@ -13,11 +13,14 @@ import { detectCouponMention, detectMultiProductRequest } from '@/lib/bargain/po
 import { walkoutOutcome } from '@/lib/bargain/negotiation-state'
 import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
 import { analyzeIntent } from '@/lib/bargain/intent'
+import { assessCustomerClaims } from '@/lib/bargain/claims'
+import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
 import { searchRecommendations, recommendationReason, type RecommendationCard, type RecommendationReason, type RecommendationContext } from '@/lib/bargain/recommendations'
 import { fetchShopifyProducts } from '@/lib/shopify'
 import { issueRetentionDiscount, buildBargainClaimUrl } from '@/lib/bargain/purchase'
 import { track } from '@/lib/analytics/track'
+import { resolveSessionLearning, recordLearningEvent, loadLearningConfig } from '@/lib/bargain/learning/service'
 
 export const dynamic = 'force-dynamic'
 
@@ -192,6 +195,47 @@ export async function POST(request: NextRequest) {
     // predictable, and merchant-controlled — the LLM is told about it, it never
     // decides it.
     const intentAnalysis = analyzeIntent(data.message)
+    const claimAssessment = assessCustomerClaims(data.message, {
+      product: productCtx,
+      originalPrice: bargainSession.originalPrice,
+      compareAtPrice: productCtx?.compareAtPrice ?? null,
+      approvedSellingPoints: config.approvedSellingPoints,
+      disallowedClaims: config.disallowedClaims,
+    })
+    const alreadyQuarantined = Boolean((bargainSession as any).learningQuarantined)
+    const learningQuarantined = claimAssessment.manipulation || alreadyQuarantined
+    if (claimAssessment.manipulation && !alreadyQuarantined) {
+      await (prisma as any).bargainSession.update({
+        where: { id: bargainSession.id },
+        data: { learningQuarantined: true },
+      }).catch(() => {})
+      const learningConfig = await loadLearningConfig(bargainSession.storeId)
+      await recordLearningEvent({
+        storeId: bargainSession.storeId,
+        sessionId: bargainSession.id,
+        environment: (bargainSession as any).environment === 'demo' ? 'demo' : 'production',
+        eventType: 'quarantined',
+        strategy: 'BASELINE',
+        baselineStrategy: 'BASELINE',
+        version: learningConfig?.version ?? 'v1',
+        contextKey: '__global__',
+        mode: 'baseline',
+        intent: intentAnalysis.intent,
+        objection: intentAnalysis.objection,
+        originalPrice: bargainSession.originalPrice,
+        floorPrice: minPrice,
+        offer: customerOffer,
+        dedupeKey: `quarantine:${bargainSession.id}`,
+        properties: {
+          source: 'offer_claim_assessment',
+          claims: claimAssessment.claims.map((claim) => ({
+            category: claim.category,
+            status: claim.status,
+            provenance: claim.provenance,
+          })),
+        },
+      })
+    }
 
     // ── §27 MULTI-PRODUCT / BUNDLE GUARD ──
     // The negotiation model is strictly single-product (bulk = same SKU). A
@@ -397,6 +441,54 @@ export async function POST(request: NextRequest) {
     // progress each turn.
     const goalCtx = await buildGoalContextForNegotiation(config, bargainSession.store.timezone, new Date())
 
+    const learningContextIsReady =
+      customerOffer != null ||
+      intentAnalysis.budget != null ||
+      isWalkout ||
+      [
+        'PRICE_ONLY',
+        'BUDGET_CONSTRAINT',
+        'VALUE_UNCLEAR',
+        'COMPARISON',
+        'PRODUCT_QUESTION',
+        'PRODUCT_MISMATCH',
+        'RECOMMENDATION_REQUEST',
+        'PRODUCT_DISCOVERY',
+        'PURCHASE_READY',
+      ].includes(intentAnalysis.intent)
+
+    const learningResolved = !learningContextIsReady || learningQuarantined
+      ? null
+      : await resolveSessionLearning({
+      session: {
+        id: bargainSession.id,
+        storeId: bargainSession.storeId,
+        environment: (bargainSession as any).environment === 'demo' ? 'demo' : 'production',
+        learningQuarantined,
+        learningStrategy: (bargainSession as any).learningStrategy ?? null,
+        learningStrategyVersion: (bargainSession as any).learningStrategyVersion ?? null,
+        learningContextKey: (bargainSession as any).learningContextKey ?? null,
+        learningMode: (bargainSession as any).learningMode ?? null,
+        learningShadowStrategy: (bargainSession as any).learningShadowStrategy ?? null,
+        learningMaxRounds: (bargainSession as any).learningMaxRounds ?? null,
+      },
+      storeId: bargainSession.storeId,
+      environment: (bargainSession as any).environment === 'demo' ? 'demo' : 'production',
+      context: {
+        originalPrice: bargainSession.originalPrice,
+        floorPrice: minPrice,
+        offer: customerOffer,
+        budget: intentAnalysis.budget,
+        intent: intentAnalysis.intent,
+        objection: intentAnalysis.objection,
+        rounds: attemptsUsed,
+        maxRounds: config.maxAttempts,
+        recommendationsEnabled: recoEnabledForMessages(config),
+        bulkQuantity,
+        promoAvailable: Boolean(config.campaignMessage),
+      },
+    })
+
     const ctx: NegotiationContext = {
       storeName: bargainSession.store.name,
       currencySymbol,
@@ -419,9 +511,13 @@ export async function POST(request: NextRequest) {
       goal: goalCtx,
       product: productCtx,
       intent: intentAnalysis,
+      claims: claimAssessment,
       negotiationMode: (config.negotiationMode as NegotiationContext['negotiationMode']) ?? 'balanced',
+      ...(isNegotiationStyle(config.negotiationStyle) ? { negotiationStyle: config.negotiationStyle } : {}),
+      abuseStrictness: isAbuseStrictness(config.abuseStrictness) ? config.abuseStrictness : 'standard',
       couponsAllowed,
       recommendationsEnabled: recoEnabledForMessages(config),
+      ...(learningResolved ? { learning: learningResolved.guidance } : {}),
     }
 
     const history = bargainSession.messages
@@ -747,6 +843,36 @@ export async function POST(request: NextRequest) {
         },
       }),
     ])
+
+    if (learningResolved) {
+      await recordLearningEvent({
+        storeId: bargainSession.storeId,
+        sessionId: bargainSession.id,
+        environment: (bargainSession as any).environment === 'demo' ? 'demo' : 'production',
+        eventType: 'offer_turn',
+        strategy: learningResolved.selection.appliedStrategy,
+        baselineStrategy: learningResolved.selection.baselineStrategy,
+        version: learningResolved.selection.version,
+        contextKey: learningResolved.selection.contextKey,
+        mode: learningResolved.selection.mode,
+        intent: intentAnalysis.intent,
+        objection: intentAnalysis.objection,
+        originalPrice: bargainSession.originalPrice,
+        floorPrice: minPrice,
+        offer: customerOffer,
+        budget: intentAnalysis.budget,
+        recommendationEligible: learningResolved.selection.features.recommendationEligible,
+        value: safeCounter,
+        dedupeKey: `turn:${bargainSession.id}:${bargainSession.messages.length}:${result.decision}`,
+        properties: {
+          decision: result.decision,
+          tactic: result.tactic ?? null,
+          counterOffer: safeCounter,
+          candidate: learningResolved.selection.strategy,
+          exploration: learningResolved.selection.isExploration,
+        },
+      })
+    }
 
     return NextResponse.json({
       reply: result.reply,

@@ -13,6 +13,7 @@ import { generateBargainDiscountCode } from '@/lib/bargain/discount'
 import { computeMinPrice } from '@/lib/services/bargain'
 import { getBargainGate } from '@/lib/bargain/gate'
 import { track } from '@/lib/analytics/track'
+import { recordLearningPurchase } from '@/lib/bargain/learning/outcomes'
 
 export function appBaseUrl(): string {
   return (process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com').replace(/\/$/, '')
@@ -275,6 +276,11 @@ export async function attributeBargainPurchase(params: PurchaseAttribution): Pro
   }
 
   if (credited) {
+    await recordLearningPurchase({
+      sessionId: session.id,
+      shopifyOrderId,
+      purchaseValue: base,
+    })
     await track({
       name: 'cartgain_bargain_purchase_attributed',
       storeId: store.id,

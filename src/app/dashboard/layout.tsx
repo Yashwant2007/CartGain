@@ -24,6 +24,7 @@ import {
   ShoppingCart,
   Sparkles,
   ShieldCheck,
+  Users,
 } from 'lucide-react'
 import StatusBadge from '@/components/dashboard/StatusBadge'
 import { PAID_PLAN_IDS, FREE_CARTS_THRESHOLD } from '@/lib/plan-constants'
@@ -106,6 +107,7 @@ function DashboardLayoutInner({
     { name: 'Campaigns', href: '/dashboard/campaigns', icon: Megaphone },
     { name: 'Bargain', href: '/dashboard/bargain', icon: Sparkles },
     { name: 'Carts', href: '/dashboard/carts', icon: ShoppingCart },
+    { name: 'Recipients', href: '/dashboard/recipients', icon: Users },
     { name: 'AI Insights', href: '/dashboard/ai', icon: BrainCircuit },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
     { name: 'Integrations', href: '/dashboard/integrations', icon: Plug },
@@ -288,6 +290,7 @@ function DashboardLayoutInner({
               { name: 'Campaigns', href: '/dashboard/campaigns', icon: Megaphone },
               { name: 'Bargain', href: '/dashboard/bargain', icon: Sparkles },
               { name: 'Carts', href: '/dashboard/carts', icon: ShoppingCart },
+    { name: 'Recipients', href: '/dashboard/recipients', icon: Users },
               { name: 'More', href: '#more', icon: Menu },
             ].map((item) => {
               if (item.name === 'More') {

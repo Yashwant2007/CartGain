@@ -108,8 +108,11 @@ const DEMO_CODES: Record<string, string> = {
 // Profit margin the demo "merchant" protects — 25% off is the floor
 const DEMO_PROFIT_PERCENT = 25
 const MAX_ATTEMPTS = 3
-// Delay before the shopper's own bubble flips from a clock to a delivered tick.
-const TICK_MS = 550
+// Human send rhythm: message → delivered tick → thinking → reply
+const TICK_MS = 100
+const THINKING_DELAY_MS = 170
+const minThinkingMs = (reply: string) => Math.min(600, Math.max(260, reply.length * 4))
+const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
 
 export default function DemoContent() {
   const { data: session, status } = useSession()
@@ -121,6 +124,9 @@ export default function DemoContent() {
   const [input, setInput] = useState('')
   const [attemptsUsed, setAttemptsUsed] = useState(0)
   const [thinking, setThinking] = useState(false)
+  const [showThinking, setShowThinking] = useState(false)
+  const thinkingTimerRef = useRef<number | null>(null)
+  const thinkingShownAtRef = useRef(0)
   const [ended, setEnded] = useState<null | 'accepted' | 'rejected' | 'abandoned' | 'skipped'>(null)
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [alreadyUsed, setAlreadyUsed] = useState(false)
@@ -140,6 +146,7 @@ export default function DemoContent() {
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const sessionIdRef = useRef(0)
+  const learningSessionIdRef = useRef('')
   // True once a deal was accepted in this exchange, so a stray follow-up chat
   // signals the backend that the deal is locked (never re-quote / renegotiate).
   const dealAcceptedRef = useRef(false)
@@ -293,6 +300,10 @@ export default function DemoContent() {
   async function send() {
     if (!input.trim() || ended || thinking) return
     const userText = input.trim()
+    if (!learningSessionIdRef.current) {
+      learningSessionIdRef.current =
+        globalThis.crypto?.randomUUID?.() ?? `demo-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    }
     const offer = extractPrice(userText)
     const isWalkout = detectWalkout(userText)
 
@@ -348,6 +359,7 @@ export default function DemoContent() {
             productTitle: ctx.productTitle,
             language: ctx.language,
             walkoutTriggered: isWalkout,
+            learningSessionId: learningSessionIdRef.current,
             dealAccepted: dealAcceptedRef.current,
             finalPrice: newFinal ?? (ended === 'accepted' ? finalPrice : undefined),
             // Verified product identity — the server quotes real facts, real
@@ -425,6 +437,16 @@ export default function DemoContent() {
     setAttemptsUsed(nextAttempt)
     setInput('')
     setThinking(true)
+    setShowThinking(false)
+    thinkingShownAtRef.current = 0
+    if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
+    const thinkingReady = new Promise<void>((resolve) => {
+      thinkingTimerRef.current = window.setTimeout(() => {
+        thinkingShownAtRef.current = Date.now()
+        setShowThinking(true)
+        resolve()
+      }, THINKING_DELAY_MS)
+    })
 
     // Deal closed → mint the code as early as possible so it's ready on reveal.
     if (newEnded === 'accepted' && newFinal != null) {
@@ -441,13 +463,19 @@ export default function DemoContent() {
       }
     }
 
-    window.setTimeout(() => {
+    window.setTimeout(async () => {
       if (sessionIdRef.current !== sid) return
+      await thinkingReady
+      const seenFor = Date.now() - thinkingShownAtRef.current
+      const hold = minThinkingMs(reply) - seenFor
+      if (hold > 0) await wait(hold)
       setMessages(prev => [...prev, { role: 'ai', content: reply, offeredPrice: counterOffer }])
       setThinking(false)
+      setShowThinking(false)
+      if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
       if (newEnded) setEnded(newEnded)
       if (newFinal != null) setFinalPrice(newFinal)
-    }, replyDelay(reply.length))
+    }, 0)
   }
 
   function skipFullPrice() {
@@ -457,13 +485,29 @@ export default function DemoContent() {
     setMessages(prev => [...prev, { role: 'customer', content: "Actually, I'll just buy it at the full price.", delivery: 'sending' }])
     setInput('')
     setThinking(true)
+    setShowThinking(false)
+    thinkingShownAtRef.current = 0
+    if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
+    const thinkingReady = new Promise<void>((resolve) => {
+      thinkingTimerRef.current = window.setTimeout(() => {
+        thinkingShownAtRef.current = Date.now()
+        setShowThinking(true)
+        resolve()
+      }, THINKING_DELAY_MS)
+    })
     window.setTimeout(() => { if (sessionIdRef.current === sid) markDelivered() }, TICK_MS)
-    window.setTimeout(() => {
+    window.setTimeout(async () => {
       if (sessionIdRef.current !== sid) return
+      await thinkingReady
+      const seenFor = Date.now() - thinkingShownAtRef.current
+      const hold = minThinkingMs(reply) - seenFor
+      if (hold > 0) await wait(hold)
       setMessages(prev => [...prev, { role: 'ai', content: reply }])
       setThinking(false)
+      setShowThinking(false)
+      if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
       setEnded('skipped')
-    }, replyDelay(reply.length))
+    }, 0)
   }
 
   function copyCode() {
@@ -500,6 +544,13 @@ export default function DemoContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white">
+      <style>{`
+        @keyframes cgfDot { 0%, 80%, 100% { opacity: 0.3; transform: translateY(0) scale(0.85) } 40% { opacity: 1; transform: translateY(-2px) scale(1) } }
+        @keyframes cgfTickIn { 0% { opacity: 0; transform: scale(0.6) } 60% { transform: scale(1.12) } 100% { opacity: 1; transform: scale(1) } }
+        .cgf-tick { color: rgba(255,255,255,0.5); opacity: 0.55; transition: color 0.2s ease, opacity 0.2s ease }
+        .cgf-tick-in { color: #ffffff; opacity: 1; animation: cgfTickIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) }
+        @media (prefers-reduced-motion: reduce) { .cgf-tick, .cgf-tick-in { animation: none !important; transition: none !important } }
+      `}</style>
       {/* Header */}
       <header className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-lg border-b border-blue-800/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between">
@@ -732,16 +783,16 @@ export default function DemoContent() {
                     }`}
                   >
                     {m.content}
-                    {m.role === 'customer' && (
-                      <span
-                        className="inline-flex items-center ml-1.5 align-[-2px]"
-                        aria-label={m.delivery === 'delivered' ? 'Delivered' : 'Sending'}
-                      >
-                        {m.delivery === 'delivered'
-                          ? <CheckCheck className="w-3.5 h-3.5 text-white/70" />
-                          : <Clock3 className="w-3 h-3 text-white/50" />}
-                      </span>
-                    )}
+                      {m.role === 'customer' && (
+                        <span
+                          className={`cgf-tick ${m.delivery === 'delivered' ? 'cgf-tick-in' : ''} inline-flex items-center ml-1.5 align-[-2px]`}
+                          aria-label={m.delivery === 'delivered' ? 'Delivered' : 'Sending'}
+                        >
+                          {m.delivery === 'delivered'
+                            ? <CheckCheck className="w-3.5 h-3.5" />
+                            : <Clock3 className="w-3 h-3" />}
+                        </span>
+                      )}
                   </div>
                 </div>
               ))}
@@ -803,12 +854,12 @@ export default function DemoContent() {
                 </div>
               )}
 
-              {thinking && (
+              {(thinking || showThinking) && (
                 <div className="flex justify-start">
-                  <div className="bg-slate-800 border border-blue-800/30 rounded-2xl rounded-bl-md px-4 py-3 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-300 animate-bounce" />
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-300 animate-bounce" style={{ animationDelay: '0.15s' }} />
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-300 animate-bounce" style={{ animationDelay: '0.3s' }} />
+                  <div className="bg-slate-800 border border-blue-800/30 rounded-2xl rounded-bl-md px-4 py-2.5 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-300 animate-[cgfDot_1.1s_infinite_ease-in-out]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-300 animate-[cgfDot_1.1s_infinite_ease-in-out]" style={{ animationDelay: '0.15s' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-300 animate-[cgfDot_1.1s_infinite_ease-in-out]" style={{ animationDelay: '0.3s' }} />
                   </div>
                 </div>
               )}

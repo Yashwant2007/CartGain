@@ -35,7 +35,7 @@ export async function collectCustomerData(input: {
   const phoneNorm = phone ? phone.replace(/\D/g, '') || null : null
   const idMatch = shopifyCustomerId ? { equals: shopifyCustomerId } : undefined
 
-  const [carts, customers, sessions, optOuts] = await Promise.all([
+  const [carts, customers, sessions, optOuts, identities] = await Promise.all([
     prisma.cart.findMany({
       where: {
         storeId,
@@ -70,7 +70,7 @@ export async function collectCustomerData(input: {
           ...(idMatch ? [{ cartToken: { in: (await prisma.cart.findMany({ where: { storeId, customerId: idMatch }, select: { cartId: true } })).map(c => c.cartId) } }] : []),
         ],
       },
-      include: { messages: true },
+      include: { messages: true, learningOutcome: true, learningEvents: true },
       orderBy: { startedAt: 'desc' },
       take: 100,
     }),
@@ -83,6 +83,18 @@ export async function collectCustomerData(input: {
         ],
       },
       take: 50,
+    }),
+    prisma.customerIdentity.findMany({
+      where: {
+        storeId,
+        OR: [
+          ...(idMatch ? [{ shopifyCustomerId: shopifyCustomerId }] : []),
+          ...(emailNorm ? [{ email: emailNorm }] : []),
+          ...(phoneNorm ? [{ phone: { contains: phoneNorm } }] : []),
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 20,
     }),
   ])
 
@@ -98,7 +110,27 @@ export async function collectCustomerData(input: {
       customers: customers.length,
       bargainSessions: sessions.length,
       optOuts: optOuts.length,
+      identities: identities.length,
     },
+    identities: identities.map(i => ({
+      phone: i.phone,
+      email: i.email,
+      name: i.name,
+      shopifyCustomerId: i.shopifyCustomerId,
+      consentWhatsApp: i.consentWhatsApp,
+      consentEmail: i.consentEmail,
+      consentSms: i.consentSms,
+      whatsappConsentAt: i.whatsappConsentAt,
+      whatsappConsentSource: i.whatsappConsentSource,
+      emailConsentAt: i.emailConsentAt,
+      emailConsentSource: i.emailConsentSource,
+      optedOutAt: i.optedOutAt,
+      suppressed: i.suppressed,
+      lastContactedAt: i.lastContactedAt,
+      lastChannel: i.lastChannel,
+      lastSeenAt: i.lastSeenAt,
+      createdAt: i.createdAt,
+    })),
     carts: carts.map(c => ({
       id: c.id,
       cartId: c.cartId,
@@ -171,6 +203,31 @@ export async function collectCustomerData(input: {
         content: m.content,
         offeredPrice: m.offeredPrice,
         createdAt: m.createdAt,
+      })),
+      learningOutcome: s.learningOutcome
+        ? {
+            environment: s.learningOutcome.environment,
+            strategy: s.learningOutcome.strategy,
+            strategyVersion: s.learningOutcome.strategyVersion,
+            originalPrice: s.learningOutcome.originalPrice,
+            finalPrice: s.learningOutcome.finalPrice,
+            accepted: s.learningOutcome.accepted,
+            purchased: s.learningOutcome.purchased,
+            purchaseValue: s.learningOutcome.purchaseValue,
+            refundedAmount: s.learningOutcome.refundedAmount,
+            shopifyOrderId: s.learningOutcome.shopifyOrderId,
+            acceptedAt: s.learningOutcome.acceptedAt,
+            purchasedAt: s.learningOutcome.purchasedAt,
+            finalizedAt: s.learningOutcome.finalizedAt,
+          }
+        : null,
+      learningEvents: (s.learningEvents ?? []).map((event: any) => ({
+        eventType: event.eventType,
+        strategy: event.strategy,
+        strategyVersion: event.strategyVersion,
+        mode: event.mode,
+        value: event.value,
+        createdAt: event.createdAt,
       })),
     })),
     optOuts: optOuts.map(o => ({

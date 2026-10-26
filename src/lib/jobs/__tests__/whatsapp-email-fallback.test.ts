@@ -24,12 +24,38 @@ jest.mock('@/lib/db', () => ({
     optOut: { findMany: jest.fn() },
     subscription: { findFirst: jest.fn(), update: jest.fn() },
     aBTest: { findFirst: jest.fn() },
+    customerIdentity: {
+      findMany: jest.fn(async ({ where }: any) =>
+        (where?.OR || [])
+          .filter((o: any) => o.phone)
+          .map((o: any) => ({
+            id: `recipient-${o.phone}`,
+            phone: o.phone,
+            email: null,
+            shopifyCustomerId: null,
+            name: 'Buyer',
+            consentWhatsApp: true,
+            consentEmail: true,
+            consentSms: false,
+            suppressed: false,
+            optedOutAt: null,
+            lastSeenAt: new Date(),
+            createdAt: new Date(),
+          })),
+      ),
+      create: jest.fn(async ({ data }: any) => ({ id: 'recipient-1', ...data })),
+      update: jest.fn(async ({ where, data }: any) => ({ id: where.id, ...data })),
+      updateMany: jest.fn(async () => ({ count: 0 })),
+      deleteMany: jest.fn(async () => ({ count: 0 })),
+      findUnique: jest.fn(async () => null),
+    },
     cart: { findMany: jest.fn(), update: jest.fn(async () => ({})) },
     message: {
       findMany: jest.fn(),
       groupBy: jest.fn(),
       create: jest.fn(async () => ({ id: 'message-1' })),
       update: jest.fn(async () => ({})),
+      updateMany: jest.fn(async () => ({ count: 1 })),
     },
     analytics: { upsert: jest.fn(async () => ({})) },
   },
@@ -129,6 +155,8 @@ function statusUpdates() {
 
 beforeEach(() => {
   jest.clearAllMocks()
+  process.env.WHATSAPP_PHONE_NUMBER_ID = '1266364546554326'
+  process.env.WHATSAPP_BUSINESS_TOKEN = 'test-token'
   prismaMock.subscription.findFirst.mockResolvedValue(null)
   prismaMock.aBTest.findFirst.mockResolvedValue(null)
   prismaMock.optOut.findMany.mockResolvedValue([])

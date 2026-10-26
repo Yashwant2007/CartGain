@@ -3,9 +3,10 @@ import crypto from 'crypto'
 import prisma from '@/lib/db'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { logWarn, logInfo } from '@/lib/observability/logger'
-import { parseWhatsAppEvents, isWhatsAppOptOutText } from '@/lib/whatsapp/inbound'
+import { parseWhatsAppEvents, isWhatsAppOptInText, isWhatsAppOptOutText } from '@/lib/whatsapp/inbound'
 import { resolveStoreIdByWhatsAppPhoneNumberId } from '@/lib/whatsapp/store-registry'
 import { recordOptOut } from '@/lib/opt-out'
+import { recordWhatsAppConsent } from '@/lib/recovery/recipients'
 import { resolveWhatsAppAppSecret, resolveWhatsAppVerifyToken } from '@/lib/whatsapp/config'
 
 export const dynamic = 'force-dynamic'
@@ -21,6 +22,34 @@ function tokensEqual(a: string, b: string): boolean {
 //   sha256=<HMAC-SHA256(rawBody, appSecret)>
 // Everything except the sha256= prefix is the lowercase hex digest.
 // Verify before trusting anything Meta claims to have sent.
+// Resolve every store that can own this inbound contact.
+//
+// Direct store mapping (Store.whatsappPhoneNumberId) is authoritative. But most
+// deployments run one business number for many stores and the column is often
+// unset — the old code then dropped the STOP entirely, which is the worst
+// outcome. Fall back to the stores that actually hold a cart for this phone
+// number; a STOP must always land somewhere.
+async function resolveInboundStoreIds(
+  phoneNumberId: string | null | undefined,
+  from: string | null | undefined,
+): Promise<string[]> {
+  const direct = await resolveStoreIdByWhatsAppPhoneNumberId(prisma, phoneNumberId).catch(() => null)
+  if (direct) return [direct]
+
+  const digits = (from || '').replace(/\D/g, '')
+  if (digits.length < 8) return []
+
+  const carts = await prisma.cart
+    .findMany({
+      where: { customerPhone: { contains: digits } },
+      select: { storeId: true },
+      distinct: ['storeId'],
+      take: 20,
+    })
+    .catch(() => [] as Array<{ storeId: string }>)
+  return Array.from(new Set(carts.map((c) => c.storeId)))
+}
+
 function verifyHubSignature(rawBody: string, signatureHeader: string | null): boolean {
   if (!signatureHeader) return false
   const expected = signatureHeader.startsWith('sha256=')
@@ -116,6 +145,12 @@ export async function POST(request: NextRequest) {
                 data: { status: 'read', deliveredAt: new Date() },
               })
               .catch(() => {})
+            await prisma.recoveryReminder
+              .updateMany({
+                where: { providerId: event.wamid, ...(storeId ? { storeId } : {}) },
+                data: { status: 'read', deliveredAt: new Date() },
+              })
+              .catch(() => {})
           } else if (event.status === 'delivered') {
             await prisma.message
               .updateMany({
@@ -123,9 +158,21 @@ export async function POST(request: NextRequest) {
                 data: { status: 'delivered', deliveredAt: new Date() },
               })
               .catch(() => {})
+            await prisma.recoveryReminder
+              .updateMany({
+                where: { providerId: event.wamid, ...(storeId ? { storeId } : {}) },
+                data: { status: 'delivered', deliveredAt: new Date() },
+              })
+              .catch(() => {})
           } else if (event.status === 'failed') {
             await prisma.message
               .updateMany({ where, data: { status: 'failed' } })
+              .catch(() => {})
+            await prisma.recoveryReminder
+              .updateMany({
+                where: { providerId: event.wamid, ...(storeId ? { storeId } : {}) },
+                data: { status: 'failed', failedAt: new Date(), reasonCode: 'provider_failed' },
+              })
               .catch(() => {})
           }
         }
@@ -136,32 +183,73 @@ export async function POST(request: NextRequest) {
       } else {
         inboundMessages++
         if (isWhatsAppOptOutText(event.text)) {
-          const storeId = await resolveStoreIdByWhatsAppPhoneNumberId(
-            prisma,
-            event.phoneNumberId,
-          ).catch(() => null)
+          const storeIds = event.from
+            ? await resolveInboundStoreIds(event.phoneNumberId, event.from)
+            : []
 
-          if (storeId && event.from) {
-            const persisted = await recordOptOut(storeId, { phone: event.from })
-              .then(() => true)
-              .catch((error) => {
-                logWarn('whatsapp', 'inbound_opt_out', 'Failed to persist inbound WhatsApp opt-out', {
-                  from: event.from,
-                  phoneNumberId: event.phoneNumberId,
-                  storeId,
-                  error: error instanceof Error ? error.message : String(error),
+          if (storeIds.length > 0 && event.from) {
+            let persisted = 0
+            for (const storeId of storeIds) {
+              const ok = await recordOptOut(storeId, { phone: event.from })
+                .then(() => true)
+                .catch((error) => {
+                  logWarn('whatsapp', 'inbound_opt_out', 'Failed to persist inbound WhatsApp opt-out', {
+                    from: event.from,
+                    phoneNumberId: event.phoneNumberId,
+                    storeId,
+                    error: error instanceof Error ? error.message : String(error),
+                  })
+                  return false
                 })
-                return false
-              })
-            if (persisted) {
+              if (ok) persisted++
+            }
+            if (persisted > 0) {
               logInfo('whatsapp', 'inbound_opt_out', 'Inbound WhatsApp opt-out persisted', {
                 from: event.from,
                 phoneNumberId: event.phoneNumberId,
-                storeId,
+                stores: persisted,
               })
             }
           } else {
             logWarn('whatsapp', 'inbound_opt_out', 'Inbound WhatsApp opt-out received but no store could be resolved', {
+              from: event.from,
+              phoneNumberId: event.phoneNumberId,
+            })
+          }
+        } else if (isWhatsAppOptInText(event.text)) {
+          const storeIds = event.from
+            ? await resolveInboundStoreIds(event.phoneNumberId, event.from)
+            : []
+
+          if (storeIds.length > 0 && event.from) {
+            let saved = 0
+            for (const storeId of storeIds) {
+              const ok = await recordWhatsAppConsent({
+                storeId,
+                phone: event.from,
+                source: 'whatsapp_keyword',
+              })
+                .then((identity) => Boolean(identity))
+                .catch((error) => {
+                  logWarn('whatsapp', 'inbound_opt_in', 'Failed to persist inbound WhatsApp opt-in', {
+                    from: event.from,
+                    phoneNumberId: event.phoneNumberId,
+                    storeId,
+                    error: error instanceof Error ? error.message : String(error),
+                  })
+                  return false
+                })
+              if (ok) saved++
+            }
+            if (saved > 0) {
+              logInfo('whatsapp', 'inbound_opt_in', 'Inbound WhatsApp opt-in persisted', {
+                from: event.from,
+                phoneNumberId: event.phoneNumberId,
+                stores: saved,
+              })
+            }
+          } else {
+            logWarn('whatsapp', 'inbound_opt_in', 'Inbound WhatsApp opt-in received but no store could be resolved', {
               from: event.from,
               phoneNumberId: event.phoneNumberId,
             })

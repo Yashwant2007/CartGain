@@ -15,6 +15,8 @@ export const maxDuration = 60
 
 const CART_RETENTION_DAYS = 90
 const BARGAIN_RETENTION_DAYS = 90
+const LEARNING_EVENT_RETENTION_DAYS = 180
+const LEARNING_OUTCOME_RETENTION_DAYS = 90
 const LOG_RETENTION_DAYS = 180
 const TOKEN_RETENTION_DAYS = 7
 const EXPORT_RETENTION_DAYS = 180 // customer data exports deleted after 180 days
@@ -36,6 +38,8 @@ export async function POST(request: NextRequest) {
     const logCutoff = new Date(now.getTime() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000)
     const tokenCutoff = new Date(now.getTime() - TOKEN_RETENTION_DAYS * 24 * 60 * 60 * 1000)
     const exportCutoff = new Date(now.getTime() - EXPORT_RETENTION_DAYS * 24 * 60 * 60 * 1000)
+    const learningOutcomeCutoff = new Date(now.getTime() - LEARNING_OUTCOME_RETENTION_DAYS * 24 * 60 * 60 * 1000)
+    const learningEventDefaultCutoff = new Date(now.getTime() - LEARNING_EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000)
 
     // 1. Anonymize old carts (keep the row for billing/analytics integrity,
     //    remove all PII so the data can no longer identify a person).
@@ -52,7 +56,32 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 2. Delete old bargain sessions (cascades BargainMessage rows).
+    // 2. Delete old bargain learning rows, then sessions (cascades messages).
+    const learningConfigModel = (prisma as any).bargainLearningConfig
+    const learningConfigs = await (learningConfigModel?.findMany?.({
+      select: { storeId: true, eventRetentionDays: true },
+    }) ?? Promise.resolve([]))
+    const learningEventModel = (prisma as any).bargainLearningEvent
+    const configuredStores: string[] = []
+    let learningEventCount = 0
+    for (const config of Array.isArray(learningConfigs) ? learningConfigs : []) {
+      const storeId = String(config.storeId)
+      configuredStores.push(storeId)
+      const days = Math.min(730, Math.max(7, Number(config.eventRetentionDays) || LEARNING_EVENT_RETENTION_DAYS))
+      const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+      const deleted = await learningEventModel?.deleteMany?.({ where: { storeId, createdAt: { lt: cutoff } } })
+      learningEventCount += Number(deleted?.count) || 0
+    }
+    const orphanEvents = await (learningEventModel?.deleteMany?.({
+      where: {
+        storeId: { notIn: configuredStores },
+        createdAt: { lt: learningEventDefaultCutoff },
+      },
+    }) ?? Promise.resolve({ count: 0 }))
+    learningEventCount += Number(orphanEvents?.count) || 0
+    const learningOutcomes = await ((prisma as any).bargainLearningOutcome?.deleteMany({
+      where: { createdAt: { lt: learningOutcomeCutoff } },
+    }) ?? Promise.resolve({ count: 0 }))
     const bargainSessions = await prisma.bargainSession.deleteMany({
       where: { startedAt: { lt: bargainCutoff } },
     })
@@ -77,12 +106,16 @@ export async function POST(request: NextRequest) {
       status: 'ok',
       anonymizedCarts: anonymized.count,
       deletedBargainSessions: bargainSessions.count,
+      deletedBargainLearningEvents: learningEventCount,
+      deletedBargainLearningOutcomes: learningOutcomes.count,
       deletedAccessLogs: logs.count,
       deletedVerificationTokens: tokens.count,
       deletedCustomerDataExports: exports.count,
       policy: {
         cartPIIAnonymizedAfterDays: CART_RETENTION_DAYS,
         bargainSessionsDeletedAfterDays: BARGAIN_RETENTION_DAYS,
+        bargainLearningEventsDeletedAfterDays: LEARNING_EVENT_RETENTION_DAYS,
+        bargainLearningOutcomesDeletedAfterDays: LEARNING_OUTCOME_RETENTION_DAYS,
         accessLogsDeletedAfterDays: LOG_RETENTION_DAYS,
         verificationTokensDeletedAfterDays: TOKEN_RETENTION_DAYS,
         customerDataExportsDeletedAfterDays: EXPORT_RETENTION_DAYS,

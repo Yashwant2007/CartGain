@@ -13,6 +13,7 @@ import {
 } from '@/lib/data-export'
 import { computeRefundNetting, isMessageAttributable } from '@/lib/attribution'
 import { attributeBargainGoal, netBargainGoalRefund } from '@/lib/bargain/goals'
+import { recordLearningRefund } from '@/lib/bargain/learning/outcomes'
 import { attributeBargainPurchase } from '@/lib/bargain/purchase'
 import { reconcileShopifySubscription, downgradeSubscriptionToFree } from '@/lib/shopify-billing/service'
 import { mapShopifyStatus } from '@/lib/shopify-billing/subscriptions'
@@ -22,6 +23,11 @@ import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
 import { isDuplicateOrder } from '@/lib/order-dedup'
 import { shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
+import {
+  cancelPendingRecoveryForCart,
+  ensureRecipientForCart,
+  upsertRecipient,
+} from '@/lib/recovery/recipients'
 
 export const dynamic = 'force-dynamic'
 
@@ -195,6 +201,10 @@ export async function POST(request: NextRequest) {
         break
       case 'customers/data_request':
         await safeRun('customer data request', () => handleCustomerDataRequest(data, store, shopDomain))
+        break
+      case 'customers/create':
+      case 'customers/update':
+        await safeRun('customer sync', () => handleCustomerSync(data, store))
         break
       case 'app_subscriptions/update':
         await safeRun('app subscription update', () => handleAppSubscriptionUpdate(data, store, shopDomain))
@@ -427,6 +437,51 @@ function extractName(cart: any): string | null {
   return full || cart.customer?.name || null
 }
 
+// customers/create + customers/update.
+//
+// This is the only event that carries the customer's real name even when the
+// cart was captured before they typed it. It registers the recipient (so the
+// dashboard is complete) but NEVER sets WhatsApp consent: Shopify's email/SMS
+// marketing flags are not WhatsApp opt-ins, and inferring consent here would
+// make every store's list "consented" without the customer ever agreeing.
+async function handleCustomerSync(data: any, store: any) {
+  const id = data?.id != null ? String(data.id) : null
+  const email = data?.email || null
+  const phone =
+    data?.phone ||
+    data?.default_address?.phone ||
+    data?.addresses?.find?.((a: any) => a?.phone)?.phone ||
+    null
+  const name =
+    `${data?.first_name || ''} ${data?.last_name || ''}`.trim() ||
+    data?.name ||
+    null
+
+  const recipient = await upsertRecipient({
+    storeId: store.id,
+    shopifyCustomerId: id,
+    name,
+    email,
+    phone,
+    source: 'shopify_customer',
+  })
+  if (!recipient) return
+
+  await logDataAccess({
+    actorType: 'system',
+    action: 'write',
+    resourceType: 'customer_identity',
+    resourceId: recipient.id,
+    purpose: 'shopify customer webhook recipient registry sync',
+    actorId: store.userId,
+    metadata: {
+      hasEmail: Boolean(email),
+      hasPhone: Boolean(phone),
+      whatsappConsent: false,
+    },
+  })
+}
+
 async function handleCartUpdate(data: any, store: any, domain: string) {
   // Shopify API 2026-04 removed the `id` field from the `checkouts/create` and
   // `checkouts/update` webhook payloads — only `token` remains (see the Shopify
@@ -489,6 +544,18 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
       currency: cart.currency || 'USD',
     },
   })
+
+  // Keep the store-wide recipient registry in step with every captured cart.
+  // A failure here must not drop the cart itself.
+  await ensureRecipientForCart(store.id, {
+    customerId,
+    customerName,
+    customerEmail,
+    customerPhone,
+    updatedAt: new Date(),
+  }).catch((err) => {
+    console.error(`Recipient registry sync failed for cart ${cart.token}:`, err?.message || err)
+  })
 }
 
 // Some payloads (notably `carts/update`) can omit or zero `total_price` even
@@ -513,6 +580,31 @@ async function processOrderCreate(data: any, store: any, domain: string) {
   // carts/update rows). Try the preferred one first, fall back to the other so
   // one logical abandonment is never missed because it arrived via the other
   // webhook family. Only ONE Cart row ever matches a single order.
+  // Register the buyer from the order as well. Orders are the highest-value
+  // contact source (they include phone/name even when the checkout didn't) and
+  // must be in the registry even if no Cart row survives. Consent stays false.
+  const orderEmail = data.email || data.customer?.email || null
+  const orderPhone =
+    data.customer?.phone ||
+    data.shipping_address?.phone ||
+    data.billing_address?.phone ||
+    data.phone ||
+    null
+  const orderName =
+    data.customer?.name ||
+    `${data.customer?.first_name || data.shipping_address?.first_name || data.billing_address?.first_name || ''} ${data.customer?.last_name || data.shipping_address?.last_name || data.billing_address?.last_name || ''}`.trim() ||
+    null
+  await upsertRecipient({
+    storeId: store.id,
+    shopifyCustomerId: data.customer?.id != null ? String(data.customer.id) : null,
+    name: orderName,
+    email: orderEmail,
+    phone: orderPhone,
+    source: 'shopify_order',
+  }).catch((err) => {
+    console.error(`Recipient registry sync failed for order ${data.id}:`, err?.message || err)
+  })
+
   const preferredToken = data.token || data.cart_token
   const fallbackToken = preferredToken === data.token ? (data.cart_token || null) : (data.token || null)
   let cart = preferredToken
@@ -607,6 +699,12 @@ async function processOrderCreate(data: any, store: any, domain: string) {
       data: { convertedAt: new Date() },
     })
   }
+
+  // A purchase supersedes every queued reminder. Mark pending rows skipped so a
+  // sweep that started before this webhook cannot still message the buyer.
+  await cancelPendingRecoveryForCart(cart.id, 'purchased').catch((err) => {
+    console.error(`Could not cancel pending recovery for purchased cart ${cart.id}:`, err?.message || err)
+  })
 
   const windowStart = new Date(orderCreatedAt.getTime() - ATTRIBUTION_WINDOW_HOURS * 60 * 60 * 1000)
   const attributingMessage = await prisma.message.findFirst({
@@ -832,6 +930,13 @@ async function handleOrderCancelled(data: any, store: any, domain: string) {
     refundAmount: 0,
     fullyRefunded: true,
   })
+  await recordLearningRefund({
+    storeId: store.id,
+    shopifyOrderId: orderId,
+    refundAmount: 0,
+    fullyRefunded: true,
+    refundId: 'cancelled',
+  })
 }
 
 async function handleRefundCreate(data: any, store: any, domain: string) {
@@ -861,6 +966,13 @@ async function handleRefundCreate(data: any, store: any, domain: string) {
     shopifyOrderId: orderId,
     refundAmount,
     fullyRefunded: false,
+  })
+  await recordLearningRefund({
+    storeId: store.id,
+    shopifyOrderId: orderId,
+    refundAmount,
+    fullyRefunded: false,
+    refundId: data.id ? String(data.id) : null,
   })
 }
 

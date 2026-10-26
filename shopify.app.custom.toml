@@ -50,6 +50,10 @@ api_version = "2026-04"
   "orders/create",
   "orders/cancelled",
   "refunds/create",
+  # Customer identity sync — registers names/phones/emails for the recovery
+  # recipient registry. It never grants WhatsApp consent (that is explicit).
+  "customers/create",
+  "customers/update",
   "app/uninstalled",
   "app_subscriptions/update"
 ]

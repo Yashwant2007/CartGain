@@ -14,7 +14,21 @@ jest.mock('@/lib/db', () => ({
   __esModule: true,
   default: {
     store: { findFirst: jest.fn(), findMany: jest.fn() },
-    optOut: { findUnique: jest.fn(), create: jest.fn() },
+    cart: { findMany: jest.fn(async () => []) },
+    optOut: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      deleteMany: jest.fn(async () => ({ count: 0 })),
+    },
+    customerIdentity: {
+      findMany: jest.fn(async () => []),
+      create: jest.fn(async ({ data }: any) => ({ id: 'identity-1', ...data })),
+      update: jest.fn(async ({ where, data }: any) => ({ id: where.id, ...data })),
+      updateMany: jest.fn(async () => ({ count: 0 })),
+    },
+    message: { updateMany: jest.fn(async () => ({ count: 0 })) },
+    recoveryJourney: { updateMany: jest.fn(async () => ({ count: 0 })) },
+    recoveryReminder: { updateMany: jest.fn(async () => ({ count: 0 })) },
   },
 }))
 
@@ -27,7 +41,17 @@ jest.mock('@/lib/rate-limit', () => ({
 
 const prismaMock = prisma as unknown as {
   store: { findFirst: jest.Mock; findMany: jest.Mock }
-  optOut: { findUnique: jest.Mock; create: jest.Mock }
+  cart: { findMany: jest.Mock }
+  optOut: { findUnique: jest.Mock; create: jest.Mock; deleteMany: jest.Mock }
+  customerIdentity: {
+    findMany: jest.Mock
+    create: jest.Mock
+    update: jest.Mock
+    updateMany: jest.Mock
+  }
+  message: { updateMany: jest.Mock }
+  recoveryJourney: { updateMany: jest.Mock }
+  recoveryReminder: { updateMany: jest.Mock }
 }
 
 const SECRET = 'test-meta-app-secret'
@@ -70,6 +94,10 @@ beforeEach(() => {
   prismaMock.store.findMany.mockResolvedValue([{ id: 'only-store' }])
   prismaMock.optOut.findUnique.mockResolvedValue(null)
   prismaMock.optOut.create.mockResolvedValue({})
+  prismaMock.cart.findMany.mockResolvedValue([])
+  prismaMock.customerIdentity.findMany.mockResolvedValue([])
+  prismaMock.customerIdentity.create.mockResolvedValue({ id: 'identity-1' })
+  prismaMock.customerIdentity.update.mockResolvedValue({ id: 'identity-1' })
 })
 
 describe('POST /api/webhooks/whatsapp — opt-out persistence', () => {
@@ -124,5 +152,36 @@ describe('POST /api/webhooks/whatsapp — opt-out persistence', () => {
     const res = await POST(signedRequest(bodyWithText('STOP')))
     expect(res.status).toBe(200)
     expect(prismaMock.optOut.create).not.toHaveBeenCalled()
+  })
+
+  it('records explicit WhatsApp consent on START and clears the opt-out row', async () => {
+    prismaMock.customerIdentity.create.mockResolvedValue({
+      id: 'identity-1',
+      storeId: 'only-store',
+      phone: '+919876543210',
+      consentWhatsApp: false,
+      consentAt: null,
+      consentSource: null,
+    })
+    const res = await POST(signedRequest(bodyWithText('START')))
+    expect(res.status).toBe(200)
+    expect(prismaMock.customerIdentity.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'identity-1' },
+        data: expect.objectContaining({
+          consentWhatsApp: true,
+          whatsappConsentSource: 'whatsapp_keyword',
+          suppressed: false,
+          optedOutAt: null,
+        }),
+      }),
+    )
+    expect(prismaMock.optOut.deleteMany).toHaveBeenCalled()
+  })
+
+  it('does not treat ordinary chat as consent', async () => {
+    const res = await POST(signedRequest(bodyWithText('do you have this in blue?')))
+    expect(res.status).toBe(200)
+    expect(prismaMock.customerIdentity.update).not.toHaveBeenCalled()
   })
 })

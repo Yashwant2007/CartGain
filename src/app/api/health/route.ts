@@ -5,7 +5,12 @@ import { getQueue } from '@/lib/queue'
 import { getAiHealth } from '@/lib/ai-client'
 import { getEmailProviderStatus } from '@/lib/services/email'
 import { currentEnvironment, currentRelease } from '@/lib/observability/version'
-import { resolveWhatsAppAppSecret, resolveWhatsAppVerifyToken } from '@/lib/whatsapp/config'
+import {
+  isWhatsAppConfigured,
+  resolveWhatsAppAccessToken,
+  resolveWhatsAppAppSecret,
+  resolveWhatsAppVerifyToken,
+} from '@/lib/whatsapp/config'
 import { getShopifyApiKey } from '@/lib/shopify-app-bridge'
 
 export const dynamic = 'force-dynamic'
@@ -39,6 +44,7 @@ interface HealthStatus {
       // so recovery messages stay "sent" and STOP replies are not recorded.
       appSecret: boolean
       verifyToken: boolean
+      configured: boolean
     }
     shopify: {
       // Which app this deployment talks to. The client id is public (it ships
@@ -104,6 +110,7 @@ export async function GET() {
   const optionalResolvers: Record<string, () => string | undefined> = {
     WHATSAPP_APP_SECRET: resolveWhatsAppAppSecret,
     WHATSAPP_VERIFY_TOKEN: resolveWhatsAppVerifyToken,
+    WHATSAPP_BUSINESS_TOKEN: resolveWhatsAppAccessToken,
   }
   const optionalMissing: string[] = []
   for (const key of optionalVars) {
@@ -195,6 +202,7 @@ export async function GET() {
   const whatsappStatus: HealthStatus['checks']['whatsapp'] = {
     appSecret: Boolean(resolveWhatsAppAppSecret()),
     verifyToken: Boolean(resolveWhatsAppVerifyToken()),
+    configured: isWhatsAppConfigured(),
   }
 
   // Which Shopify app this deployment is configured for. The client id is

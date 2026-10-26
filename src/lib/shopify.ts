@@ -350,6 +350,9 @@ export async function setupShopifyWebhooks(
     // out of recognized revenue (see src/lib/attribution.ts).
     'orders/cancelled',
     'refunds/create',
+    // Recipient registry identity sync (never grants WhatsApp consent).
+    'customers/create',
+    'customers/update',
     // Uninstall lifecycle — lets the app purge the merchant's data when they
     // remove the app. This IS an Admin-API-registrable topic.
     'app/uninstalled',
@@ -690,6 +693,20 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
           currency: checkout.currency || 'USD',
           abandonedAt: checkout.created_at ? new Date(checkout.created_at) : new Date(),
         },
+      })
+
+      // The REST sync is often the FIRST place a contact is seen (webhooks can
+      // be missed while the app is down). Register them here too; consent stays
+      // false until an explicit opt-in arrives.
+      const { ensureRecipientForCart } = await import('@/lib/recovery/recipients')
+      await ensureRecipientForCart(store.id, {
+        customerId: checkout.customer?.id ? String(checkout.customer.id) : null,
+        customerName: name,
+        customerEmail: email,
+        customerPhone: phone,
+        updatedAt: new Date(),
+      }).catch((err: any) => {
+        console.error(`Recipient registry sync failed for checkout ${token}:`, err?.message || err)
       })
       synced++
     } catch (err) {

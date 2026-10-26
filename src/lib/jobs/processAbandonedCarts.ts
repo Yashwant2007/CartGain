@@ -8,6 +8,7 @@ import { isConfigWhatsAppFailure, isPermanentWhatsAppFailure } from '@/lib/whats
 import { resolveRecoveryOffer } from '@/lib/recovery/offer'
 import { enrichCartItemsWithImages } from '@/lib/recovery/product-image'
 import { buildRecoveryLink } from '@/lib/recovery/links'
+import { buildRecoveryOfferLine } from '@/lib/recovery/offer-line'
 import { composeRecoveryMessage, singleLineMessage, stripLeadingGreeting } from '@/lib/conversation/recovery'
 import type { ConversationDiscount } from '@/lib/conversation/facts'
 import { isWithinQuietHours } from '@/lib/conversation/variety'
@@ -18,11 +19,37 @@ import { releaseLock } from '@/lib/job-lock'
 import { redisSetNX, redisIncr, redisGet, redisExpire, getRedis } from '@/lib/redis'
 import { FREE_CARTS_THRESHOLD, PLANS, PAID_PLAN_IDS, resolvePlanId, getPlan } from '@/lib/payment'
 import { track } from '@/lib/analytics/track'
+import {
+  evaluateWhatsAppEligibility,
+  normalizeWhatsAppPhone,
+  type WhatsAppEligibilityResult,
+} from '@/lib/recovery/eligibility'
+import { ensureRecipientForCart, markRecipientContacted } from '@/lib/recovery/recipients'
+import { isWhatsAppConfigured } from '@/lib/whatsapp/config'
 
 const PAID_PLANS = PAID_PLAN_IDS
 const MAX_STORE_CONCURRENCY = 10
 const MAX_CARTS_PER_STORE = 300
 const PER_STORE_LOCK_TTL = 4 * 60 * 1000
+// Transient provider failures are retried with exponential backoff instead of
+// every sweep (which used to hammer a broken credential every five minutes).
+// Permanent WhatsApp failures (number not on WhatsApp, template rejected) are
+// marked skipped immediately and email takes over in the same round.
+const DEFAULT_MAX_SEND_ATTEMPTS = 5
+const DEFAULT_RETRY_BASE_MS = 5 * 60 * 1000
+const MAX_RETRY_DELAY_MS = 6 * 60 * 60 * 1000
+
+function maxSendAttempts(): number {
+  const n = Number(process.env.RECOVERY_MAX_SEND_ATTEMPTS)
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_MAX_SEND_ATTEMPTS
+}
+
+function retryDelayMs(attempts: number): number {
+  const base = Number(process.env.RECOVERY_RETRY_BASE_MS)
+  const safeBase = Number.isFinite(base) && base > 0 ? base : DEFAULT_RETRY_BASE_MS
+  return Math.min(MAX_RETRY_DELAY_MS, safeBase * 2 ** Math.max(0, attempts - 1))
+}
+
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$', INR: '₹', EUR: '€', GBP: '£', JPY: '¥',
@@ -50,6 +77,80 @@ function formatProductList(items: any[], maxItems = 2): string {
 function getFirstProductImage(items: any[]): string | undefined {
   const first = items.find((i: any) => i.image)
   return first?.image || undefined
+}
+
+function recipientKey(kind: 'phone' | 'email' | 'customer', value: string): string {
+  return `${kind}:${value}`
+}
+
+function normalizeRecipientEmailKey(email: string | null | undefined): string | null {
+  if (!email) return null
+  const normalized = email.trim().toLowerCase()
+  return normalized || null
+}
+
+function findRecipientForCart(recipients: Map<string, any>, cart: any): any | null {
+  const phone = normalizeWhatsAppPhone(cart.customerPhone)
+  if (phone) {
+    const match = recipients.get(recipientKey('phone', phone))
+    if (match) return match
+  }
+  const email = normalizeRecipientEmailKey(cart.customerEmail)
+  if (email) {
+    const match = recipients.get(recipientKey('email', email))
+    if (match) return match
+  }
+  if (cart.customerId) {
+    const match = recipients.get(recipientKey('customer', String(cart.customerId)))
+    if (match) return match
+  }
+  return null
+}
+
+/**
+ * Load the consent records for this batch in ONE query. Missing contacts are
+ * registered with consent=false (never inferred) so the dashboard has a
+ * complete list and the skip reason is visible. A DB failure fails closed: no
+ * registry means no WhatsApp send.
+ */
+async function getRecipientMap(storeId: string, carts: any[]): Promise<Map<string, any>> {
+  const OR: Array<Record<string, any>> = []
+
+  for (const cart of carts) {
+    const phone = normalizeWhatsAppPhone(cart.customerPhone)
+    const email = normalizeRecipientEmailKey(cart.customerEmail)
+    if (phone) OR.push({ phone })
+    if (email) OR.push({ email })
+    if (cart.customerId) OR.push({ shopifyCustomerId: String(cart.customerId) })
+  }
+
+  if (OR.length === 0) return new Map()
+
+  let rows: any[] = []
+  try {
+    rows = await prisma.customerIdentity.findMany({ where: { storeId, OR } })
+  } catch (err: any) {
+    console.error(`[recovery] recipient lookup failed for store ${storeId} — WhatsApp blocked:`, err?.message || err)
+    return new Map()
+  }
+
+  const map = new Map<string, any>()
+  const index = (row: any) => {
+    const phone = normalizeWhatsAppPhone(row.phone)
+    const email = normalizeRecipientEmailKey(row.email)
+    if (phone) map.set(recipientKey('phone', phone), row)
+    if (email) map.set(recipientKey('email', email), row)
+    if (row.shopifyCustomerId) map.set(recipientKey('customer', String(row.shopifyCustomerId)), row)
+  }
+  rows.forEach(index)
+
+  for (const cart of carts) {
+    if (findRecipientForCart(map, cart)) continue
+    const created = await ensureRecipientForCart(storeId, cart).catch(() => null)
+    if (created) index(created)
+  }
+
+  return map
 }
 
 async function acquirePerStoreLock(storeId: string): Promise<boolean> {
@@ -237,13 +338,14 @@ let cursor: string | undefined
       })
 
       const customerMsgCounts = await getCustomerMessageCounts(store.id, candidates)
+      const recipients = await getRecipientMap(store.id, candidates)
       const cartResults = await Promise.allSettled(
         candidates.map(cart => processSingleCart(cart, {
           campaign, store, subscription,
           sendDelayMs, followUpDelayMs, maxRounds, activeChannels, currencySymbol, abTest,
           optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts,
           isPaidUser, cartOverageActive,
-          voice, quietHoursStart, quietHoursEnd,
+          voice, quietHoursStart, quietHoursEnd, recipients,
         }))
       )
 
@@ -288,6 +390,7 @@ type CartConfig = {
   voice: BrandVoice
   quietHoursStart: number | null
   quietHoursEnd: number | null
+  recipients: Map<string, any>
 }
 
 async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<CustomerMsgCounts> {
@@ -337,9 +440,13 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
 }
 
   async function processSingleCart(cart: any, config: CartConfig): Promise<{ sent: number; failed: number }> {
-  const { campaign, store, subscription, sendDelayMs, followUpDelayMs, maxRounds, activeChannels, currencySymbol, abTest, optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts, isPaidUser, cartOverageActive, voice, quietHoursStart, quietHoursEnd } = config
+  const { campaign, store, subscription, sendDelayMs, followUpDelayMs, maxRounds, activeChannels, currencySymbol, abTest, optedOutEmails, optedOutPhones, customerLimits, customerMsgCounts, isPaidUser, cartOverageActive, voice, quietHoursStart, quietHoursEnd, recipients } = config
 
   try {
+    // A purchase may land between the sweep's SELECT and this cart's turn.
+    // Never message a cart that has already converted.
+    if (cart.convertedAt || cart.isRecovered) return { sent: 0, failed: 0 }
+
     // Resolve the A/B variant FIRST: its channels/delays/step-budget override the
     // campaign defaults, and every decision below (step guard, delay guard,
     // channel rotation) must use the variant's effective values. Previously the
@@ -379,10 +486,36 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     const roundSettledMessages = cart.messages.filter(
       (m: any) => m.status === 'sent' || m.status === 'delivered' || m.status === 'skipped',
     )
+    const cartPhoneDigits = cart.customerPhone ? sanitizePhoneNumber(cart.customerPhone) : ''
+    const recipient = findRecipientForCart(recipients, cart)
+    // An unsubscribe is channel-agnostic. The OptOut tables cover recorded
+    // unsubscribes; a suppressed identity is the authoritative record and must
+    // stop email too, not just WhatsApp.
+    if (recipient?.suppressed || recipient?.optedOutAt) {
+      return { sent: 0, failed: 0 }
+    }
+    const whatsappEligibility: WhatsAppEligibilityResult = evaluateWhatsAppEligibility({
+      phone: cart.customerPhone,
+      identity: recipient,
+      cartConverted: Boolean(cart.convertedAt || cart.isRecovered),
+      storeActive: store.isActive !== false,
+      whatsappConfigured: isWhatsAppConfigured(),
+      onOptOutList: Boolean(cartPhoneDigits && optedOutPhones.has(cartPhoneDigits)),
+    })
+    if (
+      !whatsappEligibility.eligible &&
+      effActiveChannels.includes('whatsapp') &&
+      (cart.customerPhone || whatsappEligibility.code === 'whatsapp_not_configured')
+    ) {
+      console.log(
+        `[recovery] cart=${cart.id} whatsapp skipped: ${whatsappEligibility.code} (${whatsappEligibility.reason})`,
+      )
+    }
+
     const reachableChannels = effActiveChannels.filter(
       (c: string) =>
         (c === 'email' && Boolean(cart.customerEmail)) ||
-        (c === 'whatsapp' && Boolean(cart.customerPhone)),
+        (c === 'whatsapp' && Boolean(cart.customerPhone) && whatsappEligibility.eligible),
     )
     const channelsByStep = new Map<number, Set<string>>()
     for (const m of roundSettledMessages) {
@@ -446,7 +579,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         return false
       }
       if (c === 'email') return Boolean(cart.customerEmail)
-      if (c === 'whatsapp') return Boolean(cart.customerPhone)
+      if (c === 'whatsapp') return Boolean(cart.customerPhone) && whatsappEligibility.eligible
       return false
     })
 
@@ -631,11 +764,35 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         continue
       }
 
+      // Retry backoff: a failed message is not retried on every sweep. After the
+      // attempt budget is spent it stops consuming rounds and is marked skipped
+      // with an explainable reason.
+      if (existingMessage?.status === 'failed') {
+        const attempts = Number(existingMessage.attempts) || 0
+        if (attempts >= maxSendAttempts()) {
+          await prisma.message
+            .update({
+              where: { id: existingMessage.id },
+              data: { status: 'skipped', reasonCode: 'retry_exhausted' },
+            })
+            .catch(() => {})
+          settledThisSweep.add(ch)
+          continue
+        }
+        const lastAttempt = existingMessage.lastAttemptAt
+          ? new Date(existingMessage.lastAttemptAt).getTime()
+          : 0
+        if (lastAttempt && Date.now() - lastAttempt < retryDelayMs(attempts)) {
+          continue
+        }
+      }
+
       let sendSuccess = false
       let error = ''
       let providerId: string | undefined
       let messageId = ''
       let whatsappFailure: Parameters<typeof isPermanentWhatsAppFailure>[0] | null = null
+      let failureReason: string | null = null
 
       try {
         // ── Compose (validated) copy ────────────────────────────────────
@@ -678,13 +835,20 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           variant: composed.variant,
           promptVersion: composed.promptVersion,
           providerId: null,
+          attempts: (Number(existingMessage?.attempts) || 0) + 1,
+          lastAttemptAt: new Date(),
+          reasonCode: null,
         }
         try {
           if (existingMessage) {
-            await prisma.message.update({
-              where: { id: existingMessage.id },
+            // Condition the claim on the status we just read so two overlapping
+            // sweeps cannot both retry the same failed row. The loser re-reads
+            // on its next pass instead of double-sending.
+            const claimed = await prisma.message.updateMany({
+              where: { id: existingMessage.id, status: existingMessage.status },
               data: { ...claim, createdAt: new Date() },
             })
+            if (claimed.count === 0) continue
             messageId = existingMessage.id
           } else {
             const created = await prisma.message.create({ data: claim })
@@ -729,7 +893,10 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           })
           sendSuccess = emailResult.success
           providerId = emailResult.messageId
-          if (!sendSuccess) error = emailResult.error || 'Unknown error'
+          if (!sendSuccess) {
+            error = emailResult.error || 'Unknown error'
+            failureReason = 'email_transient'
+          }
         } else {
           const firstImage = getFirstProductImage(cartItems)
           // A CartGain-logo header means the product photo could not be
@@ -762,15 +929,21 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           // and their own single-use code. No invented urgency, no generic
           // "USE CODE" blast.
           const firstName = (customerName || '').split(' ')[0]?.trim()
-          const greetingPrefix = firstName ? `${firstName}, ` : ''
           const productSummary = formatProductList(cartItems, 2)
-          const offerLine = authorisedDiscount
-            ? `${greetingPrefix}your ${productSummary} gets ${offerValueLabel} — code ${authorisedDiscount.code}: ${checkoutLink} — or name your price: ${bargainLink}`
-            : `${greetingPrefix}your ${productSummary} is still saved — finish your order: ${checkoutLink} — or name your price: ${bargainLink}`
+          const offerLine = buildRecoveryOfferLine({
+            firstName,
+            productSummary,
+            discountLabel: offerValueLabel,
+            code: authorisedDiscount?.code,
+            checkoutUrl: checkoutLink,
+            bargainUrl: bargainLink,
+          })
 
           const template = templateMap[templateStep]
           const params = template.generateParams(
-            customerName,
+            // {{1}} is a greeting slot, so keep it to the first name (the
+            // offer line already uses the same value).
+            firstName || customerName,
             // The template greets with {{1}}; a body that greets again stutters.
             singleLineMessage(stripLeadingGreeting(composed.body, customerName)),
             offerLine,
@@ -790,6 +963,17 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           providerId = whatsappResult.messageId
           if (!sendSuccess) {
             error = whatsappResult.error || 'Unknown error'
+            const failureShape = {
+              errorCode: whatsappResult.errorCode,
+              errorSubcode: whatsappResult.errorSubcode,
+              error: whatsappResult.error,
+              errorDetails: whatsappResult.errorDetails,
+            }
+            failureReason = isPermanentWhatsAppFailure(failureShape)
+              ? 'whatsapp_permanent'
+              : isConfigWhatsAppFailure(failureShape)
+                ? 'whatsapp_config'
+                : 'whatsapp_transient'
             whatsappFailure = {
               errorCode: whatsappResult.errorCode,
               errorSubcode: whatsappResult.errorSubcode,
@@ -808,16 +992,37 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             status: sendSuccess ? 'sent' : 'failed',
             sentAt: sendSuccess ? new Date() : null,
             providerId: providerId ?? null,
+            reasonCode: sendSuccess ? null : failureReason || 'send_failed',
+            lastAttemptAt: new Date(),
           },
         })
       } catch (err: any) {
         console.error(`Error sending ${ch} for cart ${cart.id}:`, err?.message || err)
         error = err.message
+        failureReason = err?.code === 'TEMPLATE_PARAM_INVALID' ? 'template_invalid' : 'send_error'
+        if (messageId) {
+          await prisma.message
+            .update({
+              where: { id: messageId },
+              data: {
+                status: 'failed',
+                reasonCode: failureReason,
+                lastAttemptAt: new Date(),
+              },
+            })
+            .catch(() => {})
+        }
       }
 
       if (sendSuccess) {
         roundSent++
         settledThisSweep.add(ch)
+        await markRecipientContacted({
+          storeId: store.id,
+          email: cart.customerEmail,
+          phone: cart.customerPhone,
+          channel: ch as 'email' | 'whatsapp',
+        }).catch(() => {})
         if (subscription) {
           await incrementCartsUsedCounter(campaign.userId, subscription.id)
           if (isOverageChannel(ch)) {
@@ -877,7 +1082,10 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             // stays `failed` and is retried after the merchant fixes Meta.
             if (permanent && messageId) {
               await prisma.message
-                .update({ where: { id: messageId }, data: { status: 'skipped' } })
+                .update({
+                  where: { id: messageId },
+                  data: { status: 'skipped', reasonCode: failureReason || 'whatsapp_permanent' },
+                })
                 .catch(() => {})
             }
             // A fallback is about reachability, not campaign setup: even a

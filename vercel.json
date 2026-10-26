@@ -7,6 +7,10 @@
     {
       "path": "/api/jobs/health-check",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/jobs/finalize-bargain-learning",
+      "schedule": "0 4 * * *"
     }
   ],
   "functions": {

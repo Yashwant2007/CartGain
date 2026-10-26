@@ -23,6 +23,8 @@ import {
   publicGoalView,
 } from '@/lib/bargain/goals'
 import { analyzeIntent } from '@/lib/bargain/intent'
+import { assessCustomerClaims } from '@/lib/bargain/claims'
+import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
 import { extractPrice } from '@/lib/bargain/text'
 import { fetchShopifyProducts } from '@/lib/shopify'
 import {
@@ -32,6 +34,7 @@ import {
   type RecommendationContext,
 } from '@/lib/bargain/recommendations'
 import type { BargainDemoGoal } from '@/lib/bargain/api-types'
+import { previewDemoLearning, learningSelectionForClient, recordLearningEvent, loadLearningConfig } from '@/lib/bargain/learning/service'
 
 export const dynamic = 'force-dynamic'
 
@@ -205,6 +208,9 @@ export async function POST(request: NextRequest) {
       ? body.shopifyProductId
       : null
     const variantId = typeof body.variantId === 'string' && body.variantId ? body.variantId : undefined
+    const learningSessionId = typeof body.learningSessionId === 'string' && body.learningSessionId
+      ? body.learningSessionId.slice(0, 80)
+      : null
 
     // Verified floor: against a REAL product on the merchant's own Shopify store,
     // derive the floor server-side exactly like the live storefront instead of
@@ -300,6 +306,8 @@ export async function POST(request: NextRequest) {
       goal: goalCtx,
       intent: intentAnalysis,
       ...(negotiationMode ? { negotiationMode } : {}),
+      ...(isNegotiationStyle(merchant.config?.negotiationStyle) ? { negotiationStyle: merchant.config.negotiationStyle } : {}),
+      abuseStrictness: isAbuseStrictness(merchant.config?.abuseStrictness) ? merchant.config!.abuseStrictness : 'standard',
     }
 
     // Real catalog facts for item demos: when the merchant's store + a real
@@ -323,6 +331,82 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const claims = assessCustomerClaims(body.message, {
+      product: ctx.product ?? null,
+      originalPrice,
+      compareAtPrice: ctx.product?.compareAtPrice ?? null,
+      approvedSellingPoints: merchant.config?.approvedSellingPoints ?? [],
+      disallowedClaims: merchant.config?.disallowedClaims ?? [],
+    })
+    ctx.claims = claims
+    const demoQuarantined = claims.manipulation
+
+    const learningContextIsReady =
+      offer != null ||
+      intentAnalysis.budget != null ||
+      body.walkoutTriggered === true ||
+      [
+        'PRICE_ONLY',
+        'BUDGET_CONSTRAINT',
+        'VALUE_UNCLEAR',
+        'COMPARISON',
+        'PRODUCT_QUESTION',
+        'PRODUCT_MISMATCH',
+        'RECOMMENDATION_REQUEST',
+        'PRODUCT_DISCOVERY',
+        'PURCHASE_READY',
+      ].includes(intentAnalysis.intent)
+
+    const learningResolved = merchant.store && learningContextIsReady && !demoQuarantined
+      ? await previewDemoLearning({
+          storeId: merchant.store.id,
+          demoSessionId: learningSessionId,
+          context: {
+            originalPrice,
+            floorPrice: minPrice,
+            offer,
+            budget: intentAnalysis.budget,
+            intent: intentAnalysis.intent,
+            objection: intentAnalysis.objection,
+            rounds: attemptsUsed,
+            maxRounds: maxAttempts,
+            recommendationsEnabled: merchant.config?.recommendationsEnabled === true,
+            bulkQuantity,
+            promoAvailable: Boolean(merchant.config?.campaignMessage),
+          },
+        })
+      : null
+    if (learningResolved) ctx.learning = learningResolved.guidance
+
+    if (demoQuarantined && merchant.store) {
+      const learningConfig = await loadLearningConfig(merchant.store.id)
+      await recordLearningEvent({
+        storeId: merchant.store.id,
+        sessionId: null,
+        environment: 'demo',
+        eventType: 'quarantined',
+        strategy: 'BASELINE',
+        baselineStrategy: 'BASELINE',
+        version: learningConfig?.version ?? 'v1',
+        contextKey: '__global__',
+        mode: 'baseline',
+        intent: intentAnalysis.intent,
+        objection: intentAnalysis.objection,
+        originalPrice,
+        floorPrice: minPrice,
+        offer,
+        dedupeKey: `quarantine:demo:${merchant.store.id}:${learningSessionId ?? 'stateless'}`,
+        properties: {
+          source: 'demo_claim_assessment',
+          claims: claims.claims.map((claim) => ({
+            category: claim.category,
+            status: claim.status,
+            provenance: claim.provenance,
+          })),
+        },
+      })
+    }
+
     // When the client has already accepted a deal earlier in this exchange
     // (widget decision state), tell the engine so a follow-up chat confirms
     // the locked deal instead of re-quoting a confusing price or reopening
@@ -338,6 +422,35 @@ export async function POST(request: NextRequest) {
       result = offer != null
         ? ruleBasedDecision(offer, ctx2)
         : { reply: chatFallback(message, ctx2, history.length), decision: 'chat', tactic: 'demo_fallback', sentiment: 'neutral' }
+    }
+
+    if (learningResolved) {
+      await recordLearningEvent({
+        storeId: merchant.store!.id,
+        sessionId: null,
+        environment: 'demo',
+        eventType: 'offer_turn',
+        strategy: learningResolved.selection.appliedStrategy,
+        baselineStrategy: learningResolved.selection.baselineStrategy,
+        version: learningResolved.selection.version,
+        contextKey: learningResolved.selection.contextKey,
+        mode: learningResolved.selection.mode,
+        intent: intentAnalysis.intent,
+        objection: intentAnalysis.objection,
+        originalPrice,
+        floorPrice: minPrice,
+        offer,
+        budget: intentAnalysis.budget,
+        recommendationEligible: learningResolved.selection.features.recommendationEligible,
+        value: result.counterOffer ?? null,
+        dedupeKey: `turn:demo:${merchant.store!.id}:${learningSessionId ?? 'stateless'}:${history.length}:${result.decision}`,
+        properties: {
+          decision: result.decision,
+          tactic: result.tactic ?? null,
+          candidate: learningResolved.selection.strategy,
+          exploration: learningResolved.selection.isExploration,
+        },
+      })
     }
 
     // ── Product recommendation layer (demo parity) ──
@@ -406,6 +519,7 @@ export async function POST(request: NextRequest) {
       persona,
       abuse: (result.metadata as any)?.abuse === true,
       goal: demoGoal,
+      ...(learningResolved ? { learning: learningSelectionForClient(learningResolved.selection), learningSessionId } : {}),
       ...(recommendations && recommendationContext
         ? { recommendations, recommendationContext }
         : {}),
