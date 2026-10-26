@@ -97,11 +97,11 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   `BargainConfig.negotiationStyle/abuseStrictness`,
   `BargainSession.learningQuarantined`, `BargainLearningOutcome.quarantined`,
   and is applied to production (columns verified, 8 configs intact). Verified:
-  Jest **124 suites / 1381 tests**, tsc, lint and production build green. The
-  safety build was deployed to Vercel (`/api/health` ok, DB/Redis/AI/email ok);
-  the latest claim-status/provenance/integrity changes are local-only. The
-  working tree is still uncommitted, so `/api/health.release` remains
-  `5ebce39`; `whatsapp.appSecret` is still false.
+  Jest **124 suites / 1381 tests**, tsc, lint and production build green.
+  Committed as `115011ce` and deployed to Vercel; `/api/health.release` is
+  `115011c`, DB/Redis/env/AI/email are ok, and `whatsapp.appSecret` is now true
+  (inbound webhooks no longer 401). The three new API routes return 401
+  unauthenticated. A docs-only AGENTS update follows the runtime deploy.
 
 - `feat(bargain): adaptive negotiation learning layer end to end`. Added the
   additive `BargainLearning*` schema (config, events, outcomes, arm stats,
@@ -437,11 +437,10 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   `/demo` learning stays off for them until the merchant opens Settings →
   Bargain learning and saves (the existing 8 stores were seeded). Production
   learning is deliberately off until enabled there.
-- Production `/api/health` reports `checks.whatsapp.appSecret: false` even though
-  `verifyToken` and `configured` are true. Set `WHATSAPP_APP_SECRET` (or
-  `META_APP_SECRET`/`FACEBOOK_APP_SECRET`) in Vercel from Meta → App settings →
-  Basic, or inbound STOP/START and delivery receipts will answer 401. Local
-  `.env` WhatsApp credentials are placeholders, not the live Meta token.
+- WhatsApp inbound is unblocked: production `/api/health` now reports
+  `checks.whatsapp.appSecret: true` with `verifyToken` and `configured` true
+  (secret set in Vercel). Local `.env` WhatsApp credentials are still
+  placeholders, not the live Meta token.
 - Partner Dashboard "App Bridge from CDN" / "session tokens" checks are only
   confirmed by Shopify's scanner (it loads the app in the admin iframe); the
   code side is verified (script + meta served in `<head>`, token exchanged via
