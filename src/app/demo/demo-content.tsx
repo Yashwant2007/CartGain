@@ -19,6 +19,9 @@ import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { buildQuickOffers } from '@/lib/bargain/offers'
 import { currencySymbolFor } from '@/lib/bargain/i18n'
 import type { BargainRecommendation } from '@/lib/bargain/api-types'
+import ShopkeeperAvatar from '@/components/bargain/ShopkeeperAvatar'
+import type { ExpressionState } from '@/lib/bargain/experience/expressions'
+import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 
 type ChatMsg = {
   role: 'customer' | 'ai'
@@ -66,6 +69,12 @@ const PERSONAS: { id: Persona; name: string; blurb: string }[] = [
   { id: 'strict_negotiator', name: 'Morgan — Strict Negotiator', blurb: 'Precise, data-driven, no emoji.' },
   { id: 'playful_friend', name: 'Riley — Playful Friend', blurb: 'Cheeky, fun, makes you smile.' },
 ]
+
+const AVATAR_PERSONALITY: Record<Persona, ShopkeeperPersonality> = {
+  friendly_shopkeeper: 'friendly_shopkeeper',
+  strict_negotiator: 'strict_shopkeeper',
+  playful_friend: 'playful_shopkeeper',
+}
 
 const LANGUAGES: { id: string; label: string }[] = [
   { id: 'auto', label: 'Auto · mirror me' },
@@ -124,6 +133,7 @@ export default function DemoContent() {
   const [input, setInput] = useState('')
   const [attemptsUsed, setAttemptsUsed] = useState(0)
   const [thinking, setThinking] = useState(false)
+  const [avatarExpression, setAvatarExpression] = useState<ExpressionState>('listening')
   const [showThinking, setShowThinking] = useState(false)
   const thinkingTimerRef = useRef<number | null>(null)
   const thinkingShownAtRef = useRef(0)
@@ -234,6 +244,7 @@ export default function DemoContent() {
     sessionIdRef.current += 1
     dealAcceptedRef.current = false
     setMessages([{ role: 'ai', content: buildOpeningMessage(ctx) }])
+    setAvatarExpression(persona === 'playful_friend' ? 'amused' : 'listening')
     setAttemptsUsed(0)
     setEnded(null)
     setFinalPrice(null)
@@ -255,6 +266,7 @@ export default function DemoContent() {
     setEnded(null)
     setFinalPrice(null)
     setThinking(false)
+    setAvatarExpression('listening')
     setRecommendations([])
     setDiscountCode(null)
     setCodeStatus('idle')
@@ -306,6 +318,7 @@ export default function DemoContent() {
     }
     const offer = extractPrice(userText)
     const isWalkout = detectWalkout(userText)
+    setAvatarExpression('listening')
 
     const isOfferTurn = offer != null && !isAbsurdOffer(offer, { minPrice, originalPrice: product.price })
     const nextAttempt = isOfferTurn ? attemptsUsed + 1 : attemptsUsed
@@ -444,6 +457,7 @@ export default function DemoContent() {
       thinkingTimerRef.current = window.setTimeout(() => {
         thinkingShownAtRef.current = Date.now()
         setShowThinking(true)
+        setAvatarExpression('thinking')
         resolve()
       }, THINKING_DELAY_MS)
     })
@@ -473,6 +487,11 @@ export default function DemoContent() {
       setThinking(false)
       setShowThinking(false)
       if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
+      if (newEnded === 'accepted') setAvatarExpression('celebrating')
+      else if (newEnded === 'rejected' || newEnded === 'abandoned') setAvatarExpression(persona === 'strict_negotiator' ? 'declining' : 'disappointed')
+      else if (decision === 'reject') setAvatarExpression(persona === 'strict_negotiator' ? 'declining' : 'disappointed')
+      else if (counterOffer != null) setAvatarExpression(persona === 'playful_friend' ? 'surprised' : 'negotiating')
+      else setAvatarExpression(persona === 'playful_friend' ? 'amused' : 'happy')
       if (newEnded) setEnded(newEnded)
       if (newFinal != null) setFinalPrice(newFinal)
     }, 0)
@@ -484,6 +503,7 @@ export default function DemoContent() {
     const sid = sessionIdRef.current
     setMessages(prev => [...prev, { role: 'customer', content: "Actually, I'll just buy it at the full price.", delivery: 'sending' }])
     setInput('')
+    setAvatarExpression('listening')
     setThinking(true)
     setShowThinking(false)
     thinkingShownAtRef.current = 0
@@ -492,6 +512,7 @@ export default function DemoContent() {
       thinkingTimerRef.current = window.setTimeout(() => {
         thinkingShownAtRef.current = Date.now()
         setShowThinking(true)
+        setAvatarExpression('thinking')
         resolve()
       }, THINKING_DELAY_MS)
     })
@@ -506,6 +527,7 @@ export default function DemoContent() {
       setThinking(false)
       setShowThinking(false)
       if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
+      setAvatarExpression('happy')
       setEnded('skipped')
     }, 0)
   }
@@ -544,13 +566,13 @@ export default function DemoContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white">
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes cgfDot { 0%, 80%, 100% { opacity: 0.3; transform: translateY(0) scale(0.85) } 40% { opacity: 1; transform: translateY(-2px) scale(1) } }
         @keyframes cgfTickIn { 0% { opacity: 0; transform: scale(0.6) } 60% { transform: scale(1.12) } 100% { opacity: 1; transform: scale(1) } }
         .cgf-tick { color: rgba(255,255,255,0.5); opacity: 0.55; transition: color 0.2s ease, opacity 0.2s ease }
         .cgf-tick-in { color: #ffffff; opacity: 1; animation: cgfTickIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) }
         @media (prefers-reduced-motion: reduce) { .cgf-tick, .cgf-tick-in { animation: none !important; transition: none !important } }
-      `}</style>
+      ` }} />
       {/* Header */}
       <header className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-lg border-b border-blue-800/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between">
@@ -753,9 +775,19 @@ export default function DemoContent() {
           <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl overflow-hidden">
             {/* Status bar */}
             <div className="px-4 py-3 border-b border-blue-800/30 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-blue-200">{PERSONAS.find(p => p.id === persona)?.name}</span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <ShopkeeperAvatar
+                  personality={AVATAR_PERSONALITY[persona]}
+                  expression={avatarExpression}
+                  size="md"
+                />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-blue-200 truncate">{PERSONAS.find(p => p.id === persona)?.name}</span>
+                  </div>
+                  <span className="block text-[10px] text-blue-300/60">reacting live to your offers</span>
+                </div>
               </div>
               <div className="flex items-center gap-3 text-blue-300/70">
                 <span>{thinking ? 'negotiating…' : `Attempts left: ${attemptsLeft}`}</span>

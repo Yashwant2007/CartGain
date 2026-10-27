@@ -7,6 +7,9 @@ import { currencySymbolFor } from '@/lib/bargain/i18n'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { reciprocalCounter, isAbsurdOffer, absurdOfferReply, type NegotiationContext } from '@/lib/bargain/engine'
 import { GoalStrip } from '@/components/bargain/BargainPrimitives'
+import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
+import { expressionForEvent, type AvatarEvent, type ExpressionState } from '@/lib/bargain/experience/expressions'
+import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import type { BargainDemoGoal } from '@/lib/bargain/api-types'
 
 type Line =
@@ -36,6 +39,18 @@ const PERSONA_DISPLAY: Record<string, string> = {
   friendly: 'Friendly',
   strict: 'Strict',
   playful: 'Playful',
+}
+
+const PERSONA_NAME: Record<string, string> = {
+  friendly: 'Alex',
+  strict: 'Morgan',
+  playful: 'Riley',
+}
+
+const AVATAR_PERSONALITY: Record<string, ShopkeeperPersonality> = {
+  friendly: 'friendly_shopkeeper',
+  strict: 'strict_shopkeeper',
+  playful: 'playful_shopkeeper',
 }
 
 function money(currency: string, n: number): string {
@@ -101,6 +116,7 @@ export default function StorefrontBargainWidget({
   const [persona, setPersona] = useState<'friendly' | 'strict' | 'playful'>(() =>
     personaProp && ENGINE_TO_LOCAL[personaProp] ? ENGINE_TO_LOCAL[personaProp] : 'friendly',
   )
+  const [expression, setExpression] = useState<ExpressionState>('listening')
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [discountCode, setDiscountCode] = useState<string | null>(null)
   const [codeSaved, setCodeSaved] = useState(false)
@@ -150,8 +166,16 @@ export default function StorefrontBargainWidget({
     }
   }, [announceHeight])
 
+  const avatarPersonality = AVATAR_PERSONALITY[persona] ?? 'friendly_shopkeeper'
+  const reactAvatar = (event: AvatarEvent) => setExpression(expressionForEvent(avatarPersonality, event))
+  const latestAiLine = [...messages].reverse().find((m) => m.role === 'ai')?.content
+  const stageLine = showThinking
+    ? 'Let me check what I can do…'
+    : error || latestAiLine?.replace(/\s+/g, ' ').trim() || 'Make me an offer…'
+
   const openBargain = () => {
     setStep('intro')
+    reactAvatar('CHAT_OPENED')
     setMessages([])
     setAttempts(0)
     setInput('')
@@ -242,6 +266,7 @@ export default function StorefrontBargainWidget({
     const isWalkout = detectWalkout(userText)
     busyRef.current = true
     const userMsgId = uid()
+    reactAvatar('CUSTOMER_MESSAGE_RECEIVED')
     setMessages((prev) => [
       ...prev,
       { role: 'customer', content: userText, price: offer ?? undefined, id: userMsgId, delivery: 'sending' },
@@ -264,6 +289,7 @@ export default function StorefrontBargainWidget({
       thinkingTimerRef.current = window.setTimeout(() => {
         thinkingShownAtRef.current = Date.now()
         setShowThinking(true)
+        reactAvatar('AI_THINKING_STARTED')
         resolve()
       }, THINKING_DELAY_MS)
     })
@@ -328,12 +354,15 @@ export default function StorefrontBargainWidget({
       setAttempts(isAbsurdTurn ? attempts : nextAttempt)
 
       if (data.decision === 'accept') {
+        reactAvatar('OFFER_ACCEPTED')
         setStep('deal')
         setFinalPrice(data.counterOffer ?? offer)
         setDiscountCode(`BARGAIN_${Date.now().toString(36).toUpperCase()}`)
       } else if (data.decision === 'reject' || (exhausted && data.decision !== 'accept')) {
+        reactAvatar('OFFER_REJECTED')
         setStep('rejected')
       } else {
+        reactAvatar(priceTag != null ? 'COUNTEROFFER_PRESENTED' : 'AI_RESPONSE_RECEIVED')
         setStep('chat')
       }
     } catch (err: any) {
@@ -354,6 +383,7 @@ export default function StorefrontBargainWidget({
         result = { reply: PersonaRetention[persona](p, (n) => money(currency, n)), decision: 'counter', counterOffer: p }
       } else if (isWalkout) {
         pushAi(PersonaFarewell[persona])
+        reactAvatar('OFFER_REJECTED')
         setStep('rejected')
         setLoading(false)
         return
@@ -414,6 +444,10 @@ export default function StorefrontBargainWidget({
       const hold = minThinkingMs(result.reply) - seenFor
       if (hold > 0) await wait(hold)
       pushAi(result.reply, result.counterOffer)
+      if (exhausted && result.decision !== 'accept') reactAvatar('OFFER_REJECTED')
+      else if (result.decision === 'accept') reactAvatar('OFFER_ACCEPTED')
+      else if (result.counterOffer != null) reactAvatar('COUNTEROFFER_PRESENTED')
+      else reactAvatar('AI_RESPONSE_RECEIVED')
       setAttempts(nextAttempt)
     } finally {
       window.clearTimeout(ack)
@@ -480,7 +514,7 @@ export default function StorefrontBargainWidget({
       {/* Scoped chat motion — namespaced so no Shopify theme CSS is touched.
           A single delivered tick, a calm three-dot thinking pulse, and a soft
           bubble entrance keep the negotiation feeling quick and professional. */}
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         .cgf-msg { animation: cgfMsgIn 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) }
         @keyframes cgfMsgIn { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: translateY(0) } }
 
@@ -513,7 +547,7 @@ export default function StorefrontBargainWidget({
           .cgf-msg, .cgf-tick, .cgf-tick-in, .cgf-dot { animation: none !important; transition: none !important }
           .cgf-tick { opacity: 1 }
         }
-      `}</style>
+      ` }} />
 
       {/* Today's goal — merchant live preview: real server progress plus the
           strategy chip driving the agent (customers never see that chip;
@@ -525,6 +559,14 @@ export default function StorefrontBargainWidget({
           internal
         />
       )}
+
+      <ShopkeeperStage
+        personality={avatarPersonality}
+        expression={expression}
+        name={`${PERSONA_NAME[persona]} · Shopkeeper`}
+        status="Online"
+        line={stageLine}
+      />
 
       {step === 'intro' && (
         <div className="p-4 space-y-3">
@@ -559,7 +601,7 @@ export default function StorefrontBargainWidget({
           <button
             type="button"
             className={buttonCls + ' w-full'}
-            onClick={() => setStep('chat')}
+            onClick={() => { reactAvatar('CHAT_OPENED'); setStep('chat') }}
             aria-label="Start price negotiation"
           >
             Negotiate Price

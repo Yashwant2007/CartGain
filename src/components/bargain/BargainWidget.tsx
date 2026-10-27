@@ -7,12 +7,13 @@ import {
 } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import { buildQuickOffers, parseDraftOffer } from '@/lib/bargain/offers'
-import ShopkeeperAvatar, { type ExpressionState } from '@/components/bargain/ShopkeeperAvatar'
+import type { ExpressionState } from '@/components/bargain/ShopkeeperAvatar'
+import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
 import { expressionForEvent, type AvatarEvent } from '@/lib/bargain/experience/expressions'
 import { resolveShopkeeperPersonality } from '@/lib/bargain/experience/personality'
 import { trackExperienceEvent } from '@/lib/bargain/experience/analytics'
-import type { BargainExperienceConfig } from '@/lib/bargain/experience/types'
+import { PERSONALITY_META, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
 import type {
   BargainAcceptSuccess,
   BargainGoalView,
@@ -279,6 +280,13 @@ export default function BargainWidget({
   const minThinkingMs = (reply: string) => Math.min(600, Math.max(260, reply.length * 4))
   const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
   const personaChip = persona ? PERSONA_CHIP[persona] : undefined
+  const shopkeeperName = PERSONALITY_META.find((p) => p.id === personality)?.name ?? t('shopkeeperOnline')
+  const latestAiLine = [...messages].reverse().find((m) => m.role === 'ai')?.content
+  const stageLine = thinkingVisible
+    ? t('checking')
+    : error
+      ? t('checkOfferError')
+      : latestAiLine?.replace(/\s+/g, ' ').trim() || t('makeOfferSub')
   const savings = decision === 'accept' && finalPrice != null ? livePrice - finalPrice : null
 
   // The last price the shopkeeper actually put on the table (server-issued
@@ -1270,14 +1278,6 @@ export default function BargainWidget({
             background: 'linear-gradient(180deg, #ffffff, #fafbff)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-              {avatarEnabled && (
-                <ShopkeeperAvatar
-                  personality={personality}
-                  expression={expression}
-                  size="md"
-                  motionEnabled={experience?.motionEnabled !== false}
-                />
-              )}
               <ProductThumb image={productCtx.image} title={productCtx.title} size={40} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
@@ -1400,6 +1400,17 @@ export default function BargainWidget({
               bestCounter={lastCounter}
               bestCustomerOffer={bestCustomerOffer}
               t={t}
+            />
+          )}
+
+          {activeTab === 'chat' && avatarEnabled && !unavailable && !limit && (
+            <ShopkeeperStage
+              personality={personality}
+              expression={expression}
+              name={shopkeeperName}
+              status={t('shopkeeperOnline')}
+              line={stageLine}
+              motionEnabled={experience?.motionEnabled !== false}
             />
           )}
 
@@ -1911,15 +1922,15 @@ export default function BargainWidget({
             </button>
           </div>
           {isEmbed && (
-            <style>{`
+            <style dangerouslySetInnerHTML={{ __html: `
               .cg-embed-mini { position: absolute; inset: 0; z-index: 99999; background: #ffffff; display: flex; }
               .cg-embed-mini .cg-mini-inner { display: flex; align-items: center; gap: 10; padding: 10px 12px; width: 100%; border-radius: 14px; border: 1px solid #e0e7ff; background: #fafbff; }
-            `}</style>
+            ` }} />
           )}
         </div>
       )}
 
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
         @keyframes cgPanelIn { from { opacity: 0; transform: translateY(10px) scale(0.985) } to { opacity: 1; transform: translateY(0) scale(1) } }
         @keyframes cgMsgIn { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: translateY(0) } }
@@ -2057,7 +2068,7 @@ export default function BargainWidget({
         @supports (padding: max(0px)) {
           .cartgain-bargain .cg-panel-fixed, .cartgain-bargain .cg-panel-mini { padding-bottom: env(safe-area-inset-bottom) }
         }
-      `}</style>
+      ` }} />
     </div>
   )
 }
