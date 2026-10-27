@@ -90,10 +90,14 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   `20261027120000_add_bargain_experience_studio` is applied to production
   (JSONB snapshots + 15 flat columns verified); an earlier `migrate dev` shadow
   replay failed on old `BargainRevenueShareEvent`, so the additive SQL migration
-  was created/applied directly. Verified: Jest **125 suites / 1393 tests**, tsc,
+  was created/applied directly. Verified: Jest **126 suites / 1399 tests**, tsc,
   lint, production build; local public `/api/bargain/experience` returned the
   published defaults 200 and the merchant endpoint returned 401 unauthenticated.
-  Not yet committed/deployed at the time of this log.
+  Committed `a5dcdb99` and deployed; `/api/health.release` is `a5dcdb9` with
+  DB/Redis/env/AI/email/WhatsApp checks ok. Production public experience returns
+  the published defaults (200), the merchant endpoint is 401 unauthenticated,
+  and the embed returns 200. The route integration test covers auth, draft-only
+  writes, publish mirroring, defaults, and ownership fallback.
 
 - `feat(bargain): claim checks, merchant negotiation styles, and learning
   quarantine`. Added a deterministic truth layer (`src/lib/bargain/claims.ts`)
