@@ -95,7 +95,10 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   green; local production `next start` serves `/`, `/bargain/embed`, `/privacy`,
   `/dpa` and `/terms` 200. Local `/api/health` remains 503 on this machine
   (Redis unavailable + missing bootstrap env), so live health must be checked
-  after deploy. Uncommitted; production remains `cc29bc4`.
+  after deploy. Committed across `0b382402`→`74dfd82f` and deployed; live
+  `/api/health.release` is `74dfd82` with DB/Redis/env/AI/email/WhatsApp/Shopify
+  checks ok, and live `/`, `/bargain/embed`, `/privacy`, `/dpa`, `/terms` and
+  `/api/bargain/experience` answer 200 while merchant routes stay 401.
 
 - `feat(bargain): promote the shopkeeper to a large stage in the chat`
   (**uncommitted**). Replaced the small header avatar with `ShopkeeperStage` in
