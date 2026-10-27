@@ -1,14 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ShopkeeperAvatar from './ShopkeeperAvatar'
 import type { BargainExperienceConfig } from '@/lib/bargain/experience/types'
 import type { ExpressionState } from './ShopkeeperAvatar'
+import { shouldCountImpression, trackExperienceEvent } from '@/lib/bargain/experience/analytics'
 
 interface Props {
   experience: BargainExperienceConfig
   onOpen: () => void
   storeName?: string
+  storeId?: string
+  productId?: string | null
+  variantId?: string | null
+  source?: 'item' | 'cart' | 'storefront'
+  trackingEnabled?: boolean
+  preview?: boolean
 }
 
 const DESIGN_STYLES: Record<string, { bg: string; border: string; shadow: string; accent: string }> = {
@@ -18,17 +25,83 @@ const DESIGN_STYLES: Record<string, { bg: string; border: string; shadow: string
   'human-shopkeeper': { bg: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', border: '#86efac', shadow: '0 20px 60px rgba(16,185,129,0.16)', accent: '#059669' },
 }
 
-export default function StorefrontInvitation({ experience, onOpen }: Props) {
+export default function StorefrontInvitation({
+  experience,
+  onOpen,
+  storeId,
+  productId,
+  variantId,
+  source = 'storefront',
+  trackingEnabled = false,
+  preview = false,
+}: Props) {
   const [expression, setExpression] = useState<ExpressionState>('idle')
+  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const impressionTracked = useRef(false)
   const design = DESIGN_STYLES[experience.designVariant] || DESIGN_STYLES['smart-assistant']
   const accent = experience.accentColor || design.accent
   const copy = experience.customGreeting || getDefaultCopy(experience.designVariant)
   const cta = experience.ctaLabel || getDefaultCta(experience.designVariant)
   const animate = experience.motionEnabled
 
+  useEffect(() => {
+    if (!trackingEnabled || preview || !storeId || !productId || impressionTracked.current) return
+    if (!shouldCountImpression(storeId, productId, experience)) return
+    const node = buttonRef.current
+    if (!node || typeof IntersectionObserver === 'undefined') return
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        if (entry?.isIntersecting && entry.intersectionRatio >= 0.5) {
+          if (timer) return
+          timer = setTimeout(() => {
+            if (impressionTracked.current) return
+            impressionTracked.current = true
+            trackExperienceEvent({
+              storeId,
+              eventType: 'invitation_impression',
+              experience,
+              productId,
+              variantId,
+              source,
+            })
+          }, 800)
+        } else if (timer) {
+          clearTimeout(timer)
+          timer = null
+        }
+      },
+      { threshold: [0.5] }
+    )
+    observer.observe(node)
+    return () => {
+      observer.disconnect()
+      if (timer) clearTimeout(timer)
+    }
+    // Experience identity is the published snapshot at mount; changing design
+    // remounts/re-evaluates and gets its own qualified impression.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackingEnabled, preview, storeId, productId, variantId, source, experience.designVariant, experience.publishedVersion])
+
+  function handleOpen() {
+    if (trackingEnabled && !preview && storeId) {
+      trackExperienceEvent({
+        storeId,
+        eventType: 'invitation_click',
+        experience,
+        productId,
+        variantId,
+        source,
+      })
+    }
+    onOpen()
+  }
+
   return (
     <button
-      onClick={onOpen}
+      ref={buttonRef}
+      onClick={handleOpen}
       onMouseEnter={() => setExpression('curious')}
       onMouseLeave={() => setExpression('idle')}
       aria-label={cta}

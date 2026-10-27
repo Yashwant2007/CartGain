@@ -14,7 +14,7 @@ import {
 import { computeRefundNetting, isMessageAttributable } from '@/lib/attribution'
 import { attributeBargainGoal, netBargainGoalRefund } from '@/lib/bargain/goals'
 import { recordLearningRefund } from '@/lib/bargain/learning/outcomes'
-import { attributeBargainPurchase } from '@/lib/bargain/purchase'
+import { attributeBargainPurchase, netBargainPurchaseRefund } from '@/lib/bargain/purchase'
 import { reconcileShopifySubscription, downgradeSubscriptionToFree } from '@/lib/shopify-billing/service'
 import { mapShopifyStatus } from '@/lib/shopify-billing/subscriptions'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS, resolvePlanId, getPlan } from '@/lib/payment'
@@ -930,6 +930,13 @@ async function handleOrderCancelled(data: any, store: any, domain: string) {
     refundAmount: 0,
     fullyRefunded: true,
   })
+  await netBargainPurchaseRefund({
+    storeId: store.id,
+    shopifyOrderId: orderId,
+    refundAmount: 0,
+    fullyRefunded: true,
+    refundId: 'cancelled',
+  }).catch((err) => console.error('[BARGAIN_PURCHASE_REFUND]', err))
   await recordLearningRefund({
     storeId: store.id,
     shopifyOrderId: orderId,
@@ -967,6 +974,13 @@ async function handleRefundCreate(data: any, store: any, domain: string) {
     refundAmount,
     fullyRefunded: false,
   })
+  await netBargainPurchaseRefund({
+    storeId: store.id,
+    shopifyOrderId: orderId,
+    refundAmount,
+    fullyRefunded: false,
+    refundId: data.id ? String(data.id) : null,
+  }).catch((err) => console.error('[BARGAIN_PURCHASE_REFUND]', err))
   await recordLearningRefund({
     storeId: store.id,
     shopifyOrderId: orderId,

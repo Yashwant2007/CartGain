@@ -14,12 +14,26 @@ jest.mock('@/lib/db', () => ({
   default: {
     store: { findFirst: jest.fn() },
     bargainConfig: { upsert: jest.fn() },
+    bargainExperiencePublish: {
+      create: jest.fn(),
+      findMany: jest.fn(),
+      deleteMany: jest.fn(),
+      findUnique: jest.fn(),
+    },
+    $transaction: jest.fn(),
   },
 }))
 
 const prismaMock = prisma as unknown as {
   store: { findFirst: jest.Mock }
   bargainConfig: { upsert: jest.Mock }
+  bargainExperiencePublish: {
+    create: jest.Mock
+    findMany: jest.Mock
+    deleteMany: jest.Mock
+    findUnique: jest.Mock
+  }
+  $transaction: jest.Mock
 }
 const authMock = getServerSession as jest.Mock
 const STORE = { id: 'store-1', userId: 'user-1' }
@@ -57,6 +71,10 @@ beforeEach(() => {
     ...(create || {}),
     ...(update || {}),
   }))
+  prismaMock.bargainExperiencePublish.findMany.mockResolvedValue([])
+  prismaMock.bargainExperiencePublish.create.mockResolvedValue({})
+  prismaMock.bargainExperiencePublish.deleteMany.mockResolvedValue({ count: 0 })
+  prismaMock.$transaction.mockImplementation(async (fn: any) => fn(prismaMock))
 })
 
 it('rejects unauthenticated reads and writes', async () => {
@@ -78,6 +96,7 @@ it('returns the draft to the owning merchant', async () => {
   expect(body.experience.personality).toBe('strict_shopkeeper')
   expect(body.experience.draftVersion).toBe(4)
   expect(body.experience.publishedVersion).toBe(2)
+  expect(Array.isArray(body.history)).toBe(true)
 })
 
 it('saves a draft without touching the published snapshot or live columns', async () => {
@@ -116,6 +135,50 @@ it('validates the action and store ownership', async () => {
   expect((await PUT(request('PUT', { action: 'nonsense' }))).status).toBe(400)
   prismaMock.store.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null)
   expect((await GET(request('GET'))).status).toBe(404)
+})
+
+it('rejects a stale draft save without overwriting it', async () => {
+  prismaMock.bargainConfig.upsert.mockResolvedValueOnce(rawConfig({ experienceDraftVersion: 7 }))
+  const res = await PUT(request('PUT', { action: 'draft', expectedDraftVersion: 3, personality: 'playful_shopkeeper' }))
+  expect(res.status).toBe(409)
+  const body = await res.json()
+  expect(body.code).toBe('DRAFT_VERSION_CONFLICT')
+  expect(body.currentDraft.draftVersion).toBe(7)
+  // One call is the read/create used to load the current draft; no write followed.
+  expect(prismaMock.bargainConfig.upsert).toHaveBeenCalledTimes(1)
+})
+
+it('records a bounded publish snapshot', async () => {
+  const res = await PUT(request('PUT', { action: 'publish', personality: 'strict_shopkeeper' }))
+  expect(res.status).toBe(200)
+  expect(prismaMock.bargainExperiencePublish.create).toHaveBeenCalledWith(expect.objectContaining({
+    data: expect.objectContaining({
+      storeId: STORE.id,
+      version: 2,
+      action: 'publish',
+      config: expect.objectContaining({ personality: 'strict_shopkeeper' }),
+    }),
+  }))
+})
+
+it('rolls back to a stored published snapshot as a new version', async () => {
+  prismaMock.bargainExperiencePublish.findUnique.mockResolvedValue({
+    id: 'pub-1',
+    storeId: STORE.id,
+    version: 3,
+    action: 'publish',
+    config: { ...DEFAULT_BARGAIN_EXPERIENCE, personality: 'playful_shopkeeper', designVariant: 'playful-bargain-club' },
+  })
+  const res = await POST(request('POST', { action: 'rollback', version: 3 }))
+  expect(res.status).toBe(200)
+  const update = prismaMock.bargainConfig.upsert.mock.calls.at(-1)[0].update
+  expect(update.experiencePublished.personality).toBe('playful_shopkeeper')
+  expect(update.experiencePublished.designVariant).toBe('playful-bargain-club')
+  expect(update.experiencePublishedVersion).toBe(2)
+  expect(update.shopkeeperPersonality).toBe('playful_shopkeeper')
+  expect(prismaMock.bargainExperiencePublish.create).toHaveBeenCalledWith(expect.objectContaining({
+    data: expect.objectContaining({ action: 'rollback', version: 2 }),
+  }))
 })
 
 it('restores defaults in both snapshots', async () => {

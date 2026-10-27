@@ -4,7 +4,7 @@ import { bargainStartSchema, validateOrThrow, handleValidationError } from '@/li
 import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerContext, SUPPORTED_LANGUAGES, type NegotiationContext } from '@/lib/services/bargain'
 import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
 import { enginePersonaFor } from '@/lib/bargain/experience/personality'
-import { publishedPersonality } from '@/lib/bargain/experience/config'
+import { fromDb } from '@/lib/bargain/experience/config'
 import { currencySymbolFor, CURRENCY_SYMBOLS } from '@/lib/bargain/i18n'
 import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
@@ -181,7 +181,9 @@ export async function POST(request: NextRequest) {
       ...(data.cartToken ? [{ cartToken: data.cartToken }] : []),
       ...(customerEmail ? [{ customerEmail }] : []),
     ]
-    const shopkeeperPersonality = publishedPersonality(config)
+    const experience = fromDb(config, 'published')
+    const hasPublishedExperience = Boolean(config?.experiencePublished)
+    const shopkeeperPersonality = experience.personality
 
     const existing = await prisma.bargainSession.findFirst({
       where: {
@@ -318,6 +320,10 @@ export async function POST(request: NextRequest) {
           status: 'active',
           language,
           claimToken: generateClaimToken(),
+          experienceDesign: hasPublishedExperience ? experience.designVariant : null,
+          experiencePersonality: hasPublishedExperience ? experience.personality : null,
+          experienceVersion: hasPublishedExperience ? experience.publishedVersion : null,
+          experienceVisitorKey: data.customerFingerprint ?? null,
           startedAt: now,
           expiredAt,
           messages: {

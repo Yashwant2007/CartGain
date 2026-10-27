@@ -17,6 +17,7 @@ const CART_RETENTION_DAYS = 90
 const BARGAIN_RETENTION_DAYS = 90
 const LEARNING_EVENT_RETENTION_DAYS = 180
 const LEARNING_OUTCOME_RETENTION_DAYS = 90
+const EXPERIENCE_EVENT_RETENTION_DAYS = 180
 const LOG_RETENTION_DAYS = 180
 const TOKEN_RETENTION_DAYS = 7
 const EXPORT_RETENTION_DAYS = 180 // customer data exports deleted after 180 days
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
     const exportCutoff = new Date(now.getTime() - EXPORT_RETENTION_DAYS * 24 * 60 * 60 * 1000)
     const learningOutcomeCutoff = new Date(now.getTime() - LEARNING_OUTCOME_RETENTION_DAYS * 24 * 60 * 60 * 1000)
     const learningEventDefaultCutoff = new Date(now.getTime() - LEARNING_EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000)
+    const experienceEventCutoff = new Date(now.getTime() - EXPERIENCE_EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000)
 
     // 1. Anonymize old carts (keep the row for billing/analytics integrity,
     //    remove all PII so the data can no longer identify a person).
@@ -82,6 +84,9 @@ export async function POST(request: NextRequest) {
     const learningOutcomes = await ((prisma as any).bargainLearningOutcome?.deleteMany({
       where: { createdAt: { lt: learningOutcomeCutoff } },
     }) ?? Promise.resolve({ count: 0 }))
+    const experienceEvents = await prisma.bargainExperienceEvent.deleteMany({
+      where: { receivedAt: { lt: experienceEventCutoff } },
+    })
     const bargainSessions = await prisma.bargainSession.deleteMany({
       where: { startedAt: { lt: bargainCutoff } },
     })
@@ -108,6 +113,7 @@ export async function POST(request: NextRequest) {
       deletedBargainSessions: bargainSessions.count,
       deletedBargainLearningEvents: learningEventCount,
       deletedBargainLearningOutcomes: learningOutcomes.count,
+      deletedBargainExperienceEvents: experienceEvents.count,
       deletedAccessLogs: logs.count,
       deletedVerificationTokens: tokens.count,
       deletedCustomerDataExports: exports.count,
@@ -116,6 +122,7 @@ export async function POST(request: NextRequest) {
         bargainSessionsDeletedAfterDays: BARGAIN_RETENTION_DAYS,
         bargainLearningEventsDeletedAfterDays: LEARNING_EVENT_RETENTION_DAYS,
         bargainLearningOutcomesDeletedAfterDays: LEARNING_OUTCOME_RETENTION_DAYS,
+        bargainExperienceEventsDeletedAfterDays: EXPERIENCE_EVENT_RETENTION_DAYS,
         accessLogsDeletedAfterDays: LOG_RETENTION_DAYS,
         verificationTokensDeletedAfterDays: TOKEN_RETENTION_DAYS,
         customerDataExportsDeletedAfterDays: EXPORT_RETENTION_DAYS,

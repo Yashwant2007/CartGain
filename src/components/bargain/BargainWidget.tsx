@@ -11,6 +11,7 @@ import ShopkeeperAvatar, { type ExpressionState } from '@/components/bargain/Sho
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
 import { expressionForEvent, type AvatarEvent } from '@/lib/bargain/experience/expressions'
 import { resolveShopkeeperPersonality } from '@/lib/bargain/experience/personality'
+import { trackExperienceEvent } from '@/lib/bargain/experience/analytics'
 import type { BargainExperienceConfig } from '@/lib/bargain/experience/types'
 import type {
   BargainAcceptSuccess,
@@ -150,6 +151,7 @@ export default function BargainWidget({
 }: Props) {
   const [open, setOpen] = useState<boolean>(defaultOpen ?? (isEmbed && !invitationFirst))
   const [expression, setExpression] = useState<ExpressionState>('idle')
+  const chatOpenTracked = useRef(false)
   const personality = resolveShopkeeperPersonality(experience?.personality, persona)
   const avatarEnabled = experience?.avatarEnabled !== false
   const fireAvatar = (event: AvatarEvent) => setExpression(expressionForEvent(personality, event))
@@ -955,6 +957,20 @@ export default function BargainWidget({
     inputRef.current?.focus()
   }
 
+  useEffect(() => {
+    if (!invitationFirst || !experience || !open || minimised || chatOpenTracked.current) return
+    chatOpenTracked.current = true
+    trackExperienceEvent({
+      storeId,
+      eventType: 'chat_open',
+      experience,
+      productId: shopifyProductId,
+      variantId: productCtx.variantId,
+      sessionId,
+      source: mode === 'cart' ? 'cart' : mode === 'item' ? 'item' : 'storefront',
+    })
+  }, [invitationFirst, experience, open, minimised, storeId, shopifyProductId, productCtx.variantId, sessionId, mode])
+
   function openPanel() {
     setOpen(true)
     setMinimised(false)
@@ -1074,7 +1090,15 @@ export default function BargainWidget({
               justifyContent: invitationFirst ? 'center' : undefined,
               padding: invitationFirst ? 20 : undefined,
             }}>
-              <StorefrontInvitation experience={experience} onOpen={openPanel} />
+              <StorefrontInvitation
+                experience={experience}
+                onOpen={openPanel}
+                storeId={storeId}
+                productId={shopifyProductId}
+                variantId={productCtx.variantId}
+                source={mode === 'cart' ? 'cart' : mode === 'item' ? 'item' : 'storefront'}
+                trackingEnabled={invitationFirst}
+              />
             </div>
           ) : (
           <button

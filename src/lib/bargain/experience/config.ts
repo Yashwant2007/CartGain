@@ -108,6 +108,24 @@ export async function getExperienceConfig(storeId: string, channel: ExperienceCh
   return { config: fromDb(config, channel), raw: config }
 }
 
+export function experienceMirror(exp: BargainExperienceConfig) {
+  return {
+    experienceSchemaVersion: exp.schemaVersion,
+    shopkeeperPersonality: exp.personality,
+    invitationDesign: exp.designVariant,
+    avatarEnabled: exp.avatarEnabled,
+    motionEnabled: exp.motionEnabled,
+    invitationCtaLabel: exp.ctaLabel,
+    invitationCopy: null,
+    invitationGreeting: exp.customGreeting,
+    invitationAccentColor: exp.accentColor,
+    invitationAvatarSize: exp.avatarSize,
+    invitationCompact: exp.compact,
+    invitationPosition: exp.position,
+    experienceLocale: exp.localeMode,
+  }
+}
+
 export function toDbUpdate(exp: Partial<BargainExperienceConfig>, action: 'draft' | 'publish', current: any) {
   const currentDraft = fromDb(current, 'draft')
   const next = sanitizeExperience(exp, currentDraft)
@@ -123,19 +141,7 @@ export function toDbUpdate(exp: Partial<BargainExperienceConfig>, action: 'draft
     Object.assign(update, {
       experiencePublished: published,
       experiencePublishedVersion: publishedVersion + 1,
-      experienceSchemaVersion: published.schemaVersion,
-      shopkeeperPersonality: published.personality,
-      invitationDesign: published.designVariant,
-      avatarEnabled: published.avatarEnabled,
-      motionEnabled: published.motionEnabled,
-      invitationCtaLabel: published.ctaLabel,
-      invitationCopy: null,
-      invitationGreeting: published.customGreeting,
-      invitationAccentColor: published.accentColor,
-      invitationAvatarSize: published.avatarSize,
-      invitationCompact: published.compact,
-      invitationPosition: published.position,
-      experienceLocale: published.localeMode,
+      ...experienceMirror(published),
     })
   }
   return update
@@ -150,18 +156,9 @@ export function defaultsUpdate(current: any) {
     experiencePublished: defaults,
     experienceDraftVersion: draftVersion,
     experiencePublishedVersion: publishedVersion,
-    experienceSchemaVersion: defaults.schemaVersion,
-    shopkeeperPersonality: defaults.personality,
-    invitationDesign: defaults.designVariant,
-    avatarEnabled: defaults.avatarEnabled,
-    motionEnabled: defaults.motionEnabled,
+    ...experienceMirror(defaults),
     invitationCtaLabel: null,
-    invitationCopy: null,
     invitationGreeting: null,
     invitationAccentColor: null,
-    invitationAvatarSize: defaults.avatarSize,
-    invitationCompact: defaults.compact,
-    invitationPosition: defaults.position,
-    experienceLocale: defaults.localeMode,
   }
 }

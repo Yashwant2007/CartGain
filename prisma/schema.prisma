@@ -163,6 +163,8 @@ model Store {
   bargainLearningOutcomes    BargainLearningOutcome[]
   bargainLearningArmStats    BargainLearningArmStat[]
   bargainLearningAudits      BargainLearningAudit[]
+  bargainExperienceEvents    BargainExperienceEvent[]
+  bargainExperiencePublishes BargainExperiencePublish[]
 
   @@unique([userId, domain])
   @@index([userId])
@@ -438,7 +440,7 @@ model BargainConfig {
   invitationCtaLabel                String?
   invitationCopy                    String?
   invitationGreeting                String?
-  invitationAccentColor             String?   // hex color
+  invitationAccentColor             String? // hex color
   invitationAvatarSize              String    @default("md") // sm | md | lg
   invitationCompact                 Boolean   @default(false)
   invitationPosition                String    @default("bottom-right") // bottom-right | bottom-left | inline
@@ -501,7 +503,11 @@ model BargainSession {
   purchaseUrl               String? // checkout link that applies the issued code (purchase window)
   purchasedAt               DateTime? // when an order confirmed using this bargain code
   purchasedOrderId          String? // Shopify order id — idempotent purchase attribution (scoped to the store: Shopify order ids are per-shop sequences)
-  purchaseValue             Float? // recognized net value of the bargain purchase
+  purchaseValue             Float? // recognized net value of the bargain purchase (after refunds)
+  purchaseGrossValue        Float? // verified value at attribution, before refunds
+  purchaseRefundedAmount    Float     @default(0)
+  purchaseRefundStatus      String? // partially_refunded | fully_refunded
+  purchaseRefundEventIds    String[]  @default([]) // idempotency ledger for refund/cancel webhooks
   attemptsUsed              Int       @default(0)
   status                    String    @default("active") // active, accepted, rejected, expired, abandoned
   language                  String    @default("auto") // auto, en, hinglish, hi, ta, te, bn, mr, gu, kn, ml, pa, or
@@ -513,15 +519,22 @@ model BargainSession {
   learningShadowStrategy    String?
   learningMaxRounds         Int?
   learningQuarantined       Boolean   @default(false) // manipulation/injection evidence must never train the selector
+  // Published experience snapshot at session start, so historical design/
+  // personality performance cannot be rewritten by a later publish.
+  experienceDesign          String?
+  experiencePersonality     String?
+  experienceVersion         Int?
+  experienceVisitorKey      String?
   startedAt                 DateTime  @default(now())
   expiredAt                 DateTime
   updatedAt                 DateTime  @updatedAt
   createdAt                 DateTime  @default(now())
 
-  store             Store                     @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  messages          BargainMessage[]
-  learningEvents    BargainLearningEvent[]
-  learningOutcome   BargainLearningOutcome?
+  store            Store                    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  messages         BargainMessage[]
+  learningEvents   BargainLearningEvent[]
+  learningOutcome  BargainLearningOutcome?
+  experienceEvents BargainExperienceEvent[]
 
   // One order = one bargain purchase attribution, per store. Shopify order ids
   // are per-shop sequences, so the constraint is store-scoped.
@@ -548,6 +561,58 @@ model BargainMessage {
 
   @@index([sessionId])
   @@index([createdAt])
+}
+
+// ── Storefront experience analytics ─────────────────────────────────────────
+// Untrusted storefront events are accepted only for a small allow-list of
+// presentation events. Design/personality are resolved server-side from the
+// published snapshot, never trusted from the browser. `eventId` is the
+// idempotency key; `visitorKey` is pseudonymous (no PII) and lets us count
+// unique-ish sessions without cookies or customer identity.
+model BargainExperienceEvent {
+  id            String   @id @default(cuid())
+  eventId       String   @unique
+  storeId       String
+  sessionId     String?
+  visitorKey    String?
+  eventType     String // invitation_impression | invitation_click | chat_open
+  schemaVersion Int      @default(1)
+  designVariant String?
+  personality   String?
+  productId     String?
+  variantId     String?
+  source        String   @default("storefront")
+  isPreview     Boolean  @default(false)
+  occurredAt    DateTime
+  receivedAt    DateTime @default(now())
+  metadata      Json?
+
+  store   Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  session BargainSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([storeId, eventType, occurredAt])
+  @@index([storeId, designVariant, occurredAt])
+  @@index([storeId, personality, occurredAt])
+  @@index([storeId, visitorKey, occurredAt])
+  @@index([sessionId])
+}
+
+// Bounded, append-only publish history. The live `BargainConfig` remains the
+// source of truth; these snapshots enable validated rollback without touching
+// sessions, orders, or historical analytics.
+model BargainExperiencePublish {
+  id          String   @id @default(cuid())
+  storeId     String
+  version     Int
+  action      String   @default("publish") // publish | rollback | defaults
+  config      Json
+  publishedBy String?
+  createdAt   DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, version])
+  @@index([storeId, createdAt])
 }
 
 model BargainLearningConfig {
@@ -598,7 +663,7 @@ model BargainLearningEvent {
   properties             Json?
   createdAt              DateTime @default(now())
 
-  store   Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  store   Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
   session BargainSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([storeId, environment, createdAt])
@@ -607,37 +672,37 @@ model BargainLearningEvent {
 }
 
 model BargainLearningOutcome {
-  id                 String    @id @default(cuid())
-  outcomeKey         String    @unique
-  storeId            String
-  sessionId          String?   @unique
-  environment        String    @default("production")
-  strategy           String
-  strategyVersion    String
-  contextKey         String
-  mode               String
-  originalPrice      Float
-  finalPrice         Float?
-  floorPrice         Float?
-  rounds             Int       @default(0)
-  accepted           Boolean   @default(false)
-  purchased          Boolean   @default(false)
-  purchaseValue      Float?
-  refundedAmount     Float     @default(0)
-  shopifyOrderId     String?
-  reward             Float     @default(0)
-  rewardConversion   Float     @default(0)
-  rewardMargin       Float     @default(0)
-  rewardExperience   Float     @default(0)
-  rewardEfficiency   Float     @default(0)
-  rewardApplied      Float     @default(0)
-  quarantined        Boolean   @default(false)
-  acceptedAt         DateTime?
-  purchasedAt        DateTime?
-  finalizedAt        DateTime?
-  lastRewardAt       DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  id               String    @id @default(cuid())
+  outcomeKey       String    @unique
+  storeId          String
+  sessionId        String?   @unique
+  environment      String    @default("production")
+  strategy         String
+  strategyVersion  String
+  contextKey       String
+  mode             String
+  originalPrice    Float
+  finalPrice       Float?
+  floorPrice       Float?
+  rounds           Int       @default(0)
+  accepted         Boolean   @default(false)
+  purchased        Boolean   @default(false)
+  purchaseValue    Float?
+  refundedAmount   Float     @default(0)
+  shopifyOrderId   String?
+  reward           Float     @default(0)
+  rewardConversion Float     @default(0)
+  rewardMargin     Float     @default(0)
+  rewardExperience Float     @default(0)
+  rewardEfficiency Float     @default(0)
+  rewardApplied    Float     @default(0)
+  quarantined      Boolean   @default(false)
+  acceptedAt       DateTime?
+  purchasedAt      DateTime?
+  finalizedAt      DateTime?
+  lastRewardAt     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   store   Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
   session BargainSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -1207,30 +1272,30 @@ model BehavioralEvent {
 }
 
 model CustomerIdentity {
-  id                String    @id @default(cuid())
-  storeId           String
-  shopifyCustomerId String?
-  name              String?
-  email             String?
-  phone             String?
+  id                    String    @id @default(cuid())
+  storeId               String
+  shopifyCustomerId     String?
+  name                  String?
+  email                 String?
+  phone                 String?
   // Consent is explicit and per channel. A Shopify SMS/marketing flag is NOT
   // treated as WhatsApp consent; only an explicit keyword/opt-in form sets it.
-  consentEmail      Boolean   @default(false)
-  consentWhatsApp   Boolean   @default(false)
-  consentSms        Boolean   @default(false)
-  consentSource     String?
-  consentAt         DateTime?
-  emailConsentAt    DateTime?
-  emailConsentSource String?
-  whatsappConsentAt DateTime?
+  consentEmail          Boolean   @default(false)
+  consentWhatsApp       Boolean   @default(false)
+  consentSms            Boolean   @default(false)
+  consentSource         String?
+  consentAt             DateTime?
+  emailConsentAt        DateTime?
+  emailConsentSource    String?
+  whatsappConsentAt     DateTime?
   whatsappConsentSource String?
-  optedOutAt        DateTime?
-  suppressed        Boolean   @default(false)
-  lastSeenAt        DateTime  @default(now())
-  lastContactedAt   DateTime?
-  lastChannel       String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  optedOutAt            DateTime?
+  suppressed            Boolean   @default(false)
+  lastSeenAt            DateTime  @default(now())
+  lastContactedAt       DateTime?
+  lastChannel           String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 

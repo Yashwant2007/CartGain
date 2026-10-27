@@ -3,14 +3,24 @@
 import { useEffect, useState } from 'react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
-import { Sparkles, Save, Eye, RotateCcw, CheckCircle2 } from 'lucide-react'
+import { Sparkles, Save, Eye, RotateCcw, CheckCircle2, History } from 'lucide-react'
 import ShopkeeperAvatar from '@/components/bargain/ShopkeeperAvatar'
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
 import { PERSONALITY_META, DESIGN_VARIANT_META, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
 
+type PublishHistoryRow = {
+  id: string
+  version: number
+  action: 'publish' | 'rollback' | 'defaults'
+  publishedBy: string | null
+  createdAt: string
+  config: BargainExperienceConfig
+}
+
 export function BargainExperienceStudio() {
   const { storeId } = useResolvedStoreId()
   const [exp, setExp] = useState<BargainExperienceConfig | null>(null)
+  const [history, setHistory] = useState<PublishHistoryRow[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -24,6 +34,7 @@ export function BargainExperienceStudio() {
         if (res.ok) {
           const data = await res.json()
           setExp(data.experience)
+          setHistory(Array.isArray(data.history) ? data.history : [])
         }
       } finally {
         setLoading(false)
@@ -40,13 +51,53 @@ export function BargainExperienceStudio() {
       const res = await shopifySessionFetch('/api/merchant/bargain-experience', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeId, action, ...exp }),
+        body: JSON.stringify({ storeId, action, expectedDraftVersion: exp.draftVersion, ...exp }),
       })
+      if (res.status === 409) {
+        const data = await res.json().catch(() => ({}))
+        if (data.currentDraft) setExp(data.currentDraft)
+        setMessage(data.message ?? 'This draft changed in another tab. Reload and try again.')
+        return
+      }
       if (res.ok) {
         const data = await res.json()
         setExp(data.experience)
         setMessage(action === 'publish' ? 'Published to storefront' : 'Draft saved')
+        if (action === 'publish') await load()
       }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const load = async () => {
+    if (!storeId) return
+    const res = await shopifySessionFetch(`/api/merchant/bargain-experience?storeId=${storeId}`)
+    if (!res.ok) return
+    const data = await res.json()
+    setExp(data.experience)
+    setHistory(Array.isArray(data.history) ? data.history : [])
+  }
+
+  const rollback = async (version: number) => {
+    if (!storeId) return
+    setSaving(true)
+    setMessage(null)
+    try {
+      const res = await shopifySessionFetch('/api/merchant/bargain-experience', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeId, action: 'rollback', version }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setMessage(data.message ?? 'Rollback failed')
+        return
+      }
+      const data = await res.json()
+      setExp(data.experience)
+      setMessage(`Rolled back to published v${version}`)
+      await load()
     } finally {
       setSaving(false)
     }
@@ -65,6 +116,7 @@ export function BargainExperienceStudio() {
         const data = await res.json()
         setExp(data.experience)
         setMessage('Restored defaults')
+        await load()
       }
     } finally {
       setSaving(false)
@@ -166,13 +218,58 @@ export function BargainExperienceStudio() {
         <div className="rounded-2xl border border-blue-800/30 bg-slate-900/60 p-6 space-y-4">
           <h3 className="text-white font-medium">Live Preview</h3>
           <div className="rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 p-6 min-h-[200px] flex items-end justify-end">
-            <StorefrontInvitation experience={exp} onOpen={() => {}} />
+            <StorefrontInvitation experience={exp} onOpen={() => {}} preview />
           </div>
           <div className="flex items-center justify-between text-xs text-blue-300/60">
             <span>Draft v{exp.draftVersion} • Published v{exp.publishedVersion}</span>
             <span>Personality: {exp.personality} • Design: {exp.designVariant}</span>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-blue-800/30 bg-slate-900/60 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-white font-medium flex items-center gap-2"><History className="w-4 h-4 text-cyan-400" /> Publish history</h3>
+          <span className="text-xs text-blue-300/50">Last {history.length} verified snapshots</span>
+        </div>
+        {history.length === 0 ? (
+          <p className="text-sm text-blue-300/60">No published versions yet. Publish this experience to create the first rollback point.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-blue-300/70">
+                <tr>
+                  <th className="text-left px-3 py-2">Version</th>
+                  <th className="text-left px-3 py-2">Action</th>
+                  <th className="text-left px-3 py-2">Design</th>
+                  <th className="text-left px-3 py-2">Personality</th>
+                  <th className="text-left px-3 py-2">Published</th>
+                  <th className="text-right px-3 py-2">Restore</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((row) => (
+                  <tr key={row.id} className="border-t border-blue-800/20 text-blue-100">
+                    <td className="px-3 py-2 font-mono text-xs">v{row.version}</td>
+                    <td className="px-3 py-2 capitalize">{row.action}</td>
+                    <td className="px-3 py-2 text-blue-300/70">{row.config.designVariant}</td>
+                    <td className="px-3 py-2 text-blue-300/70">{row.config.personality}</td>
+                    <td className="px-3 py-2 text-xs text-blue-300/60">{new Date(row.createdAt).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        onClick={() => rollback(row.version)}
+                        disabled={saving || row.version === exp.publishedVersion}
+                        className="px-2.5 py-1 rounded-md border border-blue-800/50 text-blue-200 text-xs disabled:opacity-40"
+                      >
+                        {row.version === exp.publishedVersion ? 'Live' : 'Roll back'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )

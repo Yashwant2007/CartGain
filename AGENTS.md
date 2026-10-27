@@ -65,6 +65,40 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(bargain): storefront performance analytics, publish history, and
+  verified refund netting`. Completed the Atlas V2 measurement/safety gaps
+  without changing the negotiation engine or pricing path. New
+  `BargainExperienceEvent` stores only allow-listed presentation events
+  (`invitation_impression`, `invitation_click`, `chat_open`); design and
+  personality are resolved from the published snapshot server-side, the client
+  cannot attribute a variant, preview/dev/preview-deploy traffic is ignored,
+  duplicate beacon ids are idempotent, and events are retained 180 days by the
+  retention job. Qualified impressions require 50% visibility for 800ms and are
+  locally de-duplicated for 12h per visitor/product/design/version; clicks and
+  one chat-open per widget mount complete the funnel. `BargainSession` now
+  snapshots `experienceDesign`, `experiencePersonality`, `experienceVersion`,
+  and `experienceVisitorKey` at start, but only when a published experience
+  exists, so legacy direct-chat stores stay `unknown` instead of being assigned
+  to a design. Publish/rollback: `BargainExperiencePublish` keeps the latest 20
+  snapshots, draft writes accept `expectedDraftVersion` and answer 409 instead
+  of overwriting another tab, publish/rollback/defaults append history inside a
+  transaction, and the Studio has a rollback table. `/api/analytics/bargain`
+  now returns storefront impressions/clicks/chat-opens, CTR, click→chat,
+  chat→session, design and personality comparisons (session snapshot, with
+  insufficient/directional/sufficient evidence thresholds), gross vs net
+  revenue, refunds, fully refunded purchases, and attribution notes. The new
+  Bargain → Storefront Performance tab renders the funnel, metrics, comparison
+  tables, and explicit empty/error states. Refunds/cancellations now net
+  `BargainSession.purchaseValue` against frozen `purchaseGrossValue` through an
+  idempotent refund-event ledger, update `purchaseRefundStatus`, reverse
+  pending rev-share/accruals, and decrement the purchase-day analytics row
+  exactly once; invoiced events are never silently mutated. Migrations
+  `20261027150000_add_experience_analytics_and_history` and
+  `20261027160000_add_bargain_purchase_netting` are applied to production.
+  Verified: Jest **128 suites / 1413 tests**, tsc, lint, and production build
+  green. Local production smoke still needs the deployed release; Shopify
+  extension activation remains a separate check.
+
 - `feat(bargain): storefront experience studio with three shopkeepers, four
   invitations, and reactive avatars`. Added an additive `BargainConfig`
   experience layer while keeping the existing prompt/pricing path authoritative.
@@ -469,7 +503,11 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 ## Open / watch items
 - Storefront invitations only replace the direct-chat drawer after a merchant
   publishes an experience (`experiencePublished` exists). Draft-only stores keep
-  the prior behavior on purpose; the dashboard preview uses the draft.
+  the prior behavior on purpose; the dashboard preview uses the draft and emits
+  no telemetry.
+- Experience analytics only count published storefronts. A design table can be
+  empty while the session funnel has data (pre-experience sessions are grouped
+  under `unknown` by design/personality); that is expected, not no data.
 - New stores do not get a `BargainLearningConfig` row automatically, so
   `/demo` learning stays off for them until the merchant opens Settings →
   Bargain learning and saves (the existing 8 stores were seeded). Production

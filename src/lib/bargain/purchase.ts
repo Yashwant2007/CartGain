@@ -225,6 +225,9 @@ export async function attributeBargainPurchase(params: PurchaseAttribution): Pro
           purchasedAt: new Date(),
           purchasedOrderId: shopifyOrderId,
           purchaseValue: base,
+          purchaseGrossValue: base,
+          purchaseRefundedAmount: 0,
+          purchaseRefundStatus: null,
         },
       })
       if (claim.count === 0) return
@@ -288,4 +291,108 @@ export async function attributeBargainPurchase(params: PurchaseAttribution): Pro
     })
   }
   return credited
+}
+
+
+/**
+ * Net a Shopify refund/cancellation against an attributed bargain purchase.
+ *
+ * Gross is frozen at attribution; recognized revenue is always
+ * `max(0, gross − cumulativeRefunded)`. Refund webhook ids (and the synthetic
+ * `cancelled` id) form an idempotency ledger so retries cannot double-net.
+ */
+export async function netBargainPurchaseRefund(params: {
+  storeId: string
+  shopifyOrderId: string
+  refundAmount: number
+  fullyRefunded: boolean
+  refundId?: string | null
+}): Promise<boolean> {
+  const { storeId, shopifyOrderId, refundAmount, fullyRefunded, refundId } = params
+  if (!storeId || !shopifyOrderId) return false
+
+  const session = await prisma.bargainSession.findUnique({
+    where: { storeId_purchasedOrderId: { storeId, purchasedOrderId: shopifyOrderId } },
+    include: { store: { select: { userId: true } } },
+  })
+  if (!session || !session.purchasedAt) return false
+
+  const eventKey = fullyRefunded ? (refundId || 'cancelled') : refundId || null
+  if (eventKey && (session.purchaseRefundEventIds || []).includes(eventKey)) return false
+
+  const gross = round2(session.purchaseGrossValue ?? session.purchaseValue ?? session.finalPrice ?? session.originalPrice ?? 0)
+  if (gross <= 0) return false
+  const previousRefunded = round2(session.purchaseRefundedAmount || 0)
+  const nextRefunded = fullyRefunded
+    ? gross
+    : Math.min(gross, round2(previousRefunded + Math.max(0, refundAmount)))
+  if (nextRefunded <= previousRefunded + 0.009) return false
+
+  const recognized = round2(Math.max(0, gross - nextRefunded))
+  const previousRecognized = round2(session.purchaseValue ?? gross)
+  const revenueDelta = round2(Math.max(0, previousRecognized - recognized))
+  const nowFullyRefunded = recognized <= 0.009
+  const wasFullyRefunded = session.purchaseRefundStatus === 'fully_refunded'
+  const refundStatus = nowFullyRefunded ? 'fully_refunded' : 'partially_refunded'
+
+  let applied = false
+  await prisma.$transaction(async (tx) => {
+    const claimed = await tx.bargainSession.updateMany({
+      where: { id: session.id, purchaseRefundedAmount: previousRefunded },
+      data: {
+        purchaseValue: recognized,
+        purchaseGrossValue: gross,
+        purchaseRefundedAmount: nextRefunded,
+        purchaseRefundStatus: refundStatus,
+        ...(eventKey ? { purchaseRefundEventIds: { push: eventKey } } : {}),
+      },
+    })
+    if (claimed.count === 0) return
+    applied = true
+
+    const revenueShare = await tx.bargainRevenueShareEvent.findUnique({ where: { sessionId: session.id } })
+    if (revenueShare) {
+      if (revenueShare.invoiceId) {
+        console.error(
+          `[bargain] refund on invoiced revenue share needs reconciliation: session=${session.id} invoice=${revenueShare.invoiceId}`
+        )
+      } else {
+        const nextRevShare = round2((recognized * (revenueShare.revSharePercent || 0)) / 100)
+        const revShareDelta = round2(Math.max(0, (revenueShare.revShareAmount || 0) - nextRevShare))
+        await tx.bargainRevenueShareEvent.update({
+          where: { id: revenueShare.id },
+          data: { netAmount: recognized, revShareAmount: nextRevShare },
+        })
+        if (revShareDelta > 0) {
+          await tx.subscription.update({
+            where: { id: revenueShare.subscriptionId },
+            data: {
+              bargainAccrued: { decrement: revShareDelta },
+              bargainAccruedValue: { decrement: revenueDelta },
+            },
+          })
+        }
+      }
+    }
+
+    if (revenueDelta > 0 || (nowFullyRefunded && !wasFullyRefunded)) {
+      const day = new Date(new Date(session.purchasedAt as Date).toDateString())
+      const row = await tx.analytics.findUnique({
+        where: { userId_date: { userId: session.store.userId, date: day } },
+      })
+      if (row) {
+        await tx.analytics.update({
+          where: { id: row.id },
+          data: {
+            bargainRevenue: Math.max(0, (row.bargainRevenue || 0) - revenueDelta),
+            bargainPurchases: nowFullyRefunded && !wasFullyRefunded
+              ? Math.max(0, (row.bargainPurchases || 0) - 1)
+              : row.bargainPurchases,
+          },
+        })
+      }
+    }
+  })
+
+  return applied
 }

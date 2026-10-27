@@ -11,6 +11,9 @@ jest.mock('@/lib/db', () => ({
     },
     bargainMessage: { findFirst: jest.fn() },
     cart: { findUnique: jest.fn() },
+    bargainRevenueShareEvent: { findUnique: jest.fn(), update: jest.fn() },
+    analytics: { findUnique: jest.fn(), update: jest.fn() },
+    subscription: { update: jest.fn() },
     $transaction: jest.fn(),
   },
 }))
@@ -39,6 +42,7 @@ import {
   generateClaimToken,
   issueRetentionDiscount,
   attributeBargainPurchase,
+  netBargainPurchaseRefund,
 } from '@/lib/bargain/purchase'
 
 const mockPrisma = prisma as any
@@ -274,5 +278,95 @@ describe('attributeBargainPurchase', () => {
     ;(prisma.bargainSession.findFirst as jest.Mock).mockResolvedValue(null)
     expect(await attributeBargainPurchase(params)).toBe(false)
     expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('netBargainPurchaseRefund', () => {
+  function refundTx() {
+    return {
+      bargainSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      bargainRevenueShareEvent: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'evt1', subscriptionId: 'sub1', revSharePercent: 3, revShareAmount: 30, invoiceId: null }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      subscription: { update: jest.fn().mockResolvedValue({}) },
+      analytics: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'an1', bargainRevenue: 1000, bargainPurchases: 1 }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    }
+  }
+
+  function purchasedSession(over: Record<string, any> = {}) {
+    return {
+      id: 'sess1',
+      storeId: 'store1',
+      purchasedAt: new Date('2026-10-20T10:00:00Z'),
+      purchaseValue: 1000,
+      purchaseGrossValue: 1000,
+      purchaseRefundedAmount: 0,
+      purchaseRefundStatus: null,
+      purchaseRefundEventIds: [],
+      finalPrice: 1000,
+      originalPrice: 1000,
+      store: { userId: 'user1' },
+      ...over,
+    }
+  }
+
+  it('nets a partial refund against recognized revenue and rev share', async () => {
+    const tx = refundTx()
+    mockPrisma.bargainSession.findUnique.mockResolvedValue(purchasedSession())
+    mockPrisma.$transaction.mockImplementation(async (cb: any) => cb(tx))
+
+    const ok = await netBargainPurchaseRefund({
+      storeId: 'store1',
+      shopifyOrderId: 'order9',
+      refundAmount: 200,
+      fullyRefunded: false,
+      refundId: 'refund-1',
+    })
+    expect(ok).toBe(true)
+    const data = tx.bargainSession.updateMany.mock.calls[0][0].data
+    expect(data.purchaseValue).toBe(800)
+    expect(data.purchaseRefundedAmount).toBe(200)
+    expect(data.purchaseRefundStatus).toBe('partially_refunded')
+    expect(tx.bargainRevenueShareEvent.update.mock.calls[0][0].data.netAmount).toBe(800)
+    expect(tx.bargainRevenueShareEvent.update.mock.calls[0][0].data.revShareAmount).toBe(24)
+    expect(tx.analytics.update.mock.calls[0][0].data.bargainRevenue).toBe(800)
+  })
+
+  it('is idempotent for a retried refund webhook', async () => {
+    mockPrisma.bargainSession.findUnique.mockResolvedValue(purchasedSession({ purchaseRefundEventIds: ['refund-1'] }))
+    const ok = await netBargainPurchaseRefund({
+      storeId: 'store1',
+      shopifyOrderId: 'order9',
+      refundAmount: 200,
+      fullyRefunded: false,
+      refundId: 'refund-1',
+    })
+    expect(ok).toBe(false)
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('zeroes revenue and removes the purchase on a full cancellation', async () => {
+    const tx = refundTx()
+    mockPrisma.bargainSession.findUnique.mockResolvedValue(purchasedSession())
+    mockPrisma.$transaction.mockImplementation(async (cb: any) => cb(tx))
+
+    const ok = await netBargainPurchaseRefund({
+      storeId: 'store1',
+      shopifyOrderId: 'order9',
+      refundAmount: 0,
+      fullyRefunded: true,
+      refundId: 'cancelled',
+    })
+    expect(ok).toBe(true)
+    const data = tx.bargainSession.updateMany.mock.calls[0][0].data
+    expect(data.purchaseValue).toBe(0)
+    expect(data.purchaseRefundedAmount).toBe(1000)
+    expect(data.purchaseRefundStatus).toBe('fully_refunded')
+    expect(tx.analytics.update.mock.calls[0][0].data.bargainPurchases).toBe(0)
   })
 })
