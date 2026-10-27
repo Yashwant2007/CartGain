@@ -18,7 +18,7 @@ export default function PrivacyPolicyPage() {
           </div>
           <h1 className="text-4xl font-bold text-white mb-4">Privacy Policy</h1>
           <p className="text-lg text-blue-200 max-w-2xl mx-auto">
-            Last updated: July 1, 2026
+            Last updated: October 27, 2026
           </p>
         </div>
 
@@ -59,7 +59,9 @@ export default function PrivacyPolicyPage() {
                     <ul className="list-disc pl-5 space-y-2">
                       <li><strong>Store Information:</strong> E-commerce platform details, store URL, and API credentials.</li>
                       <li><strong>Customer Data:</strong> Abandoned cart information including customer names, emails, phone numbers, and cart contents.</li>
-                      <li><strong>Analytics Data:</strong> Recovery rates, conversion metrics, and campaign performance.</li>
+                      <li><strong>Storefront Experience Data:</strong> Limited presentation events from the bargain widget (invitation impression, invitation click, chat open) with a pseudonymous visitor key, the store, product, design variant, personality, and version. These events measure storefront performance; they do not include chat message text.</li>
+                      <li><strong>Analytics Data:</strong> Recovery rates, conversion metrics, campaign performance, storefront funnel metrics, and purchase values adjusted for refunds and cancellations.</li>
+                      <li><strong>Negotiation Learning Data:</strong> Pseudonymous session keys, negotiation context buckets, strategy identifiers, and commercial outcomes used to evaluate and improve negotiation strategies. Raw chat text is not used as a learning key.</li>
                     </ul>
                   </div>
 
@@ -84,7 +86,8 @@ export default function PrivacyPolicyPage() {
                   <li><strong>Data Minimization:</strong> We collect and process only the minimum personal data required to provide cart recovery value to merchants.</li>
                   <li><strong>Service Delivery:</strong> To provide, maintain, and improve our cart recovery services.</li>
                   <li><strong>Communication:</strong> To send recovery notifications via WhatsApp and email on your behalf (the corresponding providers are configured and activated before these channels go live).</li>
-                  <li><strong>Analytics:</strong> To track recovery performance and provide insights to merchants.</li>
+                  <li><strong>Analytics:</strong> To track recovery performance, measure the storefront experience funnel, compare presentation variants, and adjust recovered-revenue reporting for refunds and cancellations.</li>
+                  <li><strong>Bounded learning:</strong> To evaluate negotiation strategies and improve future offers. Learning is optional, can run in shadow mode, stays within merchant-approved pricing rules, and never replaces the hard price floor.</li>
                   <li><strong>Security:</strong> To detect and prevent fraud, unauthorized access, and security incidents.</li>
                   <li><strong>Legal Compliance:</strong> To comply with applicable laws and regulations.</li>
                 </ul>
@@ -111,7 +114,7 @@ export default function PrivacyPolicyPage() {
                 <p className="mb-4">We share data with the following categories of third parties:</p>
                 <ul className="list-disc pl-5 space-y-2">
                   <li><strong>E-commerce Platform:</strong> Shopify, to sync cart, order, and discount data.</li>
-                  <li><strong>Communication Providers:</strong> WhatsApp Business API and Resend (Email) — activated as configured.</li>
+                  <li><strong>Communication Providers:</strong> WhatsApp Business API (operated by Meta) and Resend (Email) — activated as configured. Messages may be sent from a shared CartGain WhatsApp number or a merchant-supplied WhatsApp Business number. Inbound STOP/START replies are matched to the relevant merchant store using the recipient phone number and cart history.</li>
                   <li><strong>AI Services:</strong> OpenAI (GPT-4o / GPT-4o-mini) and, as a fallback, Groq (gpt-oss-120b) for AI-powered message generation — customer names and cart product details are processed to generate personalized recovery messages. Per OpenAI&apos;s published API data-usage policy, API inputs and outputs are not used for model training; the same applies to Groq for the OSS model used.</li>
                   <li><strong>Payment Processors:</strong> Razorpay for subscription billing (once configured).</li>
                   <li><strong>Cloud Infrastructure:</strong> Vercel and Supabase for hosting and database.</li>
@@ -143,6 +146,8 @@ export default function PrivacyPolicyPage() {
                 <ul className="list-disc pl-5 space-y-2 mt-3">
                   <li><strong>Cart data:</strong> Customer contact details and cart contents are anonymized 90 days after abandonment.</li>
                   <li><strong>Bargain sessions:</strong> AI negotiation sessions and messages are deleted 90 days after they start.</li>
+                  <li><strong>Negotiation learning:</strong> Learning outcomes and session-linked learning data are pruned after 90 days; detailed learning events follow the store&apos;s retention setting (180 days by default).</li>
+                  <li><strong>Storefront experience events:</strong> Invitation impressions, clicks, and chat-open events are retained for 180 days and then pruned.</li>
                   <li><strong>Access logs:</strong> Internal audit logs of data access are deleted after 180 days.</li>
                   <li><strong>Verification tokens:</strong> Password-reset / verification tokens are deleted shortly after expiry.</li>
                   <li><strong>Opt-out / suppression records:</strong> kept for as long as needed to honor your customers&apos; choices.</li>
@@ -164,6 +169,7 @@ export default function PrivacyPolicyPage() {
                   <li><strong>Human override:</strong> You set a floor price, so the AI can never sell below the price you approve.</li>
                   <li><strong>Customer opt-out:</strong> Customers are shown a clear &ldquo;Skip AI, buy at full price&rdquo; option that ends AI negotiation immediately and takes them to normal checkout.</li>
                   <li><strong>Merchant control:</strong> You can disable the AI bargain system entirely at any time from your dashboard.</li>
+                  <li><strong>Bounded learning:</strong> Optional negotiation learning can run in shadow mode, is limited to merchant-approved strategies, and can only adjust within the existing engine rules. It never lowers the hard price floor.</li>
                 </ul>
               </section>
 
@@ -199,6 +205,7 @@ export default function PrivacyPolicyPage() {
                     <li><strong>Opt-out:</strong> All messages include clear instructions to opt-out (e.g., an unsubscribe link or WhatsApp opt-out).</li>
                     <li><strong>Message Frequency:</strong> Messages are sent based on cart abandonment events, not exceeding reasonable frequency.</li>
                     <li><strong>Message &amp; Data Rates:</strong> Standard messaging and data rates may apply to recipients.</li>
+                    <li><strong>Shared sender:</strong> CartGain may send messages from a shared WhatsApp Business number. A STOP or START reply is applied to the store identified by the recipient&apos;s phone number and cart history; merchants remain responsible for their own customer communications.</li>
                     <li><strong>Support:</strong> For help, recipients can contact your support team.</li>
                   </ul>
                 </div>

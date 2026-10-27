@@ -18,7 +18,7 @@ export default function TermsPage() {
           </div>
           <h1 className="text-4xl font-bold text-white mb-4">Terms of Service</h1>
           <p className="text-lg text-blue-200 max-w-2xl mx-auto">
-            Last updated: July 1, 2026
+            Last updated: October 27, 2026
           </p>
         </div>
 
@@ -41,7 +41,7 @@ export default function TermsPage() {
                 2. Description of Service
               </h2>
               <p className="leading-relaxed">
-                CartGain provides an automated abandoned cart recovery platform that helps e-commerce businesses recover lost sales through multi-channel communication (email, WhatsApp). The Platform integrates with e-commerce platforms such as Shopify to detect abandoned carts and send recovery messages on behalf of the merchant.
+                CartGain provides an automated abandoned cart recovery platform that helps e-commerce businesses recover lost sales through multi-channel communication (email, WhatsApp). The Platform integrates with e-commerce platforms such as Shopify to detect abandoned carts and send recovery messages on behalf of the merchant. The Platform also offers optional AI price negotiation within merchant-set limits, storefront experience presentation, performance analytics (including refund-adjusted revenue), and bounded negotiation learning. AI output may be produced by a primary or fallback model and is subject to your settings and the hard price floor; it is not legal, financial, or professional advice.
               </p>
             </section>
 
@@ -80,10 +80,10 @@ export default function TermsPage() {
               </h2>
               <ul className="list-disc pl-5 space-y-2">
                 <li><strong>Subscription Fees:</strong> Paid plans are billed monthly or annually as selected at checkout. All fees are in Indian Rupees (INR) unless otherwise stated.</li>
-                <li><strong>Revenue Share:</strong> In addition to the subscription fee, a revenue share percentage applies to recovered revenue after the first 50 free carts. Rates: Growth 3.5% (capped at ₹5,000/month), Pro 3% (capped at ₹10,000/month).</li>
+                <li><strong>Revenue Share:</strong> In addition to the subscription fee, a revenue share percentage applies to net recovered revenue after the first 50 free carts. Net recovered revenue means the gross order value less verified refunds, cancellations, chargebacks, and applicable taxes. Rates: Growth 3.5% (capped at ₹5,000/month), Pro 3% (capped at ₹10,000/month).</li>
                 <li><strong>Payment Processor:</strong> All payments are processed securely through Razorpay. We do not store your full payment card details.</li>
                 <li><strong>Auto-Renewal:</strong> Subscriptions automatically renew at the end of each billing period unless cancelled before the renewal date.</li>
-                <li><strong>Refunds:</strong> Subscription fees are non-refundable except as required by applicable law. Revenue share fees, once calculated, are final.</li>
+                <li><strong>Refunds:</strong> Subscription fees are non-refundable except as required by applicable law. Revenue share is calculated on net recovered revenue and may be adjusted for verified refunds or cancellations that occur after an order is attributed to CartGain.</li>
                 <li><strong>Taxes:</strong> You are responsible for all applicable taxes, including GST, VAT, or similar transaction taxes.</li>
               </ul>
             </section>
@@ -102,6 +102,7 @@ export default function TermsPage() {
                 <li><strong>GDPR Compliance (EU):</strong> You have a lawful basis for processing customer data and have provided clear privacy notices to your customers.</li>
                 <li><strong>Opt-Out:</strong> All WhatsApp and email messages include a clear, working opt-out mechanism (e.g., an unsubscribe link or WhatsApp opt-out). You must honor opt-out requests immediately.</li>
                 <li><strong>Message Frequency:</strong> You will not send excessive messages. CartGain&apos;s default settings include reasonable frequency limits.</li>
+                <li><strong>Shared sender number:</strong> CartGain may send messages from a shared WhatsApp Business number. Inbound STOP/START replies are routed using the recipient&apos;s phone number and cart history; the shared number is not a store-specific brand asset. Merchants using their own WhatsApp Business number are responsible for its Meta approval, quality, and compliance.</li>
                 <li><strong>Indemnification:</strong> You agree to indemnify and hold CartGain harmless from any claims, damages, or fines arising from your non-compliance with messaging regulations.</li>
               </ul>
             </section>
@@ -114,7 +115,8 @@ export default function TermsPage() {
               <ul className="list-disc pl-5 space-y-2">
                 <li>CartGain processes only the minimum personal data necessary to detect abandoned carts and recover revenue for merchants.</li>
                 <li>You retain full ownership of your customer data. CartGain acts as a data processor on your behalf.</li>
-                <li>We process customer data only for the purpose of providing cart recovery services.</li>
+                <li>We process customer data only for the purpose of providing cart recovery services, optional negotiation, storefront experience measurement, and bounded learning, as described in our <Link href="/privacy" className="text-cyan-400 hover:underline">Privacy Policy</Link>.</li>
+                <li>Storefront experience events are limited to presentation signals and a pseudonymous visitor key; they do not include chat message text. Learning keys are pseudonymous and the hard price floor always remains authoritative.</li>
                 <li>We implement industry-standard security measures to protect all data, including encryption, access controls, and logging of sensitive administrative access.</li>
                 <li>We do not sell your customer data to third parties.</li>
                 <li>You may request deletion of your data at any time; store-scoped data is also purged automatically upon account deletion or app uninstall.</li>

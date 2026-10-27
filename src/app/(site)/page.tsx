@@ -107,6 +107,29 @@ const VALUE_STRIP = [
   { icon: BarChart3, title: 'Track recovered revenue', desc: 'Attributable, dashboard-visible, day one' },
 ]
 
+const LATEST_UPDATES = [
+  {
+    icon: Sparkles,
+    title: 'Experience Studio',
+    desc: 'Pick a friendly, strict or playful shopkeeper, choose one of four storefront invitations, and publish or roll back instantly.',
+  },
+  {
+    icon: MessageSquare,
+    title: 'Shopkeepers that react',
+    desc: 'The avatar listens, thinks, counters and celebrates in real time — with reduced-motion and avatar controls respected.',
+  },
+  {
+    icon: BarChart3,
+    title: 'Storefront performance',
+    desc: 'Follow impressions → clicks → chats → deals, compare designs, and see net revenue after refunds and cancellations.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Safer AI, bounded learning',
+    desc: 'Primary and fallback AI with safe timeouts, plus optional shadow-mode learning that can never move your price floor.',
+  },
+]
+
 const FAQS = [
   {
     q: 'Why not just use email for cart recovery?',
@@ -130,7 +153,7 @@ const FAQS = [
   },
   {
     q: 'Do you handle WhatsApp integration?',
-    a: 'Yes. We connect to the WhatsApp Business API to send recovery messages and manage template approval, delivery, and compliance. You bring a WhatsApp Business Account; we handle the rest.',
+    a: 'Yes. We connect to the WhatsApp Business API to send approved recovery templates and manage delivery and compliance. CartGain can send from its shared WhatsApp number, or use a merchant-supplied WhatsApp Business Account; STOP/START replies always route back to the right store.',
   },
   {
     q: 'Can I protect my minimum price?',
@@ -795,6 +818,29 @@ export default function HomePage() {
                 </div>
                 <p className="text-blue-300/80 text-sm">Deals accepted by the negotiator — and the discounts each one cost you.</p>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── LATEST UPDATES ───────────────────────────────────── */}
+        <section className="py-14 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 bg-blue-950/30" aria-labelledby="updates-heading">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-10 sm:mb-12">
+              <h2 id="updates-heading" className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">A storefront that gets better every week</h2>
+              <p className="text-base sm:text-lg md:text-xl text-blue-100 max-w-2xl mx-auto">
+                New ways to present your shopkeeper, measure the storefront, and keep every deal inside your rules.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              {LATEST_UPDATES.map((update) => (
+                <div key={update.title} className="bg-slate-800/40 border border-blue-700/30 rounded-2xl p-5 sm:p-6">
+                  <div className="w-11 h-11 bg-gradient-to-br from-cyan-600/20 to-blue-600/20 border border-cyan-500/25 rounded-xl flex items-center justify-center mb-4">
+                    <update.icon className="w-5 h-5 text-cyan-400" />
+                  </div>
+                  <h3 className="text-base font-bold text-white mb-2">{update.title}</h3>
+                  <p className="text-sm text-blue-200/80 leading-relaxed">{update.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
         </section>

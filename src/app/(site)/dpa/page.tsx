@@ -18,7 +18,7 @@ export default function DPAPage() {
           </div>
           <h1 className="text-4xl font-bold text-white mb-4">Data Processing Agreement</h1>
           <p className="text-lg text-blue-200 max-w-2xl mx-auto">
-            Last updated: July 1, 2026
+            Last updated: October 27, 2026
           </p>
         </div>
 
@@ -68,11 +68,13 @@ export default function DPAPage() {
                     <li>Cart contents, product details, and order values</li>
                     <li>Communication preferences and opt-in/opt-out status</li>
                     <li>Message delivery status and engagement metrics</li>
+                    <li>Storefront experience events (invitation impression, click, chat open), a pseudonymous visitor key, and the design/personality/version shown</li>
+                    <li>Pseudonymous negotiation session keys, strategy identifiers, context buckets, and commercial outcomes used for bounded learning</li>
                   </ul>
                 </div>
                 <div>
                   <p className="font-semibold text-white">Nature and Purpose of Processing:</p>
-                  <p>Automated sending of cart recovery notifications via email, WhatsApp, and push-style web alerts to encourage customers to complete their purchases.</p>
+                  <p>Automated sending of cart recovery notifications via email, WhatsApp, and push-style web alerts to encourage customers to complete their purchases; optional AI price negotiation within merchant-set limits; storefront experience measurement; and bounded evaluation of negotiation strategies. CartGain may send WhatsApp messages from a shared sender number or a merchant-supplied WhatsApp Business number. Inbound STOP/START replies are matched to the relevant store using the recipient&apos;s phone number and cart history.</p>
                 </div>
                 <div>
                   <p className="font-semibold text-white">Duration of Processing:</p>
@@ -256,6 +258,7 @@ export default function DPAPage() {
               </h2>
               <ul className="list-disc pl-5 space-y-2">
                 <li>Personal data is processed for the duration of the Controller&apos;s active subscription.</li>
+                <li>Default retention: cart contact data is anonymized 90 days after abandonment; bargain sessions and messages are deleted after 90 days; learning outcomes and session-linked learning data are pruned after 90 days; storefront experience events are retained for 180 days; detailed learning events follow the store&apos;s retention setting (180 days by default); access logs are deleted after 180 days.</li>
                 <li>Upon uninstall or account deletion, store-scoped personal data is purged from the application database (see CartGain&apos;s data-deletion procedures).</li>
                 <li>Controllers may request earlier deletion by contacting support.</li>
                 <li>Copies that may remain in hosting-provider backups are purged in line with the provider&apos;s own backup retention schedule.</li>
