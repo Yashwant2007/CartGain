@@ -1,4 +1,4 @@
-import { decorateForFallback } from '../ai-client'
+import { decorateForFallback, classifyAiFailure } from '../ai-client'
 
 function fakeChatCompletions(createImpl: jest.Mock) {
   return {
@@ -203,5 +203,38 @@ describe('provider env parsing (getAiHealth)', () => {
 
     const { getAiHealth } = await import('../ai-client')
     expect(getAiHealth().fallback.configured).toBe(true)
+  })
+})
+
+describe('classifyAiFailure', () => {
+  it('classifies timeout without tripping the breaker', () => {
+    expect(classifyAiFailure({ name: 'APIConnectionTimeoutError' })).toEqual({
+      category: 'timeout',
+      status: undefined,
+      fallbackEligible: true,
+      tripBreaker: false,
+    })
+  })
+
+  it('classifies credentials, rate limits and quota separately', () => {
+    expect(classifyAiFailure({ status: 401 }).category).toBe('invalid_credentials')
+    expect(classifyAiFailure({ status: 429 }).category).toBe('rate_limit')
+    expect(classifyAiFailure({ status: 429, error: { code: 'insufficient_quota' } }).category).toBe('quota_exhausted')
+    expect(classifyAiFailure({ status: 429, error: { code: 'insufficient_quota' } }).tripBreaker).toBe(true)
+  })
+
+  it('keeps oversized requests out of the outage breaker', () => {
+    expect(classifyAiFailure({ status: 413 })).toEqual({
+      category: 'request_too_large',
+      status: 413,
+      fallbackEligible: true,
+      tripBreaker: false,
+    })
+  })
+
+  it('classifies provider outages and connection failures', () => {
+    expect(classifyAiFailure({ status: 503 }).category).toBe('provider_unavailable')
+    expect(classifyAiFailure({ code: 'ECONNREFUSED' }).category).toBe('provider_unavailable')
+    expect(classifyAiFailure({ name: 'APIConnectionError' }).category).toBe('provider_unavailable')
   })
 })

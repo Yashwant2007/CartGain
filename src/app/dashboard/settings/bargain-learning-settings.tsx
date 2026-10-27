@@ -22,6 +22,14 @@ type BargainLearningForm = {
   promoStrategyEnabled: boolean
 }
 
+type LearningAgentStat = {
+  source: string
+  events: number
+  outcomes: number
+  reward: number
+  purchaseValue: number
+}
+
 type LearningArmStat = {
   environment: string
   strategy: string
@@ -73,6 +81,7 @@ export function BargainLearningSettings({ storeId }: { storeId: string | null })
   const [mode, setMode] = useState('baseline')
   const [strategies, setStrategies] = useState<string[]>(Object.keys(LEARNING_STRATEGY_LABELS))
   const [stats, setStats] = useState<LearningArmStat[]>([])
+  const [agents, setAgents] = useState<LearningAgentStat[]>([])
   const [totalEvents, setTotalEvents] = useState(0)
   const [totalOutcomes, setTotalOutcomes] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -95,6 +104,7 @@ export function BargainLearningSettings({ storeId }: { storeId: string | null })
       setMode(data.mode ?? 'baseline')
       setStrategies(Array.isArray(data.strategies) ? data.strategies : Object.keys(LEARNING_STRATEGY_LABELS))
       setStats(Array.isArray(data.stats) ? data.stats : [])
+      setAgents(Array.isArray(data.agents) ? data.agents : [])
       setTotalEvents(Number(data.totalEvents) || 0)
       setTotalOutcomes(Number(data.totalOutcomes) || 0)
       setForm({
@@ -362,6 +372,34 @@ export function BargainLearningSettings({ storeId }: { storeId: string | null })
             {totalEvents} events · {totalOutcomes} outcomes
           </p>
         </div>
+        {agents.length > 0 && (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-blue-300/60 border-b border-blue-700/30">
+                  <th className="py-2 pr-4 font-medium">Agent</th>
+                  <th className="py-2 pr-4 font-medium text-right">Events</th>
+                  <th className="py-2 pr-4 font-medium text-right">Outcomes</th>
+                  <th className="py-2 pr-4 font-medium text-right">Reward</th>
+                  <th className="py-2 font-medium text-right">Purchase value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {agents.map((row) => (
+                  <tr key={row.source} className="border-b border-blue-700/20 last:border-0">
+                    <td className="py-2 pr-4 text-white capitalize">{row.source}</td>
+                    <td className="py-2 pr-4 text-right text-blue-200">{row.events}</td>
+                    <td className="py-2 pr-4 text-right text-blue-200">{row.outcomes}</td>
+                    <td className="py-2 pr-4 text-right text-blue-200">{row.reward.toFixed(2)}</td>
+                    <td className="py-2 text-right text-blue-200">
+                      {row.purchaseValue > 0 ? row.purchaseValue.toFixed(2) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         {stats.length === 0 ? (
           <p className="mt-4 text-sm text-blue-300/70">
             No strategy evidence yet. Enrol live traffic or use the demo to collect outcomes.

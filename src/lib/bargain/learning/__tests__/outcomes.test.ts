@@ -95,11 +95,16 @@ describe('bargain learning outcomes', () => {
     mockPrisma.bargainLearningArmStat.upsert.mockResolvedValue({})
   })
 
-  test('records acceptance as a provisional outcome with no reward yet', async () => {
+  test('records acceptance as a provisional outcome with agent attribution', async () => {
+    mockPrisma.bargainSession.findUnique.mockResolvedValue(
+      session({ lastAiSource: 'fallback', lastAiModel: 'openai/gpt-oss-120b' }),
+    )
     await recordLearningAcceptance('session-1')
 
     const upsert = mockPrisma.bargainLearningOutcome.upsert.mock.calls[0][0]
     expect(upsert.create.accepted).toBe(true)
+    expect(upsert.create.agentSource).toBe('fallback')
+    expect(upsert.create.agentModel).toBe('openai/gpt-oss-120b')
     expect(upsert.create.purchased).toBe(false)
     expect(upsert.create.reward).toBe(0)
     expect(upsert.create.finalizedAt).toBeNull()
@@ -140,10 +145,13 @@ describe('bargain learning outcomes', () => {
     const event = mockPrisma.bargainLearningEvent.create.mock.calls[0][0].data
     expect(event.eventType).toBe('purchased')
     expect(event.dedupeKey).toBe('purchased:store-1:order-1')
+    expect(event.agentSource).toBe(null) // this fixture has no session attribution
   })
 
   test('a full refund reverses the purchase reward exactly once', async () => {
-    mockPrisma.bargainLearningOutcome.findUnique.mockResolvedValue(purchaseOutcome())
+    mockPrisma.bargainLearningOutcome.findUnique.mockResolvedValue(
+      purchaseOutcome({ agentSource: 'fallback', agentModel: 'openai/gpt-oss-120b' }),
+    )
     await recordLearningRefund({
       storeId: 'store-1',
       shopifyOrderId: 'order-1',
@@ -155,6 +163,8 @@ describe('bargain learning outcomes', () => {
     const event = mockPrisma.bargainLearningEvent.create.mock.calls[0][0].data
     expect(event.eventType).toBe('refunded')
     expect(event.dedupeKey).toBe('refund:store-1:order-1:refund-1')
+    expect(event.agentSource).toBe('fallback')
+    expect(event.agentModel).toBe('openai/gpt-oss-120b')
 
     const upsert = mockPrisma.bargainLearningOutcome.upsert.mock.calls[0][0]
     expect(upsert.update.purchased).toBe(false)

@@ -20,6 +20,8 @@ interface OutcomeContext {
   floorPrice: number
   maxRounds: number
   quarantined: boolean
+  agentSource: string | null
+  agentModel: string | null
   config: LearningConfigView | null
 }
 
@@ -53,6 +55,8 @@ function outcomeContextFromSession(session: any, config: LearningConfigView | nu
     floorPrice: Number(session.bargainFloor) || 0,
     maxRounds: Math.max(1, Number(session.learningMaxRounds) || Number(session.attemptsUsed) || 1),
     quarantined: Boolean(session.learningQuarantined),
+    agentSource: typeof session.lastAiSource === 'string' ? session.lastAiSource : null,
+    agentModel: typeof session.lastAiModel === 'string' ? session.lastAiModel : null,
     config,
   }
 }
@@ -215,6 +219,8 @@ async function writeOutcome(params: {
         rewardEfficiency: reward.efficiency,
         rewardApplied: reward.total,
         quarantined: params.context.quarantined,
+        agentSource: params.context.agentSource,
+        agentModel: params.context.agentModel,
         acceptedAt: params.acceptedAt ?? (params.accepted ? new Date() : null),
         purchasedAt: params.purchasedAt ?? (params.purchased ? new Date() : null),
         finalizedAt,
@@ -235,6 +241,8 @@ async function writeOutcome(params: {
         rewardEfficiency: reward.efficiency,
         rewardApplied: reward.total,
         quarantined: params.context.quarantined,
+        ...(params.context.agentSource ? { agentSource: params.context.agentSource } : {}),
+        ...(params.context.agentModel ? { agentModel: params.context.agentModel } : {}),
         ...(params.acceptedAt ? { acceptedAt: params.acceptedAt } : {}),
         ...(params.purchasedAt ? { purchasedAt: params.purchasedAt } : {}),
         ...(finalizedAt ? { finalizedAt } : {}),
@@ -293,6 +301,8 @@ export async function recordLearningAcceptance(sessionId: string): Promise<void>
       value: session.finalPrice != null ? Number(session.finalPrice) : null,
       dedupeKey: `accepted:${sessionId}`,
       properties: { rounds: Number(session.attemptsUsed) || 0 },
+      agentSource: context.agentSource,
+      agentModel: context.agentModel,
     })
   } catch (err: any) {
     console.warn('[bargain-learning] acceptance record failed:', err?.message ?? err)
@@ -341,6 +351,8 @@ export async function recordLearningPurchase(params: {
       value: Math.max(0, params.purchaseValue),
       dedupeKey: `purchased:${context.storeId}:${params.shopifyOrderId}`,
       properties: { orderId: params.shopifyOrderId },
+      agentSource: context.agentSource,
+      agentModel: context.agentModel,
     })
   } catch (err: any) {
     console.warn('[bargain-learning] purchase record failed:', err?.message ?? err)
@@ -383,6 +395,8 @@ export async function recordLearningRefund(params: {
       floorPrice: outcome.floorPrice != null ? Number(outcome.floorPrice) : 0,
       value: params.refundAmount,
       dedupeKey,
+      agentSource: typeof outcome.agentSource === 'string' ? outcome.agentSource : null,
+      agentModel: typeof outcome.agentModel === 'string' ? outcome.agentModel : null,
     })
     if (!created) return
 
@@ -456,6 +470,8 @@ export async function finalizeLearningOutcome(outcomeKey: string): Promise<boole
       originalPrice: context.originalPrice,
       floorPrice: context.floorPrice,
       dedupeKey: `finalized:${outcomeKey}`,
+      agentSource: context.agentSource,
+      agentModel: context.agentModel,
     })
     return true
   } catch (err: any) {

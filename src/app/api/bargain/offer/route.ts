@@ -623,6 +623,24 @@ export async function POST(request: NextRequest) {
 
     // ── NORMAL NEGOTIATION (incl. bulk) ──
     const result = await negotiateStep(ctx, history, data.message, customerOffer ?? undefined, bargainSession.id)
+    const resultMeta = (result.metadata ?? {}) as Record<string, any>
+    const aiSource =
+      typeof resultMeta.aiSource === 'string' && resultMeta.aiSource
+        ? resultMeta.aiSource
+        : 'emergency'
+    const aiModel = typeof resultMeta.aiModel === 'string' ? resultMeta.aiModel : null
+    const aiLatencyMs =
+      typeof resultMeta.aiTotalLatencyMs === 'number'
+        ? resultMeta.aiTotalLatencyMs
+        : typeof resultMeta.aiLatencyMs === 'number'
+          ? resultMeta.aiLatencyMs
+          : null
+    const aiFailure =
+      typeof resultMeta.failureCategory === 'string'
+        ? resultMeta.failureCategory
+        : typeof resultMeta.aiFallbackReason === 'string'
+          ? resultMeta.aiFallbackReason
+          : null
 
     // If abuse was detected and doesn't consume an attempt, don't count it.
     // Only meaningful on an offer turn: a chat turn never incremented, so
@@ -724,6 +742,18 @@ export async function POST(request: NextRequest) {
         name: 'cartgain_coupon_stack_attempt_detected',
         storeId: bargainSession.storeId,
         properties: {},
+      }))
+    }
+    if (aiSource === 'fallback' || aiSource === 'emergency') {
+      analyticsEvents.push(track({
+        name: 'cartgain_ai_fallback',
+        storeId: bargainSession.storeId,
+        properties: {
+          source: aiSource,
+          failure: aiFailure,
+          model: aiModel,
+          latencyMs: aiLatencyMs,
+        },
       }))
     }
     await Promise.all(analyticsEvents)
@@ -845,6 +875,9 @@ export async function POST(request: NextRequest) {
           currentOffer: customerOffer ?? bargainSession.currentOffer,
           status: sessionStatus,
           finalPrice: result.decision === 'accept' ? (safeCounter ?? customerOffer ?? bargainSession.currentOffer) : null,
+          lastAiSource: aiSource,
+          lastAiModel: aiModel,
+          lastAiFailure: aiFailure,
         },
       }),
     ])
@@ -876,6 +909,10 @@ export async function POST(request: NextRequest) {
           candidate: learningResolved.selection.strategy,
           exploration: learningResolved.selection.isExploration,
         },
+        agentSource: aiSource,
+        agentModel: aiModel,
+        latencyMs: aiLatencyMs,
+        failureCategory: aiFailure,
       })
     }
 

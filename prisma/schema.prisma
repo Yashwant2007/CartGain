@@ -519,6 +519,9 @@ model BargainSession {
   learningShadowStrategy    String?
   learningMaxRounds         Int?
   learningQuarantined       Boolean   @default(false) // manipulation/injection evidence must never train the selector
+  lastAiSource              String? // primary, fallback, emergency, reflex
+  lastAiModel               String?
+  lastAiFailure             String? // safe failure category that caused a fallback
   // Published experience snapshot at session start, so historical design/
   // personality performance cannot be rewritten by a later publish.
   experienceDesign          String?
@@ -661,6 +664,10 @@ model BargainLearningEvent {
   value                  Float?
   dedupeKey              String   @unique
   properties             Json?
+  agentSource            String? // primary, fallback, emergency, reflex, demo
+  agentModel             String?
+  latencyMs              Int?
+  failureCategory        String?
   createdAt              DateTime @default(now())
 
   store   Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
@@ -668,6 +675,7 @@ model BargainLearningEvent {
 
   @@index([storeId, environment, createdAt])
   @@index([storeId, strategy, createdAt])
+  @@index([storeId, agentSource, createdAt])
   @@index([sessionId])
 }
 
@@ -697,6 +705,8 @@ model BargainLearningOutcome {
   rewardEfficiency Float     @default(0)
   rewardApplied    Float     @default(0)
   quarantined      Boolean   @default(false)
+  agentSource      String? // primary, fallback, emergency, reflex
+  agentModel       String?
   acceptedAt       DateTime?
   purchasedAt      DateTime?
   finalizedAt      DateTime?
@@ -710,6 +720,7 @@ model BargainLearningOutcome {
   @@unique([storeId, shopifyOrderId])
   @@index([storeId, environment, createdAt])
   @@index([storeId, strategy, createdAt])
+  @@index([storeId, agentSource, createdAt])
   @@index([sessionId])
 }
 

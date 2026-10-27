@@ -31,6 +31,8 @@ let primaryClient: OpenAI | null = null
 let fallbackClient: OpenAI | null = null
 
 const DEFAULT_FALLBACK_BASE_URL = 'https://api.groq.com/openai/v1'
+const DEFAULT_PRIMARY_TIMEOUT_MS = 10_000
+const DEFAULT_FALLBACK_TIMEOUT_MS = 20_000
 // openai/gpt-oss-120b: 131K context (handles the large bargain system prompt),
 // JSON Object Mode (matches our response_format: json_object), strong reasoning
 // (best for negotiation depth), available on Groq free tier. NOTE: the previous
@@ -59,6 +61,34 @@ function fallbackBaseUrl(): string {
 
 function fallbackModel(): string {
   return envTrimmed('AI_FALLBACK_MODEL') ?? DEFAULT_FALLBACK_MODEL
+}
+
+function timeoutFromEnv(name: string, fallback: number): number {
+  const raw = envTrimmed(name)
+  if (!raw) return fallback
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(60_000, Math.max(1_000, Math.round(parsed)))
+}
+
+export function primaryTimeoutMs(): number {
+  return timeoutFromEnv('AI_PRIMARY_TIMEOUT_MS', DEFAULT_PRIMARY_TIMEOUT_MS)
+}
+
+export function fallbackTimeoutMs(): number {
+  return timeoutFromEnv('AI_FALLBACK_TIMEOUT_MS', DEFAULT_FALLBACK_TIMEOUT_MS)
+}
+
+export function fallbackModelName(): string {
+  return fallbackModel()
+}
+
+export function fallbackProviderName(): string {
+  try {
+    return new URL(fallbackBaseUrl()).hostname
+  } catch {
+    return 'invalid-config'
+  }
 }
 
 function isFormatUnsupported(err: any): boolean {
@@ -111,7 +141,7 @@ function makeFallbackClient(): OpenAI | null {
   const client = new OpenAI({
     apiKey: fallbackKey,
     baseURL: fallbackBaseUrl(),
-    timeout: 20000,
+    timeout: fallbackTimeoutMs(),
   })
   fallbackClient = decorateForFallback(client, fallbackModel())
   return fallbackClient
@@ -127,7 +157,7 @@ export function getAiClient(userKey?: string): AiResolved | null {
   if (!forceFallback && !isTierTripped('primary')) {
     const key = envTrimmed('OPENAI_API_KEY')
     if (key) {
-      if (!primaryClient) primaryClient = new OpenAI({ apiKey: key, timeout: 10000 })
+      if (!primaryClient) primaryClient = new OpenAI({ apiKey: key, timeout: primaryTimeoutMs() })
       return { client: primaryClient, tier: 'primary' }
     }
   }
@@ -140,7 +170,7 @@ export function getAiClient(userKey?: string): AiResolved | null {
   if (!forceFallback && !isTierTripped('primary')) {
     const key = envTrimmed('OPENAI_API_KEY')
     if (key) {
-      if (!primaryClient) primaryClient = new OpenAI({ apiKey: key, timeout: 10000 })
+      if (!primaryClient) primaryClient = new OpenAI({ apiKey: key, timeout: primaryTimeoutMs() })
       return { client: primaryClient, tier: 'primary' }
     }
   }
@@ -148,35 +178,104 @@ export function getAiClient(userKey?: string): AiResolved | null {
   return null
 }
 
-export function handleAiFailure(err: any, context: string, userKey: string | undefined, tier: AiTier): void {
+/**
+ * Resolve ONLY the fallback tier. Used when the primary failed with a
+ * non-tripping error (for example a timeout) but the request can still be
+ * completed inside the overall latency budget.
+ */
+export function getFallbackAiClient(): AiResolved | null {
+  if (isTierTripped('fallback')) return null
+  const fbClient = makeFallbackClient()
+  return fbClient ? { client: fbClient, tier: 'fallback' } : null
+}
+
+export type AiFailureCategory =
+  | 'timeout'
+  | 'rate_limit'
+  | 'quota_exhausted'
+  | 'invalid_credentials'
+  | 'request_too_large'
+  | 'provider_unavailable'
+  | 'malformed_output'
+  | 'unknown'
+
+export interface AiFailureClassification {
+  category: AiFailureCategory
+  status?: number
+  /** Safe to try the other provider tier for this same request. */
+  fallbackEligible: boolean
+  /** The failed tier should be temporarily removed from rotation. */
+  tripBreaker: boolean
+}
+
+export function classifyAiFailure(err: any): AiFailureClassification {
   const status: number | undefined = err?.status ?? err?.statusCode
   const name: string | undefined = err?.name
   const code: string | undefined = err?.code
   const quota = isInsufficientQuotaError(err)
-  // A slow reply is NOT an outage: tripping a tier for 15 minutes because of one
-  // timeout would push every shopper onto the fallback, so timeouts stay local.
   const timeout =
     name === 'APIConnectionTimeoutError' ||
     name === 'AbortError' ||
     name === 'TimeoutError' ||
     code === 'ETIMEDOUT'
-  // The provider being unreachable (DNS/refused/reset) is a real outage too.
   const connection =
     name === 'APIConnectionError' ||
     ['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE', 'EHOSTUNREACH', 'ENETUNREACH'].includes(
       code ?? '',
     )
-  // Any HTTP-level failure means this tier cannot serve the request right now,
-  // so fail over instead of silently serving templates. This explicitly covers
-  // 429 rate-limits/quota — the exact case that previously degraded a whole
-  // storefront to canned lines without any log line. 413 is excluded: that is a
-  // request-SIZE problem the bargain path handles with a compact retry.
-  const httpFailure = typeof status === 'number' && status >= 400 && status !== 413
-  if (!timeout && (quota || connection || httpFailure)) {
+
+  if (status === 413) {
+    return { category: 'request_too_large', status, fallbackEligible: true, tripBreaker: false }
+  }
+  if (timeout) {
+    return { category: 'timeout', status, fallbackEligible: true, tripBreaker: false }
+  }
+  if (quota) {
+    return { category: 'quota_exhausted', status, fallbackEligible: true, tripBreaker: true }
+  }
+  if (status === 429) {
+    return { category: 'rate_limit', status, fallbackEligible: true, tripBreaker: true }
+  }
+  if (status === 401 || status === 403) {
+    return { category: 'invalid_credentials', status, fallbackEligible: true, tripBreaker: true }
+  }
+  if (connection || (typeof status === 'number' && status >= 500)) {
+    return { category: 'provider_unavailable', status, fallbackEligible: true, tripBreaker: true }
+  }
+  if (typeof status === 'number' && status >= 400) {
+    return { category: 'unknown', status, fallbackEligible: true, tripBreaker: true }
+  }
+  return { category: 'unknown', status, fallbackEligible: true, tripBreaker: false }
+}
+
+export function handleAiFailure(
+  err: any,
+  context: string,
+  userKey: string | undefined,
+  tier: AiTier,
+): AiFailureClassification {
+  const classification = classifyAiFailure(err)
+  const status = classification.status
+  // A slow reply is NOT an outage: tripping a tier for 15 minutes because of one
+  // timeout would push every shopper onto the fallback, so timeouts stay local.
+  if (classification.tripBreaker) {
     tripTierBreaker(tier)
     if (tier === 'fallback' && userKey) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
     if (shouldLogQuota()) {
-      const reason = quota ? 'credits exhausted' : httpFailure ? `HTTP ${status}` : 'provider unreachable'
+      const reason =
+        classification.category === 'quota_exhausted'
+          ? 'credits exhausted'
+          : classification.category === 'rate_limit'
+            ? 'HTTP 429'
+            : classification.category === 'invalid_credentials'
+              ? `HTTP ${status ?? 401}`
+              : classification.category === 'provider_unavailable'
+                ? status
+                  ? `HTTP ${status}`
+                  : 'provider unreachable'
+                : status
+                  ? `HTTP ${status}`
+                  : classification.category
       console.warn(
         `[AI] ${context}: ${tier} tier failing (${reason}) — ${
           tier === 'primary' ? 'switching to fallback provider' : 'falling back to heuristics'
@@ -184,8 +283,9 @@ export function handleAiFailure(err: any, context: string, userKey: string | und
       )
     }
   } else {
-    console.error(`[AI] ${context}:`, err)
+    console.error(`[AI] ${context}: ${classification.category}`, err)
   }
+  return classification
 }
 
 export function getAiHealth() {
@@ -201,12 +301,14 @@ export function getAiHealth() {
       ? 'fallback'
       : 'none'
   return {
-    primary: { configured: primaryConfigured, tripped: primaryTripped },
+    primary: { configured: primaryConfigured, tripped: primaryTripped, timeoutMs: primaryTimeoutMs() },
     fallback: {
       configured: fallbackConfigured,
       tripped: fallbackTripped,
       baseUrl: fallbackBaseUrl(),
       model: fallbackModel(),
+      provider: fallbackProviderName(),
+      timeoutMs: fallbackTimeoutMs(),
     },
     forceFallback,
     activeTier,

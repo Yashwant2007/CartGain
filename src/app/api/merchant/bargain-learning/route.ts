@@ -78,8 +78,15 @@ export async function GET(request: NextRequest) {
   let stats: any[] = []
   let totalEvents = 0
   let totalOutcomes = 0
+  let agents: Array<{
+    source: string
+    events: number
+    outcomes: number
+    reward: number
+    purchaseValue: number
+  }> = []
   try {
-    const [rows, eventCount, outcomeCount] = await Promise.all([
+    const [rows, eventCount, outcomeCount, eventGroups, outcomeGroups] = await Promise.all([
       (prisma as any).bargainLearningArmStat?.findMany({
         where: { storeId: store.id },
         orderBy: [{ environment: 'asc' }, { contextKey: 'asc' }, { strategy: 'asc' }],
@@ -87,10 +94,41 @@ export async function GET(request: NextRequest) {
       }) ?? Promise.resolve([]),
       (prisma as any).bargainLearningEvent?.count({ where: { storeId: store.id } }) ?? Promise.resolve(0),
       (prisma as any).bargainLearningOutcome?.count({ where: { storeId: store.id } }) ?? Promise.resolve(0),
+      (prisma as any).bargainLearningEvent?.groupBy?.({
+        by: ['agentSource'],
+        where: { storeId: store.id },
+        _count: { _all: true },
+      }) ?? Promise.resolve([]),
+      (prisma as any).bargainLearningOutcome?.groupBy?.({
+        by: ['agentSource'],
+        where: { storeId: store.id },
+        _count: { _all: true },
+        _sum: { reward: true, purchaseValue: true },
+      }) ?? Promise.resolve([]),
     ])
     stats = Array.isArray(rows) ? rows : []
     totalEvents = Number(eventCount) || 0
     totalOutcomes = Number(outcomeCount) || 0
+    const bySource = new Map<string, { source: string; events: number; outcomes: number; reward: number; purchaseValue: number }>()
+    for (const row of Array.isArray(eventGroups) ? eventGroups : []) {
+      const source = typeof row.agentSource === 'string' ? row.agentSource : 'unattributed'
+      bySource.set(source, {
+        source,
+        events: Number(row._count?._all) || 0,
+        outcomes: 0,
+        reward: 0,
+        purchaseValue: 0,
+      })
+    }
+    for (const row of Array.isArray(outcomeGroups) ? outcomeGroups : []) {
+      const source = typeof row.agentSource === 'string' ? row.agentSource : 'unattributed'
+      const current = bySource.get(source) ?? { source, events: 0, outcomes: 0, reward: 0, purchaseValue: 0 }
+      current.outcomes = Number(row._count?._all) || 0
+      current.reward = Number(row._sum?.reward) || 0
+      current.purchaseValue = Number(row._sum?.purchaseValue) || 0
+      bySource.set(source, current)
+    }
+    agents = Array.from(bySource.values()).sort((a, b) => b.events - a.events || b.outcomes - a.outcomes)
   } catch (error) {
     console.warn('[bargain-learning] summary read failed:', error)
   }
@@ -101,6 +139,7 @@ export async function GET(request: NextRequest) {
     ...resolved,
     totalEvents,
     totalOutcomes,
+    agents,
     stats,
     strategies: CONFIG_STRATEGIES,
   })

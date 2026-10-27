@@ -431,6 +431,7 @@ export function ruleBasedDecision(
       counterOffer: boundedOffer,
       tactic: 'accept_at_floor',
       sentiment: 'happy',
+      metadata: { aiSource: 'emergency' },
     }
   }
 
@@ -444,6 +445,7 @@ export function ruleBasedDecision(
       decision: 'chat',
       tactic: 'absurd_offer',
       sentiment: persona === 'playful_friend' ? 'playful' : persona === 'strict_negotiator' ? 'firm' : 'warm',
+      metadata: { aiSource: 'emergency' },
     }
   }
 
@@ -468,6 +470,7 @@ export function ruleBasedDecision(
       counterOffer: counter,
       tactic: 'meet_partway',
       sentiment: 'conciliatory',
+      metadata: { aiSource: 'emergency' },
     }
   }
 
@@ -482,6 +485,7 @@ export function ruleBasedDecision(
     counterOffer: counter,
     tactic: 'final_offer',
     sentiment: 'final',
+    metadata: { aiSource: 'emergency' },
   }
 }
 

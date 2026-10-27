@@ -7,7 +7,7 @@ const mockPrisma: any = {
 
 jest.mock('@/lib/db', () => ({ __esModule: true, default: mockPrisma }))
 
-import { previewDemoLearning, resolveSessionLearning } from '../service'
+import { previewDemoLearning, recordLearningEvent, resolveSessionLearning } from '../service'
 
 function configRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -241,5 +241,29 @@ describe('bargain learning service', () => {
       context,
     })
     expect(result).toBeNull()
+  })
+
+  test('turn events persist safe agent attribution', async () => {
+    mockPrisma.bargainLearningEvent.create.mockResolvedValue({ id: 'event-1' })
+    const created = await recordLearningEvent({
+      storeId: 'store-1',
+      environment: 'production',
+      eventType: 'offer_turn',
+      strategy: 'FRIENDLY',
+      version: 'v1',
+      contextKey: 'v1|price|low_mid',
+      mode: 'active',
+      dedupeKey: 'turn:session-1:2:counter',
+      agentSource: 'fallback',
+      agentModel: 'openai/gpt-oss-120b',
+      latencyMs: 412,
+      failureCategory: 'timeout',
+    })
+    expect(created).toBe(true)
+    const event = mockPrisma.bargainLearningEvent.create.mock.calls[0][0].data
+    expect(event.agentSource).toBe('fallback')
+    expect(event.agentModel).toBe('openai/gpt-oss-120b')
+    expect(event.latencyMs).toBe(412)
+    expect(event.failureCategory).toBe('timeout')
   })
 })

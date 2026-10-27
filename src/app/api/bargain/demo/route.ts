@@ -429,6 +429,21 @@ export async function POST(request: NextRequest) {
         : { reply: chatFallback(message, ctx2, history.length), decision: 'chat', tactic: 'demo_fallback', sentiment: 'neutral' }
     }
 
+    const demoMeta = (result.metadata ?? {}) as Record<string, any>
+    const demoAiSource = typeof demoMeta.aiSource === 'string' ? demoMeta.aiSource : 'emergency'
+    const demoAiModel = typeof demoMeta.aiModel === 'string' ? demoMeta.aiModel : null
+    const demoLatencyMs =
+      typeof demoMeta.aiTotalLatencyMs === 'number'
+        ? demoMeta.aiTotalLatencyMs
+        : typeof demoMeta.aiLatencyMs === 'number'
+          ? demoMeta.aiLatencyMs
+          : null
+    const demoFailure = typeof demoMeta.failureCategory === 'string'
+      ? demoMeta.failureCategory
+      : typeof demoMeta.aiFallbackReason === 'string'
+        ? demoMeta.aiFallbackReason
+        : null
+
     if (learningResolved) {
       await recordLearningEvent({
         storeId: merchant.store!.id,
@@ -455,6 +470,10 @@ export async function POST(request: NextRequest) {
           candidate: learningResolved.selection.strategy,
           exploration: learningResolved.selection.isExploration,
         },
+        agentSource: demoAiSource,
+        agentModel: demoAiModel,
+        latencyMs: demoLatencyMs,
+        failureCategory: demoFailure,
       })
     }
 

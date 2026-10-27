@@ -1,7 +1,15 @@
 import OpenAI from 'openai'
 import prisma from '@/lib/db'
 import { checkAbuse, type AbuseStrictness } from '@/lib/bargain/abuse'
-import { getAiClient, handleAiFailure } from '@/lib/ai-client'
+import {
+  getAiClient,
+  getFallbackAiClient,
+  fallbackModelName,
+  handleAiFailure,
+  classifyAiFailure,
+  type AiFailureCategory,
+  type AiTier,
+} from '@/lib/ai-client'
 import {
   strategyAdjustedCounter,
   reciprocalCounter,
@@ -2478,6 +2486,12 @@ const LEAK_SAFE_REPLY: Record<Persona, string> = {
   playful_friend: "Ooh, trying to peek behind the counter! The only number that matters is yours — hit me.",
 }
 
+type AiAttemptTrace = {
+  attempted: AiTier[]
+  fallbackReason?: AiFailureCategory
+  startedAt?: number
+}
+
 export async function negotiateStep(
   ctx: NegotiationContext,
   history: { role: 'customer' | 'ai'; content: string; offeredPrice?: number }[],
@@ -2485,6 +2499,7 @@ export async function negotiateStep(
   customerOffer?: number,
   sessionId?: string,
   forceCompact = false,
+  trace?: AiAttemptTrace,
 ): Promise<NegotiationResult> {
   // ── INPUT VALIDATION ──
   let validatedOffer = customerOffer != null ? customerOffer : null
@@ -2504,6 +2519,7 @@ export async function negotiateStep(
         tactic: `abuse_${abuse.category}`,
         sentiment: abuse.severity === 'critical' ? 'firm' : 'neutral',
         metadata: {
+          aiSource: 'reflex',
           abuse: true,
           category: abuse.category,
           severity: abuse.severity,
@@ -2546,19 +2562,32 @@ export async function negotiateStep(
       decision: 'chat',
       tactic: 'absurd_offer',
       sentiment: ctx.persona === 'playful_friend' ? 'playful' : ctx.persona === 'strict_negotiator' ? 'firm' : 'warm',
-      metadata: { absurdOffer: true, offer: validatedOffer, absurdStreak },
+      metadata: { aiSource: 'reflex', absurdOffer: true, offer: validatedOffer, absurdStreak },
     }
   }
 
-  const resolved = getAiClient()
+  // Timeout failover does not trip the primary breaker, so a recursive retry
+  // must explicitly keep using the fallback tier instead of re-resolving the
+  // primary we already tried.
+  const resolved =
+    trace?.attempted.includes('primary') && !trace.attempted.includes('fallback')
+      ? getFallbackAiClient()
+      : getAiClient()
   if (!resolved) {
     reportAiDegradation('ai_unavailable', 'no provider tier available')
     if (customerOffer != null) return ruleBasedDecision(customerOffer, ctx)
-    return { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', tactic: 'ai_unavailable', sentiment: 'neutral' }
+    return {
+      reply: chatFallback(customerMessage, ctx, history.length),
+      decision: 'chat',
+      tactic: 'ai_unavailable',
+      sentiment: 'neutral',
+      metadata: { aiSource: 'emergency', failureCategory: 'provider_unavailable' },
+    }
   }
   const ai = resolved.client
   const tier = resolved.tier
   const model = ctx.aiModel?.trim() || process.env.BARGAIN_MODEL || DEFAULT_BARGAIN_MODEL
+  const servedModel = tier === 'fallback' ? fallbackModelName() : model
 
   // ── CONVERSATION ANALYSIS ──
   const conversationAnalysis = analyzeConversation(history, customerMessage, ctx)
@@ -2592,6 +2621,8 @@ export async function negotiateStep(
     { role: 'user', content: userContent },
   ]
 
+  const attemptStartedAt = Date.now()
+  const requestStartedAt = trace?.startedAt ?? attemptStartedAt
   try {
     const completion = await ai.chat.completions.create({
       model,
@@ -2600,9 +2631,11 @@ export async function negotiateStep(
       max_completion_tokens: compact ? FALLBACK_MAX_TOKENS : BARGAIN_MAX_TOKENS,
       response_format: { type: 'json_object' },
     })
+    const aiLatencyMs = Date.now() - attemptStartedAt
 
     const raw = completion.choices[0]?.message?.content ?? ''
     let parsed: any = extractJsonObject(raw)
+    let malformedOutput = false
 
     if (!parsed) {
       // The provider replied, but not as a JSON object. Two real causes:
@@ -2611,15 +2644,39 @@ export async function negotiateStep(
       //  (2) the model wrapped valid JSON in prose/markdown. Either way, never
       //      drop the shopper onto a canned template: if there is any prose,
       //      salvage it as a live reply and let the normal safety path clamp the
-      //      price. Only a completely empty reply degrades to the rules.
+      //      price. A completely empty primary reply gets one fallback attempt
+      //      before the deterministic emergency path.
       reportAiDegradation('parse_fallback', `tier=${tier}`)
+      malformedOutput = true
       const prose = raw.replace(/```(?:json)?/gi, '').trim()
       if (prose) {
         parsed = { reply: prose, decision: customerOffer != null ? 'counter' : 'chat' }
-      } else if (customerOffer != null) {
-        return ruleBasedDecision(customerOffer, ctx)
       } else {
-        return { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', tactic: 'parse_fallback', sentiment: 'neutral' }
+        const attempted = trace?.attempted ?? []
+        if (tier === 'primary' && !attempted.includes('fallback')) {
+          const fallback = getFallbackAiClient()
+          if (fallback) {
+            return negotiateStep(ctx, history, customerMessage, customerOffer, sessionId, forceCompact, {
+              attempted: [...attempted, 'primary'],
+              fallbackReason: 'malformed_output',
+              startedAt: requestStartedAt,
+            })
+          }
+        }
+        const emergency = customerOffer != null
+          ? ruleBasedDecision(customerOffer, ctx)
+          : { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat' as const, tactic: 'parse_fallback', sentiment: 'neutral' }
+        return {
+          ...emergency,
+          metadata: {
+            ...(emergency.metadata ?? {}),
+            aiSource: tier === 'fallback' ? 'fallback' : 'emergency',
+            aiModel: servedModel,
+            aiLatencyMs,
+            aiTotalLatencyMs: Date.now() - requestStartedAt,
+            failureCategory: 'malformed_output',
+          },
+        }
       }
     }
 
@@ -2759,6 +2816,12 @@ export async function negotiateStep(
       sentiment: typeof parsed.sentiment === 'string' ? parsed.sentiment : 'neutral',
       metadata: {
         model,
+        aiSource: tier,
+        aiModel: servedModel,
+        aiLatencyMs,
+        aiTotalLatencyMs: Date.now() - requestStartedAt,
+        aiFallbackReason: trace?.fallbackReason,
+        malformedOutput: malformedOutput || undefined,
         usage: completion.usage,
         raw: parsed,
         recommendationsRequested: parsed.recommendationsRequested === true,
@@ -2777,22 +2840,47 @@ export async function negotiateStep(
     // do NOT trip the tier. Retry once on the same tier with the compact prompt
     // and a smaller output budget so the shopper still gets a real reply.
     if (isRequestTooLargeError(err) && !compact) {
-      return negotiateStep(ctx, history, customerMessage, customerOffer, sessionId, true)
+      return negotiateStep(ctx, history, customerMessage, customerOffer, sessionId, true, trace)
     }
-    handleAiFailure(err, 'bargain negotiation', undefined, tier)
+    const failure = handleAiFailure(err, 'bargain negotiation', undefined, tier)
+    const attempted = trace?.attempted ?? []
+    const nextTrace: AiAttemptTrace = {
+      attempted: [...attempted, tier],
+      fallbackReason: failure.category,
+      startedAt: requestStartedAt,
+    }
     // Fail over THIS SAME request to the next provider tier. The handler above
-    // trips the breaker of the failed tier, so a fresh resolve now yields the
-    // fallback provider — a single primary outage must never drop a real
-    // conversation into heuristics mid-message. Recursion is bounded: the retry
-    // runs on a different tier, and if that tier also fails, its own catch has
-    // no third tier to offer and returns the rule-based fallback.
-    const retried = getAiClient()
-    if (retried && retried.tier !== tier) {
-      return negotiateStep(ctx, history, customerMessage, customerOffer, sessionId)
+    // trips the breaker on provider errors; a timeout does not trip it, so the
+    // fallback is resolved explicitly. Either way a single bad primary response
+    // must never drop a real conversation into heuristics mid-message.
+    // Recursion is bounded to one attempt per configured tier.
+    if (tier === 'primary' && !attempted.includes('fallback')) {
+      const fallback = getFallbackAiClient()
+      if (fallback) {
+        return negotiateStep(ctx, history, customerMessage, customerOffer, sessionId, forceCompact, nextTrace)
+      }
     }
-    reportAiDegradation('all_tiers_failed', `tier=${tier}`)
-    return customerOffer != null
+    if (tier === 'fallback' && !attempted.includes('primary')) {
+      const primary = getAiClient()
+      if (primary && primary.tier === 'primary') {
+        return negotiateStep(ctx, history, customerMessage, customerOffer, sessionId, forceCompact, nextTrace)
+      }
+    }
+    reportAiDegradation('all_tiers_failed', `tier=${tier} failure=${failure.category}`)
+    const emergency = customerOffer != null
       ? ruleBasedDecision(customerOffer, ctx)
-      : { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat', tactic: 'conversational', sentiment: 'neutral' }
+      : { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat' as const, tactic: 'conversational', sentiment: 'neutral' }
+    return {
+      ...emergency,
+      metadata: {
+        ...(emergency.metadata ?? {}),
+        aiSource: 'emergency',
+        aiModel: servedModel,
+        aiLatencyMs: Date.now() - attemptStartedAt,
+        aiTotalLatencyMs: Date.now() - requestStartedAt,
+        failureCategory: failure.category,
+        aiFallbackReason: trace?.fallbackReason ?? failure.category,
+      },
+    }
   }
 }

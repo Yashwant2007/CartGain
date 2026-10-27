@@ -118,6 +118,10 @@ describe('primary outage is absorbed inside the same request', () => {
     // Both tiers were exercised, in order, inside one call.
     expect(sentModels).toEqual(['gpt-4o', 'openai/gpt-oss-120b'])
     expect(isTierTripped('primary')).toBe(true)
+    expect((res.metadata as any)?.aiSource).toBe('fallback')
+    expect((res.metadata as any)?.aiModel).toBe('openai/gpt-oss-120b')
+    expect((res.metadata as any)?.aiFallbackReason).toBe('quota_exhausted')
+    expect(typeof (res.metadata as any)?.aiLatencyMs).toBe('number')
   })
 
   it('serves a real Groq reply when OpenAI 401s (revoked key)', async () => {
@@ -153,12 +157,10 @@ describe('primary outage is absorbed inside the same request', () => {
     expect(isTierTripped('primary')).toBe(true)
   })
 
-  it('does NOT fail over on a single timeout, and keeps the primary breaker closed', async () => {
-    // Deliberate: a one-off slow response is not an outage. Tripping the tier
-    // would push every shopper onto Groq for 15 minutes because of one slow
-    // request, and retrying in-request would add up to 10s + 20s of shopper
-    // waiting. Instead that turn degrades to the rules and the next turn is
-    // still served by OpenAI.
+  it('fails over on a single timeout without tripping the primary breaker', async () => {
+    // A one-off slow response is not an outage, so the primary breaker stays
+    // closed. The turn still gets one bounded fallback attempt; only when both
+    // providers time out does it degrade to the deterministic rules.
     ;(globalThis as any).__nextCreate = jest.fn(async () => {
       const e: any = new Error('Request timed out.')
       e.code = 'ETIMEDOUT'
@@ -167,9 +169,11 @@ describe('primary outage is absorbed inside the same request', () => {
 
     const res = await negotiateStep(ctx({ minPrice: 80, attemptsUsed: 3, maxAttempts: 3 }), [], '70?', 70, 'sess-3')
 
-    expect(sentModels).toEqual(['gpt-4o']) // no failover attempted
-    expect(isTierTripped('primary')).toBe(false) // primary still considered healthy
-    expect(res.reply).not.toMatch(/lowest i can go/i) // degrades safely anyway
+    expect(sentModels).toEqual(['gpt-4o', 'openai/gpt-oss-120b'])
+    expect(isTierTripped('primary')).toBe(false) // one timeout is not an outage
+    expect((res.metadata as any)?.aiSource).toBe('emergency')
+    expect((res.metadata as any)?.failureCategory).toBe('timeout')
+    expect(res.reply).not.toMatch(/lowest i can go/i)
     expect(res.reply).not.toContain('80.00')
   })
 
@@ -232,6 +236,33 @@ describe('primary outage is absorbed inside the same request', () => {
 
     expect(seen[0].response_format).toEqual({ type: 'json_object' })
     expect(seen[0].messages[0].role).toBe('system')
+  })
+
+  it('retries an empty primary reply once on the fallback agent', async () => {
+    ;(globalThis as any).__nextCreate = jest.fn(async (req: any) => {
+      if (req.model === 'gpt-4o') return { choices: [{ message: { content: '' } }], usage: {} }
+      return modelReply(90)
+    })
+
+    const res = await negotiateStep(ctx(), [], 'can you do 90?', 90, 'sess-empty-primary')
+
+    expect(sentModels).toEqual(['gpt-4o', 'openai/gpt-oss-120b'])
+    expect(res.reply).toBe('Groq answered you.')
+    expect((res.metadata as any)?.aiSource).toBe('fallback')
+    expect((res.metadata as any)?.aiFallbackReason).toBe('malformed_output')
+  })
+
+  it('passes the selected learning guidance to the fallback agent too', async () => {
+    ;(globalThis as any).__nextCreate = jest.fn(async (req: any) => {
+      if (req.model === 'gpt-4o') throw { status: 429, error: { code: 'insufficient_quota' } }
+      return modelReply(90)
+    })
+
+    const learning = { prompt: 'LEARNING-HINT-XYZ', counterNudge: 0 } as any
+    await negotiateStep(ctx({ learning }), [], 'can you do 90?', 90, 'sess-learning-fb')
+
+    const fallbackSystem = (globalThis as any).__nextCreate.mock.calls[1][0].messages[0].content
+    expect(fallbackSystem).toContain('LEARNING-HINT-XYZ')
   })
 
   it('salvages a non-JSON prose reply from Groq instead of serving a template', async () => {
@@ -468,8 +499,11 @@ describe('primary outage is absorbed inside the same request', () => {
 
     const res = await negotiateStep(ctx({ minPrice: 80, attemptsUsed: 3, maxAttempts: 3 }), [], '70?', 70, 'sess-413-2')
 
-    // Compact retried exactly once on the same tier, then degraded to the rules.
-    expect(sentModels).toEqual(['gpt-4o', 'gpt-4o'])
+    // Compact retried exactly once on the primary, then one fallback attempt,
+    // then the deterministic rules.
+    expect(sentModels).toEqual(['gpt-4o', 'gpt-4o', 'openai/gpt-oss-120b'])
+    expect((res.metadata as any)?.aiSource).toBe('emergency')
+    expect((res.metadata as any)?.failureCategory).toBe('request_too_large')
     expect(res.reply).not.toContain('80.00')
     if (res.decision === 'counter') expect(res.counterOffer!).toBeGreaterThan(80)
   })

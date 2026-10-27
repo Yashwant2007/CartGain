@@ -149,6 +149,10 @@ export async function recordLearningEvent(params: {
   value?: number | null
   dedupeKey: string
   properties?: Record<string, unknown>
+  agentSource?: string | null
+  agentModel?: string | null
+  latencyMs?: number | null
+  failureCategory?: string | null
 }): Promise<boolean> {
   const model = (prisma as any).bargainLearningEvent
   if (!model?.create) return false
@@ -192,6 +196,10 @@ export async function recordLearningEvent(params: {
         value: params.value ?? null,
         dedupeKey: params.dedupeKey,
         properties: (params.properties ?? null) as any,
+        agentSource: params.agentSource ?? null,
+        agentModel: params.agentModel ?? null,
+        latencyMs: params.latencyMs ?? null,
+        failureCategory: params.failureCategory ?? null,
       },
     })
     return true
