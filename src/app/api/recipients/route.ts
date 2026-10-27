@@ -129,6 +129,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const envPhoneNumberId = resolveWhatsAppPhoneNumberId() || null
+    const storePhoneNumberId = (store as any).whatsappPhoneNumberId || null
+    const sharedNumber = Boolean(envPhoneNumberId)
+    const storeMappedToSharedNumber = Boolean(sharedNumber && storePhoneNumberId === envPhoneNumberId)
+
     return NextResponse.json({
       recipients: filtered.slice(0, limit),
       counts,
@@ -136,11 +141,19 @@ export async function GET(request: NextRequest) {
       diagnostics: {
         whatsapp: {
           configured: isWhatsAppConfigured(),
-          phoneNumberId: resolveWhatsAppPhoneNumberId() || null,
-          storePhoneNumberId: (store as any).whatsappPhoneNumberId || null,
-          // Inbound STOP/START only resolves the right store when this mapping
-          // exists (or the deployment has exactly one active store).
-          inboundWebhookMapped: Boolean((store as any).whatsappPhoneNumberId),
+          phoneNumberId: envPhoneNumberId,
+          storePhoneNumberId,
+          sharedNumber,
+          storeMappedToSharedNumber,
+          inboundRouting: storeMappedToSharedNumber
+            ? 'shared_number_mapped_to_one_store'
+            : storePhoneNumberId
+              ? 'store_mapping'
+              : sharedNumber
+                ? 'shared_number_phone_match'
+                : 'unmapped',
+          inboundWebhookMapped: Boolean(storePhoneNumberId),
+          inboundRoutingReady: Boolean(storePhoneNumberId || sharedNumber),
           webhookSecretConfigured: Boolean(resolveWhatsAppAppSecret()),
         },
         consentRule: 'WhatsApp consent is only granted by an explicit opt-in and is never inferred from Shopify email/SMS marketing flags.',

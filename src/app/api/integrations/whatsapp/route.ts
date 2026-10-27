@@ -2,17 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticate, hasPermission } from '@/lib/auth-context'
 import { resolveWhatsAppPhoneNumberId } from '@/lib/whatsapp/config'
+import { discoverWhatsAppPhoneNumbers } from '@/lib/whatsapp/discovery'
 
 export const dynamic = 'force-dynamic'
+
+async function findStore(userId: string, storeId?: string | null) {
+  return storeId
+    ? prisma.store.findFirst({ where: { id: storeId, userId } })
+    : prisma.store.findFirst({ where: { userId }, orderBy: { createdAt: 'asc' } })
+}
 
 async function resolveStore(request: NextRequest, userId: string) {
   const requested =
     request.nextUrl.searchParams.get('storeId') ||
     (await request.clone().json().catch(() => ({})))?.storeId ||
     null
-  return requested
-    ? prisma.store.findFirst({ where: { id: requested, userId } })
-    : prisma.store.findFirst({ where: { userId }, orderBy: { createdAt: 'asc' } })
+  return findStore(userId, requested)
 }
 
 export async function GET(request: NextRequest) {
@@ -23,9 +28,13 @@ export async function GET(request: NextRequest) {
   const store = await resolveStore(request, auth.ctx.userId)
   if (!store) return NextResponse.json({ message: 'Store not found' }, { status: 404 })
 
+  const envPhoneNumberId = resolveWhatsAppPhoneNumberId() || null
   return NextResponse.json({
     whatsappPhoneNumberId: (store as any).whatsappPhoneNumberId || null,
-    envPhoneNumberId: resolveWhatsAppPhoneNumberId() || null,
+    envPhoneNumberId,
+    sharedNumber: Boolean(envPhoneNumberId),
+    storeMappedToSharedNumber:
+      Boolean(envPhoneNumberId) && (store as any).whatsappPhoneNumberId === envPhoneNumberId,
   })
 }
 
@@ -40,6 +49,44 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}))
   const storeId = String(body?.storeId || '')
+  const action = String(body?.action || 'save').toLowerCase()
+  const store = await findStore(auth.ctx.userId, storeId || null)
+  if (!store) return NextResponse.json({ message: 'Store not found' }, { status: 404 })
+
+  const sharedPhoneNumberId = resolveWhatsAppPhoneNumberId()
+
+  if (action === 'discover') {
+    const result = await discoverWhatsAppPhoneNumbers({
+      wabaId: typeof body?.wabaId === 'string' ? body.wabaId.trim() : undefined,
+    })
+    const numbers = result.numbers.filter((number) => number.id !== sharedPhoneNumberId)
+    const onlySharedFound = result.ok && numbers.length === 0
+    return NextResponse.json({
+      ok: numbers.length > 0,
+      numbers,
+      wabaIds: result.wabaIds,
+      error: onlySharedFound
+        ? 'Only the CartGain shared number was found. Connect your own WhatsApp Business Account to CartGain first, then discover again.'
+        : result.error,
+      lookupErrors: result.lookupErrors,
+    })
+  }
+
+  if (action === 'clear') {
+    const updated = await prisma.store.update({
+      where: { id: store.id },
+      data: { whatsappPhoneNumberId: null },
+    })
+    return NextResponse.json({
+      ok: true,
+      whatsappPhoneNumberId: (updated as any).whatsappPhoneNumberId || null,
+    })
+  }
+
+  if (action !== 'save') {
+    return NextResponse.json({ message: 'Unknown action' }, { status: 400 })
+  }
+
   const raw = body?.whatsappPhoneNumberId
   const phoneNumberId = raw == null ? '' : String(raw).trim()
 
@@ -50,11 +97,16 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const store = await prisma.store.findFirst({
-    where: storeId ? { id: storeId, userId: auth.ctx.userId } : { userId: auth.ctx.userId },
-    orderBy: { createdAt: 'asc' },
-  })
-  if (!store) return NextResponse.json({ message: 'Store not found' }, { status: 404 })
+  if (phoneNumberId && sharedPhoneNumberId && phoneNumberId === sharedPhoneNumberId) {
+    return NextResponse.json(
+      {
+        code: 'SHARED_NUMBER',
+        message:
+          'CartGain sends from this shared WhatsApp number, so it must not be mapped to a single store. Leave the mapping empty; inbound STOP/START messages are matched to your store by phone and cart history.',
+      },
+      { status: 400 },
+    )
+  }
 
   try {
     const updated = await prisma.store.update({

@@ -40,12 +40,24 @@ type Counts = {
   email_only: number
 }
 
+type DiscoveredNumber = {
+  id: string
+  displayPhoneNumber: string | null
+  verifiedName: string | null
+  status: string | null
+  wabaId: string
+}
+
 type Diagnostics = {
   whatsapp: {
     configured: boolean
     phoneNumberId: string | null
     storePhoneNumberId: string | null
+    sharedNumber: boolean
+    storeMappedToSharedNumber: boolean
+    inboundRouting: string
     inboundWebhookMapped: boolean
+    inboundRoutingReady: boolean
     webhookSecretConfigured: boolean
   }
   consentRule: string
@@ -71,6 +83,9 @@ export default function RecipientsPage() {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [phoneIdInput, setPhoneIdInput] = useState('')
+  const [discoveredNumbers, setDiscoveredNumbers] = useState<DiscoveredNumber[]>([])
+  const [selectedNumberId, setSelectedNumberId] = useState('')
+  const [mappingMessage, setMappingMessage] = useState<string | null>(null)
 
   const load = useCallback(() => {
     if (!storeId) return () => {}
@@ -135,20 +150,77 @@ export default function RecipientsPage() {
     }
   }
 
-  const saveMapping = async () => {
-    if (!storeId) return
+  const saveMapping = async (numberId: string) => {
+    if (!storeId || !numberId.trim()) return
     setBusyId('mapping')
+    setMappingMessage(null)
     try {
       const res = await shopifySessionFetch('/api/integrations/whatsapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeId, whatsappPhoneNumberId: phoneIdInput.trim() }),
+        body: JSON.stringify({ storeId, action: 'save', whatsappPhoneNumberId: numberId.trim() }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.message || 'Could not save mapping')
+      setDiscoveredNumbers([])
+      setSelectedNumberId('')
+      setMappingMessage('WhatsApp number connected.')
       load()
     } catch (err: any) {
       setError(err?.message || 'Could not save mapping')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const discoverMapping = async () => {
+    if (!storeId) return
+    setBusyId('discover')
+    setMappingMessage(null)
+    setError(null)
+    try {
+      const res = await shopifySessionFetch('/api/integrations/whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeId, action: 'discover' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.message || 'Could not discover WhatsApp numbers')
+      const numbers: DiscoveredNumber[] = data.numbers || []
+      if (numbers.length === 0) {
+        setMappingMessage(data.error || 'No WhatsApp number found for this Meta account.')
+        return
+      }
+      if (numbers.length === 1) {
+        await saveMapping(numbers[0].id)
+        return
+      }
+      setDiscoveredNumbers(numbers)
+      setSelectedNumberId(numbers[0].id)
+      setMappingMessage('Choose the number this store uses for inbound STOP/START replies.')
+    } catch (err: any) {
+      setMappingMessage(err?.message || 'Could not discover WhatsApp numbers')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const clearMapping = async () => {
+    if (!storeId) return
+    setBusyId('mapping')
+    setMappingMessage(null)
+    try {
+      const res = await shopifySessionFetch('/api/integrations/whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeId, action: 'clear' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.message || 'Could not clear mapping')
+      setMappingMessage('Using CartGain shared routing.')
+      load()
+    } catch (err: any) {
+      setError(err?.message || 'Could not clear mapping')
     } finally {
       setBusyId(null)
     }
@@ -204,52 +276,188 @@ export default function RecipientsPage() {
         </div>
       </div>
 
-      {diagnostics && (!diagnostics.whatsapp.configured || !diagnostics.whatsapp.inboundWebhookMapped) && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-900/20 p-4 text-sm">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="w-5 h-5 text-amber-300 flex-shrink-0 mt-0.5" />
-            <div className="space-y-1 text-amber-100/90">
-              {!diagnostics.whatsapp.configured && (
-                <p>
+      {diagnostics && (
+        <div className="space-y-3">
+          {!diagnostics.whatsapp.configured && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-900/20 p-4 text-sm">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-300 flex-shrink-0 mt-0.5" />
+                <p className="text-amber-100/90">
                   WhatsApp provider is not configured on this deployment. Set <code>WHATSAPP_PHONE_NUMBER_ID</code> and{' '}
                   <code>WHATSAPP_BUSINESS_TOKEN</code> before any WhatsApp send can succeed.
                 </p>
-              )}
-              {!diagnostics.whatsapp.inboundWebhookMapped && (
-                <div className="space-y-2">
-                  <p>
-                    This store has no <code>whatsappPhoneNumberId</code> mapping. Inbound STOP/START keywords cannot be
-                    attributed to the right store when more than one store is active. Enter the business phone-number id
-                    (Meta → WhatsApp → API setup) to map it.
+              </div>
+            </div>
+          )}
+
+          {diagnostics.whatsapp.sharedNumber && (
+            <div
+              className={`rounded-xl border p-4 text-sm ${
+                diagnostics.whatsapp.storeMappedToSharedNumber
+                  ? 'border-amber-500/30 bg-amber-900/20'
+                  : 'border-blue-500/30 bg-blue-950/30'
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                {diagnostics.whatsapp.storeMappedToSharedNumber ? (
+                  <AlertTriangle className="w-5 h-5 text-amber-300 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <CheckCircle2 className="w-5 h-5 text-blue-300 flex-shrink-0 mt-0.5" />
+                )}
+                <div className="space-y-2 text-blue-100/90">
+                  <p className="font-medium text-white">CartGain shared WhatsApp number</p>
+                  {diagnostics.whatsapp.storeMappedToSharedNumber ? (
+                    <>
+                      <p>
+                        This store is mapped to the same shared number CartGain uses for every store. Mapping it here can
+                        send another store&apos;s STOP/START replies to this store. Remove the mapping so inbound messages
+                        are matched by phone and cart history instead.
+                      </p>
+                      <button
+                        onClick={clearMapping}
+                        disabled={busyId === 'mapping'}
+                        className="px-3 py-1.5 rounded-lg text-xs bg-amber-600/30 border border-amber-500/40 text-amber-100 disabled:opacity-40"
+                      >
+                        {busyId === 'mapping' ? 'Removing...' : 'Use shared routing'}
+                      </button>
+                    </>
+                  ) : (
+                    <p>
+                      No setup needed. Messages send from CartGain&apos;s shared number, and inbound STOP/START replies are
+                      matched to your store by the customer&apos;s phone number and cart history. There is no per-store
+                      phone-number ID to enter.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!diagnostics.whatsapp.storePhoneNumberId && (
+            <div className="rounded-xl border border-blue-500/30 bg-blue-950/30 p-4 text-sm">
+              <div className="flex items-start gap-2">
+                <MessageCircle className="w-5 h-5 text-blue-300 flex-shrink-0 mt-0.5" />
+                <div className="space-y-2 text-blue-100/90">
+                  <p className="font-medium text-white">
+                    {diagnostics.whatsapp.sharedNumber
+                      ? 'Using your own WhatsApp number?'
+                      : 'Connect this store&apos;s WhatsApp number'}
                   </p>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      value={phoneIdInput}
-                      onChange={(e) => setPhoneIdInput(e.target.value)}
-                      placeholder={diagnostics.whatsapp.phoneNumberId || 'e.g. 1266364546554326'}
-                      className="flex-1 px-3 py-1.5 rounded-lg bg-slate-900/50 border border-amber-500/30 text-xs text-white placeholder-amber-200/30 outline-none"
-                    />
-                    <button
-                      onClick={saveMapping}
-                      disabled={busyId === 'mapping' || !phoneIdInput.trim()}
-                      className="px-3 py-1.5 rounded-lg text-xs bg-amber-600/30 border border-amber-500/40 text-amber-100 disabled:opacity-40"
-                    >
-                      Save mapping
-                    </button>
+                  <p>
+                    CartGain can read the WhatsApp Business numbers connected to its Meta app and save the correct
+                    phone-number ID automatically. The ID routes inbound STOP/START replies and delivery receipts for
+                    that number.
+                  </p>
+                  <button
+                    onClick={discoverMapping}
+                    disabled={busyId === 'discover' || busyId === 'mapping'}
+                    className="px-3 py-1.5 rounded-lg text-xs bg-blue-600/30 border border-blue-500/40 text-blue-100 disabled:opacity-40"
+                  >
+                    {busyId === 'discover' || busyId === 'mapping' ? 'Looking up Meta...' : 'Discover from Meta'}
+                  </button>
+                  {discoveredNumbers.length === 0 && (
+                    <details className="text-xs text-blue-200/70">
+                      <summary className="cursor-pointer select-none">Enter a number ID manually</summary>
+                      <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                        <input
+                          value={phoneIdInput}
+                          onChange={(e) => setPhoneIdInput(e.target.value)}
+                          placeholder="e.g. 1266364546554326"
+                          className="flex-1 px-3 py-1.5 rounded-lg bg-slate-900/50 border border-blue-500/30 text-xs text-white placeholder-blue-200/30 outline-none"
+                        />
+                        <button
+                          onClick={() => saveMapping(phoneIdInput)}
+                          disabled={busyId === 'mapping' || !phoneIdInput.trim()}
+                          className="px-3 py-1.5 rounded-lg text-xs bg-blue-600/30 border border-blue-500/40 text-blue-100 disabled:opacity-40"
+                        >
+                          Save number
+                        </button>
+                      </div>
+                    </details>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {discoveredNumbers.length > 1 && (
+            <div className="rounded-xl border border-blue-500/30 bg-blue-950/30 p-4 text-sm">
+              <p className="font-medium text-white mb-2">Choose this store&apos;s number</p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  aria-label="Discovered WhatsApp numbers"
+                  value={selectedNumberId}
+                  onChange={(e) => setSelectedNumberId(e.target.value)}
+                  className="flex-1 px-3 py-1.5 rounded-lg bg-slate-900/50 border border-blue-500/30 text-xs text-white outline-none"
+                >
+                  {discoveredNumbers.map((number) => (
+                    <option key={number.id} value={number.id}>
+                      {number.displayPhoneNumber || number.id}
+                      {number.verifiedName ? ` - ${number.verifiedName}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => saveMapping(selectedNumberId)}
+                  disabled={busyId === 'mapping' || !selectedNumberId}
+                  className="px-3 py-1.5 rounded-lg text-xs bg-emerald-600/25 border border-emerald-500/40 text-emerald-100 disabled:opacity-40"
+                >
+                  Save number
+                </button>
+              </div>
+            </div>
+          )}
+
+          {diagnostics.whatsapp.storePhoneNumberId && !diagnostics.whatsapp.storeMappedToSharedNumber && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 text-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-300 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-white">WhatsApp number connected</p>
+                    <p className="text-xs text-blue-200/70 mt-1">
+                      Phone-number ID {diagnostics.whatsapp.storePhoneNumberId}. This routes inbound STOP/START replies
+                      and delivery receipts to this store.
+                    </p>
                   </div>
                 </div>
-              )}
-              {!diagnostics.whatsapp.webhookSecretConfigured && (
-                <p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={discoverMapping}
+                    disabled={busyId === 'discover' || busyId === 'mapping'}
+                    className="px-3 py-1.5 rounded-lg text-xs bg-blue-600/25 border border-blue-500/40 text-blue-100 disabled:opacity-40"
+                  >
+                    Rediscover
+                  </button>
+                  <button
+                    onClick={clearMapping}
+                    disabled={busyId === 'mapping'}
+                    className="px-3 py-1.5 rounded-lg text-xs bg-red-600/20 border border-red-500/30 text-red-200 disabled:opacity-40"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {mappingMessage && (
+            <p className="text-xs text-blue-200/70 px-1">{mappingMessage}</p>
+          )}
+
+          {!diagnostics.whatsapp.webhookSecretConfigured && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-900/20 p-4 text-sm">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-300 flex-shrink-0 mt-0.5" />
+                <p className="text-amber-100/90">
                   Meta app secret is not set, so inbound webhooks (STOP/START and delivery receipts) are rejected with 401.
                   Set <code>WHATSAPP_APP_SECRET</code> (or <code>META_APP_SECRET</code>).
                 </p>
-              )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
-
       <div className="flex flex-wrap gap-2">
         {FILTERS.map((tab) => {
           const count = counts ? (counts as any)[tab.key] ?? 0 : undefined
