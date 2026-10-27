@@ -20,6 +20,10 @@ export function enginePersonaFor(shopkeeper: ShopkeeperPersonality): Persona {
   return 'friendly_shopkeeper'
 }
 
+export function legacyPersonaFor(shopkeeper: ShopkeeperPersonality): Persona {
+  return enginePersonaFor(shopkeeper)
+}
+
 export function resolveShopkeeperPersonality(
   configured: unknown,
   legacyPersona?: unknown,

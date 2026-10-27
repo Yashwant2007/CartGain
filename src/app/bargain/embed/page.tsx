@@ -61,6 +61,7 @@ export default async function EmbedPage({
 
   let storeId: string | null = null
   let storeFound = false
+  let bargainEnabled = true
   let persona: string | undefined
   let experience: BargainExperienceConfig = fromDb(null, 'published')
   let hasPublishedExperience = false
@@ -77,12 +78,11 @@ export default async function EmbedPage({
     if (store) {
       storeFound = true
       storeId = store.id
-      // Bargaining is ON for any connected, active store. The `enabled` master
-      // toggle is preserved in the dashboard as the merchant's preference, but a
-      // widget added in the theme editor always renders here — previously a
-      // stale `enabled=false` default silently hid the whole widget
-      // ("added it in the theme editor but it's not showing").
+      // A disabled config pauses the widget without touching the theme. The
+      // embed stays transparent and tells the storefront controller to hide
+      // the launcher, so no dead UI or invitation is shown.
       const config = await prisma.bargainConfig.findUnique({ where: { storeId: store.id } })
+      if (config?.enabled === false) bargainEnabled = false
       experience = fromDb(config, 'published')
       hasPublishedExperience = Boolean(config?.experiencePublished)
       persona = experience.personality
@@ -100,7 +100,7 @@ export default async function EmbedPage({
   // card here would put a branded block on the store's product page, breaking
   // the theme. Instead we emit an empty, transparent frame and tell the
   // storefront controller (bargain.js) to hide the whole widget via cg_empty.
-  if (!storeFound || !valid) {
+  if (!storeFound || !valid || !bargainEnabled) {
     return (
       <>
         <EmbedDocumentReset view={view} announceEmpty />
@@ -147,7 +147,7 @@ export default async function EmbedPage({
  * itself to the viewport in drawer mode; this component removes the app
  * background/overflow that would otherwise frame or scroll it.
  *
- * The inline script runs at parse time so the dark gradient is never painted,
+ * The inline style runs at parse time so the dark gradient is never painted,
  * even for a frame that takes a moment to hydrate.
  */
 function EmbedDocumentReset({ view, announceEmpty = false }: { view: 'inline' | 'drawer'; announceEmpty?: boolean }) {
@@ -162,16 +162,16 @@ function EmbedDocumentReset({ view, announceEmpty = false }: { view: 'inline' | 
     html { overflow: hidden !important; }
     ${view === 'drawer' && !announceEmpty ? '.cartgain-bargain { height: 100% !important; }' : ''}
   `
-  const boot = `(function(){try{var d=document.documentElement,b=document.body;if(d){d.style.height='100%';d.style.overflow='hidden';d.style.background='${canvas}';}if(b){b.style.height='100%';b.style.margin='0';b.style.padding='0';b.style.overflow='hidden';b.style.background='${canvas}';b.style.backgroundImage='none';}}catch(e){}}${
-    announceEmpty
-      ? `try{if(window.parent){window.parent.postMessage({type:'cg_empty'},'*');window.parent.postMessage({type:'cg_resize',height:0},'*');}}catch(e){}`
-      : ''
-  })();`
+  const boot = announceEmpty
+    ? `(function(){try{if(window.parent){window.parent.postMessage({type:'cg_empty'},'*');window.parent.postMessage({type:'cg_resize',height:0},'*');}}catch(e){}})();`
+    : ''
 
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-sync-scripts */}
-      <script dangerouslySetInnerHTML={{ __html: boot }} />
+      {boot && (
+        // eslint-disable-next-line @next/next/no-sync-scripts
+        <script dangerouslySetInnerHTML={{ __html: boot }} />
+      )}
       <style dangerouslySetInnerHTML={{ __html: css }} />
     </>
   )

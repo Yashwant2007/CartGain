@@ -1,4 +1,4 @@
-import { defaultsUpdate, fromDb, publishedPersonality, sanitizeExperience, toDbUpdate } from '../config'
+import { applyShopkeeperPersonality, defaultsUpdate, fromDb, publishedPersonality, sanitizeExperience, toDbUpdate } from '../config'
 import { enginePersonaFor, resolveShopkeeperPersonality } from '../personality'
 import { expressionForEvent } from '../expressions'
 import { DEFAULT_BARGAIN_EXPERIENCE } from '../types'
@@ -77,6 +77,38 @@ describe('bargain experience config', () => {
     expect(fromDb({ aiPersona: 'strict_negotiator' }, 'published').personality).toBe('strict_shopkeeper')
     expect(fromDb({ aiPersona: 'playful_friend' }, 'draft').personality).toBe('playful_shopkeeper')
     expect(fromDb({ aiPersona: 'strict_negotiator', experiencePublished: { ...DEFAULT_BARGAIN_EXPERIENCE, personality: 'friendly_shopkeeper' } }, 'published').personality).toBe('friendly_shopkeeper')
+  })
+
+  it('publishes a personality chosen from the main config tab', () => {
+    const raw = {
+      shopkeeperPersonality: 'friendly_shopkeeper',
+      aiPersona: 'friendly_shopkeeper',
+      experienceDraftVersion: 3,
+      experiencePublishedVersion: 7,
+      experienceDraft: { ...DEFAULT_BARGAIN_EXPERIENCE, personality: 'friendly_shopkeeper' },
+      experiencePublished: { ...DEFAULT_BARGAIN_EXPERIENCE, personality: 'friendly_shopkeeper' },
+    }
+    const update = applyShopkeeperPersonality(raw, 'strict_shopkeeper')
+    expect(update.shopkeeperPersonality).toBe('strict_shopkeeper')
+    expect(update.aiPersona).toBe('strict_negotiator')
+    expect(update.experiencePublished.personality).toBe('strict_shopkeeper')
+    expect(update.experiencePublishedVersion).toBe(8)
+    expect(update.experienceDraft.personality).toBe('strict_shopkeeper')
+    expect(update.experienceDraftVersion).toBe(4)
+  })
+
+  it('does not churn experience versions when the personality is unchanged', () => {
+    const config = {
+      experienceDraftVersion: 3,
+      experiencePublishedVersion: 7,
+      experienceDraft: { ...DEFAULT_BARGAIN_EXPERIENCE, personality: 'playful_shopkeeper' },
+      experiencePublished: { ...DEFAULT_BARGAIN_EXPERIENCE, personality: 'playful_shopkeeper' },
+    }
+    const update = applyShopkeeperPersonality(config, 'playful_shopkeeper')
+    expect(update.shopkeeperPersonality).toBe('playful_shopkeeper')
+    expect(update.aiPersona).toBe('playful_friend')
+    expect(update.experiencePublished).toBeUndefined()
+    expect(update.experienceDraft).toBeUndefined()
   })
 
   it('restores defaults in both channels', () => {

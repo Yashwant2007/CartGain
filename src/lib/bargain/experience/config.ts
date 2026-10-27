@@ -1,5 +1,5 @@
 import prisma from '@/lib/db'
-import { resolveShopkeeperPersonality } from './personality'
+import { legacyPersonaFor, resolveShopkeeperPersonality } from './personality'
 import {
   AVATAR_SIZES,
   DEFAULT_BARGAIN_EXPERIENCE,
@@ -161,4 +161,52 @@ export function defaultsUpdate(current: any) {
     invitationGreeting: null,
     invitationAccentColor: null,
   }
+}
+
+
+export function applyShopkeeperPersonality(current: any, personality: ShopkeeperPersonality) {
+  const patch: any = {
+    shopkeeperPersonality: personality,
+    aiPersona: legacyPersonaFor(personality),
+  }
+  const publishedRaw = current?.experiencePublished
+  const draftRaw = current?.experienceDraft
+  if (!publishedRaw && !draftRaw) return patch
+
+  const draftVersion = asVersion(current?.experienceDraftVersion, 1)
+  const publishedVersion = asVersion(current?.experiencePublishedVersion, 1)
+  const publishedChanged = Boolean(
+    publishedRaw && typeof publishedRaw === 'object' && publishedPersonality(current) !== personality,
+  )
+  const draftChanged = Boolean(
+    draftRaw && typeof draftRaw === 'object' && fromDb(current, 'draft').personality !== personality,
+  )
+  if (!publishedChanged && !draftChanged) return patch
+
+  const nextDraftVersion = draftVersion + (draftChanged ? 1 : 0)
+  const nextPublishedVersion = publishedVersion + (publishedChanged ? 1 : 0)
+
+  if (draftChanged) {
+    patch.experienceDraft = {
+      ...sanitizeExperience({ ...draftRaw, personality }, fromDb(current, 'draft')),
+      personality,
+      draftVersion: nextDraftVersion,
+      publishedVersion: nextPublishedVersion,
+    }
+    patch.experienceDraftVersion = nextDraftVersion
+  }
+
+  if (publishedChanged) {
+    const published = {
+      ...sanitizeExperience({ ...publishedRaw, personality }, fromDb(current, 'published')),
+      personality,
+      draftVersion: nextDraftVersion,
+      publishedVersion: nextPublishedVersion,
+    }
+    patch.experiencePublished = published
+    patch.experiencePublishedVersion = nextPublishedVersion
+    Object.assign(patch, experienceMirror(published))
+  }
+
+  return patch
 }

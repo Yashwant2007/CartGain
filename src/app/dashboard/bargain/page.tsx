@@ -43,6 +43,8 @@ type BargainConfig = {
   enabled: boolean
   maxAttempts: number
   aiPersona: string
+  shopkeeperPersonality: string
+  experiencePublished?: unknown
   language: string
   minProfitPercent: number
   sessionTimeout: number
@@ -96,8 +98,17 @@ const CONTROL_CLS =
 // options) so a stale value can never be silently re-saved from the browser.
 function normalizeConfigForm(config: Partial<BargainConfig> & Record<string, unknown>): Partial<BargainConfig> {
   const rest = { ...config }
+  if (!rest.experiencePublished && typeof rest.aiPersona === 'string') {
+    rest.shopkeeperPersonality =
+      rest.aiPersona === 'strict_negotiator'
+        ? 'strict_shopkeeper'
+        : rest.aiPersona === 'playful_friend'
+          ? 'playful_shopkeeper'
+          : 'friendly_shopkeeper'
+  }
   delete rest.aiModel
   delete rest.complementRecommendationsEnabled
+  delete rest.aiPersona
   return rest
 }
 
@@ -469,15 +480,18 @@ void fetchConfig()
                   title="AI voice & strategy"
                   description="The personality your customers meet, how hard the AI pushes the price, and the language it speaks."
                 >
-                  <Field label="AI persona" hint="Tone of voice only — it does not change the price logic.">
+                  <Field
+                    label="Shopkeeper personality"
+                    hint="Tone of voice only — it never changes the hidden price floor. This updates the published storefront experience immediately; use Experience Studio for invitation design and draft changes."
+                  >
                     <select
-                      value={configForm.aiPersona ?? 'friendly_shopkeeper'}
-                      onChange={e => setConfigForm({ ...configForm, aiPersona: e.target.value })}
+                      value={configForm.shopkeeperPersonality ?? 'friendly_shopkeeper'}
+                      onChange={e => setConfigForm({ ...configForm, shopkeeperPersonality: e.target.value })}
                       className={CONTROL_CLS}
                     >
                       <option value="friendly_shopkeeper">Friendly Shopkeeper · warm and neighbourly</option>
-                      <option value="strict_negotiator">Strict Negotiator · precise and formal</option>
-                      <option value="playful_friend">Playful Friend · cheeky and casual</option>
+                      <option value="strict_shopkeeper">Strict Shopkeeper · precise and formal</option>
+                      <option value="playful_shopkeeper">Playful Shopkeeper · cheeky and casual</option>
                     </select>
                   </Field>
                   <Field label="Negotiation mode" hint="How steeply the AI concedes. The hidden margin floor always holds.">

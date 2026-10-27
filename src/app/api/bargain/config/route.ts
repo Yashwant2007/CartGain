@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { bargainConfigUpsertSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { getGoalStatus, demoGoalFromStatus } from '@/lib/bargain/goals'
+import { applyShopkeeperPersonality } from '@/lib/bargain/experience/config'
+import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -153,6 +155,16 @@ export async function PUT(request: NextRequest) {
           { status: 400 },
         )
       }
+    }
+
+    if (typeof clean.shopkeeperPersonality === 'string') {
+      const existing = await prisma.bargainConfig.findUnique({
+        where: { storeId: resolvedStoreId },
+      })
+      Object.assign(
+        clean,
+        applyShopkeeperPersonality(existing, clean.shopkeeperPersonality as ShopkeeperPersonality),
+      )
     }
 
     const config = await prisma.bargainConfig.upsert({
