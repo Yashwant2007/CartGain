@@ -56,14 +56,113 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   `gate.ts`, `policy.ts`, `offer-validation.ts`.
 - `src/lib/shopify.ts` — Shopify REST helpers (`fetchShopifyProducts`,
   `fetchAbandonedCheckouts`, `syncAbandonedCheckouts`, OAuth/token refresh).
+- `src/lib/whatsapp/discovery.ts` — Meta Graph WABA/phone-number discovery for
+  the Recipients page (`discoverWhatsAppPhoneNumbers`); env WABA ids first, then
+  `/me/businesses`. `src/lib/whatsapp/store-registry.ts` resolves inbound
+  phone-id mappings and falls back to cart-phone matching.
 - Routes: `src/app/api/bargain/{offer,demo,checkout-accept,config,products,
   products/catalog,accept,recommend/event}`.
 - UI: `BargainWidget.tsx` (1997 lines, real storefront embed `/bargain/embed`),
-  `StorefrontBargainWidget.tsx` (used by `/s/bargain`), `BargainPrimitives.tsx`
+  `StorefrontBargainWidget.tsx` (used by `/s/bargain`), `ShopkeeperStage.tsx`
+  (large Akinator-style shopkeeper header + speech line, used by both widgets),
+  `ShopkeeperAvatar.tsx` (13 illustrated reactions), `BargainPrimitives.tsx`
   (shared presentational primitives), `src/app/demo/demo-content.tsx` (`/demo`).
 - `extensions/storefront-bargain/blocks/*.liquid` — theme extension app blocks.
 
 ## Work log (most recent first)
+
+- `feat(release): experience-aware config, embed kill switch, WhatsApp number
+  discovery, and refreshed legal/homepage` (**uncommitted**). The main config
+  tab's persona is now a real `shopkeeperPersonality` write: the validation
+  schema accepts it, `applyShopkeeperPersonality()` syncs `aiPersona`, the draft
+  snapshot, the published snapshot and the legacy mirror columns, versions only
+  bump when the value actually changes, and the dashboard normalizes legacy
+  `aiPersona` before saving. `/bargain/embed` now honours `enabled: false` and
+  returns a transparent `cg_empty` frame (with tests) instead of a dead widget.
+  WhatsApp setup gained `src/lib/whatsapp/discovery.ts` (WABA env ids or
+  `/me/businesses → owned_whatsapp_business_accounts → phone_numbers`),
+  `POST /api/integrations/whatsapp` `discover|save|clear`, shared-number
+  filtering, and a hard `SHARED_NUMBER` 400 so the deployment sender can never
+  be mapped to one store. `/api/recipients` now reports shared/mapping state
+  plus `inboundRouting`/`inboundRoutingReady`, and the Recipients page shows a
+  calm shared-number card, an amber conflict card (“Use shared routing”),
+  Meta discovery (auto-save on one number, picker on several), manual fallback,
+  and Rediscover/Remove. Homepage added four recent-update cards and a
+  shared-sender/BYO-WABA FAQ; Privacy, DPA and Terms were refreshed for
+  storefront experience events, pseudonymous bounded learning, refund-adjusted
+  net revenue and the shared WhatsApp sender (October 27, 2026). Verified at
+  acceptance: Jest **133 suites / 1452 tests**, tsc, lint and production build
+  green; local production `next start` serves `/`, `/bargain/embed`, `/privacy`,
+  `/dpa` and `/terms` 200. Local `/api/health` remains 503 on this machine
+  (Redis unavailable + missing bootstrap env), so live health must be checked
+  after deploy. Uncommitted; production remains `cc29bc4`.
+
+- `feat(bargain): promote the shopkeeper to a large stage in the chat`
+  (**uncommitted**). Replaced the small header avatar with `ShopkeeperStage` in
+  both `BargainWidget` (embed) and `StorefrontBargainWidget` (`/s/bargain`): a
+  96px avatar with spotlight/halo, shopkeeper name/status, and a two-line speech
+  bubble fed by the latest reply (or checking/error/fallback copy). The stage
+  sits above the scroll area so it stays visible while chatting, respects
+  reduced-motion/`motionEnabled`, and hides with the avatar setting. Verified at
+  360px viewport in production mode: panel/stage have zero horizontal overflow,
+  bubble is not clipped, and Chrome CDP reports zero console errors/exceptions.
+  Jest **130 suites / 1440 tests**, tsc, lint and production build green.
+  Uncommitted; production remains `cc29bc4`.
+
+- `fix(bargain): stop the embed hydration crash caused by escaped inline CSS`
+  (**uncommitted**). `/bargain/embed` production errors
+  (`trace=b1ebdf5f-23c8-4c45-b4c7-0dc1a447eb7a`) were React #425/#423, not a
+  widget logic failure. The widget's scoped CSS was a `<style>` text child;
+  React SSR escaped `'`, `"` and `>` (`&#x27;`, `&quot;`, `&gt;`), while HTML
+  raw-text parsing leaves entities literal and the client renders raw
+  `textContent`, so hydration compared different strings. All static inline
+  styles (`BargainWidget` both blocks, `StorefrontBargainWidget`, `/demo`,
+  `ShopkeeperAvatar`) now use `dangerouslySetInnerHTML`, with a regression test
+  pinning raw CSS in the SSR output. `EmbedDocumentReset` no longer mutates
+  `body`/`html` inline styles at parse time (CSS already does it), removing the
+  extra-attribute warning. Verified with production `next start` + Chrome CDP:
+  zero console errors/exceptions on the failing embed URL. Jest
+  **130 suites / 1439 tests**, tsc, lint and production build green.
+  Uncommitted; production remains `cc29bc4`.
+
+- `feat(bargain): expressive shopkeeper avatars with live bargaining reactions`
+  (**uncommitted**). `ShopkeeperAvatar` is now a full illustrated character per
+  personality (friendly/strict/playful) with distinct eyes, brows, mouths,
+  accessories and CSS motion for all 13 expression states (listening, thinking,
+  skeptical, surprised, negotiating, disappointed, celebrating, error, …).
+  Motion respects reduced-motion and `motionEnabled`. Reactions are wired to
+  real turns: send → listening, wait → thinking, counter → negotiating,
+  accept → celebrating, reject/walkout → disappointed/declining, API error →
+  error. The avatar now appears in `/demo` and the `/s/bargain`
+  `StorefrontBargainWidget` (previously only `BargainWidget`/embed), including a
+  header identity on every step. Added
+  `src/components/bargain/__tests__/shopkeeper-avatar.test.tsx`. Verified after
+  both avatar + AI changes: Jest **129 suites / 1438 tests**, tsc, lint and
+  production build green. Still uncommitted and not deployed
+  (`/api/health.release` remains `cc29bc4`).
+
+- `feat(bargain): AI agent attribution, classified failover, and bounded
+  timeout fallback` (**uncommitted**). Kept the existing primary/fallback API
+  agents and added safe production plumbing rather than a second pricing path.
+  `src/lib/ai-client.ts` now classifies failures (`timeout`, `rate_limit`,
+  `quota_exhausted`, `invalid_credentials`, `request_too_large`,
+  `provider_unavailable`, `unknown`), exposes `getFallbackAiClient()`,
+  configurable bounds (`AI_PRIMARY_TIMEOUT_MS` default 10s,
+  `AI_FALLBACK_TIMEOUT_MS` default 20s, clamped 1–60s), and reports provider/
+  timeout health. A primary timeout now gets exactly one fallback attempt
+  without tripping the primary breaker; malformed/empty primary output does the
+  same, while provider errors still trip and fail over as before. Every reply
+  carries `aiSource` (`primary`/`fallback`/`emergency`/`reflex`), served
+  `aiModel`, per-attempt and total latency, and a safe failure category. `/offer`
+  persists `BargainSession.lastAiSource/lastAiModel/lastAiFailure`, writes the
+  attribution onto learning events, records a `cartgain_ai_fallback` analytics
+  event, and outcomes inherit source from the session. Demo events are
+  attributed too. Merchant learning evidence now shows an agent table
+  (events/outcomes/reward/purchase value). Migration
+  `20261027170000_add_ai_agent_attribution` adds nullable columns + indexes and
+  is applied to production (33 migrations); old code remains compatible.
+  Verified: Jest **128 suites / 1420 tests**, tsc, lint, production build.
+  **Not committed or deployed yet**, so `/api/health.release` is still `cc29bc4`.
 
 - `feat(bargain): storefront performance analytics, publish history, and
   verified refund netting`. Completed the Atlas V2 measurement/safety gaps
