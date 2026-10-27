@@ -28,6 +28,8 @@ const ENGINE_TO_LOCAL: Record<string, 'friendly' | 'strict' | 'playful'> = {
   friendly_shopkeeper: 'friendly',
   strict_negotiator: 'strict',
   playful_friend: 'playful',
+  strict_shopkeeper: 'strict',
+  playful_shopkeeper: 'playful',
 }
 
 const PERSONA_DISPLAY: Record<string, string> = {

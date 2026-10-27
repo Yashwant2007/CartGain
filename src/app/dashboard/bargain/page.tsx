@@ -25,9 +25,11 @@ import {
   MousePointerClick,
   ShoppingBag,
   Receipt,
+  Palette,
 } from 'lucide-react'
 import { DemoPanel } from './demo-panel'
 import { ProductCatalogPanel } from './product-catalog'
+import { BargainExperienceStudio } from './experience-studio'
 import {
   ABUSE_STRICTNESS_LABELS,
   ABUSE_STRICTNESS_VALUES,
@@ -155,7 +157,7 @@ type Summary = {
   }>
 }
 
-type Tab = 'config' | 'products' | 'analytics' | 'logs' | 'demo' | 'goals'
+type Tab = 'config' | 'products' | 'analytics' | 'logs' | 'demo' | 'goals' | 'experience'
 
 export default function BargainDashboardPage() {
   const router = useRouter()
@@ -324,6 +326,7 @@ void fetchConfig()
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'goals', label: 'Daily Goal', icon: Target },
     { id: 'logs', label: 'Conversation Logs', icon: MessageSquare },
+    { id: 'experience', label: 'Bargain Experience', icon: Palette },
   ]
 
   return (
@@ -1004,6 +1007,13 @@ void fetchConfig()
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Bargain Experience tab */}
+      {storeId && (
+        <div className={tab === 'experience' ? '' : 'hidden'}>
+          <BargainExperienceStudio />
         </div>
       )}
 

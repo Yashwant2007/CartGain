@@ -24,6 +24,8 @@ import {
 import { analyzeSocialSignals, socialSignalsToPromptBlock, type SocialSignals } from '@/lib/bargain/behavior'
 import { applyLearningCounterBias } from '@/lib/bargain/learning/strategies'
 import type { LearningGuidance } from '@/lib/bargain/learning/types'
+import { SHOPKEEPER_PERSONALITY_GUIDANCE } from '@/lib/bargain/experience/personality'
+import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 
 // Negotiation model. Defaults to the fast, low-cost `gpt-4o-mini`, which the
 // schema's BargainConfig.aiModel also defaults to — `gpt-4o` added multi-second
@@ -160,6 +162,8 @@ export interface NegotiationContext {
   claims?: ClaimAssessment
   negotiationMode?: BargainNegotiationMode
   negotiationStyle?: NegotiationStyle
+  /** Merchant-selected storefront personality. Additive to the engine persona. */
+  shopkeeperPersonality?: ShopkeeperPersonality
   abuseStrictness?: AbuseStrictness
   /** Whether the store has product recommendations enabled (drives guidance). */
   recommendationsEnabled?: boolean
@@ -2294,6 +2298,10 @@ export function buildSystemPrompt(
 
   if (ctx.negotiationStyle) {
     contextParts.push(negotiationStyleGuidance(ctx.negotiationStyle))
+  }
+
+  if (ctx.shopkeeperPersonality) {
+    contextParts.push(SHOPKEEPER_PERSONALITY_GUIDANCE[ctx.shopkeeperPersonality])
   }
 
   // Verified product intelligence — the ONLY product facts the model may cite

@@ -430,6 +430,27 @@ model BargainConfig {
   dwellNudgeEnabled                 Boolean   @default(false) // master toggle for the product-page dwell nudge
   dwellSeconds                      Int       @default(60) // visible seconds on a product page before the first nudge
   dwellReminderSeconds              Int       @default(60) // seconds after the first nudge before the reminder
+  // ── Bargain Experience Studio (shopkeeper personality + storefront invitations) ──
+  shopkeeperPersonality             String    @default("friendly_shopkeeper") // friendly_shopkeeper | strict_shopkeeper | playful_shopkeeper
+  invitationDesign                  String    @default("smart-assistant") // smart-assistant | playful-bargain-club | unlock-your-deal | human-shopkeeper
+  avatarEnabled                     Boolean   @default(true)
+  motionEnabled                     Boolean   @default(true)
+  invitationCtaLabel                String?
+  invitationCopy                    String?
+  invitationGreeting                String?
+  invitationAccentColor             String?   // hex color
+  invitationAvatarSize              String    @default("md") // sm | md | lg
+  invitationCompact                 Boolean   @default(false)
+  invitationPosition                String    @default("bottom-right") // bottom-right | bottom-left | inline
+  experienceLocale                  String    @default("store-default")
+  experienceSchemaVersion           Int       @default(1)
+  experiencePublishedVersion        Int       @default(1)
+  experienceDraftVersion            Int       @default(1)
+  // Canonical draft/published snapshots. The flat columns above mirror the
+  // published snapshot for backwards compatibility; draft edits never mutate
+  // the live storefront until Publish copies the draft here.
+  experienceDraft                   Json?
+  experiencePublished               Json?
   createdAt                         DateTime  @default(now())
   updatedAt                         DateTime  @updatedAt
 

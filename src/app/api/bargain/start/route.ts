@@ -3,6 +3,8 @@ import prisma from '@/lib/db'
 import { bargainStartSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerContext, SUPPORTED_LANGUAGES, type NegotiationContext } from '@/lib/services/bargain'
 import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
+import { enginePersonaFor } from '@/lib/bargain/experience/personality'
+import { publishedPersonality } from '@/lib/bargain/experience/config'
 import { currencySymbolFor, CURRENCY_SYMBOLS } from '@/lib/bargain/i18n'
 import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
@@ -179,6 +181,8 @@ export async function POST(request: NextRequest) {
       ...(data.cartToken ? [{ cartToken: data.cartToken }] : []),
       ...(customerEmail ? [{ customerEmail }] : []),
     ]
+    const shopkeeperPersonality = publishedPersonality(config)
+
     const existing = await prisma.bargainSession.findFirst({
       where: {
         storeId: data.storeId,
@@ -207,7 +211,7 @@ export async function POST(request: NextRequest) {
           minPrice: existingFloor.minPrice,
           attemptsUsed: existing.attemptsUsed,
           maxAttempts: config.maxAttempts,
-          persona: config.aiPersona as any,
+          persona: enginePersonaFor(shopkeeperPersonality),
           language: existing.language || 'auto',
           customerContext: `Returning to continue an existing session.`,
         }),
@@ -262,7 +266,8 @@ export async function POST(request: NextRequest) {
       minPrice,
       attemptsUsed: 0,
       maxAttempts: config.maxAttempts,
-      persona: config.aiPersona as NegotiationContext['persona'],
+      persona: enginePersonaFor(shopkeeperPersonality),
+      shopkeeperPersonality,
       aiModel: config.aiModel ?? undefined,
       productTitle: undefined,
       language,

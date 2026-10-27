@@ -3,6 +3,8 @@ import prisma from '@/lib/db'
 import { resolveActiveStoreIdByShopDomain } from '@/lib/stores/resolve-by-domain'
 import BargainWidget from '@/components/bargain/BargainWidget'
 import EmbedErrorBoundary from '@/components/bargain/EmbedErrorBoundary'
+import { fromDb } from '@/lib/bargain/experience/config'
+import type { BargainExperienceConfig } from '@/lib/bargain/experience/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,6 +62,8 @@ export default async function EmbedPage({
   let storeId: string | null = null
   let storeFound = false
   let persona: string | undefined
+  let experience: BargainExperienceConfig = fromDb(null, 'published')
+  let hasPublishedExperience = false
   let language: string | undefined
   // Round budget for the meter. This is a COUNT of offers, not a price — the
   // merchant's floor/profit margin is never serialised into this document.
@@ -79,7 +83,9 @@ export default async function EmbedPage({
       // stale `enabled=false` default silently hid the whole widget
       // ("added it in the theme editor but it's not showing").
       const config = await prisma.bargainConfig.findUnique({ where: { storeId: store.id } })
-      persona = config?.aiPersona ?? 'friendly_shopkeeper'
+      experience = fromDb(config, 'published')
+      hasPublishedExperience = Boolean(config?.experiencePublished)
+      persona = experience.personality
       language = config?.language ?? 'auto'
       if (typeof config?.maxAttempts === 'number' && config.maxAttempts > 0) {
         maxAttempts = config.maxAttempts
@@ -117,6 +123,8 @@ export default async function EmbedPage({
           image={decodedImage}
           language={language}
           persona={persona}
+          experience={experience}
+          invitationFirst={hasPublishedExperience}
           maxAttempts={maxAttempts}
           mode={mode}
           cartToken={cartToken}

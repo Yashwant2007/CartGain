@@ -65,6 +65,36 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(bargain): storefront experience studio with three shopkeepers, four
+  invitations, and reactive avatars`. Added an additive `BargainConfig`
+  experience layer while keeping the existing prompt/pricing path authoritative.
+  Personalities `friendly_shopkeeper`, `strict_shopkeeper`, and
+  `playful_shopkeeper` map onto the existing engine personas
+  (`friendly_shopkeeper`, `strict_negotiator`, `playful_friend`) and add
+  bounded prompt guidance only; legacy `aiPersona` stores keep their prior
+  behavior until they publish an experience. `src/lib/bargain/experience/`
+  now owns validated types/defaults, legacy-compatible config mapping,
+  draft/published snapshots, avatar event-to-expression mapping, and personality
+  prompt guidance. Merchants get `GET/PUT/POST /api/merchant/bargain-experience`
+  plus a Settings → Bargain Experience tab with live invitation/avatar preview,
+  personality and design galleries, copy/CTA/accent/size/position controls,
+  draft save, publish, and restore defaults. Draft edits are stored in
+  `experienceDraft`; only Publish copies them to `experiencePublished` and
+  mirrors the flat columns read by storefront/engine paths. `BargainWidget`
+  renders `ShopkeeperAvatar` in the chat header, maps chat/counter/accept/reject/
+  error/session events to expressions, and shows `StorefrontInvitation` before
+  the first chat turn for merchants with a published experience (existing
+  merchants keep the direct-chat drawer). Four designs: `smart-assistant`,
+  `playful-bargain-club`, `unlock-your-deal`, `human-shopkeeper`; reduced-motion
+  and avatar/motion toggles respected. Migration
+  `20261027120000_add_bargain_experience_studio` is applied to production
+  (JSONB snapshots + 15 flat columns verified); an earlier `migrate dev` shadow
+  replay failed on old `BargainRevenueShareEvent`, so the additive SQL migration
+  was created/applied directly. Verified: Jest **125 suites / 1393 tests**, tsc,
+  lint, production build; local public `/api/bargain/experience` returned the
+  published defaults 200 and the merchant endpoint returned 401 unauthenticated.
+  Not yet committed/deployed at the time of this log.
+
 - `feat(bargain): claim checks, merchant negotiation styles, and learning
   quarantine`. Added a deterministic truth layer (`src/lib/bargain/claims.ts`)
   that classifies customer claims across competitor prices, prior purchases/
@@ -433,6 +463,9 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   extracted. Live/verified.
 
 ## Open / watch items
+- Storefront invitations only replace the direct-chat drawer after a merchant
+  publishes an experience (`experiencePublished` exists). Draft-only stores keep
+  the prior behavior on purpose; the dashboard preview uses the draft.
 - New stores do not get a `BargainLearningConfig` row automatically, so
   `/demo` learning stays off for them until the merchant opens Settings →
   Bargain learning and saves (the existing 8 stores were seeded). Production

@@ -15,6 +15,8 @@ import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/go
 import { analyzeIntent } from '@/lib/bargain/intent'
 import { assessCustomerClaims } from '@/lib/bargain/claims'
 import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
+import { enginePersonaFor } from '@/lib/bargain/experience/personality'
+import { publishedPersonality } from '@/lib/bargain/experience/config'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
 import { searchRecommendations, recommendationReason, type RecommendationCard, type RecommendationReason, type RecommendationContext } from '@/lib/bargain/recommendations'
 import { fetchShopifyProducts } from '@/lib/shopify'
@@ -489,6 +491,8 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    const shopkeeperPersonality = publishedPersonality(config)
+
     const ctx: NegotiationContext = {
       storeName: bargainSession.store.name,
       currencySymbol,
@@ -496,7 +500,8 @@ export async function POST(request: NextRequest) {
       minPrice,
       attemptsUsed,
       maxAttempts: config.maxAttempts,
-      persona: config.aiPersona as NegotiationContext['persona'],
+      persona: enginePersonaFor(shopkeeperPersonality),
+      shopkeeperPersonality,
       aiModel: config.aiModel ?? undefined,
       productTitle,
       bulkQuantity: bulkQuantity ?? undefined,

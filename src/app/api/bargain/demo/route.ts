@@ -25,6 +25,8 @@ import {
 import { analyzeIntent } from '@/lib/bargain/intent'
 import { assessCustomerClaims } from '@/lib/bargain/claims'
 import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
+import { enginePersonaFor } from '@/lib/bargain/experience/personality'
+import { publishedPersonality } from '@/lib/bargain/experience/config'
 import { extractPrice } from '@/lib/bargain/text'
 import { fetchShopifyProducts } from '@/lib/shopify'
 import {
@@ -289,6 +291,8 @@ export async function POST(request: NextRequest) {
         ? (merchant.config.negotiationMode as BargainNegotiationMode)
         : undefined
 
+    const shopkeeperPersonality = publishedPersonality(merchant.config)
+
     const ctx: NegotiationContext = {
       storeName,
       currencySymbol,
@@ -296,7 +300,8 @@ export async function POST(request: NextRequest) {
       minPrice,
       attemptsUsed,
       maxAttempts,
-      persona,
+      persona: enginePersonaFor(shopkeeperPersonality),
+      shopkeeperPersonality,
       productTitle,
       bulkQuantity,
       language: effectiveLanguage,

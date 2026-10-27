@@ -7,6 +7,11 @@ import {
 } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import { buildQuickOffers, parseDraftOffer } from '@/lib/bargain/offers'
+import ShopkeeperAvatar, { type ExpressionState } from '@/components/bargain/ShopkeeperAvatar'
+import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
+import { expressionForEvent, type AvatarEvent } from '@/lib/bargain/experience/expressions'
+import { resolveShopkeeperPersonality } from '@/lib/bargain/experience/personality'
+import type { BargainExperienceConfig } from '@/lib/bargain/experience/types'
 import type {
   BargainAcceptSuccess,
   BargainGoalView,
@@ -85,6 +90,9 @@ type Props = {
   embedded?: boolean
   image?: string
   persona?: string
+  experience?: BargainExperienceConfig
+  /** Show the published invitation before the first chat turn. */
+  invitationFirst?: boolean
   mode?: 'item' | 'cart'
   /**
    * How many offers the merchant allows in one session. Drives the round meter
@@ -113,6 +121,8 @@ const PERSONA_CHIP: Record<string, { label: string; emoji: string }> = {
   friendly_shopkeeper: { label: 'Friendly', emoji: '' },
   strict_negotiator: { label: 'Strict', emoji: '' },
   playful_friend: { label: 'Playful', emoji: '' },
+  strict_shopkeeper: { label: 'Strict', emoji: '' },
+  playful_shopkeeper: { label: 'Playful', emoji: '' },
 }
 
 export default function BargainWidget({
@@ -131,12 +141,18 @@ export default function BargainWidget({
   embedded: isEmbed = false,
   image,
   persona,
+  experience,
+  invitationFirst = false,
   mode,
   maxAttempts,
   view = 'inline',
   defaultOpen,
 }: Props) {
-  const [open, setOpen] = useState<boolean>(defaultOpen ?? isEmbed)
+  const [open, setOpen] = useState<boolean>(defaultOpen ?? (isEmbed && !invitationFirst))
+  const [expression, setExpression] = useState<ExpressionState>('idle')
+  const personality = resolveShopkeeperPersonality(experience?.personality, persona)
+  const avatarEnabled = experience?.avatarEnabled !== false
+  const fireAvatar = (event: AvatarEvent) => setExpression(expressionForEvent(personality, event))
   const [minimised, setMinimised] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [sessionToken, setSessionToken] = useState<string | null>(null)
@@ -526,6 +542,7 @@ export default function BargainWidget({
       setExpiresAt(data.expiresAt ?? null)
       if (data.returning) setReturning(true)
       if (data.goal) setGoal(data.goal)
+      if (data.existingSession) fireAvatar('SESSION_RESTORED')
       if (data.existingSession && data.session?.messages?.length) {
         const restored: BargainMessage[] = data.session.messages.map((m: BargainMessage) => ({
           id: m.id,
@@ -602,6 +619,7 @@ export default function BargainWidget({
     setError(null)
     setNotice(null)
     const localId = `c-${Date.now()}`
+    fireAvatar('CUSTOMER_MESSAGE_RECEIVED')
     setMessages(prev => [
       ...prev,
       { id: localId, role: 'customer', content: msg, offeredPrice: parseDraftOffer(msg), createdAt: new Date().toISOString(), delivery: 'sending' },
@@ -620,6 +638,7 @@ export default function BargainWidget({
       thinkingTimerRef.current = window.setTimeout(() => {
         thinkingShownAtRef.current = Date.now()
         setShowThinking(true)
+        fireAvatar('AI_THINKING_STARTED')
         resolve()
       }, THINKING_DELAY_MS)
     })
@@ -699,6 +718,11 @@ export default function BargainWidget({
       // acceptDeal().
       if (data.decision === 'reject') {
         setDecision('reject')
+        fireAvatar('OFFER_REJECTED')
+      } else if (data.counterOffer != null) {
+        fireAvatar('COUNTEROFFER_PRESENTED')
+      } else {
+        fireAvatar('AI_RESPONSE_RECEIVED')
       }
       if (data.discountCode) setDiscountCode(data.discountCode)
       if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
@@ -711,6 +735,7 @@ export default function BargainWidget({
       }
       lastFailedRef.current = null
     } catch (err: any) {
+      fireAvatar('API_ERROR')
       lastFailedRef.current = { kind: 'offer', payload: msg }
       setError(errorCopy(err))
     } finally {
@@ -835,6 +860,7 @@ export default function BargainWidget({
           // Machine-readable backend rejection (unavailable / campaign expired /
           // coupon stacking / price moved). Show the server's own copy in a
           // calm state card instead of an error box.
+          fireAvatar('OFFER_REJECTED')
           setRejection({ code: data.code, reason: data.reason ?? data.code, message: data.message ?? t('tryAgain') })
           setMessages(prev => [
             ...prev,
@@ -855,6 +881,7 @@ export default function BargainWidget({
         }
         throw new Error(data.message ?? 'Could not accept')
       }
+      fireAvatar('OFFER_ACCEPTED')
       setFinalPrice(data.finalPrice)
       setDiscountCode(data.discountCode)
       setPurchaseUrl(data.purchaseUrl ?? null)
@@ -931,6 +958,7 @@ export default function BargainWidget({
   function openPanel() {
     setOpen(true)
     setMinimised(false)
+    fireAvatar('CHAT_OPENED')
     if (!sessionId) {
       void startSession()
     }
@@ -962,6 +990,7 @@ export default function BargainWidget({
     }
     setOpen(false)
     setMinimised(false)
+    setExpression('idle')
     // Keyboard users: hand focus back to the launcher when the panel closes so
     // the next tab-stop lands somewhere predictable in the theme.
     window.setTimeout(() => launcherRef.current?.focus(), 0)
@@ -1037,6 +1066,17 @@ export default function BargainWidget({
 
       {!open && (
         isEmbed ? (
+          experience ? (
+            <div style={{
+              minHeight: invitationFirst ? '100%' : undefined,
+              display: 'flex',
+              alignItems: invitationFirst ? 'center' : undefined,
+              justifyContent: invitationFirst ? 'center' : undefined,
+              padding: invitationFirst ? 20 : undefined,
+            }}>
+              <StorefrontInvitation experience={experience} onOpen={openPanel} />
+            </div>
+          ) : (
           <button
             onClick={openPanel}
             type="button"
@@ -1112,6 +1152,7 @@ export default function BargainWidget({
               <ArrowRight size={14} />
             </span>
           </button>
+          )
         ) : (
           <button
             onClick={openPanel}
@@ -1205,6 +1246,14 @@ export default function BargainWidget({
             background: 'linear-gradient(180deg, #ffffff, #fafbff)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              {avatarEnabled && (
+                <ShopkeeperAvatar
+                  personality={personality}
+                  expression={expression}
+                  size="md"
+                  motionEnabled={experience?.motionEnabled !== false}
+                />
+              )}
               <ProductThumb image={productCtx.image} title={productCtx.title} size={40} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
