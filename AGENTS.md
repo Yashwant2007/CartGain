@@ -96,8 +96,13 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   `20261027150000_add_experience_analytics_and_history` and
   `20261027160000_add_bargain_purchase_netting` are applied to production.
   Verified: Jest **128 suites / 1413 tests**, tsc, lint, and production build
-  green. Local production smoke still needs the deployed release; Shopify
-  extension activation remains a separate check.
+  green. Committed `975405d4` and deployed; `/api/health.release` is `975405d`
+  with DB/Redis/env/AI/email/WhatsApp/Shopify checks ok. Production smoke: the
+  public experience endpoint returns the published defaults (200), `/bargain/
+  embed` returns 200, and both merchant experience and analytics endpoints
+  return 401 unauthenticated. New tables are live (0 events / 0 publishes) and
+  the sample store has no published snapshot, so it correctly keeps the legacy
+  direct-chat path. Shopify extension activation remains a separate check.
 
 - `feat(bargain): storefront experience studio with three shopkeepers, four
   invitations, and reactive avatars`. Added an additive `BargainConfig`
