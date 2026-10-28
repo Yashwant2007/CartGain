@@ -23,5 +23,8 @@
     "src/app/api/bargain/sessions/route.ts": {
       "maxDuration": 60
     }
-  }
+  },
+  "regions": [
+    "bom1"
+  ]
 }

@@ -281,8 +281,8 @@ export default function BargainWidget({
   // Send-sequence timing (see sendMessage): tick, then a beat, then thinking,
   // then a length-scaled minimum thinking beat before the reply is revealed.
   const TICK_MS = 100
-  const THINKING_DELAY_MS = 170
-  const minThinkingMs = (reply: string) => Math.min(600, Math.max(260, reply.length * 4))
+  const THINKING_DELAY_MS = 60
+  const minThinkingMs = (reply: string) => Math.min(220, Math.max(90, reply.length * 2))
   const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
   const personaChip = persona ? PERSONA_CHIP[persona] : undefined
   const shopkeeperName = PERSONALITY_META.find((p) => p.id === personality)?.name ?? t('shopkeeperOnline')

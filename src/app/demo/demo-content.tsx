@@ -124,8 +124,8 @@ const DEMO_PROFIT_PERCENT = 25
 const MAX_ATTEMPTS = 3
 // Human send rhythm: message → delivered tick → thinking → reply
 const TICK_MS = 100
-const THINKING_DELAY_MS = 170
-const minThinkingMs = (reply: string) => Math.min(600, Math.max(260, reply.length * 4))
+const THINKING_DELAY_MS = 60
+const minThinkingMs = (reply: string) => Math.min(220, Math.max(90, reply.length * 2))
 const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
 
 export default function DemoContent() {

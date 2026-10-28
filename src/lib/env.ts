@@ -30,6 +30,7 @@ export const OPTIONAL_AI_VARS: Record<string, string> = {
   AI_FALLBACK_API_KEY: 'OpenAI-compatible provider key (fallback when OpenAI is unavailable)',
   AI_FALLBACK_BASE_URL: 'OpenAI-compatible base URL (default Groq)',
   AI_FALLBACK_MODEL: 'Fallback model id (default openai/gpt-oss-120b)',
+  AI_RATE_LIMIT_COOLDOWN_MS: 'How long a 429 provider stays out of rotation (default 30000)',
 }
 
 // Optional operational/infrastructure variables. The app degrades gracefully

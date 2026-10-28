@@ -108,6 +108,25 @@ describe('handleAiFailure trips the tier on provider failures', () => {
     expect(isTierTripped('primary')).toBe(true)
   })
 
+  it('cools a rate-limited tier briefly instead of disabling it for 15 minutes', async () => {
+    jest.useFakeTimers()
+    jest.setSystemTime(new Date('2026-10-28T10:00:00Z'))
+    try {
+      const { handleAiFailure } = await import('../ai-client')
+      const { isTierTripped, resetQuotaBreakForTests, rateLimitBreakerMs } = await import('../ai-quota')
+      resetQuotaBreakForTests()
+
+      handleAiFailure({ status: 429, error: { code: 'rate_limit_exceeded' } }, 'test', undefined, 'fallback')
+
+      expect(isTierTripped('fallback')).toBe(true)
+      jest.setSystemTime(Date.now() + 31_000)
+      expect(isTierTripped('fallback')).toBe(false)
+      expect(rateLimitBreakerMs()).toBeLessThan(15 * 60_000)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
   it('trips on other HTTP provider failures (401/403/404/500)', async () => {
     const { handleAiFailure } = await import('../ai-client')
     const { isTierTripped, resetQuotaBreakForTests } = await import('../ai-quota')

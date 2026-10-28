@@ -250,9 +250,9 @@ export default function StorefrontBargainWidget({
   // The minimum is length-scaled so a one-word reply still feels considered,
   // while a long one is never padded.
   const TICK_MS = 100
-  const THINKING_DELAY_MS = 170
+  const THINKING_DELAY_MS = 60
   const minThinkingMs = (reply: string) =>
-    Math.min(600, Math.max(260, reply.length * 4))
+    Math.min(220, Math.max(90, reply.length * 2))
   const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
 
   const markDelivered = useCallback((id: string) => {

@@ -138,7 +138,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
   }
 
   function replyDelay(len: number) {
-    return 600 + Math.min(len, 240) * 1.0
+    return 180 + Math.min(len, 120) * 0.4
   }
 
   async function send() {

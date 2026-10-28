@@ -157,6 +157,51 @@ describe('primary outage is absorbed inside the same request', () => {
     expect(isTierTripped('primary')).toBe(true)
   })
 
+  it('retries the primary when the fallback itself is rate-limited', async () => {
+    // Sequence seen in production: primary timed out (breaker stays closed),
+    // then Groq answered 429. The fallback 429 says nothing about OpenAI, and
+    // giving up here is what served a template despite a healthy primary.
+    let primaryCalls = 0
+    ;(globalThis as any).__nextCreate = jest.fn(async (req: any) => {
+      if (req.model === 'gpt-4o') {
+        primaryCalls++
+        if (primaryCalls === 1) {
+          const timeout: any = new Error('Request timed out.')
+          timeout.code = 'ETIMEDOUT'
+          throw timeout
+        }
+        return modelReply(90)
+      }
+      throw { status: 429, error: { code: 'rate_limit_exceeded', message: 'Rate limit reached' } }
+    })
+
+    const res = await negotiateStep(ctx(), [], 'can you do 90?', 90, 'sess-fb-429')
+
+    expect(sentModels).toEqual(['gpt-4o', 'openai/gpt-oss-120b', 'gpt-4o'])
+    expect(res.reply).toBe('Groq answered you.')
+    expect((res.metadata as any)?.aiSource).toBe('primary')
+    expect(isTierTripped('primary')).toBe(false)
+    expect(isTierTripped('fallback')).toBe(true)
+  })
+
+  it('keeps the large mastery before per-turn data so Groq can cache it', async () => {
+    const systems: string[] = []
+    ;(globalThis as any).__nextCreate = jest.fn(async (req: any) => {
+      systems.push(req.messages[0].content)
+      return modelReply(90)
+    })
+
+    await negotiateStep(ctx({ attemptsUsed: 1 }), [], '90?', 90, 'sess-cache-1')
+    await negotiateStep(ctx({ attemptsUsed: 2 }), [], '91?', 91, 'sess-cache-2')
+
+    const marker = 'NEGOTIATION SCENARIO'
+    expect(systems[0].indexOf('professional salesperson and master negotiator')).toBeLessThan(
+      systems[0].indexOf(marker),
+    )
+    const stablePrefix = systems[0].slice(0, systems[0].indexOf(marker))
+    expect(systems[1].startsWith(stablePrefix)).toBe(true)
+  })
+
   it('fails over on a single timeout without tripping the primary breaker', async () => {
     // A one-off slow response is not an outage, so the primary breaker stays
     // closed. The turn still gets one bounded fallback attempt; only when both

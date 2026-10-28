@@ -4,6 +4,7 @@ import { checkAbuse, type AbuseStrictness } from '@/lib/bargain/abuse'
 import {
   getAiClient,
   getFallbackAiClient,
+  getPrimaryAiClient,
   fallbackModelName,
   handleAiFailure,
   classifyAiFailure,
@@ -1668,15 +1669,50 @@ export function quotedFloor(ctx: Pick<NegotiationContext, 'minPrice' | 'original
  * is the clamped value, so the shopper is shown a price we will not accept. This
  * rewrites the model's stated figure so the spoken price matches the real offer.
  */
-function rewriteStatedPrice(reply: string, from: number, to: number): string {
+export function rewriteStatedPrice(reply: string, from: number, to: number): string {
   if (!(from > 0) || Math.abs(from - to) < 0.01) return reply
-  const fromNum = String(Math.round(from * 100) / 100)
-  const toNum = String(Math.round(to * 100) / 100)
-  const core = fromNum.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  // Replace the whole number token only (not part of a larger number), leaving
-  // any currency symbol/prefix (₹, Rs, INR) untouched.
-  const re = new RegExp(`(?<![\\d.])${core}(?![\\d])`, 'g')
-  return reply.replace(re, toNum)
+  const roundedFrom = Math.round(from * 100) / 100
+  const roundedTo = Math.round(to * 100) / 100
+
+  // Models often format money ("₹2,200", "Rs 2,200.00") while `parsed.counterOffer`
+  // is a plain number. Build the grouped variants as well as the raw one, or the
+  // spoken price stays at the rejected figure while the offer badge moves.
+  const variants = new Set<string>([
+    String(roundedFrom),
+    roundedFrom.toLocaleString('en-IN', { maximumFractionDigits: 2 }),
+    roundedFrom.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+    roundedFrom.toFixed(2),
+    roundedFrom.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    roundedFrom.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+  ])
+
+  let out = reply
+  // Longest first so "2,200.00" is consumed before the bare "2200" variant can
+  // corrupt it into "2,453.5.00".
+  for (const variant of Array.from(variants).sort((a, b) => b.length - a.length)) {
+    if (!variant) continue
+    const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const grouped = variant.includes(',')
+    const decimals = variant.includes('.') ? variant.split('.')[1].length : 0
+    const raw = !grouped && decimals === 0
+    const replacement = grouped
+      ? roundedTo.toLocaleString('en-US', {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: Math.max(decimals, 2),
+        })
+      : decimals > 0
+        ? roundedTo.toFixed(decimals)
+        : String(roundedTo)
+    // Replace the whole number token only (not part of a larger number), leaving
+    // any currency symbol/prefix (₹, Rs, INR) untouched. The bare-number variant
+    // must also not start/end inside a comma-grouped or decimal figure.
+    const re = new RegExp(
+      `(?<![\\d.,])${escaped}${raw ? '(?![\\d.])' : '(?![\\d])'}`,
+      'g',
+    )
+    out = out.replace(re, replacement)
+  }
+  return out
 }
 
 // ── Rule-based decision (no AI) ──
@@ -2353,7 +2389,7 @@ export function buildSystemPrompt(
   // On the compact (token-budgeted) path, cap the dynamic context so a long
   // product description or history note cannot push the whole request back over
   // the provider's per-minute token limit. The mastery is already trimmed.
-  const COMPACT_CONTEXT_CHAR_BUDGET = 5000
+  const COMPACT_CONTEXT_CHAR_BUDGET = 3000
   let specialContextBody = contextParts.join('\n\n')
   if (compact && specialContextBody.length > COMPACT_CONTEXT_CHAR_BUDGET) {
     specialContextBody = specialContextBody.slice(0, COMPACT_CONTEXT_CHAR_BUDGET) + '…'
@@ -2364,9 +2400,17 @@ export function buildSystemPrompt(
 
   const languageGuidance = buildLanguageGuidance(ctx.language, currencySymbol)
 
+  // The stable instruction prefix comes FIRST. Groq's automatic prompt caching
+  // only reuses an exact prefix, and cached input tokens do not count against
+  // the free tier's 8K-tokens/minute bucket. Per-turn data (attempts, progress,
+  // product context) therefore goes after the mastery so the large block is
+  // cached across turns instead of re-billed every message.
   return `${persona}
 
 ${languageGuidance}
+
+${mastery}
+${FRESHNESS_RULES}
 
 ══════════════════════════════════════════════════════════════
 NEGOTIATION SCENARIO
@@ -2381,8 +2425,6 @@ Phase: ${phaseGuidance}
 ${specialContext}
 ══════════════════════════════════════════════════════════════
 
-${mastery}
-${FRESHNESS_RULES}
 ══════════════════════════════════════════════════════════════
 RESPONSE FORMAT — STRICT JSON ONLY
 ══════════════════════════════════════════════════════════════
@@ -2490,6 +2532,7 @@ type AiAttemptTrace = {
   attempted: AiTier[]
   fallbackReason?: AiFailureCategory
   startedAt?: number
+  primaryRetried?: boolean
 }
 
 export async function negotiateStep(
@@ -2599,14 +2642,14 @@ export async function negotiateStep(
 
   // Build conversation history for the AI. On the compact path keep only the
   // most recent turns and cap each message so a long transcript cannot overflow.
-  const modelHistory = compact ? history.slice(-8) : history
+  const modelHistory = compact ? history.slice(-4) : history
   const historyMessages: OpenAI.Chat.ChatCompletionMessageParam[] = modelHistory.map(m => {
     const content = m.offeredPrice != null
       ? `${m.content} [offered ${ctx.currencySymbol}${m.offeredPrice.toFixed(2)}]`
       : m.content
     return {
       role: (m.role === 'customer' ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: compact ? content.slice(0, 400) : content,
+      content: compact ? content.slice(0, 280) : content,
     }
   })
 
@@ -2860,10 +2903,18 @@ export async function negotiateStep(
         return negotiateStep(ctx, history, customerMessage, customerOffer, sessionId, forceCompact, nextTrace)
       }
     }
-    if (tier === 'fallback' && !attempted.includes('primary')) {
-      const primary = getAiClient()
-      if (primary && primary.tier === 'primary') {
-        return negotiateStep(ctx, history, customerMessage, customerOffer, sessionId, forceCompact, nextTrace)
+    if (tier === 'fallback' && failure.category === 'rate_limit' && !trace?.primaryRetried) {
+      // The fallback being rate-limited says nothing about the primary. This
+      // also rescues the common sequence "primary timed out → fallback 429":
+      // a timeout does not trip the primary breaker, so retry it once before
+      // dropping a real shopper onto heuristics. Other fallback failures (e.g.
+      // a second timeout) are not retried to keep one bad turn bounded.
+      const primary = getPrimaryAiClient()
+      if (primary) {
+        return negotiateStep(ctx, history, customerMessage, customerOffer, sessionId, forceCompact, {
+          ...nextTrace,
+          primaryRetried: true,
+        })
       }
     }
     reportAiDegradation('all_tiers_failed', `tier=${tier} failure=${failure.category}`)

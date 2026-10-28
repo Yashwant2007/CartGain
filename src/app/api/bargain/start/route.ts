@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainStartSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
-import { buildOpeningMessage, computeMinPrice, negotiateStep, buildCustomerContext, SUPPORTED_LANGUAGES, type NegotiationContext } from '@/lib/services/bargain'
+import { buildOpeningMessage, computeMinPrice, buildCustomerContext, SUPPORTED_LANGUAGES, type NegotiationContext } from '@/lib/services/bargain'
 import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
 import { enginePersonaFor } from '@/lib/bargain/experience/personality'
 import { fromDb } from '@/lib/bargain/experience/config'
@@ -291,18 +291,11 @@ export async function POST(request: NextRequest) {
     // the customer). Same context the offer step uses for every later turn.
     if (goalCtx) ctx.goal = goalCtx
 
-    // Try AI opening message, fall back to deterministic
-    let openingReply = buildOpeningMessage(ctx)
-    let openingMeta: any = { source: 'fallback' }
-
-    try {
-      const ai = await negotiateStep(ctx, [], "I'm interested in this item", originalPrice, 'opening')
-      // Treat negotiation as welcome for opening (don't actually evaluate originalPrice as customer offer)
-      openingReply = ai.reply || openingReply
-      openingMeta = { source: 'openai', tactic: ai.tactic, sentiment: ai.sentiment }
-    } catch (e) {
-      // silent — fallback already set
-    }
+    // The opening is deterministic on purpose: it is a welcome, not a priced
+    // negotiation turn. Asking a model here made the widget wait on provider
+    // quota/retries before it could paint, with no benefit to the shopper.
+    const openingReply = buildOpeningMessage(ctx)
+    const openingMeta: any = { source: 'deterministic' }
 
     const [bargainSession] = await prisma.$transaction([
       prisma.bargainSession.create({

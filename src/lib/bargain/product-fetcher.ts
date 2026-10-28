@@ -101,13 +101,13 @@ export interface ProductContextOptions {
 
 export async function buildProductContext(opts: ProductContextOptions): Promise<ProductContext> {
   const now = new Date()
-  const overrides = await loadOverrides(opts.storeId, opts.shopifyProductId)
 
   if (CACHE_ENABLED && opts.useCache !== false) {
     const cached = await getCachedProductContext(opts.storeId, opts.shopifyProductId)
     if (cached && !isContextStale(cached)) return cached
   }
 
+  const overrides = await loadOverrides(opts.storeId, opts.shopifyProductId)
   const source = await fetchShopifyProductDetail(opts.store, opts.shopifyProductId)
   if (!source) {
     return failedContext(opts.shopifyProductId, opts.fallbackTitle ?? null)

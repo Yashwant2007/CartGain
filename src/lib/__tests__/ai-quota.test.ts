@@ -1,4 +1,11 @@
-import { isTierTripped, tripTierBreaker, shouldLogQuota, isInsufficientQuotaError, resetQuotaBreakForTests } from '../ai-quota'
+import {
+  isTierTripped,
+  tripTierBreaker,
+  shouldLogQuota,
+  isInsufficientQuotaError,
+  resetQuotaBreakForTests,
+  rateLimitBreakerMs,
+} from '../ai-quota'
 
 describe('AI quota circuit breakers', () => {
   beforeEach(() => {
@@ -38,6 +45,14 @@ describe('AI quota circuit breakers', () => {
       jest.setSystemTime(Date.now() + 14 * 60_000)
       expect(isTierTripped('primary')).toBe(true)
       jest.setSystemTime(Date.now() + 2 * 60_000)
+      expect(isTierTripped('primary')).toBe(false)
+    })
+
+    it('supports a short cooldown for transient rate limits', () => {
+      tripTierBreaker('fallback', Date.now(), rateLimitBreakerMs())
+      expect(isTierTripped('fallback')).toBe(true)
+      jest.setSystemTime(Date.now() + rateLimitBreakerMs() + 1_000)
+      expect(isTierTripped('fallback')).toBe(false)
       expect(isTierTripped('primary')).toBe(false)
     })
 

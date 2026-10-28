@@ -1,5 +1,12 @@
 import OpenAI from 'openai'
-import { AiTier, isTierTripped, tripTierBreaker, shouldLogQuota, isInsufficientQuotaError } from '@/lib/ai-quota'
+import {
+  AiTier,
+  isTierTripped,
+  tripTierBreaker,
+  shouldLogQuota,
+  isInsufficientQuotaError,
+  rateLimitBreakerMs,
+} from '@/lib/ai-quota'
 
 export type { AiTier }
 
@@ -33,6 +40,10 @@ let fallbackClient: OpenAI | null = null
 const DEFAULT_FALLBACK_BASE_URL = 'https://api.groq.com/openai/v1'
 const DEFAULT_PRIMARY_TIMEOUT_MS = 10_000
 const DEFAULT_FALLBACK_TIMEOUT_MS = 20_000
+// Our own primary/fallback failover already covers provider errors. The
+// OpenAI SDK's default two retries stack on top of that and can add 10+ seconds
+// to a single reply when a provider sends `retry-after`, so fail over now.
+const DEFAULT_PROVIDER_MAX_RETRIES = 0
 // openai/gpt-oss-120b: 131K context (handles the large bargain system prompt),
 // JSON Object Mode (matches our response_format: json_object), strong reasoning
 // (best for negotiation depth), available on Groq free tier. NOTE: the previous
@@ -77,6 +88,14 @@ export function primaryTimeoutMs(): number {
 
 export function fallbackTimeoutMs(): number {
   return timeoutFromEnv('AI_FALLBACK_TIMEOUT_MS', DEFAULT_FALLBACK_TIMEOUT_MS)
+}
+
+function providerMaxRetries(): number {
+  const raw = envTrimmed('AI_PROVIDER_MAX_RETRIES')
+  if (!raw) return DEFAULT_PROVIDER_MAX_RETRIES
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) return DEFAULT_PROVIDER_MAX_RETRIES
+  return Math.min(2, Math.max(0, Math.round(parsed)))
 }
 
 export function fallbackModelName(): string {
@@ -142,6 +161,7 @@ function makeFallbackClient(): OpenAI | null {
     apiKey: fallbackKey,
     baseURL: fallbackBaseUrl(),
     timeout: fallbackTimeoutMs(),
+    maxRetries: providerMaxRetries(),
   })
   fallbackClient = decorateForFallback(client, fallbackModel())
   return fallbackClient
@@ -149,32 +169,38 @@ function makeFallbackClient(): OpenAI | null {
 
 export type AiResolved = { client: OpenAI; tier: AiTier }
 
+function forceFallbackEnabled(): boolean {
+  const value = envTrimmed('AI_FORCE_FALLBACK')
+  return value === 'true' || value === '1'
+}
+
+export function getPrimaryAiClient(): AiResolved | null {
+  if (forceFallbackEnabled() || isTierTripped('primary')) return null
+  const key = envTrimmed('OPENAI_API_KEY')
+  if (!key) return null
+  if (!primaryClient) {
+    primaryClient = new OpenAI({
+      apiKey: key,
+      timeout: primaryTimeoutMs(),
+      maxRetries: providerMaxRetries(),
+    })
+  }
+  return { client: primaryClient, tier: 'primary' }
+}
+
 export function getAiClient(userKey?: string): AiResolved | null {
   if (userKey && isUserOnCooldown(userKey)) return null
 
-  const forceFallback = envTrimmed('AI_FORCE_FALLBACK') === 'true' || envTrimmed('AI_FORCE_FALLBACK') === '1'
-
-  if (!forceFallback && !isTierTripped('primary')) {
-    const key = envTrimmed('OPENAI_API_KEY')
-    if (key) {
-      if (!primaryClient) primaryClient = new OpenAI({ apiKey: key, timeout: primaryTimeoutMs() })
-      return { client: primaryClient, tier: 'primary' }
-    }
-  }
+  const primary = getPrimaryAiClient()
+  if (primary) return primary
 
   if (!isTierTripped('fallback')) {
     const fbClient = makeFallbackClient()
     if (fbClient) return { client: fbClient, tier: 'fallback' }
   }
 
-  if (!forceFallback && !isTierTripped('primary')) {
-    const key = envTrimmed('OPENAI_API_KEY')
-    if (key) {
-      if (!primaryClient) primaryClient = new OpenAI({ apiKey: key, timeout: primaryTimeoutMs() })
-      return { client: primaryClient, tier: 'primary' }
-    }
-  }
-
+  // If fallback is the only configured tier and it is briefly cooling down,
+  // let the caller see it as unavailable rather than silently re-entering it.
   return null
 }
 
@@ -259,7 +285,13 @@ export function handleAiFailure(
   // A slow reply is NOT an outage: tripping a tier for 15 minutes because of one
   // timeout would push every shopper onto the fallback, so timeouts stay local.
   if (classification.tripBreaker) {
-    tripTierBreaker(tier)
+    // A 429 is transient. Cool the tier for ~30s so it can recover, not for 15
+    // minutes, which would serve templates long after the provider recovered.
+    tripTierBreaker(
+      tier,
+      Date.now(),
+      classification.category === 'rate_limit' ? rateLimitBreakerMs() : undefined,
+    )
     if (tier === 'fallback' && userKey) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
     if (shouldLogQuota()) {
       const reason =
