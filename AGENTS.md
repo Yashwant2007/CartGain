@@ -57,19 +57,123 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 - `src/lib/shopify.ts` — Shopify REST helpers (`fetchShopifyProducts`,
   `fetchAbandonedCheckouts`, `syncAbandonedCheckouts`, OAuth/token refresh).
 - `src/lib/whatsapp/discovery.ts` — Meta Graph WABA/phone-number discovery for
-  the Recipients page (`discoverWhatsAppPhoneNumbers`); env WABA ids first, then
-  `/me/businesses`. `src/lib/whatsapp/store-registry.ts` resolves inbound
-  phone-id mappings and falls back to cart-phone matching.
+  the Recipients page (`discoverWhatsAppPhoneNumbers`); scans configured WABA ids
+  and `/me/businesses`, dedupes WABAs. `src/lib/whatsapp/store-registry.ts`
+  resolves inbound phone-id mappings (ignoring the shared sender) and falls back
+  to cart-phone matching.
 - Routes: `src/app/api/bargain/{offer,demo,checkout-accept,config,products,
-  products/catalog,accept,recommend/event}`.
+  products/catalog,accept,recommend/event}`; public recovery consent at
+  `src/app/api/recovery/opt-in`.
+- Recovery: `src/lib/recovery/recipients.ts` (`recordRecipientConsent`,
+  `recordWhatsAppConsent`), `src/lib/jobs/processRecoveryJourneys.ts`,
+  `src/lib/jobs/processAbandonedCarts.ts`.
 - UI: `BargainWidget.tsx` (1997 lines, real storefront embed `/bargain/embed`),
   `StorefrontBargainWidget.tsx` (used by `/s/bargain`), `ShopkeeperStage.tsx`
   (large Akinator-style shopkeeper header + speech line, used by both widgets),
   `ShopkeeperAvatar.tsx` (13 illustrated reactions), `BargainPrimitives.tsx`
   (shared presentational primitives), `src/app/demo/demo-content.tsx` (`/demo`).
-- `extensions/storefront-bargain/blocks/*.liquid` — theme extension app blocks.
+- `extensions/storefront-bargain/blocks/*.liquid` — theme extension app blocks;
+  `snippets/cg-recovery-capture.liquid` + `assets/recovery-capture.{js,css}`
+  render the explicit reminder opt-in, and the checkout UI extension adds the
+  same consent action.
 
 ## Work log (most recent first)
+
+- `feat(recovery): explicit email/WhatsApp opt-in and consent-gated reminders`
+  (**uncommitted**). Recovery is now consent-first. `recordRecipientConsent`
+  records per-channel email/WhatsApp consent with provenance, clears stale
+  opt-outs on a genuine re-opt-in, and keeps `recordWhatsAppConsent` as the
+  WhatsApp-only wrapper. New public `POST /api/recovery/opt-in` (CORS +
+  per-IP/contact rate limits) resolves the connected shop, stores explicit
+  consent, links an existing cart by `cart.token` filling only missing contact
+  fields, and otherwise schedules one `product_browse` journey after 60 minutes.
+  Product title/link/image are resolved server-side via
+  `buildProductContext`; client-supplied copy is ignored, so a crafted request
+  cannot use the merchant's brand for phishing. `processAbandonedCarts` now
+  requires `consentEmail` for email (WhatsApp already required explicit
+  consent), so both channels are silent until a shopper opts in.
+  `processRecoveryJourneys` now uses product-aware destinations and links,
+  enforces store quiet hours, and fixes the `buildOptOutUrl(appUrl, {storeId,
+  email})` call. Shopify cart/order webhooks retire still-pending product
+  journeys when a cart is captured or purchased, preventing duplicate reminders.
+  Storefront capture ships as `snippets/cg-recovery-capture.liquid` plus
+  `assets/recovery-capture.{js,css}` (explicit email and WhatsApp checkboxes,
+  no inferred consent), wired into the product, cart, and app-embed blocks; the
+  checkout UI extension adds a one-click WhatsApp/email reminder. Verified:
+  Jest **137 suites / 1490 tests**, tsc, lint, production build, and
+  `shopify app build` theme check. Not committed or deployed yet. Production
+  had **0 email / 0 WhatsApp consents**, so existing carts will not be messaged
+  until shoppers opt in (intended). Theme app embed still has to be enabled in
+  the theme editor, and the checkout extension needs `shopify app deploy`.
+
+- `fix(ai): rate limits now cool a provider for 30s, fall back to the
+  primary, and cache the large prompt prefix` (**uncommitted, deployed**).
+  Production logged
+  `[BARGAIN_AI_DEGRADED] reason=all_tiers_failed detail=tier=fallback failure=rate_limit`.
+  `/api/health` showed the primary healthy while the error appeared, and the
+  production env deliberately leaves `AI_FALLBACK_BASE_URL`/`AI_FALLBACK_MODEL`
+  empty, so the fallback is Groq `openai/gpt-oss-120b`. Its free tier is 8K
+  TPM / 30 RPM / 1K RPD; one bargain prompt was large enough that a single
+  request could consume most of a minute, and any 429 previously disabled the
+  tier for **15 minutes**. Fixes: a 429 now trips a configurable **30s**
+  cooldown (`AI_RATE_LIMIT_COOLDOWN_MS`, clamped 1s–5m) while hard failures keep
+  15m; a fallback 429 retries the primary once even when the primary had already
+  timed out (tracked as `AiAttemptTrace.primaryRetried`, timeouts still do not
+  trip the primary); and `buildSystemPrompt` now places persona, language,
+  mastery and freshness **before** the per-turn scenario/progress so Groq's
+  exact-prefix prompt cache can reuse the large stable block (cached tokens do
+  not count toward TPM). Fallback context was trimmed to 4 history messages,
+  280 chars each and a 3,000-char context budget. No backup provider key is
+  configured, so this absorbs 429 bursts but cannot remove Groq's free-tier
+  capacity ceiling. Verified: Jest **135 suites / 1471 tests**, tsc, lint and
+  production build green. Deployed `2WmpoFESxnXxR1i2sg3sgYeS5THA`; live health
+  is `status=ok`, `ai.activeTier=primary`, region `bom1`, DB 180ms, Redis 5ms,
+  `/bargain/embed` and `/api/bargain/experience` return 200. Not committed, so
+  `/api/health.release` still says `74354f9`. This deploy also shipped the
+  uncommitted shared-WhatsApp routing changes below.
+
+- `fix(whatsapp): shared-routing is automatic, and BYO numbers are discovered`
+  (**uncommitted**). The shared WhatsApp sender is a deployment-wide outbound
+  number, not a per-store property, so `resolveStoreIdByWhatsAppPhoneNumberId`
+  now takes `sharedPhoneNumberId` and deliberately ignores any legacy row that
+  still maps it; the webhook then resolves STOP/START by customer phone and cart
+  history (delivery receipts fall back to the globally unique `providerId`).
+  `POST /api/integrations/whatsapp` treats saving the shared id as a 200
+  ignored no-op instead of `SHARED_NUMBER` 400, and `/api/recipients` reports
+  `sharedMappingIgnored` with effective routing no longer labelled as a bad
+  mapping. The Recipients page shows shared routing as “no setup needed” and
+  hides BYO discovery behind an explicit “Use my own WhatsApp number” action;
+  manual phone-id paste is gone. Discovery now scans configured WABA ids **and**
+  `/me/businesses` (deduped), filters the shared number, and auto-saves when
+  Meta returns exactly one merchant number; multiple numbers still require an
+  explicit choice, and a P2002 ownership conflict is reported instead of
+  stealing another store's mapping. Verified: Jest **135 suites / 1467 tests**,
+  tsc, lint and production build green. Not committed or deployed.
+
+- `fix(bargain): cut chat latency by running functions beside the database`
+  (**uncommitted**). The bargain chat was slow for two separate reasons, both
+  measured in production. First, Vercel Functions ran in `iad1` while Supabase
+  is `aws-1-ap-south-1` (Mumbai): `X-Vercel-Id` was `bom1::iad1`, DB health was
+  **1117ms**, and a warm 410 response still took **2.7–4s**. Added
+  `"regions": ["bom1"]` to `vercel.json`; `X-Vercel-Id` is now `bom1::bom1`,
+  DB health is **10–11ms**, Redis **0ms**, and a synthetic start fell from
+  **26.54s → 0.82–0.89s** while offers fell from **16.35/28.59s → 1.68–5.22s**.
+  Second, the opening message waited on an AI call (and provider 429s) before
+  the widget could paint; `/api/bargain/start` now always uses deterministic
+  `buildOpeningMessage` and records `source: 'deterministic'`. Provider SDK
+  retries no longer stack on top of the app's own failover
+  (`AI_PROVIDER_MAX_RETRIES`, default 0), the product-context cache is checked
+  before override queries, and artificial reveal holds were reduced
+  (storefront/demo `THINKING_DELAY_MS` 170→60ms, max hold 600→220ms; dashboard
+  demo 600–840→180–228ms). Also fixed a trust bug found during measurement:
+  `rewriteStatedPrice` only matched ungrouped numbers, so the reply could say
+  “₹2,200” while `counterOffer` was ₹2,453.5; it now rewrites grouped/decimal
+  variants, with regression tests. Verified **135 suites / 1462 tests**, tsc,
+  lint and production build green. Deployed to Vercel, but not committed, so
+  `/api/health.release` still reports `74354f9`; region, health and route
+  latency were verified directly. Six synthetic sessions were removed from
+  production. Remaining offer latency is provider variance (first-turn 429 /
+  fallback), not DB or UI.
 
 - `feat(bargain): visible persona-driven shopkeepers across preview, demo, and
   storefront`. The Experience Studio Live Preview now renders
@@ -630,6 +734,19 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   extracted. Live/verified.
 
 ## Open / watch items
+- Recovery is consent-first after the opt-in change: `processAbandonedCarts`
+  requires `consentEmail` for email and explicit WhatsApp consent, and
+  `processRecoveryJourneys` requires channel consent. Production had **0**
+  email/WhatsApp consents at the time of the change, so existing carts will not
+  be messaged until shoppers use the new form/checkout action (intended). The
+  theme app embed must be enabled in the theme editor, and the checkout
+  extension must be released with `shopify app deploy`, before capture is live.
+- The public opt-in endpoint verifies product title/link/image server-side to
+  avoid branded spam/phishing, but it is still a public form with no email
+  double-opt-in; per-IP/contact rate limits reduce abuse. Add confirmation mail
+  if consent proof needs to be stronger for a compliance review.
+- Campaigns can still store `sms`/`push` channel selections, but the recovery
+  sender only implements email/WhatsApp; those selections are ignored.
 - Storefront invitations only replace the direct-chat drawer after a merchant
   publishes an experience (`experiencePublished` exists). Draft-only stores keep
   the prior behavior on purpose; the dashboard preview uses the draft and emits
@@ -645,6 +762,11 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   `checks.whatsapp.appSecret: true` with `verifyToken` and `configured` true
   (secret set in Vercel). Local `.env` WhatsApp credentials are still
   placeholders, not the live Meta token.
+- BYO WABA discovery has no persisted per-store WABA id: it scans every WABA
+  visible to the Meta token and auto-saves only when exactly one merchant number
+  exists. Multiple numbers require a choice; a number already owned by another
+  store returns a P2002 conflict. Embedded signup/per-store WABA binding is the
+  next step if merchants' WABAs are not visible to the system-user token.
 - Partner Dashboard "App Bridge from CDN" / "session tokens" checks are only
   confirmed by Shopify's scanner (it loads the app in the admin iframe); the
   code side is verified (script + meta served in `<head>`, token exchanged via

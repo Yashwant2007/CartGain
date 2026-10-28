@@ -60,6 +60,14 @@
     </button>
   {% endif %}
 </div>
+{% render 'cg-recovery-capture',
+  surface: 'cart',
+  enabled: block.settings.recovery_capture,
+  delay: block.settings.recovery_delay,
+  heading: block.settings.recovery_heading,
+  copy: block.settings.recovery_copy,
+  accent: block.settings.accent
+%}
 
 {% schema %}
 {
@@ -88,6 +96,37 @@
       "id": "accent",
       "label": "Accent color",
       "default": "#1d4ed8"
+    },
+    {
+      "type": "header",
+      "content": "Cart reminders"
+    },
+    {
+      "type": "checkbox",
+      "id": "recovery_capture",
+      "label": "Show reminder opt-in on this page",
+      "default": true
+    },
+    {
+      "type": "range",
+      "id": "recovery_delay",
+      "label": "Show after (seconds)",
+      "min": 5,
+      "max": 120,
+      "step": 5,
+      "default": 20
+    },
+    {
+      "type": "text",
+      "id": "recovery_heading",
+      "label": "Reminder heading",
+      "default": "Almost yours - want a reminder?"
+    },
+    {
+      "type": "textarea",
+      "id": "recovery_copy",
+      "label": "Reminder copy",
+      "default": "We can email or WhatsApp you a link so you do not lose this cart."
     }
   ]
 }

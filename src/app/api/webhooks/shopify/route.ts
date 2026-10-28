@@ -547,7 +547,7 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
 
   // Keep the store-wide recipient registry in step with every captured cart.
   // A failure here must not drop the cart itself.
-  await ensureRecipientForCart(store.id, {
+  const identity = await ensureRecipientForCart(store.id, {
     customerId,
     customerName,
     customerEmail,
@@ -555,7 +555,32 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
     updatedAt: new Date(),
   }).catch((err) => {
     console.error(`Recipient registry sync failed for cart ${cart.token}:`, err?.message || err)
+    return null
   })
+
+  // A product-page opt-in can schedule a product reminder before the shopper
+  // adds to cart. Once the cart is captured, the abandoned-cart job owns the
+  // follow-up, so retire any still-pending product journeys for this identity
+  // to avoid double-messaging the same shopper.
+  if (identity?.id) {
+    await prisma.recoveryJourney
+      .updateMany({
+        where: {
+          storeId: store.id,
+          customerIdentityId: identity.id,
+          journeyType: 'product_browse',
+          status: { in: ['OBSERVED', 'IDENTIFIED', 'ELIGIBILITY_CHECKED', 'SCHEDULED'] },
+        },
+        data: {
+          status: 'CONVERTED',
+          convertedAt: new Date(),
+          reasonCode: 'cart_captured',
+        },
+      })
+      .catch((err) => {
+        console.error(`Product journey cleanup failed for cart ${cart.token}:`, err?.message || err)
+      })
+  }
 }
 
 // Some payloads (notably `carts/update`) can omit or zero `total_price` even
@@ -594,7 +619,7 @@ async function processOrderCreate(data: any, store: any, domain: string) {
     data.customer?.name ||
     `${data.customer?.first_name || data.shipping_address?.first_name || data.billing_address?.first_name || ''} ${data.customer?.last_name || data.shipping_address?.last_name || data.billing_address?.last_name || ''}`.trim() ||
     null
-  await upsertRecipient({
+  const orderIdentity = await upsertRecipient({
     storeId: store.id,
     shopifyCustomerId: data.customer?.id != null ? String(data.customer.id) : null,
     name: orderName,
@@ -603,7 +628,30 @@ async function processOrderCreate(data: any, store: any, domain: string) {
     source: 'shopify_order',
   }).catch((err) => {
     console.error(`Recipient registry sync failed for order ${data.id}:`, err?.message || err)
+    return null
   })
+
+  // A purchase ends every queued product-interest reminder, even when the
+  // matching Cart row was already cleaned up and the code below returns early.
+  if (orderIdentity?.id) {
+    await prisma.recoveryJourney
+      .updateMany({
+        where: {
+          storeId: store.id,
+          customerIdentityId: orderIdentity.id,
+          journeyType: 'product_browse',
+          status: { in: ['OBSERVED', 'IDENTIFIED', 'ELIGIBILITY_CHECKED', 'SCHEDULED'] },
+        },
+        data: {
+          status: 'CONVERTED',
+          convertedAt: new Date(),
+          reasonCode: 'purchased',
+        },
+      })
+      .catch((err) => {
+        console.error(`Product journey cleanup failed for order ${data.id}:`, err?.message || err)
+      })
+  }
 
   const preferredToken = data.token || data.cart_token
   const fallbackToken = preferredToken === data.token ? (data.cart_token || null) : (data.token || null)

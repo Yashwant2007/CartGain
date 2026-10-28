@@ -90,6 +90,61 @@ const graduatedCounter = (originalPrice, minPrice, attemptsUsed) => {
   return Math.round(counter * 100) / 100;
 };
 
+function RecoveryOptIn() {
+  const api = shopify;
+  const [state, setState] = useState('idle');
+  const phone = api.buyerIdentity?.phone?.current || '';
+  const email = api.buyerIdentity?.email?.current || '';
+
+  if (!phone && !email) return null;
+
+  const save = async () => {
+    if (state === 'saving' || state === 'saved') return;
+    setState('saving');
+    try {
+      const response = await fetch('https://cart-gain.com/api/recovery/opt-in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shop: api.shop?.myshopifyDomain || '',
+          email: email || null,
+          phone: phone || null,
+          consentEmail: Boolean(email),
+          consentWhatsApp: Boolean(phone),
+          source: 'checkout_extension',
+        }),
+      });
+      if (!response.ok) throw new Error('Could not save reminder preference');
+      setState('saved');
+    } catch (err) {
+      console.error('Failed to save reminder consent:', err);
+      setState('error');
+    }
+  };
+
+  return (
+    <s-banner heading="Want a reminder if you do not finish?">
+      <s-stack direction="block" gap="small-200">
+        <s-text color="subdued">
+          {phone
+            ? 'We can text this cart to you on WhatsApp and email the link. Reply STOP to opt out.'
+            : 'We can email you a link to this cart. Unsubscribe any time.'}
+        </s-text>
+        {state === 'saved' ? (
+          <s-text>Reminder saved. We will only message you if you leave without ordering.</s-text>
+        ) : (
+          <s-stack direction="inline" gap="small-200">
+            <s-button onClick={save} disabled={state === 'saving'}>
+              {state === 'saving' ? 'Saving...' : phone ? 'Remind me on WhatsApp' : 'Email me my cart'}
+            </s-button>
+            {state === 'error' && <s-text color="critical">Could not save. Please try again.</s-text>}
+          </s-stack>
+        )}
+      </s-stack>
+    </s-banner>
+  );
+}
+
 function CartGainBargainWidget() {
   const api = shopify;
 
@@ -307,6 +362,8 @@ function CartGainBargainWidget() {
           </s-stack>
         </s-banner>
       )}
+
+      {!isThankYou && <RecoveryOptIn />}
 
       {showBargain && (
         <s-modal title="Bargain with AI" open={showBargain} onClose={closeBargain}>

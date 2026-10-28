@@ -174,7 +174,7 @@ beforeEach(() => {
 })
 
 describe('recovery send-time consent gate', () => {
-  it('sends email but never WhatsApp without an explicit opt-in', async () => {
+  it('sends nothing without an explicit channel opt-in', async () => {
     prime()
     prismaMock.customerIdentity.create.mockResolvedValue(
       identity({ id: 'recipient-new', consentWhatsApp: false, consentEmail: false }),
@@ -183,8 +183,8 @@ describe('recovery send-time consent gate', () => {
     const result = await processAbandonedCarts(25)
 
     expect(whatsappMock).not.toHaveBeenCalled()
-    expect(emailMock).toHaveBeenCalledTimes(1)
-    expect(result.messagesSent).toBe(1)
+    expect(emailMock).not.toHaveBeenCalled()
+    expect(result.messagesSent).toBe(0)
   })
 
   it('sends WhatsApp only when the matching identity opted in', async () => {

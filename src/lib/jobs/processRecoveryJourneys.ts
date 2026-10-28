@@ -6,6 +6,33 @@ import { buildOptOutUrl } from '@/lib/opt-out'
 import { isWithinQuietHours } from '@/lib/conversation/variety'
 import { loadStoreVoiceSettings } from '@/lib/conversation/store'
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function safeHttpUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
+function storefrontBase(store: any): string {
+  const domain = String(store?.domain || '').trim()
+  if (!domain) return 'https://cart-gain.com'
+  if (/^https?:\/\//i.test(domain)) return domain.replace(/\/$/, '')
+  if (domain.includes('.')) return `https://${domain}`
+  return `https://${domain}.myshopify.com`
+}
+
 export async function processRecoveryJourneys(limit = 50) {
   const now = new Date()
   const journeys = await prisma.recoveryJourney.findMany({
@@ -71,7 +98,11 @@ export async function processRecoveryJourneys(limit = 50) {
       }
 
       const voice = await loadStoreVoiceSettings(store.id).catch(() => null)
-      if (voice?.quietHoursStart && voice?.quietHoursEnd && false) {
+      if (
+        voice?.quietHoursStart != null &&
+        voice?.quietHoursEnd != null &&
+        isWithinQuietHours(new Date(), { start: voice.quietHoursStart, end: voice.quietHoursEnd })
+      ) {
         await prisma.recoveryJourney.update({
           where: { id: journey.id },
           data: { scheduledFor: new Date(Date.now() + 60 * 60 * 1000), status: 'SCHEDULED' },
@@ -91,12 +122,30 @@ export async function processRecoveryJourneys(limit = 50) {
         continue
       }
 
+      const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com').replace(/\/$/, '')
+      const meta = journey.metadata && typeof journey.metadata === 'object'
+        ? (journey.metadata as Record<string, any>)
+        : {}
+      const productTitle = typeof meta.productTitle === 'string' && meta.productTitle.trim()
+        ? meta.productTitle.trim().slice(0, 200)
+        : null
+      const productUrl = safeHttpUrl(meta.productUrl)
+      const cartUrl = safeHttpUrl(meta.cartUrl)
+      const productImage = safeHttpUrl(meta.productImage)
+      const fallbackCartUrl = `${storefrontBase(store)}/cart`
+      const destination = cartUrl || productUrl || fallbackCartUrl
+      const firstName = (identity?.name || 'there').split(' ')[0]
+      const subject = productTitle
+        ? `Still thinking about ${productTitle}?`
+        : `Your cart is still saved at ${store.name}`
+      const bodyText = productTitle
+        ? `Still thinking about ${productTitle}? Pick up where you left off: ${destination}`
+        : `Your cart is still saved at ${store.name}. Finish when you are ready: ${destination}`
+
       let didSend = false
       const whatsappGate = await canSendToIdentity(identity, 'whatsapp')
       if (phone && whatsappGate.ok) {
         try {
-          const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com').replace(/\/$/, '')
-          const firstName = (identity?.name || 'there').split(' ')[0]
           const result = await sendWhatsAppMessage({
             to: phone,
             templateName: process.env.WHATSAPP_TEMPLATE_REMINDER || 'cart_reminders',
@@ -104,16 +153,20 @@ export async function processRecoveryJourneys(limit = 50) {
               header: {
                 type: 'image',
                 imageUrl:
-                  process.env.WHATSAPP_TEMPLATE_HEADER_IMAGE_URL || 'https://cart-gain.com/logo.png',
+                  productImage ||
+                  process.env.WHATSAPP_TEMPLATE_HEADER_IMAGE_URL ||
+                  'https://cart-gain.com/logo.png',
               },
               body: [
                 firstName,
-                'Your cart is still saved — finish your order when you are ready.',
-                `${appUrl}/cart/${journey.cartId || ''}`,
+                productTitle
+                  ? `Still thinking about ${productTitle}? Your cart is saved.`
+                  : 'Your cart is still saved — finish your order when you are ready.',
+                `Continue: ${destination}`,
               ],
             },
           })
-          if ((result as any)?.success || (result as any)?.messageId || (result as any)?.wamid) {
+          if (result.success || result.messageId) {
             didSend = true
             await prisma.recoveryReminder.create({
               data: {
@@ -123,7 +176,7 @@ export async function processRecoveryJourneys(limit = 50) {
                 status: 'sent',
                 scheduledFor: now,
                 sentAt: new Date(),
-                providerId: (result as any).messageId || (result as any).wamid || null,
+                providerId: result.messageId || null,
               },
             })
           }
@@ -132,15 +185,16 @@ export async function processRecoveryJourneys(limit = 50) {
         }
       }
 
-      if (!didSend && email) {
+      const emailGate = await canSendToIdentity(identity, 'email')
+      if (!didSend && email && emailGate.ok) {
         try {
-          const optOutUrl = buildOptOutUrl(store.id, email)
+          const optOutUrl = buildOptOutUrl(appUrl, { storeId: store.id, email })
           const result = await sendEmail({
             to: email,
-            subject: 'Still thinking about it?',
-            html: `<p>Hi there, you left items in your cart at ${store.name}. <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/cart/${journey.cartId || ''}">Complete your purchase</a></p><p><a href="${optOutUrl}">Unsubscribe</a></p>`,
+            subject,
+            html: `<p>Hi ${escapeHtml(firstName)}, ${escapeHtml(bodyText)}</p><p><a href="${escapeHtml(destination)}">Pick up where you left off</a></p><p><a href="${escapeHtml(optOutUrl)}">Unsubscribe</a></p>`,
           } as any)
-          if ((result as any)?.success || (result as any)?.messageId || (result as any)?.id) {
+          if (result.success || result.messageId) {
             didSend = true
             await prisma.recoveryReminder.create({
               data: {
@@ -150,7 +204,7 @@ export async function processRecoveryJourneys(limit = 50) {
                 status: 'sent',
                 scheduledFor: now,
                 sentAt: new Date(),
-                providerId: (result as any).messageId || (result as any).id || null,
+                providerId: result.messageId || null,
               },
             })
           }
@@ -162,7 +216,7 @@ export async function processRecoveryJourneys(limit = 50) {
       if (didSend) {
         await prisma.recoveryJourney.update({
           where: { id: journey.id },
-          data: { status: 'SENT', lastProcessedAt: new Date() },
+          data: { status: 'SENT', reasonCode: null, lastProcessedAt: new Date() },
         })
         sent++
       } else {

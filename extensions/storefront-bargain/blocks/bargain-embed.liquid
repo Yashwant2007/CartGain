@@ -74,6 +74,14 @@
   {% endif %}
 </div>
 {%- if cg_surface == 'product' -%}<script src="{{ 'dwell.js' | asset_url }}" defer></script>{%- endif -%}
+{% render 'cg-recovery-capture',
+  surface: cg_surface,
+  enabled: block.settings.recovery_capture,
+  delay: block.settings.recovery_delay,
+  heading: block.settings.recovery_heading,
+  copy: block.settings.recovery_copy,
+  accent: '#1d4ed8'
+%}
 {%- endif -%}
 
 {% schema %}
@@ -114,6 +122,37 @@
       "id": "enable_cart",
       "label": "Show on cart page",
       "default": true
+    },
+    {
+      "type": "header",
+      "content": "Cart reminders"
+    },
+    {
+      "type": "checkbox",
+      "id": "recovery_capture",
+      "label": "Show reminder opt-in",
+      "default": true
+    },
+    {
+      "type": "range",
+      "id": "recovery_delay",
+      "label": "Show after (seconds)",
+      "min": 5,
+      "max": 120,
+      "step": 5,
+      "default": 20
+    },
+    {
+      "type": "text",
+      "id": "recovery_heading",
+      "label": "Reminder heading",
+      "default": "Want us to save this for you?"
+    },
+    {
+      "type": "textarea",
+      "id": "recovery_copy",
+      "label": "Reminder copy",
+      "default": "Get a reminder if you leave without finishing. No spam."
     }
   ]
 }

@@ -512,9 +512,13 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       )
     }
 
+    const emailConsented = Boolean(cart.customerEmail) && recipient?.consentEmail === true
+    if (cart.customerEmail && !emailConsented && effActiveChannels.includes('email')) {
+      console.log(`[recovery] cart=${cart.id} email skipped: no_email_consent`)
+    }
     const reachableChannels = effActiveChannels.filter(
       (c: string) =>
-        (c === 'email' && Boolean(cart.customerEmail)) ||
+        (c === 'email' && emailConsented) ||
         (c === 'whatsapp' && Boolean(cart.customerPhone) && whatsappEligibility.eligible),
     )
     const channelsByStep = new Map<number, Set<string>>()
@@ -578,7 +582,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       ) {
         return false
       }
-      if (c === 'email') return Boolean(cart.customerEmail)
+      if (c === 'email') return emailConsented
       if (c === 'whatsapp') return Boolean(cart.customerPhone) && whatsappEligibility.eligible
       return false
     })

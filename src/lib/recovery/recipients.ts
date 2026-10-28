@@ -228,10 +228,94 @@ export async function ensureRecipientForCart(
 }
 
 /**
- * Record an explicit WhatsApp opt-in. This is the only code path that turns
- * `consentWhatsApp` on. It also clears a previous opt-out (START/YES after
- * STOP), removes the canonical OptOut row, and stamps provenance so the
- * merchant can answer "when and why did this person consent?".
+ * Record an explicit opt-in for one or both reminder channels.
+ *
+ * This is the only code path that can turn `consentWhatsApp` or
+ * `consentEmail` on from a storefront/checkout form. Inbound START and merchant
+ * attestations may clear a previous STOP; public forms pass
+ * `overrideOptOut:false` so a forged submission cannot revive an unsubscribe.
+ * Every real opt-in removes the canonical OptOut rows and stamps per-channel
+ * provenance so the merchant can answer "when and why did this person consent?".
+ */
+export async function recordRecipientConsent(input: {
+  storeId: string
+  email?: string | null
+  phone?: string | null
+  shopifyCustomerId?: string | null
+  name?: string | null
+  source: string
+  consentEmail?: boolean
+  consentWhatsApp?: boolean
+  /** Public forms must not silently override an existing STOP/unsubscribe. */
+  overrideOptOut?: boolean
+  at?: Date
+}): Promise<RecipientLike | null> {
+  const email = normalizeRecipientEmail(input.email)
+  const phone = normalizeRecipientPhone(input.phone)
+  const wantsEmail = input.consentEmail === true && Boolean(email)
+  const wantsWhatsApp = input.consentWhatsApp === true && Boolean(phone)
+  if (!email && !phone) return null
+  if (!wantsEmail && !wantsWhatsApp) return null
+
+  const at = input.at || new Date()
+  const identity =
+    (await upsertRecipient({
+      storeId: input.storeId,
+      shopifyCustomerId: input.shopifyCustomerId,
+      name: input.name,
+      email,
+      phone,
+      seenAt: at,
+      source: input.source,
+    })) || null
+  if (!identity) return null
+
+  const keepSuppressed =
+    input.overrideOptOut === false &&
+    (identity.suppressed === true || identity.optedOutAt != null)
+  const data: Record<string, unknown> = {
+    lastSeenAt: at,
+    ...(keepSuppressed ? {} : { optedOutAt: null, suppressed: false }),
+  }
+  if (email) data.email = email
+  if (phone) data.phone = phone
+  if (wantsEmail) {
+    data.consentEmail = true
+    data.emailConsentAt = at
+    data.emailConsentSource = input.source
+  }
+  if (wantsWhatsApp) {
+    data.consentWhatsApp = true
+    data.whatsappConsentAt = at
+    data.whatsappConsentSource = input.source
+  }
+  data.consentAt = identity.consentAt || at
+  data.consentSource = identity.consentSource || input.source
+
+  const updated = (await prisma.customerIdentity.update({
+    where: { id: identity.id },
+    data,
+  })) as unknown as RecipientLike
+
+  // OptOut rows store bare digits; the registry stores E.164 with a leading +.
+  // Clear both spellings so an explicit re-opt-in is not blocked by a stale
+  // STOP row on the next sweep.
+  const OR: Array<Record<string, string>> = []
+  if (email) OR.push({ email })
+  if (phone) {
+    const digits = phone.replace(/\D/g, '')
+    OR.push({ phone }, ...(digits !== phone ? [{ phone: digits }] : []))
+  }
+  if (OR.length > 0 && !keepSuppressed) {
+    await prisma.optOut.deleteMany({ where: { storeId: input.storeId, OR } }).catch(() => {})
+  }
+
+  return updated
+}
+
+/**
+ * Backwards-compatible WhatsApp-only wrapper used by the inbound START webhook
+ * and the merchant attestation action.
  */
 export async function recordWhatsAppConsent(input: {
   storeId: string
@@ -242,47 +326,11 @@ export async function recordWhatsAppConsent(input: {
   source: string
   at?: Date
 }): Promise<RecipientLike | null> {
-  const phone = normalizeRecipientPhone(input.phone)
-  if (!phone) return null
-  const at = input.at || new Date()
-
-  const identity =
-    (await upsertRecipient({
-      storeId: input.storeId,
-      shopifyCustomerId: input.shopifyCustomerId,
-      name: input.name,
-      email: input.email,
-      phone,
-      seenAt: at,
-      source: input.source,
-    })) || null
-  if (!identity) return null
-
-  const updated = (await prisma.customerIdentity.update({
-    where: { id: identity.id },
-    data: {
-      phone,
-      consentWhatsApp: true,
-      whatsappConsentAt: at,
-      whatsappConsentSource: input.source,
-      consentAt: identity.consentAt || at,
-      consentSource: identity.consentSource || input.source,
-      optedOutAt: null,
-      suppressed: false,
-      lastSeenAt: at,
-    },
-  })) as unknown as RecipientLike
-
-  const email = normalizeRecipientEmail(input.email)
-  // OptOut rows store bare digits; the registry stores E.164 with a leading +.
-  // Clear both spellings or a START after STOP leaves the canonical opt-out row
-  // behind and the next sweep blocks the contact again.
-  const digits = phone.replace(/\D/g, '')
-  const OR: Array<Record<string, string>> = [{ phone }, ...(digits !== phone ? [{ phone: digits }] : [])]
-  if (email) OR.push({ email })
-  await prisma.optOut.deleteMany({ where: { storeId: input.storeId, OR } }).catch(() => {})
-
-  return updated
+  return recordRecipientConsent({
+    ...input,
+    consentEmail: false,
+    consentWhatsApp: true,
+  })
 }
 
 /**

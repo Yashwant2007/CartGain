@@ -8,6 +8,7 @@
 import {
   cancelPendingRecoveryForCart,
   markRecipientContacted,
+  recordRecipientConsent,
   recordWhatsAppConsent,
   suppressRecipient,
   upsertRecipient,
@@ -159,6 +160,88 @@ describe('upsertRecipient', () => {
 })
 
 describe('consent transitions', () => {
+  it('records email + WhatsApp consent with per-channel provenance', async () => {
+    await recordRecipientConsent({
+      storeId: 'store-1',
+      email: 'Buyer@Example.com',
+      phone: '+91 99999 99999',
+      source: 'storefront_product_opt_in',
+      consentEmail: true,
+      consentWhatsApp: true,
+      at: new Date('2026-10-28T10:00:00Z'),
+    })
+
+    expect(prismaMock.customerIdentity.update).toHaveBeenCalledWith({
+      where: { id: 'id-new' },
+      data: expect.objectContaining({
+        email: 'buyer@example.com',
+        phone: '+919999999999',
+        consentEmail: true,
+        consentWhatsApp: true,
+        emailConsentSource: 'storefront_product_opt_in',
+        whatsappConsentSource: 'storefront_product_opt_in',
+        suppressed: false,
+        optedOutAt: null,
+      }),
+    })
+    expect(prismaMock.optOut.deleteMany).toHaveBeenCalledWith({
+      where: {
+        storeId: 'store-1',
+        OR: [
+          { email: 'buyer@example.com' },
+          { phone: '+919999999999' },
+          { phone: '919999999999' },
+        ],
+      },
+    })
+  })
+
+  it('does not let a public form override an existing unsubscribe', async () => {
+    prismaMock.customerIdentity.findMany.mockResolvedValue([
+      row({ id: 'id-suppressed', email: 'buyer@example.com', suppressed: true, optedOutAt: new Date('2026-10-01') }),
+    ])
+
+    await recordRecipientConsent({
+      storeId: 'store-1',
+      email: 'buyer@example.com',
+      source: 'storefront_product_opt_in',
+      consentEmail: true,
+      overrideOptOut: false,
+    })
+
+    const data = prismaMock.customerIdentity.update.mock.calls.at(-1)[0].data
+    expect(data.consentEmail).toBe(true)
+    expect(data).not.toHaveProperty('suppressed', false)
+    expect(data).not.toHaveProperty('optedOutAt', null)
+    expect(prismaMock.optOut.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it('does not grant WhatsApp when only email consent was requested', async () => {
+    await recordRecipientConsent({
+      storeId: 'store-1',
+      email: 'buyer@example.com',
+      phone: '+919999999999',
+      source: 'storefront_product_opt_in',
+      consentEmail: true,
+      consentWhatsApp: false,
+    })
+
+    const data = prismaMock.customerIdentity.update.mock.calls[0][0].data
+    expect(data.consentEmail).toBe(true)
+    expect(data).not.toHaveProperty('consentWhatsApp')
+  })
+
+  it('refuses to record consent when no channel was chosen', async () => {
+    const result = await recordRecipientConsent({
+      storeId: 'store-1',
+      email: 'buyer@example.com',
+      phone: '+919999999999',
+      source: 'storefront_opt_in',
+    })
+    expect(result).toBeNull()
+    expect(prismaMock.customerIdentity.update).not.toHaveBeenCalled()
+  })
+
   it('records an explicit opt-in with provenance and clears the opt-out row', async () => {
     prismaMock.customerIdentity.findMany.mockResolvedValue([
       row({ id: 'id-1', suppressed: true, optedOutAt: new Date(), consentWhatsApp: false }),

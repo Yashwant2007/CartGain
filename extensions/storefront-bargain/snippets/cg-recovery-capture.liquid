@@ -1,0 +1,75 @@
+{%- comment -%}
+  CartGain reminder opt-in.
+  Renders a dismissible card after a short delay on product/cart pages. The
+  shopper explicitly chooses email and/or WhatsApp; anonymous page views do not
+  expose contact details, so nothing is sent by the script until this form is
+  submitted. The endpoint never infers WhatsApp consent from a phone number.
+{%- endcomment -%}
+
+{%- if enabled -%}
+  <link rel="stylesheet" href="{{ 'recovery-capture.css' | asset_url }}">
+  <script src="{{ 'recovery-capture.js' | asset_url }}" defer></script>
+  {%- assign cg_surface = surface | default: 'product' -%}
+  {%- if cg_surface == 'cart' -%}
+    {%- assign cg_item = cart.items.first -%}
+    {%- assign cg_product_id = cg_item.product_id | default: cg_item.product.id -%}
+    {%- assign cg_product_title = cg_item.product.title | default: cg_item.title -%}
+    {%- assign cg_product_url = shop.url | append: routes.cart_url -%}
+    {%- assign cg_product_image = cg_item.image | image_url: width: 640 -%}
+  {%- else -%}
+    {%- assign cg_product_id = product.id -%}
+    {%- assign cg_product_title = product.title -%}
+    {%- assign cg_product_url = product.canonical_url -%}
+    {%- assign cg_product_image = product.featured_image | image_url: width: 640 -%}
+  {%- endif -%}
+
+  <div
+    class="cg-reminder"
+    data-cg-recovery
+    data-cg-shop="{{ shop.permanent_domain | escape }}"
+    data-cg-surface="{{ cg_surface }}"
+    data-cg-email="{{ customer.email | escape }}"
+    data-cg-phone="{{ customer.phone | escape }}"
+    data-cg-cart-token="{{ cart.token | escape }}"
+    data-cg-product-id="{{ cg_product_id | escape }}"
+    data-cg-product-title="{{ cg_product_title | escape }}"
+    data-cg-product-url="{{ cg_product_url | escape }}"
+    data-cg-product-image="{{ cg_product_image | escape }}"
+    data-cg-delay="{{ delay | default: 20 }}"
+    data-cg-heading="{{ heading | default: 'Want us to save this for you?' | escape }}"
+    data-cg-copy="{{ copy | default: 'Get a reminder if you leave without finishing. No spam.' | escape }}"
+    style="--cg-reminder-accent: {{ accent | default: '#1d4ed8' }};"
+    hidden
+  >
+    <div class="cg-reminder__card" role="dialog" aria-modal="false" aria-label="{{ heading | default: 'Want us to save this for you?' | escape }}">
+      <button type="button" class="cg-reminder__close" data-cg-reminder-close aria-label="Dismiss reminder">&times;</button>
+      <p class="cg-reminder__eyebrow">CartGain</p>
+      <h3 class="cg-reminder__title">{{ heading | default: 'Want us to save this for you?' }}</h3>
+      <p class="cg-reminder__copy">{{ copy | default: 'Get a reminder if you leave without finishing. No spam.' }}</p>
+
+      <form class="cg-reminder__form" data-cg-reminder-form novalidate>
+        <label class="cg-reminder__label">
+          <span>Email</span>
+          <input type="email" name="email" inputmode="email" autocomplete="email" placeholder="you@example.com" />
+        </label>
+        <label class="cg-reminder__label">
+          <span>Phone (for WhatsApp)</span>
+          <input type="tel" name="phone" inputmode="tel" autocomplete="tel" placeholder="+91 98765 43210" />
+        </label>
+        <label class="cg-reminder__check">
+          <input type="checkbox" name="email_opt_in" />
+          <span>Email me a reminder</span>
+        </label>
+        <label class="cg-reminder__check">
+          <input type="checkbox" name="whatsapp" />
+          <span>Send me a WhatsApp reminder</span>
+        </label>
+        <button type="submit" class="cg-reminder__submit">Send my reminder</button>
+        <p class="cg-reminder__legal">
+          You will only be contacted on the channels you choose above. Reply STOP or unsubscribe at any time. <a href="https://cart-gain.com/privacy" target="_blank" rel="noopener">Privacy</a>
+        </p>
+        <p class="cg-reminder__status" data-cg-reminder-status role="status" aria-live="polite"></p>
+      </form>
+    </div>
+  </div>
+{%- endif -%}
