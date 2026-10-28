@@ -19,8 +19,13 @@ import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { buildQuickOffers } from '@/lib/bargain/offers'
 import { currencySymbolFor } from '@/lib/bargain/i18n'
 import type { BargainRecommendation } from '@/lib/bargain/api-types'
-import ShopkeeperAvatar from '@/components/bargain/ShopkeeperAvatar'
-import type { ExpressionState } from '@/lib/bargain/experience/expressions'
+import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
+import {
+  expressionForEvent,
+  expressionForShopperMessage,
+  expressionForTurn,
+  type ExpressionState,
+} from '@/lib/bargain/experience/expressions'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 
 type ChatMsg = {
@@ -174,6 +179,15 @@ export default function DemoContent() {
     return null
   }, [messages])
 
+  const latestAiLine = [...messages].reverse().find(m => m.role === 'ai')?.content
+  const stageLine = thinking
+    ? 'Checking your offer…'
+    : ended === 'accepted' || ended === 'skipped'
+      ? 'Deal locked. Enjoy your price.'
+      : ended
+        ? 'No hard feelings — the door is always open.'
+        : latestAiLine?.replace(/\s+/g, ' ').trim() || 'Tell me what you have in mind and we will find a fair price.'
+
   // Offer-suggestion chips — identical rules to the live storefront widget
   // (server counter, then conservative percentages of the LISTED price; never
   // floor-derived).
@@ -244,7 +258,7 @@ export default function DemoContent() {
     sessionIdRef.current += 1
     dealAcceptedRef.current = false
     setMessages([{ role: 'ai', content: buildOpeningMessage(ctx) }])
-    setAvatarExpression(persona === 'playful_friend' ? 'amused' : 'listening')
+    setAvatarExpression(expressionForEvent(AVATAR_PERSONALITY[persona], 'CHAT_OPENED'))
     setAttemptsUsed(0)
     setEnded(null)
     setFinalPrice(null)
@@ -318,7 +332,7 @@ export default function DemoContent() {
     }
     const offer = extractPrice(userText)
     const isWalkout = detectWalkout(userText)
-    setAvatarExpression('listening')
+    setAvatarExpression(expressionForShopperMessage(AVATAR_PERSONALITY[persona], userText, product.price))
 
     const isOfferTurn = offer != null && !isAbsurdOffer(offer, { minPrice, originalPrice: product.price })
     const nextAttempt = isOfferTurn ? attemptsUsed + 1 : attemptsUsed
@@ -487,11 +501,14 @@ export default function DemoContent() {
       setThinking(false)
       setShowThinking(false)
       if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
-      if (newEnded === 'accepted') setAvatarExpression('celebrating')
-      else if (newEnded === 'rejected' || newEnded === 'abandoned') setAvatarExpression(persona === 'strict_negotiator' ? 'declining' : 'disappointed')
-      else if (decision === 'reject') setAvatarExpression(persona === 'strict_negotiator' ? 'declining' : 'disappointed')
-      else if (counterOffer != null) setAvatarExpression(persona === 'playful_friend' ? 'surprised' : 'negotiating')
-      else setAvatarExpression(persona === 'playful_friend' ? 'amused' : 'happy')
+      setAvatarExpression(expressionForTurn(AVATAR_PERSONALITY[persona], {
+        customerMessage: userText,
+        aiReply: reply,
+        counterOffer,
+        originalPrice: product.price,
+        decision,
+        ended: newEnded,
+      }))
       if (newEnded) setEnded(newEnded)
       if (newFinal != null) setFinalPrice(newFinal)
     }, 0)
@@ -527,7 +544,11 @@ export default function DemoContent() {
       setThinking(false)
       setShowThinking(false)
       if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
-      setAvatarExpression('happy')
+      setAvatarExpression(expressionForTurn(AVATAR_PERSONALITY[persona], {
+        customerMessage: "Actually, I'll just buy it at the full price.",
+        decision: 'skipped',
+        ended: 'skipped',
+      }))
       setEnded('skipped')
     }, 0)
   }
@@ -773,34 +794,24 @@ export default function DemoContent() {
         {/* Chat panel */}
         {started && (
           <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl overflow-hidden">
-            {/* Status bar */}
-            <div className="px-4 py-3 border-b border-blue-800/30 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <ShopkeeperAvatar
-                  personality={AVATAR_PERSONALITY[persona]}
-                  expression={avatarExpression}
-                  size="md"
-                />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-blue-200 truncate">{PERSONAS.find(p => p.id === persona)?.name}</span>
-                  </div>
-                  <span className="block text-[10px] text-blue-300/60">reacting live to your offers</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 text-blue-300/70">
-                <span>{thinking ? 'negotiating…' : `Attempts left: ${attemptsLeft}`}</span>
-                {ended && (
-                  <span className={`px-2 py-0.5 rounded-full ${
-                    ended === 'accepted' || ended === 'skipped'
-                      ? 'bg-emerald-900/40 text-emerald-300'
-                      : 'bg-red-900/40 text-red-300'
-                  }`}>
-                    {ended}
-                  </span>
-                )}
-              </div>
+            <ShopkeeperStage
+              personality={AVATAR_PERSONALITY[persona]}
+              expression={avatarExpression}
+              name={PERSONAS.find(p => p.id === persona)?.name ?? 'Shopkeeper'}
+              status={ended ? 'Closed' : 'Online'}
+              line={stageLine}
+            />
+            <div className="px-4 py-2 border-b border-blue-800/30 flex items-center justify-between text-xs text-blue-300/70">
+              <span>{thinking ? 'negotiating…' : `Attempts left: ${attemptsLeft}`}</span>
+              {ended && (
+                <span className={`px-2 py-0.5 rounded-full ${
+                  ended === 'accepted' || ended === 'skipped'
+                    ? 'bg-emerald-900/40 text-emerald-300'
+                    : 'bg-red-900/40 text-red-300'
+                }`}>
+                  {ended}
+                </span>
+              )}
             </div>
 
             {/* Messages */}

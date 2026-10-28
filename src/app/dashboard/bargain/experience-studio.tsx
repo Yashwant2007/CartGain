@@ -5,8 +5,14 @@ import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 import { Sparkles, Save, Eye, RotateCcw, CheckCircle2, History } from 'lucide-react'
 import ShopkeeperAvatar from '@/components/bargain/ShopkeeperAvatar'
+import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
 import { PERSONALITY_META, DESIGN_VARIANT_META, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
+import {
+  expressionForEvent,
+  expressionForShopperMessage,
+  expressionForTurn,
+} from '@/lib/bargain/experience/expressions'
 
 type PublishHistoryRow = {
   id: string
@@ -24,6 +30,7 @@ export function BargainExperienceStudio() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [previewScenario, setPreviewScenario] = useState<'welcome' | 'lowball' | 'walkout' | 'deal'>('welcome')
 
   useEffect(() => {
     if (!storeId) return
@@ -125,6 +132,22 @@ export function BargainExperienceStudio() {
 
   if (loading || !exp) return <div className="text-blue-300/70 text-sm">Loading experience studio...</div>
 
+  const previewPersona = PERSONALITY_META.find(p => p.id === exp.personality) ?? PERSONALITY_META[0]
+  const previewExpression = previewScenario === 'lowball'
+    ? expressionForShopperMessage(exp.personality, '₹50 is all I can do.', 1000)
+    : previewScenario === 'walkout'
+      ? expressionForShopperMessage(exp.personality, 'Forget it, I am leaving.', 1000)
+      : previewScenario === 'deal'
+        ? expressionForTurn(exp.personality, { decision: 'accept', ended: 'accepted' })
+        : expressionForEvent(exp.personality, 'CHAT_OPENED')
+  const previewLine = previewScenario === 'lowball'
+    ? 'That is a bold start — let me see what I can do without crossing the floor.'
+    : previewScenario === 'walkout'
+      ? 'I understand. The door stays open if you change your mind.'
+      : previewScenario === 'deal'
+        ? 'Deal — that price is yours. Let me get your code ready.'
+        : previewPersona.exampleDialogue[0]
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -146,7 +169,7 @@ export function BargainExperienceStudio() {
             <h3 className="text-white font-medium mb-3">Shopkeeper Personality</h3>
             <div className="grid gap-3">
               {PERSONALITY_META.map(p => (
-                <button key={p.id} onClick={() => setExp({ ...exp, personality: p.id })} className={`p-4 rounded-xl border text-left flex items-start gap-3 transition ${exp.personality === p.id ? 'border-cyan-500/60 bg-cyan-950/20' : 'border-blue-800/40 bg-slate-950/40'}`}>
+                <button key={p.id} onClick={() => { setExp({ ...exp, personality: p.id }); setPreviewScenario('welcome') }} className={`p-4 rounded-xl border text-left flex items-start gap-3 transition ${exp.personality === p.id ? 'border-cyan-500/60 bg-cyan-950/20' : 'border-blue-800/40 bg-slate-950/40'}`}>
                   <ShopkeeperAvatar personality={p.id} expression={exp.personality === p.id ? 'listening' : 'idle'} size="md" motionEnabled={exp.motionEnabled} />
                   <div>
                     <div className="text-white font-medium">{p.name}</div>
@@ -216,13 +239,59 @@ export function BargainExperienceStudio() {
         </div>
 
         <div className="rounded-2xl border border-blue-800/30 bg-slate-900/60 p-6 space-y-4">
-          <h3 className="text-white font-medium">Live Preview</h3>
-          <div className="rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 p-6 min-h-[200px] flex items-end justify-end">
-            <StorefrontInvitation experience={exp} onOpen={() => {}} preview />
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-white font-medium">Live Preview</h3>
+              <p className="mt-1 text-xs text-blue-300/60">
+                Watch the shopkeeper read the shopper, then try a reaction to see this personality&apos;s face.
+              </p>
+            </div>
+            <span className="rounded-full border border-cyan-500/30 bg-cyan-950/30 px-2 py-1 text-[10px] font-medium text-cyan-200">
+              {previewPersona.name}
+            </span>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            {exp.avatarEnabled ? (
+              <ShopkeeperStage
+                personality={exp.personality}
+                expression={previewExpression}
+                name={previewPersona.name}
+                status="Preview"
+                line={previewLine}
+                motionEnabled={exp.motionEnabled}
+              />
+            ) : (
+              <div className="border-b border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-500">
+                Avatar preview is off. Turn on &quot;Avatar enabled&quot; to show the shopkeeper.
+              </div>
+            )}
+            <div className="flex min-h-[150px] items-end justify-end bg-gradient-to-br from-slate-100 to-slate-200 p-6">
+              <StorefrontInvitation experience={exp} onOpen={() => {}} preview />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {([
+              ['welcome', 'Say hello'],
+              ['lowball', 'Lowball'],
+              ['walkout', 'Walkout'],
+              ['deal', 'Accept deal'],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setPreviewScenario(id)}
+                className={`rounded-full border px-3 py-1.5 text-xs transition ${
+                  previewScenario === id
+                    ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100'
+                    : 'border-blue-800/50 text-blue-300/80 hover:bg-blue-900/40'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
           <div className="flex items-center justify-between text-xs text-blue-300/60">
             <span>Draft v{exp.draftVersion} • Published v{exp.publishedVersion}</span>
-            <span>Personality: {exp.personality} • Design: {exp.designVariant}</span>
+            <span>Design: {exp.designVariant}</span>
           </div>
         </div>
       </div>

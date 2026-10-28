@@ -8,7 +8,13 @@ import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { reciprocalCounter, isAbsurdOffer, absurdOfferReply, type NegotiationContext } from '@/lib/bargain/engine'
 import { GoalStrip } from '@/components/bargain/BargainPrimitives'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
-import { expressionForEvent, type AvatarEvent, type ExpressionState } from '@/lib/bargain/experience/expressions'
+import {
+  expressionForEvent,
+  expressionForShopperMessage,
+  expressionForTurn,
+  type AvatarEvent,
+  type ExpressionState,
+} from '@/lib/bargain/experience/expressions'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import type { BargainDemoGoal } from '@/lib/bargain/api-types'
 
@@ -266,7 +272,7 @@ export default function StorefrontBargainWidget({
     const isWalkout = detectWalkout(userText)
     busyRef.current = true
     const userMsgId = uid()
-    reactAvatar('CUSTOMER_MESSAGE_RECEIVED')
+    setExpression(expressionForShopperMessage(avatarPersonality, userText, originalPrice))
     setMessages((prev) => [
       ...prev,
       { role: 'customer', content: userText, price: offer ?? undefined, id: userMsgId, delivery: 'sending' },
@@ -353,18 +359,28 @@ export default function StorefrontBargainWidget({
       pushAi(data.reply, priceTag)
       setAttempts(isAbsurdTurn ? attempts : nextAttempt)
 
+      const ended = data.decision === 'reject' || (exhausted && data.decision !== 'accept')
+        ? 'rejected'
+        : data.decision === 'accept'
+          ? 'accepted'
+          : null
       if (data.decision === 'accept') {
-        reactAvatar('OFFER_ACCEPTED')
         setStep('deal')
         setFinalPrice(data.counterOffer ?? offer)
         setDiscountCode(`BARGAIN_${Date.now().toString(36).toUpperCase()}`)
-      } else if (data.decision === 'reject' || (exhausted && data.decision !== 'accept')) {
-        reactAvatar('OFFER_REJECTED')
+      } else if (ended === 'rejected') {
         setStep('rejected')
       } else {
-        reactAvatar(priceTag != null ? 'COUNTEROFFER_PRESENTED' : 'AI_RESPONSE_RECEIVED')
         setStep('chat')
       }
+      setExpression(expressionForTurn(avatarPersonality, {
+        customerMessage: userText,
+        aiReply: data.reply,
+        counterOffer: priceTag ?? data.counterOffer ?? null,
+        originalPrice,
+        decision: data.decision,
+        ended,
+      }))
     } catch (err: any) {
       console.warn('[StorefrontBargain] API failed, using local fallback:', err.message)
       const nextAttempt = attempts + 1
@@ -383,7 +399,13 @@ export default function StorefrontBargainWidget({
         result = { reply: PersonaRetention[persona](p, (n) => money(currency, n)), decision: 'counter', counterOffer: p }
       } else if (isWalkout) {
         pushAi(PersonaFarewell[persona])
-        reactAvatar('OFFER_REJECTED')
+        setExpression(expressionForTurn(avatarPersonality, {
+          customerMessage: userText,
+          aiReply: PersonaFarewell[persona],
+          originalPrice,
+          decision: 'reject',
+          ended: 'abandoned',
+        }))
         setStep('rejected')
         setLoading(false)
         return
@@ -444,10 +466,18 @@ export default function StorefrontBargainWidget({
       const hold = minThinkingMs(result.reply) - seenFor
       if (hold > 0) await wait(hold)
       pushAi(result.reply, result.counterOffer)
-      if (exhausted && result.decision !== 'accept') reactAvatar('OFFER_REJECTED')
-      else if (result.decision === 'accept') reactAvatar('OFFER_ACCEPTED')
-      else if (result.counterOffer != null) reactAvatar('COUNTEROFFER_PRESENTED')
-      else reactAvatar('AI_RESPONSE_RECEIVED')
+      setExpression(expressionForTurn(avatarPersonality, {
+        customerMessage: userText,
+        aiReply: result.reply,
+        counterOffer: result.counterOffer ?? null,
+        originalPrice,
+        decision: result.decision,
+        ended: exhausted && result.decision !== 'accept'
+          ? 'rejected'
+          : result.decision === 'accept'
+            ? 'accepted'
+            : null,
+      }))
       setAttempts(nextAttempt)
     } finally {
       window.clearTimeout(ack)

@@ -10,7 +10,12 @@ import { buildQuickOffers, parseDraftOffer } from '@/lib/bargain/offers'
 import type { ExpressionState } from '@/components/bargain/ShopkeeperAvatar'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
-import { expressionForEvent, type AvatarEvent } from '@/lib/bargain/experience/expressions'
+import {
+  expressionForEvent,
+  expressionForShopperMessage,
+  expressionForTurn,
+  type AvatarEvent,
+} from '@/lib/bargain/experience/expressions'
 import { resolveShopkeeperPersonality } from '@/lib/bargain/experience/personality'
 import { trackExperienceEvent } from '@/lib/bargain/experience/analytics'
 import { PERSONALITY_META, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
@@ -629,7 +634,7 @@ export default function BargainWidget({
     setError(null)
     setNotice(null)
     const localId = `c-${Date.now()}`
-    fireAvatar('CUSTOMER_MESSAGE_RECEIVED')
+    setExpression(expressionForShopperMessage(personality, msg, livePrice))
     setMessages(prev => [
       ...prev,
       { id: localId, role: 'customer', content: msg, offeredPrice: parseDraftOffer(msg), createdAt: new Date().toISOString(), delivery: 'sending' },
@@ -690,6 +695,13 @@ export default function BargainWidget({
             offeredPrice: null, createdAt: new Date().toISOString(),
           }])
           if (data.status === 'rejected') setDecision('reject')
+          setExpression(expressionForTurn(personality, {
+            customerMessage: msg,
+            aiReply: data.message,
+            decision: data.status === 'rejected' ? 'reject' : 'chat',
+            ended: data.status ?? 'abandoned',
+            originalPrice: livePrice,
+          }))
           lastFailedRef.current = null
           return
         }
@@ -726,14 +738,14 @@ export default function BargainWidget({
       // "reject" flips the widget into its ended state here; on accept the
       // Accept bar stays visible off lastCounter and closing happens in
       // acceptDeal().
-      if (data.decision === 'reject') {
-        setDecision('reject')
-        fireAvatar('OFFER_REJECTED')
-      } else if (data.counterOffer != null) {
-        fireAvatar('COUNTEROFFER_PRESENTED')
-      } else {
-        fireAvatar('AI_RESPONSE_RECEIVED')
-      }
+      if (data.decision === 'reject') setDecision('reject')
+      setExpression(expressionForTurn(personality, {
+        customerMessage: msg,
+        aiReply: data.reply,
+        counterOffer: data.counterOffer ?? null,
+        originalPrice: livePrice,
+        decision: data.decision,
+      }))
       if (data.discountCode) setDiscountCode(data.discountCode)
       if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
       if (data.floorReached === true) setFloorReached(true)

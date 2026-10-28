@@ -30,6 +30,7 @@ import {
 import { DemoPanel } from './demo-panel'
 import { ProductCatalogPanel } from './product-catalog'
 import { BargainExperienceStudio } from './experience-studio'
+import { isShopkeeperPersonality } from '@/lib/bargain/experience/personality'
 import {
   ABUSE_STRICTNESS_LABELS,
   ABUSE_STRICTNESS_VALUES,
@@ -478,22 +479,13 @@ void fetchConfig()
                 <ConfigCard
                   icon={Sparkles}
                   title="AI voice & strategy"
-                  description="The personality your customers meet, how hard the AI pushes the price, and the language it speaks."
+                  description="How hard the AI pushes the price, how it handles pushback, and the language it speaks. Personality and avatar are set in Bargain Experience."
                 >
-                  <Field
-                    label="Shopkeeper personality"
-                    hint="Tone of voice only — it never changes the hidden price floor. This updates the published storefront experience immediately; use Experience Studio for invitation design and draft changes."
-                  >
-                    <select
-                      value={configForm.shopkeeperPersonality ?? 'friendly_shopkeeper'}
-                      onChange={e => setConfigForm({ ...configForm, shopkeeperPersonality: e.target.value })}
-                      className={CONTROL_CLS}
-                    >
-                      <option value="friendly_shopkeeper">Friendly Shopkeeper · warm and neighbourly</option>
-                      <option value="strict_shopkeeper">Strict Shopkeeper · precise and formal</option>
-                      <option value="playful_shopkeeper">Playful Shopkeeper · cheeky and casual</option>
-                    </select>
-                  </Field>
+                  <div className="rounded-xl border border-blue-800/40 bg-slate-950/40 px-3 py-2.5 text-xs leading-relaxed text-blue-300/70">
+                    Shopkeeper personality, avatar and invitation design are managed once in the{' '}
+                    <span className="font-medium text-blue-200">Bargain Experience</span> tab. The saved
+                    personality is used by the demo and the live storefront.
+                  </div>
                   <Field label="Negotiation mode" hint="How steeply the AI concedes. The hidden margin floor always holds.">
                     <select
                       value={configForm.negotiationMode ?? 'balanced'}
@@ -811,22 +803,6 @@ void fetchConfig()
                 </ConfigCard>
               </div>
 
-              {/* Bottom save (mirror of the sticky bar for long pages) */}
-              <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
-                {configMessage && (
-                  <span className={configMessage.type === 'success' ? 'text-sm text-emerald-300' : 'text-sm text-red-300'}>
-                    {configMessage.text}
-                  </span>
-                )}
-                <button
-                  onClick={saveConfig}
-                  disabled={savingConfig}
-                  className="flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-50"
-                >
-                  {savingConfig ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  Save changes
-                </button>
-              </div>
             </>
           )}
         </div>
@@ -835,7 +811,7 @@ void fetchConfig()
       {/* Demo tab */}
       {tab === 'demo' && (
         <DemoPanel
-          defaultPersona={(config?.aiPersona as 'friendly_shopkeeper' | 'strict_negotiator' | 'playful_friend') ?? 'friendly_shopkeeper'}
+          defaultPersona={isShopkeeperPersonality(config?.shopkeeperPersonality) ? config.shopkeeperPersonality : 'friendly_shopkeeper'}
           defaultLanguage={config?.language ?? 'auto'}
           maxAttempts={config?.maxAttempts ?? 3}
           minProfitPercent={config?.minProfitPercent ?? 20}

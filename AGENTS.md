@@ -71,6 +71,24 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(bargain): visible persona-driven shopkeepers across preview, demo, and
+  storefront` (**uncommitted**). The Experience Studio Live Preview now renders
+  the large `ShopkeeperStage` beside the invitation, with Say hello / Lowball /
+  Walkout / Accept deal controls that exercise the selected personality. The
+  dashboard Live Demo gained the same stage, uses the saved
+  `shopkeeperPersonality` as its default (instead of the stale legacy
+  `aiPersona`), and now maps its UI personas to engine personas in one place.
+  `/demo` uses the storefront stage too, so avatar, persona, and the signed-in
+  `/api/bargain/demo` agent path are identical. `expressions.ts` gained
+  `expressionForShopperMessage` and `expressionForTurn`: reactions now read the
+  customer's lowball, walkout, complaint, question, or buying signal and the
+  real counter/accept/reject outcome, with distinct friendly/strict/playful
+  faces. Both storefront widgets and both demos use them. Removed the duplicate
+  config-tab persona selector and the bottom duplicate Save button; personality
+  and avatar are configured once in Bargain Experience. Verified: Jest **134
+  suites / 1458 tests**, tsc, lint, and production build green. Uncommitted and
+  not deployed yet; production remains `49cad61`.
+
 - `feat(release): experience-aware config, embed kill switch, WhatsApp number
   discovery, and refreshed legal/homepage` (**uncommitted**). The main config
   tab's persona is now a real `shopkeeperPersonality` write: the validation

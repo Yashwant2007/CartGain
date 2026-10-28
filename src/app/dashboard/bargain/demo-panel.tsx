@@ -12,6 +12,14 @@ import {
   Languages,
 } from 'lucide-react'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
+import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
+import {
+  expressionForEvent,
+  expressionForShopperMessage,
+  expressionForTurn,
+  type ExpressionState,
+} from '@/lib/bargain/experience/expressions'
+import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import {
   buildOpeningMessage,
   ruleBasedDecision,
@@ -30,10 +38,10 @@ type ChatMsg = {
   offeredPrice?: number | null
 }
 
-const PERSONAS: { id: Persona; name: string; blurb: string }[] = [
-  { id: 'friendly_shopkeeper', name: 'Friendly Shopkeeper', blurb: 'Warm, neighbourly, finds a way.' },
-  { id: 'strict_negotiator', name: 'Strict Negotiator', blurb: 'Precise, data-driven, protects margin.' },
-  { id: 'playful_friend', name: 'Playful Friend', blurb: 'Cheeky, fun, keeps it engaging.' },
+const PERSONAS: { id: ShopkeeperPersonality; engine: Persona; name: string; blurb: string }[] = [
+  { id: 'friendly_shopkeeper', engine: 'friendly_shopkeeper', name: 'Friendly Shopkeeper', blurb: 'Warm, neighbourly, finds a way.' },
+  { id: 'strict_shopkeeper', engine: 'strict_negotiator', name: 'Strict Shopkeeper', blurb: 'Precise, data-driven, protects margin.' },
+  { id: 'playful_shopkeeper', engine: 'playful_friend', name: 'Playful Shopkeeper', blurb: 'Cheeky, fun, keeps it engaging.' },
 ]
 
 const LANGUAGES: { id: string; label: string }[] = [
@@ -53,7 +61,7 @@ const LANGUAGES: { id: string; label: string }[] = [
 ]
 
 type DemoPanelProps = {
-  defaultPersona: Persona
+  defaultPersona: ShopkeeperPersonality
   defaultLanguage: string
   maxAttempts: number
   minProfitPercent: number
@@ -61,13 +69,15 @@ type DemoPanelProps = {
 
 export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minProfitPercent }: DemoPanelProps) {
   const [price, setPrice] = useState<number>(1000)
-  const [persona, setPersona] = useState<Persona>(defaultPersona)
+  const [personality, setPersonality] = useState<ShopkeeperPersonality>(defaultPersona)
+  const persona = PERSONAS.find(p => p.id === personality)?.engine ?? 'friendly_shopkeeper'
   const [language, setLanguage] = useState<string>(defaultLanguage || 'auto')
   const [started, setStarted] = useState(false)
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
   const [attemptsUsed, setAttemptsUsed] = useState(0)
   const [thinking, setThinking] = useState(false)
+  const [avatarExpression, setAvatarExpression] = useState<ExpressionState>('listening')
   const [ended, setEnded] = useState<null | 'accepted' | 'rejected' | 'abandoned'>(null)
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
@@ -111,6 +121,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
     setFinalPrice(null)
     setThinking(false)
     setAiError(null)
+    setAvatarExpression('listening')
   }
 
   function start() {
@@ -118,6 +129,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
     dealAcceptedRef.current = false
     setAiError(null)
     setMessages([{ role: 'ai', content: buildOpeningMessage(buildCtx(0)) }])
+    setAvatarExpression(expressionForEvent(personality, 'CHAT_OPENED'))
     setAttemptsUsed(0)
     setEnded(null)
     setFinalPrice(null)
@@ -134,6 +146,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
     const userText = input.trim()
     const offer = extractPrice(userText)
     const isWalkout = detectWalkout(userText)
+    setAvatarExpression(expressionForShopperMessage(personality, userText, price))
     // Only a turn that quotes a price spends an attempt — plain chat is free.
     // Otherwise a few friendly "how are you / my budget is tight" messages burn
     // the whole budget before the customer ever names a number, and the first
@@ -245,6 +258,14 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
       if (sessionIdRef.current !== sid) return
       setMessages(prev => [...prev, { role: 'ai', content: reply, offeredPrice: counterOffer }])
       setThinking(false)
+      setAvatarExpression(expressionForTurn(personality, {
+        customerMessage: userText,
+        aiReply: reply,
+        counterOffer,
+        originalPrice: price,
+        decision,
+        ended: newEnded,
+      }))
       if (newEnded) {
         setEnded(newEnded)
         if (newFinal != null) setFinalPrice(newFinal)
@@ -267,6 +288,14 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
     return null
   }, [messages])
 
+  const personaMeta = PERSONAS.find(p => p.id === personality) ?? PERSONAS[0]
+  const latestAiLine = [...messages].reverse().find(m => m.role === 'ai')?.content
+  const stageLine = thinking
+    ? 'Checking your offer…'
+    : aiError
+      ? 'I hit a connection wobble — try that again.'
+      : latestAiLine?.replace(/\s+/g, ' ').trim() || 'Tell me what you have in mind and we will find a fair price.'
+
   function acceptCounter(amount: number) {
     if (ended || thinking) return
     dealAcceptedRef.current = true
@@ -277,6 +306,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
     }])
     setFinalPrice(amount)
     setEnded('accepted')
+    setAvatarExpression('celebrating')
     setAiError(null)
   }
 
@@ -288,6 +318,11 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
       offeredPrice: null,
     }])
     setEnded('abandoned')
+    setAvatarExpression(expressionForTurn(personality, {
+      customerMessage: 'No thanks, that is still too high for me.',
+      decision: 'reject',
+      ended: 'abandoned',
+    }))
   }
 
   return (
@@ -332,15 +367,19 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
             {PERSONAS.map(p => (
               <button
                 key={p.id}
-                onClick={() => { setPersona(p.id); started && reset() }}
+                onClick={() => {
+                  setPersonality(p.id)
+                  setAvatarExpression(expressionForEvent(p.id, 'CHAT_OPENED'))
+                  started && reset()
+                }}
                 className={`w-full text-left p-2.5 rounded-lg transition ${
-                  persona === p.id
+                  personality === p.id
                     ? 'bg-blue-600 text-white border border-blue-600'
                     : 'hover:bg-blue-900/40 border border-blue-800/40 text-blue-100'
                 }`}
               >
                 <div className="text-sm font-medium">{p.name}</div>
-                <div className={`text-[11px] mt-0.5 ${persona === p.id ? 'text-white/80' : 'text-blue-300/70'}`}>{p.blurb}</div>
+                <div className={`text-[11px] mt-0.5 ${personality === p.id ? 'text-white/80' : 'text-blue-300/70'}`}>{p.blurb}</div>
               </button>
             ))}
           </div>
@@ -388,17 +427,16 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
 
       {/* Chat */}
       <div className="lg:col-span-2 bg-slate-900/60 border border-blue-800/30 rounded-xl overflow-hidden self-start">
-        <div className="px-4 py-3 border-b border-blue-800/30 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full animate-pulse ${started ? 'bg-emerald-400' : 'bg-slate-600'}`} />
-            <span className="text-blue-200">
-              {PERSONAS.find(p => p.id === persona)?.name}
-              <span className="text-blue-300/50 ml-2 italic">· {LANGUAGES.find(l => l.id === language)?.label}</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-blue-300/70">
-            <span>{thinking ? 'negotiating…' : started ? `Attempts: ${attemptsLeft} left` : ''}</span>
-          </div>
+        <ShopkeeperStage
+          personality={personality}
+          expression={avatarExpression}
+          name={personaMeta.name}
+          status={started ? (ended ? 'Closed' : 'Online') : 'Ready'}
+          line={stageLine}
+        />
+        <div className="px-4 py-2 border-b border-blue-800/30 flex items-center justify-between text-xs text-blue-300/70">
+          <span>{LANGUAGES.find(l => l.id === language)?.label}</span>
+          <span>{thinking ? 'negotiating…' : started ? `Attempts: ${attemptsLeft} left` : 'Not started'}</span>
         </div>
 
         <div ref={scrollRef} className="h-[380px] overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-slate-950/40 to-transparent">
