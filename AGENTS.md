@@ -72,7 +72,7 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 ## Work log (most recent first)
 
 - `feat(bargain): visible persona-driven shopkeepers across preview, demo, and
-  storefront` (**uncommitted**). The Experience Studio Live Preview now renders
+  storefront`. The Experience Studio Live Preview now renders
   the large `ShopkeeperStage` beside the invitation, with Say hello / Lowball /
   Walkout / Accept deal controls that exercise the selected personality. The
   dashboard Live Demo gained the same stage, uses the saved
@@ -86,8 +86,12 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   faces. Both storefront widgets and both demos use them. Removed the duplicate
   config-tab persona selector and the bottom duplicate Save button; personality
   and avatar are configured once in Bargain Experience. Verified: Jest **134
-  suites / 1458 tests**, tsc, lint, and production build green. Uncommitted and
-  not deployed yet; production remains `49cad61`.
+  suites / 1458 tests**, tsc, lint, and production build green. Committed
+  `f4c14ccd` and deployed; live `/api/health.release` is `f4c14cc` with
+  DB/Redis/env/AI/email/WhatsApp/Shopify checks ok. Live `/`,
+  `/bargain/embed`, `/api/bargain/experience`, `/privacy`, `/dpa` and `/terms`
+  answer 200; unauthenticated `/demo` redirects to `/login?callbackUrl=/demo`
+  as expected.
 
 - `feat(release): experience-aware config, embed kill switch, WhatsApp number
   discovery, and refreshed legal/homepage` (**uncommitted**). The main config
