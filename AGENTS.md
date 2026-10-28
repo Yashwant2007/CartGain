@@ -80,7 +80,7 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 ## Work log (most recent first)
 
 - `feat(recovery): explicit email/WhatsApp opt-in and consent-gated reminders`
-  (**uncommitted**). Recovery is now consent-first. `recordRecipientConsent`
+  (committed `83a9ff9b`, deployed). Recovery is now consent-first. `recordRecipientConsent`
   records per-channel email/WhatsApp consent with provenance, clears stale
   opt-outs on a genuine re-opt-in, and keeps `recordWhatsAppConsent` as the
   WhatsApp-only wrapper. New public `POST /api/recovery/opt-in` (CORS +
@@ -101,13 +101,20 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   no inferred consent), wired into the product, cart, and app-embed blocks; the
   checkout UI extension adds a one-click WhatsApp/email reminder. Verified:
   Jest **137 suites / 1490 tests**, tsc, lint, production build, and
-  `shopify app build` theme check. Not committed or deployed yet. Production
-  had **0 email / 0 WhatsApp consents**, so existing carts will not be messaged
-  until shoppers opt in (intended). Theme app embed still has to be enabled in
-  the theme editor, and the checkout extension needs `shopify app deploy`.
+  `shopify app build` theme check. Committed `83a9ff9b`, deployed to Vercel and
+  released as Shopify version `cartgain-38`; live `/api/health` reports
+  `release=83a9ff9`, `status=ok`, region `bom1`, DB/Redis/env/AI/email/WhatsApp/
+  Shopify ok, and `/bargain/embed`, `/api/bargain/experience` are 200 while
+  `OPTIONS /api/recovery/opt-in` is 204. Production had **0 email / 0 WhatsApp
+  consents**, so existing carts will not be messaged until shoppers opt in
+  (intended). Live consent smoke is blocked because there is currently **no
+  active connected Shopify store** (the rows with tokens are inactive, and the
+  active rows have no token), so the public endpoint correctly returns 404
+  "Store not found" until a merchant reconnects. Theme app embed still has to be
+  enabled in the theme editor, and the checkout extension must be activated.
 
 - `fix(ai): rate limits now cool a provider for 30s, fall back to the
-  primary, and cache the large prompt prefix` (**uncommitted, deployed**).
+  primary, and cache the large prompt prefix` (committed `971544e4`, deployed).
   Production logged
   `[BARGAIN_AI_DEGRADED] reason=all_tiers_failed detail=tier=fallback failure=rate_limit`.
   `/api/health` showed the primary healthy while the error appeared, and the
@@ -128,12 +135,11 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   capacity ceiling. Verified: Jest **135 suites / 1471 tests**, tsc, lint and
   production build green. Deployed `2WmpoFESxnXxR1i2sg3sgYeS5THA`; live health
   is `status=ok`, `ai.activeTier=primary`, region `bom1`, DB 180ms, Redis 5ms,
-  `/bargain/embed` and `/api/bargain/experience` return 200. Not committed, so
-  `/api/health.release` still says `74354f9`. This deploy also shipped the
-  uncommitted shared-WhatsApp routing changes below.
+  `/bargain/embed` and `/api/bargain/experience` return 200. This deploy also
+  shipped the shared-WhatsApp routing changes below.
 
 - `fix(whatsapp): shared-routing is automatic, and BYO numbers are discovered`
-  (**uncommitted**). The shared WhatsApp sender is a deployment-wide outbound
+  (committed `9f050393`, deployed). The shared WhatsApp sender is a deployment-wide outbound
   number, not a per-store property, so `resolveStoreIdByWhatsAppPhoneNumberId`
   now takes `sharedPhoneNumberId` and deliberately ignores any legacy row that
   still maps it; the webhook then resolves STOP/START by customer phone and cart
@@ -148,7 +154,7 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   Meta returns exactly one merchant number; multiple numbers still require an
   explicit choice, and a P2002 ownership conflict is reported instead of
   stealing another store's mapping. Verified: Jest **135 suites / 1467 tests**,
-  tsc, lint and production build green. Not committed or deployed.
+  tsc, lint and production build green.
 
 - `fix(bargain): cut chat latency by running functions beside the database`
   (**uncommitted**). The bargain chat was slow for two separate reasons, both
@@ -739,8 +745,14 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   `processRecoveryJourneys` requires channel consent. Production had **0**
   email/WhatsApp consents at the time of the change, so existing carts will not
   be messaged until shoppers use the new form/checkout action (intended). The
-  theme app embed must be enabled in the theme editor, and the checkout
-  extension must be released with `shopify app deploy`, before capture is live.
+  checkout extension is released as `cartgain-38`, but the theme app embed must
+  still be enabled in the theme editor before capture renders.
+- There is currently **no active connected Shopify store** in production: the
+  rows that still have an encrypted access token are `isActive=false`, and the
+  active rows have `apiKey=null`. The public opt-in endpoint therefore answers
+  404 "Store not found" and the abandoned-cart sweep has no store to process.
+  A merchant must reinstall/reconnect before live consent or reminder delivery
+  can be verified (`/api/health` checks app credentials, not store tokens).
 - The public opt-in endpoint verifies product title/link/image server-side to
   avoid branded spam/phishing, but it is still a public form with no email
   double-opt-in; per-IP/contact rate limits reduce abuse. Add confirmation mail
