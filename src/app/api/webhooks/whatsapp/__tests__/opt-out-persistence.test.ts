@@ -134,6 +134,22 @@ describe('POST /api/webhooks/whatsapp — opt-out persistence', () => {
     })
   })
 
+  it('ignores a legacy per-store mapping of the shared sender', async () => {
+    const previous = process.env.WHATSAPP_PHONE_NUMBER_ID
+    process.env.WHATSAPP_PHONE_NUMBER_ID = 'SHARED'
+    try {
+      prismaMock.store.findFirst.mockResolvedValue({ id: 'legacy-shared-store' })
+      prismaMock.store.findMany.mockResolvedValue([{ id: 'store-a' }, { id: 'store-b' }])
+      const res = await POST(signedRequest(bodyWithText('STOP', 'SHARED')))
+      expect(res.status).toBe(200)
+      expect(prismaMock.store.findFirst).not.toHaveBeenCalled()
+      expect(prismaMock.optOut.create).not.toHaveBeenCalled()
+    } finally {
+      if (previous === undefined) delete process.env.WHATSAPP_PHONE_NUMBER_ID
+      else process.env.WHATSAPP_PHONE_NUMBER_ID = previous
+    }
+  })
+
   it('does not write when the opt-out is unambiguously unattributable', async () => {
     prismaMock.store.findMany.mockResolvedValue([{ id: 'a' }, { id: 'b' }])
     const res = await POST(signedRequest(bodyWithText('unsubscribe')))

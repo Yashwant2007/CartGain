@@ -55,6 +55,7 @@ type Diagnostics = {
     storePhoneNumberId: string | null
     sharedNumber: boolean
     storeMappedToSharedNumber: boolean
+    sharedMappingIgnored: boolean
     inboundRouting: string
     inboundWebhookMapped: boolean
     inboundRoutingReady: boolean
@@ -82,7 +83,7 @@ export default function RecipientsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [phoneIdInput, setPhoneIdInput] = useState('')
+  const [showOwnSetup, setShowOwnSetup] = useState(false)
   const [discoveredNumbers, setDiscoveredNumbers] = useState<DiscoveredNumber[]>([])
   const [selectedNumberId, setSelectedNumberId] = useState('')
   const [mappingMessage, setMappingMessage] = useState<string | null>(null)
@@ -104,7 +105,6 @@ export default function RecipientsPage() {
         setRecipients(data.recipients || [])
         setCounts(data.counts || null)
         setDiagnostics(data.diagnostics || null)
-        setPhoneIdInput(data.diagnostics?.whatsapp?.storePhoneNumberId || '')
       })
       .catch((err) => {
         if (err?.name === 'AbortError') return
@@ -185,19 +185,22 @@ export default function RecipientsPage() {
         body: JSON.stringify({ storeId, action: 'discover' }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data?.message || 'Could not discover WhatsApp numbers')
+      if (!res.ok) throw new Error(data?.error || data?.message || 'Could not discover WhatsApp numbers')
       const numbers: DiscoveredNumber[] = data.numbers || []
+      if (data.saved) {
+        setDiscoveredNumbers([])
+        setSelectedNumberId('')
+        setMappingMessage('WhatsApp number connected automatically from Meta.')
+        load()
+        return
+      }
       if (numbers.length === 0) {
         setMappingMessage(data.error || 'No WhatsApp number found for this Meta account.')
         return
       }
-      if (numbers.length === 1) {
-        await saveMapping(numbers[0].id)
-        return
-      }
       setDiscoveredNumbers(numbers)
       setSelectedNumberId(numbers[0].id)
-      setMappingMessage('Choose the number this store uses for inbound STOP/START replies.')
+      setMappingMessage('Meta returned more than one number. Choose the one this store uses.')
     } catch (err: any) {
       setMappingMessage(err?.message || 'Could not discover WhatsApp numbers')
     } finally {
@@ -241,6 +244,9 @@ export default function RecipientsPage() {
   }
 
   const isLoading = resolving || loading
+  const hasOwnNumber = Boolean(
+    diagnostics?.whatsapp.storePhoneNumberId && !diagnostics.whatsapp.storeMappedToSharedNumber,
+  )
 
   return (
     <div className="space-y-6">
@@ -291,62 +297,47 @@ export default function RecipientsPage() {
           )}
 
           {diagnostics.whatsapp.sharedNumber && (
-            <div
-              className={`rounded-xl border p-4 text-sm ${
-                diagnostics.whatsapp.storeMappedToSharedNumber
-                  ? 'border-amber-500/30 bg-amber-900/20'
-                  : 'border-blue-500/30 bg-blue-950/30'
-              }`}
-            >
+            <div className="rounded-xl border border-blue-500/30 bg-blue-950/30 p-4 text-sm">
               <div className="flex items-start gap-2">
-                {diagnostics.whatsapp.storeMappedToSharedNumber ? (
-                  <AlertTriangle className="w-5 h-5 text-amber-300 flex-shrink-0 mt-0.5" />
-                ) : (
-                  <CheckCircle2 className="w-5 h-5 text-blue-300 flex-shrink-0 mt-0.5" />
-                )}
+                <CheckCircle2 className="w-5 h-5 text-blue-300 flex-shrink-0 mt-0.5" />
                 <div className="space-y-2 text-blue-100/90">
                   <p className="font-medium text-white">CartGain shared WhatsApp number</p>
-                  {diagnostics.whatsapp.storeMappedToSharedNumber ? (
-                    <>
-                      <p>
-                        This store is mapped to the same shared number CartGain uses for every store. Mapping it here can
-                        send another store&apos;s STOP/START replies to this store. Remove the mapping so inbound messages
-                        are matched by phone and cart history instead.
-                      </p>
-                      <button
-                        onClick={clearMapping}
-                        disabled={busyId === 'mapping'}
-                        className="px-3 py-1.5 rounded-lg text-xs bg-amber-600/30 border border-amber-500/40 text-amber-100 disabled:opacity-40"
-                      >
-                        {busyId === 'mapping' ? 'Removing...' : 'Use shared routing'}
-                      </button>
-                    </>
-                  ) : (
-                    <p>
-                      No setup needed. Messages send from CartGain&apos;s shared number, and inbound STOP/START replies are
-                      matched to your store by the customer&apos;s phone number and cart history. There is no per-store
-                      phone-number ID to enter.
+                  <p>
+                    No setup needed. Messages send from CartGain&apos;s shared number, and inbound STOP/START replies are
+                    matched to your store by the customer&apos;s phone number and cart history. There is no per-store
+                    phone-number ID to enter.
+                  </p>
+                  {diagnostics.whatsapp.sharedMappingIgnored && (
+                    <p className="text-xs text-blue-200/70">
+                      An older shared-number ID saved on this store is ignored automatically. No action needed.
                     </p>
+                  )}
+                  {!hasOwnNumber && !showOwnSetup && (
+                    <button
+                      onClick={() => setShowOwnSetup(true)}
+                      className="px-3 py-1.5 rounded-lg text-xs bg-blue-600/20 border border-blue-500/40 text-blue-100"
+                    >
+                      Use my own WhatsApp number
+                    </button>
                   )}
                 </div>
               </div>
             </div>
           )}
 
-          {!diagnostics.whatsapp.storePhoneNumberId && (
+          {!hasOwnNumber && (!diagnostics.whatsapp.sharedNumber || showOwnSetup) && (
             <div className="rounded-xl border border-blue-500/30 bg-blue-950/30 p-4 text-sm">
               <div className="flex items-start gap-2">
                 <MessageCircle className="w-5 h-5 text-blue-300 flex-shrink-0 mt-0.5" />
                 <div className="space-y-2 text-blue-100/90">
                   <p className="font-medium text-white">
                     {diagnostics.whatsapp.sharedNumber
-                      ? 'Using your own WhatsApp number?'
+                      ? 'Connect your own WhatsApp number'
                       : 'Connect this store&apos;s WhatsApp number'}
                   </p>
                   <p>
-                    CartGain can read the WhatsApp Business numbers connected to its Meta app and save the correct
-                    phone-number ID automatically. The ID routes inbound STOP/START replies and delivery receipts for
-                    that number.
+                    CartGain reads the number from the WhatsApp Business Account connected to Meta and saves the correct
+                    phone-number ID automatically. You do not need to find or paste an ID.
                   </p>
                   <button
                     onClick={discoverMapping}
@@ -355,26 +346,6 @@ export default function RecipientsPage() {
                   >
                     {busyId === 'discover' || busyId === 'mapping' ? 'Looking up Meta...' : 'Discover from Meta'}
                   </button>
-                  {discoveredNumbers.length === 0 && (
-                    <details className="text-xs text-blue-200/70">
-                      <summary className="cursor-pointer select-none">Enter a number ID manually</summary>
-                      <div className="flex flex-col sm:flex-row gap-2 mt-2">
-                        <input
-                          value={phoneIdInput}
-                          onChange={(e) => setPhoneIdInput(e.target.value)}
-                          placeholder="e.g. 1266364546554326"
-                          className="flex-1 px-3 py-1.5 rounded-lg bg-slate-900/50 border border-blue-500/30 text-xs text-white placeholder-blue-200/30 outline-none"
-                        />
-                        <button
-                          onClick={() => saveMapping(phoneIdInput)}
-                          disabled={busyId === 'mapping' || !phoneIdInput.trim()}
-                          className="px-3 py-1.5 rounded-lg text-xs bg-blue-600/30 border border-blue-500/40 text-blue-100 disabled:opacity-40"
-                        >
-                          Save number
-                        </button>
-                      </div>
-                    </details>
-                  )}
                 </div>
               </div>
             </div>

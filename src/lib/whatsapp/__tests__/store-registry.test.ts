@@ -66,6 +66,23 @@ describe('resolveStoreIdByWhatsAppPhoneNumberId', () => {
     await expect(resolveStoreIdByWhatsAppPhoneNumberId(client, 'PN1')).resolves.toBe('store-b')
   })
 
+  it('ignores a legacy per-store mapping of the shared sender', async () => {
+    const client = makeClient([
+      { id: 'store-a', whatsappPhoneNumberId: 'SHARED' },
+      { id: 'store-b' },
+    ])
+    await expect(
+      resolveStoreIdByWhatsAppPhoneNumberId(client, 'SHARED', { sharedPhoneNumberId: 'SHARED' }),
+    ).resolves.toBeNull()
+  })
+
+  it('still resolves a merchant-owned number when shared routing is configured', async () => {
+    const client = makeClient([{ id: 'store-b', whatsappPhoneNumberId: 'PN2' }])
+    await expect(
+      resolveStoreIdByWhatsAppPhoneNumberId(client, 'PN2', { sharedPhoneNumberId: 'SHARED' }),
+    ).resolves.toBe('store-b')
+  })
+
   it('returns null for an empty / missing phone number id', async () => {
     const client = makeClient([{ id: 'only-store' }])
     await expect(resolveStoreIdByWhatsAppPhoneNumberId(client, '')).resolves.toBeNull()

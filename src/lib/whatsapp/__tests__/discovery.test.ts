@@ -50,6 +50,44 @@ describe('WhatsApp phone-number discovery', () => {
     ])
   })
 
+  it('also discovers a merchant WABA when the shared WABA is configured', async () => {
+    process.env.WHATSAPP_BUSINESS_ACCOUNT_ID = 'waba-shared'
+    process.env.WHATSAPP_BUSINESS_TOKEN = 'token-123'
+    const fetchMock = jest.fn(async (url: string) => {
+      if (url.includes('/me/businesses')) {
+        return { ok: true, json: async () => ({ data: [{ id: 'biz-1', name: 'Merchant Biz' }] }) }
+      }
+      if (url.includes('/owned_whatsapp_business_accounts')) {
+        return { ok: true, json: async () => ({ data: [{ id: 'waba-byo', name: 'Merchant WABA' }] }) }
+      }
+      if (url.includes('/waba-byo/phone_numbers')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [{ id: '9000000002', display_phone_number: '+91 90000 00002', status: 'CONNECTED' }],
+          }),
+        }
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          data: [{ id: '9000000001', display_phone_number: '+91 90000 00001', status: 'CONNECTED' }],
+        }),
+      }
+    })
+    global.fetch = fetchMock as any
+
+    const result = await discoverWhatsAppPhoneNumbers()
+
+    expect(result.ok).toBe(true)
+    expect(result.wabaIds).toEqual(expect.arrayContaining(['waba-shared', 'waba-byo']))
+    expect(result.numbers.map((number) => number.id)).toEqual(['9000000001', '9000000002'])
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/me/businesses'),
+      expect.anything(),
+    )
+  })
+
   it('discovers the WABA through the token when no WABA id is configured', async () => {
     delete process.env.WHATSAPP_BUSINESS_ACCOUNT_ID
     process.env.WHATSAPP_BUSINESS_TOKEN = 'token-123'

@@ -61,12 +61,50 @@ export async function POST(request: NextRequest) {
     })
     const numbers = result.numbers.filter((number) => number.id !== sharedPhoneNumberId)
     const onlySharedFound = result.ok && numbers.length === 0
+
+    // Discovery is the source of truth: if Meta exposes exactly one merchant
+    // number, save it now. Merchants should never have to copy a phone-number
+    // id by hand (and the shared sender is not a per-store value at all).
+    if (numbers.length === 1) {
+      const discovered = numbers[0]
+      if ((store as any).whatsappPhoneNumberId !== discovered.id) {
+        try {
+          await prisma.store.update({
+            where: { id: store.id },
+            data: { whatsappPhoneNumberId: discovered.id },
+          })
+        } catch (err: any) {
+          if (err?.code === 'P2002') {
+            return NextResponse.json({
+              ok: false,
+              saved: false,
+              numbers,
+              wabaIds: result.wabaIds,
+              error:
+                'That WhatsApp number is already connected to another store. Sign in to that store, or disconnect it there first.',
+              lookupErrors: result.lookupErrors,
+            })
+          }
+          throw err
+        }
+      }
+      return NextResponse.json({
+        ok: true,
+        saved: true,
+        numbers,
+        whatsappPhoneNumberId: discovered.id,
+        wabaIds: result.wabaIds,
+        lookupErrors: result.lookupErrors,
+      })
+    }
+
     return NextResponse.json({
       ok: numbers.length > 0,
+      saved: false,
       numbers,
       wabaIds: result.wabaIds,
       error: onlySharedFound
-        ? 'Only the CartGain shared number was found. Connect your own WhatsApp Business Account to CartGain first, then discover again.'
+        ? 'Only the CartGain shared number was found. Shared routing already works without a per-store ID. To use your own number, connect your WhatsApp Business Account to CartGain first, then discover again.'
         : result.error,
       lookupErrors: result.lookupErrors,
     })
@@ -98,14 +136,17 @@ export async function POST(request: NextRequest) {
   }
 
   if (phoneNumberId && sharedPhoneNumberId && phoneNumberId === sharedPhoneNumberId) {
-    return NextResponse.json(
-      {
-        code: 'SHARED_NUMBER',
-        message:
-          'CartGain sends from this shared WhatsApp number, so it must not be mapped to a single store. Leave the mapping empty; inbound STOP/START messages are matched to your store by phone and cart history.',
-      },
-      { status: 400 },
-    )
+    // The shared sender is deployment-wide, not a per-store mapping. Treat the
+    // attempt as a successful no-op so older clients do not show an error; the
+    // inbound webhook deliberately ignores any legacy value anyway.
+    return NextResponse.json({
+      ok: true,
+      ignored: true,
+      sharedNumber: true,
+      whatsappPhoneNumberId: null,
+      message:
+        'CartGain shared routing is active. There is no per-store phone-number ID to save; inbound STOP/START replies are matched by customer phone and cart history.',
+    })
   }
 
   try {

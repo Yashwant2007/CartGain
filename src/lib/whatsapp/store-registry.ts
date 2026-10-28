@@ -27,9 +27,16 @@ export function normalizeWhatsAppPhoneNumberId(value: string | null | undefined)
 export async function resolveStoreIdByWhatsAppPhoneNumberId(
   client: StoreWhatsAppLookup,
   phoneNumberId: string | null | undefined,
+  opts?: { sharedPhoneNumberId?: string | null },
 ): Promise<string | null> {
   const id = normalizeWhatsAppPhoneNumberId(phoneNumberId)
   if (!id) return null
+
+  // The deployment's shared sender is intentionally not a per-store mapping.
+  // Even if an older row still stores it, never let that row capture every
+  // inbound STOP/START; the caller must fall back to phone/cart matching.
+  const sharedId = normalizeWhatsAppPhoneNumberId(opts?.sharedPhoneNumberId)
+  if (sharedId && id === sharedId) return null
 
   const direct = await client.store.findFirst({
     where: { whatsappPhoneNumberId: id, isActive: true },

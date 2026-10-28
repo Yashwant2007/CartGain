@@ -133,6 +133,7 @@ export async function GET(request: NextRequest) {
     const storePhoneNumberId = (store as any).whatsappPhoneNumberId || null
     const sharedNumber = Boolean(envPhoneNumberId)
     const storeMappedToSharedNumber = Boolean(sharedNumber && storePhoneNumberId === envPhoneNumberId)
+    const ownPhoneNumberId = storePhoneNumberId && !storeMappedToSharedNumber ? storePhoneNumberId : null
 
     return NextResponse.json({
       recipients: filtered.slice(0, limit),
@@ -145,15 +146,14 @@ export async function GET(request: NextRequest) {
           storePhoneNumberId,
           sharedNumber,
           storeMappedToSharedNumber,
-          inboundRouting: storeMappedToSharedNumber
-            ? 'shared_number_mapped_to_one_store'
-            : storePhoneNumberId
-              ? 'store_mapping'
-              : sharedNumber
-                ? 'shared_number_phone_match'
-                : 'unmapped',
-          inboundWebhookMapped: Boolean(storePhoneNumberId),
-          inboundRoutingReady: Boolean(storePhoneNumberId || sharedNumber),
+          sharedMappingIgnored: storeMappedToSharedNumber,
+          inboundRouting: ownPhoneNumberId
+            ? 'store_mapping'
+            : sharedNumber
+              ? 'shared_number_phone_match'
+              : 'unmapped',
+          inboundWebhookMapped: Boolean(ownPhoneNumberId),
+          inboundRoutingReady: Boolean(ownPhoneNumberId || sharedNumber),
           webhookSecretConfigured: Boolean(resolveWhatsAppAppSecret()),
         },
         consentRule: 'WhatsApp consent is only granted by an explicit opt-in and is never inferred from Shopify email/SMS marketing flags.',

@@ -91,14 +91,25 @@ export async function discoverWhatsAppPhoneNumbers(opts?: {
 
   const lookupErrors: string[] = []
   const wabas: Array<{ id: string; name: string | null }> = []
-  const explicitWaba = clean(opts?.wabaId)
-  if (explicitWaba) {
-    wabas.push({ id: explicitWaba, name: null })
-  } else {
-    for (const id of configuredWabaIds()) wabas.push({ id, name: null })
+  const seenWabas = new Set<string>()
+  const addWaba = (id: string, name: string | null) => {
+    const cleanId = clean(id)
+    if (!cleanId || seenWabas.has(cleanId)) return
+    seenWabas.add(cleanId)
+    wabas.push({ id: cleanId, name })
   }
 
-  if (wabas.length === 0) {
+  const explicitWaba = clean(opts?.wabaId)
+  if (explicitWaba) {
+    addWaba(explicitWaba, null)
+  } else {
+    for (const id of configuredWabaIds()) addWaba(id, null)
+
+    // Configured WABA ids usually point at the CartGain shared sender. A
+    // merchant bringing their own WABA can still be attached to the same Meta
+    // app, so always walk the token's businesses too instead of stopping at
+    // the shared one. Their phone-number id then comes from Meta, never from a
+    // value the merchant has to paste into every store.
     const businesses = await graphGet('me/businesses?fields=id,name', accessToken)
     if (!businesses.ok) {
       lookupErrors.push(businesses.body?.error?.message || 'Could not read Meta businesses')
@@ -113,7 +124,7 @@ export async function discoverWhatsAppPhoneNumbers(opts?: {
         continue
       }
       for (const waba of owned.body?.data || []) {
-        wabas.push({ id: String(waba.id), name: waba.name || null })
+        addWaba(String(waba.id), waba.name || null)
       }
     }
   }

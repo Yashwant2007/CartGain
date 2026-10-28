@@ -68,7 +68,7 @@ it('reports the shared sender and whether the store points at it', async () => {
   expect(body.envPhoneNumberId).toBe('111111')
 })
 
-it('filters the shared number out of discovery results', async () => {
+it('filters the shared number and auto-saves the only merchant number', async () => {
   discoverMock.mockResolvedValue({
     ok: true,
     wabaIds: ['waba-1'],
@@ -82,17 +82,45 @@ it('filters the shared number out of discovery results', async () => {
   expect(res.status).toBe(200)
   const body = await res.json()
   expect(body.ok).toBe(true)
+  expect(body.saved).toBe(true)
+  expect(body.whatsappPhoneNumberId).toBe('222222')
   expect(body.numbers.map((n: any) => n.id)).toEqual(['222222'])
+  expect(prismaMock.store.update).toHaveBeenCalledWith({
+    where: { id: 'store-1' },
+    data: { whatsappPhoneNumberId: '222222' },
+  })
 })
 
-it('refuses to map the shared sender to a single store', async () => {
+it('returns multiple merchant numbers for an explicit choice', async () => {
+  discoverMock.mockResolvedValue({
+    ok: true,
+    wabaIds: ['waba-1'],
+    lookupErrors: [],
+    numbers: [
+      { id: '111111', displayPhoneNumber: '+91 90000 00000', wabaId: 'waba-1' },
+      { id: '222222', displayPhoneNumber: '+91 90000 00001', wabaId: 'waba-1' },
+      { id: '333333', displayPhoneNumber: '+91 90000 00002', wabaId: 'waba-1' },
+    ],
+  })
+  const res = await POST(request('POST', { storeId: 'store-1', action: 'discover' }))
+  expect(res.status).toBe(200)
+  const body = await res.json()
+  expect(body.saved).toBe(false)
+  expect(body.numbers.map((n: any) => n.id)).toEqual(['222222', '333333'])
+  expect(prismaMock.store.update).not.toHaveBeenCalled()
+})
+
+it('treats saving the shared sender as an ignored no-op', async () => {
   const res = await POST(request('POST', {
     storeId: 'store-1',
     action: 'save',
     whatsappPhoneNumberId: '111111',
   }))
-  expect(res.status).toBe(400)
-  expect((await res.json()).code).toBe('SHARED_NUMBER')
+  expect(res.status).toBe(200)
+  const body = await res.json()
+  expect(body.ok).toBe(true)
+  expect(body.ignored).toBe(true)
+  expect(body.sharedNumber).toBe(true)
   expect(prismaMock.store.update).not.toHaveBeenCalled()
 })
 

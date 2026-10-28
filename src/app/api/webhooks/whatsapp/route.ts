@@ -7,7 +7,7 @@ import { parseWhatsAppEvents, isWhatsAppOptInText, isWhatsAppOptOutText } from '
 import { resolveStoreIdByWhatsAppPhoneNumberId } from '@/lib/whatsapp/store-registry'
 import { recordOptOut } from '@/lib/opt-out'
 import { recordWhatsAppConsent } from '@/lib/recovery/recipients'
-import { resolveWhatsAppAppSecret, resolveWhatsAppVerifyToken } from '@/lib/whatsapp/config'
+import { resolveWhatsAppAppSecret, resolveWhatsAppPhoneNumberId, resolveWhatsAppVerifyToken } from '@/lib/whatsapp/config'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,7 +33,9 @@ async function resolveInboundStoreIds(
   phoneNumberId: string | null | undefined,
   from: string | null | undefined,
 ): Promise<string[]> {
-  const direct = await resolveStoreIdByWhatsAppPhoneNumberId(prisma, phoneNumberId).catch(() => null)
+  const direct = await resolveStoreIdByWhatsAppPhoneNumberId(prisma, phoneNumberId, {
+    sharedPhoneNumberId: resolveWhatsAppPhoneNumberId() || null,
+  }).catch(() => null)
   if (direct) return [direct]
 
   const digits = (from || '').replace(/\D/g, '')
@@ -133,6 +135,7 @@ export async function POST(request: NextRequest) {
           const storeId = await resolveStoreIdByWhatsAppPhoneNumberId(
             prisma,
             event.phoneNumberId,
+            { sharedPhoneNumberId: resolveWhatsAppPhoneNumberId() || null },
           ).catch(() => null)
           const where = {
             providerId: event.wamid,
