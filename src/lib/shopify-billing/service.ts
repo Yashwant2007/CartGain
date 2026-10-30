@@ -20,13 +20,15 @@ export function shopifyTokenState(
   now: Date = new Date(),
 ): ShopifyTokenState {
   if (!store.apiKey) return 'missing'
-  // A token without a refresh token is a legacy non-expiring token. Shopify no
-  // longer accepts those for the Admin API (403), and they cannot be refreshed,
-  // so the store must reconnect via OAuth to get an expiring offline token.
-  if (!store.shopifyRefreshToken) return 'expired'
+  // We have an access token. It may be a legacy non-expiring token (Shopify
+  // now rejects those with 403) or a fresh expiring token. We can't tell
+  // without calling the API, so mark it usable and let fetchShopifyWithAuth
+  // surface any 401/403 through a clear ShopifyReconnectRequiredError.
   if (!store.shopifyTokenExpiresAt) return 'ok'
   if (store.shopifyTokenExpiresAt.getTime() > now.getTime() + TOKEN_REFRESH_MARGIN_MS) return 'ok'
-  return 'refreshable'
+  // Token is expired or near expiry: refreshable only when a refresh token
+  // exists, otherwise the store must reconnect.
+  return store.shopifyRefreshToken ? 'refreshable' : 'expired'
 }
 
 export async function resolveShopifyStoreForUser(userId: string): Promise<ShopifyStore | null> {

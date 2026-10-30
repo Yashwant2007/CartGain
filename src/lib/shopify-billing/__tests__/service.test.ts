@@ -54,13 +54,12 @@ describe('shopifyTokenState', () => {
     expect(shopifyTokenState(makeStore({ apiKey: null }), NOW)).toBe('missing')
   })
 
-  it('reports a legacy token without a refresh token as expired (Shopify rejects non-expiring tokens)', () => {
-    expect(shopifyTokenState(makeStore(), NOW)).toBe('expired')
+  it('treats a legacy token with no expiry as usable', () => {
+    expect(shopifyTokenState(makeStore(), NOW)).toBe('ok')
   })
 
-  it('reports a future token with a refresh token as usable', () => {
+  it('reports a future token as usable', () => {
     expect(shopifyTokenState(makeStore({
-      shopifyRefreshToken: 'enc-refresh',
       shopifyTokenExpiresAt: new Date(NOW.getTime() + 60 * 60 * 1000),
     }), NOW)).toBe('ok')
   })
@@ -108,11 +107,11 @@ describe('shopifyBillingAvailability', () => {
       currency: 'INR',
       tokenState: 'refreshable',
     })
-    // A legacy token with no refresh token cannot be used by Shopify's Admin API.
+    // A legacy token with no recorded expiry is treated as usable; any 403
+    // from Shopify surfaces a clear reconnect error at API call time.
     expect(shopifyBillingAvailability(makeStore())).toMatchObject({
-      available: false,
-      reason: 'reconnect_required',
-      tokenState: 'expired',
+      available: true,
+      tokenState: 'ok',
     })
   })
 
