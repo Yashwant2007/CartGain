@@ -71,14 +71,25 @@ export async function POST(req: NextRequest) {
     // the key by event type: each distinct lifecycle transition is its own
     // delivery.
     const subscriptionId = event.payload?.subscription?.entity?.id
-    const dedupKey =
-      event.event === "payment.authorized" || event.event === "payment.captured"
-        ? ["payment", event.payload?.payment?.entity?.id]
-        : event.event === "payment_link.paid"
-        ? ["payment_link", event.payload?.payment_link?.entity?.id]
-        : event.event.startsWith("subscription.") && subscriptionId
-        ? ["subscription", `${event.event}:${subscriptionId}`]
-        : null
+    const providerEventId = req.headers.get("x-razorpay-event-id")
+    const chargedPeriodKey =
+      event.payload?.subscription?.entity?.current_end ||
+      event.payload?.payment?.entity?.id ||
+      "unknown"
+    const dedupKey = providerEventId
+      ? ["razorpay_event", providerEventId]
+      : event.event === "payment.authorized" || event.event === "payment.captured"
+      ? ["payment", event.payload?.payment?.entity?.id]
+      : event.event === "payment_link.paid"
+      ? ["payment_link", event.payload?.payment_link?.entity?.id]
+      : event.event.startsWith("subscription.") && subscriptionId
+      ? [
+          "subscription",
+          event.event === "subscription.charged"
+            ? `charged:${subscriptionId}:${chargedPeriodKey}`
+            : `${event.event}:${subscriptionId}`,
+        ]
+      : null
 
     if (dedupKey && dedupKey[1]) {
       const firstDelivery = await claimEventOnce(dedupKey[0], dedupKey[1])
@@ -108,6 +119,13 @@ export async function POST(req: NextRequest) {
 
       case "subscription.activated":
         await handleSubscriptionActivated(event.payload.subscription.entity);
+        break;
+
+      case "subscription.charged":
+        await handleSubscriptionCharged(
+          event.payload.subscription.entity,
+          event.payload.payment?.entity,
+        );
         break;
 
       case "subscription.paused":
@@ -254,6 +272,61 @@ async function handleSubscriptionActivated(subscription: any) {
   })
 
   console.log(`✅ Subscription ${subId} activated for user ${existing.userId}, plan: ${existing.plan}`)
+}
+
+function razorpayTimestamp(value: unknown): Date | null {
+  const seconds = Number(value)
+  if (!Number.isFinite(seconds) || seconds <= 0) return null
+  return new Date(seconds * 1000)
+}
+
+async function handleSubscriptionCharged(subscription: any, payment: any) {
+  const subId = subscription?.id
+  if (!subId) return
+
+  const existing = await prisma.subscription.findFirst({
+    where: { subscriptionId: subId },
+  })
+  if (!existing) {
+    console.log(`⚠️ No local subscription for Razorpay charged event ${subId}, skipping`)
+    return
+  }
+
+  const periodStart = razorpayTimestamp(subscription.current_start)
+  const periodEnd = razorpayTimestamp(subscription.current_end)
+  const planId = resolvePlanId(existing.plan)
+
+  await prisma.subscription.update({
+    where: { id: existing.id },
+    data: {
+      status: "active",
+      ...(subscription.customer_id ? { customerId: subscription.customer_id } : {}),
+      ...(periodStart ? { currentPeriodStart: periodStart } : {}),
+      ...(periodEnd ? { currentPeriodEnd: periodEnd } : {}),
+      overageEnabled: (PAID_PLAN_IDS as readonly string[]).includes(planId),
+      cartsUsedInPeriod: 0,
+      bargainSessionsUsed: 0,
+      bargainDealsUsed: 0,
+      bargainOverageDeals: 0,
+      cartOverage: 0,
+      overageMessages: 0,
+    },
+  })
+
+  await track({
+    name: "cartgain_subscription_renewed",
+    userId: existing.userId,
+    properties: {
+      plan: existing.plan,
+      paymentId: payment?.id ?? null,
+      amount: payment?.amount ?? null,
+    },
+  })
+
+  console.log(
+    `🔁 Subscription ${subId} renewed for user ${existing.userId}` +
+    (periodEnd ? ` until ${periodEnd.toISOString()}` : ""),
+  )
 }
 
 async function handleSubscriptionPaused(subscription: any) {

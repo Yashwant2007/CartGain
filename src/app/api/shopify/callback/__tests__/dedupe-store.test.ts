@@ -129,4 +129,41 @@ describe('Shopify install callback — store de-duplication', () => {
       }),
     )
   })
+
+  it('falls back to the Admin API shop owner for offline-token installs', async () => {
+    prismaMock.store.findFirst.mockResolvedValue(null)
+    let call = 0
+    ;(global as any).fetch = jest.fn(async () => {
+      call++
+      if (call === 1) {
+        return {
+          ok: true,
+          json: async () => ({ access_token: 'tok', refresh_token: 'refresh', expires_in: 3600 }),
+        }
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          shop: { email: 'owner@shop.com', shop_owner: 'Owner Name' },
+        }),
+      }
+    })
+
+    await GET(makeRequest())
+
+    expect((global as any).fetch).toHaveBeenCalledWith(
+      'https://test.myshopify.com/admin/api/2026-04/shop.json',
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'X-Shopify-Access-Token': 'tok' }),
+      }),
+    )
+    expect(prismaMock.store.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          shopifyRefreshToken: 'enc',
+          shopifyTokenExpiresAt: expect.any(Date),
+        }),
+      }),
+    )
+  })
 })

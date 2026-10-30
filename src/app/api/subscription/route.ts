@@ -7,6 +7,7 @@ import {
   reconcileShopifySubscriptionForUser,
 } from '@/lib/shopify-billing/service'
 import { getAuthContext, unauthorizedResponse } from '@/lib/embedded-auth'
+import { evaluateSubscriptionEntitlement } from '@/lib/subscription-entitlement'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,9 +64,8 @@ export async function GET(request: NextRequest) {
         })
       : []
 
-    const resolvedPlan = subscription
-      ? Object.values(PLANS).find(p => p.id === subscription.plan) || PLANS.FREE
-      : PLANS.FREE
+    const entitlement = evaluateSubscriptionEntitlement(subscription)
+    const resolvedPlan = Object.values(PLANS).find(p => p.id === entitlement.effectivePlanId) || PLANS.FREE
 
     return NextResponse.json({
       subscription: subscription
@@ -92,6 +92,14 @@ export async function GET(request: NextRequest) {
               maxCampaigns: resolvedPlan.maxCampaigns,
               maxMessagesPerCustomer: resolvedPlan.maxMessagesPerCustomer,
             },
+            entitlement: {
+              effectivePlan: entitlement.effectivePlanId,
+              isPaid: entitlement.isPaid,
+              isEntitled: entitlement.isEntitled,
+              isExpired: entitlement.isExpired,
+              daysRemaining: entitlement.daysRemaining,
+              renewalDueSoon: entitlement.renewalDueSoon,
+            },
             activeCampaigns,
           }
         : null,
@@ -105,6 +113,7 @@ export async function GET(request: NextRequest) {
         shopifyAvailable: availability.available,
         shopifyCurrency: availability.currency,
         shopifyUnavailableReason: availability.reason ?? null,
+        shopifyTokenState: availability.tokenState,
         shopDomain: subscription?.shopDomain ?? shopifyStore?.domain ?? null,
       },
       meta: {

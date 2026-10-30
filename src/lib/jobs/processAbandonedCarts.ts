@@ -17,7 +17,8 @@ import type { BrandVoice } from '@/lib/conversation/voice'
 import { loadStoreVoiceSettings } from '@/lib/conversation/store'
 import { releaseLock } from '@/lib/job-lock'
 import { redisSetNX, redisIncr, redisGet, redisExpire, getRedis } from '@/lib/redis'
-import { FREE_CARTS_THRESHOLD, PLANS, PAID_PLAN_IDS, resolvePlanId, getPlan } from '@/lib/payment'
+import { FREE_CARTS_THRESHOLD, PLANS, getPlan } from '@/lib/payment'
+import { evaluateSubscriptionEntitlement } from '@/lib/subscription-entitlement'
 import { track } from '@/lib/analytics/track'
 import {
   evaluateWhatsAppEligibility,
@@ -27,7 +28,6 @@ import {
 import { ensureRecipientForCart, markRecipientContacted } from '@/lib/recovery/recipients'
 import { isWhatsAppConfigured } from '@/lib/whatsapp/config'
 
-const PAID_PLANS = PAID_PLAN_IDS
 const MAX_STORE_CONCURRENCY = 10
 const MAX_CARTS_PER_STORE = 300
 const PER_STORE_LOCK_TTL = 4 * 60 * 1000
@@ -244,7 +244,8 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
       where: { userId: campaign.userId },
     })
 
-    const isPaidUser = !!(subscription && (PAID_PLAN_IDS as readonly string[]).includes(resolvePlanId(subscription.plan)) && subscription.status === 'active')
+    const entitlement = evaluateSubscriptionEntitlement(subscription)
+    const isPaidUser = entitlement.isPaid
 
     // Cart overage: a paid merchant is never hard-stopped at their cart quota —
     // carts recovered beyond it are recorded and billed (plan.bargainOverageCartPrice)
@@ -274,7 +275,7 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
     }
 
     const planConfig = isPaidUser && subscription
-      ? getPlan(subscription.plan)
+      ? getPlan(entitlement.effectivePlanId)
       : PLANS.FREE
     const customerLimits = planConfig.maxMessagesPerCustomer
 

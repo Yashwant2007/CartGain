@@ -37,6 +37,30 @@ async function findConnectedStoreByShopDomain(shop: string) {
   return null
 }
 
+async function fetchShopOwner(
+  shop: string,
+  accessToken: string,
+): Promise<{ email?: string; name?: string }> {
+  try {
+    const res = await fetch(`https://${shop}/admin/api/2026-04/shop.json`, {
+      headers: { 'X-Shopify-Access-Token': accessToken },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!res.ok) return {}
+    const data = await res.json().catch(() => null)
+    const owner = data?.shop
+    const email = typeof owner?.email === 'string'
+      ? owner.email
+      : typeof owner?.customer_email === 'string'
+        ? owner.customer_email
+        : undefined
+    const name = typeof owner?.shop_owner === 'string' ? owner.shop_owner : undefined
+    return { email, name }
+  } catch {
+    return {}
+  }
+}
+
 function redirectWithCleanup(path: string, baseUrl: string): NextResponse {
   const res = NextResponse.redirect(new URL(path, baseUrl))
   for (const name of STALE_COOKIE_NAMES) {
@@ -144,18 +168,21 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Install-origin auto-provision ──
-    // For online (per-user) tokens the token response includes the authorizing
-    // staff member. Use their email as the CartGain account email; the store
-    // owner installing the app becomes the account owner.
     let provisionedUserId: string | null = null
     if (installOrigin) {
       const associatedUser = tokenData.associated_user as
         | { email?: string; first_name?: string; last_name?: string }
         | undefined
-      const ownerEmail = associatedUser?.email?.toLowerCase().trim()
-      const ownerName =
-        [associatedUser?.first_name, associatedUser?.last_name].filter(Boolean).join(' ').trim() ||
-        shop.replace('.myshopify.com', '')
+      let ownerEmail = associatedUser?.email?.toLowerCase().trim()
+      let ownerName =
+        [associatedUser?.first_name, associatedUser?.last_name].filter(Boolean).join(' ').trim()
+
+      if (!ownerEmail) {
+        const shopOwner = await fetchShopOwner(shop, accessToken)
+        ownerEmail = shopOwner.email?.toLowerCase().trim()
+        ownerName = ownerName || shopOwner.name?.trim() || ''
+      }
+      ownerName = ownerName || shop.replace('.myshopify.com', '')
 
       if (!ownerEmail) {
         return redirectWithCleanup('/dashboard/integrations?shopify_error=Owner+email+not+available', baseUrl)

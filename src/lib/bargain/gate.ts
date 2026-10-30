@@ -1,7 +1,8 @@
 import prisma from '@/lib/db'
 import type { Prisma } from '@prisma/client'
 import type { Plan } from '@/lib/payment'
-import { PLANS, PAID_PLAN_IDS, resolvePlanId, getPlan } from '@/lib/payment'
+import { PLANS, resolvePlanId, getPlan } from '@/lib/payment'
+import { evaluateSubscriptionEntitlement } from '@/lib/subscription-entitlement'
 
 // Usage window for the free allowance. Free/pending subscriptions are metered
 // per CALENDAR MONTH so the "resets each month" promise the widget makes is
@@ -61,10 +62,10 @@ export async function getBargainGate(storeId: string): Promise<BargainGate> {
     })
   }
 
-  const isActive = subscription.status === 'active'
-  const planId = resolvePlanId(isActive ? subscription.plan : 'free')
-  const plan = getPlan(isActive ? subscription.plan : 'free') || PLANS.FREE
-  const isPaid = isActive && (PAID_PLAN_IDS as readonly string[]).includes(planId)
+  const entitlement = evaluateSubscriptionEntitlement(subscription)
+  const planId = resolvePlanId(entitlement.effectivePlanId)
+  const plan = getPlan(entitlement.effectivePlanId) || PLANS.FREE
+  const isPaid = entitlement.isPaid
 
   // Only an ACTIVE subscription earns paid-plan quotas and overage. A row that
   // is pending (not yet paid), cancelled (merchant ended it at the gateway or

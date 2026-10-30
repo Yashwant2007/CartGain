@@ -4,33 +4,64 @@ import { getActiveShopifySubscription } from './subscriptions'
 import { normalizeCurrency, type BillingCurrency, type BillingPeriod } from './plans'
 import type { ShopifyStoreRef } from './client'
 
-export type ShopifyStore = ShopifyStoreRef & { userId: string; currency: string; platform: string }
+export type ShopifyStore = ShopifyStoreRef & {
+  userId: string
+  currency: string
+  platform: string
+  isActive: boolean
+}
 
-/**
- * The store a Shopify Billing subscription belongs to. CartGain is single-store
- * per merchant in practice; when a merchant has several, the Shopify one is the
- * billing subject.
- */
+export type ShopifyTokenState = 'ok' | 'refreshable' | 'expired' | 'missing'
+
+const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000
+
+export function shopifyTokenState(
+  store: Pick<ShopifyStoreRef, 'apiKey' | 'shopifyRefreshToken' | 'shopifyTokenExpiresAt'>,
+  now: Date = new Date(),
+): ShopifyTokenState {
+  if (!store.apiKey) return 'missing'
+  if (!store.shopifyTokenExpiresAt) return 'ok'
+  if (store.shopifyTokenExpiresAt.getTime() > now.getTime() + TOKEN_REFRESH_MARGIN_MS) return 'ok'
+  return store.shopifyRefreshToken ? 'refreshable' : 'expired'
+}
+
 export async function resolveShopifyStoreForUser(userId: string): Promise<ShopifyStore | null> {
-  const store = await prisma.store.findFirst({
+  const stores = await prisma.store.findMany({
     where: { userId, platform: 'shopify', apiKey: { not: null } },
     orderBy: { createdAt: 'asc' },
   })
+  const store = stores.find((candidate) => candidate.isActive) ?? stores[0]
   return (store as ShopifyStore) || null
 }
 
 export interface ShopifyBillingAvailability {
   available: boolean
   currency: BillingCurrency | null
-  reason?: 'no_shopify_store' | 'unsupported_currency'
+  reason?:
+    | 'no_shopify_store'
+    | 'store_inactive'
+    | 'reconnect_required'
+    | 'unsupported_currency'
+  tokenState: ShopifyTokenState | null
 }
 
 /** Whether this merchant can be billed through Shopify Billing right now. */
 export function shopifyBillingAvailability(store: ShopifyStore | null): ShopifyBillingAvailability {
-  if (!store) return { available: false, currency: null, reason: 'no_shopify_store' }
+  if (!store) {
+    return { available: false, currency: null, reason: 'no_shopify_store', tokenState: null }
+  }
+  const tokenState = shopifyTokenState(store)
+  if (!store.isActive) {
+    return { available: false, currency: null, reason: 'store_inactive', tokenState }
+  }
+  if (tokenState === 'expired' || tokenState === 'missing') {
+    return { available: false, currency: null, reason: 'reconnect_required', tokenState }
+  }
   const currency = normalizeCurrency(store.currency)
-  if (!currency) return { available: false, currency: null, reason: 'unsupported_currency' }
-  return { available: true, currency }
+  if (!currency) {
+    return { available: false, currency: null, reason: 'unsupported_currency', tokenState }
+  }
+  return { available: true, currency, tokenState }
 }
 
 /**

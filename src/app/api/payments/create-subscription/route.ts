@@ -10,6 +10,7 @@ import {
 } from '@/lib/shopify-billing/service'
 import { resolveBillingPrice, resolveUsageCap } from '@/lib/shopify-billing/plans'
 import { createShopifySubscription, cancelShopifySubscription } from '@/lib/shopify-billing/subscriptions'
+import { ShopifyReconnectRequiredError } from '@/lib/shopify-billing/client'
 import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
 import prisma from '@/lib/db'
@@ -55,6 +56,15 @@ export async function POST(req: NextRequest) {
     // never the client — decides whether Shopify Billing is actually available.
     const shopifyStore = await resolveShopifyStoreForUser(session.user.id)
     const availability = shopifyBillingAvailability(shopifyStore)
+
+    if (requestedProvider === 'shopify' && !availability.available) {
+      return shopifyUnavailableResponse(availability.reason, shopifyStore?.domain)
+    }
+
+    if (requestedProvider == null && shopifyStore && !availability.available) {
+      return shopifyUnavailableResponse(availability.reason, shopifyStore.domain)
+    }
+
     const useShopify =
       availability.available &&
       (requestedProvider === 'shopify' || (requestedProvider == null && shopifyStore !== null))
@@ -121,6 +131,16 @@ export async function POST(req: NextRequest) {
       keyId: process.env.RAZORPAY_KEY_ID,
     })
   } catch (error) {
+    if (error instanceof ShopifyReconnectRequiredError) {
+      return NextResponse.json(
+        {
+          error: 'Your Shopify connection has expired. Reconnect Shopify in Integrations, then try again.',
+          code: 'SHOPIFY_RECONNECT_REQUIRED',
+        },
+        { status: 409 },
+      )
+    }
+
     await captureError({
       level: 'error',
       component: 'billing',
@@ -131,6 +151,38 @@ export async function POST(req: NextRequest) {
       statusCode: 500,
     })
     return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 })
+  }
+}
+
+function shopifyUnavailableResponse(
+  reason: ReturnType<typeof shopifyBillingAvailability>['reason'],
+  domain?: string,
+): NextResponse {
+  const reconnectMessage = domain
+    ? `Your Shopify store (${domain}) needs to be reconnected before billing can continue. Open Integrations, reconnect Shopify, then try again.`
+    : 'Reconnect your Shopify store in Integrations before choosing a plan.'
+
+  switch (reason) {
+    case 'reconnect_required':
+      return NextResponse.json(
+        { error: reconnectMessage, code: 'SHOPIFY_RECONNECT_REQUIRED' },
+        { status: 409 },
+      )
+    case 'store_inactive':
+      return NextResponse.json(
+        { error: reconnectMessage, code: 'SHOPIFY_STORE_INACTIVE' },
+        { status: 409 },
+      )
+    case 'unsupported_currency':
+      return NextResponse.json(
+        { error: 'Billing is not available for your store currency. Please contact support.', code: 'UNSUPPORTED_CURRENCY' },
+        { status: 400 },
+      )
+    default:
+      return NextResponse.json(
+        { error: 'Connect a Shopify store before choosing a Shopify-billed plan.', code: 'SHOPIFY_NOT_CONNECTED' },
+        { status: 400 },
+      )
   }
 }
 

@@ -55,10 +55,14 @@ jest.mock('@/lib/observability/logger', () => ({ captureError: jest.fn(async () 
 
 const prismaMock = prisma as any
 
-function makeRequest(event: Record<string, unknown>) {
+function makeRequest(event: Record<string, unknown>, extraHeaders: Record<string, string> = {}) {
   return new Request('https://cart-gain.com/api/payment/webhook', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-razorpay-signature': 'sig' },
+    headers: {
+      'content-type': 'application/json',
+      'x-razorpay-signature': 'sig',
+      ...extraHeaders,
+    },
     body: JSON.stringify(event),
   }) as any
 }
@@ -122,5 +126,40 @@ describe('Razorpay webhook — subscription lifecycle dedup', () => {
     // The duplicate delivery never re-ran the handler.
     expect(prismaMock.subscription.findFirst).toHaveBeenCalledTimes(1)
     expect(prismaMock.subscription.update).toHaveBeenCalledTimes(1)
+  })
+
+  it('extends the paid period and resets included usage on every renewal charge', async () => {
+    const firstCharge = subscriptionEvent('subscription.charged')
+    ;(firstCharge.payload.subscription.entity as any).current_end = 1_705_184_000
+    ;(firstCharge.payload as any).payment = { entity: { id: 'pay_1', amount: 149900 } }
+
+    const secondCharge = subscriptionEvent('subscription.charged')
+    ;(secondCharge.payload.subscription.entity as any).current_end = 1_707_776_000
+    ;(secondCharge.payload as any).payment = { entity: { id: 'pay_2', amount: 149900 } }
+
+    await POST(makeRequest(firstCharge))
+    await POST(makeRequest(secondCharge))
+
+    expect(prismaMock.subscription.findFirst).toHaveBeenCalledTimes(2)
+    expect(prismaMock.subscription.update).toHaveBeenCalledTimes(2)
+    expect(prismaMock.subscription.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'active',
+          currentPeriodEnd: new Date(1_707_776_000 * 1000),
+          cartsUsedInPeriod: 0,
+          bargainSessionsUsed: 0,
+          bargainDealsUsed: 0,
+        }),
+      }),
+    )
+
+    const keys = prismaMock.webhookEvent.create.mock.calls.map(
+      (c: any[]) => c[0].data.entityId,
+    )
+    expect(keys).toEqual([
+      'charged:sub_1:1705184000',
+      'charged:sub_1:1707776000',
+    ])
   })
 })

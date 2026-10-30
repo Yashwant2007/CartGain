@@ -19,6 +19,14 @@ type SubscriptionData = {
   overageEnabled: boolean
   overageMessages: number
   cartOverage?: number
+  entitlement?: {
+    effectivePlan: string
+    isPaid: boolean
+    isEntitled: boolean
+    isExpired: boolean
+    daysRemaining: number | null
+    renewalDueSoon: boolean
+  }
 }
 
 type BillingInfo = {
@@ -26,6 +34,7 @@ type BillingInfo = {
   shopifyAvailable: boolean
   shopifyCurrency: string | null
   shopifyUnavailableReason: string | null
+  shopifyTokenState?: 'ok' | 'refreshable' | 'expired' | 'missing' | null
   shopDomain: string | null
 }
 
@@ -140,8 +149,13 @@ export default function SubscriptionPage() {
   const currentPlanId = subscription?.plan
     ? (LEGACY_PLAN_MAP[subscription.plan] ?? subscription.plan)
     : 'free'
-  const isPaidUser = !!(subscription && PAID_PLANS.includes(currentPlanId) && subscription.status === 'active')
-  const isFreeUser = !subscription || currentPlanId === 'free' || !PAID_PLANS.includes(currentPlanId)
+  const entitlement = subscription?.entitlement
+  const isPaidUser = entitlement
+    ? entitlement.isPaid
+    : !!(subscription && PAID_PLANS.includes(currentPlanId) && subscription.status === 'active')
+  const isExpired = entitlement?.isExpired ?? false
+  const renewalDueSoon = entitlement?.renewalDueSoon ?? false
+  const isFreeUser = !isPaidUser
 
   const currentPlanKey = isPaidUser
     ? (currentPlanId as PlanKey)
@@ -283,6 +297,43 @@ export default function SubscriptionPage() {
         <p className="text-blue-300/80 mt-1 text-sm">Choose a plan that fits your store size</p>
       </div>
 
+      {isExpired && (
+        <div className="bg-red-900/30 border border-red-500/40 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-red-200">Your paid plan has expired</h2>
+          <p className="text-xs text-blue-300/70 mt-1">
+            Paid features are paused and the account is running on the Free allowance. Renew below to restore your plan.
+          </p>
+        </div>
+      )}
+
+      {!isExpired && renewalDueSoon && entitlement?.daysRemaining != null && (
+        <div className="bg-amber-900/20 border border-amber-500/30 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-amber-200">
+            Renewal due in {entitlement.daysRemaining} day{entitlement.daysRemaining === 1 ? '' : 's'}
+          </h2>
+          <p className="text-xs text-blue-300/70 mt-1">
+            Your card will be charged automatically. Update billing above if you need a different plan before renewal.
+          </p>
+        </div>
+      )}
+
+      {billingInfo?.shopifyUnavailableReason === 'reconnect_required' && (
+        <div className="bg-amber-900/20 border border-amber-500/30 rounded-xl p-5 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-amber-200">Reconnect Shopify to manage billing</h2>
+            <p className="text-xs text-blue-300/70 mt-1">
+              Your Shopify access token has expired. Reconnect the store, then choose a plan again.
+            </p>
+          </div>
+          <a
+            href="/dashboard/integrations"
+            className="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap bg-gradient-to-r from-amber-500 to-orange-500 text-white"
+          >
+            Open Integrations
+          </a>
+        </div>
+      )}
+
       {/* Current Plan + Revenue Share Meter */}
       <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
         <div className="flex items-center justify-between mb-6">
@@ -297,8 +348,17 @@ export default function SubscriptionPage() {
                   <p className="text-sm text-blue-300/60">
                     {isYearly ? `₹${currentPlan.yearlyPrice.toLocaleString('en-IN')}/yr` : `₹${currentPlan.price.toLocaleString('en-IN')}/mo`}
                     {subscription?.currentPeriodEnd && (
-                      <> &middot; Renews {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-IN')}</>
+                      <> &middot; {isExpired ? 'Ended' : 'Renews'} {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-IN')}</>
                     )}
+                  </p>
+                </>
+              ) : isExpired ? (
+                <>
+                  <h2 className="text-lg font-semibold text-white">{currentPlan?.name ?? currentPlanId} — expired</h2>
+                  <p className="text-sm text-blue-300/60">
+                    {freeCartsRemaining > 0
+                      ? `Running on Free: ${freeCartsRemaining} carts remaining`
+                      : 'Free allowance exhausted — renew to continue'}
                   </p>
                 </>
               ) : (
@@ -314,11 +374,13 @@ export default function SubscriptionPage() {
             </div>
           </div>
           <span className={`px-3 py-1 rounded-full text-sm font-medium border ${
-            isPaidUser
-              ? 'bg-emerald-600/40 text-emerald-300 border-emerald-500/40'
-              : 'bg-amber-600/40 text-amber-300 border-amber-500/40'
+            isExpired
+              ? 'bg-red-600/30 text-red-300 border-red-500/40'
+              : isPaidUser
+                ? 'bg-emerald-600/40 text-emerald-300 border-emerald-500/40'
+                : 'bg-amber-600/40 text-amber-300 border-amber-500/40'
           }`}>
-            {isPaidUser ? 'Active' : freeCartsRemaining > 0 ? 'Trial' : 'Trial Exhausted'}
+            {isExpired ? 'Expired' : isPaidUser ? 'Active' : freeCartsRemaining > 0 ? 'Trial' : 'Trial Exhausted'}
           </span>
         </div>
 

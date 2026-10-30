@@ -19,6 +19,19 @@ export interface GraphQLResult<T> {
   errors: string[]
 }
 
+export class ShopifyReconnectRequiredError extends Error {
+  constructor(message = 'Your Shopify connection has expired. Reconnect Shopify and try again.') {
+    super(message)
+    this.name = 'ShopifyReconnectRequiredError'
+  }
+}
+
+export function isShopifyAuthFailure(errors: string[]): boolean {
+  return errors.some((error) =>
+    /HTTP (401|403)|no valid shopify access token|unauthorized|access token/i.test(error),
+  )
+}
+
 /**
  * Minimal GraphQL Admin API client. Uses the same encrypted/refreshable access
  * token as the REST helpers — no token is ever exposed to the browser or logs.

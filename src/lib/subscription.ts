@@ -1,14 +1,19 @@
 import prisma from '@/lib/db'
-import { PAID_PLAN_IDS, FREE_CARTS_THRESHOLD, resolvePlanId, getPlan } from '@/lib/payment'
+import { FREE_CARTS_THRESHOLD, getPlan } from '@/lib/payment'
+import { evaluateSubscriptionEntitlement } from '@/lib/subscription-entitlement'
 
 export type SubscriptionStatus = {
   hasSubscription: boolean
   plan: string
+  effectivePlan: string
   isActive: boolean
   isFree: boolean
   isPaid: boolean
   isTrialing: boolean
   isExhausted: boolean
+  isExpired: boolean
+  renewalDueSoon: boolean
+  daysRemaining: number | null
   cartsUsed: number
   cartsRemaining: number
   bargainSessionsUsed: number
@@ -38,12 +43,13 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
     prisma.store.findFirst({ where: { userId } }),
   ])
 
-    if (!subscription) return null
+  if (!subscription) return null
 
   const plan = subscription.plan || 'free'
-  const planConfig = planConfigFor(plan)
-  const isPaid = (PAID_PLAN_IDS as readonly string[]).includes(plan)
-  const isActive = subscription.status === 'active'
+  const entitlement = evaluateSubscriptionEntitlement(subscription)
+  const planConfig = planConfigFor(entitlement.effectivePlanId)
+  const isPaid = entitlement.isPaid
+  const isActive = entitlement.isEntitled
   const isFree = !isPaid
 
   // Bargain usage is derived from the sessions themselves, not the mutable
@@ -95,11 +101,15 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
   return {
     hasSubscription: true,
     plan,
+    effectivePlan: entitlement.effectivePlanId,
     isActive,
     isFree,
     isPaid,
     isTrialing: isFree && cartsUsed < FREE_CARTS_THRESHOLD,
     isExhausted,
+    isExpired: entitlement.isExpired,
+    renewalDueSoon: entitlement.renewalDueSoon,
+    daysRemaining: entitlement.daysRemaining,
     cartsUsed,
     cartsRemaining,
     bargainSessionsUsed,

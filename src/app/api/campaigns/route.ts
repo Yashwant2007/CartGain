@@ -5,6 +5,7 @@ import prisma from '@/lib/db'
 import { campaignCreateSchema, validateOrThrow, ValidationError, handleValidationError } from '@/lib/validation'
 import { getSubscription } from '@/lib/subscription'
 import { PLANS } from '@/lib/payment'
+import { evaluateSubscriptionEntitlement } from '@/lib/subscription-entitlement'
 import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
 
@@ -116,11 +117,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'No subscription found. Please choose a plan first.' }, { status: 402 })
     }
 
-    if (subscription.status !== 'active') {
-      return NextResponse.json({ message: 'Your subscription is not active. Please renew your plan.' }, { status: 402 })
+    const entitlement = evaluateSubscriptionEntitlement(subscription)
+    if (!entitlement.isEntitled) {
+      return NextResponse.json({ message: 'Your subscription has expired. Please renew your plan.' }, { status: 402 })
     }
 
-    const planConfig = Object.values(PLANS).find(p => p.id === subscription.plan)
+    const planConfig = Object.values(PLANS).find(p => p.id === entitlement.effectivePlanId)
     const maxCampaigns = planConfig?.maxCampaigns ?? Infinity
 
     if (maxCampaigns !== Infinity) {

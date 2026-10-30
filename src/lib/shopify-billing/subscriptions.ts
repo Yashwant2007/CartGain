@@ -1,4 +1,11 @@
-import { shopifyGraphQL, assertNoUserErrors, type ShopifyStoreRef, type UserError } from './client'
+import {
+  shopifyGraphQL,
+  assertNoUserErrors,
+  isShopifyAuthFailure,
+  ShopifyReconnectRequiredError,
+  type ShopifyStoreRef,
+  type UserError,
+} from './client'
 import type { BillingCurrency, BillingPeriod } from './plans'
 
 /**
@@ -93,7 +100,11 @@ export async function getActiveShopifySubscription(
   store: ShopifyStoreRef,
 ): Promise<NormalizedShopifySubscription | null> {
   const { data, errors } = await shopifyGraphQL<ActiveSubscriptionQuery>(store, ACTIVE_SUBSCRIPTION_QUERY)
-  if (errors.length || !data) return null
+  if (errors.length) {
+    if (isShopifyAuthFailure(errors)) throw new ShopifyReconnectRequiredError()
+    return null
+  }
+  if (!data) return null
 
   const subscriptions = data.currentAppInstallation?.activeSubscriptions || []
   if (subscriptions.length === 0) return null
@@ -207,8 +218,12 @@ export async function createShopifySubscription(
     },
   )
 
-  if (errors.length || !data) {
+  if (errors.length) {
+    if (isShopifyAuthFailure(errors)) throw new ShopifyReconnectRequiredError()
     throw new Error(errors[0] || 'Shopify did not create the subscription.')
+  }
+  if (!data) {
+    throw new Error('Shopify did not create the subscription.')
   }
 
   assertNoUserErrors(data.appSubscriptionCreate.userErrors, 'Shopify declined the subscription')

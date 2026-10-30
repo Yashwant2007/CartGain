@@ -50,7 +50,15 @@ function DashboardLayoutInner({
     setEmbedParams(getShopifyEmbedParams())
   }, [])
 
-  const [subStatus, setSubStatus] = useState<{ isFree: boolean; isExhausted: boolean; cartsUsed: number; cartsRemaining: number } | null>(null)
+  const [subStatus, setSubStatus] = useState<{
+    isFree: boolean
+    isExhausted: boolean
+    isExpired: boolean
+    renewalDueSoon: boolean
+    daysRemaining: number | null
+    cartsUsed: number
+    cartsRemaining: number
+  } | null>(null)
   const [subLoading, setSubLoading] = useState(true)
 
   useEffect(() => {
@@ -73,10 +81,16 @@ function DashboardLayoutInner({
           const plan = typeof sub.plan === 'string'
             ? (sub.plan === 'starter' ? 'growth' : sub.plan)
             : 'free'
-          const isFree = !PAID_PLAN_IDS.includes(plan)
+          const entitlement = sub.entitlement as
+            | { isPaid?: boolean; isExpired?: boolean; renewalDueSoon?: boolean; daysRemaining?: number | null }
+            | undefined
+          const isFree = entitlement ? !entitlement.isPaid : !PAID_PLAN_IDS.includes(plan)
           setSubStatus({
             isFree,
             isExhausted: isFree && processed >= FREE_CARTS_THRESHOLD,
+            isExpired: entitlement?.isExpired ?? false,
+            renewalDueSoon: entitlement?.renewalDueSoon ?? false,
+            daysRemaining: entitlement?.daysRemaining ?? null,
             cartsUsed: processed,
             cartsRemaining: Math.max(0, FREE_CARTS_THRESHOLD - processed),
           })
@@ -237,7 +251,49 @@ function DashboardLayoutInner({
         </header>
 
         {/* Subscription banner */}
-        {!subLoading && subStatus?.isExhausted && (
+        {!subLoading && subStatus?.isExpired && (
+          <div className="mx-3 sm:mx-4 md:mx-6 lg:mx-8 mt-3 sm:mt-4 md:mt-6 lg:mt-8">
+            <div className="bg-red-900/30 border border-red-500/40 rounded-xl p-4 backdrop-blur-sm flex items-center justify-between gap-4">
+              <div className="flex items-start space-x-3">
+                <XCircle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-red-200">Your paid plan has expired</p>
+                  <p className="text-xs text-blue-300/70 mt-0.5">Paid features are paused. Renew now to restore your plan and usage limits.</p>
+                </div>
+              </div>
+              <Link
+                href={embedHref('/dashboard/subscription')}
+                className="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap bg-gradient-to-r from-red-500 to-orange-500 text-white hover:shadow-lg hover:shadow-red-500/50 transition-all flex-shrink-0"
+              >
+                Renew Now
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {!subLoading && subStatus && !subStatus.isExpired && subStatus.renewalDueSoon && !subStatus.isFree && (
+          <div className="mx-3 sm:mx-4 md:mx-6 lg:mx-8 mt-3 sm:mt-4 md:mt-6 lg:mt-8">
+            <div className="bg-amber-900/20 border border-amber-500/30 rounded-xl p-4 backdrop-blur-sm flex items-center justify-between gap-4">
+              <div className="flex items-start space-x-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-200">
+                    Renewal due{subStatus.daysRemaining != null ? ` in ${subStatus.daysRemaining} day${subStatus.daysRemaining === 1 ? '' : 's'}` : ' soon'}
+                  </p>
+                  <p className="text-xs text-blue-300/70 mt-0.5">Your subscription renews automatically. Review your plan before the renewal date.</p>
+                </div>
+              </div>
+              <Link
+                href={embedHref('/dashboard/subscription')}
+                className="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:shadow-lg hover:shadow-amber-500/50 transition-all flex-shrink-0"
+              >
+                Manage Plan
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {!subLoading && subStatus?.isExhausted && !subStatus.isExpired && (
           <div className="mx-3 sm:mx-4 md:mx-6 lg:mx-8 mt-3 sm:mt-4 md:mt-6 lg:mt-8">
             <div className="bg-red-900/30 border border-red-500/40 rounded-xl p-4 backdrop-blur-sm flex items-center justify-between gap-4">
               <div className="flex items-start space-x-3">
@@ -257,7 +313,7 @@ function DashboardLayoutInner({
           </div>
         )}
 
-        {!subLoading && subStatus && !subStatus.isExhausted && subStatus.isFree && subStatus.cartsUsed > 0 && (
+        {!subLoading && subStatus && !subStatus.isExpired && !subStatus.isExhausted && subStatus.isFree && subStatus.cartsUsed > 0 && (
           <div className="mx-3 sm:mx-4 md:mx-6 lg:mx-8 mt-3 sm:mt-4 md:mt-6 lg:mt-8">
             <div className="bg-amber-900/20 border border-amber-500/30 rounded-xl p-4 backdrop-blur-sm flex items-center justify-between gap-4">
               <div className="flex items-start space-x-3">

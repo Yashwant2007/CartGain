@@ -39,10 +39,7 @@ export function buildShopifyOAuthUrl(opts: {
   authUrl.searchParams.set('scope', SHOPIFY_OAUTH_SCOPES)
   authUrl.searchParams.set('redirect_uri', opts.redirectUri)
   authUrl.searchParams.set('state', opts.state)
-  // Request expiring online tokens (Shopify deprecated non-expiring offline
-  // tokens). Online tokens include expires_in + refresh_token + the
-  // associated_user (owner) identity — we store all three in the callback.
-  authUrl.searchParams.append('grant_options[]', 'per-user')
+  authUrl.searchParams.set('expiring', '1')
   return authUrl.toString()
 }
 
