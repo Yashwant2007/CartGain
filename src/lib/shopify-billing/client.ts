@@ -1,4 +1,10 @@
-import { getAccessToken, assertAllowedShopifyHost } from '@/lib/shopify'
+import {
+  getAccessToken,
+  assertAllowedShopifyHost,
+  ShopifyReconnectRequiredError,
+} from '@/lib/shopify'
+
+export { ShopifyReconnectRequiredError }
 
 // Shopify Admin GraphQL API version — kept in sync with the REST calls in
 // src/lib/shopify.ts and shopify.app.toml.
@@ -19,13 +25,6 @@ export interface GraphQLResult<T> {
   errors: string[]
 }
 
-export class ShopifyReconnectRequiredError extends Error {
-  constructor(message = 'Your Shopify connection has expired. Reconnect Shopify and try again.') {
-    super(message)
-    this.name = 'ShopifyReconnectRequiredError'
-  }
-}
-
 export function isShopifyAuthFailure(errors: string[]): boolean {
   return errors.some((error) =>
     /HTTP (401|403)|no valid shopify access token|unauthorized|access token/i.test(error),
@@ -44,24 +43,48 @@ export async function shopifyGraphQL<T>(
 ): Promise<GraphQLResult<T>> {
   const accessToken = await getAccessToken(store)
   if (!accessToken) {
-    return { data: null, errors: ['No valid Shopify access token — reconnect the store.'] }
+    throw new ShopifyReconnectRequiredError()
   }
 
   try {
     const url = `https://${store.domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`
     assertAllowedShopifyHost(url)
-    const res = await fetch(url, {
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Shopify-Access-Token': accessToken,
+    }
+    const body = JSON.stringify({ query, variables })
+    let res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Shopify-Access-Token': accessToken,
-      },
+      headers,
       signal: AbortSignal.timeout(GRAPHQL_TIMEOUT_MS),
-      body: JSON.stringify({ query, variables }),
+      body,
     })
 
+    // Shopify rejected the token — force a refresh once if a refresh token
+    // exists, then retry. Legacy non-expiring tokens can never be refreshed,
+    // so they surface ShopifyReconnectRequiredError instead of being reused.
+    if (res.status === 401 || res.status === 403) {
+      if (store.shopifyRefreshToken) {
+        const refreshed = await getAccessToken(store, { forceRefresh: true })
+        if (refreshed && refreshed !== accessToken) {
+          res = await fetch(url, {
+            method: 'POST',
+            headers: { ...headers, 'X-Shopify-Access-Token': refreshed },
+            signal: AbortSignal.timeout(GRAPHQL_TIMEOUT_MS),
+            body,
+          })
+        }
+      }
+      if (res.status === 401 || res.status === 403) {
+        throw new ShopifyReconnectRequiredError(
+          `Shopify rejected the access token (HTTP ${res.status}). Reconnect the store from Integrations.`,
+        )
+      }
+    }
+
     if (!res.ok) {
-      // 401/403 = token revoked/expired; 402 = shop frozen; 429 = throttled.
+      // 402 = shop frozen; 429 = throttled; other = unexpected.
       return { data: null, errors: [`Shopify GraphQL HTTP ${res.status}`] }
     }
 
@@ -77,6 +100,7 @@ export async function shopifyGraphQL<T>(
 
     return { data: json.data, errors: [] }
   } catch (err: any) {
+    if (err instanceof ShopifyReconnectRequiredError) throw err
     const message = err?.name === 'TimeoutError'
       ? 'Shopify took too long to respond.'
       : 'Could not reach Shopify.'

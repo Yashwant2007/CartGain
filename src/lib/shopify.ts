@@ -7,6 +7,17 @@ const SHOPIFY_MAX_RETRIES = 3
 const SHOPIFY_BASE_BACKOFF_MS = 500
 const SHOPIFY_MAX_BACKOFF_MS = 30_000
 
+/** Thrown when a Shopify access token is missing, revoked, expired, or is a
+ * legacy non-expiring token that Shopify no longer accepts. The store must be
+ * reconnected from Integrations so OAuth can issue a fresh expiring offline
+ * token. */
+export class ShopifyReconnectRequiredError extends Error {
+  constructor(message = 'Your Shopify connection has expired. Reconnect the store from Integrations, then try again.') {
+    super(message)
+    this.name = 'ShopifyReconnectRequiredError'
+  }
+}
+
 // Shopify returns 429 (throttled) with a Retry-After header, and transient 5xx
 // during incidents. Without backing off we hammer the API, extend the throttle
 // window and fail recoveries that would have succeeded a second later.
@@ -69,24 +80,30 @@ async function shopifyFetch(input: string, init: RequestInit = {}, retries = SHO
   return res
 }
 
-export async function getAccessToken(store: {
-  id: string
-  domain: string
-  apiKey: string | null
-  shopifyRefreshToken: string | null
-  shopifyTokenExpiresAt: Date | null
-}): Promise<string | null> {
+export async function getAccessToken(
+  store: {
+    id: string
+    domain: string
+    apiKey: string | null
+    shopifyRefreshToken: string | null
+    shopifyTokenExpiresAt: Date | null
+  },
+  { forceRefresh = false } = {},
+): Promise<string | null> {
   if (!store.apiKey) return null
 
   const { decrypt, encrypt } = await import('@/lib/encryption')
 
-  // No refresh token → legacy permanent token, use as-is
+  // Legacy/permanent token (no refresh token). Shopify no longer accepts
+  // non-expiring access tokens for the Admin API, so we cannot use it. The
+  // store must reconnect via OAuth to get a fresh expiring offline token.
   if (!store.shopifyRefreshToken || !store.shopifyTokenExpiresAt) {
-    try { return decrypt(store.apiKey) } catch { return null }
+    return null
   }
 
-  // Token still valid
-  if (Date.now() < store.shopifyTokenExpiresAt.getTime() - REFRESH_MARGIN_MS) {
+  // Token still valid — unless the caller forced a refresh (e.g. after a
+  // 401/403 that suggests Shopify rejected it even before the expiry margin).
+  if (!forceRefresh && Date.now() < store.shopifyTokenExpiresAt.getTime() - REFRESH_MARGIN_MS) {
     try { return decrypt(store.apiKey) } catch { return null }
   }
 
@@ -137,14 +154,58 @@ export async function getAccessToken(store: {
 }
 
 /**
- * SHA-256 of the configured app secret, truncated.
+ * Fetch a Shopify Admin REST endpoint with automatic token refresh on 401/403.
  *
- * When a legitimate delivery is rejected there are only two possible causes: the
- * code is wrong, or the secret we hold is not the secret Shopify signed with.
- * The code is easy to read, the secret is not — so log a preimage-resistant
- * fingerprint instead. The merchant (or we, together) can hash the secret from
- * the Partner Dashboard locally and compare the two values without the secret
- * ever being written to a log, a chat, or a commit.
+ * Resolves the access token via `getAccessToken`, sends the request, and on a
+ * 401/403 (token rejected) force-refreshes once when the store has a refresh
+ * token. Legacy non-expiring tokens (no refresh token) can never be refreshed,
+ * so they surface `ShopifyReconnectRequiredError` instead of being reused and
+ * rejected on every call.
+ */
+export async function fetchShopifyWithAuth(
+  store: {
+    id: string
+    domain: string
+    apiKey: string | null
+    shopifyRefreshToken: string | null
+    shopifyTokenExpiresAt: Date | null
+  },
+  input: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  assertAllowedShopifyHost(input)
+
+  const accessToken = await getAccessToken(store)
+  if (!accessToken) {
+    throw new ShopifyReconnectRequiredError()
+  }
+
+  const headers = new Headers(init.headers || {})
+  headers.set('X-Shopify-Access-Token', accessToken)
+
+  let res = await shopifyFetch(input, { ...init, headers })
+
+  // Shopify rejected the token even though getAccessToken considered it valid
+  // (e.g. revoked, or non-expiring ban applied mid-session). Force a refresh
+  // when a refresh token exists, then retry once.
+  if (res.status === 401 || res.status === 403) {
+    if (store.shopifyRefreshToken) {
+      const refreshed = await getAccessToken(store, { forceRefresh: true })
+      if (refreshed && refreshed !== accessToken) {
+        headers.set('X-Shopify-Access-Token', refreshed)
+        res = await shopifyFetch(input, { ...init, headers })
+      }
+    }
+    if (res.status === 401 || res.status === 403) {
+      throw new ShopifyReconnectRequiredError(`Shopify rejected the access token (HTTP ${res.status}). Reconnect the store from Integrations.`)
+    }
+  }
+
+  return res
+}
+
+/**
+ * SHA-256 of the configured app secret, truncated.
  */
 function secretFingerprint(secret: string): string {
   return crypto.createHash('sha256').update(secret, 'utf8').digest('hex').slice(0, 16)
@@ -247,17 +308,21 @@ export async function verifyShopifyAccessToken(accessToken: string): Promise<{
 }
 
 export async function createShopifyWebhook(
-  shopDomain: string,
-  accessToken: string,
+  store: {
+    id: string
+    domain: string
+    apiKey: string | null
+    shopifyRefreshToken: string | null
+    shopifyTokenExpiresAt: Date | null
+  },
   topic: string,
   webhookUrl: string
 ): Promise<boolean> {
   try {
-    const response = await shopifyFetch(`https://${shopDomain}/admin/api/2026-04/webhooks.json`, {
+    const response = await fetchShopifyWithAuth(store, `https://${store.domain}/admin/api/2026-04/webhooks.json`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Shopify-Access-Token': accessToken,
       },
       signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
@@ -281,6 +346,10 @@ export async function createShopifyWebhook(
     }
     return response.ok
   } catch (error) {
+    if (error instanceof ShopifyReconnectRequiredError) {
+      console.log(`Store ${store.domain} needs Shopify reconnection — skipping webhook ${topic}`)
+      return false
+    }
     console.error('Failed to create Shopify webhook:', error)
     return false
   }
@@ -290,19 +359,20 @@ export async function createShopifyWebhook(
 // same address, and re-points stale subscriptions (old address) instead of
 // creating duplicates. Makes setupShopifyWebhooks idempotent across reconnects.
 export async function createShopifyWebhookIfMissing(
-  shopDomain: string,
-  accessToken: string,
+  store: {
+    id: string
+    domain: string
+    apiKey: string | null
+    shopifyRefreshToken: string | null
+    shopifyTokenExpiresAt: Date | null
+  },
   topic: string,
   webhookUrl: string
 ): Promise<boolean> {
   try {
-    const listRes = await shopifyFetch(
-      `https://${shopDomain}/admin/api/2026-04/webhooks.json?topic=${encodeURIComponent(topic)}`,
-      {
-        headers: { 'X-Shopify-Access-Token': accessToken },
-        signal: AbortSignal.timeout(10000),
-      }
-    )
+    const listRes = await fetchShopifyWithAuth(store, `https://${store.domain}/admin/api/2026-04/webhooks.json?topic=${encodeURIComponent(topic)}`, {
+      signal: AbortSignal.timeout(10000),
+    })
 
     if (listRes.ok) {
       const data = await listRes.json()
@@ -313,11 +383,10 @@ export async function createShopifyWebhookIfMissing(
 
       const stale = existing.find((w) => w.address !== webhookUrl)
       if (stale) {
-        const updateRes = await shopifyFetch(`https://${shopDomain}/admin/api/2026-04/webhooks/${stale.id}.json`, {
+        const updateRes = await fetchShopifyWithAuth(store, `https://${store.domain}/admin/api/2026-04/webhooks/${stale.id}.json`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            'X-Shopify-Access-Token': accessToken,
           },
           signal: AbortSignal.timeout(10000),
           body: JSON.stringify({ webhook: { address: webhookUrl } }),
@@ -327,15 +396,24 @@ export async function createShopifyWebhookIfMissing(
       }
     }
   } catch (error) {
+    if (error instanceof ShopifyReconnectRequiredError) {
+      console.log(`Store ${store.domain} needs Shopify reconnection — skipping webhook ${topic}`)
+      return false
+    }
     console.error(`Failed to list Shopify webhooks for ${topic}:`, error)
   }
 
-  return createShopifyWebhook(shopDomain, accessToken, topic, webhookUrl)
+  return createShopifyWebhook(store, topic, webhookUrl)
 }
 
 export async function setupShopifyWebhooks(
-  shopDomain: string,
-  accessToken: string,
+  store: {
+    id: string
+    domain: string
+    apiKey: string | null
+    shopifyRefreshToken: string | null
+    shopifyTokenExpiresAt: Date | null
+  },
   baseUrl: string
 ): Promise<void> {
   const webhookUrl = `${baseUrl}/api/webhooks/shopify`
@@ -369,68 +447,58 @@ export async function setupShopifyWebhooks(
   ]
 
   for (const topic of topics) {
-    await createShopifyWebhookIfMissing(shopDomain, accessToken, topic, webhookUrl)
+    await createShopifyWebhookIfMissing(store, topic, webhookUrl)
   }
 }
 
 export async function fetchShopifyCarts(
-  shopDomain: string,
-  accessToken: string,
+  store: {
+    id: string
+    domain: string
+    apiKey: string | null
+    shopifyRefreshToken: string | null
+    shopifyTokenExpiresAt: Date | null
+  },
   limit: number = 50
 ): Promise<any[]> {
   try {
-    const response = await shopifyFetch(
-      `https://${shopDomain}/admin/api/2026-04/carts.json?limit=${limit}`,
-      {
-        headers: {
-          'X-Shopify-Access-Token': accessToken,
-        },
-        signal: AbortSignal.timeout(10000),
-      }
+    const response = await fetchShopifyWithAuth(
+      store,
+      `https://${store.domain}/admin/api/2026-04/carts.json?limit=${limit}`,
+      { signal: AbortSignal.timeout(10000) },
     )
-
     const data = await response.json()
     return data.carts || []
   } catch (error) {
+    if (error instanceof ShopifyReconnectRequiredError) {
+      console.log(`Store ${store.domain} needs Shopify reconnection — skipping cart fetch`)
+      return []
+    }
     console.error('Failed to fetch Shopify carts:', error)
     return []
   }
 }
 
 export async function fetchAbandonedCheckouts(
-  shopDomain: string,
-  accessToken: string,
+  store: {
+    id: string
+    domain: string
+    apiKey: string | null
+    shopifyRefreshToken: string | null
+    shopifyTokenExpiresAt: Date | null
+  },
   limit: number = 50
-): Promise<any[] | null> {
-  try {
-    // Shopify's abandoned-checkouts resource lives at `checkouts.json` (the
-    // list is returned under the `checkouts` key). The old `abandoned_checkouts`
-    // path/key never existed and produced a 404 on every cart-processing run.
-    const url = `https://${shopDomain}/admin/api/2026-04/checkouts.json?limit=${limit}`
-    const response = await shopifyFetch(url, {
-      headers: { 'X-Shopify-Access-Token': accessToken },
-      signal: AbortSignal.timeout(10000),
-    })
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '(no body)')
-      // 401 means the token is dead and the store must reconnect — surface that
-      // to the caller. Everything else (403 missing scope, 404 no resource, 5xx)
-      // is an expected "no data" outcome: log a warning, never an error, so a
-      // quiet shop doesn't spam the error feed on every 5-minute cart sweep.
-      if (response.status === 401) {
-        console.warn(`Shopify checkout fetch unauthorized (401): ${errText}`)
-        return null
-      }
-      console.warn(`Shopify checkout fetch returned ${response.status}: ${errText}`)
-      return []
-    }
-    const data = await response.json()
-    return data.checkouts || []
-  } catch (error) {
-    console.error('Failed to fetch Shopify checkouts:', error)
-    return []
-  }
+): Promise<any[]> {
+  // Shopify's abandoned-checkouts resource lives at `checkouts.json` (the list
+  // is returned under the `checkouts` key). The old `abandoned_checkouts`
+  // path/key never existed and produced a 404 on every cart-processing run.
+  const response = await fetchShopifyWithAuth(
+    store,
+    `https://${store.domain}/admin/api/2026-04/checkouts.json?limit=${limit}`,
+    { signal: AbortSignal.timeout(10000) },
+  )
+  const data = await response.json()
+  return data.checkouts || []
 }
 
 export async function fetchShopifyProductPrice(
@@ -438,38 +506,37 @@ export async function fetchShopifyProductPrice(
   shopifyProductId: string,
   variantId?: string | null,
 ): Promise<number | null> {
-  const accessToken = await getAccessToken(store)
-  if (!accessToken) return null
-
   const productId = shopifyProductId.replace(/^gid:\/\/shopify\/Product\//, '')
   const url = `https://${store.domain}/admin/api/2026-04/products/${productId}.json`
 
+  let res: Response
   try {
-    const res = await shopifyFetch(url, {
-      headers: { 'X-Shopify-Access-Token': accessToken },
-      signal: AbortSignal.timeout(5000),
-    })
-    if (!res.ok) return null
-    const data = await res.json()
-    const product = data.product
-    if (!product?.variants?.length) return null
-
-    if (variantId) {
-      const variantIdNum = variantId.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
-      const variant = product.variants.find((v: any) => String(v.id) === variantIdNum)
-      if (variant?.price) return parseFloat(variant.price)
-      // A specific variant was requested but does not belong to this product.
-      // Returning another variant's price (e.g. variants[0]) would quote the
-      // wrong price and could weaken the negotiation floor — treat it as
-      // unknown so callers fall back to their own verified/default price.
+    res = await fetchShopifyWithAuth(store, url, { signal: AbortSignal.timeout(5000) })
+  } catch (error) {
+    if (error instanceof ShopifyReconnectRequiredError) {
       return null
     }
-
-    const price = product.variants[0].price
-    return price != null ? parseFloat(price) : null
-  } catch {
     return null
   }
+
+  if (!res.ok) return null
+  const data = await res.json()
+  const product = data.product
+  if (!product?.variants?.length) return null
+
+  if (variantId) {
+    const variantIdNum = variantId.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
+    const variant = product.variants.find((v: any) => String(v.id) === variantIdNum)
+    if (variant?.price) return parseFloat(variant.price)
+    // A specific variant was requested but does not belong to this product.
+    // Returning another variant's price (e.g. variants[0]) would quote the
+    // wrong price and could weaken the negotiation floor — treat it as
+    // unknown so callers fall back to their own verified/default price.
+    return null
+  }
+
+  const price = product.variants[0].price
+  return price != null ? parseFloat(price) : null
 }
 
 export interface ShopifyProductDetail {
@@ -506,17 +573,20 @@ export async function fetchShopifyProductDetail(
   store: { id: string; domain: string; apiKey: string | null; shopifyRefreshToken: string | null; shopifyTokenExpiresAt: Date | null },
   shopifyProductId: string,
 ): Promise<ShopifyProductDetail | null> {
-  const accessToken = await getAccessToken(store)
-  if (!accessToken) return null
-
   const productId = shopifyProductId.replace(/^gid:\/\/shopify\/Product\//, '')
   const url = `https://${store.domain}/admin/api/2026-04/products/${productId}.json`
 
+  let res: Response
   try {
-    const res = await shopifyFetch(url, {
-      headers: { 'X-Shopify-Access-Token': accessToken },
-      signal: AbortSignal.timeout(5000),
-    })
+    res = await fetchShopifyWithAuth(store, url, { signal: AbortSignal.timeout(5000) })
+  } catch (error) {
+    if (error instanceof ShopifyReconnectRequiredError) {
+      return null
+    }
+    return null
+  }
+
+  try {
     if (!res.ok) return null
     const data = await res.json()
     const product = data.product
@@ -627,24 +697,50 @@ export async function fetchShopifyProducts(
 }
 
 export async function syncAbandonedCheckouts(store: any): Promise<number> {
-  const accessToken = await getAccessToken(store)
+  let accessToken: string | null
+  try {
+    accessToken = await getAccessToken(store)
+  } catch {
+    accessToken = null
+  }
   if (!accessToken) {
-    console.log(`No valid token for store ${store.domain} — skipping checkout sync`)
+    if (store.apiKey) {
+      // Shopify is connected but the token is a legacy non-expiring token that
+      // Shopify no longer accepts, or it is otherwise invalid. Deactivate the
+      // store so the sweep stops retrying and the merchant is prompted to
+      // reconnect from Integrations (which now issues an expiring offline
+      // token).
+      console.log(`🔌 Deactivating ${store.domain}: Shopify token is missing or deprecated — reconnect from Integrations.`)
+      try {
+        const prisma = (await import('@/lib/db')).default
+        await prisma.store.update({
+          where: { id: store.id },
+          data: { isActive: false },
+        }).catch(() => {})
+      } catch {}
+    } else {
+      console.log(`No valid token for store ${store.domain} — skipping checkout sync`)
+    }
     return 0
   }
 
-  const checkouts = await fetchAbandonedCheckouts(store.domain, accessToken)
-
-  if (checkouts === null) {
-    console.error(`🚫 Auth failed for ${store.domain} — token is deprecated or invalid. Store needs to reconnect from Integrations page.`)
-    try {
-      const prisma = (await import('@/lib/db')).default
-      await prisma.store.update({
-        where: { id: store.id },
-        data: { isActive: false },
-      }).catch(() => {})
-    } catch {}
-    return -1
+  let checkouts: any[]
+  try {
+    checkouts = await fetchAbandonedCheckouts(store, 50)
+  } catch (error) {
+    if (error instanceof ShopifyReconnectRequiredError) {
+      console.log(`🔌 ${store.domain}: ${error.message}`)
+      try {
+        const prisma = (await import('@/lib/db')).default
+        await prisma.store.update({
+          where: { id: store.id },
+          data: { isActive: false },
+        }).catch(() => {})
+      } catch {}
+      return 0
+    }
+    console.error(`Failed to fetch abandoned checkouts for ${store.domain}:`, error)
+    return 0
   }
 
   if (checkouts.length === 0) {

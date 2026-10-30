@@ -18,8 +18,8 @@ const store = {
   id: 'store-1',
   domain: 'test.myshopify.com',
   apiKey: 'enc',
-  shopifyRefreshToken: null,
-  shopifyTokenExpiresAt: null,
+  shopifyRefreshToken: 'refresh',
+  shopifyTokenExpiresAt: new Date(Date.now() + 1_000_000),
 }
 
 function mockProduct(variants: Array<{ id: number; price: string }>) {

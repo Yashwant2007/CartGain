@@ -23,6 +23,11 @@ import fs from 'fs'
 import path from 'path'
 import { verifyShopifyWebhook } from '@/lib/shopify'
 
+jest.mock('@/lib/encryption', () => ({
+  decrypt: jest.fn(() => 'tok'),
+  encrypt: jest.fn(() => 'enc'),
+}))
+
 const APP_TOML = fs.readFileSync(path.join(process.cwd(), 'shopify.app.toml'), 'utf8')
 
 ;(globalThis as any).__origFetch = global.fetch
@@ -135,7 +140,13 @@ describe('check 3 — mandatory compliance webhooks are declared in the app conf
 
     try {
       const { setupShopifyWebhooks } = await import('@/lib/shopify')
-      await setupShopifyWebhooks('demo.myshopify.com', 'token', 'https://cart-gain.com')
+      await setupShopifyWebhooks({
+        id: 'store-1',
+        domain: 'demo.myshopify.com',
+        apiKey: 'encrypted-token',
+        shopifyRefreshToken: 'refresh',
+        shopifyTokenExpiresAt: new Date(Date.now() + 1_000_000),
+      }, 'https://cart-gain.com')
     } finally {
       global.fetch = (globalThis as any).__origFetch
     }

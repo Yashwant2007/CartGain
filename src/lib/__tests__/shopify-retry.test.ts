@@ -1,5 +1,10 @@
 import { retryDelayMs, fetchShopifyCarts } from '@/lib/shopify'
 
+jest.mock('@/lib/encryption', () => ({
+  decrypt: (s: string) => s,
+  encrypt: (s: string) => s,
+}))
+
 function mockResponse(status: number, retryAfter?: string) {
   return {
     status,
@@ -57,7 +62,13 @@ describe('shopifyFetch retry loop', () => {
       }
     })
 
-    const carts = await fetchShopifyCarts('shop.myshopify.com', 'token')
+    const carts = await fetchShopifyCarts({
+      id: 's1',
+      domain: 'shop.myshopify.com',
+      apiKey: 'token',
+      shopifyRefreshToken: 'refresh',
+      shopifyTokenExpiresAt: new Date(Date.now() + 1_000_000),
+    })
     expect(carts).toEqual([{ id: 42 }])
     expect((global.fetch as jest.Mock).mock.calls.length).toBe(2)
   })
@@ -70,7 +81,13 @@ describe('shopifyFetch retry loop', () => {
       json: async () => ({ carts: [] }),
     }))
     ;(globalThis as any).fetch = fetchMock
-    await fetchShopifyCarts('shop.myshopify.com', 'tok')
+    await fetchShopifyCarts({
+      id: 's1',
+      domain: 'shop.myshopify.com',
+      apiKey: 'tok',
+      shopifyRefreshToken: 'refresh',
+      shopifyTokenExpiresAt: new Date(Date.now() + 1_000_000),
+    })
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

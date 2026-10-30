@@ -271,7 +271,18 @@ export async function GET(req: NextRequest) {
     })
 
     try {
-      await setupShopifyWebhooks(shop, accessToken, baseUrl)
+      await setupShopifyWebhooks(
+        {
+          id: storeId!,
+          domain: shop,
+          apiKey: encrypt(accessToken),
+          ...(tokenData.refresh_token
+            ? { shopifyRefreshToken: encrypt(tokenData.refresh_token) }
+            : { shopifyRefreshToken: null }),
+          shopifyTokenExpiresAt: tokenExpiresAt ?? null,
+        },
+        baseUrl,
+      )
     } catch (webhookError) {
       await captureError({
         level: 'error',
