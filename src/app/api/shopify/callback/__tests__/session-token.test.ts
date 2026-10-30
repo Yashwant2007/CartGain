@@ -28,7 +28,14 @@ jest.mock('@/lib/db', () => ({
 jest.mock('next-auth/jwt', () => ({ encode: jest.fn(async () => 'SIGNED_SESSION') }))
 jest.mock('@/lib/app-base-url', () => ({ getAppBaseUrl: jest.fn(() => 'https://cart-gain.com') }))
 jest.mock('@/lib/encryption', () => ({ encrypt: jest.fn(() => 'enc') }))
-jest.mock('@/lib/shopify', () => ({ setupShopifyWebhooks: jest.fn(async () => {}) }))
+jest.mock('@/lib/shopify', () => ({
+  setupShopifyWebhooks: jest.fn(async () => {}),
+  fetchShopifyWithAuth: jest.fn(async () => ({
+    ok: true,
+    json: async () => ({ shop: { id: 1, email: 'owner@shop.com' } }),
+  })),
+  ShopifyReconnectRequiredError: class extends Error {},
+}))
 jest.mock('@/lib/services/ai', () => ({ generateCampaignSetup: jest.fn(async () => null) }))
 jest.mock('@/lib/subscription', () => ({ createFreeSubscription: jest.fn(async () => {}) }))
 jest.mock('@/lib/shopify-oauth', () => ({

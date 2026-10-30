@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { getAppBaseUrl } from '@/lib/app-base-url'
 import { encrypt } from '@/lib/encryption'
-import { setupShopifyWebhooks } from '@/lib/shopify'
+import { setupShopifyWebhooks, fetchShopifyWithAuth, ShopifyReconnectRequiredError } from '@/lib/shopify'
 import { generateCampaignSetup } from '@/lib/services/ai'
 import { verifyOAuthState, verifyShopifyCallbackHmac, isValidShopDomain } from '@/lib/shopify-oauth'
 import { createFreeSubscription } from '@/lib/subscription'
@@ -257,10 +257,50 @@ export async function GET(req: NextRequest) {
           // inactive (signup creates stores inactive until email verification,
           // and an inactive store is skipped by cart processing + bargaining).
           isActive: true,
-          ...(tokenData.refresh_token ? { shopifyRefreshToken: encrypt(tokenData.refresh_token) } : {}),
+          ...(tokenData.refresh_token
+            ? { shopifyRefreshToken: encrypt(tokenData.refresh_token) }
+            : {}),
           ...(tokenExpiresAt ? { shopifyTokenExpiresAt: tokenExpiresAt } : {}),
         },
       })
+
+      // ── Post-OAuth token verification ──
+      // Confirm the token Shopify issued actually works against the Admin API.
+      // If Shopify returned a deprecated non-expiring token despite expiring=1,
+      // surface a clear error immediately instead of letting the merchant
+      // discover it later on the billing page.
+      try {
+        await fetchShopifyWithAuth(
+          {
+            id: storeId,
+            domain: shop,
+            apiKey: encrypt(accessToken),
+            ...(tokenData.refresh_token
+              ? { shopifyRefreshToken: encrypt(tokenData.refresh_token) }
+              : { shopifyRefreshToken: null }),
+            shopifyTokenExpiresAt: tokenExpiresAt ?? null,
+          },
+          `https://${shop}/admin/api/2026-04/shop.json`,
+          { signal: AbortSignal.timeout(10000) },
+        )
+      } catch (verifyError) {
+        if (verifyError instanceof ShopifyReconnectRequiredError) {
+          await captureError({
+            level: 'error',
+            component: 'oauth',
+            operation: 'shopify_connect',
+            error: verifyError,
+            req,
+            persist: true,
+            statusCode: 409,
+          })
+          return redirectWithCleanup(
+            '/dashboard/integrations?shopify_error=Deprecated+offline+token.+Shopify+did+not+issue+an+expiring+token.+Please+contact+support+or+try+reconnecting+Shopify.',
+            baseUrl,
+          )
+        }
+        throw verifyError
+      }
     }
 
     await track({
