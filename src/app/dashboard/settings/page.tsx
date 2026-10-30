@@ -646,7 +646,7 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to initiate connection')
+        throw new Error(data.error || data.message || 'Failed to initiate connection')
       }
 
       if (popup) {

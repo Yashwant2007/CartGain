@@ -184,7 +184,7 @@ export class ValidationError extends Error {
 export function handleValidationError(error: unknown) {
   if (error instanceof ValidationError) {
     return NextResponse.json(
-      { message: error.message, errors: error.details.map(d => ({ field: d.path.join('.'), message: d.message })) },
+      { error: error.message, message: error.message, errors: error.details.map(d => ({ field: d.path.join('.'), message: d.message })) },
       { status: 400 }
     )
   }

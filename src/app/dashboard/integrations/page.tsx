@@ -139,7 +139,7 @@ export default function IntegrationsPage() {
         })
         if (!res.ok) {
           const data = await res.json().catch(() => null)
-          setActionMsg({ type: 'error', text: data?.error || 'Failed to initiate Shopify connection. Please try again.' })
+          setActionMsg({ type: 'error', text: data?.error || data?.message || 'Failed to initiate Shopify connection. Please try again.' })
           return
         }
         const data = await res.json()
@@ -197,7 +197,7 @@ export default function IntegrationsPage() {
         body: JSON.stringify({ shop: domain, storeId: status.store.id }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to initiate connection')
+      if (!res.ok) throw new Error(data.error || data.message || 'Failed to initiate connection')
 
       setShopifyModal(false)
 
