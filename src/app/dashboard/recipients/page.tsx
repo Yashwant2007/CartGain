@@ -20,10 +20,13 @@ type Recipient = {
   email: string | null
   phone: string | null
   consentWhatsApp: boolean
+  consentEmail: boolean
   whatsappStatus: string
   whatsappStatusLabel: string
   whatsappConsentAt: string | null
   whatsappConsentSource: string | null
+  emailConsentAt: string | null
+  emailConsentSource: string | null
   optedOutAt: string | null
   suppressed: boolean
   lastSeenAt: string | null
@@ -61,7 +64,6 @@ type Diagnostics = {
     inboundRoutingReady: boolean
     webhookSecretConfigured: boolean
   }
-  consentRule: string
 }
 
 const FILTERS: Array<{ key: string; label: string }> = [
@@ -164,6 +166,7 @@ export default function RecipientsPage() {
       if (!res.ok) throw new Error(data?.message || 'Could not save mapping')
       setDiscoveredNumbers([])
       setSelectedNumberId('')
+      setShowOwnSetup(false)
       setMappingMessage('WhatsApp number connected.')
       load()
     } catch (err: any) {
@@ -190,12 +193,17 @@ export default function RecipientsPage() {
       if (data.saved) {
         setDiscoveredNumbers([])
         setSelectedNumberId('')
+        setShowOwnSetup(false)
         setMappingMessage('WhatsApp number connected automatically from Meta.')
         load()
         return
       }
       if (numbers.length === 0) {
-        setMappingMessage(data.error || 'No WhatsApp number found for this Meta account.')
+        setMappingMessage(
+          diagnostics?.whatsapp.sharedNumber
+            ? "No separate number found. CartGain's shared number stays active."
+            : data.error || 'No WhatsApp number found in the connected Meta account.',
+        )
         return
       }
       setDiscoveredNumbers(numbers)
@@ -220,7 +228,8 @@ export default function RecipientsPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.message || 'Could not clear mapping')
-      setMappingMessage('Using CartGain shared routing.')
+      setShowOwnSetup(false)
+      setMappingMessage('Switched to the CartGain shared number.')
       load()
     } catch (err: any) {
       setError(err?.message || 'Could not clear mapping')
@@ -243,7 +252,21 @@ export default function RecipientsPage() {
     }
   }
 
+  const emailBadge = (recipient: Recipient) => {
+    if (recipient.suppressed || recipient.optedOutAt) {
+      return { label: 'Opted out', className: 'bg-red-600/20 text-red-300 border-red-500/30' }
+    }
+    if (!recipient.email) {
+      return { label: 'No email', className: 'bg-slate-600/30 text-blue-200 border-slate-500/40' }
+    }
+    if (recipient.consentEmail) {
+      return { label: 'Opted in', className: 'bg-emerald-600/20 text-emerald-300 border-emerald-500/30' }
+    }
+    return { label: 'No opt-in', className: 'bg-amber-600/20 text-amber-300 border-amber-500/30' }
+  }
+
   const isLoading = resolving || loading
+  const hasAnyRecipients = (counts?.all ?? 0) > 0
   const hasOwnNumber = Boolean(
     diagnostics?.whatsapp.storePhoneNumberId && !diagnostics.whatsapp.storeMappedToSharedNumber,
   )
@@ -257,21 +280,23 @@ export default function RecipientsPage() {
             Recipients
           </h1>
           <p className="text-blue-300 text-sm mt-1">
-            Automatic registry from Shopify carts, checkouts, orders and customer sync. WhatsApp is only sent to explicit opt-ins.
+            Automatic registry from Shopify carts, checkouts, orders and customer sync. Email and WhatsApp reminders are only sent to explicit opt-ins.
           </p>
         </div>
         <div className="flex gap-2">
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400" />
-            <input
-              type="text"
-              placeholder="Search name, email or phone..."
-              aria-label="Search recipients"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-slate-800/40 border border-blue-700/30 rounded-lg text-sm text-white placeholder-blue-400/50 focus:border-blue-500/70 outline-none"
-            />
-          </div>
+          {(hasAnyRecipients || search) && (
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400" />
+              <input
+                type="text"
+                placeholder="Search name, email or phone..."
+                aria-label="Search recipients"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-slate-800/40 border border-blue-700/30 rounded-lg text-sm text-white placeholder-blue-400/50 focus:border-blue-500/70 outline-none"
+              />
+            </div>
+          )}
           <button
             onClick={() => load()}
             className="p-2 rounded-lg bg-slate-800/40 border border-blue-700/30 text-blue-300 hover:text-white"
@@ -296,56 +321,88 @@ export default function RecipientsPage() {
             </div>
           )}
 
-          {diagnostics.whatsapp.sharedNumber && (
-            <div className="rounded-xl border border-blue-500/30 bg-blue-950/30 p-4 text-sm">
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="w-5 h-5 text-blue-300 flex-shrink-0 mt-0.5" />
-                <div className="space-y-2 text-blue-100/90">
-                  <p className="font-medium text-white">CartGain shared WhatsApp number</p>
-                  <p>
-                    No setup needed. Messages send from CartGain&apos;s shared number, and inbound STOP/START replies are
-                    matched to your store by the customer&apos;s phone number and cart history. There is no per-store
-                    phone-number ID to enter.
-                  </p>
-                  {diagnostics.whatsapp.sharedMappingIgnored && (
-                    <p className="text-xs text-blue-200/70">
-                      An older shared-number ID saved on this store is ignored automatically. No action needed.
+          {hasOwnNumber ? (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 text-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-300 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-white">Your WhatsApp number is connected</p>
+                    <p className="text-xs text-blue-200/70 mt-1">
+                      Inbound STOP/START replies and delivery receipts route to this store.
                     </p>
-                  )}
-                  {!hasOwnNumber && !showOwnSetup && (
-                    <button
-                      onClick={() => setShowOwnSetup(true)}
-                      className="px-3 py-1.5 rounded-lg text-xs bg-blue-600/20 border border-blue-500/40 text-blue-100"
-                    >
-                      Use my own WhatsApp number
-                    </button>
-                  )}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={discoverMapping}
+                    disabled={busyId === 'discover' || busyId === 'mapping'}
+                    className="px-3 py-1.5 rounded-lg text-xs bg-blue-600/25 border border-blue-500/40 text-blue-100 disabled:opacity-40"
+                  >
+                    Rediscover
+                  </button>
+                  <button
+                    onClick={clearMapping}
+                    disabled={busyId === 'mapping'}
+                    className="px-3 py-1.5 rounded-lg text-xs bg-red-600/20 border border-red-500/30 text-red-200 disabled:opacity-40"
+                  >
+                    Remove
+                  </button>
                 </div>
               </div>
             </div>
-          )}
-
-          {!hasOwnNumber && (!diagnostics.whatsapp.sharedNumber || showOwnSetup) && (
+          ) : (
             <div className="rounded-xl border border-blue-500/30 bg-blue-950/30 p-4 text-sm">
               <div className="flex items-start gap-2">
                 <MessageCircle className="w-5 h-5 text-blue-300 flex-shrink-0 mt-0.5" />
                 <div className="space-y-2 text-blue-100/90">
                   <p className="font-medium text-white">
                     {diagnostics.whatsapp.sharedNumber
-                      ? 'Connect your own WhatsApp number'
-                      : 'Connect this store&apos;s WhatsApp number'}
+                      ? "Using CartGain's shared WhatsApp number"
+                      : 'Connect a WhatsApp number'}
                   </p>
                   <p>
-                    CartGain reads the number from the WhatsApp Business Account connected to Meta and saves the correct
-                    phone-number ID automatically. You do not need to find or paste an ID.
+                    {diagnostics.whatsapp.sharedNumber
+                      ? 'No setup needed. Outbound messages and inbound STOP/START replies are handled automatically.'
+                      : 'Find the number from the WhatsApp Business Account connected to Meta.'}
                   </p>
-                  <button
-                    onClick={discoverMapping}
-                    disabled={busyId === 'discover' || busyId === 'mapping'}
-                    className="px-3 py-1.5 rounded-lg text-xs bg-blue-600/30 border border-blue-500/40 text-blue-100 disabled:opacity-40"
-                  >
-                    {busyId === 'discover' || busyId === 'mapping' ? 'Looking up Meta...' : 'Discover from Meta'}
-                  </button>
+                  {diagnostics.whatsapp.sharedNumber ? (
+                    <button
+                      onClick={() => {
+                        setShowOwnSetup((value) => !value)
+                        setMappingMessage(null)
+                        setDiscoveredNumbers([])
+                        setSelectedNumberId('')
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs bg-blue-600/20 border border-blue-500/40 text-blue-100"
+                    >
+                      {showOwnSetup ? 'Keep using shared number' : 'Use your own number (optional)'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={discoverMapping}
+                      disabled={busyId === 'discover' || busyId === 'mapping'}
+                      className="px-3 py-1.5 rounded-lg text-xs bg-blue-600/30 border border-blue-500/40 text-blue-100 disabled:opacity-40"
+                    >
+                      {busyId === 'discover' || busyId === 'mapping' ? 'Looking up Meta...' : 'Discover from Meta'}
+                    </button>
+                  )}
+
+                  {diagnostics.whatsapp.sharedNumber && showOwnSetup && (
+                    <div className="mt-3 pt-3 border-t border-blue-500/20 space-y-2">
+                      <p className="text-xs text-blue-200/70">
+                        Optional: use your own WhatsApp Business number. CartGain finds the phone-number ID from Meta;
+                        the shared number stays active if none is found.
+                      </p>
+                      <button
+                        onClick={discoverMapping}
+                        disabled={busyId === 'discover' || busyId === 'mapping'}
+                        className="px-3 py-1.5 rounded-lg text-xs bg-blue-600/30 border border-blue-500/40 text-blue-100 disabled:opacity-40"
+                      >
+                        {busyId === 'discover' || busyId === 'mapping' ? 'Looking up Meta...' : 'Discover my number'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -379,39 +436,6 @@ export default function RecipientsPage() {
             </div>
           )}
 
-          {diagnostics.whatsapp.storePhoneNumberId && !diagnostics.whatsapp.storeMappedToSharedNumber && (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 text-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-300 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-medium text-white">WhatsApp number connected</p>
-                    <p className="text-xs text-blue-200/70 mt-1">
-                      Phone-number ID {diagnostics.whatsapp.storePhoneNumberId}. This routes inbound STOP/START replies
-                      and delivery receipts to this store.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={discoverMapping}
-                    disabled={busyId === 'discover' || busyId === 'mapping'}
-                    className="px-3 py-1.5 rounded-lg text-xs bg-blue-600/25 border border-blue-500/40 text-blue-100 disabled:opacity-40"
-                  >
-                    Rediscover
-                  </button>
-                  <button
-                    onClick={clearMapping}
-                    disabled={busyId === 'mapping'}
-                    className="px-3 py-1.5 rounded-lg text-xs bg-red-600/20 border border-red-500/30 text-red-200 disabled:opacity-40"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           {mappingMessage && (
             <p className="text-xs text-blue-200/70 px-1">{mappingMessage}</p>
           )}
@@ -429,26 +453,28 @@ export default function RecipientsPage() {
           )}
         </div>
       )}
-      <div className="flex flex-wrap gap-2">
-        {FILTERS.map((tab) => {
-          const count = counts ? (counts as any)[tab.key] ?? 0 : undefined
-          const active = filter === tab.key
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setFilter(tab.key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
-                active
-                  ? 'bg-blue-600/30 border-blue-500/50 text-blue-100'
-                  : 'bg-slate-800/30 border-blue-700/20 text-blue-300/70 hover:text-blue-100'
-              }`}
-            >
-              {tab.label}
-              {count !== undefined && <span className="ml-1.5 text-blue-300/50">{count}</span>}
-            </button>
-          )
-        })}
-      </div>
+      {hasAnyRecipients && (
+        <div className="flex flex-wrap gap-2">
+          {FILTERS.map((tab) => {
+            const count = counts ? (counts as any)[tab.key] ?? 0 : undefined
+            const active = filter === tab.key
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setFilter(tab.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                  active
+                    ? 'bg-blue-600/30 border-blue-500/50 text-blue-100'
+                    : 'bg-slate-800/30 border-blue-700/20 text-blue-300/70 hover:text-blue-100'
+                }`}
+              >
+                {tab.label}
+                {count !== undefined && <span className="ml-1.5 text-blue-300/50">{count}</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {storeError ? (
         <div className="bg-slate-800/40 border border-red-800/40 rounded-xl p-12 text-center">
@@ -467,10 +493,31 @@ export default function RecipientsPage() {
       ) : recipients.length === 0 ? (
         <div className="bg-slate-800/40 border border-blue-700/20 rounded-xl p-12 text-center">
           <Users className="w-12 h-12 text-blue-300/20 mx-auto mb-4" />
-          <p className="text-blue-300/60">No recipients in this filter</p>
-          <p className="text-sm text-blue-300/40 mt-1">
-            Contacts are added automatically from Shopify carts, abandoned checkouts, orders and customer webhooks.
-          </p>
+          {hasAnyRecipients ? (
+            <>
+              <p className="text-blue-300/60">No recipients match this view</p>
+              <p className="text-sm text-blue-300/40 mt-1">Try another filter or clear your search.</p>
+              {(search || filter !== 'all') && (
+                <button
+                  onClick={() => {
+                    setSearch('')
+                    setFilter('all')
+                  }}
+                  className="mt-4 px-3 py-1.5 rounded-lg text-xs bg-blue-600/20 border border-blue-500/40 text-blue-100"
+                >
+                  Clear filters
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="text-blue-300/60">No recipients yet</p>
+              <p className="text-sm text-blue-300/40 mt-1 max-w-md mx-auto">
+                They appear automatically after a Shopify cart, checkout, order or customer sync. Reminders require an
+                explicit email or WhatsApp opt-in.
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <div className="bg-slate-800/40 border border-blue-700/20 rounded-xl overflow-hidden">
@@ -480,14 +527,16 @@ export default function RecipientsPage() {
                 <tr className="text-left text-blue-300/70 border-b border-blue-700/20">
                   <th className="p-4 font-medium">Recipient</th>
                   <th className="p-4 font-medium">WhatsApp</th>
-                  <th className="p-4 font-medium">Consent source</th>
+                  <th className="p-4 font-medium">Email</th>
                   <th className="p-4 font-medium">Last seen</th>
                   <th className="p-4 font-medium">Last contact</th>
                   <th className="p-4 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {recipients.map((recipient) => (
+                {recipients.map((recipient) => {
+                  const email = emailBadge(recipient)
+                  return (
                   <tr key={recipient.id} className="border-b border-blue-700/10 last:border-0 hover:bg-slate-700/20">
                     <td className="p-4">
                       <div className="font-medium text-white">{recipient.name || 'Unknown'}</div>
@@ -510,16 +559,31 @@ export default function RecipientsPage() {
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${badge(recipient)}`}>
                         {recipient.whatsappStatusLabel}
                       </span>
+                      {recipient.consentWhatsApp && recipient.whatsappConsentSource && (
+                        <div className="text-blue-300/40 text-xs mt-1">
+                          {recipient.whatsappConsentSource}
+                          {recipient.whatsappConsentAt
+                            ? ` · ${new Date(recipient.whatsappConsentAt).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                              })}`
+                            : ''}
+                        </div>
+                      )}
                     </td>
                     <td className="p-4 text-blue-300/60 text-xs">
-                      {recipient.whatsappConsentSource || '—'}
-                      {recipient.whatsappConsentAt && (
-                        <div className="text-blue-300/40">
-                          {new Date(recipient.whatsappConsentAt).toLocaleDateString('en-IN', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${email.className}`}>
+                        {email.label}
+                      </span>
+                      {recipient.consentEmail && recipient.emailConsentSource && (
+                        <div className="text-blue-300/40 mt-1">
+                          {recipient.emailConsentSource}
+                          {recipient.emailConsentAt
+                            ? ` · ${new Date(recipient.emailConsentAt).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                              })}`
+                            : ''}
                         </div>
                       )}
                     </td>
@@ -544,9 +608,10 @@ export default function RecipientsPage() {
                     </td>
                     <td className="p-4">
                       <div className="flex flex-wrap gap-2">
-                        {!recipient.consentWhatsApp && !recipient.suppressed && !recipient.optedOutAt && (
+                        {!recipient.consentWhatsApp && !recipient.suppressed && !recipient.optedOutAt && recipient.phone && (
                           <button
-                            disabled={busyId === recipient.id || !recipient.phone}
+                            disabled={busyId === recipient.id}
+                            title="Only if you hold explicit WhatsApp consent"
                             onClick={() => act(recipient, 'grant_whatsapp_consent')}
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs bg-emerald-600/20 border border-emerald-500/30 text-emerald-200 hover:bg-emerald-600/30 disabled:opacity-40"
                           >
@@ -567,16 +632,14 @@ export default function RecipientsPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {diagnostics && (
-        <p className="text-xs text-blue-300/40">{diagnostics.consentRule}</p>
-      )}
     </div>
   )
 }

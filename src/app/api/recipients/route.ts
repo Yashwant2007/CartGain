@@ -156,7 +156,7 @@ export async function GET(request: NextRequest) {
           inboundRoutingReady: Boolean(ownPhoneNumberId || sharedNumber),
           webhookSecretConfigured: Boolean(resolveWhatsAppAppSecret()),
         },
-        consentRule: 'WhatsApp consent is only granted by an explicit opt-in and is never inferred from Shopify email/SMS marketing flags.',
+        consentRule: 'Email and WhatsApp consent are only granted by an explicit opt-in and are never inferred from Shopify marketing flags.',
       },
     })
   } catch (error: any) {
