@@ -79,6 +79,21 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `fix(recipients): simplify WhatsApp setup and surface email consent`
+  (committed `77bd99e7`, deployed). The Recipients tab no longer opens with a
+  wall of setup diagnostics: shared routing is a single "no setup needed" card
+  with an optional "Use your own number" reveal, a connected BYO number gets a
+  compact card with Rediscover/Remove, and a multi-number discovery still shows
+  the picker. The search box and the six filter chips are hidden when there are
+  zero recipients, the empty state now distinguishes "no recipients yet" from
+  "no matches" (with Clear filters), the table gained an Email consent column
+  (status, source and date) while WhatsApp source moved under its badge, and the
+  disabled "Record opt-in" button only renders when a phone exists. Also
+  updated the API consent-rule copy to cover email. Verified: Jest **137 suites
+  / 1490 tests**, tsc, lint and production build green; Vercel deploy aliased
+  `https://cart-gain.com`, `/api/health` release `77bd99e`, status ok, region
+  `bom1`, DB/Redis/env/AI/email/WhatsApp/Shopify checks ok.
+
 - `feat(recovery): explicit email/WhatsApp opt-in and consent-gated reminders`
   (committed `83a9ff9b`, deployed). Recovery is now consent-first. `recordRecipientConsent`
   records per-channel email/WhatsApp consent with provenance, clears stale
