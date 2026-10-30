@@ -54,12 +54,13 @@ describe('shopifyTokenState', () => {
     expect(shopifyTokenState(makeStore({ apiKey: null }), NOW)).toBe('missing')
   })
 
-  it('treats a legacy token with no expiry as usable', () => {
-    expect(shopifyTokenState(makeStore(), NOW)).toBe('ok')
+  it('reports a legacy token without a refresh token as expired (Shopify rejects non-expiring tokens)', () => {
+    expect(shopifyTokenState(makeStore(), NOW)).toBe('expired')
   })
 
-  it('reports a future token as usable', () => {
+  it('reports a future token with a refresh token as usable', () => {
     expect(shopifyTokenState(makeStore({
+      shopifyRefreshToken: 'enc-refresh',
       shopifyTokenExpiresAt: new Date(NOW.getTime() + 60 * 60 * 1000),
     }), NOW)).toBe('ok')
   })
@@ -107,14 +108,20 @@ describe('shopifyBillingAvailability', () => {
       currency: 'INR',
       tokenState: 'refreshable',
     })
+    // A legacy token with no refresh token cannot be used by Shopify's Admin API.
     expect(shopifyBillingAvailability(makeStore())).toMatchObject({
-      available: true,
-      tokenState: 'ok',
+      available: false,
+      reason: 'reconnect_required',
+      tokenState: 'expired',
     })
   })
 
   it('rejects unsupported currencies without guessing a price', () => {
-    expect(shopifyBillingAvailability(makeStore({ currency: 'EUR' }))).toMatchObject({
+    expect(shopifyBillingAvailability(makeStore({
+      currency: 'EUR',
+      shopifyRefreshToken: 'enc-refresh',
+      shopifyTokenExpiresAt: new Date(Date.now() + 1_000_000),
+    }))).toMatchObject({
       available: false,
       reason: 'unsupported_currency',
     })

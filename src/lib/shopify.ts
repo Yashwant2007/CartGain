@@ -97,13 +97,11 @@ export async function getAccessToken(
   // Legacy/permanent token (no refresh token). Shopify no longer accepts
   // non-expiring access tokens for the Admin API, so we cannot use it. The
   // store must reconnect via OAuth to get a fresh expiring offline token.
-  if (!store.shopifyRefreshToken || !store.shopifyTokenExpiresAt) {
-    return null
-  }
+  if (!store.shopifyRefreshToken) return null
 
   // Token still valid — unless the caller forced a refresh (e.g. after a
   // 401/403 that suggests Shopify rejected it even before the expiry margin).
-  if (!forceRefresh && Date.now() < store.shopifyTokenExpiresAt.getTime() - REFRESH_MARGIN_MS) {
+  if (!forceRefresh && store.shopifyTokenExpiresAt && Date.now() < store.shopifyTokenExpiresAt.getTime() - REFRESH_MARGIN_MS) {
     try { return decrypt(store.apiKey) } catch { return null }
   }
 
