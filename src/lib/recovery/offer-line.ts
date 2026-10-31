@@ -3,8 +3,8 @@
 // Keep the text side bounded (product names are merchant-controlled and can be
 // arbitrarily long) and append the links verbatim at the end.
 
-const MAX_PRODUCT_CHARS = 60
-const MAX_NAME_CHARS = 32
+const MAX_PRODUCT_CHARS = 45
+const MAX_NAME_CHARS = 28
 
 function oneLine(value: string | null | undefined): string {
   return (value || '').replace(/\s+/g, ' ').trim()
@@ -38,7 +38,7 @@ export function buildRecoveryOfferLine(input: RecoveryOfferLineInput): string {
   // Price + qty in parens, e.g. "(299.00 × 2)". Empty when no price is known.
   let priceBit = ''
   if (typeof input.productPrice === 'number' && input.productPrice > 0) {
-    priceBit = `(${input.productPrice.toFixed(2)}`
+    priceBit = ` (${input.productPrice.toFixed(2)}`
     if (input.productQty && input.productQty > 1) priceBit += ` × ${input.productQty}`
     priceBit += ')'
   }
@@ -47,13 +47,13 @@ export function buildRecoveryOfferLine(input: RecoveryOfferLineInput): string {
   // the copy layer never invents a discount.
   const offer =
     discount && code
-      ? `${discount} — code ${code}`
+      ? `${discount} · code ${code}`
       : code
         ? `code ${code}`
         : 'still saved'
 
-  // Compact, emoji-led, product-first. Separators are `·` so the line stays
-  // scannable; URLs are appended verbatim so WhatsApp can linkify them.
+  // Compact, emoji-led, product-first. Short labels keep the line scannable.
+  // URLs are appended verbatim so WhatsApp can linkify them.
   const priceRender = priceBit ? ` ${priceBit}` : ''
-  return `${prefix}your ${products}${priceRender} is saved 🛒 — ${offer} · Checkout: ${input.checkoutUrl} · Bargain: ${input.bargainUrl}`
+  return `${prefix}your ${products}${priceRender} is saved 🛒 · ${offer} · 💬 Bargain now: ${input.bargainUrl} · 🛒 Checkout: ${input.checkoutUrl}`
 }

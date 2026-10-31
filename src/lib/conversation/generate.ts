@@ -228,7 +228,7 @@ export function buildFallbackMessage(
   opts?: { subjectPrefix?: string }
 ): { body: string; subject?: string } {
   const name = facts.customerName ? facts.customerName.split(' ')[0] : null
-  const greeting = name ? `Hi ${name},` : 'Hi,'
+  const greeting = name ? `Hi ${name}!` : 'Hi there!'
   const itemText = facts.items.length
     ? facts.items.map((i) => `${i.name} (x${i.quantity})`).join(', ')
     : 'your items'
@@ -241,17 +241,17 @@ export function buildFallbackMessage(
   // WhatsApp template button), so repeating the raw link only adds noise.
   if (facts.channel === 'whatsapp') {
     return {
-      body: `${greeting} your ${itemText} is still saved here 🛒 — total ${total}.${offer} Come back whenever suits you.`,
+      body: `${greeting} your ${itemText} is still saved here 🛒 — total ${total}.${offer} Come back whenever suits you. No pressure, just your goodies waiting.`,
     }
   }
 
   const subject = opts?.subjectPrefix
-    ? `${opts.subjectPrefix} ${name ? name + ',' : ''}`.trim()
+    ? `${opts.subjectPrefix} ${name ? name + '!' : ''}`.trim()
     : `${name ? `${name}, your cart is waiting` : 'Your cart is waiting'}`
 
   return {
     subject,
-    body: `${greeting}\n\nYour ${itemText} is still saved — total ${total}.${offer}\n\nWhenever you're ready, you can pick up right where you left off.`,
+    body: `${greeting}\n\nYour ${itemText} is still saved — total ${total}.${offer}\n\nWhenever you're ready, you can pick up right where you left off. We'll be here. 🛍️`,
   }
 }
 

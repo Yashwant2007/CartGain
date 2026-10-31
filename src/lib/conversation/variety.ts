@@ -43,10 +43,11 @@ export const OPENERS: Record<'email' | 'whatsapp', string[]> = {
     'Your picks are on hold.',
   ],
   whatsapp: [
-    'Still thinking it over?',
-    'Your cart is waiting.',
-    'Picked the right things?',
-    'You left something behind.',
+    'Still thinking it over? 🤔',
+    'Your cart is waiting 🛒',
+    'Picked the right things? ✨',
+    'You left something behind 😅',
+    'Psst… your cart misses you 😉',
   ],
 }
 

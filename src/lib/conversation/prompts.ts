@@ -79,6 +79,7 @@ STYLE (how it should read)
     : 'One light, situational joke or playful aside at most, and only if it lands naturally.'
 }
 - Sound like a person who works at the store, not a marketing robot: contractions, short sentences, no exclamation-mark stacking.
+- Use emoji where it adds warmth (max ${maxEmojis(voice, facts.channel)}), but never more than one or two in a short WhatsApp message.
 - End with one clear next step (finish checkout, or make an offer if the FACTS include that link).
 
 FACTS (the ONLY things you are allowed to state)

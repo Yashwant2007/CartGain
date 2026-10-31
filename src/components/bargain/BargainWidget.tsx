@@ -1105,26 +1105,25 @@ export default function BargainWidget({
       <div className="cg-sr-only" role="status" aria-live="polite">{announcer}</div>
 
       {!open && (
-        isEmbed ? (
-          experience ? (
-            <div style={{
-              minHeight: invitationFirst ? '100%' : undefined,
-              display: 'flex',
-              alignItems: invitationFirst ? 'center' : undefined,
-              justifyContent: invitationFirst ? 'center' : undefined,
-              padding: invitationFirst ? 20 : undefined,
-            }}>
-              <StorefrontInvitation
-                experience={experience}
-                onOpen={openPanel}
-                storeId={storeId}
-                productId={shopifyProductId}
-                variantId={productCtx.variantId}
-                source={mode === 'cart' ? 'cart' : mode === 'item' ? 'item' : 'storefront'}
-                trackingEnabled={invitationFirst}
-              />
-            </div>
-          ) : (
+        experience ? (
+          <div style={{
+            minHeight: invitationFirst ? '100%' : undefined,
+            display: 'flex',
+            alignItems: invitationFirst ? 'center' : undefined,
+            justifyContent: invitationFirst ? 'center' : undefined,
+            padding: invitationFirst ? 20 : undefined,
+          }}>
+            <StorefrontInvitation
+              experience={experience}
+              onOpen={openPanel}
+              storeId={storeId}
+              productId={shopifyProductId}
+              variantId={productCtx.variantId}
+              source={mode === 'cart' ? 'cart' : mode === 'item' ? 'item' : 'storefront'}
+              trackingEnabled={invitationFirst}
+            />
+          </div>
+        ) : (
           <button
             onClick={openPanel}
             type="button"
@@ -1198,58 +1197,6 @@ export default function BargainWidget({
               <MessageCircle size={14} />
               {t('makeOffer')}
               <ArrowRight size={14} />
-            </span>
-          </button>
-          )
-        ) : (
-          <button
-            onClick={openPanel}
-            ref={launcherRef}
-            aria-haspopup="dialog"
-            aria-expanded={open}
-            aria-label={t('makeOfferSub')}
-            className="cg-fab"
-            style={{
-              background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-              color: '#ffffff',
-              padding: '15px 22px',
-              borderRadius: 999,
-              border: '1px solid rgba(255,255,255,0.25)',
-              fontWeight: 800,
-              fontSize: 15,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 10,
-              cursor: 'pointer',
-              minHeight: 56,
-              boxShadow: '0 10px 30px rgba(79,70,229,0.45), 0 2px 6px rgba(0,0,0,0.12)',
-              transition: 'all 0.2s ease',
-              animation: 'cgAttnFloat 3s ease-in-out infinite',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'linear-gradient(135deg, #4f46e5, #4338ca)'
-              e.currentTarget.style.boxShadow = '0 12px 36px rgba(79,70,229,0.55), 0 2px 6px rgba(0,0,0,0.14)'
-              e.currentTarget.style.transform = 'scale(1.03)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'linear-gradient(135deg, #6366f1, #4f46e5)'
-              e.currentTarget.style.boxShadow = '0 10px 30px rgba(79,70,229,0.45), 0 2px 6px rgba(0,0,0,0.12)'
-              e.currentTarget.style.transform = 'scale(1)'
-            }}
-          >
-            <span style={{ position: 'relative', display: 'inline-flex' }}>
-              <MessageCircle size={19} />
-              <span style={{
-                position: 'absolute', top: -4, right: -7, width: 9, height: 9,
-                background: '#34d399', border: '2px solid #4f46e5', borderRadius: '50%',
-              }} />
-            </span>
-            <span>{t('makeOffer')}</span>
-            <span style={{
-              background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)',
-              padding: '3px 10px', borderRadius: 999, fontSize: 11.5, fontWeight: 800,
-            }}>
-              {t('saveNow')}
             </span>
           </button>
         )

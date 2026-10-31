@@ -20,10 +20,10 @@ describe('buildRecoveryOfferLine', () => {
     expect(line).toContain('code GAINABC123')
     expect(line).toContain(checkout)
     expect(line).toContain(bargain)
-    expect(line.indexOf(checkout)).toBeLessThan(line.indexOf(bargain))
+    expect(line.indexOf(bargain)).toBeLessThan(line.indexOf(checkout))
     expect(line).toContain('🛒')
-    expect(line).toContain('· Checkout:')
-    expect(line).toContain('· Bargain:')
+    expect(line).toContain('💬 Bargain now:')
+    expect(line).toContain('🛒 Checkout:')
   })
 
   it('keeps a live checkout and bargain link when there is no discount', () => {
