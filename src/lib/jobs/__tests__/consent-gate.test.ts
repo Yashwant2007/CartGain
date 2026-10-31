@@ -198,6 +198,37 @@ describe('recovery send-time consent gate', () => {
     expect(result.messagesSent).toBe(2)
   })
 
+  it('uses the consented identity phone when the cart has no phone', async () => {
+    prime({ customerPhone: null })
+    prismaMock.customerIdentity.findMany.mockResolvedValue([
+      identity({ email: 'buyer@example.com', phone: PHONE }),
+    ])
+
+    const result = await processAbandonedCarts(25)
+
+    expect(whatsappMock).toHaveBeenCalledTimes(1)
+    expect(whatsappMock.mock.calls[0][0].to).toBe('919999999999')
+    expect(prismaMock.cart.update).toHaveBeenCalledWith({
+      where: { id: 'cart-1' },
+      data: { customerPhone: PHONE },
+    })
+    expect(result.messagesSent).toBe(2)
+  })
+
+  it('ignores unsupported legacy channels instead of disabling supported ones', async () => {
+    prime()
+    prismaMock.campaign.findMany.mockResolvedValue([
+      { ...campaign(), channels: ['email', 'push'] },
+    ])
+    prismaMock.customerIdentity.findMany.mockResolvedValue([identity()])
+
+    const result = await processAbandonedCarts(25)
+
+    expect(emailMock).toHaveBeenCalledTimes(1)
+    expect(whatsappMock).not.toHaveBeenCalled()
+    expect(result.messagesSent).toBe(1)
+  })
+
   it('does not accept consent recorded against a different phone', async () => {
     prime()
     // Mirror Prisma's OR filter: a row for another phone must not be matched.

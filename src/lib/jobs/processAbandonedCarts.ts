@@ -279,7 +279,13 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
       : PLANS.FREE
     const customerLimits = planConfig.maxMessagesPerCustomer
 
-    const channels = (campaign.channels.length > 0 ? campaign.channels : ['whatsapp', 'email']).filter((c: string) => c !== 'sms')
+    const channels = (campaign.channels.length > 0 ? campaign.channels : ['whatsapp', 'email'])
+      .filter((c: string) => c === 'email' || c === 'whatsapp')
+    if (channels.length !== campaign.channels.length) {
+      console.warn(
+        `[recovery] campaign=${campaign.id} ignored unsupported channels: ${campaign.channels.filter((c: string) => c !== 'email' && c !== 'whatsapp').join(', ')}`,
+      )
+    }
     let sendDelayMs = campaign.sendDelay * 60 * 1000
     let followUpDelayMs = campaign.followUpDelay * 60 * 1000
     // One "round" touches every usable channel (WhatsApp AND email on the
@@ -487,8 +493,13 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     const roundSettledMessages = cart.messages.filter(
       (m: any) => m.status === 'sent' || m.status === 'delivered' || m.status === 'skipped',
     )
-    const cartPhoneDigits = cart.customerPhone ? sanitizePhoneNumber(cart.customerPhone) : ''
     const recipient = findRecipientForCart(recipients, cart)
+    // Shopify checkouts often omit the phone even when the shopper opted in on
+    // the storefront. The consent record is keyed by email/customer and holds
+    // the verified phone, so use it for WhatsApp when the cart has none and
+    // backfill the cart so later rounds and the dashboard show the same number.
+    const whatsappPhone = cart.customerPhone || recipient?.phone || null
+    const cartPhoneDigits = whatsappPhone ? sanitizePhoneNumber(whatsappPhone) : ''
     // An unsubscribe is channel-agnostic. The OptOut tables cover recorded
     // unsubscribes; a suppressed identity is the authoritative record and must
     // stop email too, not just WhatsApp.
@@ -496,17 +507,29 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       return { sent: 0, failed: 0 }
     }
     const whatsappEligibility: WhatsAppEligibilityResult = evaluateWhatsAppEligibility({
-      phone: cart.customerPhone,
+      phone: whatsappPhone,
       identity: recipient,
       cartConverted: Boolean(cart.convertedAt || cart.isRecovered),
       storeActive: store.isActive !== false,
       whatsappConfigured: isWhatsAppConfigured(),
       onOptOutList: Boolean(cartPhoneDigits && optedOutPhones.has(cartPhoneDigits)),
     })
+    if (whatsappEligibility.eligible && !cart.customerPhone && whatsappPhone) {
+      cart.customerPhone = whatsappPhone
+      try {
+        await prisma.cart.update({
+          where: { id: cart.id },
+          data: { customerPhone: whatsappPhone },
+        })
+      } catch {
+        // Best-effort backfill: the current sweep can still send with the
+        // identity phone even if persisting it fails.
+      }
+    }
     if (
       !whatsappEligibility.eligible &&
       effActiveChannels.includes('whatsapp') &&
-      (cart.customerPhone || whatsappEligibility.code === 'whatsapp_not_configured')
+      (whatsappPhone || whatsappEligibility.code === 'whatsapp_not_configured')
     ) {
       console.log(
         `[recovery] cart=${cart.id} whatsapp skipped: ${whatsappEligibility.code} (${whatsappEligibility.reason})`,
@@ -520,7 +543,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     const reachableChannels = effActiveChannels.filter(
       (c: string) =>
         (c === 'email' && emailConsented) ||
-        (c === 'whatsapp' && Boolean(cart.customerPhone) && whatsappEligibility.eligible),
+        (c === 'whatsapp' && Boolean(whatsappPhone) && whatsappEligibility.eligible),
     )
     const channelsByStep = new Map<number, Set<string>>()
     for (const m of roundSettledMessages) {
@@ -584,14 +607,14 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         return false
       }
       if (c === 'email') return emailConsented
-      if (c === 'whatsapp') return Boolean(cart.customerPhone) && whatsappEligibility.eligible
+      if (c === 'whatsapp') return Boolean(whatsappPhone) && whatsappEligibility.eligible
       return false
     })
 
     if (availableChannels.length === 0) return { sent: 0, failed: 0 }
 
     const customerEmail = cart.customerEmail?.toLowerCase().trim()
-    const customerPhone = cart.customerPhone?.replace(/\D/g, '')
+    const customerPhone = whatsappPhone?.replace(/\D/g, '')
 
     if (customerEmail && optedOutEmails.has(customerEmail)) return { sent: 0, failed: 0 }
     // Opt-out is per-contact and channel-agnostic: a customer who unsubscribed
@@ -960,7 +983,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             },
           )
           const whatsappResult = await sendWhatsAppMessage({
-            to: sanitizePhoneNumber(cart.customerPhone!),
+            to: sanitizePhoneNumber(whatsappPhone!),
             templateName: template.name,
             templateParams: params,
           })

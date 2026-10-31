@@ -79,9 +79,25 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `fix(recovery): send WhatsApp from consented identity phones and stop legacy
+  channels from disabling it` (deployed). Two independent reasons a test cart
+  only got email. First, the store's campaign still had `channels:
+  ['email','push']`; the job dropped `sms` but kept the unsupported `push`, so
+  WhatsApp was never attempted. The job now filters to `email`/`whatsapp` (and
+  logs any dropped channel), and the campaign edit page sanitizes legacy
+  channels on load so saving can no longer fail validation. The live
+  `CartGaintest` campaign was updated to `['whatsapp','email']`. Second,
+  Shopify checkouts often omit the phone even when the shopper opted in on the
+  storefront: the cart had an email and no phone, while its consented
+  `CustomerIdentity` held a phone. `processAbandonedCarts` now falls back to
+  the matched recipient's phone for eligibility and sending, and backfills
+  `Cart.customerPhone` best-effort. Consent is still explicit and phone-matched;
+  a cart phone that differs from the consented identity still blocks WhatsApp.
+  Verified: Jest **143 suites / 1528 tests**, tsc, lint and production build
+  green.
+
 - `fix(shopify): refreshable offline tokens, reconnect UX, and expiry-aware
-  entitlement` (committed `41e201b6`→`53f47607`, deployed; follow-up cleanup
-  **uncommitted**). Shopify now issues expiring offline tokens
+  entitlement` (committed `41e201b6`→`53f47607` and `2abe0c03`, deployed). Shopify now issues expiring offline tokens
   (`expiring=1`); `getAccessToken` refreshes 5 minutes before expiry, persists
   rotated access/refresh tokens, accepts `forceRefresh`, and refuses legacy
   non-expiring tokens (no refresh token) instead of reusing them.

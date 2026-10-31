@@ -67,7 +67,9 @@ export default function EditCampaignPage() {
         setCampaign(data.campaign)
         setFormData({
           name: data.campaign.name,
-          channels: data.campaign.channels,
+          channels: (data.campaign.channels as string[]).filter(
+            (c) => c === 'email' || c === 'whatsapp',
+          ),
           aiOptimized: data.campaign.aiOptimized,
           sendDelay: data.campaign.sendDelay,
           followUpDelay: data.campaign.followUpDelay,
