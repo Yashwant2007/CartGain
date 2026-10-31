@@ -79,6 +79,40 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `fix(shopify): refreshable offline tokens, reconnect UX, and expiry-aware
+  entitlement` (committed `41e201b6`→`53f47607`, deployed; follow-up cleanup
+  **uncommitted**). Shopify now issues expiring offline tokens
+  (`expiring=1`); `getAccessToken` refreshes 5 minutes before expiry, persists
+  rotated access/refresh tokens, accepts `forceRefresh`, and refuses legacy
+  non-expiring tokens (no refresh token) instead of reusing them.
+  `fetchShopifyWithAuth` centralises REST auth: on 401/403 it force-refreshes
+  once and retries, then throws `ShopifyReconnectRequiredError`; every REST
+  helper (webhooks, checkouts, products, product price/detail, catalog list)
+  uses it. The GraphQL billing client mirrors the same contract, and billing
+  routes answer `409 SHOPIFY_RECONNECT_REQUIRED` instead of a generic failure.
+  The OAuth callback no longer blocks reconnect on a deprecated token (Shopify
+  was returning them despite `expiring=1`); it now clears any stale refresh
+  token/expiry when the issued token is legacy. `shopifyTokenState` treats a
+  token with no recorded expiry as usable so the error surfaces at API-call
+  time, not at connect time. New `src/lib/subscription-entitlement.ts` is the
+  single source of truth for paid access: an active paid plan past
+  `currentPeriodEnd` is expired and falls back to free in the dashboard,
+  campaigns, bargain gate, and abandoned-cart job, with a 7-day renewal
+  warning. Razorpay `subscription.charged` renewals reset the usage meters and
+  extend the period (deduped by `x-razorpay-event-id` / charge period).
+  Follow-up cleanup: catalog listing and `/api/shopify/health` now go through
+  `fetchShopifyWithAuth`; the health route reports `reauthRequired` on a
+  rejected token; `syncAbandonedCheckouts` only deactivates a store for a
+  legacy token (a transient refresh failure skips the sweep instead); the
+  subscription status keeps `isActive` meaning "status active". Root cause of
+  the "Deprecated offline token" reconnect loop: `expiring=1` was only on the
+  authorize URL, not on the authorization-code **exchange POST**, so Shopify
+  kept issuing non-expiring tokens. The callback now sends `expiring: '1'` in
+  the exchange body and, if Shopify still returns a legacy token, calls
+  `migrateNonExpiringOfflineToken` (token-exchange migration grant) to convert
+  it in place; otherwise stale refresh/expiry are cleared. Verified: Jest
+  **143 suites / 1526 tests**, tsc, lint and production build green.
+
 - `fix(recipients): simplify WhatsApp setup and surface email consent`
   (committed `77bd99e7`, deployed). The Recipients tab no longer opens with a
   wall of setup diagnostics: shared routing is a single "no setup needed" card

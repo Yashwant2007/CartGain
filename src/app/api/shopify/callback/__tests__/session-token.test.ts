@@ -30,11 +30,6 @@ jest.mock('@/lib/app-base-url', () => ({ getAppBaseUrl: jest.fn(() => 'https://c
 jest.mock('@/lib/encryption', () => ({ encrypt: jest.fn(() => 'enc') }))
 jest.mock('@/lib/shopify', () => ({
   setupShopifyWebhooks: jest.fn(async () => {}),
-  fetchShopifyWithAuth: jest.fn(async () => ({
-    ok: true,
-    json: async () => ({ shop: { id: 1, email: 'owner@shop.com' } }),
-  })),
-  ShopifyReconnectRequiredError: class extends Error {},
 }))
 jest.mock('@/lib/services/ai', () => ({ generateCampaignSetup: jest.fn(async () => null) }))
 jest.mock('@/lib/subscription', () => ({ createFreeSubscription: jest.fn(async () => {}) }))
@@ -42,6 +37,7 @@ jest.mock('@/lib/shopify-oauth', () => ({
   verifyOAuthState: jest.fn(() => ({ shop: 'test.myshopify.com', host: 'embed-host' })),
   verifyShopifyCallbackHmac: jest.fn(() => true),
   isValidShopDomain: jest.fn(() => true),
+  migrateNonExpiringOfflineToken: jest.fn(async () => null),
 }))
 jest.mock('@/lib/analytics/track', () => ({ track: jest.fn(async () => {}) }))
 jest.mock('@/lib/observability/logger', () => ({ captureError: jest.fn(async () => {}) }))

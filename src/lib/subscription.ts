@@ -49,7 +49,7 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
   const entitlement = evaluateSubscriptionEntitlement(subscription)
   const planConfig = planConfigFor(entitlement.effectivePlanId)
   const isPaid = entitlement.isPaid
-  const isActive = entitlement.isEntitled
+  const isActive = subscription.status === 'active'
   const isFree = !isPaid
 
   // Bargain usage is derived from the sessions themselves, not the mutable

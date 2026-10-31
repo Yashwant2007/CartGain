@@ -102,6 +102,60 @@ export function isValidShopDomain(shop: string | null): boolean {
     /^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$/.test(shop)
 }
 
+export interface ExpiringOfflineToken {
+  access_token: string
+  refresh_token: string
+  expires_in?: number
+  refresh_token_expires_in?: number
+}
+
+/**
+ * Convert a non-expiring offline token into an expiring one via Shopify's
+ * token-exchange migration grant. This is the safety net for shops where the
+ * authorization-code exchange still returns a legacy token: reconnecting should
+ * self-heal instead of leaving the merchant with an unusable credential.
+ *
+ * Returns null (and leaves the caller on the legacy token) when Shopify rejects
+ * the migration, so a failed conversion never blocks the connect flow.
+ */
+export async function migrateNonExpiringOfflineToken(opts: {
+  shop: string
+  accessToken: string
+  timeoutMs?: number
+}): Promise<ExpiringOfflineToken | null> {
+  const apiKey = process.env.SHOPIFY_API_KEY
+  const apiSecret = process.env.SHOPIFY_API_SECRET?.trim()
+  if (!apiKey || !apiSecret) return null
+
+  try {
+    const res = await fetch(`https://${opts.shop}/admin/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 10000),
+      body: JSON.stringify({
+        grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+        client_id: apiKey,
+        client_secret: apiSecret,
+        subject_token: opts.accessToken,
+        subject_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token',
+        requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token',
+        expiring: '1',
+      }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    if (!data?.access_token || !data?.refresh_token) return null
+    return {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      ...(data.expires_in ? { expires_in: data.expires_in } : {}),
+      ...(data.refresh_token_expires_in ? { refresh_token_expires_in: data.refresh_token_expires_in } : {}),
+    }
+  } catch {
+    return null
+  }
+}
+
 /**
  * Verify Shopify's OAuth callback HMAC. Shopify signs every query parameter
  * (except hmac and signature) with the app secret (hex-encoded, alphabetically

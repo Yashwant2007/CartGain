@@ -4,7 +4,7 @@ import { getAppBaseUrl } from '@/lib/app-base-url'
 import { encrypt } from '@/lib/encryption'
 import { setupShopifyWebhooks } from '@/lib/shopify'
 import { generateCampaignSetup } from '@/lib/services/ai'
-import { verifyOAuthState, verifyShopifyCallbackHmac, isValidShopDomain } from '@/lib/shopify-oauth'
+import { verifyOAuthState, verifyShopifyCallbackHmac, isValidShopDomain, migrateNonExpiringOfflineToken } from '@/lib/shopify-oauth'
 import { createFreeSubscription } from '@/lib/subscription'
 import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
@@ -143,6 +143,10 @@ export async function GET(req: NextRequest) {
         client_id: apiKey,
         client_secret: apiSecret,
         code,
+        // Required on the TOKEN EXCHANGE itself (not just the authorize URL):
+        // without it Shopify issues a legacy non-expiring offline token, which
+        // the Admin API now rejects with 403.
+        expiring: '1',
       }),
     })
 
@@ -153,18 +157,35 @@ export async function GET(req: NextRequest) {
     }
 
     const tokenData = await tokenResponse.json()
-    const accessToken = tokenData.access_token
+    let accessToken: string | undefined = tokenData.access_token
 
     if (!accessToken) {
       return redirectWithCleanup('/dashboard/integrations?shopify_error=No+access+token+received', baseUrl)
     }
 
-    const tokenExpiresAt = tokenData.expires_in
+    let refreshToken: string | undefined = tokenData.refresh_token
+    let tokenExpiresAt = tokenData.expires_in
       ? new Date(Date.now() + tokenData.expires_in * 1000)
       : null
 
-    if (tokenData.refresh_token || tokenData.expires_in) {
-      console.log(`Shopify token for ${shop}${tokenData.expires_in ? ` expires in ${tokenData.expires_in}s` : ''}${tokenData.refresh_token ? ', refresh token provided' : ''}`)
+    // Shopify normally honours expiring=1 on the exchange, but some shops still
+    // receive a legacy non-expiring token. Convert it in place through the
+    // token-exchange migration grant so reconnecting actually restores access.
+    if (!refreshToken) {
+      const migrated = await migrateNonExpiringOfflineToken({ shop, accessToken })
+      if (migrated) {
+        accessToken = migrated.access_token
+        refreshToken = migrated.refresh_token
+        tokenExpiresAt = migrated.expires_in
+          ? new Date(Date.now() + migrated.expires_in * 1000)
+          : null
+      }
+    }
+
+    if (refreshToken || tokenExpiresAt) {
+      console.log(`Shopify token for ${shop}: expiring offline token (refreshable)`)
+    } else {
+      console.warn(`Shopify token for ${shop}: legacy non-expiring token; store will require reconnection`)
     }
 
     // ── Install-origin auto-provision ──
@@ -257,10 +278,15 @@ export async function GET(req: NextRequest) {
           // inactive (signup creates stores inactive until email verification,
           // and an inactive store is skipped by cart processing + bargaining).
           isActive: true,
-          ...(tokenData.refresh_token
-            ? { shopifyRefreshToken: encrypt(tokenData.refresh_token) }
-            : {}),
-          ...(tokenExpiresAt ? { shopifyTokenExpiresAt: tokenExpiresAt } : {}),
+          // Always overwrite both fields. If Shopify returns a legacy
+          // non-expiring token (no refresh_token / expires_in), clearing any
+          // stale refresh token and expiry from an older connection prevents
+          // getAccessToken from attempting a doomed refresh with old
+          // credentials.
+          shopifyRefreshToken: refreshToken
+            ? encrypt(refreshToken)
+            : null,
+          shopifyTokenExpiresAt: tokenExpiresAt,
         },
       })
     }
@@ -278,8 +304,8 @@ export async function GET(req: NextRequest) {
           id: storeId!,
           domain: shop,
           apiKey: encrypt(accessToken),
-          ...(tokenData.refresh_token
-            ? { shopifyRefreshToken: encrypt(tokenData.refresh_token) }
+          ...(refreshToken
+            ? { shopifyRefreshToken: encrypt(refreshToken) }
             : { shopifyRefreshToken: null }),
           shopifyTokenExpiresAt: tokenExpiresAt ?? null,
         },

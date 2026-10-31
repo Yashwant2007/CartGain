@@ -510,10 +510,9 @@ export async function fetchShopifyProductPrice(
   let res: Response
   try {
     res = await fetchShopifyWithAuth(store, url, { signal: AbortSignal.timeout(5000) })
-  } catch (error) {
-    if (error instanceof ShopifyReconnectRequiredError) {
-      return null
-    }
+  } catch {
+    // Missing/expired token or a transient Shopify failure — callers fall back
+    // to their own verified/default price rather than quoting something wrong.
     return null
   }
 
@@ -577,10 +576,9 @@ export async function fetchShopifyProductDetail(
   let res: Response
   try {
     res = await fetchShopifyWithAuth(store, url, { signal: AbortSignal.timeout(5000) })
-  } catch (error) {
-    if (error instanceof ShopifyReconnectRequiredError) {
-      return null
-    }
+  } catch {
+    // Same contract as fetchShopifyProductPrice: an unreachable/reconnect-
+    // required store yields "unknown", never a guessed product record.
     return null
   }
 
@@ -651,11 +649,6 @@ export async function fetchShopifyProducts(
   store: { id: string; domain: string; apiKey: string | null; shopifyRefreshToken: string | null; shopifyTokenExpiresAt: Date | null },
   opts: { limit?: number; pageInfo?: string | null; query?: string | null } = {},
 ): Promise<{ products: any[]; nextCursor: string | null; prevCursor: string | null; error: string | null }> {
-  const accessToken = await getAccessToken(store)
-  if (!accessToken) {
-    return { products: [], nextCursor: null, prevCursor: null, error: 'Could not reach Shopify. Reconnect the store from Integrations.' }
-  }
-
   const limit = Math.min(opts.limit ?? 25, 250)
   const params = new URLSearchParams({ limit: String(limit) })
   if (opts.pageInfo) params.set('page_info', opts.pageInfo)
@@ -663,13 +656,7 @@ export async function fetchShopifyProducts(
 
   const url = `https://${store.domain}/admin/api/2026-04/products.json?${params.toString()}`
   try {
-    const res = await shopifyFetch(url, {
-      headers: { 'X-Shopify-Access-Token': accessToken },
-      signal: AbortSignal.timeout(10000),
-    })
-    if (res.status === 401) {
-      return { products: [], nextCursor: null, prevCursor: null, error: 'Store token unauthorized. Reconnect the store from Integrations.' }
-    }
+    const res = await fetchShopifyWithAuth(store, url, { signal: AbortSignal.timeout(10000) })
     if (!res.ok) {
       return { products: [], nextCursor: null, prevCursor: null, error: `Shopify returned HTTP ${res.status}` }
     }
@@ -690,6 +677,9 @@ export async function fetchShopifyProducts(
     }
     return { products, nextCursor, prevCursor, error: null }
   } catch (err: any) {
+    if (err instanceof ShopifyReconnectRequiredError) {
+      return { products: [], nextCursor: null, prevCursor: null, error: 'Reconnect the store from Integrations to list products.' }
+    }
     return { products: [], nextCursor: null, prevCursor: null, error: err?.name === 'TimeoutError' ? 'Shopify took too long to respond. Try again.' : 'Could not list products from Shopify.' }
   }
 }
@@ -702,13 +692,12 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
     accessToken = null
   }
   if (!accessToken) {
-    if (store.apiKey) {
+    if (store.apiKey && !store.shopifyRefreshToken) {
       // Shopify is connected but the token is a legacy non-expiring token that
-      // Shopify no longer accepts, or it is otherwise invalid. Deactivate the
-      // store so the sweep stops retrying and the merchant is prompted to
-      // reconnect from Integrations (which now issues an expiring offline
-      // token).
-      console.log(`🔌 Deactivating ${store.domain}: Shopify token is missing or deprecated — reconnect from Integrations.`)
+      // Shopify no longer accepts. Deactivate the store so the sweep stops
+      // retrying and the merchant is prompted to reconnect from Integrations
+      // (which now issues an expiring offline token).
+      console.log(`🔌 Deactivating ${store.domain}: legacy Shopify token — reconnect from Integrations.`)
       try {
         const prisma = (await import('@/lib/db')).default
         await prisma.store.update({
@@ -717,6 +706,9 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
         }).catch(() => {})
       } catch {}
     } else {
+      // No token, or a refreshable token whose refresh failed transiently
+      // (network/5xx). Do NOT deactivate a healthy store on a transient blip;
+      // just skip this sweep and let the next one retry.
       console.log(`No valid token for store ${store.domain} — skipping checkout sync`)
     }
     return 0

@@ -12,6 +12,7 @@
  */
 import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/shopify/callback/route'
+import { migrateNonExpiringOfflineToken } from '@/lib/shopify-oauth'
 import prisma from '@/lib/db'
 
 jest.mock('@/lib/db', () => ({
@@ -36,14 +37,17 @@ jest.mock('@/lib/shopify-oauth', () => ({
   verifyOAuthState: jest.fn(() => ({ shop: 'test.myshopify.com', host: 'embed-host' })),
   verifyShopifyCallbackHmac: jest.fn(() => true),
   isValidShopDomain: jest.fn(() => true),
+  migrateNonExpiringOfflineToken: jest.fn(async () => null),
 }))
 jest.mock('@/lib/analytics/track', () => ({ track: jest.fn(async () => {}) }))
 jest.mock('@/lib/observability/logger', () => ({ captureError: jest.fn(async () => {}) }))
 
 const prismaMock = prisma as any
+const migrateMock = migrateNonExpiringOfflineToken as jest.Mock
 
 beforeEach(() => {
   jest.clearAllMocks()
+  migrateMock.mockResolvedValue(null)
   process.env.SHOPIFY_API_KEY = 'key'
   process.env.SHOPIFY_API_SECRET = 'secret'
   process.env.NEXTAUTH_SECRET = 'nextauth-secret'
@@ -113,8 +117,83 @@ describe('Shopify install callback — store de-duplication', () => {
     )
   })
 
-  it('creates a store only when the account has none', async () => {
+  it('migrates a legacy token returned by the code exchange', async () => {
     prismaMock.store.findFirst.mockResolvedValue(null)
+    ;(global as any).fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        access_token: 'legacy-token',
+        associated_user: { email: 'owner@shop.com' },
+      }),
+    }))
+    migrateMock.mockResolvedValueOnce({
+      access_token: 'expiring-token',
+      refresh_token: 'refresh-token',
+      expires_in: 3600,
+    })
+
+    await GET(makeRequest())
+
+    expect(migrateMock).toHaveBeenCalledWith({
+      shop: 'test.myshopify.com',
+      accessToken: 'legacy-token',
+    })
+    expect(prismaMock.store.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          shopifyRefreshToken: 'enc',
+          shopifyTokenExpiresAt: expect.any(Date),
+        }),
+      }),
+    )
+  })
+
+  it('asks Shopify for an expiring offline token at the code exchange', async () => {
+    prismaMock.store.findFirst.mockResolvedValue(null)
+
+    await GET(makeRequest())
+
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0]
+    expect(url).toBe('https://test.myshopify.com/admin/oauth/access_token')
+    expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
+      code: 'abc',
+      expiring: '1',
+    })
+  })
+
+  it('clears stale refresh credentials when Shopify issues a legacy token', async () => {
+    prismaMock.store.findFirst.mockImplementation(async ({ where }: any) => {
+      if (where?.domain) return null
+      if (where?.userId) {
+        return {
+          id: 'store-old',
+          userId: 'user-1',
+          name: 'My Store',
+          domain: 'test.myshopify.com',
+          platform: 'shopify',
+          isActive: true,
+        }
+      }
+      return null
+    })
+
+    await GET(makeRequest())
+
+    // The default fetch mock returns only `access_token` (no refresh_token /
+    // expires_in), i.e. a legacy non-expiring token. Reconnecting must wipe the
+    // old refresh token and expiry instead of leaving them to be reused.
+    expect(prismaMock.store.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          apiKey: 'enc',
+          shopifyRefreshToken: null,
+          shopifyTokenExpiresAt: null,
+        }),
+      }),
+    )
+  })
+
+  it('creates a store only when the account has none', async () => {    prismaMock.store.findFirst.mockResolvedValue(null)
 
     await GET(makeRequest())
 

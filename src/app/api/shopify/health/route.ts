@@ -2,9 +2,12 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
-import { getAccessToken } from '@/lib/shopify'
+import { fetchShopifyWithAuth, ShopifyReconnectRequiredError } from '@/lib/shopify'
 
 export const dynamic = 'force-dynamic'
+
+const RECONNECT_MESSAGE =
+  'Your Shopify connection has expired. Reconnect the store from Integrations, then try again.'
 
 export async function GET() {
   try {
@@ -21,27 +24,25 @@ export async function GET() {
       return NextResponse.json({ connected: false })
     }
 
-    const accessToken = await getAccessToken(store)
-    if (!accessToken) {
-      const hasRefresh = store.shopifyRefreshToken && store.shopifyTokenExpiresAt
-      if (hasRefresh) {
+    const shop = store.domain
+
+    let res: Response
+    try {
+      res = await fetchShopifyWithAuth(
+        store,
+        `https://${shop}/admin/api/2026-04/shop.json`,
+        { signal: AbortSignal.timeout(10000) },
+      )
+    } catch (error) {
+      if (error instanceof ShopifyReconnectRequiredError) {
         return NextResponse.json({
           connected: false,
-          error: 'Shopify token expired and refresh failed. Please reconnect your store.',
+          error: RECONNECT_MESSAGE,
           reauthRequired: true,
         })
       }
-      return NextResponse.json({
-        connected: false,
-        error: 'Deprecated offline token. Please reconnect your store to get a new expiring token.',
-        reauthRequired: true,
-      })
+      throw error
     }
-
-    const shop = store.domain
-    const res = await fetch(`https://${shop}/admin/api/2026-04/shop.json`, {
-      headers: { 'X-Shopify-Access-Token': accessToken },
-    })
 
     if (res.ok) {
       const data = await res.json()
@@ -50,27 +51,11 @@ export async function GET() {
         connected: true,
         shopName: data.shop?.name || shop,
         domain: shop,
-        ...(expiresAt ? { tokenExpiresAt: expiresAt.toISOString() } : { tokenType: 'permanent (legacy)' }),
+        ...(expiresAt ? { tokenExpiresAt: expiresAt.toISOString() } : {}),
       })
     }
 
     const errBody = await res.text().catch(() => '(no body)')
-
-    if (res.status === 401) {
-      if (errBody.toLowerCase().includes('deprecated') || errBody.toLowerCase().includes('offline')) {
-        return NextResponse.json({
-          connected: false,
-          error: 'Deprecated offline token. New expiring offline tokens are replacing tokens that grant permanent offline access. Please reconnect your Shopify store.',
-          reauthRequired: true,
-        })
-      }
-      return NextResponse.json({
-        connected: false,
-        error: 'Shopify access token is invalid or expired. Please reconnect your store.',
-        reauthRequired: true,
-      })
-    }
-
     return NextResponse.json({
       connected: false,
       error: `Shopify API returned status ${res.status}: ${errBody.slice(0, 200)}`,
