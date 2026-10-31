@@ -11,13 +11,13 @@
  *
  * A message that reaches a customer has always passed the validator.
  */
-import { getAiClient, handleAiFailure } from '@/lib/ai-client'
+import { getAiClient, getFallbackAiClient, handleAiFailure, type AiResolved } from '@/lib/ai-client'
 import { ConversationFacts } from './facts'
 import { BrandVoice, maxEmojis, maxWords } from './voice'
 import { CONVERSATION_PROMPT_VERSION, ConversationStage, buildRecoveryPrompt } from './prompts'
 import { ValidationIssue, isNearDuplicate, validateMessage } from './validate'
 
-export type MessageSource = 'ai' | 'ai_retry' | 'fallback'
+export type MessageSource = 'ai' | 'ai_retry' | 'ai_fallback' | 'fallback'
 
 export type GeneratedMessage = {
   body: string
@@ -63,11 +63,13 @@ async function callModel(
     previousMessage?: string | null
     storeId: string
     correction?: string
-  }
+  },
+  /** Use a pre-resolved client/tier instead of auto-selecting (primary first). */
+  resolved?: AiResolved | null,
 ): Promise<{ body: string; subject?: string } | null> {
   const userKey = args.storeId || 'default'
-  const resolved = getAiClient(userKey)
-  if (!resolved) return null
+  const client = resolved ?? getAiClient(userKey)
+  if (!client) return null
 
   const prompt = buildRecoveryPrompt({
     facts: args.facts,
@@ -89,7 +91,7 @@ async function callModel(
   }
 
   try {
-    const res = await resolved.client.chat.completions.create({
+    const res = await client.client.chat.completions.create({
       model: 'gpt-4o-mini',
       messages,
       ...(isEmail ? { response_format: { type: 'json_object' as const } } : {}),
@@ -106,8 +108,8 @@ async function callModel(
       return { body, subject }
     }
     return { body: content }
-  } catch (err) {
-    handleAiFailure(err, 'conversation generation', userKey, resolved.tier)
+  } catch (err: any) {
+    handleAiFailure(err, 'conversation generation', userKey, client.tier)
     return null
   }
 }
@@ -125,7 +127,7 @@ export async function generateRecoveryMessage(args: {
   stage: ConversationStage
   previousMessage?: string | null
   storeId: string
-  /** Deterministic, fact-only template used when the model cannot be trusted. */
+  /** Deterministic, fact-only template used when no model can be trusted. */
   fallback: SafeFallback
   /** Stable seed for the wording variant. */
   variantSeed: string
@@ -133,7 +135,31 @@ export async function generateRecoveryMessage(args: {
   const { facts, voice } = args
   const issues: ValidationIssue[] = []
 
-  const first = await callModel({
+  const validateAndTag = (
+    result: { body: string; subject?: string },
+    source: MessageSource,
+  ): GeneratedMessage | null => {
+    const validation = validateMessage(result.body, facts, voice, { previous: args.previousMessage })
+    issues.push(...validation.issues)
+    const subjectCheck = result.subject
+      ? validateSubject(result.subject, facts, voice)
+      : { ok: true, subject: undefined, issues: [] as ValidationIssue[] }
+    issues.push(...subjectCheck.issues)
+    if (!validation.ok || !subjectCheck.ok) return null
+    return {
+      body: validation.text,
+      subject: subjectCheck.subject,
+      source,
+      promptVersion: CONVERSATION_PROMPT_VERSION,
+      variant: args.variantSeed,
+      issues,
+    }
+  }
+
+  // 1. Primary tier (OpenAI). On a timeout or other non-tripping failure we do
+  //    NOT mark the tier dead, so a later caller can still reach it — but for
+  //    this request we move on rather than making the shopper wait again.
+  let primary = await callModel({
     facts,
     voice,
     stage: args.stage,
@@ -141,54 +167,44 @@ export async function generateRecoveryMessage(args: {
     storeId: args.storeId,
   })
 
-  if (first) {
-    const validation = validateMessage(first.body, facts, voice, { previous: args.previousMessage })
-    issues.push(...validation.issues)
-    const subjectCheck = first.subject
-      ? validateSubject(first.subject, facts, voice)
-      : { ok: true, subject: undefined, issues: [] as ValidationIssue[] }
-    issues.push(...subjectCheck.issues)
+  let validated = primary ? validateAndTag(primary, 'ai') : null
 
-    if (validation.ok && subjectCheck.ok) {
-      return {
-        body: validation.text,
-        subject: subjectCheck.subject,
-        source: 'ai',
-        promptVersion: CONVERSATION_PROMPT_VERSION,
-        variant: args.variantSeed,
-        issues,
-      }
-    }
-
-    // One correction round-trip, then we stop trusting the model.
+  // One correction round-trip on primary when the output broke a rule.
+  if (!validated && primary) {
     const retry = await callModel({
       facts,
       voice,
       stage: args.stage,
       previousMessage: args.previousMessage,
       storeId: args.storeId,
-      correction: describeIssues([...validation.issues, ...subjectCheck.issues]),
+      correction: describeIssues(issues.filter((i) => i.severity === 'block')),
     })
+    if (retry) validated = validateAndTag(retry, 'ai_retry')
+  }
 
-    if (retry) {
-      const retryValidation = validateMessage(retry.body, facts, voice, { previous: args.previousMessage })
-      const retrySubject = retry.subject
-        ? validateSubject(retry.subject, facts, voice)
-        : { ok: true, subject: undefined, issues: [] as ValidationIssue[] }
-      if (retryValidation.ok && retrySubject.ok) {
-        return {
-          body: retryValidation.text,
-          subject: retrySubject.subject,
-          source: 'ai_retry',
-          promptVersion: CONVERSATION_PROMPT_VERSION,
-          variant: args.variantSeed,
-          issues: [...issues, ...retryValidation.issues, ...retrySubject.issues],
-        }
-      }
+  // 2. Fallback AI provider (Groq) before the deterministic template. This
+  //    catches primary timeouts/unavailability without surfacing an error and
+  //    without making the shopper wait for a second primary timeout.
+  if (!validated) {
+    const fallbackResolved = getFallbackAiClient()
+    if (fallbackResolved) {
+      const fb = await callModel(
+        {
+          facts,
+          voice,
+          stage: args.stage,
+          previousMessage: args.previousMessage,
+          storeId: args.storeId,
+        },
+        fallbackResolved,
+      )
+      if (fb) validated = validateAndTag(fb, 'ai_fallback')
     }
   }
 
-  // Deterministic fallback — built from the facts by code.
+  if (validated) return validated
+
+  // 3. Deterministic template — last resort, never unvalidated model output.
   const safe = args.fallback(facts)
   const safeValidation = validateMessage(safe.body, facts, voice, { previous: args.previousMessage })
   const safeSubject = safe.subject ? validateSubject(safe.subject, facts, voice) : { ok: true, subject: undefined, issues: [] as ValidationIssue[] }

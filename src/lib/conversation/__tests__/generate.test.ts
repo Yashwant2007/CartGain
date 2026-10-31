@@ -1,15 +1,17 @@
 jest.mock('@/lib/ai-client', () => ({
   getAiClient: jest.fn(),
+  getFallbackAiClient: jest.fn(),
   handleAiFailure: jest.fn(),
 }))
 
-import { getAiClient } from '@/lib/ai-client'
+import { getAiClient, getFallbackAiClient } from '@/lib/ai-client'
 import { ConversationFacts } from '../facts'
 import { DEFAULT_VOICE } from '../voice'
 import { buildFallbackMessage, generateRecoveryMessage } from '../generate'
 import { composeRecoveryMessage, stageForStep } from '../recovery'
 
 const mockedGetAiClient = getAiClient as jest.Mock
+const mockedGetFallbackAiClient = getFallbackAiClient as jest.Mock
 
 function aiReturning(...contents: string[]) {
   const create = jest.fn()
@@ -51,6 +53,8 @@ describe('stageForStep', () => {
 describe('generateRecoveryMessage', () => {
   afterEach(() => {
     mockedGetAiClient.mockReset()
+    mockedGetFallbackAiClient.mockReset()
+    mockedGetFallbackAiClient.mockReturnValue(null)
   })
 
   it('uses a safe, fact-only template when no AI client is available', async () => {
