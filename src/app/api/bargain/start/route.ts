@@ -153,8 +153,9 @@ export async function POST(request: NextRequest) {
     // purchase attribution — without putting PII in the public embed URL.
     let customerEmail = data.customerEmail || null
     let customerName = data.customerName || null
+    let cart: any = null
     if (!customerEmail && data.cartToken) {
-      const cart = await prisma.cart.findUnique({
+      cart = await prisma.cart.findUnique({
         where: { storeId_cartId: { storeId: data.storeId, cartId: data.cartToken } },
         select: { customerEmail: true, customerName: true },
       })
@@ -334,6 +335,17 @@ export async function POST(request: NextRequest) {
         },
         include: { messages: { orderBy: { createdAt: 'asc' } } },
       }),
+      // Persist the shopper's name on the cart so recovery emails/WhatsApp
+      // and future bargain sessions can address them personally — this is what
+      // turns an anonymous abandoner into a known, reachable customer.
+      ...(customerName && data.cartToken && !cart?.customerName
+        ? [
+          prisma.cart.update({
+            where: { storeId_cartId: { storeId: data.storeId, cartId: data.cartToken } },
+            data: { customerName },
+          }),
+        ]
+        : []),
       recordBargainSessionOp(gate.subscriptionId),
     ])
 

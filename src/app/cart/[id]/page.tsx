@@ -5,6 +5,7 @@ import prisma from '@/lib/db'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, ShoppingBag, Zap, Tag } from 'lucide-react'
 import BargainWidget from '@/components/bargain/BargainWidget'
+import CaptureCustomerName from './CaptureCustomerName'
 import { getExperienceConfig } from '@/lib/bargain/experience/config'
 import { getAbandonedBargainContextForCartToken } from '@/lib/bargain/hooks'
 import { fetchShopifyProductDetail } from '@/lib/shopify'
@@ -132,8 +133,10 @@ export default async function CartRecoveryPage({
             <h1 className="text-2xl font-bold text-white">Your Cart</h1>
           </div>
 
-          {cart.customerName && (
+          {cart.customerName ? (
             <p className="text-blue-200 mb-6">Hi {cart.customerName}, these items are still waiting for you!</p>
+          ) : (
+            <CaptureCustomerName cartId={cart.id} storeId={storeId} />
           )}
 
           {productDescription && (
