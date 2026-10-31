@@ -152,12 +152,14 @@ export async function POST(request: NextRequest) {
     // to the real Shopify customer — buyer-bound discount codes + accurate
     // purchase attribution — without putting PII in the public embed URL.
     let customerEmail = data.customerEmail || null
+    let customerName = data.customerName || null
     if (!customerEmail && data.cartToken) {
       const cart = await prisma.cart.findUnique({
         where: { storeId_cartId: { storeId: data.storeId, cartId: data.cartToken } },
-        select: { customerEmail: true },
+        select: { customerEmail: true, customerName: true },
       })
       customerEmail = cart?.customerEmail ?? null
+      customerName = customerName ?? (cart?.customerName ?? null)
     }
 
     // Daily-goal context is shared by EVERY success shape this route returns
@@ -256,6 +258,7 @@ export async function POST(request: NextRequest) {
 
     const customerContext = await buildCustomerContext(data.storeId, {
       customerEmail: customerEmail || null,
+      customerName: customerName || null,
       customerFingerprint: data.customerFingerprint || null,
       cartToken: data.cartToken || null,
     })
@@ -346,6 +349,7 @@ export async function POST(request: NextRequest) {
         storeId: data.storeId,
         customerEmail: customerEmail ?? null,
         customerPhone: data.customerPhone ?? null,
+        customerName: customerName ?? null,
       },
     })
 

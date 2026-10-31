@@ -5,6 +5,7 @@ import prisma from '@/lib/db'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, ShoppingBag, Zap, Tag } from 'lucide-react'
 import BargainWidget from '@/components/bargain/BargainWidget'
+import { getExperienceConfig } from '@/lib/bargain/experience/config'
 import { getAbandonedBargainContextForCartToken } from '@/lib/bargain/hooks'
 import { fetchShopifyProductDetail } from '@/lib/shopify'
 
@@ -50,6 +51,13 @@ export default async function CartRecoveryPage({
   }))
   const storeId = cart.store.id
   const checkoutUrl = `https://${cart.store.domain}/cart/${cart.cartId}`
+
+  // Published storefront experience: when a merchant has published an
+  // invitation (design + CTA + avatar), show the engaging StorefrontInvitation
+  // instead of a plain launcher button.
+  const { config: experience } = await getExperienceConfig(storeId, 'published').catch(() => ({
+    config: null,
+  }))
 
   // Calculate per-item price for bargain widget
   const itemCount = items.length || 1
@@ -112,7 +120,10 @@ export default async function CartRecoveryPage({
           currency={cart.currency || 'INR'}
           cartToken={cart.cartId}
           customerEmail={cart.customerEmail || undefined}
+          customerName={cart.customerName || undefined}
           productTitle={items.length > 0 ? items[0]?.name : 'Product'}
+          experience={experience ?? undefined}
+          invitationFirst={Boolean(experience)}
         />
 
         <div className="bg-slate-800/50 border border-blue-700/30 rounded-2xl p-6 sm:p-8">

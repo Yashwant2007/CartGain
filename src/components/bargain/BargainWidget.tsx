@@ -87,6 +87,7 @@ type Props = {
   cartToken?: string
   customerEmail?: string
   customerPhone?: string
+  customerName?: string
   productTitle?: string
   language?: string
   apiBase?: string
@@ -141,6 +142,7 @@ export default function BargainWidget({
   cartToken,
   customerEmail,
   customerPhone,
+  customerName,
   productTitle,
   language,
   apiBase = '',
@@ -534,6 +536,7 @@ export default function BargainWidget({
           cartToken,
           customerEmail,
           customerPhone,
+          customerName,
           customerFingerprint: bargainFingerprint(cartToken ?? ''),
           language,
         }),
@@ -603,6 +606,7 @@ export default function BargainWidget({
       customerFingerprint: bargainFingerprint(cartToken ?? ''),
       cartToken: cartToken ?? undefined,
       customerEmail: customerEmail ?? undefined,
+      customerName: customerName ?? undefined,
       sessionToken: sessionToken ?? undefined,
     }
   }

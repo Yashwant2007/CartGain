@@ -1466,6 +1466,7 @@ export type CustomerIdentity =
   | null
   | {
       customerEmail?: string | null
+      customerName?: string | null
       customerFingerprint?: string | null
       cartToken?: string | null
     }
@@ -1499,6 +1500,7 @@ export async function buildCustomerContext(
 ): Promise<string | undefined> {
   const id = typeof identity === 'string' ? { customerEmail: identity } : (identity ?? {})
   const customerEmail = id.customerEmail?.trim() || null
+  const customerName = id.customerName?.trim() || null
   const customerFingerprint = id.customerFingerprint?.trim() || null
   const cartToken = id.cartToken?.trim() || null
 
@@ -1542,7 +1544,9 @@ export async function buildCustomerContext(
     return `${i + 1}. Bargained for ${productRef} but didn't close on ${date} (rejected)`
   })
 
-  let summary = `They have ${pastSessions.length} past session(s):\n${lines.join('\n')}`
+  let summary = pastSessions.length > 0
+    ? `${customerName ? customerName + ' has ' : 'They have '}${pastSessions.length} past session(s):\n${lines.join('\n')}`
+    : undefined
 
   // Recall of what they told you last time — the difference between a warm
   // "welcome back" and a true relationship. Recent session first.

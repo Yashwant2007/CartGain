@@ -91,6 +91,7 @@ export const bargainStartSchema = z.object({
   cartToken: z.string().max(200).optional(),
   customerEmail: z.string().email().optional().or(z.literal('')),
   customerPhone: z.string().max(20).optional().or(z.literal('')),
+  customerName: z.string().max(200).optional().or(z.literal('')),
   customerFingerprint: z.string().min(8, 'customerFingerprint is required').max(128).optional(),
 })
 
