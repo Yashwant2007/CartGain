@@ -7,7 +7,7 @@ import { sendWhatsAppMessage, WhatsAppTemplates } from '@/lib/services/whatsapp'
 import { isConfigWhatsAppFailure, isPermanentWhatsAppFailure } from '@/lib/whatsapp/errors'
 import { resolveRecoveryOffer } from '@/lib/recovery/offer'
 import { enrichCartItemsWithImages } from '@/lib/recovery/product-image'
-import { buildRecoveryLink } from '@/lib/recovery/links'
+import { buildRecoveryLink, buildStoreCheckoutLink } from '@/lib/recovery/links'
 import { buildRecoveryOfferLine } from '@/lib/recovery/offer-line'
 import { composeRecoveryMessage, singleLineMessage, stripLeadingGreeting } from '@/lib/conversation/recovery'
 import type { ConversationDiscount } from '@/lib/conversation/facts'
@@ -526,6 +526,13 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         // identity phone even if persisting it fails.
       }
     }
+    // A courtesy WhatsApp (no explicit consent) is limited to one message per
+    // cart — a second sweep must not send another one.
+    const courtesyWhatsAppSent =
+      whatsappEligibility.code === 'courtesy_single' &&
+      cart.messages.some(
+        (m: any) => m.channel === 'whatsapp' && (m.status === 'sent' || m.status === 'delivered'),
+      )
     if (
       !whatsappEligibility.eligible &&
       effActiveChannels.includes('whatsapp') &&
@@ -543,7 +550,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     const reachableChannels = effActiveChannels.filter(
       (c: string) =>
         (c === 'email' && emailConsented) ||
-        (c === 'whatsapp' && Boolean(whatsappPhone) && whatsappEligibility.eligible),
+        (c === 'whatsapp' && Boolean(whatsappPhone) && whatsappEligibility.eligible && !courtesyWhatsAppSent),
     )
     const channelsByStep = new Map<number, Set<string>>()
     for (const m of roundSettledMessages) {
@@ -607,7 +614,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         return false
       }
       if (c === 'email') return emailConsented
-      if (c === 'whatsapp') return Boolean(whatsappPhone) && whatsappEligibility.eligible
+      if (c === 'whatsapp') return Boolean(whatsappPhone) && whatsappEligibility.eligible && !courtesyWhatsAppSent
       return false
     })
 
@@ -951,16 +958,28 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
                 ? 'free shipping'
                 : `${currencySymbol}${authorisedDiscount.value} off`
             : ''
-          const checkoutLink = linkFor('whatsapp', 'checkout')
+          // Direct store checkout (Shopify native: applies the discount and
+          // returns to the cart) instead of a CartGain redirect that can land on
+          // the wrong page. Falls back to the tracked redirect link when the
+          // Shopify cart token is unavailable.
+          const directCheckoutLink = cart.cartId
+            ? buildStoreCheckoutLink({
+              domain: store.domain,
+              shopifyCartId: cart.cartId,
+              discountCode: authorisedDiscount?.code || undefined,
+            })
+            : null
+          const checkoutLink = directCheckoutLink || linkFor('whatsapp', 'checkout')
           const bargainLink = linkFor('whatsapp', 'bargain')
-          // Personal offer line: the customer's name, the product they chose
-          // and their own single-use code. No invented urgency, no generic
-          // "USE CODE" blast.
+          // Personal offer line: compact, emoji-led, product-first, short URLs.
           const firstName = (customerName || '').split(' ')[0]?.trim()
           const productSummary = formatProductList(cartItems, 2)
+          const firstItem = cartItems[0]
           const offerLine = buildRecoveryOfferLine({
             firstName,
             productSummary,
+            productPrice: firstItem?.price || null,
+            productQty: firstItem?.quantity || null,
             discountLabel: offerValueLabel,
             code: authorisedDiscount?.code,
             checkoutUrl: checkoutLink,
@@ -977,8 +996,10 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             offerLine,
             firstImage,
             {
+              // The dynamic URL button opens the store checkout directly, not
+              // the CartGain cart page (and not Facebook).
               buttonUrlSuffix: process.env.WHATSAPP_TEMPLATE_BUTTON_BASE
-                ? `${cart.id}?c=whatsapp`
+                ? `${encodeURIComponent(cart.cartId || cart.id)}?c=checkout&code=${authorisedDiscount?.code || ''}`
                 : undefined,
             },
           )

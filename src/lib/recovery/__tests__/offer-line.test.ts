@@ -14,10 +14,16 @@ describe('buildRecoveryOfferLine', () => {
       bargainUrl: bargain,
     })
 
-    expect(line).toBe(
-      `Priya, your Snowboard gets 10% off — code GAINABC123 — finish checkout: ${checkout} — or name your price: ${bargain}`,
-    )
+    expect(line).toContain('Priya')
+    expect(line).toContain('Snowboard')
+    expect(line).toContain('10% off')
+    expect(line).toContain('code GAINABC123')
+    expect(line).toContain(checkout)
+    expect(line).toContain(bargain)
     expect(line.indexOf(checkout)).toBeLessThan(line.indexOf(bargain))
+    expect(line).toContain('🛒')
+    expect(line).toContain('· Checkout:')
+    expect(line).toContain('· Bargain:')
   })
 
   it('keeps a live checkout and bargain link when there is no discount', () => {
@@ -29,7 +35,7 @@ describe('buildRecoveryOfferLine', () => {
       bargainUrl: bargain,
     })
 
-    expect(line).toContain('is still saved')
+    expect(line).toContain('is saved 🛒')
     expect(line).toContain(checkoutWithoutCode)
     expect(line).toContain(bargain)
     expect(line).not.toContain(' — code ')
@@ -68,8 +74,35 @@ describe('buildRecoveryOfferLine', () => {
 
   it('still produces a non-empty line when every descriptive field is missing', () => {
     const line = buildRecoveryOfferLine({ checkoutUrl: checkout, bargainUrl: bargain })
-    expect(line).toContain('your cart is still saved')
+    expect(line).toContain('is saved 🛒')
     expect(line).toContain(checkout)
     expect(line).toContain(bargain)
+  })
+
+  it('includes product price and qty when provided', () => {
+    const line = buildRecoveryOfferLine({
+      firstName: 'Priya',
+      productSummary: 'Snowboard',
+      productPrice: 299,
+      productQty: 2,
+      discountLabel: '10% off',
+      code: 'GAINABC123',
+      checkoutUrl: checkout,
+      bargainUrl: bargain,
+    })
+
+    expect(line).toContain('299.00')
+    expect(line).toContain('× 2')
+  })
+
+  it('uses fallback "your cart" when product summary is empty', () => {
+    const line = buildRecoveryOfferLine({
+      firstName: 'Priya',
+      productSummary: '',
+      checkoutUrl: checkout,
+      bargainUrl: bargain,
+    })
+
+    expect(line).toContain('your cart is saved 🛒')
   })
 })

@@ -225,7 +225,7 @@ export function buildFallbackMessage(
   // WhatsApp template button), so repeating the raw link only adds noise.
   if (facts.channel === 'whatsapp') {
     return {
-      body: `${greeting} your ${itemText} is still saved here — total ${total}.${offer} Come back whenever suits you.`,
+      body: `${greeting} your ${itemText} is still saved here 🛒 — total ${total}.${offer} Come back whenever suits you.`,
     }
   }
 

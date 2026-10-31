@@ -54,11 +54,13 @@ describe('evaluateWhatsAppEligibility', () => {
     expect(evaluateWhatsAppEligibility({ ...base, onOptOutList: true }).code).toBe('opted_out')
   })
 
-  it('never infers consent from a missing recipient record', () => {
-    expect(evaluateWhatsAppEligibility({ ...base, identity: null }).code).toBe('no_consent')
-    expect(evaluateWhatsAppEligibility({ ...base, identity: identity({ consentWhatsApp: false }) }).code).toBe(
-      'no_consent',
-    )
+  it('allows a single courtesy reminder when no explicit WhatsApp consent exists', () => {
+    expect(
+      evaluateWhatsAppEligibility({ ...base, identity: null }),
+    ).toMatchObject({ eligible: true, code: 'courtesy_single' })
+    expect(
+      evaluateWhatsAppEligibility({ ...base, identity: identity({ consentWhatsApp: false }) }),
+    ).toMatchObject({ eligible: true, code: 'courtesy_single' })
   })
 
   it('requires consent to belong to the cart phone number', () => {

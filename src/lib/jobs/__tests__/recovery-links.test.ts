@@ -183,7 +183,7 @@ describe('recovery message wiring', () => {
     const body: string[] = lastWhatsAppParams().body
     expect(body[2]).toContain('SAVE15')
     expect(body[2]).toContain('15% off')
-    expect(body[2]).toContain('https://cart-gain.com/r/cart-1?c=whatsapp&to=checkout&code=SAVE15')
+    expect(body[2]).toContain('https://acme.myshopify.com/discount/SAVE15?redirect=%2Fcart%2Fshopify_cart_1')
     expect(body[2]).toContain('https://cart-gain.com/r/cart-1?c=whatsapp&to=bargain')
   })
 
@@ -192,7 +192,7 @@ describe('recovery message wiring', () => {
 
     const body: string[] = lastWhatsAppParams().body
     expect(body[2]).not.toContain('Use code')
-    expect(body[2]).toContain('https://cart-gain.com/r/cart-1?c=whatsapp&to=checkout')
+    expect(body[2]).toContain('https://acme.myshopify.com/cart/shopify_cart_1')
     expect(body[2]).toContain('to=bargain')
   })
 
@@ -250,7 +250,7 @@ describe('recovery message wiring', () => {
     await processAbandonedCarts(25)
 
     expect(lastWhatsAppParams().buttons).toEqual([
-      { type: 'url', text: 'Complete Purchase', url: 'cart-1?c=whatsapp' },
+      { type: 'url', text: 'Complete Purchase', url: 'shopify_cart_1?c=checkout&code=' },
     ])
   })
 

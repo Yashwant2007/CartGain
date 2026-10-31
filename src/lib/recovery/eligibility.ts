@@ -11,6 +11,7 @@ import { isValidPhone } from '@/lib/utils'
 
 export type WhatsAppBlockCode =
   | 'eligible'
+  | 'courtesy_single'
   | 'cart_converted'
   | 'store_inactive'
   | 'whatsapp_not_configured'
@@ -73,16 +74,23 @@ export function evaluateWhatsAppEligibility(
   if (input.onOptOutList) return block('opted_out', 'Contact is on the opt-out list')
 
   const identity = input.identity
-  if (!identity) return block('no_consent', 'No recipient record with WhatsApp consent')
-  if (identity.suppressed) return block('suppressed', 'Recipient is suppressed')
-  if (identity.optedOutAt) return block('opted_out', 'Recipient opted out')
+  if (identity?.suppressed) return block('suppressed', 'Recipient is suppressed')
+  if (identity?.optedOutAt) return block('opted_out', 'Recipient opted out')
 
-  const identityPhone = normalizeWhatsAppPhone(identity.phone)
-  if (!identityPhone || identityPhone !== phone) {
+  const identityPhone = identity ? normalizeWhatsAppPhone(identity.phone) : null
+  if (identity && (!identityPhone || identityPhone !== phone)) {
     return block('identity_mismatch', 'Consent is recorded for a different phone number')
   }
-  if (identity.consentWhatsApp !== true) {
-    return block('no_consent', 'Recipient has not explicitly opted in to WhatsApp')
+
+  // No explicit WhatsApp consent: allow a single courtesy reminder so the
+  // shopper still gets one nudge. Subsequent rounds are blocked by the caller
+  // (processSingleCart checks for an already-sent WhatsApp message).
+  if (!identity || identity.consentWhatsApp !== true) {
+    return {
+      eligible: true,
+      code: 'courtesy_single',
+      reason: 'No explicit WhatsApp consent — single courtesy reminder only',
+    }
   }
 
   return { eligible: true, code: 'eligible', reason: 'Recipient can receive WhatsApp' }

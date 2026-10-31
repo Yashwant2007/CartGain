@@ -3,7 +3,7 @@
 // Keep the text side bounded (product names are merchant-controlled and can be
 // arbitrarily long) and append the links verbatim at the end.
 
-const MAX_PRODUCT_CHARS = 90
+const MAX_PRODUCT_CHARS = 60
 const MAX_NAME_CHARS = 32
 
 function oneLine(value: string | null | undefined): string {
@@ -20,6 +20,8 @@ function shorten(value: string, max: number): string {
 export type RecoveryOfferLineInput = {
   firstName?: string | null
   productSummary?: string | null
+  productPrice?: number | null
+  productQty?: number | null
   discountLabel?: string | null
   code?: string | null
   checkoutUrl: string
@@ -33,14 +35,25 @@ export function buildRecoveryOfferLine(input: RecoveryOfferLineInput): string {
   const discount = oneLine(input.discountLabel)
   const code = oneLine(input.code)
 
+  // Price + qty in parens, e.g. "(299.00 × 2)". Empty when no price is known.
+  let priceBit = ''
+  if (typeof input.productPrice === 'number' && input.productPrice > 0) {
+    priceBit = `(${input.productPrice.toFixed(2)}`
+    if (input.productQty && input.productQty > 1) priceBit += ` × ${input.productQty}`
+    priceBit += ')'
+  }
+
   // A code is only advertised when the merchant/Shopify actually produced one;
   // the copy layer never invents a discount.
   const offer =
     discount && code
-      ? `your ${products} gets ${discount} — code ${code}`
-      : `your ${products} is still saved`
+      ? `${discount} — code ${code}`
+      : code
+        ? `code ${code}`
+        : 'still saved'
 
-  // Order is stable and labelled: checkout first, bargain second. The URLs are
-  // appended untouched so a long product name can never consume their space.
-  return `${prefix}${offer} — finish checkout: ${input.checkoutUrl} — or name your price: ${input.bargainUrl}`
+  // Compact, emoji-led, product-first. Separators are `·` so the line stays
+  // scannable; URLs are appended verbatim so WhatsApp can linkify them.
+  const priceRender = priceBit ? ` ${priceBit}` : ''
+  return `${prefix}your ${products}${priceRender} is saved 🛒 — ${offer} · Checkout: ${input.checkoutUrl} · Bargain: ${input.bargainUrl}`
 }
