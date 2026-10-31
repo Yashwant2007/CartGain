@@ -5,7 +5,7 @@ import prisma from '@/lib/db'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, ShoppingBag, Zap, Tag } from 'lucide-react'
 import BargainWidget from '@/components/bargain/BargainWidget'
-import CaptureCustomerName from './CaptureCustomerName'
+import CaptureCustomerContact from './CaptureCustomerName'
 import { getExperienceConfig } from '@/lib/bargain/experience/config'
 import { getAbandonedBargainContextForCartToken } from '@/lib/bargain/hooks'
 import { fetchShopifyProductDetail } from '@/lib/shopify'
@@ -122,6 +122,7 @@ export default async function CartRecoveryPage({
           cartToken={cart.cartId}
           customerEmail={cart.customerEmail || undefined}
           customerName={cart.customerName || undefined}
+          customerPhone={cart.customerPhone || undefined}
           productTitle={items.length > 0 ? items[0]?.name : 'Product'}
           experience={experience ?? undefined}
           invitationFirst={Boolean(experience)}
@@ -133,11 +134,13 @@ export default async function CartRecoveryPage({
             <h1 className="text-2xl font-bold text-white">Your Cart</h1>
           </div>
 
-          {cart.customerName ? (
-            <p className="text-blue-200 mb-6">Hi {cart.customerName}, these items are still waiting for you!</p>
-          ) : (
-            <CaptureCustomerName cartId={cart.id} storeId={storeId} />
-          )}
+          <CaptureCustomerContact
+            cartId={cart.id}
+            storeId={storeId}
+            shop={cart.store.domain}
+            defaultName={cart.customerName || undefined}
+            defaultPhone={cart.customerPhone || undefined}
+          />
 
           {productDescription && (
             <div className="mb-6 p-4 rounded-xl bg-slate-900/40 border border-blue-700/20">
