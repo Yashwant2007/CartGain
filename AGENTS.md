@@ -79,6 +79,30 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `fix(recovery): open Meta's 24h window for free-form WhatsApp reminders`
+  (committed `ab658a50`, deployed release `ab658a5`; Shopify version
+  `cartgain-39`). Meta's per-user marketing-template limit (`131049`) cannot be
+  overridden by code, so recovery now uses the customer-service window instead.
+  `CustomerIdentity.lastInboundAt` (migration
+  `20261101060000_add_customer_identity_last_inbound`, 34 migrations applied)
+  records every inbound WhatsApp message. The webhook resolves stores from
+  carts **and** consented identities, creates a `+digits` identity with consent
+  false when the contact is new, and stamps `lastInboundAt`/`lastSeenAt` for
+  every inbound message (not only START/STOP). Inside 24h the job sends
+  free-form text — the validated `composed.body` plus the personalised offer
+  line and both links — instead of a template, persists that body on the
+  `Message`, and keeps the 24h/2-attempt engagement-limited retry plus email
+  fallback outside the window. Storefront capture now opens
+  `https://wa.me/917355849689?text=START` from the submit gesture and shows a
+  Confirm on WhatsApp link (`data-cg-whatsapp-number`, shared sender default)
+  so the shopper can open the window; `cartgain-39` released the theme
+  extension. Verified: Jest **143 suites / 1539 tests**, tsc, lint and
+  production build green; live `/api/health` `status=ok`, release `ab658a5`,
+  DB/Redis/env/AI/email/WhatsApp/Shopify checks ok. Next live test: the shopper
+  must actually send START (or any message) to the business number; without an
+  open window Meta can still reject the marketing template with `131049`, in
+  which case the email fallback still runs.
+
 - `fix(recovery): surface and respect Meta's per-user marketing WhatsApp limit`
   (committed `bb63ee27` + `b99db7a5`, deployed). The identity-phone fix made the
   job attempt WhatsApp, but the API accepted the template and Meta then sent a
