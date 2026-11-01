@@ -64,6 +64,8 @@
     var close = root.querySelector('[data-cg-reminder-close]');
     if (!form || !status) return;
 
+    var nameInput = form.querySelector('input[name="customer_name"]');
+    if (nameInput) nameInput.value = root.getAttribute('data-cg-name') || '';
     form.email.value = root.getAttribute('data-cg-email') || '';
     form.phone.value = root.getAttribute('data-cg-phone') || '';
 
@@ -88,6 +90,7 @@
       event.preventDefault();
       setStatus(status, '');
 
+      var name = nameInput ? nameInput.value.trim() : '';
       var email = form.email.value.trim();
       var phone = form.phone.value.trim();
       var whatsapp = form.whatsapp.checked;
@@ -145,6 +148,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           shop: shop,
+          name: name || null,
           email: email || null,
           phone: phone || null,
           consentEmail: wantsEmail,

@@ -750,9 +750,25 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
     const lineItems = normalizeShopifyLineItems(checkout.line_items)
 
     const phone = checkout.phone || checkout.billing_address?.phone || checkout.shipping_address?.phone || checkout.customer?.phone || null
-    const firstName = checkout.billing_address?.first_name || checkout.shipping_address?.first_name || checkout.customer?.first_name || ''
-    const lastName = checkout.billing_address?.last_name || checkout.shipping_address?.last_name || checkout.customer?.last_name || ''
-    const name = `${firstName} ${lastName}`.trim() || checkout.customer?.name || null
+    const firstName =
+      checkout.billing_address?.first_name ||
+      checkout.shipping_address?.first_name ||
+      checkout.customer?.first_name ||
+      checkout.customer?.default_address?.first_name ||
+      ''
+    const lastName =
+      checkout.billing_address?.last_name ||
+      checkout.shipping_address?.last_name ||
+      checkout.customer?.last_name ||
+      checkout.customer?.default_address?.last_name ||
+      ''
+    const name =
+      `${firstName} ${lastName}`.trim() ||
+      checkout.billing_address?.name ||
+      checkout.shipping_address?.name ||
+      checkout.customer?.name ||
+      checkout.customer?.default_address?.name ||
+      null
     const email = checkout.email || checkout.customer?.email || null
 
     try {
@@ -785,7 +801,7 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
       // be missed while the app is down). Register them here too; consent stays
       // false until an explicit opt-in arrives.
       const { ensureRecipientForCart } = await import('@/lib/recovery/recipients')
-      await ensureRecipientForCart(store.id, {
+      const identity = await ensureRecipientForCart(store.id, {
         customerId: checkout.customer?.id ? String(checkout.customer.id) : null,
         customerName: name,
         customerEmail: email,
@@ -793,7 +809,15 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
         updatedAt: new Date(),
       }).catch((err: any) => {
         console.error(`Recipient registry sync failed for checkout ${token}:`, err?.message || err)
+        return null
       })
+      // The identity may already know the customer's name from a customer or
+      // order webhook even when this checkout payload omitted it.
+      if (!name && identity?.name) {
+        await prisma.cart
+          .update({ where: { storeId_cartId: { storeId: store.id, cartId: token } }, data: { customerName: identity.name } })
+          .catch(() => {})
+      }
       synced++
     } catch (err) {
       console.error(`Failed to sync checkout ${token}:`, err)

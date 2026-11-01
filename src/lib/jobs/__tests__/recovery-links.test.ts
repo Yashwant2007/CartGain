@@ -42,7 +42,7 @@ jest.mock('@/lib/db', () => ({
       deleteMany: jest.fn(async () => ({ count: 0 })),
       findUnique: jest.fn(async () => null),
     },
-    cart: { findMany: jest.fn() },
+    cart: { findMany: jest.fn(), update: jest.fn(async () => ({})) },
     message: {
       findMany: jest.fn(),
       groupBy: jest.fn(),
@@ -171,6 +171,21 @@ describe('recovery message wiring', () => {
     const body: string[] = lastWhatsAppParams().body
     expect(body[0]).toBe('Priya')
     expect(body[2]).toMatch(/^Priya, /)
+  })
+
+  it('falls back to the consented identity name and backfills the cart', async () => {
+    prismaMock.cart.findMany.mockReset()
+    prismaMock.cart.findMany
+      .mockResolvedValueOnce([cart({ customerName: null })])
+      .mockResolvedValue([])
+
+    await processAbandonedCarts(25)
+
+    expect(lastWhatsAppParams().body[0]).toBe('Buyer')
+    expect(prismaMock.cart.update).toHaveBeenCalledWith({
+      where: { id: 'cart-1' },
+      data: { customerName: 'Buyer' },
+    })
   })
 
   it('uses the merchant code and both working links when discounts are on', async () => {

@@ -176,6 +176,30 @@ describe('POST /api/recovery/opt-in', () => {
     expect(journeyMock).not.toHaveBeenCalled()
   })
 
+  it('stores the supplied name on the identity and fills a blank cart name', async () => {
+    prismaMock.cart.findUnique.mockResolvedValue({
+      id: 'cart-row-1',
+      customerEmail: 'existing@example.com',
+      customerPhone: '+919111111111',
+      customerName: null,
+      convertedAt: null,
+      isRecovered: false,
+    })
+
+    const res = await POST(
+      makeRequest({ name: '  Priya Sharma  ', source: 'storefront_cart', cartToken: 'cart-token-1' }),
+    )
+
+    expect(res.status).toBe(200)
+    expect(consentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Priya Sharma' }),
+    )
+    expect(prismaMock.cart.update).toHaveBeenCalledWith({
+      where: { id: 'cart-row-1' },
+      data: { customerName: 'Priya Sharma' },
+    })
+  })
+
   it('never overwrites an existing cart contact', async () => {
     prismaMock.cart.findUnique.mockResolvedValue({
       id: 'cart-row-1',

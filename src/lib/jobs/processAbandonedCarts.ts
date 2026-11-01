@@ -499,6 +499,15 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       (m: any) => m.status === 'sent' || m.status === 'delivered' || m.status === 'skipped',
     )
     const recipient = findRecipientForCart(recipients, cart)
+    // Customer webhooks and order payloads can carry the name even when the
+    // checkout omitted it. The identity is the durable record, so use it for
+    // personalisation and backfill the cart for later rounds/dashboard views.
+    if (!cart.customerName && recipient?.name) {
+      cart.customerName = recipient.name
+      prisma.cart
+        .update({ where: { id: cart.id }, data: { customerName: recipient.name } })
+        .catch(() => {})
+    }
     // Shopify checkouts often omit the phone even when the shopper opted in on
     // the storefront. The consent record is keyed by email/customer and holds
     // the verified phone, so use it for WhatsApp when the cart has none and
@@ -671,7 +680,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
 
     if (channelsToProcess.length === 0) return { sent: 0, failed: 0 }
 
-    const customerName = cart.customerName || 'Valued Customer'
+    const customerName = (cart.customerName || recipient?.name || '').trim() || 'Valued Customer'
     const rawItems = Array.isArray(cart.items) ? (cart.items as any[]) : []
     // Captures made before images were stored carry no photo (and older
     // checkouts only had `image_url`, which the old mapper ignored). Resolve

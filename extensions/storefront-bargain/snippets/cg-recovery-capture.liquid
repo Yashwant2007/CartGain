@@ -28,6 +28,7 @@
     data-cg-recovery
     data-cg-shop="{{ shop.permanent_domain | escape }}"
     data-cg-surface="{{ cg_surface }}"
+    data-cg-name="{{ customer.name | escape }}"
     data-cg-email="{{ customer.email | escape }}"
     data-cg-phone="{{ customer.phone | escape }}"
     data-cg-cart-token="{{ cart.token | escape }}"
@@ -49,6 +50,10 @@
       <p class="cg-reminder__copy">{{ copy | default: 'Get a reminder if you leave without finishing. No spam.' }}</p>
 
       <form class="cg-reminder__form" data-cg-reminder-form novalidate>
+        <label class="cg-reminder__label">
+          <span>Your name</span>
+          <input type="text" name="customer_name" autocomplete="name" placeholder="Your name" />
+        </label>
         <label class="cg-reminder__label">
           <span>Email</span>
           <input type="email" name="email" inputmode="email" autocomplete="email" placeholder="you@example.com" />

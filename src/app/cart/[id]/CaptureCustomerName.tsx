@@ -4,19 +4,18 @@ import { useEffect, useState } from 'react'
 import { User, Phone, CheckCircle2 } from 'lucide-react'
 
 interface Props {
-  cartId: string
-  storeId: string
+  cartToken: string
   shop?: string
   defaultName?: string
   defaultPhone?: string
 }
 
-export default function CaptureCustomerContact({ cartId, storeId, shop, defaultName, defaultPhone }: Props) {
+export default function CaptureCustomerContact({ cartToken, shop, defaultName, defaultPhone }: Props) {
   const [name, setName] = useState(defaultName || '')
   const [phone, setPhone] = useState(defaultPhone || '')
   const [consentWhatsApp, setConsentWhatsApp] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(Boolean(defaultName || defaultPhone))
+  const [saved, setSaved] = useState(Boolean(defaultName && defaultPhone))
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -37,30 +36,25 @@ export default function CaptureCustomerContact({ cartId, storeId, shop, defaultN
     }
     setSaving(true)
     try {
-      // 1. Save name + phone to the cart record
-      await fetch('/api/carts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          storeId,
-          cartId,
-          customerName: name.trim() || null,
-          customerPhone: phone.trim(),
-        }),
-      })
-
-      // 2. Record explicit WhatsApp consent
-      await fetch('/api/recovery/opt-in', {
+      // The public opt-in endpoint owns the write: it records explicit consent
+      // and links the cart by its Shopify token. /api/carts is merchant-auth
+      // only, so calling it from this public recovery page always failed.
+      const response = await fetch('/api/recovery/opt-in', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           shop: shop || '',
+          name: name.trim() || null,
           phone: phone.trim(),
           consentWhatsApp: true,
           source: 'storefront_cart',
-          cartToken: cartId,
+          cartToken,
         }),
       })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.message || 'Could not save your preference. Please try again.')
+      }
 
       setSaved(true)
     } catch (err: any) {

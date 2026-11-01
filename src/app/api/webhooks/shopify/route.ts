@@ -427,14 +427,23 @@ function extractName(cart: any): string | null {
     cart.billing_address?.first_name ||
     cart.shipping_address?.first_name ||
     cart.customer?.first_name ||
+    cart.customer?.default_address?.first_name ||
     ''
   const lastName =
     cart.billing_address?.last_name ||
     cart.shipping_address?.last_name ||
     cart.customer?.last_name ||
+    cart.customer?.default_address?.last_name ||
     ''
   const full = `${firstName} ${lastName}`.trim()
-  return full || cart.customer?.name || null
+  return (
+    full ||
+    cart.billing_address?.name ||
+    cart.shipping_address?.name ||
+    cart.customer?.name ||
+    cart.customer?.default_address?.name ||
+    null
+  )
 }
 
 // customers/create + customers/update.
@@ -466,6 +475,23 @@ async function handleCustomerSync(data: any, store: any) {
     source: 'shopify_customer',
   })
   if (!recipient) return
+
+  // Backfill carts captured before the customer supplied a name. Customer
+  // webhooks are the authoritative source and often arrive after the checkout.
+  const cartMatch: any[] = []
+  if (id) cartMatch.push({ customerId: id })
+  if (email) cartMatch.push({ customerEmail: email })
+  if (phone) cartMatch.push({ customerPhone: phone })
+  if (name && cartMatch.length > 0) {
+    await prisma.cart
+      .updateMany({
+        where: { storeId: store.id, customerName: null, OR: cartMatch },
+        data: { customerName: name },
+      })
+      .catch((err) => {
+        console.error(`Cart name backfill failed for customer ${id || email || phone}:`, err?.message || err)
+      })
+  }
 
   await logDataAccess({
     actorType: 'system',
@@ -557,6 +583,18 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
     console.error(`Recipient registry sync failed for cart ${cart.token}:`, err?.message || err)
     return null
   })
+
+  // The identity may already know the name from a customer/order webhook even
+  // when this checkout/cart payload omitted it. Backfill the cart so the
+  // dashboard and later recovery rounds personalise with it.
+  if (!customerName && identity?.name) {
+    await prisma.cart
+      .update({
+        where: { storeId_cartId: { storeId: store.id, cartId: cart.token } },
+        data: { customerName: identity.name },
+      })
+      .catch(() => {})
+  }
 
   // A product-page opt-in can schedule a product reminder before the shopper
   // adds to cart. Once the cart is captured, the abandoned-cart job owns the
@@ -667,15 +705,25 @@ async function processOrderCreate(data: any, store: any, domain: string) {
   }
   if (!cart) return
 
-  // Backfill the customer id (raw or gid) on orders/create — carts recorded by
-  // older webhooks/sync runs may predate the customerId column. Ensures
-  // customers/redact can locate every cart even for legacy rows.
+  // Backfill contact fields on orders/create — carts recorded by older
+  // webhooks/sync runs may predate the customerId column or be missing the
+  // name/phone/email the order carries. Ensures customers/redact can locate
+  // every cart and recovery/dashboard views show the same person.
   const orderCustomerId = data.customer?.id ? String(data.customer.id) : null
+  const orderBackfill: {
+    customerId?: string
+    customerName?: string
+    customerEmail?: string
+    customerPhone?: string
+  } = {}
   if (orderCustomerId && !cart.customerId) {
-    await prisma.cart.update({
-      where: { id: cart.id },
-      data: { customerId: normalizeCustomerId(orderCustomerId) || orderCustomerId },
-    }).catch(() => {})
+    orderBackfill.customerId = normalizeCustomerId(orderCustomerId) || orderCustomerId
+  }
+  if (!cart.customerName && orderName) orderBackfill.customerName = orderName
+  if (!cart.customerEmail && orderEmail) orderBackfill.customerEmail = orderEmail
+  if (!cart.customerPhone && orderPhone) orderBackfill.customerPhone = orderPhone
+  if (Object.keys(orderBackfill).length > 0) {
+    await prisma.cart.update({ where: { id: cart.id }, data: orderBackfill }).catch(() => {})
   }
 
   await logDataAccess({

@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
 
     const email = normalizeRecipientEmail(text((body as any).email, 320))
     const phone = normalizeRecipientPhone(text((body as any).phone, 40))
+    const name = text((body as any).name, 120)
     const consentEmail = (body as any).consentEmail === true
     const consentWhatsApp = (body as any).consentWhatsApp === true
     const source = ALLOWED_SOURCES.has(String((body as any).source || ''))
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
       storeId,
       email,
       phone,
-      name: null,
+      name,
       source: consentSource,
       consentEmail,
       consentWhatsApp,
@@ -134,6 +135,7 @@ export async function POST(request: NextRequest) {
         } = {}
         if (!cart.customerEmail && email) update.customerEmail = email
         if (!cart.customerPhone && phone) update.customerPhone = phone
+        if (!cart.customerName && name) update.customerName = name
         if (Object.keys(update).length > 0) {
           await prisma.cart.update({ where: { id: cart.id }, data: update }).catch(() => {})
         }

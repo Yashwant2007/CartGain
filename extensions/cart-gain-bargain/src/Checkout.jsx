@@ -95,6 +95,13 @@ function RecoveryOptIn() {
   const [state, setState] = useState('idle');
   const phone = api.buyerIdentity?.phone?.current || '';
   const email = api.buyerIdentity?.email?.current || '';
+  const name =
+    [api.buyerIdentity?.customer?.firstName, api.buyerIdentity?.customer?.lastName]
+      .filter(Boolean)
+      .join(' ') ||
+    api.buyerIdentity?.customer?.name ||
+    api.buyerIdentity?.name ||
+    '';
 
   if (!phone && !email) return null;
 
@@ -107,6 +114,7 @@ function RecoveryOptIn() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           shop: api.shop?.myshopifyDomain || '',
+          name: name || null,
           email: email || null,
           phone: phone || null,
           consentEmail: Boolean(email),

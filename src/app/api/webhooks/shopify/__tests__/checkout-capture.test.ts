@@ -100,6 +100,19 @@ describe('checkout webhook capture (Shopify 2026-04 has no `id`)', () => {
     expect(arg.create.items[0].name).toBe('Silk Saree')
   })
 
+  it('captures a full name from the shipping address when first/last are absent', async () => {
+    await post(
+      delivery('checkouts/update', {
+        token: 'checkout-token-name',
+        total_price: '500',
+        shipping_address: { name: 'Asha Rao' },
+        line_items: [{ title: 'Mug', price: '500', quantity: 1 }],
+      }),
+    )
+    await Promise.all(mockPending)
+    expect(mockCartUpsert.mock.calls[0][0].create.customerName).toBe('Asha Rao')
+  })
+
   it('captures a contact email carried on customer.email when email is absent', async () => {
     await post(
       delivery('checkouts/update', {
