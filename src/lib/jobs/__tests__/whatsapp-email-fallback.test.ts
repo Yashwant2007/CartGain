@@ -339,4 +339,69 @@ describe('WhatsApp → email fallback', () => {
     )?.[0]
     expect(skipped?.data.reasonCode).toBe('whatsapp_engagement_limited')
   })
+
+  it('sends free-form text when the shopper messaged in the last 24h', async () => {
+    prismaMock.customerIdentity.findMany.mockResolvedValueOnce([
+      {
+        id: 'recipient-1',
+        storeId: 'store-1',
+        phone: '+919999999999',
+        email: 'buyer@example.com',
+        shopifyCustomerId: null,
+        name: 'Buyer',
+        consentWhatsApp: true,
+        consentEmail: true,
+        consentSms: false,
+        suppressed: false,
+        optedOutAt: null,
+        lastSeenAt: new Date(),
+        lastInboundAt: new Date(Date.now() - HOUR),
+        createdAt: new Date(),
+      },
+    ])
+    prismaMock.campaign.findMany.mockResolvedValue([campaign({ channels: ['whatsapp'] })])
+    prismaMock.cart.findMany.mockResolvedValueOnce([cart()]).mockResolvedValue([])
+
+    await processAbandonedCarts(25)
+
+    expect(whatsappMock).toHaveBeenCalledTimes(1)
+    const payload = whatsappMock.mock.calls[0][0]
+    expect(payload.templateName).toBeUndefined()
+    expect(typeof payload.content).toBe('string')
+    expect(payload.content.length).toBeGreaterThan(0)
+    const persisted = prismaMock.message.update.mock.calls.find(
+      (c: any) => c[0].data.content,
+    )?.[0]
+    expect(persisted?.data.content).toBe(payload.content)
+  })
+
+  it('uses the approved template once the 24h window has closed', async () => {
+    prismaMock.customerIdentity.findMany.mockResolvedValueOnce([
+      {
+        id: 'recipient-1',
+        storeId: 'store-1',
+        phone: '+919999999999',
+        email: 'buyer@example.com',
+        shopifyCustomerId: null,
+        name: 'Buyer',
+        consentWhatsApp: true,
+        consentEmail: true,
+        consentSms: false,
+        suppressed: false,
+        optedOutAt: null,
+        lastSeenAt: new Date(),
+        lastInboundAt: new Date(Date.now() - 25 * HOUR),
+        createdAt: new Date(),
+      },
+    ])
+    prismaMock.campaign.findMany.mockResolvedValue([campaign({ channels: ['whatsapp'] })])
+    prismaMock.cart.findMany.mockResolvedValueOnce([cart()]).mockResolvedValue([])
+
+    await processAbandonedCarts(25)
+
+    expect(whatsappMock).toHaveBeenCalledTimes(1)
+    const payload = whatsappMock.mock.calls[0][0]
+    expect(payload.templateName).toBe('tpl')
+    expect(payload.content).toBeUndefined()
+  })
 })

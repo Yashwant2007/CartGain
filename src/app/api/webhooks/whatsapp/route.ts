@@ -49,7 +49,54 @@ async function resolveInboundStoreIds(
       take: 20,
     })
     .catch(() => [] as Array<{ storeId: string }>)
-  return Array.from(new Set(carts.map((c) => c.storeId)))
+  const identities = await prisma.customerIdentity
+    .findMany({
+      where: { phone: { contains: digits } },
+      select: { storeId: true },
+      distinct: ['storeId'],
+      take: 20,
+    })
+    .catch(() => [] as Array<{ storeId: string }>)
+  return Array.from(new Set([...carts, ...identities].map((c) => c.storeId)))
+}
+
+async function recordInboundWindow(storeIds: string[], phone: string): Promise<void> {
+  const digits = phone.replace(/\D/g, '')
+  if (digits.length < 8) return
+  const now = new Date()
+  await Promise.all(
+    storeIds.map(async (storeId) => {
+      try {
+        const existing = await prisma.customerIdentity.findFirst({
+          where: { storeId, phone: { contains: digits } },
+          select: { id: true },
+        })
+        if (existing) {
+          await prisma.customerIdentity.update({
+            where: { id: existing.id },
+            data: { lastInboundAt: now, lastSeenAt: now },
+          })
+        } else {
+          // An inbound message from a phone tied to one of this store's carts
+          // is real contact evidence. Keep consent false; the 24h window alone
+          // allows the courtesy reply and the customer can still opt in/out.
+          await prisma.customerIdentity.create({
+            data: {
+              storeId,
+              phone: `+${digits}`,
+              lastInboundAt: now,
+              lastSeenAt: now,
+            },
+          })
+        }
+      } catch (error: any) {
+        logWarn('whatsapp', 'inbound_window', 'Failed to record inbound WhatsApp window', {
+          storeId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }),
+  )
 }
 
 function verifyHubSignature(rawBody: string, signatureHeader: string | null): boolean {
@@ -197,11 +244,16 @@ export async function POST(request: NextRequest) {
         })
       } else {
         inboundMessages++
+        const storeIds = event.from
+          ? await resolveInboundStoreIds(event.phoneNumberId, event.from)
+          : []
+        if (storeIds.length > 0 && event.from) {
+          // Every inbound message opens Meta's 24h customer-service window.
+          // Recovery uses it to send free-form copy instead of a marketing
+          // template, which is what avoids the 131049 per-user limit.
+          await recordInboundWindow(storeIds, event.from)
+        }
         if (isWhatsAppOptOutText(event.text)) {
-          const storeIds = event.from
-            ? await resolveInboundStoreIds(event.phoneNumberId, event.from)
-            : []
-
           if (storeIds.length > 0 && event.from) {
             let persisted = 0
             for (const storeId of storeIds) {
@@ -232,10 +284,6 @@ export async function POST(request: NextRequest) {
             })
           }
         } else if (isWhatsAppOptInText(event.text)) {
-          const storeIds = event.from
-            ? await resolveInboundStoreIds(event.phoneNumberId, event.from)
-            : []
-
           if (storeIds.length > 0 && event.from) {
             let saved = 0
             for (const storeId of storeIds) {

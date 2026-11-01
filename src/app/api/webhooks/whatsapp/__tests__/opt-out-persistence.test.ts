@@ -22,6 +22,7 @@ jest.mock('@/lib/db', () => ({
     },
     customerIdentity: {
       findMany: jest.fn(async () => []),
+      findFirst: jest.fn(async () => null),
       create: jest.fn(async ({ data }: any) => ({ id: 'identity-1', ...data })),
       update: jest.fn(async ({ where, data }: any) => ({ id: where.id, ...data })),
       updateMany: jest.fn(async () => ({ count: 0 })),
@@ -45,6 +46,7 @@ const prismaMock = prisma as unknown as {
   optOut: { findUnique: jest.Mock; create: jest.Mock; deleteMany: jest.Mock }
   customerIdentity: {
     findMany: jest.Mock
+    findFirst: jest.Mock
     create: jest.Mock
     update: jest.Mock
     updateMany: jest.Mock
@@ -96,6 +98,7 @@ beforeEach(() => {
   prismaMock.optOut.create.mockResolvedValue({})
   prismaMock.cart.findMany.mockResolvedValue([])
   prismaMock.customerIdentity.findMany.mockResolvedValue([])
+  prismaMock.customerIdentity.findFirst.mockResolvedValue(null)
   prismaMock.customerIdentity.create.mockResolvedValue({ id: 'identity-1' })
   prismaMock.customerIdentity.update.mockResolvedValue({ id: 'identity-1' })
 })
@@ -196,8 +199,26 @@ describe('POST /api/webhooks/whatsapp — opt-out persistence', () => {
   })
 
   it('does not treat ordinary chat as consent', async () => {
+    prismaMock.customerIdentity.findFirst.mockResolvedValue({ id: 'identity-1' })
     const res = await POST(signedRequest(bodyWithText('do you have this in blue?')))
     expect(res.status).toBe(200)
-    expect(prismaMock.customerIdentity.update).not.toHaveBeenCalled()
+    expect(prismaMock.customerIdentity.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ consentWhatsApp: true }),
+      }),
+    )
+  })
+
+  it('records the inbound window for any customer message', async () => {
+    prismaMock.customerIdentity.findFirst.mockResolvedValue({ id: 'identity-1' })
+    const res = await POST(signedRequest(bodyWithText('do you have this in blue?')))
+    expect(res.status).toBe(200)
+    expect(prismaMock.customerIdentity.update).toHaveBeenCalledWith({
+      where: { id: 'identity-1' },
+      data: expect.objectContaining({
+        lastInboundAt: expect.any(Date),
+        lastSeenAt: expect.any(Date),
+      }),
+    })
   })
 })

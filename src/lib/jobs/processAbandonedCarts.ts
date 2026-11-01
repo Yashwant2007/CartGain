@@ -864,6 +864,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       let messageId = ''
       let whatsappFailure: Parameters<typeof isPermanentWhatsAppFailure>[0] | null = null
       let failureReason: string | null = null
+      let whatsappFreeFormBody: string | null = null
 
       try {
         // ── Compose (validated) copy ────────────────────────────────────
@@ -1022,28 +1023,52 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             bargainUrl: bargainLink,
           })
 
-          const template = templateMap[templateStep]
-          const params = template.generateParams(
-            // {{1}} is a greeting slot, so keep it to the first name (the
-            // offer line already uses the same value).
-            firstName || customerName,
-            // The template greets with {{1}}; a body that greets again stutters.
-            singleLineMessage(stripLeadingGreeting(composed.body, customerName)),
-            offerLine,
-            firstImage,
-            {
-              // The dynamic URL button opens the store checkout directly, not
-              // the CartGain cart page (and not Facebook).
-              buttonUrlSuffix: process.env.WHATSAPP_TEMPLATE_BUTTON_BASE
-                ? `${encodeURIComponent(cart.cartId || cart.id)}?c=checkout&code=${authorisedDiscount?.code || ''}`
-                : undefined,
-            },
-          )
-          const whatsappResult = await sendWhatsAppMessage({
-            to: sanitizePhoneNumber(whatsappPhone!),
-            templateName: template.name,
-            templateParams: params,
-          })
+          const inboundAt = recipient?.lastInboundAt
+            ? new Date(recipient.lastInboundAt).getTime()
+            : 0
+          const windowOpen = inboundAt > 0 && Date.now() - inboundAt < 24 * 60 * 60 * 1000
+
+          let whatsappResult: Awaited<ReturnType<typeof sendWhatsAppMessage>>
+          if (windowOpen) {
+            // The customer messaged us in the last 24h. Meta allows free-form
+            // text in that window and the per-user marketing-template limit
+            // (131049) does not apply, so use the same copy + offer + links
+            // without a template.
+            whatsappFreeFormBody = [
+              stripLeadingGreeting(composed.body, customerName).trim(),
+              offerLine,
+            ]
+              .filter(Boolean)
+              .join('\n\n')
+            console.log(`[recovery] cart=${cart.id} whatsapp free-form (24h window)`)
+            whatsappResult = await sendWhatsAppMessage({
+              to: sanitizePhoneNumber(whatsappPhone!),
+              content: whatsappFreeFormBody,
+            })
+          } else {
+            const template = templateMap[templateStep]
+            const params = template.generateParams(
+              // {{1}} is a greeting slot, so keep it to the first name (the
+              // offer line already uses the same value).
+              firstName || customerName,
+              // The template greets with {{1}}; a body that greets again stutters.
+              singleLineMessage(stripLeadingGreeting(composed.body, customerName)),
+              offerLine,
+              firstImage,
+              {
+                // The dynamic URL button opens the store checkout directly, not
+                // the CartGain cart page (and not Facebook).
+                buttonUrlSuffix: process.env.WHATSAPP_TEMPLATE_BUTTON_BASE
+                  ? `${encodeURIComponent(cart.cartId || cart.id)}?c=checkout&code=${authorisedDiscount?.code || ''}`
+                  : undefined,
+              },
+            )
+            whatsappResult = await sendWhatsAppMessage({
+              to: sanitizePhoneNumber(whatsappPhone!),
+              templateName: template.name,
+              templateParams: params,
+            })
+          }
           sendSuccess = whatsappResult.success
           providerId = whatsappResult.messageId
           if (!sendSuccess) {
@@ -1081,6 +1106,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             providerId: providerId ?? null,
             reasonCode: sendSuccess ? null : failureReason || 'send_failed',
             lastAttemptAt: new Date(),
+            ...(whatsappFreeFormBody ? { content: whatsappFreeFormBody } : {}),
           },
         })
       } catch (err: any) {
@@ -1095,6 +1121,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
                 status: 'failed',
                 reasonCode: failureReason,
                 lastAttemptAt: new Date(),
+                ...(whatsappFreeFormBody ? { content: whatsappFreeFormBody } : {}),
               },
             })
             .catch(() => {})

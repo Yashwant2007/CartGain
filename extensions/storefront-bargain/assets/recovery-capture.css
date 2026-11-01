@@ -168,6 +168,17 @@
   color: #047857;
 }
 
+.cg-reminder__whatsapp {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: #25d366;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 @keyframes cg-reminder-in {
   from {
     opacity: 0;

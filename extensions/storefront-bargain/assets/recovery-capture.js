@@ -118,6 +118,24 @@
       if (submit) submit.disabled = true;
       setStatus(status, 'Saving…');
 
+      // Meta only allows free-form recovery copy inside a 24h customer-service
+      // window, and marketing templates are capped per user (131049). Open the
+      // business chat from this user gesture so the shopper can send START and
+      // open that window; the webhook records it for the reminder job.
+      var waNumber = (root.getAttribute('data-cg-whatsapp-number') || '').replace(/\D/g, '');
+      var waMessage = 'START';
+      var waLink = waNumber
+        ? 'https://wa.me/' + waNumber + '?text=' + encodeURIComponent(waMessage)
+        : '';
+      var waWindow = null;
+      if (whatsapp && waLink) {
+        try {
+          waWindow = window.open(waLink, '_blank');
+        } catch (e) {
+          waWindow = null;
+        }
+      }
+
       fetch('https://cart-gain.com/api/recovery/opt-in', {
         method: 'POST',
         mode: 'cors',
@@ -147,13 +165,42 @@
         .then(function () {
           window.clearTimeout(showTimer);
           safeSet(window.localStorage, doneKey, '1');
-          setStatus(status, 'Saved. We will remind you if you leave.', 'success');
-          if (submit) submit.textContent = 'Reminder saved';
-          window.setTimeout(function () {
-            root.hidden = true;
-          }, 3200);
+          if (whatsapp) {
+            setStatus(
+              status,
+              'Saved. Tap Confirm on WhatsApp so we can send your reminder.',
+              'success',
+            );
+            if (waLink) {
+              var link = document.createElement('a');
+              link.href = waLink;
+              link.target = '_blank';
+              link.rel = 'noopener';
+              link.className = 'cg-reminder__whatsapp';
+              link.textContent = 'Confirm on WhatsApp';
+              status.appendChild(document.createElement('br'));
+              status.appendChild(link);
+            }
+            if (submit) submit.textContent = 'Reminder saved';
+            window.setTimeout(function () {
+              root.hidden = true;
+            }, 30000);
+          } else {
+            setStatus(status, 'Saved. We will remind you if you leave.', 'success');
+            if (submit) submit.textContent = 'Reminder saved';
+            window.setTimeout(function () {
+              root.hidden = true;
+            }, 3200);
+          }
         })
         .catch(function (error) {
+          if (waWindow) {
+            try {
+              waWindow.close();
+            } catch (e) {
+              /* the tab may already be closed */
+            }
+          }
           if (submit) submit.disabled = false;
           setStatus(status, error.message || 'Could not save your reminder. Please try again.', 'error');
         });

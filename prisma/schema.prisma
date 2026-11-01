@@ -1304,6 +1304,10 @@ model CustomerIdentity {
   suppressed            Boolean   @default(false)
   lastSeenAt            DateTime  @default(now())
   lastContactedAt       DateTime?
+  // Last inbound WhatsApp message from this contact. A message within 24h
+  // opens Meta's customer-service window, where free-form text is allowed and
+  // marketing-template per-user limits do not apply.
+  lastInboundAt         DateTime?
   lastChannel           String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
