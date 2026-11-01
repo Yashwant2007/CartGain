@@ -187,6 +187,37 @@ describe('recovery send-time consent gate', () => {
     expect(result.messagesSent).toBe(1)
   })
 
+  it('sends a transactional email for a Shopify cart address without explicit consent', async () => {
+    prime()
+    prismaMock.customerIdentity.create.mockImplementation(async ({ data }: any) => ({
+      ...identity({ id: 'recipient-new', consentWhatsApp: false, consentEmail: false }),
+      ...data,
+    }))
+
+    const result = await processAbandonedCarts(25)
+
+    expect(emailMock).toHaveBeenCalledTimes(1)
+    expect(emailMock.mock.calls[0][0].to).toBe('buyer@example.com')
+    expect(whatsappMock).toHaveBeenCalledTimes(1)
+    expect(result.messagesSent).toBe(2)
+  })
+
+  it('does not email a WhatsApp-only opt-in with no transactional basis', async () => {
+    prime()
+    prismaMock.customerIdentity.create.mockImplementation(async ({ data }: any) => ({
+      ...identity({ id: 'recipient-new', consentWhatsApp: true, consentEmail: false }),
+      ...data,
+      emailConsentBasis: 'none',
+      consentSource: 'whatsapp_keyword',
+    }))
+
+    const result = await processAbandonedCarts(25)
+
+    expect(whatsappMock).toHaveBeenCalledTimes(1)
+    expect(emailMock).not.toHaveBeenCalled()
+    expect(result.messagesSent).toBe(1)
+  })
+
   it('sends WhatsApp only when the matching identity opted in', async () => {
     prime()
     prismaMock.customerIdentity.findMany.mockResolvedValue([identity()])

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticate, hasPermission } from '@/lib/auth-context'
-import { normalizeRecipientPhone } from '@/lib/recovery/recipients'
+import { canSendRecoveryEmail, normalizeEmailBasis, normalizeRecipientPhone } from '@/lib/recovery/recipients'
 import { recordWhatsAppConsent } from '@/lib/recovery/recipients'
 import { recordOptOut } from '@/lib/opt-out'
 import { isWhatsAppConfigured, resolveWhatsAppPhoneNumberId } from '@/lib/whatsapp/config'
@@ -22,6 +22,7 @@ type RecipientRow = {
   whatsappConsentSource?: string | null
   emailConsentAt?: Date | null
   emailConsentSource?: string | null
+  emailConsentBasis?: string | null
   optedOutAt?: Date | null
   suppressed?: boolean | null
   lastSeenAt?: Date | null
@@ -90,11 +91,38 @@ export async function GET(request: NextRequest) {
 
     const decorated = rows.map((recipient) => {
       const reason = reasonFor(recipient)
+      const emailEligible = Boolean(recipient.email) && canSendRecoveryEmail(recipient)
+      const emailBasis = recipient.consentEmail === true
+        ? 'explicit'
+        : normalizeEmailBasis(recipient.emailConsentBasis)
+      const emailStatus = !recipient.email
+        ? 'missing_email'
+        : recipient.suppressed
+          ? 'suppressed'
+          : recipient.optedOutAt
+            ? 'opted_out'
+            : emailEligible
+              ? emailBasis
+              : 'none'
       return {
         ...recipient,
         whatsappEligible: reason === 'eligible',
         whatsappStatus: reason,
         whatsappStatusLabel: reasonLabel(reason),
+        emailEligible,
+        emailConsentBasis: emailBasis,
+        emailStatus,
+        emailStatusLabel: emailStatus === 'explicit'
+          ? 'Email opt-in'
+          : emailStatus === 'transactional'
+            ? 'Transactional email'
+            : emailStatus === 'missing_email'
+              ? 'No email'
+              : emailStatus === 'suppressed'
+                ? 'Suppressed'
+                : emailStatus === 'opted_out'
+                  ? 'Opted out'
+                  : 'No email basis',
       }
     })
 
@@ -106,6 +134,9 @@ export async function GET(request: NextRequest) {
       invalid_phone: decorated.filter((r) => r.whatsappStatus === 'invalid_phone').length,
       opted_out: decorated.filter((r) => r.whatsappStatus === 'opted_out' || r.whatsappStatus === 'suppressed').length,
       email_only: decorated.filter((r) => Boolean(r.email) && !r.phone).length,
+      email_eligible: decorated.filter((r) => r.emailEligible).length,
+      email_transactional: decorated.filter((r) => r.emailStatus === 'transactional').length,
+      email_explicit: decorated.filter((r) => r.emailStatus === 'explicit').length,
     }
 
     let filtered = decorated
@@ -156,7 +187,7 @@ export async function GET(request: NextRequest) {
           inboundRoutingReady: Boolean(ownPhoneNumberId || sharedNumber),
           webhookSecretConfigured: Boolean(resolveWhatsAppAppSecret()),
         },
-        consentRule: 'Email and WhatsApp consent are only granted by an explicit opt-in and are never inferred from Shopify marketing flags.',
+        consentRule: 'Email is sent on an explicit opt-in or a transactional Shopify cart/checkout basis until the customer unsubscribes. WhatsApp always requires an explicit opt-in and is never inferred from Shopify marketing flags.',
       },
     })
   } catch (error: any) {

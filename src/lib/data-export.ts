@@ -119,6 +119,7 @@ export async function collectCustomerData(input: {
       shopifyCustomerId: i.shopifyCustomerId,
       consentWhatsApp: i.consentWhatsApp,
       consentEmail: i.consentEmail,
+      emailConsentBasis: i.emailConsentBasis,
       consentSms: i.consentSms,
       whatsappConsentAt: i.whatsappConsentAt,
       whatsappConsentSource: i.whatsappConsentSource,

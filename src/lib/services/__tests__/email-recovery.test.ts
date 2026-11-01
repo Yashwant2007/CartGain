@@ -34,6 +34,15 @@ describe('EmailTemplates.abandoned — recovery email', () => {
     }
   })
 
+  it('uses the AI headline and CTA when supplied', () => {
+    const html = render({
+      headline: 'Asha, your serum is still saved',
+      cta: 'Finish checkout',
+    })
+    expect(html).toContain('Asha, your serum is still saved')
+    expect(html).toContain('Finish checkout')
+  })
+
   it('shows the offer code when a real offer exists', () => {
     const html = render({ offer: { code: 'GAINABC123', value: 10, type: 'percentage' } })
     expect(html).toContain('GAINABC123')
@@ -43,6 +52,22 @@ describe('EmailTemplates.abandoned — recovery email', () => {
   it('does not invent an offer when none was authorised', () => {
     const html = render({ offer: null })
     expect(html).not.toContain('Your personal offer')
+  })
+
+  it('never addresses an unnamed customer as "there" in the offer band', () => {
+    const html = EmailTemplates.abandoned(
+      '',
+      items,
+      100,
+      'https://cart-gain.com/r/cart_1?c=email',
+      'Acme',
+      '₹',
+      'Your cart is still saved.',
+      'https://cart-gain.com/opt-out?x=1',
+      { offer: { code: 'GAINABC123', value: 10, type: 'percentage' } },
+    )
+    expect(html).toContain('Just for you')
+    expect(html).not.toContain('Just for there')
   })
 
   it('sends the primary CTA to the checkout link with the code', () => {

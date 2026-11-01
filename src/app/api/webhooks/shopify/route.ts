@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import prisma from '@/lib/db'
 import { logDataAccess } from '@/lib/data-protection'
-import { verifyShopifyWebhook } from '@/lib/shopify'
+import { cleanShopifyName, verifyShopifyWebhook } from '@/lib/shopify'
 import { normalizeShopifyLineItems } from '@/lib/shopify-line-items'
 import { purgeStoreData, redactCustomer } from '@/lib/data-deletion'
 import {
@@ -436,13 +436,13 @@ function extractName(cart: any): string | null {
     cart.customer?.default_address?.last_name ||
     ''
   const full = `${firstName} ${lastName}`.trim()
-  return (
+  return cleanShopifyName(
     full ||
-    cart.billing_address?.name ||
-    cart.shipping_address?.name ||
-    cart.customer?.name ||
-    cart.customer?.default_address?.name ||
-    null
+      cart.billing_address?.name ||
+      cart.shipping_address?.name ||
+      cart.customer?.name ||
+      cart.customer?.default_address?.name ||
+      null,
   )
 }
 
@@ -461,10 +461,9 @@ async function handleCustomerSync(data: any, store: any) {
     data?.default_address?.phone ||
     data?.addresses?.find?.((a: any) => a?.phone)?.phone ||
     null
-  const name =
-    `${data?.first_name || ''} ${data?.last_name || ''}`.trim() ||
-    data?.name ||
-    null
+  const name = cleanShopifyName(
+    `${data?.first_name || ''} ${data?.last_name || ''}`.trim() || data?.name || null,
+  )
 
   const recipient = await upsertRecipient({
     storeId: store.id,
@@ -653,10 +652,11 @@ async function processOrderCreate(data: any, store: any, domain: string) {
     data.billing_address?.phone ||
     data.phone ||
     null
-  const orderName =
+  const orderName = cleanShopifyName(
     data.customer?.name ||
-    `${data.customer?.first_name || data.shipping_address?.first_name || data.billing_address?.first_name || ''} ${data.customer?.last_name || data.shipping_address?.last_name || data.billing_address?.last_name || ''}`.trim() ||
-    null
+      `${data.customer?.first_name || data.shipping_address?.first_name || data.billing_address?.first_name || ''} ${data.customer?.last_name || data.shipping_address?.last_name || data.billing_address?.last_name || ''}`.trim() ||
+      null,
+  )
   const orderIdentity = await upsertRecipient({
     storeId: store.id,
     shopifyCustomerId: data.customer?.id != null ? String(data.customer.id) : null,

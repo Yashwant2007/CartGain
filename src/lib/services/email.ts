@@ -197,9 +197,14 @@ export const EmailTemplates = {
       offer?: { code: string; value: number; type: 'percentage' | 'fixed' | 'free_shipping' } | null
       checkoutUrl?: string
       bargainUrl?: string
+      headline?: string
+      cta?: string
     }
   ) => {
-    const firstName = (customerName || '').trim().split(/\s+/)[0] || customerName || 'there'
+    const firstName = (customerName || '').trim().split(/\s+/)[0] || ''
+    const greetingName = firstName || 'there'
+    const hero = opts?.headline?.trim() || 'Your cart is still waiting'
+    const ctaLabel = opts?.cta?.trim() || 'Complete Your Order'
     const showEmoji = opts?.emoji !== false
     const itemCount = items?.length || 0
     const itemsHtml = (items || [])
@@ -237,7 +242,7 @@ export const EmailTemplates = {
 
     const textBody = aiBody
       ? escapeHtmlMultiline(aiBody)
-      : `Hey ${escapeHtml(firstName)} ${showEmoji ? '✨' : ''}<br><br>Your ${itemCount > 1 ? 'items are' : 'item is'} still sitting in your cart at <strong>${escapeHtml(storeName)}</strong>, and we saved them just for you.<br><br>No rush, but they won't wait forever ${showEmoji ? '⏰' : ''}`
+      : `Hey ${escapeHtml(greetingName)} ${showEmoji ? '✨' : ''}<br><br>Your ${itemCount > 1 ? 'items are' : 'item is'} still sitting in your cart at <strong>${escapeHtml(storeName)}</strong>, and we saved them just for you.<br><br>No rush — your cart is here whenever you're ready. ${showEmoji ? '🛒' : ''}`
 
     return `<!DOCTYPE html>
 <html>
@@ -245,7 +250,7 @@ export const EmailTemplates = {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>Your cart is waiting at ${escapeHtml(storeName)}</title>
+  <title>${escapeHtml(hero)} at ${escapeHtml(storeName)}</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, Helvetica, Arial, sans-serif;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f8fafc;">
@@ -255,8 +260,8 @@ export const EmailTemplates = {
           <tr>
             <td style="background: radial-gradient(120% 120% at 50% 0%, #a5b4fc 0%, #6366f1 40%, #4f46e5 100%); padding: 40px 32px; text-align: center;">
               <div style="font-size: 42px; line-height: 1; margin-bottom: 16px;">${showEmoji ? '🛒' : ''}</div>
-              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 800; letter-spacing: -0.02em;">Your cart is still waiting ${showEmoji ? '✨' : ''}</h1>
-              <p style="margin: 12px 0 0; color: rgba(255,255,255,0.92); font-size: 16px;">Hey <strong>${escapeHtml(firstName)}</strong>, your picks are saved & ready for checkout.</p>
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 800; letter-spacing: -0.02em;">${escapeHtml(hero)} ${showEmoji ? '✨' : ''}</h1>
+              <p style="margin: 12px 0 0; color: rgba(255,255,255,0.92); font-size: 16px;">Hey <strong>${escapeHtml(greetingName)}</strong>, your picks are saved & ready for checkout.</p>
             </td>
           </tr>
 
@@ -297,7 +302,7 @@ export const EmailTemplates = {
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top: 28px;">
                 <tr>
                   <td style="background: linear-gradient(135deg, #f8f7ff 0%, #eef2ff 100%); border: 1px solid #c7d2fe; border-radius: 16px; padding: 26px; text-align: center;">
-                    <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.18em; color: #4338ca; font-weight: 700;">Just for ${escapeHtml(firstName)}</div>
+                    <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.18em; color: #4338ca; font-weight: 700;">Just for ${escapeHtml(firstName || 'you')}</div>
                     <div style="margin-top: 10px; font-size: 14px; color: #475569;">Use this personal code at checkout</div>
                     <div style="margin: 16px auto 0; display: inline-block; padding: 14px 36px; border-radius: 999px; background: #ffffff; border: 2px dashed #6366f1; font-size: 22px; font-weight: 800; letter-spacing: 0.4em; color: #312e81;">${escapeHtml(opts.offer.code)}</div>
                     <div style="margin-top: 14px; font-size: 15px; color: #475569;">
@@ -319,7 +324,7 @@ export const EmailTemplates = {
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top: 32px;">
                 <tr>
                   <td align="center">
-                    <a href="${safeHref(opts?.checkoutUrl || cartUrl)}" style="display: inline-block; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: #ffffff; text-decoration: none; padding: 16px 56px; border-radius: 999px; font-weight: 700; font-size: 16px; box-shadow: 0 18px 40px -20px rgba(79, 70, 229, 0.9);">Complete Your Order ${showEmoji ? '→' : ''}</a>
+                    <a href="${safeHref(opts?.checkoutUrl || cartUrl)}" style="display: inline-block; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: #ffffff; text-decoration: none; padding: 16px 56px; border-radius: 999px; font-weight: 700; font-size: 16px; box-shadow: 0 18px 40px -20px rgba(79, 70, 229, 0.9);">${escapeHtml(ctaLabel)} ${showEmoji ? '→' : ''}</a>
                     <div style="margin-top: 10px; font-size: 13px; color: #94a3b8;">Secure checkout • Takes less than a minute</div>
                   </td>
                 </tr>

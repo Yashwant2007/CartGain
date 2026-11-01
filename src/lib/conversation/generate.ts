@@ -16,12 +16,17 @@ import { ConversationFacts } from './facts'
 import { BrandVoice, maxEmojis, maxWords } from './voice'
 import { CONVERSATION_PROMPT_VERSION, ConversationStage, buildRecoveryPrompt } from './prompts'
 import { ValidationIssue, isNearDuplicate, validateMessage } from './validate'
+import { pickIndex } from './variety'
 
 export type MessageSource = 'ai' | 'ai_retry' | 'ai_fallback' | 'fallback'
 
 export type GeneratedMessage = {
   body: string
   subject?: string
+  /** Email hero line. Optional so existing callers keep working. */
+  headline?: string
+  /** Email button label. Optional; the template has a safe default. */
+  cta?: string
   source: MessageSource
   promptVersion: string
   /** Stable identifier of the wording variant used. */
@@ -29,7 +34,7 @@ export type GeneratedMessage = {
   issues: ValidationIssue[]
 }
 
-export type SafeFallback = (facts: ConversationFacts) => { body: string; subject?: string }
+export type SafeFallback = (facts: ConversationFacts) => { body: string; subject?: string; headline?: string; cta?: string }
 
 function validateSubject(subject: string, facts: ConversationFacts, voice: BrandVoice): { ok: boolean; subject?: string; issues: ValidationIssue[] } {
   const issues: ValidationIssue[] = []
@@ -66,7 +71,7 @@ async function callModel(
   },
   /** Use a pre-resolved client/tier instead of auto-selecting (primary first). */
   resolved?: AiResolved | null,
-): Promise<{ body: string; subject?: string } | null> {
+): Promise<{ body: string; subject?: string; headline?: string; cta?: string; tier: 'primary' | 'fallback' } | null> {
   const userKey = args.storeId || 'default'
   const client = resolved ?? getAiClient(userKey)
   if (!client) return null
@@ -90,13 +95,17 @@ async function callModel(
     })
   }
 
+  const primaryModel = process.env.AI_PRIMARY_MODEL?.trim() || 'gpt-4o-mini'
+
   try {
     const res = await client.client.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: primaryModel,
       messages,
       ...(isEmail ? { response_format: { type: 'json_object' as const } } : {}),
-      max_tokens: isEmail ? 400 : 200,
-      temperature: 0.85,
+      max_tokens: isEmail ? 500 : 220,
+      temperature: 0.9,
+      presence_penalty: 0.2,
+      frequency_penalty: 0.2,
     })
     const content = res.choices[0]?.message?.content?.trim()
     if (!content) return null
@@ -104,14 +113,28 @@ async function callModel(
       const parsed = JSON.parse(content)
       const body = typeof parsed.body === 'string' ? parsed.body : ''
       const subject = typeof parsed.subject === 'string' ? parsed.subject : undefined
+      const headline = typeof parsed.headline === 'string' ? parsed.headline : undefined
+      const cta = typeof parsed.cta === 'string' ? parsed.cta : undefined
       if (!body) return null
-      return { body, subject }
+      return { body, subject, headline, cta, tier: client.tier }
     }
-    return { body: content }
+    return { body: content, tier: client.tier }
   } catch (err: any) {
     handleAiFailure(err, 'conversation generation', userKey, client.tier)
     return null
   }
+}
+
+function validateDisplayText(
+  text: string,
+  facts: ConversationFacts,
+  voice: BrandVoice,
+  maxChars: number,
+): { ok: boolean; text?: string } {
+  const trimmed = text.trim()
+  if (!trimmed || trimmed.length > maxChars) return { ok: false }
+  const validation = validateMessage(trimmed, facts, voice)
+  return validation.ok ? { ok: true, text: validation.text } : { ok: false }
 }
 
 function describeIssues(issues: ValidationIssue[]): string {
@@ -136,7 +159,7 @@ export async function generateRecoveryMessage(args: {
   const issues: ValidationIssue[] = []
 
   const validateAndTag = (
-    result: { body: string; subject?: string },
+    result: { body: string; subject?: string; headline?: string; cta?: string },
     source: MessageSource,
   ): GeneratedMessage | null => {
     const validation = validateMessage(result.body, facts, voice, { previous: args.previousMessage })
@@ -146,9 +169,17 @@ export async function generateRecoveryMessage(args: {
       : { ok: true, subject: undefined, issues: [] as ValidationIssue[] }
     issues.push(...subjectCheck.issues)
     if (!validation.ok || !subjectCheck.ok) return null
+    const headlineCheck: { ok: boolean; text?: string } = result.headline
+      ? validateDisplayText(result.headline, facts, voice, 70)
+      : { ok: false }
+    const ctaCheck: { ok: boolean; text?: string } = result.cta
+      ? validateDisplayText(result.cta, facts, voice, 32)
+      : { ok: false }
     return {
       body: validation.text,
       subject: subjectCheck.subject,
+      headline: headlineCheck.ok ? headlineCheck.text : undefined,
+      cta: ctaCheck.ok ? ctaCheck.text : undefined,
       source,
       promptVersion: CONVERSATION_PROMPT_VERSION,
       variant: args.variantSeed,
@@ -168,9 +199,13 @@ export async function generateRecoveryMessage(args: {
   })
 
   let validated = primary ? validateAndTag(primary, 'ai') : null
+  // getAiClient() may already have selected the fallback provider (for example
+  // when the primary breaker is open). Do not call the same provider twice for
+  // one message: that is how a free-tier 429 becomes a template fallback.
+  const primaryWasFallback = primary?.tier === 'fallback'
 
-  // One correction round-trip on primary when the output broke a rule.
-  if (!validated && primary) {
+  // One correction round-trip on the primary when the output broke a rule.
+  if (!validated && primary && !primaryWasFallback) {
     const retry = await callModel({
       facts,
       voice,
@@ -185,7 +220,7 @@ export async function generateRecoveryMessage(args: {
   // 2. Fallback AI provider (Groq) before the deterministic template. This
   //    catches primary timeouts/unavailability without surfacing an error and
   //    without making the shopper wait for a second primary timeout.
-  if (!validated) {
+  if (!validated && !primaryWasFallback) {
     const fallbackResolved = getFallbackAiClient()
     if (fallbackResolved) {
       const fb = await callModel(
@@ -208,10 +243,18 @@ export async function generateRecoveryMessage(args: {
   const safe = args.fallback(facts)
   const safeValidation = validateMessage(safe.body, facts, voice, { previous: args.previousMessage })
   const safeSubject = safe.subject ? validateSubject(safe.subject, facts, voice) : { ok: true, subject: undefined, issues: [] as ValidationIssue[] }
+  const safeHeadline: { ok: boolean; text?: string } = safe.headline
+    ? validateDisplayText(safe.headline, facts, voice, 70)
+    : { ok: false }
+  const safeCta: { ok: boolean; text?: string } = safe.cta
+    ? validateDisplayText(safe.cta, facts, voice, 32)
+    : { ok: false }
 
   return {
     body: safeValidation.ok ? safeValidation.text : safe.body,
     subject: safeSubject.ok ? safeSubject.subject : undefined,
+    headline: safeHeadline.ok ? safeHeadline.text : undefined,
+    cta: safeCta.ok ? safeCta.text : undefined,
     source: 'fallback',
     promptVersion: CONVERSATION_PROMPT_VERSION,
     variant: args.variantSeed,
@@ -225,34 +268,148 @@ export async function generateRecoveryMessage(args: {
  */
 export function buildFallbackMessage(
   facts: ConversationFacts,
-  opts?: { subjectPrefix?: string }
-): { body: string; subject?: string } {
-  const name = facts.customerName ? facts.customerName.split(' ')[0] : null
-  const greeting = name ? `Hi ${name}!` : 'Hi there!'
+  opts?: {
+    subjectPrefix?: string
+    stage?: ConversationStage
+    seed?: string
+    previousMessage?: string | null
+  },
+): { body: string; subject?: string; headline?: string; cta?: string } {
+  const firstName = facts.customerName?.trim().split(/\s+/)[0] || null
+  const greeting = firstName ? `Hi ${firstName}!` : 'Hi there!'
   const itemText = facts.items.length
     ? facts.items.map((i) => `${i.name} (x${i.quantity})`).join(', ')
     : 'your items'
-  const total = `${facts.currencySymbol}${facts.total.toFixed(2)}`
-  const offer = facts.discount
-    ? ` We kept a ${facts.discount.type === 'percentage' ? `${facts.discount.value}% off` : facts.discount.type === 'free_shipping' ? 'free shipping' : `${facts.currencySymbol}${facts.discount.value} off`} offer for you — use code ${facts.discount.code} at checkout.`
+  const firstItem = facts.items[0]
+  const firstItemName = (firstItem?.name || 'your item').slice(0, 40)
+  const rawDetail = typeof firstItem?.description === 'string'
+    ? firstItem.description.replace(/\s+/g, ' ').trim().split(/(?<=[.!?])\s/)[0]
     : ''
+  const detail = rawDetail && rawDetail.toLowerCase() !== firstItemName.toLowerCase()
+    ? rawDetail.slice(0, 70)
+    : ''
+  const detailBit = detail ? ` — ${detail}` : ''
+  const total = `${facts.currencySymbol}${facts.total.toFixed(2)}`
+  const offerValue = facts.discount
+    ? facts.discount.type === 'percentage'
+      ? `${facts.discount.value}% off`
+      : facts.discount.type === 'free_shipping'
+        ? 'free shipping'
+        : `${facts.currencySymbol}${facts.discount.value} off`
+    : ''
+  const offer = facts.discount ? ` Use ${facts.discount.code} for ${offerValue}.` : ''
+  const stage = opts?.stage || 'reminder_1'
+  const channel = facts.channel
 
-  // The URL is never inlined: every channel renders its own button (email CTA,
-  // WhatsApp template button), so repeating the raw link only adds noise.
-  if (facts.channel === 'whatsapp') {
-    return {
-      body: `${greeting} your ${itemText} is still saved here 🛒 — total ${total}.${offer} Come back whenever suits you. No pressure, just your goodies waiting.`,
+  const bodies: Record<ConversationStage, string[]> = channel === 'whatsapp'
+    ? {
+        reminder_1: [
+          `${greeting} your ${itemText}${detailBit} is still saved 🛒 — ${total}.${offer} Come back whenever suits you.`,
+          `${greeting} we kept your ${itemText}${detailBit} in your cart ✨ — ${total}.${offer} Ready when you are.`,
+          `${greeting} your ${itemText}${detailBit} is right where you left it — ${total}.${offer} No rush 🙂`,
+        ],
+        reminder_2: [
+          `${greeting} still thinking about your ${itemText}? It's saved 🛒 — ${total}.${offer} Want to take another look?`,
+          `${greeting} no pressure — your ${itemText}${detailBit} is still in your cart (${total}).${offer} We're here when you're ready.`,
+          `${greeting} your ${itemText}${detailBit} hasn't gone anywhere — ${total}.${offer} Take another look?`,
+        ],
+        reminder_3: [
+          `${greeting} last note about your ${itemText}${detailBit} — still saved for ${total}.${offer} If now isn't the time, no worries. 💛`,
+          `${greeting} we'll stop nudging after this one. Your ${itemText}${detailBit} is here if you want it — ${total}.${offer}`,
+          `${greeting} final reminder about your ${itemText}${detailBit} — ${total}.${offer} Thanks for looking either way 👋`,
+        ],
+      }
+    : {
+        reminder_1: [
+          `${greeting}
+
+Your ${itemText}${detailBit} is still saved — total ${total}.${offer}
+
+No rush. Pick up right where you left off whenever you're ready. 🛍️`,
+          `${greeting}
+
+We kept your ${itemText}${detailBit} in your cart — ${total}.${offer}
+
+Come back when it suits you; checkout takes a minute. ✨`,
+          `${greeting}
+
+Your ${itemText}${detailBit} is waiting for you — ${total}.${offer}
+
+If you're still deciding, that's okay. Your cart is right here. 🙂`,
+        ],
+        reminder_2: [
+          `${greeting}
+
+Still thinking about your ${itemText}? It's saved${detailBit} — ${total}.${offer}
+
+If something felt off, tell us. Otherwise, your cart is one tap away. 💬`,
+          `${greeting}
+
+No pressure at all — your ${itemText}${detailBit} is still in your cart (${total}).${offer}
+
+When you're ready, we'll keep checkout quick. 🛒`,
+          `${greeting}
+
+Your ${itemText}${detailBit} hasn't gone anywhere. Total ${total}.${offer}
+
+Take another look, or make us an offer if the price is the sticking point. 🤝`,
+        ],
+        reminder_3: [
+          `${greeting}
+
+This is the last note from us about this cart. Your ${itemText}${detailBit} is still saved — ${total}.${offer}
+
+If now isn't the time, no hard feelings. 💛`,
+          `${greeting}
+
+We'll stop nudging you after this one. Your ${itemText}${detailBit} is here if you want it — ${total}.${offer}
+
+Thanks for taking a look either way. 🙌`,
+          `${greeting}
+
+Last reminder about your ${itemText}${detailBit} — ${total}.${offer}
+
+If you'd rather not hear from us again, the unsubscribe link is below. Take care. 👋`,
+        ],
+      }
+
+  const candidates = bodies[stage]
+  const seed = opts?.seed || `${facts.storeName}:${facts.cartUrl}:${stage}:${channel}`
+  const start = pickIndex(seed, candidates.length)
+  let body = candidates[start]
+  if (opts?.previousMessage) {
+    for (let i = 1; i < candidates.length; i += 1) {
+      const next = candidates[(start + i) % candidates.length]
+      if (!isNearDuplicate(next, opts.previousMessage)) {
+        body = next
+        break
+      }
     }
   }
 
-  const subject = opts?.subjectPrefix
-    ? `${opts.subjectPrefix} ${name ? name + '!' : ''}`.trim()
-    : `${name ? `${name}, your cart is waiting` : 'Your cart is waiting'}`
-
-  return {
-    subject,
-    body: `${greeting}\n\nYour ${itemText} is still saved — total ${total}.${offer}\n\nWhenever you're ready, you can pick up right where you left off. We'll be here. 🛍️`,
+  const nameBit = firstName ? `${firstName}, ` : ''
+  const subjectByStage: Record<ConversationStage, string> = {
+    reminder_1: `${nameBit}your cart is still saved`,
+    reminder_2: `${nameBit}still thinking it over?`,
+    reminder_3: `${nameBit}a last note about your cart`,
   }
+  const subject = opts?.subjectPrefix
+    ? `${opts.subjectPrefix} ${firstName ? firstName + '!' : ''}`.trim()
+    : subjectByStage[stage]
+
+  const headlineByStage: Record<ConversationStage, string> = {
+    reminder_1: `${nameBit}your ${firstItemName} is still saved`,
+    reminder_2: `${nameBit}still deciding on your ${firstItemName}?`,
+    reminder_3: 'A last note about your cart',
+  }
+  const ctaVariants: Record<ConversationStage, string[]> = {
+    reminder_1: ['Finish checkout', 'Pick up where you left off', 'Back to your cart'],
+    reminder_2: ['Take another look', 'Return to your cart', 'See your cart'],
+    reminder_3: ['Complete your order', 'Finish checkout', 'One last look'],
+  }
+  const cta = ctaVariants[stage][pickIndex(`${seed}:cta`, ctaVariants[stage].length)]
+
+  return { body, subject, headline: headlineByStage[stage], cta }
 }
 
 /**

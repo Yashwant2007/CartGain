@@ -48,6 +48,13 @@ describe('stageForStep', () => {
     expect(stageForStep(2)).toBe('reminder_3')
     expect(stageForStep(9)).toBe('reminder_3')
   })
+
+  it('only calls the real last round final when a campaign has more rounds', () => {
+    expect(stageForStep(1, 5)).toBe('reminder_2')
+    expect(stageForStep(3, 5)).toBe('reminder_2')
+    expect(stageForStep(4, 5)).toBe('reminder_3')
+    expect(stageForStep(4, 3)).toBe('reminder_3')
+  })
 })
 
 describe('generateRecoveryMessage', () => {
@@ -68,11 +75,32 @@ describe('generateRecoveryMessage', () => {
   })
 
   it('returns validated model copy when the model obeys the rules', async () => {
-    aiReturning(JSON.stringify({ subject: 'Your serum is saved', body: 'Hi Asha, your Vitamin C Serum is still saved. Whenever you are ready.' }))
+    aiReturning(JSON.stringify({
+      subject: 'Your serum is saved',
+      headline: 'Asha, your serum is still saved',
+      body: 'Hi Asha, your Vitamin C Serum is still saved. Whenever you are ready.',
+      cta: 'Finish checkout',
+    }))
     const result = await generateRecoveryMessage(baseArgs)
     expect(result.source).toBe('ai')
     expect(result.subject).toBe('Your serum is saved')
+    expect(result.headline).toBe('Asha, your serum is still saved')
+    expect(result.cta).toBe('Finish checkout')
     expect(result.body).toContain('Vitamin C Serum')
+  })
+
+  it('drops an invalid headline or CTA instead of rejecting good body copy', async () => {
+    aiReturning(JSON.stringify({
+      subject: 'Your serum is saved',
+      headline: 'Last chance — selling out fast!',
+      body: 'Hi Asha, your Vitamin C Serum is still saved. Whenever you are ready.',
+      cta: 'Best price guaranteed',
+    }))
+    const result = await generateRecoveryMessage(baseArgs)
+    expect(result.source).toBe('ai')
+    expect(result.body).toContain('Vitamin C Serum')
+    expect(result.headline).toBeUndefined()
+    expect(result.cta).toBeUndefined()
   })
 
   it('retries once and accepts the corrected copy', async () => {
@@ -106,6 +134,33 @@ describe('generateRecoveryMessage', () => {
     // subject is used instead.
     expect(result.source).toBe('fallback')
     expect(result.subject).not.toContain('✨')
+  })
+
+  it('uses a concrete item detail and varies fallback copy by stage and seed', () => {
+    const detailed: ConversationFacts = {
+      ...facts,
+      items: [{ name: 'Vitamin C Serum', price: 1200, quantity: 1, description: 'A bright daily serum with vitamin C.' }],
+    }
+    const first = buildFallbackMessage(detailed, { stage: 'reminder_1', seed: 'seed-a' })
+    const second = buildFallbackMessage(detailed, { stage: 'reminder_2', seed: 'seed-a' })
+    expect(first.body).toContain('bright daily serum')
+    expect(first.body).not.toBe(second.body)
+    expect(first.subject).not.toBe(second.subject)
+    expect(first.headline).toContain('Vitamin C Serum')
+    expect(first.cta).toBeTruthy()
+  })
+
+  it('does not repeat the previous fallback message or invent a customer name', () => {
+    const unnamed: ConversationFacts = { ...facts, customerName: undefined }
+    const first = buildFallbackMessage(unnamed, { stage: 'reminder_1', seed: 'seed-a' })
+    const next = buildFallbackMessage(unnamed, {
+      stage: 'reminder_1',
+      seed: 'seed-a',
+      previousMessage: first.body,
+    })
+    expect(first.body).toContain('Hi there!')
+    expect(first.body).not.toMatch(/valued customer/i)
+    expect(next.body).not.toBe(first.body)
   })
 
   it('mentions an authorised discount in the fallback and keeps it valid', async () => {

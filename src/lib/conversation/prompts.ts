@@ -13,7 +13,7 @@
 import { ConversationFacts } from './facts'
 import { BrandVoice, maxEmojis, maxWords, voicePromptBlock } from './voice'
 
-export const CONVERSATION_PROMPT_VERSION = 'recovery-v3'
+export const CONVERSATION_PROMPT_VERSION = 'recovery-v4'
 
 export type ConversationStage = 'reminder_1' | 'reminder_2' | 'reminder_3'
 
@@ -26,8 +26,16 @@ const STAGE_OBJECTIVE: Record<ConversationStage, string> = {
 function factsBlock(facts: ConversationFacts): string {
   const lines: string[] = []
   lines.push(`Store: ${facts.storeName}`)
-  if (facts.customerName) lines.push(`Customer first name: ${facts.customerName}`)
+  lines.push(
+    facts.customerName
+      ? `Customer first name: ${facts.customerName}`
+      : 'Customer first name: NOT PROVIDED — do not invent or use a name.',
+  )
   lines.push(`Items: ${facts.items.map((i) => `${i.name} x${i.quantity} (${facts.currencySymbol}${i.price})`).join('; ') || 'none'}`)
+  for (const item of facts.items) {
+    const detail = typeof item.description === 'string' ? item.description.replace(/\s+/g, ' ').trim() : ''
+    if (detail) lines.push(`Item detail for ${item.name}: ${detail.slice(0, 220)}`)
+  }
   lines.push(`Cart total: ${facts.currencySymbol}${facts.total.toFixed(2)}`)
   if (facts.discount) {
     const value =
@@ -81,6 +89,9 @@ STYLE (how it should read)
 - Sound like a person who works at the store, not a marketing robot: contractions, short sentences, no exclamation-mark stacking.
 - Use emoji where it adds warmth (max ${maxEmojis(voice, facts.channel)}), but never more than one or two in a short WhatsApp message.
 - End with one clear next step (finish checkout, or make an offer if the FACTS include that link).
+- Make the headline and CTA specific to THIS stage and THESE items. Never use a generic "Your cart is waiting" on every message.
+- Vary your opening and sentence rhythm. Do not reuse the previous message's opener, structure or joke.
+- If the item detail is present, use ONE concrete detail from it (colour, material, flavour, size) — never invent one.
 
 FACTS (the ONLY things you are allowed to state)
 ${factsBlock(facts)}
@@ -93,7 +104,11 @@ HARD RULES
 - Never compare us to other stores and never promise guarantees, refunds or outcomes.
 - Never pretend to be a person: no "I personally checked", no "my team", no "I am a real human".
 - Do not invent a discount code, a URL, a delivery date or a product benefit that is not in the FACTS.
-- Output format: ${isEmail ? 'JSON with keys "subject" (max 60 characters) and "body" (plain text, no HTML, no markdown).' : 'plain text only, no JSON, no quotes, no markdown, no HTML.'}
+- Output format: ${
+  isEmail
+    ? 'JSON with keys "subject" (max 60 characters), "headline" (max 70 characters, the email hero line), "body" (plain text, no HTML, no markdown) and "cta" (max 32 characters, the button label).'
+    : 'plain text only, no JSON, no quotes, no markdown, no HTML.'
+}
 - Word limit for the message body: ${wordLimit}. ${emojiRule}
 - Do not include the cart URL — it is added separately.
 

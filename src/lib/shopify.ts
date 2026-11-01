@@ -18,6 +18,12 @@ export class ShopifyReconnectRequiredError extends Error {
   }
 }
 
+export function cleanShopifyName(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const cleaned = value.replace(/\s+/g, ' ').trim()
+  return cleaned || null
+}
+
 // Shopify returns 429 (throttled) with a Retry-After header, and transient 5xx
 // during incidents. Without backing off we hammer the API, extend the throttle
 // window and fail recoveries that would have succeeded a second later.
@@ -762,13 +768,14 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
       checkout.customer?.last_name ||
       checkout.customer?.default_address?.last_name ||
       ''
-    const name =
+    const name = cleanShopifyName(
       `${firstName} ${lastName}`.trim() ||
-      checkout.billing_address?.name ||
-      checkout.shipping_address?.name ||
-      checkout.customer?.name ||
-      checkout.customer?.default_address?.name ||
-      null
+        checkout.billing_address?.name ||
+        checkout.shipping_address?.name ||
+        checkout.customer?.name ||
+        checkout.customer?.default_address?.name ||
+        null,
+    )
     const email = checkout.email || checkout.customer?.email || null
 
     try {

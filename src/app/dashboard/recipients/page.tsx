@@ -21,6 +21,10 @@ type Recipient = {
   phone: string | null
   consentWhatsApp: boolean
   consentEmail: boolean
+  emailConsentBasis: string | null
+  emailStatus: string
+  emailStatusLabel: string
+  emailEligible: boolean
   whatsappStatus: string
   whatsappStatusLabel: string
   whatsappConsentAt: string | null
@@ -259,10 +263,13 @@ export default function RecipientsPage() {
     if (!recipient.email) {
       return { label: 'No email', className: 'bg-slate-600/30 text-blue-200 border-slate-500/40' }
     }
-    if (recipient.consentEmail) {
+    if (recipient.emailStatus === 'explicit' || recipient.consentEmail) {
       return { label: 'Opted in', className: 'bg-emerald-600/20 text-emerald-300 border-emerald-500/30' }
     }
-    return { label: 'No opt-in', className: 'bg-amber-600/20 text-amber-300 border-amber-500/30' }
+    if (recipient.emailStatus === 'transactional') {
+      return { label: 'Transactional', className: 'bg-blue-600/20 text-blue-200 border-blue-500/30' }
+    }
+    return { label: 'No email basis', className: 'bg-amber-600/20 text-amber-300 border-amber-500/30' }
   }
 
   const isLoading = resolving || loading
@@ -280,7 +287,7 @@ export default function RecipientsPage() {
             Recipients
           </h1>
           <p className="text-blue-300 text-sm mt-1">
-            Automatic registry from Shopify carts, checkouts, orders and customer sync. Email and WhatsApp reminders are only sent to explicit opt-ins.
+            Automatic registry from Shopify carts, checkouts, orders and customer sync. Email uses an explicit opt-in or a transactional Shopify basis; WhatsApp always requires an explicit opt-in.
           </p>
         </div>
         <div className="flex gap-2">
@@ -513,8 +520,8 @@ export default function RecipientsPage() {
             <>
               <p className="text-blue-300/60">No recipients yet</p>
               <p className="text-sm text-blue-300/40 mt-1 max-w-md mx-auto">
-                They appear automatically after a Shopify cart, checkout, order or customer sync. Reminders require an
-                explicit email or WhatsApp opt-in.
+                They appear automatically after a Shopify cart, checkout, order or customer sync. Email reminders use an
+                explicit opt-in or a transactional Shopify cart/checkout basis; WhatsApp always needs an explicit opt-in.
               </p>
             </>
           )}
@@ -575,7 +582,7 @@ export default function RecipientsPage() {
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${email.className}`}>
                         {email.label}
                       </span>
-                      {recipient.consentEmail && recipient.emailConsentSource && (
+                      {recipient.emailConsentBasis !== 'none' && recipient.emailConsentSource && (
                         <div className="text-blue-300/40 mt-1">
                           {recipient.emailConsentSource}
                           {recipient.emailConsentAt

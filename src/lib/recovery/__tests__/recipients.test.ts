@@ -6,6 +6,7 @@
  * opt-in/opt-out transitions the recovery job relies on.
  */
 import {
+  canSendRecoveryEmail,
   cancelPendingRecoveryForCart,
   markRecipientContacted,
   recordRecipientConsent,
@@ -46,6 +47,8 @@ function row(over: Record<string, any> = {}) {
     consentWhatsApp: false,
     consentEmail: false,
     consentSms: false,
+    emailConsentBasis: 'none',
+    consentSource: null,
     suppressed: false,
     optedOutAt: null,
     consentAt: null,
@@ -95,11 +98,13 @@ describe('upsertRecipient', () => {
         email: 'buyer@example.com',
         name: 'Buyer',
         consentSource: 'shopify_cart',
+        emailConsentBasis: 'transactional',
       }),
     })
     const data = prismaMock.customerIdentity.create.mock.calls[0][0].data
     expect(data).not.toHaveProperty('consentWhatsApp')
     expect(data).not.toHaveProperty('suppressed')
+    expect(data.consentEmail).toBeUndefined()
   })
 
   it('merges duplicate rows, keeping consent and suppression, before updating', async () => {
@@ -178,6 +183,7 @@ describe('consent transitions', () => {
         phone: '+919999999999',
         consentEmail: true,
         consentWhatsApp: true,
+        emailConsentBasis: 'explicit',
         emailConsentSource: 'storefront_product_opt_in',
         whatsappConsentSource: 'storefront_product_opt_in',
         suppressed: false,
@@ -285,6 +291,50 @@ describe('consent transitions', () => {
         optedOutAt: expect.any(Date),
       }),
     })
+  })
+})
+
+describe('email consent basis', () => {
+  it('treats a transactional Shopify address as reachable without marketing consent', () => {
+    expect(
+      canSendRecoveryEmail({
+        consentEmail: false,
+        emailConsentBasis: 'transactional',
+        consentSource: 'shopify_checkout',
+        suppressed: false,
+        optedOutAt: null,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not email a WhatsApp-only opt-in or a suppressed/opted-out contact', () => {
+    expect(
+      canSendRecoveryEmail({
+        consentEmail: false,
+        emailConsentBasis: 'none',
+        consentSource: 'whatsapp_keyword',
+        suppressed: false,
+        optedOutAt: null,
+      }),
+    ).toBe(false)
+    expect(
+      canSendRecoveryEmail({
+        consentEmail: true,
+        emailConsentBasis: 'explicit',
+        consentSource: 'storefront_product_opt_in',
+        suppressed: true,
+        optedOutAt: null,
+      }),
+    ).toBe(false)
+    expect(
+      canSendRecoveryEmail({
+        consentEmail: true,
+        emailConsentBasis: 'explicit',
+        consentSource: 'storefront_product_opt_in',
+        suppressed: false,
+        optedOutAt: new Date(),
+      }),
+    ).toBe(false)
   })
 })
 

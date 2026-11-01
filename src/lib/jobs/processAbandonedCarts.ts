@@ -30,7 +30,11 @@ import {
   normalizeWhatsAppPhone,
   type WhatsAppEligibilityResult,
 } from '@/lib/recovery/eligibility'
-import { ensureRecipientForCart, markRecipientContacted } from '@/lib/recovery/recipients'
+import {
+  canSendRecoveryEmail,
+  ensureRecipientForCart,
+  markRecipientContacted,
+} from '@/lib/recovery/recipients'
 import { isWhatsAppConfigured } from '@/lib/whatsapp/config'
 
 const MAX_STORE_CONCURRENCY = 10
@@ -502,10 +506,10 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     // Customer webhooks and order payloads can carry the name even when the
     // checkout omitted it. The identity is the durable record, so use it for
     // personalisation and backfill the cart for later rounds/dashboard views.
-    if (!cart.customerName && recipient?.name) {
-      cart.customerName = recipient.name
+    if (!cart.customerName?.trim() && recipient?.name?.trim()) {
+      cart.customerName = recipient.name.trim()
       prisma.cart
-        .update({ where: { id: cart.id }, data: { customerName: recipient.name } })
+        .update({ where: { id: cart.id }, data: { customerName: recipient.name.trim() } })
         .catch(() => {})
     }
     // Shopify checkouts often omit the phone even when the shopper opted in on
@@ -557,13 +561,22 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       )
     }
 
-    const emailConsented = Boolean(cart.customerEmail) && recipient?.consentEmail === true
-    if (cart.customerEmail && !emailConsented && effActiveChannels.includes('email')) {
-      console.log(`[recovery] cart=${cart.id} email skipped: no_email_consent`)
+    // Email is transactional for a cart: the shopper gave the address to
+    // complete an order, so a follow-up about that cart is allowed until they
+    // unsubscribe. WhatsApp still requires explicit consent. A contact who only
+    // opted into WhatsApp (basis `none`) is not emailed.
+    const emailReachable = Boolean(cart.customerEmail) && canSendRecoveryEmail(recipient)
+    if (cart.customerEmail && !emailReachable && effActiveChannels.includes('email')) {
+      const reason = recipient?.suppressed || recipient?.optedOutAt
+        ? 'email_suppressed'
+        : recipient
+          ? 'no_email_basis'
+          : 'no_recipient_record'
+      console.log(`[recovery] cart=${cart.id} email skipped: ${reason}`)
     }
     const reachableChannels = effActiveChannels.filter(
       (c: string) =>
-        (c === 'email' && emailConsented) ||
+        (c === 'email' && emailReachable) ||
         (c === 'whatsapp' && Boolean(whatsappPhone) && whatsappEligibility.eligible && !courtesyWhatsAppSent),
     )
     const channelsByStep = new Map<number, Set<string>>()
@@ -627,7 +640,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       ) {
         return false
       }
-      if (c === 'email') return emailConsented
+      if (c === 'email') return emailReachable
       if (c === 'whatsapp') return Boolean(whatsappPhone) && whatsappEligibility.eligible && !courtesyWhatsAppSent
       return false
     })
@@ -680,7 +693,10 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
 
     if (channelsToProcess.length === 0) return { sent: 0, failed: 0 }
 
-    const customerName = (cart.customerName || recipient?.name || '').trim() || 'Valued Customer'
+    // Never pass a placeholder into the AI: it will greet the shopper as
+    // "Valued". No name is better than a fake one.
+    const personalName = ((cart.customerName || '').trim() || (recipient?.name || '').trim()) || undefined
+    const firstName = personalName?.split(/\s+/)[0]?.trim() || undefined
     const rawItems = Array.isArray(cart.items) ? (cart.items as any[]) : []
     // Captures made before images were stored carry no photo (and older
     // checkouts only had `image_url`, which the old mapper ignored). Resolve
@@ -881,7 +897,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           storeId: store.id,
           storeName: store.name,
           currencySymbol,
-          customerName,
+          customerName: personalName,
           items: cartItems.map((item: any) => ({
             name: item.name,
             price: Number(item.price) || 0,
@@ -893,6 +909,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           discount: authorisedDiscount,
           channel: ch as 'email' | 'whatsapp',
           step,
+          maxRounds,
           voice,
           previousMessage,
         })
@@ -908,7 +925,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           // template already greets with {{1}}), email gets the full body.
           content:
             ch === 'whatsapp'
-              ? singleLineMessage(stripLeadingGreeting(composed.body, customerName))
+              ? singleLineMessage(stripLeadingGreeting(composed.body, personalName))
               : composed.body,
           status: 'pending',
           sentAt: null,
@@ -951,7 +968,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
 
         if (ch === 'email') {
           const emailHtml = EmailTemplates.abandoned(
-            customerName,
+            personalName || '',
             cartItems,
             cart.totalValue,
             cartUrl,
@@ -964,11 +981,13 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
               offer: authorisedDiscount,
               checkoutUrl: linkFor('email', 'checkout'),
               bargainUrl: linkFor('email', 'bargain'),
+              headline: composed.headline,
+              cta: composed.cta,
             },
           )
           const emailResult = await sendEmail({
             to: cart.customerEmail!,
-            subject: composed.subject || `${customerName}, your cart is still saved`,
+            subject: composed.subject || `${personalName ? `${personalName}, ` : ''}your cart is still saved`,
             html: emailHtml,
             text: composed.body,
           })
@@ -1018,7 +1037,6 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           const checkoutLink = directCheckoutLink || linkFor('whatsapp', 'checkout')
           const bargainLink = linkFor('whatsapp', 'bargain')
           // Personal offer line: compact, emoji-led, product-first, short URLs.
-          const firstName = (customerName || '').split(' ')[0]?.trim()
           const productSummary = formatProductList(cartItems, 2)
           const firstItem = cartItems[0]
           const offerLine = buildRecoveryOfferLine({
@@ -1044,7 +1062,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             // (131049) does not apply, so use the same copy + offer + links
             // without a template.
             whatsappFreeFormBody = [
-              stripLeadingGreeting(composed.body, customerName).trim(),
+              stripLeadingGreeting(composed.body, personalName).trim(),
               offerLine,
             ]
               .filter(Boolean)
@@ -1059,9 +1077,9 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             const params = template.generateParams(
               // {{1}} is a greeting slot, so keep it to the first name (the
               // offer line already uses the same value).
-              firstName || customerName,
+              firstName || 'there',
               // The template greets with {{1}}; a body that greets again stutters.
-              singleLineMessage(stripLeadingGreeting(composed.body, customerName)),
+              singleLineMessage(stripLeadingGreeting(composed.body, personalName)),
               offerLine,
               firstImage,
               {

@@ -14,7 +14,6 @@ import { ConversationDiscount, ConversationFacts } from './facts'
 import { BrandVoice } from './voice'
 import { ConversationStage } from './prompts'
 import { GeneratedMessage, buildFallbackMessage, generateRecoveryMessage } from './generate'
-import { OPENERS, pickVariant } from './variety'
 
 export type RecoveryCartInput = {
   storeId: string
@@ -28,14 +27,19 @@ export type RecoveryCartInput = {
   channel: 'email' | 'whatsapp'
   /** 0-based sequence step. */
   step: number
+  /** Total rounds the campaign may send. Only the real last round is "final". */
+  maxRounds?: number
   voice: BrandVoice
   previousMessage?: string | null
 }
 
-export function stageForStep(step: number): ConversationStage {
+export function stageForStep(step: number, maxRounds = 3): ConversationStage {
   if (step <= 0) return 'reminder_1'
-  if (step === 1) return 'reminder_2'
-  return 'reminder_3'
+  const lastStep = Math.max(1, maxRounds - 1)
+  // Intermediate rounds reuse reminder_2; only the real final round is allowed
+  // to say "last note" (campaigns may run up to five rounds).
+  if (step >= lastStep) return 'reminder_3'
+  return 'reminder_2'
 }
 
 /** Build the trusted, minimal fact set for a recovery message. */
@@ -68,18 +72,18 @@ export async function composeRecoveryMessage(input: RecoveryCartInput): Promise<
     // keep the raw value
   }
   const variantSeed = `${input.storeId}:${input.channel}:${input.step}:${cartPath}`
-  const opener = pickVariant(variantSeed, OPENERS[input.channel]) || ''
-
   return generateRecoveryMessage({
     facts,
     voice: input.voice,
-    stage: stageForStep(input.step),
+    stage: stageForStep(input.step, input.maxRounds),
     previousMessage: input.previousMessage,
     storeId: input.storeId,
     variantSeed,
     fallback: (fallbackFacts) =>
       buildFallbackMessage(fallbackFacts, {
-        subjectPrefix: input.channel === 'email' ? opener : undefined,
+        stage: stageForStep(input.step, input.maxRounds),
+        seed: variantSeed,
+        previousMessage: input.previousMessage,
       }),
   })
 }

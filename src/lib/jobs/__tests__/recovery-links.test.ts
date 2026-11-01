@@ -188,6 +188,21 @@ describe('recovery message wiring', () => {
     })
   })
 
+  it('treats a whitespace cart name as missing and uses the identity name', async () => {
+    prismaMock.cart.findMany.mockReset()
+    prismaMock.cart.findMany
+      .mockResolvedValueOnce([cart({ customerName: '   ' })])
+      .mockResolvedValue([])
+
+    await processAbandonedCarts(25)
+
+    expect(lastWhatsAppParams().body[0]).toBe('Buyer')
+    expect(prismaMock.cart.update).toHaveBeenCalledWith({
+      where: { id: 'cart-1' },
+      data: { customerName: 'Buyer' },
+    })
+  })
+
   it('uses the merchant code and both working links when discounts are on', async () => {
     prismaMock.campaign.findMany.mockResolvedValue([
       campaign({ discountEnabled: true, discountType: 'percentage', discountValue: 15, discountCode: 'SAVE15' }),

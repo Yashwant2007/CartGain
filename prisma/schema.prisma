@@ -1294,6 +1294,10 @@ model CustomerIdentity {
   consentEmail          Boolean   @default(false)
   consentWhatsApp       Boolean   @default(false)
   consentSms            Boolean   @default(false)
+  // How email may be used: explicit opt-in, transactional cart/checkout
+  // follow-up (the shopper gave the address to complete an order), or none.
+  // WhatsApp never uses this field: it always requires consentWhatsApp.
+  emailConsentBasis     String    @default("none") // explicit | transactional | none
   consentSource         String?
   consentAt             DateTime?
   emailConsentAt        DateTime?

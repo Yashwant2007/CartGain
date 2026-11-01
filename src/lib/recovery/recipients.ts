@@ -33,6 +33,7 @@ export type RecipientLike = {
   consentEmail?: boolean | null
   consentWhatsApp?: boolean | null
   consentSms?: boolean | null
+  emailConsentBasis?: string | null
   consentSource?: string | null
   consentAt?: Date | null
   emailConsentAt?: Date | null
@@ -55,6 +56,34 @@ export function normalizeRecipientEmail(email: string | null | undefined): strin
 
 export function normalizeRecipientPhone(phone: string | null | undefined): string | null {
   return normalizeWhatsAppPhone(phone)
+}
+
+/**
+ * Email reachability for abandoned-cart recovery.
+ *
+ * An explicit opt-in always allows email. A checkout/cart/order address is
+ * transactional, so it may receive cart follow-ups until the contact
+ * unsubscribes. A contact who only opted into WhatsApp (basis `none`) must not
+ * be emailed, and suppression/opt-out stops both bases.
+ */
+export type EmailConsentLike = Pick<
+  RecipientLike,
+  'consentEmail' | 'emailConsentBasis' | 'consentSource' | 'suppressed' | 'optedOutAt'
+>
+
+export function canSendRecoveryEmail(identity: EmailConsentLike | null | undefined): boolean {
+  if (!identity) return false
+  if (identity.suppressed || identity.optedOutAt) return false
+  if (identity.consentEmail === true) return true
+  if (identity.emailConsentBasis === 'transactional') return true
+  // Rolling deploy / legacy row: the migration has not run yet, but the
+  // contact was captured from a Shopify cart/checkout, so the address is
+  // transactional.
+  return (
+    !identity.emailConsentBasis &&
+    typeof identity.consentSource === 'string' &&
+    identity.consentSource.startsWith('shopify_')
+  )
 }
 
 function latestDate(...dates: Array<Date | null | undefined>): Date | null {
@@ -80,11 +109,33 @@ function firstString(...values: Array<string | null | undefined>): string | null
   return null
 }
 
+export type EmailConsentBasis = 'explicit' | 'transactional' | 'none'
+
+export function normalizeEmailBasis(value: string | null | undefined): EmailConsentBasis {
+  return value === 'explicit' || value === 'transactional' ? value : 'none'
+}
+
+function strongerEmailBasis(a: EmailConsentBasis, b: EmailConsentBasis): EmailConsentBasis {
+  const rank: Record<EmailConsentBasis, number> = { none: 0, transactional: 1, explicit: 2 }
+  return rank[a] >= rank[b] ? a : b
+}
+
+function isTransactionalSource(source: string | null | undefined): boolean {
+  return typeof source === 'string' && /^shopify_/.test(source)
+}
+
 function combineIdentities(primary: RecipientLike, all: RecipientLike[]) {
   const anyWhatsAppConsent = all.some((i) => i.consentWhatsApp === true)
   const anyEmailConsent = all.some((i) => i.consentEmail === true)
   const anySmsConsent = all.some((i) => i.consentSms === true)
   const anySuppressed = all.some((i) => i.suppressed === true)
+  const storedEmailBasis = all.reduce<EmailConsentBasis>(
+    (best, i) => strongerEmailBasis(best, normalizeEmailBasis(i.emailConsentBasis)),
+    'none',
+  )
+  // Legacy rows may predate the basis column (or be written during a rolling
+  // deploy). An explicit consent flag is always stronger than the stored basis.
+  const emailConsentBasis: EmailConsentBasis = anyEmailConsent ? 'explicit' : storedEmailBasis
   return {
     shopifyCustomerId: firstString(primary.shopifyCustomerId, ...all.map((i) => i.shopifyCustomerId)),
     name: firstString(primary.name, ...all.map((i) => i.name)),
@@ -93,6 +144,7 @@ function combineIdentities(primary: RecipientLike, all: RecipientLike[]) {
     consentEmail: anyEmailConsent,
     consentWhatsApp: anyWhatsAppConsent,
     consentSms: anySmsConsent,
+    emailConsentBasis,
     consentSource: firstString(primary.consentSource, ...all.map((i) => i.consentSource)),
     consentAt: earliestDate(primary.consentAt, ...all.map((i) => i.consentAt)),
     emailConsentAt: earliestDate(primary.emailConsentAt, ...all.map((i) => i.emailConsentAt)),
@@ -141,6 +193,11 @@ export async function upsertRecipient(input: RecipientContact): Promise<Recipien
     matches[0]
 
   const seenAt = input.seenAt || new Date()
+  // A checkout/cart/customer/order address is a transactional relationship:
+  // the shopper supplied it to complete an order. It is not marketing consent,
+  // but it is enough to follow up about that order/cart until they unsubscribe.
+  const incomingBasis: EmailConsentBasis =
+    email && isTransactionalSource(input.source) ? 'transactional' : 'none'
 
   if (!primary) {
     try {
@@ -151,6 +208,7 @@ export async function upsertRecipient(input: RecipientContact): Promise<Recipien
           name: input.name?.trim() || null,
           email,
           phone,
+          emailConsentBasis: incomingBasis,
           consentSource: input.source || null,
           lastSeenAt: seenAt,
         },
@@ -191,6 +249,10 @@ export async function upsertRecipient(input: RecipientContact): Promise<Recipien
       consentEmail: merged.consentEmail,
       consentWhatsApp: merged.consentWhatsApp,
       consentSms: merged.consentSms,
+      emailConsentBasis: strongerEmailBasis(
+        normalizeEmailBasis(merged.emailConsentBasis),
+        incomingBasis,
+      ),
       consentSource: merged.consentSource,
       consentAt: merged.consentAt,
       emailConsentAt: merged.emailConsentAt,
@@ -281,6 +343,7 @@ export async function recordRecipientConsent(input: {
   if (phone) data.phone = phone
   if (wantsEmail) {
     data.consentEmail = true
+    data.emailConsentBasis = 'explicit'
     data.emailConsentAt = at
     data.emailConsentSource = input.source
   }
