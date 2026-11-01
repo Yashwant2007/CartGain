@@ -115,3 +115,19 @@ export async function redisLRange(key: string, start: number, stop: number): Pro
 }
 
 export { getRedis }
+
+/**
+ * Ping Redis for health checks without depending on the legacy Bull queue.
+ * Returns latency in ms, or null when Redis is not configured/unreachable.
+ */
+export async function redisPing(): Promise<number | null> {
+  const r = getRedis()
+  if (!r) return null
+  const start = Date.now()
+  try {
+    await r.ping()
+    return Date.now() - start
+  } catch {
+    return null
+  }
+}

@@ -10,7 +10,12 @@ if (typeof window === 'undefined') {
   }
 }
 
+export function isQueueEnabled(): boolean {
+  return process.env.ENABLE_REDIS_QUEUE === 'true'
+}
+
 function hasValidRedisConfig(): boolean {
+  if (!isQueueEnabled()) return false
   const url = process.env.REDIS_URL
   if (!url && !process.env.REDIS_HOST) return false
   if (url) {

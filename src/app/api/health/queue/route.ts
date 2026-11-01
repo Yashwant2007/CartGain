@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server'
-import { hasRedis } from '@/lib/queue'
-import { getQueue } from '@/lib/queue'
+import { getQueue, isQueueEnabled } from '@/lib/queue'
+import { redisPing } from '@/lib/redis'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const redisAvailable = hasRedis()
-    const queue = getQueue()
-    
+    const redisLatency = await redisPing()
+    const redisAvailable = redisLatency !== null
+    const queueEnabled = isQueueEnabled()
+    const queue = queueEnabled ? getQueue() : null
+
     let jobCounts: any = null
     if (queue) {
       try {
@@ -24,12 +26,14 @@ export async function GET() {
         console.error('Failed to get queue counts:', e)
       }
     }
-    
+
     return NextResponse.json({
       redis: redisAvailable,
-      queue: queue ? 'initialized' : 'fallback',
+      redisLatencyMs: redisLatency,
+      queue: queue ? 'initialized' : 'disabled',
+      queueEnabled,
       jobs: jobCounts,
-      status: redisAvailable && queue ? 'healthy' : 'degraded',
+      status: redisAvailable && (!queueEnabled || queue) ? 'healthy' : 'degraded',
     })
   } catch (error) {
     console.error('Queue health error:', error)

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import prisma from '@/lib/db'
-import { getQueue } from '@/lib/queue'
+import { redisPing } from '@/lib/redis'
 import { getAiHealth } from '@/lib/ai-client'
 import { getEmailProviderStatus } from '@/lib/services/email'
 import { currentEnvironment, currentRelease } from '@/lib/observability/version'
@@ -152,24 +152,17 @@ export async function GET() {
     }
   }
 
-  // Redis / queue check
+  // Redis check. The Bull queue is disabled on Vercel (no worker), so ping
+  // the Redis client directly instead of waiting on a queue connection.
   let redisStatus: HealthStatus['checks']['redis'] = { status: 'ok' }
-  try {
-    const redisStart = Date.now()
-    const queue = getQueue()
-    if (queue && typeof queue.isReady === 'function') {
-      await queue.isReady()
-      redisStatus.latencyMs = Date.now() - redisStart
-    } else if (queue) {
-      redisStatus = { status: 'ok', latencyMs: Date.now() - redisStart }
-    } else {
-      redisStatus = { status: 'degraded', error: 'Queue not initialized (Redis unavailable, using direct processing)' }
-    }
-  } catch {
+  const redisLatency = await redisPing()
+  if (redisLatency === null) {
     redisStatus = {
       status: 'degraded',
-      error: 'Redis unavailable',
+      error: 'Redis unavailable (using in-process fallbacks)',
     }
+  } else {
+    redisStatus.latencyMs = redisLatency
   }
 
   const ai = getAiHealth()
