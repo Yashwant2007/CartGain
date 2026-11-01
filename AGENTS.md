@@ -96,7 +96,10 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   `https://wa.me/917355849689?text=START` from the submit gesture and shows a
   Confirm on WhatsApp link (`data-cg-whatsapp-number`, shared sender default)
   so the shopper can open the window; `cartgain-39` released the theme
-  extension. Verified: Jest **143 suites / 1539 tests**, tsc, lint and
+  extension. A follow-up `d9c8b00` holds the WhatsApp tab from the submit
+  gesture and navigates it only after the opt-in write succeeds, so an inbound
+  START cannot race the cart/identity phone save; released as `cartgain-40`.
+  Verified: Jest **143 suites / 1539 tests**, tsc, lint and
   production build green; live `/api/health` `status=ok`, release `ab658a5`,
   DB/Redis/env/AI/email/WhatsApp/Shopify checks ok. Next live test: the shopper
   must actually send START (or any message) to the business number; without an
