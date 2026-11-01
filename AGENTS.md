@@ -79,6 +79,20 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `fix(ops): stop the legacy Bull queue from timing out on Vercel`
+  (committed `771e78bf`, deployed release `771e78b`). `/api/jobs/process-carts`
+  and `/api/health` logged `Queue error: connect ETIMEDOUT` because `getQueue()`
+  created a Bull connection on every request even though no worker is deployed.
+  The queue is now gated by `ENABLE_REDIS_QUEUE` (default false),
+  `initializeQueues()` returns without starting the in-process interval, and
+  health checks use a direct `redisPing()` instead of `queue.isReady()`.
+  `/api/health/queue` now reports `queue: "disabled"`, `queueEnabled: false`
+  and the real Redis latency. Verified: Jest **144 suites / 1540 tests**, tsc,
+  lint and production build green; live `/api/health` `status=ok`, release
+  `771e78b`, Redis ok (16ms), and `/api/health/queue` healthy with
+  `queue=disabled`. Set `ENABLE_REDIS_QUEUE=true` only when a real Bull worker
+  is running.
+
 - `fix(recovery): open Meta's 24h window for free-form WhatsApp reminders`
   (committed `ab658a50`, deployed release `ab658a5`; Shopify version
   `cartgain-39`). Meta's per-user marketing-template limit (`131049`) cannot be
