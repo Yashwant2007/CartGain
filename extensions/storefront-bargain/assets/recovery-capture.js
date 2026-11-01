@@ -130,7 +130,9 @@
       var waWindow = null;
       if (whatsapp && waLink) {
         try {
-          waWindow = window.open(waLink, '_blank');
+          // Hold a tab from this user gesture, but navigate only after the
+          // opt-in is saved so the inbound START cannot race the consent write.
+          waWindow = window.open('about:blank', '_blank');
         } catch (e) {
           waWindow = null;
         }
@@ -166,9 +168,18 @@
           window.clearTimeout(showTimer);
           safeSet(window.localStorage, doneKey, '1');
           if (whatsapp) {
+            if (waWindow && waLink) {
+              try {
+                waWindow.location.href = waLink;
+              } catch (e) {
+                waWindow = null;
+              }
+            }
             setStatus(
               status,
-              'Saved. Tap Confirm on WhatsApp so we can send your reminder.',
+              waWindow
+                ? 'Saved. Send START in WhatsApp to confirm your reminder.'
+                : 'Saved. Tap Confirm on WhatsApp so we can send your reminder.',
               'success',
             );
             if (waLink) {
