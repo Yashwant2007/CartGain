@@ -79,6 +79,28 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `fix(recovery): capture and personalise with customer names`
+  (committed `302b04d5`, deployed release `302b04d`, Shopify version
+  `cartgain-41`). The live `CartGaintest` store had **7/7 carts and 3/3
+  identities with no name**, so recovery always fell back to "Valued
+  Customer". Three separate gaps caused it: Shopify checkout payloads often
+  omit the name; the public `/cart/[id]` form called the merchant-authenticated
+  `/api/carts` (always 401) and passed the internal cart id where the Shopify
+  cart token was expected; and the recovery job ignored the consented
+  `CustomerIdentity.name`. The public `/api/recovery/opt-in` now accepts and
+  stores `name`, fills a blank cart `customerName`, and is the only write the
+  public cart form makes (with the real Shopify cart token). The storefront
+  capture block and checkout UI extension now collect/send a name, and the
+  Shopify REST sync + checkout/customer/order webhooks read address
+  `first_name`/`last_name`/`name` and `customer.default_address`, backfilling
+  carts from the authoritative identity. `processAbandonedCarts` uses
+  `cart.customerName || recipient.name` and backfills the cart before
+  composing. Verified: Jest **144 suites / 1543 tests**, tsc, lint, production
+  build and `shopify app build` green; live `/api/health` `status=ok`, release
+  `302b04d`, DB 151ms, Redis 19ms, env missing `[]`, AI/email/WhatsApp/Shopify
+  ok. Live name capture still needs a fresh shopper submission; the existing
+  seven carts remain nameless until then.
+
 - `fix(ops): stop the legacy Bull queue from timing out on Vercel`
   (committed `771e78bf`, deployed release `771e78b`). `/api/jobs/process-carts`
   and `/api/health` logged `Queue error: connect ETIMEDOUT` because `getQueue()`
@@ -865,6 +887,9 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   extracted. Live/verified.
 
 ## Open / watch items
+- Customer names are now captured on the public opt-in/cart/storefront forms and
+  backfilled from customer/order webhooks. Existing production carts captured
+  before `302b04d5` remain nameless; verify with a fresh shopper submission.
 - Recovery is consent-first after the opt-in change: `processAbandonedCarts`
   requires `consentEmail` for email and explicit WhatsApp consent, and
   `processRecoveryJourneys` requires channel consent. Production had **0**
