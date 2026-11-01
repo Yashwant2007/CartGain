@@ -79,6 +79,25 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `fix(recovery): surface and respect Meta's per-user marketing WhatsApp limit`
+  (committed `bb63ee27` + `b99db7a5`, deployed). The identity-phone fix made the
+  job attempt WhatsApp, but the API accepted the template and Meta then sent a
+  **failed delivery receipt** with `131049` ("This message was not delivered to
+  maintain healthy ecosystem engagement"). The webhook used to drop
+  `statuses[].errors`, so the message row only said `retry_exhausted`; it now
+  parses and persists `provider_failed:<code>:<title>` on both `Message` and
+  `RecoveryReminder`, and logs the code/title/details. `131049` and `130472`
+  are classified separately from permanent/transient/config failures: the job
+  waits **24h** instead of 5 minutes, allows one retry, then marks the row
+  `skipped` with `whatsapp_engagement_limited`; email fallback is queued in the
+  same round (also when a delivery receipt arrives after the API accepted the
+  message). Meta's limit is marketing-template-specific: a customer who
+  messages the business first opens a 24h window, and utility/auth templates
+  are not subject to it. Verified: Jest **143 suites / 1536 tests**, tsc, lint
+  and production build green; deployed release `b99db7a`, `/api/health` `ok`
+  with WhatsApp configured/appSecret/verifyToken true. The live test cart's
+  WhatsApp row remains undelivered by Meta policy; email still delivers.
+
 - `fix(recovery): send WhatsApp from consented identity phones and stop legacy
   channels from disabling it` (deployed). Two independent reasons a test cart
   only got email. First, the store's campaign still had `channels:
