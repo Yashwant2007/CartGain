@@ -47,6 +47,54 @@ describe('whatsapp inbound parsing', () => {
     expect(parseWhatsAppEvents({ entry: [{ changes: [{ value: {} }] }] })).toEqual([])
   })
 
+  it('keeps the delivery failure reason on a failed status', () => {
+    const body = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: 'PN1' },
+                statuses: [
+                  {
+                    id: 'wamid.M0',
+                    status: 'failed',
+                    recipient_id: '919876543210',
+                    errors: [
+                      {
+                        code: 131026,
+                        title: 'Message undeliverable',
+                        message: 'Message undeliverable',
+                        error_data: { details: 'Recipient is not on WhatsApp' },
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }
+
+    const [event] = parseWhatsAppEvents(body)
+    expect(event).toEqual({
+      kind: 'status',
+      wamid: 'wamid.M0',
+      status: 'failed',
+      recipientPhone: '919876543210',
+      phoneNumberId: 'PN1',
+      errors: [
+        {
+          code: 131026,
+          title: 'Message undeliverable',
+          message: 'Message undeliverable',
+          details: 'Recipient is not on WhatsApp',
+        },
+      ],
+    })
+  })
+
   it('recognizes opt-out keywords only', () => {
     expect(isWhatsAppOptOutText(' STOP ')).toBe(true)
     expect(isWhatsAppOptOutText('Unsubscribe')).toBe(true)

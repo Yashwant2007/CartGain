@@ -168,15 +168,27 @@ export async function POST(request: NextRequest) {
               })
               .catch(() => {})
           } else if (event.status === 'failed') {
+            const failure = event.errors?.[0]
+            const reasonCode = failure
+              ? `provider_failed:${failure.code ?? 'unknown'}${
+                  failure.title ? `:${failure.title}` : failure.message ? `:${failure.message}` : ''
+                }`.slice(0, 180)
+              : 'provider_failed'
             await prisma.message
-              .updateMany({ where, data: { status: 'failed' } })
+              .updateMany({ where, data: { status: 'failed', reasonCode } })
               .catch(() => {})
             await prisma.recoveryReminder
               .updateMany({
                 where: { providerId: event.wamid, ...(storeId ? { storeId } : {}) },
-                data: { status: 'failed', failedAt: new Date(), reasonCode: 'provider_failed' },
+                data: { status: 'failed', failedAt: new Date(), reasonCode },
               })
               .catch(() => {})
+            logWarn('whatsapp', 'delivery_failed', 'WhatsApp delivery failed', {
+              wamid: event.wamid,
+              code: failure?.code,
+              title: failure?.title,
+              details: failure?.details,
+            })
           }
         }
         logInfo('whatsapp', 'delivery_status', `WhatsApp delivery status: ${event.status}`, {

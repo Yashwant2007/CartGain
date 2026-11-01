@@ -2,6 +2,13 @@
 // Kept pure and dependency-free so it is unit-testable and safe to call from the
 // webhook hot path after the X-Hub-Signature-256 check has passed.
 
+export type WhatsAppStatusError = {
+  code?: number
+  title?: string
+  message?: string
+  details?: string
+}
+
 export type WhatsAppInboundEvent =
   | {
       kind: 'message'
@@ -16,6 +23,7 @@ export type WhatsAppInboundEvent =
       status: string
       recipientPhone?: string
       phoneNumberId?: string
+      errors?: WhatsAppStatusError[]
     }
 
 // Truthy "unsubscribe me" keywords a customer can text back. Kept deliberately
@@ -87,12 +95,21 @@ export function parseWhatsAppEvents(body: unknown): WhatsAppInboundEvent[] {
 
       const statuses = Array.isArray(value.statuses) ? value.statuses : []
       for (const st of statuses) {
+        const errors: WhatsAppStatusError[] | undefined = Array.isArray(st?.errors)
+          ? st.errors.map((e: any) => ({
+              code: typeof e?.code === 'number' ? e.code : undefined,
+              title: typeof e?.title === 'string' ? e.title : undefined,
+              message: typeof e?.message === 'string' ? e.message : undefined,
+              details: typeof e?.error_data?.details === 'string' ? e.error_data.details : undefined,
+            }))
+          : undefined
         events.push({
           kind: 'status',
           wamid: st?.id,
           status: String(st?.status ?? ''),
           recipientPhone: st?.recipient_id,
           phoneNumberId,
+          ...(errors && errors.length > 0 ? { errors } : {}),
         })
       }
     }
