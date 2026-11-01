@@ -255,4 +255,88 @@ describe('WhatsApp → email fallback', () => {
     expect(emailMock).not.toHaveBeenCalled()
     expect(statusUpdates()).toContain('skipped')
   })
+
+  it('keeps an engagement-limited WhatsApp row retryable and emails in the same round', async () => {
+    whatsappMock.mockResolvedValue({
+      success: false,
+      error: 'This message was not delivered to maintain healthy ecosystem engagement.',
+      errorCode: 131049,
+    })
+    prismaMock.campaign.findMany.mockResolvedValue([campaign({ channels: ['whatsapp'] })])
+    prismaMock.cart.findMany.mockResolvedValueOnce([cart()]).mockResolvedValue([])
+
+    const result = await processAbandonedCarts(25)
+
+    expect(emailMock).toHaveBeenCalledTimes(1)
+    expect(result.messagesSent).toBe(1)
+    expect(statusUpdates()).not.toContain('skipped')
+    expect(statusUpdates()).toContain('failed')
+    const failed = prismaMock.message.update.mock.calls.find(
+      (c: any) => c[0].data.status === 'failed',
+    )?.[0]
+    expect(failed?.data.reasonCode).toBe('whatsapp_engagement_limited')
+  })
+
+  it('does not retry a recent engagement-limited delivery receipt and emails instead', async () => {
+    prismaMock.campaign.findMany.mockResolvedValue([campaign({ channels: ['whatsapp', 'email'] })])
+    prismaMock.cart.findMany
+      .mockResolvedValueOnce([
+        cart({
+          messages: [
+            {
+              id: 'wa-1',
+              channel: 'whatsapp',
+              step: 0,
+              status: 'failed',
+              attempts: 1,
+              reasonCode:
+                'provider_failed:131049:This message was not delivered to maintain healthy ecosystem engagement.',
+              lastAttemptAt: new Date(),
+              createdAt: new Date(),
+            },
+          ],
+        }),
+      ])
+      .mockResolvedValue([])
+
+    const result = await processAbandonedCarts(25)
+
+    expect(whatsappMock).not.toHaveBeenCalled()
+    expect(emailMock).toHaveBeenCalledTimes(1)
+    expect(result.messagesSent).toBe(1)
+    expect(statusUpdates()).not.toContain('skipped')
+  })
+
+  it('stops after a second engagement-limited attempt and emails instead', async () => {
+    prismaMock.campaign.findMany.mockResolvedValue([campaign({ channels: ['whatsapp', 'email'] })])
+    prismaMock.cart.findMany
+      .mockResolvedValueOnce([
+        cart({
+          messages: [
+            {
+              id: 'wa-1',
+              channel: 'whatsapp',
+              step: 0,
+              status: 'failed',
+              attempts: 2,
+              reasonCode:
+                'provider_failed:131049:This message was not delivered to maintain healthy ecosystem engagement.',
+              lastAttemptAt: new Date(Date.now() - 24 * HOUR),
+              createdAt: new Date(Date.now() - 25 * HOUR),
+            },
+          ],
+        }),
+      ])
+      .mockResolvedValue([])
+
+    await processAbandonedCarts(25)
+
+    expect(whatsappMock).not.toHaveBeenCalled()
+    expect(emailMock).toHaveBeenCalledTimes(1)
+    expect(statusUpdates()).toContain('skipped')
+    const skipped = prismaMock.message.update.mock.calls.find(
+      (c: any) => c[0].data.status === 'skipped',
+    )?.[0]
+    expect(skipped?.data.reasonCode).toBe('whatsapp_engagement_limited')
+  })
 })

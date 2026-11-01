@@ -4,7 +4,12 @@ import { sendEmail, EmailTemplates } from '@/lib/services/email'
 import { buildOptOutUrl } from '@/lib/opt-out'
 import { sanitizePhoneNumber } from '@/lib/utils'
 import { sendWhatsAppMessage, WhatsAppTemplates } from '@/lib/services/whatsapp'
-import { isConfigWhatsAppFailure, isPermanentWhatsAppFailure } from '@/lib/whatsapp/errors'
+import {
+  isConfigWhatsAppFailure,
+  isEngagementLimitedReason,
+  isEngagementLimitedWhatsAppFailure,
+  isPermanentWhatsAppFailure,
+} from '@/lib/whatsapp/errors'
 import { resolveRecoveryOffer } from '@/lib/recovery/offer'
 import { enrichCartItemsWithImages } from '@/lib/recovery/product-image'
 import { buildRecoveryLink, buildStoreCheckoutLink } from '@/lib/recovery/links'
@@ -772,6 +777,19 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           m.step === step &&
           (m.status === 'sent' || m.status === 'delivered' || m.status === 'skipped'),
       )
+    // Reachability fallback shared by immediate WhatsApp failures and delivery
+    // receipts that arrive after the API accepted the template.
+    const queueEmailFallback = (): boolean => {
+      const emailAllowed =
+        Boolean(cart.customerEmail) &&
+        (!channelLimited('email') || overageEligible) &&
+        !emailSettledThisRound()
+      if (emailAllowed && !sendQueue.includes('email')) {
+        sendQueue.push('email')
+        return true
+      }
+      return false
+    }
 
     while (sendQueue.length > 0) {
       const ch = sendQueue.shift()!
@@ -804,6 +822,22 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       // with an explainable reason.
       if (existingMessage?.status === 'failed') {
         const attempts = Number(existingMessage.attempts) || 0
+        const engagementLimited =
+          ch === 'whatsapp' && isEngagementLimitedReason(existingMessage.reasonCode)
+        // Meta's per-user marketing limit needs a long pause, not the normal
+        // five-minute retry. Two marketing attempts are enough; the shopper
+        // still gets the email fallback in this round.
+        if (engagementLimited && attempts >= 2) {
+          await prisma.message
+            .update({
+              where: { id: existingMessage.id },
+              data: { status: 'skipped', reasonCode: 'whatsapp_engagement_limited' },
+            })
+            .catch(() => {})
+          settledThisSweep.add(ch)
+          queueEmailFallback()
+          continue
+        }
         if (attempts >= maxSendAttempts()) {
           await prisma.message
             .update({
@@ -817,7 +851,9 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         const lastAttempt = existingMessage.lastAttemptAt
           ? new Date(existingMessage.lastAttemptAt).getTime()
           : 0
-        if (lastAttempt && Date.now() - lastAttempt < retryDelayMs(attempts)) {
+        const retryDelay = engagementLimited ? 24 * 60 * 60 * 1000 : retryDelayMs(attempts)
+        if (lastAttempt && Date.now() - lastAttempt < retryDelay) {
+          if (engagementLimited) queueEmailFallback()
           continue
         }
       }
@@ -1018,11 +1054,13 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
               error: whatsappResult.error,
               errorDetails: whatsappResult.errorDetails,
             }
-            failureReason = isPermanentWhatsAppFailure(failureShape)
-              ? 'whatsapp_permanent'
-              : isConfigWhatsAppFailure(failureShape)
-                ? 'whatsapp_config'
-                : 'whatsapp_transient'
+            failureReason = isEngagementLimitedWhatsAppFailure(failureShape)
+              ? 'whatsapp_engagement_limited'
+              : isPermanentWhatsAppFailure(failureShape)
+                ? 'whatsapp_permanent'
+                : isConfigWhatsAppFailure(failureShape)
+                  ? 'whatsapp_config'
+                  : 'whatsapp_transient'
             whatsappFailure = {
               errorCode: whatsappResult.errorCode,
               errorSubcode: whatsappResult.errorSubcode,
@@ -1124,11 +1162,13 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         if (ch === 'whatsapp' && whatsappFailure) {
           const permanent = isPermanentWhatsAppFailure(whatsappFailure)
           const configProblem = isConfigWhatsAppFailure(whatsappFailure)
-          if (permanent || configProblem) {
+          const engagementLimited = isEngagementLimitedWhatsAppFailure(whatsappFailure)
+          if (permanent || configProblem || engagementLimited) {
             settledThisSweep.add('whatsapp')
             // A permanently undeliverable channel must not wedge the round:
             // mark it skipped so the sequence advances. A credential problem
-            // stays `failed` and is retried after the merchant fixes Meta.
+            // stays `failed` and is retried after the merchant fixes Meta. An
+            // engagement-limited message stays `failed` for one retry after 24h.
             if (permanent && messageId) {
               await prisma.message
                 .update({
@@ -1141,16 +1181,11 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             // WhatsApp-only campaign may email a shopper whose number cannot
             // receive WhatsApp at all. The plan's per-customer email cap and
             // the email opt-out still apply.
-            const emailAllowed =
-              Boolean(cart.customerEmail) &&
-              (!channelLimited('email') || overageEligible) &&
-              !emailSettledThisRound()
-            if (emailAllowed) {
+            if (queueEmailFallback()) {
               console.warn(
                 `[recovery] cart=${cart.id} whatsapp unavailable for round ${step} ` +
                   `(${whatsappFailure.errorCode ?? whatsappFailure.error ?? 'unknown'}) — sending email fallback`,
               )
-              sendQueue.push('email')
             }
           }
         }

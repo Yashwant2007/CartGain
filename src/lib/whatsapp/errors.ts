@@ -70,3 +70,24 @@ export function isConfigWhatsAppFailure(failure: WhatsAppFailure): boolean {
   const text = [failure.error, failure.errorDetails].filter(Boolean).join(' ')
   return text.length > 0 && CONFIG_PATTERN.test(text)
 }
+
+/**
+ * Meta's per-user marketing-message limit. The API accepts the template and
+ * returns a wamid, then a delivery receipt reports the message as failed with
+ * one of these codes. It is not a template/credential bug and immediate retries
+ * make it worse: Meta asks for a wait of at least 24 hours (or for the customer
+ * to message the business first). Utility/authentication templates and an open
+ * customer-service window are not subject to the marketing limit.
+ *
+ *   131049 per-user marketing template limit ("healthy ecosystem engagement")
+ *   130472 recipient is in a Meta experiment that blocks marketing messages
+ */
+const ENGAGEMENT_CODES = new Set([131049, 130472])
+
+export function isEngagementLimitedWhatsAppFailure(failure: WhatsAppFailure): boolean {
+  return typeof failure.errorCode === 'number' && ENGAGEMENT_CODES.has(failure.errorCode)
+}
+
+export function isEngagementLimitedReason(reasonCode: string | null | undefined): boolean {
+  return /(?:^|[:_-])(131049|130472)(?:$|[:_-])/.test(reasonCode || '')
+}
