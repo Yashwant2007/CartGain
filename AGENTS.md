@@ -79,6 +79,30 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `fix(recovery): recover names by email, normalize WhatsApp numbers, and render
+  the experience inline` (commits `fdad1886`, `b9915f25`, `2300cc24`). The
+  production audit showed the newest cart had an email but no name, phone, or
+  messages, an older WhatsApp attempt had been accepted then failed with Meta
+  `131049`, and a storefront opt-in stored a bare 10-digit number as
+  `+7496806284`. Recovery now resolves a missing name from the matching Shopify
+  customer (`findShopifyCustomerNameByEmail`, cached 10 min) in the abandoned
+  cart job, checkout sync, and cart webhook; all three backfill identity
+  name/phone onto the cart. `cleanShopifyName` rejects generic placeholders
+  (`Valued Customer`, `guest`, …). `normalizeWhatsAppPhone` maps bare 10-digit
+  and leading-zero Indian numbers to `+91`, and the storefront capture
+  normalizes before POST and requires a name. Product/cart theme blocks now
+  replace the “Bargain now” CTA with the published experience inline; the
+  controller mounts the iframe, handles `cg_resize`, pushes variant changes,
+  and keeps the theme-editor preview. Shopify's 10 KB app-block JS limit forced
+  minifying `bargain.js` (9.7 KB) after the readable version was rejected by
+  theme check. Verified: Jest **145 suites / 1556 tests**, tsc, lint, production
+  build and `shopify app deploy` all green (release `cartgain-43`); live
+  `/api/health` `status=ok`, release `b9915f2`, DB/Redis/env/AI/email/WhatsApp/
+  Shopify ok. Remaining: `131049` still blocks cold marketing templates, the
+  live storefront is password-protected so the inline visual needs a merchant
+  preview, and a fresh opted-in cart is still needed to prove the name/phone
+  capture end to end.
+
 - `fix(recovery): capture and personalise with customer names`
   (committed `302b04d5`, deployed release `302b04d`, Shopify version
   `cartgain-41`). The live `CartGaintest` store had **7/7 carts and 3/3
