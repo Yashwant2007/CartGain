@@ -36,6 +36,7 @@ import {
   markRecipientContacted,
 } from '@/lib/recovery/recipients'
 import { isWhatsAppConfigured } from '@/lib/whatsapp/config'
+import { findShopifyCustomerNameByEmail } from '@/lib/shopify'
 
 const MAX_STORE_CONCURRENCY = 10
 const MAX_CARTS_PER_STORE = 300
@@ -511,6 +512,18 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       prisma.cart
         .update({ where: { id: cart.id }, data: { customerName: recipient.name.trim() } })
         .catch(() => {})
+    }
+    // Guest checkouts frequently omit the name. If the email belongs to an
+    // existing Shopify customer, recover the authoritative name before the copy
+    // is generated so the shopper is never greeted as "there" or "Valued".
+    if (!cart.customerName?.trim() && cart.customerEmail) {
+      const lookedUpName = await findShopifyCustomerNameByEmail(store, cart.customerEmail).catch(() => null)
+      if (lookedUpName) {
+        cart.customerName = lookedUpName
+        prisma.cart
+          .update({ where: { id: cart.id }, data: { customerName: lookedUpName } })
+          .catch(() => {})
+      }
     }
     // Shopify checkouts often omit the phone even when the shopper opted in on
     // the storefront. The consent record is keyed by email/customer and holds

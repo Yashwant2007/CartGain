@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import prisma from '@/lib/db'
 import { logDataAccess } from '@/lib/data-protection'
-import { cleanShopifyName, verifyShopifyWebhook } from '@/lib/shopify'
+import { cleanShopifyName, findShopifyCustomerNameByEmail, verifyShopifyWebhook } from '@/lib/shopify'
 import { normalizeShopifyLineItems } from '@/lib/shopify-line-items'
 import { purgeStoreData, redactCustomer } from '@/lib/data-deletion'
 import {
@@ -521,8 +521,10 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
   const cart = data
   const customerId = data.customer?.id ? String(data.customer.id) : null
   const customerPhone = extractPhone(cart)
-  const customerName = extractName(cart)
   const customerEmail = cart.email || cart.customer?.email || null
+  const customerName =
+    extractName(cart) ||
+    (await findShopifyCustomerNameByEmail(store, customerEmail).catch(() => null))
 
   await logDataAccess({
     actorType: 'system',
@@ -583,14 +585,17 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
     return null
   })
 
-  // The identity may already know the name from a customer/order webhook even
-  // when this checkout/cart payload omitted it. Backfill the cart so the
-  // dashboard and later recovery rounds personalise with it.
-  if (!customerName && identity?.name) {
+  // The identity may already know the name/phone from a customer webhook or a
+  // storefront opt-in even when this checkout payload omitted them. Backfill
+  // the cart so later recovery rounds can personalise and send WhatsApp.
+  const identityPatch: { customerName?: string; customerPhone?: string } = {}
+  if (!customerName && identity?.name) identityPatch.customerName = identity.name
+  if (!customerPhone && identity?.phone) identityPatch.customerPhone = identity.phone
+  if (Object.keys(identityPatch).length > 0) {
     await prisma.cart
       .update({
         where: { storeId_cartId: { storeId: store.id, cartId: cart.token } },
-        data: { customerName: identity.name },
+        data: identityPatch,
       })
       .catch(() => {})
   }

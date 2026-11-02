@@ -12,6 +12,8 @@ describe('normalizeWhatsAppPhone', () => {
   it('normalises spaces and punctuation to E.164 digits', () => {
     expect(normalizeWhatsAppPhone('+91 98765 43210')).toBe('+919876543210')
     expect(normalizeWhatsAppPhone('(91) 98765-43210')).toBe('+919876543210')
+    expect(normalizeWhatsAppPhone('98765 43210')).toBe('+919876543210')
+    expect(normalizeWhatsAppPhone('098765 43210')).toBe('+919876543210')
   })
 
   it('rejects too short, too long and malformed numbers', () => {

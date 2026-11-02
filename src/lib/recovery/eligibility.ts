@@ -46,7 +46,14 @@ export type WhatsAppEligibilityResult = {
 
 export function normalizeWhatsAppPhone(phone: string | null | undefined): string | null {
   if (!phone) return null
-  const digits = String(phone).replace(/\D/g, '')
+  let digits = String(phone).replace(/\D/g, '')
+  // The shared sender is an Indian number and the storefront form asks for a
+  // local mobile number. Shoppers routinely type just the 10-digit national
+  // number ("98765 43210"), which used to be stored as +9876543210 — a
+  // different (and usually invalid) subscriber. Treat a bare 10-digit number
+  // as +91, and accept the common leading-zero form too.
+  if (digits.length === 11 && digits.startsWith('0')) digits = `91${digits.slice(1)}`
+  else if (digits.length === 10) digits = `91${digits}`
   if (digits.length < 8 || digits.length > 15) return null
   if (!isValidPhone(digits)) return null
   return `+${digits}`

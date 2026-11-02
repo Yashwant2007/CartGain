@@ -18,10 +18,24 @@ export class ShopifyReconnectRequiredError extends Error {
   }
 }
 
+const GENERIC_CUSTOMER_NAMES = new Set([
+  'customer',
+  'guest',
+  'guest customer',
+  'shopify customer',
+  'unknown',
+  'valued',
+  'valued customer',
+])
+
 export function cleanShopifyName(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const cleaned = value.replace(/\s+/g, ' ').trim()
-  return cleaned || null
+  if (!cleaned) return null
+  // Placeholder names were being treated as real people, producing greetings
+  // like "Hi Valued". A missing name is better than a fake one.
+  if (GENERIC_CUSTOMER_NAMES.has(cleaned.toLowerCase())) return null
+  return cleaned
 }
 
 // Shopify returns 429 (throttled) with a Retry-After header, and transient 5xx
@@ -505,6 +519,63 @@ export async function fetchAbandonedCheckouts(
   return data.checkouts || []
 }
 
+type CustomerNameStore = {
+  id: string
+  domain: string
+  apiKey: string | null
+  shopifyRefreshToken: string | null
+  shopifyTokenExpiresAt: Date | null
+}
+
+const customerNameCache = new Map<string, { name: string | null; expiresAt: number }>()
+const CUSTOMER_NAME_CACHE_MS = 10 * 60 * 1000
+
+/**
+ * Guest checkouts often omit the shopper's name, but the same email may belong
+ * to an existing Shopify customer. Resolve that customer's authoritative name
+ * so recovery copy never falls back to "there" (or an old "Valued Customer"
+ * placeholder). Best-effort: any Shopify failure returns null.
+ */
+export async function findShopifyCustomerNameByEmail(
+  store: CustomerNameStore,
+  email: string | null | undefined,
+): Promise<string | null> {
+  const address = String(email || '').trim().toLowerCase()
+  if (!address) return null
+
+  const key = `${store.id}:${address}`
+  const cached = customerNameCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) return cached.name
+
+  let name: string | null = null
+  try {
+    const query = encodeURIComponent(`email:${address}`)
+    const res = await fetchShopifyWithAuth(
+      store,
+      `https://${store.domain}/admin/api/2026-04/customers/search.json?query=${query}&fields=id,first_name,last_name,name,email&limit=1`,
+      { signal: AbortSignal.timeout(5000) },
+    )
+    if (res.ok) {
+      const data = await res.json().catch(() => null)
+      const customer = data?.customers?.[0]
+      if (customer) {
+        name = cleanShopifyName(
+          `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || customer.name || null,
+        )
+      }
+    }
+  } catch {
+    name = null
+  }
+
+  customerNameCache.set(key, { name, expiresAt: Date.now() + CUSTOMER_NAME_CACHE_MS })
+  if (customerNameCache.size > 500) {
+    const oldest = customerNameCache.keys().next().value
+    if (oldest) customerNameCache.delete(oldest)
+  }
+  return name
+}
+
 export async function fetchShopifyProductPrice(
   store: { id: string; domain: string; apiKey: string | null; shopifyRefreshToken: string | null; shopifyTokenExpiresAt: Date | null },
   shopifyProductId: string,
@@ -768,15 +839,16 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
       checkout.customer?.last_name ||
       checkout.customer?.default_address?.last_name ||
       ''
-    const name = cleanShopifyName(
-      `${firstName} ${lastName}`.trim() ||
-        checkout.billing_address?.name ||
-        checkout.shipping_address?.name ||
-        checkout.customer?.name ||
-        checkout.customer?.default_address?.name ||
-        null,
-    )
     const email = checkout.email || checkout.customer?.email || null
+    const name =
+      cleanShopifyName(
+        `${firstName} ${lastName}`.trim() ||
+          checkout.billing_address?.name ||
+          checkout.shipping_address?.name ||
+          checkout.customer?.name ||
+          checkout.customer?.default_address?.name ||
+          null,
+      ) || (await findShopifyCustomerNameByEmail(store, email))
 
     try {
       await prisma.cart.upsert({
@@ -818,11 +890,18 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
         console.error(`Recipient registry sync failed for checkout ${token}:`, err?.message || err)
         return null
       })
-      // The identity may already know the customer's name from a customer or
-      // order webhook even when this checkout payload omitted it.
-      if (!name && identity?.name) {
+      // The identity may already know the customer's name/phone from a
+      // customer webhook or a storefront opt-in even when this checkout payload
+      // omitted them.
+      const identityPatch: { customerName?: string; customerPhone?: string } = {}
+      if (!name && identity?.name) identityPatch.customerName = identity.name
+      if (!phone && identity?.phone) identityPatch.customerPhone = identity.phone
+      if (Object.keys(identityPatch).length > 0) {
         await prisma.cart
-          .update({ where: { storeId_cartId: { storeId: store.id, cartId: token } }, data: { customerName: identity.name } })
+          .update({
+            where: { storeId_cartId: { storeId: store.id, cartId: token } },
+            data: identityPatch,
+          })
           .catch(() => {})
       }
       synced++
