@@ -1,9 +1,8 @@
 {% comment %}
-  CartGain Bargain — cart page block (drawer).
-  Lets shoppers bargain a cart line item (drawer negotiation) right before
-  checkout. The CTA opens the same fixed drawer as the product block; the
-  widget negotiates the first cart line as the anchor item. No floors of any
-  kind are embedded in the page — the server is the only source of price truth.
+  CartGain Bargain — cart page block (inline experience).
+  Shows the merchant's published Bargain Experience inline, then hands off to
+  the negotiation chat for the first cart line. No floors of any kind are
+  embedded in the page — the server is the only source of price truth.
 {% endcomment %}
 
 {% assign currency = cart.currency.iso_code | default: shop.currency %}
@@ -32,6 +31,7 @@
   data-cg-bargain-root
   {{ block.shopify_attributes }}
   data-cg-surface="cart"
+  {% unless request.design_mode %}data-cg-inline="true"{% endunless %}
   data-cg-src="{{ widget_src | escape }}"
   data-cg-variant="{{ first_item.variant.id }}"
   data-cg-variants=""
@@ -43,21 +43,9 @@
       <span class="cg-bargain-cta__txt">{{ block.settings.heading }}</span>
       <span class="cg-bargain-cta__chev" aria-hidden="true">›</span>
     </div>
-    <p class="cg-bargain-note">CartGain Cart Bargain — opens the negotiation drawer on the live storefront.</p>
+    <p class="cg-bargain-note">CartGain Cart Bargain — shows the published experience inline on the live storefront.</p>
   {% else %}
-    <button
-      type="button"
-      class="cg-bargain-cta"
-      data-cg-bargain-open
-      aria-haspopup="dialog"
-      aria-expanded="false"
-    >
-      <svg class="cg-bargain-cta__ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
-      </svg>
-      <span class="cg-bargain-cta__txt">{{ block.settings.heading }}</span>
-      <span class="cg-bargain-cta__chev" aria-hidden="true">›</span>
-    </button>
+    <div class="cg-bargain-inline" data-cg-inline-mount></div>
   {% endif %}
 </div>
 {% render 'cg-recovery-capture',

@@ -38,6 +38,13 @@
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   }
 
+  function normalizePhone(value) {
+    var digits = String(value || '').replace(/\D/g, '');
+    if (digits.length === 11 && digits.charAt(0) === '0') digits = '91' + digits.slice(1);
+    else if (digits.length === 10) digits = '91' + digits;
+    return digits ? '+' + digits : '';
+  }
+
   function setStatus(el, message, tone) {
     if (!el) return;
     el.textContent = message || '';
@@ -92,17 +99,23 @@
 
       var name = nameInput ? nameInput.value.trim() : '';
       var email = form.email.value.trim();
-      var phone = form.phone.value.trim();
+      var phone = normalizePhone(form.phone.value);
+      if (form.phone) form.phone.value = phone;
       var whatsapp = form.whatsapp.checked;
       var wantsEmail = form.email_opt_in.checked && Boolean(email);
 
+      if (!name) {
+        setStatus(status, 'Enter your name so we can personalise your reminder.', 'error');
+        if (nameInput) nameInput.focus();
+        return;
+      }
       if (email && !isValidEmail(email)) {
         setStatus(status, 'Enter a valid email address.', 'error');
         form.email.focus();
         return;
       }
       if (whatsapp && phone.replace(/\D/g, '').length < 8) {
-        setStatus(status, 'Enter a valid WhatsApp number or untick the box.', 'error');
+        setStatus(status, 'Enter a valid WhatsApp number with country code, or untick the box.', 'error');
         form.phone.focus();
         return;
       }
