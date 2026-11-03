@@ -79,6 +79,26 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(bargain): make the products tab a working bargain toggle board`
+  (committed `2793947a`, deployed release `2793947`). The Products tab now says
+  every Shopify product bargains by default and turns each row into a real
+  `role="switch"` toggle with Bargaining/Paused badges and live counts. Merchants
+  can enable/pause one product, bulk enable/pause the current page, edit or
+  clear per-product floors, reset a rule, toggle saved rules that live outside
+  the current page, and add a draft/wholesale product by numeric ID or GID.
+  Root fixes: the catalog now returns each override's internal id and the
+  DELETE route accepts `storeId` + `shopifyProductId` (the old reset button sent
+  the Shopify id where the API expected the row id, so it always 404'd);
+  refresh/retry keep the current page cursor instead of jumping to another
+  page; search clears the cursor and translates bare numeric ids to Shopify
+  `id:` queries; and the upsert schema accepts `null` floors so blanking a
+  minimum price / max discount actually clears it. Added route tests (catalog
+  override ids, id search, clearing floors, both DELETE shapes) and component
+  tests (toggle, reset, refresh, search cursor). Verified: Jest **147 suites /
+  1567 tests**, tsc, lint and production build green; live `/api/health` is
+  `status=ok`, release `2793947`, DB 13ms, Redis 1ms, env missing `[]`, AI/
+  email/WhatsApp/Shopify ok, and unauthenticated catalog/DELETE return 401.
+
 - `fix(storefront): hand inline cards off to the full side chat and tidy the
   composer`. The product/cart cards (and now the app embed) render the published
   experience first, but clicking it posts `cg_open_drawer` instead of growing a
