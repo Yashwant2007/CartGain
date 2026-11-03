@@ -160,7 +160,9 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE /api/bargain/products?id=xxx — delete a single product override
+// DELETE /api/bargain/products?id=xxx — delete a single product override.
+// Also accepts storeId + shopifyProductId so the catalog (which merges Shopify
+// products) can reset a product without having to expose internal row ids.
 export async function DELETE(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -169,23 +171,41 @@ export async function DELETE(request: NextRequest) {
     }
 
     const id = request.nextUrl.searchParams.get('id')
-    if (!id) {
-      return NextResponse.json({ message: 'id is required' }, { status: 400 })
+    const storeId = request.nextUrl.searchParams.get('storeId')
+    const shopifyProductId = request.nextUrl.searchParams.get('shopifyProductId')
+    if (!id && !(storeId && shopifyProductId)) {
+      return NextResponse.json(
+        { message: 'id or storeId + shopifyProductId is required' },
+        { status: 400 },
+      )
     }
 
-    const product = await prisma.bargainProduct.findUnique({ where: { id } })
+    if (storeId) {
+      const store = await prisma.store.findFirst({
+        where: { id: storeId, userId: session.user.id },
+        select: { id: true },
+      })
+      if (!store) return NextResponse.json({ message: 'Store not found' }, { status: 404 })
+    }
+
+    const product = id
+      ? await prisma.bargainProduct.findUnique({ where: { id } })
+      : await prisma.bargainProduct.findUnique({
+          where: { storeId_shopifyProductId: { storeId: storeId!, shopifyProductId: shopifyProductId! } },
+        })
     if (!product) {
       return NextResponse.json({ message: 'Product override not found' }, { status: 404 })
     }
 
     const store = await prisma.store.findFirst({
       where: { id: product.storeId, userId: session.user.id },
+      select: { id: true },
     })
     if (!store) {
       return NextResponse.json({ message: 'Forbidden' }, { status: 403 })
     }
 
-    await prisma.bargainProduct.delete({ where: { id } })
+    await prisma.bargainProduct.delete({ where: { id: product.id } })
     return NextResponse.json({ message: 'Product override deleted' })
   } catch (error) {
     console.error('[BARGAIN_PRODUCT_DELETE]', error)

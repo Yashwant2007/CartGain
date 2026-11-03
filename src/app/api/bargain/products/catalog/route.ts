@@ -35,7 +35,14 @@ export async function GET(request: NextRequest) {
     }
 
     const cursor = request.nextUrl.searchParams.get('cursor') || undefined
-    const q = request.nextUrl.searchParams.get('q') || undefined
+    const rawQuery = request.nextUrl.searchParams.get('q') || undefined
+    // Shopify's REST product query only does field filters, so a bare numeric
+    // search must be translated to `id:` instead of being treated as free text.
+    const q = rawQuery?.trim()
+      ? /^(#|gid:\/\/shopify\/Product\/)?\d+$/.test(rawQuery.trim())
+        ? `id:${rawQuery.trim().replace(/^#/, '').replace(/^gid:\/\/shopify\/Product\//, '')}`
+        : rawQuery.trim()
+      : undefined
 
     const { products, nextCursor, prevCursor, error } = await fetchShopifyProducts(store, {
       pageInfo: cursor || null,
@@ -50,25 +57,44 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         message: error,
         products: [], nextCursor: null, prevCursor: null,
-        overrides, platform: 'shopify',
+        overrides, savedOverrides: overrides.map(o => ({
+          id: o.id,
+          shopifyProductId: o.shopifyProductId,
+          productTitle: o.productTitle,
+          minPrice: o.minPrice,
+          minProfitPercent: o.minProfitPercent,
+          maxDiscountPercent: o.maxDiscountPercent,
+          isBargainable: o.isBargainable,
+          updatedAt: o.updatedAt,
+        })), platform: 'shopify',
       }, { status: 200 })
     }
 
     // Merge overrides into the fetched catalog for quick status/floor display.
-    const overrideMap = new Map<string, { minPrice: number | null; minProfitPercent: number | null; maxDiscountPercent: number | null; isBargainable: boolean }>()
-    const overrides = await prisma.bargainProduct.findMany({ where: { storeId } })
+    const overrideMap = new Map<string, { id: string; minPrice: number | null; minProfitPercent: number | null; maxDiscountPercent: number | null; isBargainable: boolean; productTitle: string | null }>()
+    const overrides = await prisma.bargainProduct.findMany({
+      where: { storeId },
+      orderBy: { updatedAt: 'desc' },
+    })
     for (const o of overrides) {
       overrideMap.set(o.shopifyProductId, {
+        id: o.id,
         minPrice: o.minPrice,
         minProfitPercent: o.minProfitPercent,
         maxDiscountPercent: o.maxDiscountPercent,
         isBargainable: o.isBargainable,
+        productTitle: o.productTitle,
       })
     }
 
     interface Merged {
       product: any
-      bargains: { enabled: boolean; minPrice: number | null; maxDiscountPercent: number | null }
+      bargains: {
+        overrideId: string | null
+        enabled: boolean
+        minPrice: number | null
+        maxDiscountPercent: number | null
+      }
     }
     const merged: Merged[] = []
     const seen = new Set<string>()
@@ -79,8 +105,13 @@ export async function GET(request: NextRequest) {
       merged.push({
         product: p,
         bargains: ov
-          ? { enabled: ov.isBargainable, minPrice: ov.minPrice, maxDiscountPercent: ov.maxDiscountPercent }
-          : { enabled: true, minPrice: null, maxDiscountPercent: null },
+          ? {
+              overrideId: ov.id,
+              enabled: ov.isBargainable,
+              minPrice: ov.minPrice,
+              maxDiscountPercent: ov.maxDiscountPercent,
+            }
+          : { overrideId: null, enabled: true, minPrice: null, maxDiscountPercent: null },
       })
     }
 
@@ -93,6 +124,16 @@ export async function GET(request: NextRequest) {
       nextCursor: nextCursor ? encodeURIComponent(nextCursor) : null,
       prevCursor: prevCursor ? encodeURIComponent(prevCursor) : null,
       orphanOverrides,
+      savedOverrides: overrides.map(o => ({
+        id: o.id,
+        shopifyProductId: o.shopifyProductId,
+        productTitle: o.productTitle,
+        minPrice: o.minPrice,
+        minProfitPercent: o.minProfitPercent,
+        maxDiscountPercent: o.maxDiscountPercent,
+        isBargainable: o.isBargainable,
+        updatedAt: o.updatedAt,
+      })),
       error: null,
       platform: 'shopify',
     })
