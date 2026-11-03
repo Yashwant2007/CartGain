@@ -13,8 +13,9 @@
  *   1. the drawer root fills the viewport instead of a percentage chain, and
  *   2. the widget says hello so the theme controller can retire its skeleton.
  */
-import { render, act } from '@testing-library/react'
+import { render, act, fireEvent, screen } from '@testing-library/react'
 import BargainWidget from '@/components/bargain/BargainWidget'
+import { DEFAULT_BARGAIN_EXPERIENCE } from '@/lib/bargain/experience/types'
 
 // jsdom ships no matchMedia; the widget probes it for pointer/reduced-motion.
 beforeAll(() => {
@@ -93,6 +94,27 @@ describe('BargainWidget drawer mode (view=drawer)', () => {
     })
 
     expect(postMessage).toHaveBeenCalledWith({ type: 'cg_hello' }, '*')
+  })
+
+  it('hands an inline invitation off to the side drawer instead of growing the card', () => {
+    const postMessage = jest.fn()
+    Object.defineProperty(window, 'parent', {
+      value: { postMessage },
+      configurable: true,
+      writable: true,
+    })
+
+    render(
+      <BargainWidget
+        {...baseProps}
+        view="inline"
+        invitationFirst
+        experience={DEFAULT_BARGAIN_EXPERIENCE}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Make an offer' }))
+    expect(postMessage).toHaveBeenCalledWith({ type: 'cg_open_drawer' }, '*')
   })
 
   it('never announces cg_resize in drawer mode (stale controllers must not shrink it)', async () => {

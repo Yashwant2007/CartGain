@@ -53,6 +53,9 @@ export default async function EmbedPage({
   // Drawer mode: the theme controller hosts the iframe in a fixed right-side
   // drawer / full-screen mobile sheet and owns open/close + variant sync.
   const view = sp('view') === 'drawer' ? 'drawer' : 'inline'
+  // Inline cards hand off to the drawer; `open=1` skips the invitation there so
+  // the shopper lands directly in the real chat.
+  const openDirect = sp('open') === '1'
 
   // Shopify themes url_encode these params when they build the embed src —
   // decode once here so the widget never renders percent-encoded text/URLs.
@@ -130,6 +133,7 @@ export default async function EmbedPage({
           cartToken={cartToken}
           linkout={sp('linkout')}
           view={view}
+          defaultOpen={openDirect}
           embedded
         />
       </EmbedErrorBoundary>

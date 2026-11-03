@@ -157,7 +157,7 @@ export default function BargainWidget({
   view = 'inline',
   defaultOpen,
 }: Props) {
-  const [open, setOpen] = useState<boolean>(defaultOpen ?? (isEmbed && !invitationFirst))
+  const [open, setOpen] = useState<boolean>(defaultOpen === true ? true : (isEmbed && !invitationFirst))
   const [expression, setExpression] = useState<ExpressionState>('idle')
   const chatOpenTracked = useRef(false)
   const personality = resolveShopkeeperPersonality(experience?.personality, persona)
@@ -996,6 +996,15 @@ export default function BargainWidget({
   }, [invitationFirst, experience, open, minimised, storeId, shopifyProductId, productCtx.variantId, sessionId, mode])
 
   function openPanel() {
+    // Inline experience: the iframe is only as tall as the invitation card.
+    // Ask the theme controller to open the full side drawer instead of growing
+    // the card into a cramped mini-chat.
+    if (isEmbed && view !== 'drawer') {
+      try {
+        window.parent?.postMessage({ type: 'cg_open_drawer' } as CgEmbedMessage, '*')
+      } catch {}
+      return
+    }
     setOpen(true)
     setMinimised(false)
     fireAvatar('CHAT_OPENED')
@@ -1768,22 +1777,26 @@ export default function BargainWidget({
               )}
 
               <div style={{
-                padding: '8px 14px 12px',
+                padding: '10px 14px 12px',
                 background: '#ffffff',
+                borderTop: '1px solid #eef2f7',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 8,
+                gap: 6,
               }}>
-                {/* Message / offer composer — free text is a real chat message;
-                    a number anywhere in it is treated as the negotiation offer. */}
+                {/* Message / offer composer — one calm, roomy control. Free text
+                    is a real chat message; a number anywhere in it is treated
+                    as the negotiation offer. */}
                 <div className="cg-composer" style={{
                   display: 'flex',
                   alignItems: 'center',
-                  borderRadius: 13,
-                  border: '1px solid #e2e8f0',
-                  background: '#f6f8fb',
-                  padding: '0 6px 0 14px',
-                  transition: 'border-color 0.15s ease',
+                  gap: 6,
+                  borderRadius: 16,
+                  border: '1px solid #dbe3ee',
+                  background: '#ffffff',
+                  padding: '5px 5px 5px 16px',
+                  boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
+                  transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
                   opacity: sessionEnded ? 0.55 : 1,
                 }}>
                   <input
@@ -1810,31 +1823,44 @@ export default function BargainWidget({
                       flex: 1,
                       minWidth: 0,
                       width: 0,
-                      padding: '13px 8px 13px 0',
+                      padding: '12px 4px',
                       border: 'none',
                       background: 'transparent',
                       color: '#0f172a',
-                      fontSize: 15.5,
+                      fontSize: 16,
+                      fontWeight: 500,
+                      lineHeight: 1.35,
                       outline: 'none',
-                      minHeight: 52,
+                      minHeight: 54,
                     }}
                   />
+                  <button
+                    onClick={() => sendMessage()}
+                    disabled={loading || !input.trim() || sessionEnded || !!busyRef.current}
+                    aria-label={draftAmount != null ? t('makeOffer') : t('send')}
+                    className="cg-btn cg-btn-send cg-btn-send--inline"
+                  >
+                    <Send size={17} />
+                    <span className="cg-send-label">
+                      {draftAmount != null
+                        ? `${t('makeOffer')} · ${currencySymbol}${draftAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+                        : t('send')}
+                    </span>
+                  </button>
                 </div>
-
-                {/* Primary CTA — stays a paper-plane even while the assistant
-                    is "thinking"; the three-dot bubble is the processing cue,
-                    so the button never turns into a buffering spinner. */}
-                <button
-                  onClick={() => sendMessage()}
-                  disabled={loading || !input.trim() || sessionEnded || !!busyRef.current}
-                  aria-label={draftAmount != null ? t('makeOffer') : t('send')}
-                  className="cg-btn cg-btn-send"
-                >
-                  <Send size={17} />
-                  {draftAmount != null
-                    ? `${t('makeOffer')} · ${currencySymbol}${draftAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
-                    : t('send')}
-                </button>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  padding: '0 3px',
+                  fontSize: 11.5,
+                  lineHeight: 1.3,
+                  color: '#94a3b8',
+                }}>
+                  <span>{input.trim() ? (draftAmount != null ? 'Offer detected' : 'Press Enter to send') : 'Name your price or ask a question'}</span>
+                  <span aria-hidden>{input.length}/500</span>
+                </div>
               </div>
             </>
           )}
@@ -1916,7 +1942,7 @@ export default function BargainWidget({
         .cartgain-bargain input:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px }
         .cartgain-bargain .cg-composer:focus-within {
           border-color: #a5b4fc;
-          box-shadow: 0 0 0 3px rgba(99,102,241,0.14);
+          box-shadow: 0 0 0 4px rgba(99,102,241,0.16), 0 4px 12px rgba(15,23,42,0.10);
           background: #ffffff;
         }
 
@@ -1926,14 +1952,14 @@ export default function BargainWidget({
         .cartgain-bargain .cg-panel-fixed {
           position: fixed; z-index: 9999;
           right: 16px; bottom: 16px;
-          width: clamp(360px, 36vw, 430px);
+          width: clamp(380px, 38vw, 460px);
           max-width: calc(100vw - 32px);
-          height: min(680px, calc(100vh - 32px));
+          height: min(720px, calc(100vh - 32px));
           max-height: calc(100vh - 32px);
           min-height: 0;
-          border-radius: 20px;
+          border-radius: 24px;
           border: 1px solid rgba(226,232,240,0.95);
-          box-shadow: -14px 26px 64px rgba(15,23,42,0.22), 0 3px 12px rgba(15,23,42,0.08);
+          box-shadow: -20px 32px 80px rgba(15,23,42,0.28), 0 4px 16px rgba(15,23,42,0.12);
         }
         .cartgain-bargain .cg-panel-mini {
           position: fixed; z-index: 9999;
@@ -1978,9 +2004,21 @@ export default function BargainWidget({
         .cg-btn-accept:not(:disabled):hover { background: linear-gradient(135deg, #16a34a, #15803d) }
         .cg-btn-send {
           width: 100%; background: linear-gradient(135deg, #6366f1, #4f46e5); color: #ffffff;
-          box-shadow: 0 3px 12px rgba(79,70,229,0.35); min-height: 52px;
+          box-shadow: 0 4px 16px rgba(79,70,229,0.42); min-height: 56px;
+          border-radius: 14;
         }
-        .cg-btn-send:not(:disabled):hover { background: linear-gradient(135deg, #4f46e5, #4338ca) }
+        .cg-btn-send:not(:disabled):hover { background: linear-gradient(135deg, #4f46e5, #4338ca); box-shadow: 0 6px 20px rgba(79,70,229,0.5) }
+        .cg-btn-send:active { transform: translateY(1px) }
+        .cg-btn-send:disabled { opacity: 0.6; box-shadow: none }
+        .cg-btn-send--inline {
+          width: auto; flex: 0 0 auto; min-height: 50px; padding: 0 16px;
+          border-radius: 13px; font-size: 14px; white-space: nowrap;
+        }
+        .cg-send-label { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+        @media (max-width: 380px) {
+          .cg-send-label { max-width: 92px }
+          .cg-btn-send--inline { padding: 0 13px }
+        }
         .cg-btn-ghost {
           background: #ffffff; color: #475569; border: 1px solid #e2e8f0; text-decoration: none;
         }
@@ -2016,7 +2054,7 @@ export default function BargainWidget({
           .cartgain-bargain .cg-panel-fixed {
             left: 0; right: 0; bottom: 0; top: auto;
             width: 100%; max-width: none; max-height: none;
-            border-radius: 20px 20px 0 0; border-bottom: none;
+            border-radius: 24px 24px 0 0; border-bottom: none;
             height: 88svh; height: 88lvh; height: 88dvh;
             max-height: 100lvh;
           }

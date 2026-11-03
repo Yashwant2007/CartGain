@@ -29,6 +29,8 @@ export type CgEmbedMessage =
   | { type: 'cg_hello'; height?: never }
   /** Drawer mode: the widget's close button asks the theme controller to close. */
   | { type: 'cg_close'; height?: never }
+  /** Inline experience: open the full side drawer straight into the chat. */
+  | { type: 'cg_open_drawer'; height?: never }
 
 // ── Bargain messages / sessions ──────────────────────────────────────────
 export type BargainMessageRole = 'customer' | 'ai' | 'system'

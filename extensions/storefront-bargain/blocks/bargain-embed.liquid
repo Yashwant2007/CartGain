@@ -1,8 +1,8 @@
 {% comment %}
-  CartGain Bargain — app embed (floating launcher).
+  CartGain Bargain — app embed (floating experience).
   Fallback for themes where app blocks can't be placed inline. Merchants enable
-  it under: Theme settings → App embeds. Renders a floating "Make an offer"
-  badge that opens the SAME fixed drawer as the product/cart blocks (controller:
+  it under: Theme settings → App embeds. Renders the published experience as a
+  floating card; clicking it opens the full side drawer chat (controller:
   bargain.js). Works on every theme including legacy / non-OS 2.0.
 {% endcomment %}
 
@@ -51,6 +51,7 @@
   class="cg-bargain-embed cg-bargain-embed--{{ block.settings.position | default: 'bottom-right' }}"
   data-cg-bargain-root
   data-cg-surface="{{ cg_surface | default: 'product' }}"
+  {% unless request.design_mode %}data-cg-inline="true"{% endunless %}
   data-cg-shop="{{ shop.permanent_domain }}"
   data-cg-src="{{ widget_src | escape }}"
   data-cg-variant=""
@@ -59,18 +60,9 @@
   style="--cg-accent: #1d4ed8;"
 >
   {% if request.design_mode %}
-    <div class="cg-bargain-embed__badge cg-bargain-embed__badge--preview">CartGain Bargain (launcher — disabled in theme editor)</div>
+    <div class="cg-bargain-embed__badge cg-bargain-embed__badge--preview">CartGain Bargain (experience — disabled in theme editor)</div>
   {% else %}
-    <button
-      type="button"
-      class="cg-bargain-embed__badge"
-      data-cg-bargain-open
-      aria-haspopup="dialog"
-      aria-expanded="false"
-    >
-      <span aria-hidden="true">🤝</span>
-      <span>{{ block.settings.heading }}</span>
-    </button>
+    <div class="cg-bargain-inline cg-bargain-inline--floating" data-cg-inline-mount></div>
   {% endif %}
 </div>
 {%- if cg_surface == 'product' -%}<script src="{{ 'dwell.js' | asset_url }}" defer></script>{%- endif -%}

@@ -79,6 +79,22 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `fix(storefront): hand inline cards off to the full side chat and tidy the
+  composer`. The product/cart cards (and now the app embed) render the published
+  experience first, but clicking it posts `cg_open_drawer` instead of growing a
+  tiny chat inside the card. The theme controller opens the normal side drawer
+  with `open=1`, so `/bargain/embed` skips the invitation and starts the real
+  chat immediately. The app embed no longer shows the legacy floating “Make an
+  offer” pill; it renders the same experience card, starting the published
+  accent/avatar/greeting from config. The drawer is wider/taller (460 × 720,
+  24px radius) and the composer is one roomy control with the send button
+  inside it, a focused 16px input, offer/Enter helper text, and a 500-char
+  counter. `bargain.js` remains under Shopify's 10 KB app-block limit (8.4 KB,
+  minified). Verified: Jest **145 suites / 1557 tests**, tsc, lint, production
+  build, jsdom handshake (`cg_open_drawer` → `view=drawer&open=1`), and local
+  `open=1` SSR (composer, no invitation). Deployed to Vercel and released as the
+  next Shopify extension version.
+
 - `fix(recovery): recover names by email, normalize WhatsApp numbers, and render
   the experience inline` (commits `fdad1886`, `b9915f25`, `2300cc24`). The
   production audit showed the newest cart had an email but no name, phone, or
