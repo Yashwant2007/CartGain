@@ -92,8 +92,11 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   counter. `bargain.js` remains under Shopify's 10 KB app-block limit (8.4 KB,
   minified). Verified: Jest **145 suites / 1557 tests**, tsc, lint, production
   build, jsdom handshake (`cg_open_drawer` → `view=drawer&open=1`), and local
-  `open=1` SSR (composer, no invitation). Deployed to Vercel and released as the
-  next Shopify extension version.
+  `open=1` SSR (composer, no invitation). Committed `f4a2c658`, deployed and
+  aliased `https://cart-gain.com`; live `/api/health` reports `release=f4a2c65`,
+  `status=ok`, DB 264ms, Redis 24ms, env missing `[]`, AI/email/WhatsApp/Shopify
+  ok, and live `view=drawer&open=1` returns 200 with the composer and no
+  invitation. Released as Shopify version `cartgain-44`.
 
 - `fix(recovery): recover names by email, normalize WhatsApp numbers, and render
   the experience inline` (commits `fdad1886`, `b9915f25`, `2300cc24`). The
