@@ -79,9 +79,9 @@ export default function TermsPage() {
                 5. Fees, Payments &amp; Renewals
               </h2>
               <ul className="list-disc pl-5 space-y-2">
-                <li><strong>Subscription Fees:</strong> Paid plans are billed monthly or annually as selected at checkout. All fees are in Indian Rupees (INR) unless otherwise stated.</li>
-                <li><strong>Revenue Share:</strong> In addition to the subscription fee, a revenue share percentage applies to net recovered revenue after the first 50 free carts. Net recovered revenue means the gross order value less verified refunds, cancellations, chargebacks, and applicable taxes. Rates: Growth 3.5% (capped at ₹5,000/month), Pro 3% (capped at ₹10,000/month).</li>
-                <li><strong>Payment Processor:</strong> All payments are processed securely through Razorpay. We do not store your full payment card details.</li>
+                <li><strong>Subscription Fees:</strong> Paid plans are billed monthly or annually through Shopify Billing in the currency of the merchant&apos;s Shopify store.</li>
+                <li><strong>Revenue Share:</strong> In addition to the subscription fee, a revenue share percentage applies to net recovered revenue after the first 50 free carts. Net recovered revenue means the gross order value less verified refunds, cancellations, chargebacks, and applicable taxes. Rates: Growth 3.5% and Pro 3%, capped monthly at the amount shown in your store currency when you approve Shopify Billing (₹5,000 / US$60 for Growth; ₹10,000 / US$120 for Pro).</li>
+                <li><strong>Payment Processor:</strong> All app charges are processed securely through Shopify Billing and appear on your Shopify invoice. We do not store your full payment card details.</li>
                 <li><strong>Auto-Renewal:</strong> Subscriptions automatically renew at the end of each billing period unless cancelled before the renewal date.</li>
                 <li><strong>Refunds:</strong> Subscription fees are non-refundable except as required by applicable law. Revenue share is calculated on net recovered revenue and may be adjusted for verified refunds or cancellations that occur after an order is attributed to CartGain.</li>
                 <li><strong>Taxes:</strong> You are responsible for all applicable taxes, including GST, VAT, or similar transaction taxes.</li>

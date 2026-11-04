@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { Check, Shield, Percent, Zap, FileText, Download, ToggleLeft, Mail, MessageSquare } from 'lucide-react'
 import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/payment'
+import { resolveBillingPrice, resolveUsageCap, resolveOveragePrices } from '@/lib/shopify-billing/plans'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 
 type SubscriptionData = {
@@ -30,12 +31,13 @@ type SubscriptionData = {
 }
 
 type BillingInfo = {
-  provider: 'shopify' | 'razorpay'
+  provider: 'shopify'
   shopifyAvailable: boolean
   shopifyCurrency: string | null
   shopifyUnavailableReason: string | null
   shopifyTokenState?: 'ok' | 'refreshable' | 'expired' | 'missing' | null
   shopDomain: string | null
+  legacyBilling?: boolean
 }
 
 type StoreData = {
@@ -64,13 +66,10 @@ export default function SubscriptionPage() {
   const [invoices, setInvoices] = useState<InvoiceData[]>([])
   const [loading, setLoading] = useState(true)
   const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly')
-  const [razorpayLoaded, setRazorpayLoaded] = useState(false)
   const [billingInfo, setBillingInfo] = useState<BillingInfo | null>(null)
   const [processing, setProcessing] = useState<string | null>(null)
   const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null)
   const [monthlyRecoveredRevenue, setMonthlyRecoveredRevenue] = useState(0)
-  const [generatingInvoice, setGeneratingInvoice] = useState(false)
-  const [invoiceMsg, setInvoiceMsg] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
@@ -78,6 +77,22 @@ export default function SubscriptionPage() {
   const [isYearly, setIsYearly] = useState(false)
 
   const abortFetchData = useRef<(() => void) | null>(null)
+
+  const billingCurrency = billingInfo?.shopifyCurrency ?? store?.currency ?? 'INR'
+  const formatMoney = (amount: number) =>
+    new Intl.NumberFormat(billingCurrency === 'INR' ? 'en-IN' : 'en-US', {
+      style: 'currency',
+      currency: billingCurrency,
+      minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+      maximumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    }).format(amount)
+  const planPrice = (plan: (typeof PLANS)[keyof typeof PLANS], period: 'monthly' | 'yearly') =>
+    resolveBillingPrice(plan.id, period, billingCurrency)?.amount
+      ?? (period === 'yearly' ? plan.yearlyPrice : plan.price)
+  const planOverage = (plan: (typeof PLANS)[keyof typeof PLANS]) =>
+    resolveOveragePrices(plan.id, billingCurrency)
+  const planUsageCap = (plan: (typeof PLANS)[keyof typeof PLANS]) =>
+    resolveUsageCap(plan.id, billingCurrency) ?? plan.revShareCap
 
   const fetchData = async () => {
     const controller = new AbortController()
@@ -115,23 +130,6 @@ export default function SubscriptionPage() {
   useEffect(() => {
     fetchData()
     return () => abortFetchData.current?.()
-  }, [])
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !(window as any).Razorpay) {
-      const script = document.createElement('script')
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
-      script.async = true
-      let finished = false
-      script.onload = () => { if (!finished) setRazorpayLoaded(true) }
-      document.body.appendChild(script)
-      return () => {
-        finished = true
-        document.body.removeChild(script)
-      }
-    } else {
-      setRazorpayLoaded(true)
-    }
   }, [])
 
   // Billing-period heuristic depends on Date.now() — evaluate only after mount
@@ -206,66 +204,18 @@ export default function SubscriptionPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create subscription')
 
-      // Shopify track: Shopify hosts the approval page and handles the charge.
-      // We must break out of the Shopify-admin iframe and send the top window
-      // there; on return the ?billing=success reconcile syncs the local plan.
-      if (data.provider === 'shopify') {
-        if (!data.confirmationUrl) throw new Error('Shopify did not return a confirmation URL.')
-        const top = (window.top || window) as Window
-        top.location.href = data.confirmationUrl
-        return
+      // Shopify hosts the approval page and handles the charge. Break out of
+      // the Shopify-admin iframe and send the top window there; on return the
+      // ?billing=success reconcile syncs the local plan.
+      if (data.provider !== 'shopify' || !data.confirmationUrl) {
+        throw new Error('Shopify did not return an approval URL.')
       }
-
-      // Razorpay / direct track (unchanged)
-      if (!razorpayLoaded) throw new Error('Checkout is still loading. Please try again in a moment.')
-      if (!data.keyId || !data.subscriptionId) {
-        throw new Error('Checkout is not configured on this deployment (missing payment key).')
-      }
-
-      const options = {
-        key: data.keyId,
-        subscription_id: data.subscriptionId,
-        name: 'CartGain',
-        description: `${plan.name} Plan - ${billing === 'yearly' ? 'Yearly' : 'Monthly'}`,
-        handler: (response: any) => {
-          setPurchaseSuccess(plan.name)
-          // Refetch data instead of reloading the page — reload breaks inside
-          // a Shopify admin iframe and is jarring UX regardless.
-          setTimeout(() => { fetchData() }, 2000)
-        },
-        prefill: { 
-          name: '', 
-          email: '', 
-          contact: '' 
-        },
-        theme: { color: '#22D3EE' },
-        modal: {
-          ondismiss: function() {
-            setProcessing(null)
-          }
-        }
-      }
-
-      const razorpay = new (window as any).Razorpay(options)
-
-      // Razorpay authorizations can still fail after the checkout opens (e.g.
-      // "Payment failed" from a declined card / bank timeout). Wire the real
-      // reason through instead of the generic alert, and give the merchant a
-      // sensible next step (retry, or switch plan / billing period).
-      razorpay.on('payment.failed', (response: any) => {
-        const code = response?.error?.code
-        const desc = response?.error?.description
-        alert(
-          `Payment was not completed${code ? ` (${code})` : ''}.${desc ? ` ${desc}` : ''} ` +
-          'Your subscription has not been changed. Please try again or use a different card / UPI.'
-        )
-      })
-
-      razorpay.open()
+      const top = (window.top || window) as Window
+      top.location.href = data.confirmationUrl
     } catch (error) {
-      console.error('Payment error:', error)
+      console.error('Billing error:', error)
       const msg = error instanceof Error ? error.message : 'Please try again.'
-      alert(`Payment failed. ${msg}`)
+      alert(`Billing could not start. ${msg}`)
     } finally {
       setProcessing(null)
     }
@@ -286,7 +236,7 @@ export default function SubscriptionPage() {
         <div className="bg-emerald-900/30 border border-emerald-500/40 rounded-xl p-6 backdrop-blur-sm text-center">
           <div className="text-4xl mb-3">🎉</div>
           <h2 className="text-xl font-bold text-white mb-2">Welcome to {purchaseSuccess}!</h2>
-          <p className="text-sm text-emerald-300/80 mb-3">Your payment was successful. Recovery will continue without interruption.</p>
+          <p className="text-sm text-emerald-300/80 mb-3">Your Shopify subscription is active. Recovery will continue without interruption.</p>
           <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-xs text-blue-300/60 mt-3">Refreshing your plan details...</p>
         </div>
@@ -312,7 +262,7 @@ export default function SubscriptionPage() {
             Renewal due in {entitlement.daysRemaining} day{entitlement.daysRemaining === 1 ? '' : 's'}
           </h2>
           <p className="text-xs text-blue-300/70 mt-1">
-            Your card will be charged automatically. Update billing above if you need a different plan before renewal.
+            Shopify will charge the payment method on file for your store. Change your plan below before renewal if needed.
           </p>
         </div>
       )}
@@ -334,6 +284,16 @@ export default function SubscriptionPage() {
         </div>
       )}
 
+      {billingInfo?.legacyBilling && (
+        <div className="bg-amber-900/20 border border-amber-500/30 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-amber-200">Move this plan to Shopify billing</h2>
+          <p className="text-xs text-blue-300/70 mt-1">
+            This subscription was created before CartGain moved to Shopify Billing. Choose a plan below to switch;
+            we cancel the old subscription before Shopify asks for approval.
+          </p>
+        </div>
+      )}
+
       {/* Current Plan + Revenue Share Meter */}
       <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
         <div className="flex items-center justify-between mb-6">
@@ -346,7 +306,7 @@ export default function SubscriptionPage() {
                 <>
                   <h2 className="text-lg font-semibold text-white">{currentPlan.name}</h2>
                   <p className="text-sm text-blue-300/60">
-                    {isYearly ? `₹${currentPlan.yearlyPrice.toLocaleString('en-IN')}/yr` : `₹${currentPlan.price.toLocaleString('en-IN')}/mo`}
+                    {isYearly ? `${formatMoney(planPrice(currentPlan, 'yearly'))}/yr` : `${formatMoney(planPrice(currentPlan, 'monthly'))}/mo`}
                     {subscription?.currentPeriodEnd && (
                       <> &middot; {isExpired ? 'Ended' : 'Renews'} {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-IN')}</>
                     )}
@@ -484,7 +444,7 @@ export default function SubscriptionPage() {
           </div>
           <div className="bg-slate-700/30 rounded-lg p-4">
             <p className="text-xs text-blue-300/60">Revenue Recovered</p>
-            <p className="text-xl font-bold text-emerald-400 mt-1">₹{monthlyRecoveredRevenue.toLocaleString('en-IN')}</p>
+            <p className="text-xl font-bold text-emerald-400 mt-1">{formatMoney(monthlyRecoveredRevenue)}</p>
           </div>
           <div className="bg-slate-700/30 rounded-lg p-4">
             <p className="text-xs text-blue-300/60">Rev Share Carts</p>
@@ -492,7 +452,7 @@ export default function SubscriptionPage() {
           </div>
           <div className="bg-slate-700/30 rounded-lg p-4">
             <p className="text-xs text-blue-300/60">Rev Share Accrued</p>
-            <p className="text-xl font-bold text-cyan-400 mt-1">₹{Math.round((subscription?.revenueShareAccrued ?? estimatedRevShare)).toLocaleString('en-IN')}</p>
+            <p className="text-xl font-bold text-cyan-400 mt-1">{formatMoney(Math.round(subscription?.revenueShareAccrued ?? estimatedRevShare))}</p>
           </div>
         </div>
       </div>
@@ -563,7 +523,7 @@ export default function SubscriptionPage() {
               </p>
               <p className="flex items-start space-x-2">
                 <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                <span>Revenue share: <strong className="text-white">{PLANS.GROWTH.revSharePercent}% Growth</strong> (capped at ₹{PLANS.GROWTH.revShareCap.toLocaleString('en-IN')}/mo) / <strong className="text-white">{PLANS.PRO.revSharePercent}% Pro</strong> (capped at ₹{PLANS.PRO.revShareCap.toLocaleString('en-IN')}/mo).</span>
+                <span>Revenue share: <strong className="text-white">{PLANS.GROWTH.revSharePercent}% Growth</strong> (capped at {formatMoney(planUsageCap(PLANS.GROWTH))}/mo) / <strong className="text-white">{PLANS.PRO.revSharePercent}% Pro</strong> (capped at {formatMoney(planUsageCap(PLANS.PRO))}/mo).</span>
               </p>
               <p className="flex items-start space-x-2">
                 <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
@@ -624,50 +584,16 @@ export default function SubscriptionPage() {
                 <h2 className="text-lg font-semibold text-white">Revenue Share & Invoices</h2>
                 <p className="text-sm text-blue-300/60">
                   {subscription?.revenueShareAccrued && subscription.revenueShareAccrued > 0
-                    ? `₹${Math.round(subscription.revenueShareAccrued).toLocaleString('en-IN')} accrued, ₹${Math.round(subscription.revenueSharePaid).toLocaleString('en-IN')} paid`
+                    ? `${formatMoney(Math.round(subscription.revenueShareAccrued))} accrued, ${formatMoney(Math.round(subscription.revenueSharePaid))} paid`
                     : 'No revenue share accrued yet'}
                 </p>
               </div>
             </div>
-            <button
-              onClick={async () => {
-                setGeneratingInvoice(true)
-                setInvoiceMsg(null)
-                try {
-                  const res = await shopifySessionFetch('/api/invoices', { method: 'POST' })
-                  const data = await res.json()
-                  if (res.ok) {
-                    setInvoiceMsg('Invoice generated successfully')
-                    setInvoices(prev => [data.invoice, ...prev])
-                  } else {
-                    setInvoiceMsg(data.error || 'Failed to generate invoice')
-                  }
-                } catch {
-                  setInvoiceMsg('Failed to generate invoice')
-                } finally {
-                  setGeneratingInvoice(false)
-                }
-              }}
-              disabled={generatingInvoice || !subscription?.revenueShareAccrued || subscription.revenueShareAccrued < 100}
-              className={`px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
-                subscription?.revenueShareAccrued && subscription.revenueShareAccrued >= 100
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:shadow-lg hover:shadow-cyan-500/50'
-                  : 'bg-slate-600/50 text-blue-300/40 cursor-not-allowed'
-              } ${generatingInvoice ? 'opacity-50 cursor-wait' : ''}`}
-            >
-              {generatingInvoice ? 'Generating...' : 'Generate Invoice'}
-            </button>
           </div>
 
-          {invoiceMsg && (
-            <div className={`mb-4 px-4 py-2 rounded-lg text-sm ${
-              invoiceMsg.includes('successfully')
-                ? 'bg-emerald-900/30 text-emerald-300 border border-emerald-500/30'
-                : 'bg-amber-900/30 text-amber-300 border border-amber-500/30'
-            }`}>
-              {invoiceMsg}
-            </div>
-          )}
+          <p className="text-xs text-blue-300/60 mb-4">
+            Revenue share and overage are charged automatically through Shopify within the usage cap you approved. No separate payment is needed.
+          </p>
 
           {invoices.length > 0 ? (
             <div className="overflow-x-auto">
@@ -686,7 +612,7 @@ export default function SubscriptionPage() {
                       <td className="py-3 text-white">
                         {new Date(inv.periodStart).toLocaleDateString('en-IN')} - {new Date(inv.periodEnd).toLocaleDateString('en-IN')}
                       </td>
-                      <td className="py-3 text-white font-medium">₹{inv.amount.toLocaleString('en-IN')}</td>
+                      <td className="py-3 text-white font-medium">{formatMoney(inv.amount)}</td>
                       <td className="py-3">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           inv.status === 'paid'
@@ -773,19 +699,17 @@ export default function SubscriptionPage() {
         {billingInfo && (
           <div className="mb-6 text-xs text-blue-300/70 flex items-center gap-2">
             <Shield size={14} />
-            {billingInfo.provider === 'shopify' ? (
-              <span>
-                Billing is handled securely by Shopify{billingInfo.shopDomain ? ` for ${billingInfo.shopDomain}` : ''}.
-                Charges appear on your Shopify invoice.
-              </span>
-            ) : (
-              <span>
-                {billingInfo.shopifyAvailable
-                  ? 'Billing is handled securely by Razorpay (UPI / cards).'
-                  : billingInfo.shopifyUnavailableReason ||
-                    'Billing is handled securely by Razorpay (UPI / cards).'}
-              </span>
-            )}
+            <span>
+              {billingInfo.shopifyAvailable
+                ? `Billing is handled securely by Shopify${billingInfo.shopDomain ? ` for ${billingInfo.shopDomain}` : ''}. Charges appear on your Shopify invoice.`
+                : billingInfo.shopifyUnavailableReason === 'reconnect_required'
+                ? 'Reconnect Shopify above to choose or change a plan.'
+                : billingInfo.shopifyUnavailableReason === 'store_inactive'
+                ? 'Reactivate your Shopify store connection to choose or change a plan.'
+                : billingInfo.shopifyUnavailableReason === 'unsupported_currency'
+                ? 'Shopify billing is not available for this store currency yet.'
+                : 'Connect your Shopify store to choose a paid plan. CartGain bills only through Shopify.'}
+            </span>
           </div>
         )}
 
@@ -802,7 +726,13 @@ export default function SubscriptionPage() {
             const canDowngrade = !isCurrentPlan && plan.price > 0 && isPaidUser && plan.price < currentPlanPrice
             const isActionable = canUpgrade || canDowngrade || (!isFree && !isCurrentPlan)
 
-            const displayPrice = billing === 'yearly' ? Math.round(plan.yearlyPrice / 12) : plan.price
+            const overagePrices = planOverage(plan)
+            const usageCap = planUsageCap(plan)
+            const displayPrice = isFree
+              ? 0
+              : billing === 'yearly'
+              ? Math.round(planPrice(plan, 'yearly') / 12)
+              : planPrice(plan, 'monthly')
             const period = billing === 'yearly' ? '/mo billed yearly' : '/mo'
 
             // Card accent colours per plan
@@ -880,11 +810,11 @@ export default function SubscriptionPage() {
                 {/* Price */}
                 <div className="mb-1 flex items-end gap-1">
                   {isFree ? (
-                    <span className={`text-4xl font-extrabold ${priceColor}`}>₹0</span>
+                    <span className={`text-4xl font-extrabold ${priceColor}`}>{formatMoney(0)}</span>
                   ) : (
                     <>
                       <span className={`text-4xl font-extrabold ${priceColor}`}>
-                        ₹{displayPrice.toLocaleString('en-IN')}
+                        {formatMoney(displayPrice)}
                       </span>
                       <span className="text-sm text-blue-300/50 pb-1">{period}</span>
                     </>

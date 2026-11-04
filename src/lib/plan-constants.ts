@@ -1,6 +1,6 @@
 /**
  * Client-safe plan constants. Import these from anywhere (client or server) —
- * this module has NO server-only dependencies (no razorpay/prisma), so the
+ * this module has NO server-only dependencies (no billing SDK/prisma), so the
  * dashboard layout can use the same values as the billing/gate code instead of
  * hardcoding a second copy that can drift out of sync.
  */

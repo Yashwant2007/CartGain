@@ -1,5 +1,5 @@
 jest.mock('@/lib/shopify', () => ({
-  getAccessToken: jest.fn(),
+  shopifyGraphQL: jest.fn(),
 }))
 
 jest.mock('@/lib/redis', () => ({
@@ -7,7 +7,7 @@ jest.mock('@/lib/redis', () => ({
   redisSet: jest.fn(),
 }))
 
-import { getAccessToken } from '@/lib/shopify'
+import { shopifyGraphQL } from '@/lib/shopify'
 import { redisGet, redisSet } from '@/lib/redis'
 import {
   enrichCartItemsWithImages,
@@ -24,49 +24,44 @@ const store = {
 }
 
 const productResponse = (src: string | null) => ({
-  ok: true,
-  status: 200,
-  json: async () => ({ product: { id: 123, image: src ? { src } : null, images: [] } }),
+  product: {
+    featuredImage: src ? { url: src } : null,
+    images: { nodes: [] },
+  },
 })
 
 describe('product image resolver', () => {
-  const originalFetch = global.fetch
-
   beforeEach(() => {
     jest.clearAllMocks()
     ;(redisGet as jest.Mock).mockResolvedValue(null)
     ;(redisSet as jest.Mock).mockResolvedValue(undefined)
-    ;(getAccessToken as jest.Mock).mockResolvedValue('shpat_test')
-  })
-
-  afterAll(() => {
-    global.fetch = originalFetch
+    ;(shopifyGraphQL as jest.Mock).mockResolvedValue(productResponse('https://cdn.shopify.com/default.jpg'))
   })
 
   it('prefers the image captured with the line item (no API call)', async () => {
-    const fetchMock = jest.fn()
-    global.fetch = fetchMock as any
-
     const image = await resolveCartProductImage(store, [
       { name: 'Board', productId: '123', image: 'https://cdn.shopify.com/board.jpg' },
     ])
 
     expect(image).toBe('https://cdn.shopify.com/board.jpg')
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(shopifyGraphQL).not.toHaveBeenCalled()
   })
 
   it('fetches the product hero image by id, normalises it, and caches it', async () => {
-    const fetchMock = jest
-      .fn()
-      .mockResolvedValue(productResponse('https://cdn.shopify.com/s/files/1/1/1/products/board.jpg?v=9'))
-    global.fetch = fetchMock as any
+    ;(shopifyGraphQL as jest.Mock).mockResolvedValue(
+      productResponse('https://cdn.shopify.com/s/files/1/1/1/products/board.jpg?v=9'),
+    )
 
     const image = await resolveCartProductImage(store, [{ name: 'Board', productId: '123' }])
 
     expect(image).toBe('https://cdn.shopify.com/s/files/1/1/1/products/board.jpg?v=9')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(String(fetchMock.mock.calls[0][0])).toContain('/admin/api/2026-04/products/123.json')
-    expect(fetchMock.mock.calls[0][1].headers['X-Shopify-Access-Token']).toBe('shpat_test')
+    expect(shopifyGraphQL).toHaveBeenCalledTimes(1)
+    expect(shopifyGraphQL).toHaveBeenCalledWith(
+      store,
+      expect.stringContaining('ProductImage'),
+      { id: 'gid://shopify/Product/123' },
+      5000,
+    )
     expect(redisSet).toHaveBeenCalledWith(
       'product-image:store_1:123',
       'https://cdn.shopify.com/s/files/1/1/1/products/board.jpg?v=9',
@@ -75,40 +70,41 @@ describe('product image resolver', () => {
   })
 
   it('accepts gid product ids', async () => {
-    const fetchMock = jest.fn().mockResolvedValue(productResponse('https://cdn.shopify.com/x.jpg'))
-    global.fetch = fetchMock as any
+    ;(shopifyGraphQL as jest.Mock).mockResolvedValue(productResponse('https://cdn.shopify.com/x.jpg'))
 
     const image = await fetchShopifyProductImage(store, 'gid://shopify/Product/124')
     expect(image).toBe('https://cdn.shopify.com/x.jpg')
-    expect(String(fetchMock.mock.calls[0][0])).toContain('/products/124.json')
+    expect(shopifyGraphQL).toHaveBeenCalledWith(
+      store,
+      expect.any(String),
+      { id: 'gid://shopify/Product/124' },
+      5000,
+    )
   })
 
   it('serves a cached URL without calling Shopify', async () => {
     ;(redisGet as jest.Mock).mockResolvedValue('https://cdn.shopify.com/cached.jpg')
-    const fetchMock = jest.fn()
-    global.fetch = fetchMock as any
 
     expect(await fetchShopifyProductImage(store, '999')).toBe('https://cdn.shopify.com/cached.jpg')
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(shopifyGraphQL).not.toHaveBeenCalled()
   })
 
-  it('does not treat a 401 as "product has no image"', async () => {
-    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) }) as any
+  it('does not cache a transient Shopify failure as "product has no image"', async () => {
+    ;(shopifyGraphQL as jest.Mock).mockRejectedValue(new Error('Shopify GraphQL returned HTTP 401'))
 
     expect(await fetchShopifyProductImage(store, '125')).toBeUndefined()
     expect(redisSet).not.toHaveBeenCalled()
   })
 
   it('returns undefined when nothing can be resolved', async () => {
-    global.fetch = jest.fn().mockResolvedValue(productResponse(null)) as any
+    ;(shopifyGraphQL as jest.Mock).mockResolvedValue(productResponse(null))
     expect(await resolveCartProductImage(store, [{ name: 'Mystery' }])).toBeUndefined()
   })
 
   it('enriches every item that has a product id and reports the change', async () => {
-    global.fetch = jest
-      .fn()
+    ;(shopifyGraphQL as jest.Mock)
       .mockResolvedValueOnce(productResponse('https://cdn.shopify.com/a.jpg'))
-      .mockResolvedValueOnce(productResponse('https://cdn.shopify.com/b.jpg')) as any
+      .mockResolvedValueOnce(productResponse('https://cdn.shopify.com/b.jpg'))
 
     const { items, changed } = await enrichCartItemsWithImages(store, [
       { name: 'A', productId: '1' },
@@ -123,7 +119,6 @@ describe('product image resolver', () => {
   })
 
   it('reports no change when the cart already has images', async () => {
-    global.fetch = jest.fn() as any
     const { changed } = await enrichCartItemsWithImages(store, [
       { name: 'A', productId: '1', image: 'https://cdn.shopify.com/a.jpg' },
     ])

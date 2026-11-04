@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
-import { fetchShopifyWithAuth, ShopifyReconnectRequiredError } from '@/lib/shopify'
+import { shopifyGraphQL, ShopifyReconnectRequiredError } from '@/lib/shopify'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,13 +26,24 @@ export async function GET() {
 
     const shop = store.domain
 
-    let res: Response
     try {
-      res = await fetchShopifyWithAuth(
+      const data = await shopifyGraphQL<{ shop?: { name?: string | null } | null }>(
         store,
-        `https://${shop}/admin/api/2026-04/shop.json`,
-        { signal: AbortSignal.timeout(10000) },
+        `#graphql
+          query ShopHealth {
+            shop { name }
+          }
+        `,
+        {},
+        10000,
       )
+      const expiresAt = store.shopifyTokenExpiresAt
+      return NextResponse.json({
+        connected: true,
+        shopName: data.shop?.name || shop,
+        domain: shop,
+        ...(expiresAt ? { tokenExpiresAt: expiresAt.toISOString() } : {}),
+      })
     } catch (error) {
       if (error instanceof ShopifyReconnectRequiredError) {
         return NextResponse.json({
@@ -41,25 +52,12 @@ export async function GET() {
           reauthRequired: true,
         })
       }
-      throw error
-    }
-
-    if (res.ok) {
-      const data = await res.json()
-      const expiresAt = store.shopifyTokenExpiresAt
+      const message = error instanceof Error ? error.message : 'Shopify API request failed'
       return NextResponse.json({
-        connected: true,
-        shopName: data.shop?.name || shop,
-        domain: shop,
-        ...(expiresAt ? { tokenExpiresAt: expiresAt.toISOString() } : {}),
+        connected: false,
+        error: `Shopify API returned an error: ${message.slice(0, 200)}`,
       })
     }
-
-    const errBody = await res.text().catch(() => '(no body)')
-    return NextResponse.json({
-      connected: false,
-      error: `Shopify API returned status ${res.status}: ${errBody.slice(0, 200)}`,
-    })
   } catch (error) {
     console.error('Shopify health check error:', error)
     return NextResponse.json({ connected: false, error: 'Health check failed' })

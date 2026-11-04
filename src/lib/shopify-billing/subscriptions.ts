@@ -17,6 +17,11 @@ import type { BillingCurrency, BillingPeriod } from './plans'
  * Shopify issues test charges and dev stores are never really billed.
  */
 export function shopifyBillingTestMode(): boolean {
+  // Never allow test charges to reach real merchants, even if the flag leaks
+  // into a production environment by mistake.
+  if (process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production') {
+    return false
+  }
   return process.env.SHOPIFY_BILLING_TEST === 'true'
 }
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { createRazorpaySubscription, resolvePlanId, getPlan, cancelRazorpaySubscription } from '@/lib/payment'
+import { resolvePlanId, getPlan, cancelRazorpaySubscription } from '@/lib/payment'
 import { getAppBaseUrl } from '@/lib/app-base-url'
 import {
   resolveShopifyStoreForUser,
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { plan, period, provider: requestedProvider } = await req.json()
+    const { plan, period } = await req.json()
     const normalizedPeriod = period === 'yearly' ? 'yearly' : 'monthly'
 
     if (!plan) {
@@ -50,85 +50,26 @@ export async function POST(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    // ── Provider selection ──────────────────────────────────────────────
-    // App Store installs MUST bill through Shopify (policy 3.0.5). Custom-app /
-    // direct merchants can opt into the Razorpay track explicitly. The server —
-    // never the client — decides whether Shopify Billing is actually available.
+    // ── Shopify Billing only ────────────────────────────────────────────
+    // Shopify App Store policy requires every app charge to use Shopify App
+    // Pricing or the Billing API. The server — never the client — decides
+    // whether Shopify Billing is available; there is no off-platform fallback.
     const shopifyStore = await resolveShopifyStoreForUser(session.user.id)
     const availability = shopifyBillingAvailability(shopifyStore)
 
-    if (requestedProvider === 'shopify' && !availability.available) {
+    if (!availability.available || !shopifyStore) {
       return shopifyUnavailableResponse(availability.reason, shopifyStore?.domain)
     }
 
-    if (requestedProvider == null && shopifyStore && !availability.available) {
-      return shopifyUnavailableResponse(availability.reason, shopifyStore.domain)
-    }
-
-    const useShopify =
-      availability.available &&
-      (requestedProvider === 'shopify' || (requestedProvider == null && shopifyStore !== null))
-
-    if (useShopify && shopifyStore) {
-      return await startShopifySubscription({
-        req,
-        userId: session.user.id,
-        store: shopifyStore,
-        planId: resolvedPlanId,
-        planName: planConfig.name,
-        planConfig,
-        period: normalizedPeriod,
-        existingSub,
-      })
-    }
-
-    // ── Razorpay / direct track (unchanged behaviour) ───────────────────
-    if (existingSub?.subscriptionId && (existingSub.provider !== 'shopify') &&
-        (existingSub.status === 'pending' || existingSub.status === 'active')) {
-      const cancelled = await cancelRazorpaySubscription(existingSub.subscriptionId)
-      if (!cancelled) {
-        return NextResponse.json(
-          { error: "We couldn't cancel your existing subscription at the payment gateway. Please contact support." },
-          { status: 502 },
-        )
-      }
-    }
-
-    const result = await createRazorpaySubscription(resolvedPlanId, session.user.email, normalizedPeriod)
-
-    const periodMs = (normalizedPeriod === 'yearly' ? 365 : 30) * 86400000
-    await prisma.subscription.upsert({
-      where: { userId: session.user.id },
-      update: {
-        provider: 'razorpay',
-        subscriptionId: result.subscriptionId,
-        plan: resolvedPlanId,
-        status: 'pending',
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(Date.now() + periodMs),
-      },
-      create: {
-        userId: session.user.id,
-        customerId: `customer_${session.user.id}`,
-        subscriptionId: result.subscriptionId,
-        provider: 'razorpay',
-        plan: resolvedPlanId,
-        status: 'pending',
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(Date.now() + periodMs),
-      },
-    })
-
-    await track({
-      name: 'cartgain_billing_started',
+    return await startShopifySubscription({
+      req,
       userId: session.user.id,
-      properties: { plan: resolvedPlanId, period: normalizedPeriod, provider: 'razorpay' },
-    })
-
-    return NextResponse.json({
-      provider: 'razorpay',
-      subscriptionId: result.subscriptionId,
-      keyId: process.env.RAZORPAY_KEY_ID,
+      store: shopifyStore,
+      planId: resolvedPlanId,
+      planName: planConfig.name,
+      planConfig,
+      period: normalizedPeriod,
+      existingSub,
     })
   } catch (error) {
     if (error instanceof ShopifyReconnectRequiredError) {

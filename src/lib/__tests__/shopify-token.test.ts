@@ -130,7 +130,7 @@ describe('fetchShopifyWithAuth', () => {
     await expect(
       fetchShopifyWithAuth(
         makeStore({ shopifyRefreshToken: null, shopifyTokenExpiresAt: null }),
-        'https://test.myshopify.com/admin/api/2026-04/shop.json',
+        'https://test.myshopify.com/admin/api/2026-04/graphql.json',
       ),
     ).rejects.toBeInstanceOf(ShopifyReconnectRequiredError)
     expect(global.fetch).not.toHaveBeenCalled()
@@ -149,7 +149,7 @@ describe('fetchShopifyWithAuth', () => {
 
     const res = await fetchShopifyWithAuth(
       makeStore(),
-      'https://test.myshopify.com/admin/api/2026-04/shop.json',
+      'https://test.myshopify.com/admin/api/2026-04/graphql.json',
     )
 
     expect(res.status).toBe(200)
@@ -167,7 +167,7 @@ describe('fetchShopifyWithAuth', () => {
     await expect(
       fetchShopifyWithAuth(
         makeStore(),
-        'https://test.myshopify.com/admin/api/2026-04/shop.json',
+        'https://test.myshopify.com/admin/api/2026-04/graphql.json',
       ),
     ).rejects.toBeInstanceOf(ShopifyReconnectRequiredError)
   })

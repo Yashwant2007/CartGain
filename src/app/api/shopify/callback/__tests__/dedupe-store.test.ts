@@ -29,7 +29,7 @@ jest.mock('@/lib/db', () => ({
 jest.mock('next-auth/jwt', () => ({ encode: jest.fn(async () => 'SIGNED_SESSION') }))
 jest.mock('@/lib/app-base-url', () => ({ getAppBaseUrl: jest.fn(() => 'https://cart-gain.com') }))
 jest.mock('@/lib/encryption', () => ({ encrypt: jest.fn(() => 'enc') }))
-jest.mock('@/lib/shopify', () => ({ setupShopifyWebhooks: jest.fn(async () => {}) }))
+jest.mock('@/lib/shopify', () => ({ assertAllowedShopifyHost: jest.fn(), SHOPIFY_API_VERSION: '2026-04' }))
 jest.mock('@/lib/services/ai', () => ({ generateCampaignSetup: jest.fn(async () => null) }))
 jest.mock('@/lib/subscription', () => ({ createFreeSubscription: jest.fn(async () => {}) }))
 jest.mock('@/lib/shopify-oauth', () => ({
@@ -223,7 +223,7 @@ describe('Shopify install callback — store de-duplication', () => {
       return {
         ok: true,
         json: async () => ({
-          shop: { email: 'owner@shop.com', shop_owner: 'Owner Name' },
+          data: { shop: { email: 'owner@shop.com', shopOwnerName: 'Owner Name' } },
         }),
       }
     })
@@ -231,8 +231,9 @@ describe('Shopify install callback — store de-duplication', () => {
     await GET(makeRequest())
 
     expect((global as any).fetch).toHaveBeenCalledWith(
-      'https://test.myshopify.com/admin/api/2026-04/shop.json',
+      'https://test.myshopify.com/admin/api/2026-04/graphql.json',
       expect.objectContaining({
+        method: 'POST',
         headers: expect.objectContaining({ 'X-Shopify-Access-Token': 'tok' }),
       }),
     )

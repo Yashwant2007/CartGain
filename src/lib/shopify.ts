@@ -1,7 +1,8 @@
 import crypto from 'crypto'
-import { normalizeShopifyLineItems } from './shopify-line-items'
+import { normalizeImageUrl, normalizeShopifyLineItems, toNumericId } from './shopify-line-items'
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000 // refresh 5 min before expiry
+export const SHOPIFY_API_VERSION = '2026-04'
 
 const SHOPIFY_MAX_RETRIES = 3
 const SHOPIFY_BASE_BACKOFF_MS = 500
@@ -325,7 +326,12 @@ export async function verifyShopifyAccessToken(accessToken: string): Promise<{
   }
 }
 
-export async function createShopifyWebhook(
+/**
+ * Execute an Admin GraphQL operation with the store's refreshed offline token.
+ * Shopify requires all new public apps to use the GraphQL Admin API; this is
+ * the single entry point for app data (products, customers, checkouts, shop).
+ */
+export async function shopifyGraphQL<T>(
   store: {
     id: string
     domain: string
@@ -333,50 +339,47 @@ export async function createShopifyWebhook(
     shopifyRefreshToken: string | null
     shopifyTokenExpiresAt: Date | null
   },
-  topic: string,
-  webhookUrl: string
-): Promise<boolean> {
-  try {
-    const response = await fetchShopifyWithAuth(store, `https://${store.domain}/admin/api/2026-04/webhooks.json`, {
+  query: string,
+  variables: Record<string, unknown> = {},
+  timeoutMs = 10000,
+): Promise<T> {
+  const res = await fetchShopifyWithAuth(
+    store,
+    `https://${store.domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+    {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      signal: AbortSignal.timeout(10000),
-      body: JSON.stringify({
-        webhook: {
-          topic,
-          address: webhookUrl,
-          format: 'json',
-        },
-      }),
-    })
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(timeoutMs),
+    },
+  )
 
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '(no body)')
-      // Duplicate subscriptions (same topic + address) are expected on
-      // reconnects — treat them as success so OAuth completes cleanly.
-      if (response.status === 422 && errText.includes('already been taken')) {
-        console.log(`Webhook ${topic} already registered — skipping`)
-        return true
-      }
-      console.error(`Shopify webhook ${topic} registration failed: ${response.status} ${errText}`)
-    }
-    return response.ok
-  } catch (error) {
-    if (error instanceof ShopifyReconnectRequiredError) {
-      console.log(`Store ${store.domain} needs Shopify reconnection — skipping webhook ${topic}`)
-      return false
-    }
-    console.error('Failed to create Shopify webhook:', error)
-    return false
+  if (!res.ok) {
+    throw new Error(`Shopify GraphQL returned HTTP ${res.status}`)
   }
+
+  const payload = await res.json().catch(() => null) as
+    | { data?: T; errors?: Array<{ message?: string }> }
+    | null
+  if (payload?.errors?.length) {
+    throw new Error(payload.errors[0]?.message || 'Shopify GraphQL error')
+  }
+  if (!payload?.data) {
+    throw new Error('Shopify GraphQL returned no data')
+  }
+  return payload.data
 }
 
-// Registers a webhook only if the same topic isn't already subscribed to the
-// same address, and re-points stale subscriptions (old address) instead of
-// creating duplicates. Makes setupShopifyWebhooks idempotent across reconnects.
-export async function createShopifyWebhookIfMissing(
+export interface ShopifyShopInfo {
+  name: string
+  email: string | null
+  ownerName: string | null
+  currencyCode: string | null
+  ianaTimezone: string | null
+}
+
+/** Read the shop identity through GraphQL (used by OAuth provisioning/health). */
+export async function fetchShopifyShopInfo(
   store: {
     id: string
     domain: string
@@ -384,119 +387,74 @@ export async function createShopifyWebhookIfMissing(
     shopifyRefreshToken: string | null
     shopifyTokenExpiresAt: Date | null
   },
-  topic: string,
-  webhookUrl: string
-): Promise<boolean> {
+): Promise<ShopifyShopInfo | null> {
   try {
-    const listRes = await fetchShopifyWithAuth(store, `https://${store.domain}/admin/api/2026-04/webhooks.json?topic=${encodeURIComponent(topic)}`, {
-      signal: AbortSignal.timeout(10000),
-    })
-
-    if (listRes.ok) {
-      const data = await listRes.json()
-      const existing: { id: number; address: string }[] = data.webhooks || []
-
-      const sameAddress = existing.find((w) => w.address === webhookUrl)
-      if (sameAddress) return true
-
-      const stale = existing.find((w) => w.address !== webhookUrl)
-      if (stale) {
-        const updateRes = await fetchShopifyWithAuth(store, `https://${store.domain}/admin/api/2026-04/webhooks/${stale.id}.json`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          signal: AbortSignal.timeout(10000),
-          body: JSON.stringify({ webhook: { address: webhookUrl } }),
-        })
-        if (updateRes.ok) return true
-        console.error(`Failed to re-point webhook ${topic} (${stale.id}): ${updateRes.status}`)
+    const data = await shopifyGraphQL<{
+      shop?: {
+        name?: string | null
+        email?: string | null
+        shopOwnerName?: string | null
+        currencyCode?: string | null
+        ianaTimezone?: string | null
+      } | null
+    }>(store, `#graphql
+      query ShopInfo {
+        shop {
+          name
+          email
+          shopOwnerName
+          currencyCode
+          ianaTimezone
+        }
       }
+    `)
+    const shop = data.shop
+    if (!shop) return null
+    return {
+      name: shop.name || store.domain,
+      email: shop.email || null,
+      ownerName: shop.shopOwnerName || null,
+      currencyCode: shop.currencyCode || null,
+      ianaTimezone: shop.ianaTimezone || null,
     }
-  } catch (error) {
-    if (error instanceof ShopifyReconnectRequiredError) {
-      console.log(`Store ${store.domain} needs Shopify reconnection — skipping webhook ${topic}`)
-      return false
-    }
-    console.error(`Failed to list Shopify webhooks for ${topic}:`, error)
-  }
-
-  return createShopifyWebhook(store, topic, webhookUrl)
-}
-
-export async function setupShopifyWebhooks(
-  store: {
-    id: string
-    domain: string
-    apiKey: string | null
-    shopifyRefreshToken: string | null
-    shopifyTokenExpiresAt: Date | null
-  },
-  baseUrl: string
-): Promise<void> {
-  const webhookUrl = `${baseUrl}/api/webhooks/shopify`
-
-  const topics = [
-    // Functional data flow
-    'carts/update',
-    'checkouts/create',
-    'checkouts/update',
-    'orders/create',
-    // Revenue netting — Day 8-10: refunded/cancelled recoveries must be netted
-    // out of recognized revenue (see src/lib/attribution.ts).
-    'orders/cancelled',
-    'refunds/create',
-    // Recipient registry identity sync (never grants WhatsApp consent).
-    'customers/create',
-    'customers/update',
-    // Uninstall lifecycle — lets the app purge the merchant's data when they
-    // remove the app. This IS an Admin-API-registrable topic.
-    'app/uninstalled',
-    // NOTE: the three mandatory GDPR compliance topics (customers/data_request,
-    // customers/redact, shop/redact) are intentionally NOT registered here.
-    // Shopify rejects them on POST /admin/api/.../webhooks.json with a 404 —
-    // they are declared in shopify.app.toml under `compliance_topics` and
-    // registered by `shopify app deploy`. The webhook handler already accepts
-    // them (see src/app/api/webhooks/shopify/route.ts); the old code that POSTed
-    // them here only produced 404 noise on every reconnect.
-    // Billing lifecycle — activates/cancels/expires the shop's app subscription
-    // when the merchant approves, declines, or cancels from their Shopify admin.
-    'app_subscriptions/update',
-  ]
-
-  for (const topic of topics) {
-    await createShopifyWebhookIfMissing(store, topic, webhookUrl)
+  } catch {
+    return null
   }
 }
 
-export async function fetchShopifyCarts(
-  store: {
-    id: string
-    domain: string
-    apiKey: string | null
-    shopifyRefreshToken: string | null
-    shopifyTokenExpiresAt: Date | null
-  },
-  limit: number = 50
-): Promise<any[]> {
+/**
+ * Extract the checkout/cart token from Shopify's recovery URL. GraphQL exposes
+ * `abandonedCheckoutUrl` instead of the REST `token` field; recovery URLs look
+ * like `.../checkouts/<token>/recover?...`.
+ */
+export function extractShopifyCheckoutToken(recoveryUrl: string | null | undefined): string | null {
+  if (!recoveryUrl) return null
   try {
-    const response = await fetchShopifyWithAuth(
-      store,
-      `https://${store.domain}/admin/api/2026-04/carts.json?limit=${limit}`,
-      { signal: AbortSignal.timeout(10000) },
-    )
-    const data = await response.json()
-    return data.carts || []
-  } catch (error) {
-    if (error instanceof ShopifyReconnectRequiredError) {
-      console.log(`Store ${store.domain} needs Shopify reconnection — skipping cart fetch`)
-      return []
-    }
-    console.error('Failed to fetch Shopify carts:', error)
-    return []
+    const url = new URL(recoveryUrl)
+    const explicit = url.searchParams.get('token')
+    if (explicit) return explicit
+    const segments = url.pathname.split('/').filter(Boolean)
+    const recoverIndex = segments.indexOf('recover')
+    if (recoverIndex > 0) return segments[recoverIndex - 1] || null
+    return segments[segments.length - 1] || null
+  } catch {
+    return null
   }
 }
 
+function addressFromGraphQL(address: any): any | null {
+  if (!address) return null
+  const firstName = address.firstName ?? null
+  const lastName = address.lastName ?? null
+  return {
+    first_name: firstName,
+    last_name: lastName,
+    name: [firstName, lastName].filter(Boolean).join(' ') || null,
+    phone: address.phone ?? null,
+  }
+}
+
+/** List open abandoned checkouts through the GraphQL Admin API. */
 export async function fetchAbandonedCheckouts(
   store: {
     id: string
@@ -507,16 +465,121 @@ export async function fetchAbandonedCheckouts(
   },
   limit: number = 50
 ): Promise<any[]> {
-  // Shopify's abandoned-checkouts resource lives at `checkouts.json` (the list
-  // is returned under the `checkouts` key). The old `abandoned_checkouts`
-  // path/key never existed and produced a 404 on every cart-processing run.
-  const response = await fetchShopifyWithAuth(
+  const data = await shopifyGraphQL<{
+    abandonedCheckouts?: {
+      nodes?: Array<{
+        id: string
+        abandonedCheckoutUrl: string
+        completedAt?: string | null
+        createdAt: string
+        totalPriceSet?: { shopMoney?: { amount?: string | null; currencyCode?: string | null } | null } | null
+        customer?: {
+          id: string
+          email?: string | null
+          phone?: string | null
+          firstName?: string | null
+          lastName?: string | null
+          displayName?: string | null
+          defaultAddress?: any | null
+        } | null
+        billingAddress?: any | null
+        shippingAddress?: any | null
+        lineItems?: {
+          nodes?: Array<{
+            title?: string | null
+            quantity?: number | null
+            sku?: string | null
+            image?: { url?: string | null } | null
+            originalUnitPriceSet?: { shopMoney?: { amount?: string | null } | null } | null
+            product?: { id?: string | null; featuredImage?: { url?: string | null } | null } | null
+            variant?: { id?: string | null; title?: string | null } | null
+          }>
+        } | null
+      }>
+    } | null
+  }>(
     store,
-    `https://${store.domain}/admin/api/2026-04/checkouts.json?limit=${limit}`,
-    { signal: AbortSignal.timeout(10000) },
+    `#graphql
+      query AbandonedCheckouts($first: Int!) {
+        abandonedCheckouts(first: $first, reverse: true) {
+          nodes {
+            id
+            abandonedCheckoutUrl
+            completedAt
+            createdAt
+            totalPriceSet { shopMoney { amount currencyCode } }
+            customer {
+              id
+              email
+              phone
+              firstName
+              lastName
+              displayName
+              defaultAddress { firstName lastName phone }
+            }
+            billingAddress { firstName lastName phone }
+            shippingAddress { firstName lastName phone }
+            lineItems(first: 50) {
+              nodes {
+                title
+                quantity
+                sku
+                image { url }
+                originalUnitPriceSet { shopMoney { amount } }
+                product { id featuredImage { url } }
+                variant { id title }
+              }
+            }
+          }
+        }
+      }
+    `,
+    { first: Math.min(Math.max(limit, 1), 250) },
+    10000,
   )
-  const data = await response.json()
-  return data.checkouts || []
+
+  return (data.abandonedCheckouts?.nodes || [])
+    .filter((node) => !node.completedAt)
+    .map((node) => {
+      const token = extractShopifyCheckoutToken(node.abandonedCheckoutUrl)
+      if (!token) return null
+      const customer = node.customer
+      const shopMoney = node.totalPriceSet?.shopMoney
+      return {
+        id: toNumericId(node.id) ?? node.id,
+        token,
+        cart_token: token,
+        created_at: node.createdAt,
+        total_price: shopMoney?.amount ?? null,
+        currency: shopMoney?.currencyCode ?? null,
+        email: customer?.email ?? null,
+        phone: customer?.phone ?? null,
+        customer: customer
+          ? {
+              id: toNumericId(customer.id) ?? customer.id,
+              email: customer.email ?? null,
+              phone: customer.phone ?? null,
+              first_name: customer.firstName ?? null,
+              last_name: customer.lastName ?? null,
+              name: customer.displayName ?? null,
+              default_address: addressFromGraphQL(customer.defaultAddress),
+            }
+          : null,
+        billing_address: addressFromGraphQL(node.billingAddress),
+        shipping_address: addressFromGraphQL(node.shippingAddress),
+        line_items: (node.lineItems?.nodes || []).map((item) => ({
+          title: item.title,
+          quantity: item.quantity,
+          sku: item.sku,
+          price: item.originalUnitPriceSet?.shopMoney?.amount ?? null,
+          image_url: normalizeImageUrl(item.image) || normalizeImageUrl(item.product?.featuredImage),
+          product_id: toNumericId(item.product?.id),
+          variant_id: toNumericId(item.variant?.id),
+          variant_title: item.variant?.title ?? null,
+        })),
+      }
+    })
+    .filter((checkout): checkout is NonNullable<typeof checkout> => checkout != null)
 }
 
 type CustomerNameStore = {
@@ -549,20 +612,33 @@ export async function findShopifyCustomerNameByEmail(
 
   let name: string | null = null
   try {
-    const query = encodeURIComponent(`email:${address}`)
-    const res = await fetchShopifyWithAuth(
+    const data = await shopifyGraphQL<{
+      customers?: {
+        nodes?: Array<{
+          firstName?: string | null
+          lastName?: string | null
+          displayName?: string | null
+        }>
+      } | null
+    }>(
       store,
-      `https://${store.domain}/admin/api/2026-04/customers/search.json?query=${query}&fields=id,first_name,last_name,name,email&limit=1`,
-      { signal: AbortSignal.timeout(5000) },
+      `#graphql
+        query CustomerByEmail($query: String!) {
+          customers(first: 1, query: $query) {
+            nodes { firstName lastName displayName }
+          }
+        }
+      `,
+      { query: `email:${address}` },
+      5000,
     )
-    if (res.ok) {
-      const data = await res.json().catch(() => null)
-      const customer = data?.customers?.[0]
-      if (customer) {
-        name = cleanShopifyName(
-          `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || customer.name || null,
-        )
-      }
+    const customer = data.customers?.nodes?.[0]
+    if (customer) {
+      name = cleanShopifyName(
+        `${customer.firstName || ''} ${customer.lastName || ''}`.trim() ||
+          customer.displayName ||
+          null,
+      )
     }
   } catch {
     name = null
@@ -581,36 +657,51 @@ export async function fetchShopifyProductPrice(
   shopifyProductId: string,
   variantId?: string | null,
 ): Promise<number | null> {
-  const productId = shopifyProductId.replace(/^gid:\/\/shopify\/Product\//, '')
-  const url = `https://${store.domain}/admin/api/2026-04/products/${productId}.json`
+  const productId = toNumericId(shopifyProductId)
+  if (!productId) return null
 
-  let res: Response
   try {
-    res = await fetchShopifyWithAuth(store, url, { signal: AbortSignal.timeout(5000) })
+    const data = await shopifyGraphQL<{
+      product?: {
+        variants?: {
+          nodes?: Array<{ id: string; price?: string | null }>
+        } | null
+      } | null
+    }>(
+      store,
+      `#graphql
+        query ProductPrice($id: ID!) {
+          product(id: $id) {
+            variants(first: 250) {
+              nodes { id price }
+            }
+          }
+        }
+      `,
+      { id: `gid://shopify/Product/${productId}` },
+      5000,
+    )
+
+    const variants = data.product?.variants?.nodes || []
+    if (!variants.length) return null
+
+    if (variantId) {
+      const variantIdNum = toNumericId(variantId)
+      const variant = variants.find((v) => toNumericId(v.id) === variantIdNum)
+      if (variant?.price) return parseFloat(variant.price)
+      // A specific variant was requested but does not belong to this product.
+      // Returning another variant's price (e.g. variants[0]) would quote the
+      // wrong price and could weaken the negotiation floor — treat it as
+      // unknown so callers fall back to their own verified/default price.
+      return null
+    }
+
+    return variants[0].price != null ? parseFloat(variants[0].price) : null
   } catch {
     // Missing/expired token or a transient Shopify failure — callers fall back
     // to their own verified/default price rather than quoting something wrong.
     return null
   }
-
-  if (!res.ok) return null
-  const data = await res.json()
-  const product = data.product
-  if (!product?.variants?.length) return null
-
-  if (variantId) {
-    const variantIdNum = variantId.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
-    const variant = product.variants.find((v: any) => String(v.id) === variantIdNum)
-    if (variant?.price) return parseFloat(variant.price)
-    // A specific variant was requested but does not belong to this product.
-    // Returning another variant's price (e.g. variants[0]) would quote the
-    // wrong price and could weaken the negotiation floor — treat it as
-    // unknown so callers fall back to their own verified/default price.
-    return null
-  }
-
-  const price = product.variants[0].price
-  return price != null ? parseFloat(price) : null
 }
 
 export interface ShopifyProductDetail {
@@ -638,74 +729,100 @@ export interface ShopifyProductDetail {
   }>
 }
 
+function graphQLVariant(variant: any, fallbackPrice?: string | null) {
+  const options = Array.isArray(variant?.selectedOptions) ? variant.selectedOptions : []
+  return {
+    id: toNumericId(variant?.id) ?? String(variant?.id ?? ''),
+    title: variant?.title ?? 'Default',
+    price: variant?.price ?? fallbackPrice ?? null,
+    compare_at_price: variant?.compareAtPrice ?? null,
+    available: variant?.availableForSale === true,
+    inventory_quantity: variant?.inventoryQuantity ?? null,
+    inventory_policy:
+      typeof variant?.inventoryPolicy === 'string' ? variant.inventoryPolicy.toLowerCase() : null,
+    option1: options[0]?.value ?? null,
+    option2: options[1]?.value ?? null,
+    option3: options[2]?.value ?? null,
+  }
+}
+
+function graphQLProduct(product: any): ShopifyProductDetail {
+  const imageUrl = normalizeImageUrl(product?.featuredImage) || null
+  const images = Array.isArray(product?.images?.nodes)
+    ? product.images.nodes
+        .map((image: unknown) => normalizeImageUrl(image))
+        .filter((url: string | undefined): url is string => Boolean(url))
+    : []
+  const rawVariants = Array.isArray(product?.variants?.nodes) ? product.variants.nodes : []
+  const priceTag = rawVariants.find((variant: any) => variant?.price != null)?.price ?? null
+
+  return {
+    id: toNumericId(product?.id) ?? String(product?.id ?? ''),
+    title: product?.title ?? '',
+    handle: product?.handle ?? null,
+    vendor: product?.vendor ?? null,
+    product_type: product?.productType ?? null,
+    tags: Array.isArray(product?.tags) ? product.tags.join(', ') : String(product?.tags ?? ''),
+    status: typeof product?.status === 'string' ? product.status.toLowerCase() : null,
+    body_html: product?.descriptionHtml ?? null,
+    body_plain: stripHtmlBody(product?.descriptionHtml ?? null),
+    image: imageUrl ? { src: imageUrl } : null,
+    variants: rawVariants.map((variant: any) => graphQLVariant(variant, priceTag)),
+  }
+}
+
 // Fetch one product's full catalog record for the AI Salesperson product
-// context. Mirrors fetchShopifyProductPrice's auth + REST shape but returns the
-// whole normalized record (description, variants, tags, availability) instead
-// of just the price. `available` is derived from the REST inventory fields:
-// explicit only when Shopify tells us the quantity, and never assumed true.
+// context. GraphQL returns the same normalized record (description, variants,
+// tags, availability) as the old REST path. `available` comes from Shopify's
+// `availableForSale`, and inventory is only reported when Shopify returns it.
 export async function fetchShopifyProductDetail(
   store: { id: string; domain: string; apiKey: string | null; shopifyRefreshToken: string | null; shopifyTokenExpiresAt: Date | null },
   shopifyProductId: string,
 ): Promise<ShopifyProductDetail | null> {
-  const productId = shopifyProductId.replace(/^gid:\/\/shopify\/Product\//, '')
-  const url = `https://${store.domain}/admin/api/2026-04/products/${productId}.json`
+  const productId = toNumericId(shopifyProductId)
+  if (!productId) return null
 
-  let res: Response
   try {
-    res = await fetchShopifyWithAuth(store, url, { signal: AbortSignal.timeout(5000) })
+    const data = await shopifyGraphQL<{
+      product?: any | null
+    }>(
+      store,
+      `#graphql
+        query ProductDetail($id: ID!) {
+          product(id: $id) {
+            id
+            title
+            handle
+            vendor
+            productType
+            tags
+            status
+            descriptionHtml
+            featuredImage { url }
+            images(first: 10) { nodes { url } }
+            variants(first: 250) {
+              nodes {
+                id
+                title
+                price
+                compareAtPrice
+                availableForSale
+                inventoryQuantity
+                inventoryPolicy
+                selectedOptions { name value }
+              }
+            }
+          }
+        }
+      `,
+      { id: `gid://shopify/Product/${productId}` },
+      5000,
+    )
+
+    return data.product ? graphQLProduct(data.product) : null
   } catch {
     // Same contract as fetchShopifyProductPrice: an unreachable/reconnect-
     // required store yields "unknown", never a guessed product record.
-    return null
-  }
-
-  try {
-    if (!res.ok) return null
-    const data = await res.json()
-    const product = data.product
-    if (!product) return null
-
-    const rawVariants = Array.isArray(product.variants) ? product.variants : []
-    const priceTag = rawVariants.find((v: any) => v?.price != null)?.price
-    const plainPrice = priceTag != null ? parseFloat(String(priceTag)) : null
-
-    const variants = rawVariants.map((v: any) => {
-      const quantity: number | null = v?.inventory_quantity != null ? Number(v.inventory_quantity) : null
-      const policy = v?.inventory_policy ?? null
-      const available =
-        quantity != null
-          ? policy === 'continue'
-            ? true
-            : quantity > 0
-          : null
-      return {
-        id: String(v.id),
-        title: v?.title ?? 'Default',
-        price: v?.price ?? priceTag ?? null,
-        compare_at_price: v?.compare_at_price ?? null,
-        available: available === true,
-        inventory_quantity: v?.inventory_quantity ?? null,
-        inventory_policy: policy,
-        option1: v?.option1 ?? null,
-        option2: v?.option2 ?? null,
-        option3: v?.option3 ?? null,
-      }
-    })
-
-    return {
-      id: String(product.id),
-      title: product.title ?? '',
-      handle: product.handle ?? null,
-      vendor: product.vendor ?? null,
-      product_type: product.product_type ?? null,
-      tags: product.tags ?? '',
-      status: product.status ?? null,
-      body_html: product.body_html ?? null,
-      body_plain: stripHtmlBody(product.body_html ?? null),
-      image: product.image?.src ? { src: product.image.src } : null,
-      variants,
-    }
-  } catch {
     return null
   }
 }
@@ -720,39 +837,82 @@ function stripHtmlBody(html: string | null): string | null {
     .trim()
 }
 
-// List Shopify products (catalog picker) using the Admin REST API. Returns raw
-// product objects (id, title, handle, status, variants incl. prices, image).
+// List Shopify products (catalog picker) through the GraphQL Admin API. Returns
+// REST-shaped product objects (id, title, handle, status, variants incl. prices,
+// image) so existing dashboard/demo/recommendation code keeps its contract.
 export async function fetchShopifyProducts(
   store: { id: string; domain: string; apiKey: string | null; shopifyRefreshToken: string | null; shopifyTokenExpiresAt: Date | null },
   opts: { limit?: number; pageInfo?: string | null; query?: string | null } = {},
 ): Promise<{ products: any[]; nextCursor: string | null; prevCursor: string | null; error: string | null }> {
   const limit = Math.min(opts.limit ?? 25, 250)
-  const params = new URLSearchParams({ limit: String(limit) })
-  if (opts.pageInfo) params.set('page_info', opts.pageInfo)
-  if (opts.query) params.set('query', opts.query)
+  const cursor = opts.pageInfo?.trim() || null
+  const isPrevious = cursor?.startsWith('prev:') ?? false
+  const isNext = cursor?.startsWith('next:') ?? false
+  const after = isNext ? cursor!.slice('next:'.length) : !isPrevious ? cursor : null
+  const before = isPrevious ? cursor!.slice('prev:'.length) : null
 
-  const url = `https://${store.domain}/admin/api/2026-04/products.json?${params.toString()}`
   try {
-    const res = await fetchShopifyWithAuth(store, url, { signal: AbortSignal.timeout(10000) })
-    if (!res.ok) {
-      return { products: [], nextCursor: null, prevCursor: null, error: `Shopify returned HTTP ${res.status}` }
-    }
-    const data = await res.json()
-    const products = data.products || []
-    let nextCursor: string | null = null
-    let prevCursor: string | null = null
-    const linkHeader = res.headers.get('link')
-    if (linkHeader) {
-      for (const part of linkHeader.split(',')) {
-        const match = part.trim().match(/<[^>]*page_info=([^&>]*)>;\s*rel="(\w+)"/)
-        if (match) {
-          const cursor = match[1]
-          const rel = match[2]
-          try { const dec = decodeURIComponent(cursor); if (rel === 'next') nextCursor = dec; else if (rel === 'previous') prevCursor = dec } catch { /* ignore */ }
+    const data = await shopifyGraphQL<{
+      products?: {
+        nodes?: any[]
+        pageInfo?: {
+          hasNextPage?: boolean
+          hasPreviousPage?: boolean
+          startCursor?: string | null
+          endCursor?: string | null
+        } | null
+      } | null
+    }>(
+      store,
+      `#graphql
+        query Products($first: Int, $last: Int, $after: String, $before: String, $query: String) {
+          products(first: $first, last: $last, after: $after, before: $before, query: $query) {
+            nodes {
+              id
+              title
+              handle
+              vendor
+              productType
+              tags
+              status
+              featuredImage { url }
+              images(first: 10) { nodes { url } }
+              variants(first: 250) {
+                nodes {
+                  id
+                  title
+                  price
+                  compareAtPrice
+                  availableForSale
+                  inventoryQuantity
+                  inventoryPolicy
+                  selectedOptions { name value }
+                }
+              }
+            }
+            pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
+          }
         }
-      }
+      `,
+      {
+        first: isPrevious ? null : limit,
+        last: isPrevious ? limit : null,
+        after,
+        before,
+        query: opts.query || null,
+      },
+      10000,
+    )
+
+    const page = data.products
+    const products = (page?.nodes || []).map(graphQLProduct)
+    const info = page?.pageInfo
+    return {
+      products,
+      nextCursor: info?.hasNextPage && info.endCursor ? `next:${info.endCursor}` : null,
+      prevCursor: info?.hasPreviousPage && info.startCursor ? `prev:${info.startCursor}` : null,
+      error: null,
     }
-    return { products, nextCursor, prevCursor, error: null }
   } catch (err: any) {
     if (err instanceof ShopifyReconnectRequiredError) {
       return { products: [], nextCursor: null, prevCursor: null, error: 'Reconnect the store from Integrations to list products.' }

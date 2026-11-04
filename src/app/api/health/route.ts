@@ -67,8 +67,6 @@ export async function GET() {
     'NEXTAUTH_SECRET',
     'RESEND_API_KEY',
     'OPENAI_API_KEY',
-    'RAZORPAY_KEY_ID',
-    'RAZORPAY_KEY_SECRET',
     'ENCRYPTION_KEY',
     // Shopify drives installs, OAuth and every webhook delivery. When these
     // went missing nothing else reported it: the health check stayed green

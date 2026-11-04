@@ -26,17 +26,17 @@ Custom distribution is **not** "a public app without review". Shopify's rules
    on **multiple stores that belong to the same Shopify Plus organization**,
    plus transfer-disabled development stores. The "Allow multi-store installs"
    toggle is for a single Plus org only.
-3. **No App Store review and no Shopify Billing API.** You cannot charge through
-   Shopify for a custom app, so the custom app uses the **Razorpay "direct /
-   custom-app track"** (`Subscription.provider = "razorpay"`, already implemented
-   in this codebase).
+3. **No App Store review and no Shopify Billing API.** You cannot create Shopify
+   app subscriptions or usage charges for a custom app. A custom install stays on
+   the free tier or uses a manually invoiced contract handled outside this
+   codebase; do not sell it as an App Store paid plan.
 4. **The distribution method is permanent.** You cannot switch a custom app to
    public distribution later.
 5. **Expiring tokens** (mandatory for public apps created on/after 2026-04-01) do
    **not** apply to custom apps — but this codebase already requests per-user
    expiring tokens and refreshes them, so it is correct either way.
-6. **Billing via the codebase stays identical** — only the provider differs
-   (Razorpay instead of Shopify).
+6. **Billing code is shared, but custom apps cannot invoke Shopify Billing** —
+   paid-plan checkout is intentionally unavailable on the custom track.
 
 > **Bottom line for "onboard merchants early":** custom distribution works for a
 > **small number of design-partner merchants (one app each)** or a **single Plus
@@ -61,7 +61,7 @@ Custom distribution is **not** "a public app without review". Shopify's rules
    │  client_id 67be…  │                           │  client_id 850b…      │
    │  cart-gain.com    │                           │  custom.cart-gain.com │
    │  Vercel: public   │                           │  Vercel: custom       │
-   │  Shopify billing  │                           │  Razorpay billing     │
+   │  Shopify billing  │                           │  Free / manual terms  │
    └───────────────────┘                           └───────────────────────┘
 ```
 
@@ -167,7 +167,8 @@ the public deployment is untouched). Set the environment from
 - `NEXT_PUBLIC_APP_URL` / `NEXTAUTH_URL` → `https://custom.cart-gain.com`
 - `NEXTAUTH_SECRET`, `SHOPIFY_OAUTH_STATE_SECRET`, `ENCRYPTION_KEY`, `JOB_SECRET`
 - `DATABASE_URL` / `DIRECT_URL` → the **custom** database
-- `RAZORPAY_*` → custom-app billing
+- `RAZORPAY_*` → only if you need the legacy cancellation path; there is no
+  custom-app paid billing flow
 - `OPENAI_API_KEY`, WhatsApp/Email/Redis vars as needed
 
 > The code reads only `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET` for OAuth,
@@ -187,9 +188,10 @@ shopify app deploy --config custom
 - For CI afterwards: `shopify app deploy --config custom --allow-updates`.
 
 This also registers the webhooks declared in `shopify.app.custom.toml`
-(functional + the three compliance topics). At install time the app additionally
-registers the same webhooks at runtime via `setupShopifyWebhooks()` — both point
-at `https://custom.cart-gain.com/api/webhooks/shopify`.
+(functional + the three compliance topics). The runtime does **not** create
+webhook subscriptions through the Admin API, so there are no duplicate
+registrations. Every delivery points at
+`https://custom.cart-gain.com/api/webhooks/shopify`.
 
 ### 8. Install and verify
 
@@ -207,18 +209,22 @@ at `https://custom.cart-gain.com/api/webhooks/shopify`.
 
 ---
 
-## Billing on the custom app (Razorpay track)
+## Billing on the custom app
 
-The codebase already supports two billing providers
-(`prisma/schema.prisma` → `Subscription.provider`):
+Shopify does not allow the Billing API for custom-distribution apps. CartGain's
+paid-plan checkout uses Shopify Billing, so the custom track cannot offer paid
+upgrades:
 
-- `"shopify"` — App Store track (public app).
-- `"razorpay"` — **direct / custom-app track** ← the custom app uses this.
+- Custom installs remain on the **Free** plan in the app.
+- Any commercial arrangement is a **manual contract** handled outside this
+  codebase and outside Shopify Billing.
+- `Subscription.provider = "razorpay"` rows are legacy pre-migration records. The
+  only Razorpay code path left is cancellation when a merchant moves off the old
+  gateway. It never starts or collects a charge.
 
-No code change is required: the Shopify-billing-specific route/webhook
-(`app_subscriptions/update`) simply never fires for a custom app. Checkout for
-paid plans goes through the existing Razorpay endpoints
-(`/api/payments/create-subscription`, `/api/payments/webhook`).
+Do not point a custom deployment at Razorpay creation endpoints: those routes
+have been removed. If a custom design partner needs more than the free limits,
+handle it as a manual contract and keep billing records accurate.
 
 ---
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { getAppBaseUrl } from '@/lib/app-base-url'
 import { encrypt } from '@/lib/encryption'
-import { setupShopifyWebhooks } from '@/lib/shopify'
+import { assertAllowedShopifyHost, SHOPIFY_API_VERSION } from '@/lib/shopify'
 import { generateCampaignSetup } from '@/lib/services/ai'
 import { verifyOAuthState, verifyShopifyCallbackHmac, isValidShopDomain, migrateNonExpiringOfflineToken } from '@/lib/shopify-oauth'
 import { createFreeSubscription } from '@/lib/subscription'
@@ -42,19 +42,29 @@ async function fetchShopOwner(
   accessToken: string,
 ): Promise<{ email?: string; name?: string }> {
   try {
-    const res = await fetch(`https://${shop}/admin/api/2026-04/shop.json`, {
-      headers: { 'X-Shopify-Access-Token': accessToken },
+    const url = `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`
+    assertAllowedShopifyHost(url)
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        query: `#graphql
+          query ShopOwner {
+            shop { email shopOwnerName }
+          }
+        `,
+      }),
       signal: AbortSignal.timeout(10000),
     })
     if (!res.ok) return {}
     const data = await res.json().catch(() => null)
-    const owner = data?.shop
-    const email = typeof owner?.email === 'string'
-      ? owner.email
-      : typeof owner?.customer_email === 'string'
-        ? owner.customer_email
-        : undefined
-    const name = typeof owner?.shop_owner === 'string' ? owner.shop_owner : undefined
+    const owner = data?.data?.shop
+    const email = typeof owner?.email === 'string' ? owner.email : undefined
+    const name = typeof owner?.shopOwnerName === 'string' ? owner.shopOwnerName : undefined
     return { email, name }
   } catch {
     return {}
@@ -297,30 +307,6 @@ export async function GET(req: NextRequest) {
       userId: provisionedUserId ?? undefined,
       properties: { shop },
     })
-
-    try {
-      await setupShopifyWebhooks(
-        {
-          id: storeId!,
-          domain: shop,
-          apiKey: encrypt(accessToken),
-          ...(refreshToken
-            ? { shopifyRefreshToken: encrypt(refreshToken) }
-            : { shopifyRefreshToken: null }),
-          shopifyTokenExpiresAt: tokenExpiresAt ?? null,
-        },
-        baseUrl,
-      )
-    } catch (webhookError) {
-      await captureError({
-        level: 'error',
-        component: 'webhook',
-        operation: 'setup_shopify_webhooks',
-        error: webhookError,
-        req,
-        persist: true,
-      })
-    }
 
     try {
       const targetStore = storeId

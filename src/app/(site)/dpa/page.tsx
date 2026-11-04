@@ -154,9 +154,9 @@ export default function DPAPage() {
                       <td className="py-3">Global (Meta processing)</td>
                     </tr>
                     <tr>
-                      <td className="py-3">Razorpay</td>
-                      <td className="py-3">Payment processing</td>
-                      <td className="py-3">India (Razorpay processing)</td>
+                      <td className="py-3">Shopify</td>
+                      <td className="py-3">App subscription and usage billing</td>
+                      <td className="py-3">Global (Shopify processing)</td>
                     </tr>
                     <tr>
                       <td className="py-3">OpenAI</td>

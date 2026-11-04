@@ -14,9 +14,9 @@
  * or 500 on a forged payload fails the check even when the subscriptions are
  * correct.
  *
- * These tests assert the config declares the topics, that the config and the
- * runtime install path agree, and that the handler has the exact status-code
- * behaviour the reviewer probes.
+ * These tests assert the config declares the topics and that the handler has
+ * the exact status-code behaviour the reviewer probes. App-specific webhooks
+ * are registered by `shopify app deploy`, not at runtime.
  */
 import crypto from 'crypto'
 import fs from 'fs'
@@ -55,7 +55,6 @@ function subscriptionBlocks(toml: string): { topics: string[]; complianceTopics:
 
 const blocks = subscriptionBlocks(APP_TOML)
 const complianceBlocks = blocks.filter((b) => b.complianceTopics.length > 0)
-const functionalTopics = blocks.flatMap((b) => b.topics)
 
 describe('check 3 — mandatory compliance webhooks are declared in the app config', () => {
   it('declares all three topics via compliance_topics', () => {
@@ -113,56 +112,6 @@ describe('check 3 — mandatory compliance webhooks are declared in the app conf
     for (const topic of ['carts/update', 'orders/create', 'app/uninstalled']) {
       expect(functional).toContain(topic)
     }
-  })
-
-  it('keeps the config and the runtime install list in sync', async () => {
-    // src/lib/shopify.ts registers the same three topics through the Admin API
-    // at install. A mismatch would mean a merchant gets different privacy
-    // coverage depending on which path ran. Intercept the real HTTP calls and
-    // read the topics Shopify would actually be asked to subscribe.
-    const created: string[] = []
-    const fetchMock = jest.fn(async (input: any, init: any) => {
-      const url = String(input)
-      if (url.includes('/webhooks.json') && (init?.method ?? 'GET') === 'GET') {
-        return { ok: true, json: async () => ({ webhooks: [] }) } as any
-      }
-      if (url.includes('/webhooks.json') && init?.method === 'POST') {
-        const parsed = JSON.parse(init.body)
-        created.push(parsed.webhook.topic)
-        return { ok: true, status: 201, json: async () => ({ webhook: {} }) } as any
-      }
-      if (url.includes('/webhooks/') && init?.method === 'PUT') {
-        return { ok: true, status: 200, json: async () => ({ webhook: {} }) } as any
-      }
-      return { ok: true, json: async () => ({}) } as any
-    })
-    global.fetch = fetchMock as any
-
-    try {
-      const { setupShopifyWebhooks } = await import('@/lib/shopify')
-      await setupShopifyWebhooks({
-        id: 'store-1',
-        domain: 'demo.myshopify.com',
-        apiKey: 'encrypted-token',
-        shopifyRefreshToken: 'refresh',
-        shopifyTokenExpiresAt: new Date(Date.now() + 1_000_000),
-      }, 'https://cart-gain.com')
-    } finally {
-      global.fetch = (globalThis as any).__origFetch
-    }
-
-    // Compliance topics must NOT be POSTed to the Admin API: Shopify rejects
-    // them there with a 404 on every reconnect. They are registered by
-    // `shopify app deploy` from the `compliance_topics` block in the TOML.
-    for (const topic of COMPLIANCE_TOPICS) {
-      expect(created).not.toContain(topic)
-    }
-    // The functional topics the config declares ARE registered at runtime, so
-    // the two surfaces stay in sync.
-    for (const topic of functionalTopics) {
-      expect(created).toContain(topic)
-    }
-    expect(created.length).toBeGreaterThan(0)
   })
 })
 

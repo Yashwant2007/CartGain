@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { POST } from '../route'
 import { getServerSession } from 'next-auth'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { createRazorpaySubscription, getPlan, resolvePlanId } from '@/lib/payment'
+import { getPlan, resolvePlanId } from '@/lib/payment'
 import { resolveShopifyStoreForUser, shopifyBillingAvailability } from '@/lib/shopify-billing/service'
 import { createShopifySubscription } from '@/lib/shopify-billing/subscriptions'
 import { ShopifyReconnectRequiredError } from '@/lib/shopify-billing/client'
@@ -13,7 +13,6 @@ jest.mock('next-auth', () => ({ getServerSession: jest.fn() }))
 jest.mock('@/lib/auth', () => ({ authOptions: {} }))
 jest.mock('@/lib/rate-limit', () => ({ checkRateLimit: jest.fn() }))
 jest.mock('@/lib/payment', () => ({
-  createRazorpaySubscription: jest.fn(),
   cancelRazorpaySubscription: jest.fn(),
   getPlan: jest.fn(),
   resolvePlanId: jest.fn(),
@@ -50,7 +49,6 @@ const rateLimitMock = checkRateLimit as jest.Mock
 const storeMock = resolveShopifyStoreForUser as jest.Mock
 const availabilityMock = shopifyBillingAvailability as jest.Mock
 const createShopifyMock = createShopifySubscription as jest.Mock
-const createRazorpayMock = createRazorpaySubscription as jest.Mock
 const prismaMock = prisma as any
 
 const STORE = {
@@ -96,7 +94,6 @@ describe('POST /api/payments/create-subscription', () => {
       code: 'SHOPIFY_STORE_INACTIVE',
       error: expect.stringContaining('test3cg.myshopify.com'),
     })
-    expect(createRazorpayMock).not.toHaveBeenCalled()
   })
 
   it('asks for a reconnect when the Shopify token expired without a refresh token', async () => {

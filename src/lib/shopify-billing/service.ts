@@ -153,7 +153,7 @@ export async function reconcileShopifySubscription(
       shopifySubscriptionId: active.id,
       shopifyLineItemId: active.lineItemId ?? local.shopifyLineItemId,
       ...(active.currentPeriodEnd ? { currentPeriodEnd: active.currentPeriodEnd } : {}),
-      // Mirror the Razorpay activation behaviour so bargain/recovery overage
+      // Mirror the normal activation behaviour so bargain/recovery overage
       // gating works identically regardless of provider. currentPeriodStart is
       // only seeded on FIRST activation — re-setting it on every reconcile (e.g.
       // each post-redirect visit) would let a merchant extend their cart-meter

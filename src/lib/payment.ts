@@ -1,5 +1,3 @@
-import crypto from "crypto";
-import { requireEnv } from "./env";
 import {
   PLAN_IDS,
   LEGACY_PLAN_MAP,
@@ -10,52 +8,32 @@ import {
 
 export { PLAN_IDS, FREE_CARTS_THRESHOLD, PAID_PLAN_IDS, resolvePlanId } from "./plan-constants";
 
-let razorpayInstance: any = null;
-
-if (typeof window === 'undefined') {
-  try {
-    const Razorpay = require("razorpay");
-    razorpayInstance = new Razorpay({
-      key_id: requireEnv("RAZORPAY_KEY_ID", "Razorpay payment processing"),
-      key_secret: requireEnv("RAZORPAY_KEY_SECRET", "Razorpay payment processing"),
-    });
-  } catch (e) {
-    console.error("Failed to load Razorpay:", e);
-  }
-}
-
-export const razorpay = razorpayInstance;
-
-export function verifyWebhookSignature(body: string, signature: string): boolean {
-  const expected = crypto
-    .createHmac("sha256", requireEnv("RAZORPAY_WEBHOOK_SECRET", "webhook signature verification"))
-    .update(body)
-    .digest("hex");
-
-  const a = Buffer.from(signature);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
-}
-
 /**
- * Cancel a merchant's Razorpay subscription server-side. Returns true when the
- * gateway subscription was cancelled (or when there is nothing to cancel), and
- * false when the gateway cancel fails so callers can decide whether to keep the
- * merchant on the paid plan locally.
+ * Legacy-only Razorpay cancellation.
+ *
+ * CartGain no longer creates app subscriptions or payment links outside Shopify.
+ * This helper exists solely so a merchant who subscribed before the migration
+ * can be cancelled at the old gateway when they switch to Shopify Billing. It
+ * must never be used to start or collect an app charge.
  */
 export async function cancelRazorpaySubscription(subscriptionId: string | null | undefined): Promise<boolean> {
   if (!subscriptionId) return true
-  if (!razorpay) return false
+
+  const keyId = process.env.RAZORPAY_KEY_ID?.trim()
+  const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim()
+  if (!keyId || !keySecret) return false
+
   try {
-    await razorpay.subscriptions.cancel(subscriptionId)
+    const Razorpay = require("razorpay")
+    const client = new Razorpay({ key_id: keyId, key_secret: keySecret })
+    await client.subscriptions.cancel(subscriptionId)
     return true
   } catch (error: any) {
-    // 400 "already cancelled / not in active state" — the merchant won't be
+    // 400 "already cancelled / not in active state" - the merchant won't be
     // charged anymore, treat as success. Other errors propagate.
     const status = error?.statusCode || error?.status
     if (status === 400 || status === 404) return true
-    console.error("Razorpay subscription cancel failed:", error?.message || error)
+    console.error("Legacy Razorpay subscription cancel failed:", error?.message || error)
     return false
   }
 }
@@ -94,83 +72,6 @@ export interface Plan {
   storesLimit: number;          // stores allowed on the plan
   estimatedRecovery: EstimatedRecovery;
   recommended?: boolean;
-}
-
-const planIdCache = new Map<string, string>()
-
-export async function getOrCreateRazorpayPlan(planId: string, name: string, amount: number, period: 'monthly' | 'yearly'): Promise<string> {
-  if (!razorpay) throw new Error('Razorpay not configured')
-
-  const cacheKey = `${planId}_${period}`
-  if (planIdCache.has(cacheKey)) return planIdCache.get(cacheKey)!
-
-  const periodInterval = period === 'monthly' ? 'monthly' : 'yearly'
-  const periodCount = 1
-
-  try {
-    const plans = await razorpay.plans.all({ count: 50 })
-    const existing = (plans.items || []).find(
-      (p: any) =>
-        p.item?.name === `CartGain ${name}` &&
-        p.period === periodInterval &&
-        p.item?.amount === Math.round(amount * 100)
-    )
-    if (existing) {
-      planIdCache.set(cacheKey, existing.id)
-      return existing.id
-    }
-  } catch {
-    // continue to create
-  }
-
-  const plan = await razorpay.plans.create({
-    period: periodInterval,
-    interval: periodCount,
-    item: {
-      name: `CartGain ${name}`,
-      amount: Math.round(amount * 100),
-      currency: 'INR',
-      description: `CartGain ${name} - ${period} subscription`,
-    },
-    notes: {
-      plan_id: planId,
-      period,
-    },
-  })
-
-  planIdCache.set(cacheKey, plan.id)
-  return plan.id
-}
-
-export async function createRazorpaySubscription(planId: string, customerEmail: string, period: 'monthly' | 'yearly'): Promise<{
-  subscriptionId: string
-  shortUrl?: string
-}> {
-  if (!razorpay) throw new Error('Razorpay not configured')
-
-  const plan = Object.values(PLANS).find(p => p.id === planId)
-  if (!plan || plan.price === 0) throw new Error('Invalid plan')
-
-  const amount = period === 'yearly' ? plan.yearlyPrice : plan.price
-  const rzpPlanId = await getOrCreateRazorpayPlan(planId, plan.name, amount, period)
-
-  const subscription = await razorpay.subscriptions.create({
-    plan_id: rzpPlanId,
-    customer_notify: true,
-    quantity: 1,
-    total_count: 100,
-    expire_by: Math.round((Date.now() + 86400000) / 1000),
-    notes: {
-      plan_id: planId,
-      period,
-      plan_name: plan.name,
-    },
-  })
-
-  return {
-    subscriptionId: subscription.id,
-    shortUrl: subscription.short_url,
-  }
 }
 
 /**

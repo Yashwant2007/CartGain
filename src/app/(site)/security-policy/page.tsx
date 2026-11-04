@@ -120,7 +120,7 @@ export default function SecurityPolicyPage() {
               <li>Groq — AI development/fallback inference (gpt-oss-120b)</li>
               <li>Resend — transactional email (not yet runtime-configured)</li>
               <li>Meta (WhatsApp Cloud API) — WhatsApp delivery (not yet runtime-configured)</li>
-              <li>Razorpay — subscription billing (not yet runtime-configured)</li>
+              <li>Shopify Billing — app subscriptions and usage charges</li>
             </ul>
             <p className="text-xs text-slate-400 mt-3">
               Data processed by each provider is purpose-limited and minimized (for example, only

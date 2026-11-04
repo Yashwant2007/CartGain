@@ -1,8 +1,7 @@
-import { getAccessToken } from '@/lib/shopify'
+import { shopifyGraphQL } from '@/lib/shopify'
 import { redisGet, redisSet } from '@/lib/redis'
 import { normalizeImageUrl, toNumericId, type NormalizedLineItem } from '@/lib/shopify-line-items'
 
-const API_VERSION = '2026-04'
 const IMAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const MISS_TTL_MS = 15 * 60 * 1000
 const MISS = '__none__'
@@ -63,28 +62,29 @@ export async function fetchShopifyProductImage(
   }
 
   try {
-    const token = await getAccessToken(store)
-    if (!token) return undefined
-    const res = await fetch(
-      `https://${store.domain}/admin/api/${API_VERSION}/products/${id}.json?fields=id,image,images`,
-      {
-        headers: { 'X-Shopify-Access-Token': token, Accept: 'application/json' },
-        signal: AbortSignal.timeout(5000),
-      },
+    const data = await shopifyGraphQL<{
+      product?: {
+        featuredImage?: { url?: string | null } | null
+        images?: { nodes?: Array<{ url?: string | null }> } | null
+      } | null
+    }>(
+      store,
+      `#graphql
+        query ProductImage($id: ID!) {
+          product(id: $id) {
+            featuredImage { url }
+            images(first: 10) { nodes { url } }
+          }
+        }
+      `,
+      { id: `gid://shopify/Product/${id}` },
+      5000,
     )
-    if (!res.ok) {
-      // 401/403 means reconnect; don't cache that as "no photo".
-      if (res.status === 401 || res.status === 403) return undefined
-      await redisSet(cacheKey, MISS, MISS_TTL_MS).catch(() => {})
-      writeMemory(cacheKey, null, MISS_TTL_MS)
-      return undefined
-    }
-    const json = await res.json().catch(() => null)
-    const product = json?.product
+    const product = data.product
     const url =
-      normalizeImageUrl(product?.image) ||
-      (Array.isArray(product?.images)
-        ? product.images.map((image: unknown) => normalizeImageUrl(image)).find(Boolean)
+      normalizeImageUrl(product?.featuredImage) ||
+      (Array.isArray(product?.images?.nodes)
+        ? product.images.nodes.map((image: unknown) => normalizeImageUrl(image)).find(Boolean)
         : undefined)
 
     await redisSet(cacheKey, url || MISS, url ? IMAGE_TTL_MS : MISS_TTL_MS).catch(() => {})

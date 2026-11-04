@@ -2,27 +2,22 @@ import crypto from 'crypto'
 
 /**
  * Minimum necessary access — kept in sync with shopify.app.toml.
- * - read_customers / read_checkouts / read_orders / read_products: recover
- *   abandoned carts and read the data needed for recovery + bargain pricing.
- * - write_checkouts: required alongside read_checkouts for the abandoned
- *   checkout REST endpoints CartGain uses.
- * - read_discounts / write_discounts: create and manage recovery discount
- *   codes (discountCodeBasicCreate).
- * - read_webhooks / write_webhooks are NOT requested — Shopify deprecated those
- *   scopes and webhook management is implicit for the app.
- * Not requested: write_customers, write_orders, write_products,
- * write_draft_orders, read_draft_orders, fulfillment scopes — CartGain does
- * not write customers/orders/products and never uses draft orders.
+ * - read_orders: abandoned checkouts, orders and refund webhooks. Shopify's
+ *   abandoned-checkout resource requires the orders scope (not checkouts).
+ * - read_customers: resolve a missing recovery name from the Shopify customer.
+ * - read_products: product details and prices for the bargain widget.
+ * - write_discounts: create one-use bargain/recovery discount codes.
+ * Not requested: checkout, order/customer/product write scopes, discount reads,
+ * product listings, fulfillment and draft-order scopes. CartGain does not use
+ * them. read_all_orders is deliberately absent: the app never reads order
+ * history beyond what its webhooks deliver.
+ * read_webhooks / write_webhooks are also omitted — Shopify deprecated those
+ * scopes and webhook management is implicit for the app.
  */
 export const SHOPIFY_OAUTH_SCOPES = [
-  'read_checkouts',
-  'write_checkouts',
   'read_orders',
-  'read_all_orders',
   'read_customers',
   'read_products',
-  'read_product_listings',
-  'read_discounts',
   'write_discounts',
 ].join(',')
 

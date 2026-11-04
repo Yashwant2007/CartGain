@@ -26,8 +26,6 @@ const ALL_REQUIRED = [
   'NEXTAUTH_SECRET',
   'RESEND_API_KEY',
   'OPENAI_API_KEY',
-  'RAZORPAY_KEY_ID',
-  'RAZORPAY_KEY_SECRET',
   'ENCRYPTION_KEY',
   'SHOPIFY_API_KEY',
   'SHOPIFY_API_SECRET',
@@ -85,11 +83,11 @@ describe('GET /api/health — env reporting', () => {
   })
 
   it('flags padding on any required var, not only the Shopify ones', async () => {
-    process.env.RAZORPAY_KEY_SECRET = '  padded  '
+    process.env.OPENAI_API_KEY = '  padded  '
 
     const body = await load()
     expect(body.checks.env.unpadded).toBe(true)
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('RAZORPAY_KEY_SECRET'))
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('OPENAI_API_KEY'))
   })
 
   it('reports no padding when every value is clean', async () => {
@@ -100,7 +98,6 @@ describe('GET /api/health — env reporting', () => {
 
   it('never leaks variable names or the padding list in the public response', async () => {
     delete process.env.ENCRYPTION_KEY
-    delete process.env.RAZORPAY_KEY_ID
     process.env.SHOPIFY_API_SECRET = 'padded\n'
 
     const body = await load()

@@ -2,7 +2,7 @@
 
 client_id = "67beb1794fab10553102c134b63e1277"
 name = "CARTGAIN"
-description = "Recover abandoned carts with WhatsApp, Email and SMS — plus AI price negotiation at checkout that converts bargain hunters into buyers."
+description = "Recover abandoned carts with WhatsApp and Email — plus AI price negotiation at checkout that converts bargain hunters into buyers."
 application_url = "https://cart-gain.com/api/shopify/install"
 embedded = true
 # handle = "cartgain"  # linked via client_id; omitted to avoid branding validation bug
@@ -22,9 +22,9 @@ embedded = true
 # registration path. Missing them fails
 #   - "Provides mandatory compliance webhooks"
 #   - "Verifies webhooks with HMAC signatures" (no registered endpoint to test)
-# Declaring them here is additive — src/lib/shopify.ts still registers all three
-# at install via the Admin API, and both paths point at the same handler, so a
-# merchant gets identical behaviour whichever applies.
+# App-specific webhooks are registered by `shopify app deploy`; the runtime does
+# NOT create webhook subscriptions through the Admin API, so there are no
+# duplicate deliveries and no REST webhook calls.
 api_version = "2026-04"
 
 # Webhook URIs below are ABSOLUTE on purpose. Shopify resolves a relative
@@ -72,7 +72,7 @@ api_version = "2026-04"
 # not requested (see SHOPIFY_PROTECTED_DATA_READINESS.md).
 # read_webhooks / write_webhooks are omitted: Shopify deprecated those scopes
 # and webhook management is implicit for the app.
-scopes = "read_checkouts,write_checkouts,read_orders,read_all_orders,read_customers,read_products,read_product_listings,read_discounts,write_discounts"
+scopes = "read_orders,read_customers,read_products,write_discounts"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 

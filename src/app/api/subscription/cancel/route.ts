@@ -45,6 +45,9 @@ export async function POST(request: NextRequest) {
       }
       gatewayCancelled = await cancelShopifySubscription(store, subscription.shopifySubscriptionId)
     } else {
+      // Legacy cleanup only: no new off-platform app charges are created. If a
+      // merchant still has a pre-migration Razorpay subscription, cancel it
+      // before downgrading so they are never billed twice.
       gatewayCancelled = await cancelRazorpaySubscription(subscription.subscriptionId)
     }
 

@@ -1,4 +1,4 @@
-import { retryDelayMs, fetchShopifyCarts } from '@/lib/shopify'
+import { retryDelayMs, shopifyGraphQL } from '@/lib/shopify'
 
 jest.mock('@/lib/encryption', () => ({
   decrypt: (s: string) => s,
@@ -58,18 +58,18 @@ describe('shopifyFetch retry loop', () => {
         ok: true,
         status: 200,
         headers: { get: () => null },
-        json: async () => ({ carts: [{ id: 42 }] }),
+        json: async () => ({ data: { shop: { name: 'Test Shop' } } }),
       }
     })
 
-    const carts = await fetchShopifyCarts({
+    const data = await shopifyGraphQL<{ shop: { name: string } }>({
       id: 's1',
       domain: 'shop.myshopify.com',
       apiKey: 'token',
       shopifyRefreshToken: 'refresh',
       shopifyTokenExpiresAt: new Date(Date.now() + 1_000_000),
-    })
-    expect(carts).toEqual([{ id: 42 }])
+    }, 'query { shop { name } }')
+    expect(data).toEqual({ shop: { name: 'Test Shop' } })
     expect((global.fetch as jest.Mock).mock.calls.length).toBe(2)
   })
 
@@ -78,16 +78,16 @@ describe('shopifyFetch retry loop', () => {
       ok: true,
       status: 200,
       headers: { get: () => null },
-      json: async () => ({ carts: [] }),
+      json: async () => ({ data: { shop: { name: 'Test Shop' } } }),
     }))
     ;(globalThis as any).fetch = fetchMock
-    await fetchShopifyCarts({
+    await shopifyGraphQL({
       id: 's1',
       domain: 'shop.myshopify.com',
       apiKey: 'tok',
       shopifyRefreshToken: 'refresh',
       shopifyTokenExpiresAt: new Date(Date.now() + 1_000_000),
-    })
+    }, 'query { shop { name } }')
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

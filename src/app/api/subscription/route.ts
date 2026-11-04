@@ -109,12 +109,14 @@ export async function GET(request: NextRequest) {
       invoices,
       plans: PLANS,
       billing: {
-        provider: subscription?.provider === 'shopify' ? 'shopify' : 'razorpay',
+        provider: 'shopify',
         shopifyAvailable: availability.available,
         shopifyCurrency: availability.currency,
         shopifyUnavailableReason: availability.reason ?? null,
         shopifyTokenState: availability.tokenState,
         shopDomain: subscription?.shopDomain ?? shopifyStore?.domain ?? null,
+        legacyBilling: !!subscription && subscription.provider !== 'shopify' &&
+          (subscription.status === 'active' || subscription.status === 'pending'),
       },
       meta: {
         activeCampaigns,

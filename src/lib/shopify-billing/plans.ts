@@ -98,3 +98,55 @@ export function resolveUsageCap(
   if (!Number.isFinite(cap) || cap <= 0) return null
   return cap
 }
+
+export interface ShopifyOveragePrices {
+  message: number
+  deal: number
+  cart: number
+}
+
+/**
+ * Per-unit overage prices in the shop's billing currency. RevenueShareEvent
+ * amounts are already denominated in the store currency, so these must be too;
+ * reusing the INR plan values for a USD shop would overcharge by ~80x.
+ *
+ * [REQUIRES CONFIRMATION] USD amounts are placeholders.
+ */
+export const SHOPIFY_OVERAGE_PRICES: Record<BillingCurrency, Record<string, ShopifyOveragePrices>> = {
+  INR: {
+    [PLANS.GROWTH.id]: {
+      message: 1,
+      deal: PLANS.GROWTH.bargainOverageDealPrice,
+      cart: PLANS.GROWTH.bargainOverageCartPrice,
+    },
+    [PLANS.PRO.id]: {
+      message: 1,
+      deal: PLANS.PRO.bargainOverageDealPrice,
+      cart: PLANS.PRO.bargainOverageCartPrice,
+    },
+  },
+  USD: {
+    [PLANS.GROWTH.id]: { message: 0.02, deal: 0.3, cart: 0.04 },
+    [PLANS.PRO.id]: { message: 0.02, deal: 0.18, cart: 0.04 },
+  },
+}
+
+export function resolveOveragePrices(
+  planId: string,
+  currency: string | null | undefined,
+): ShopifyOveragePrices | null {
+  const cur = normalizeCurrency(currency)
+  if (!cur) return null
+  return SHOPIFY_OVERAGE_PRICES[cur][resolvePlanId(planId)] ?? null
+}
+
+/** Minimum invoice amount per currency (INR plans use a ₹100 noise floor). */
+export const SHOPIFY_INVOICE_FLOORS: Record<BillingCurrency, number> = {
+  INR: 100,
+  USD: 1.2,
+}
+
+export function resolveInvoiceFloor(currency: string | null | undefined): number {
+  const cur = normalizeCurrency(currency)
+  return cur ? SHOPIFY_INVOICE_FLOORS[cur] : 0
+}

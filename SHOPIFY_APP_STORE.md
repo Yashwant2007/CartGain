@@ -1,209 +1,233 @@
 # Shopify App Store — Listing & Submission Plan
 
 **Owner**: Yashwant (account holder) + AI partner (assets + code)
-**Status date**: Aug 4, 2026
-**Goal**: Approved, public CartGain listing on the Shopify App Store within 21 days.
+**Status date**: Nov 4, 2026
+**Goal**: Approved public CartGain listing on the Shopify App Store.
 
 ---
 
-## 1. WHAT'S ALREADY DONE (no extra work)
+## 1. What is already implemented
 
-CartGain is already a functional embedded Shopify app:
+CartGain is a functional embedded Shopify app:
 
-- `src/app/api/shopify/install` + `callback` — full OAuth install flow (per-user tokens, refresh-token rotation, `grant_options[]=per-user`)
-- `src/app/api/shopify/connect`, `pending-install`, `session-token`, `health` — install lifecycle
-- `src/lib/shopify.ts` — token encryption, refresh-before-expiry, AbortSignal-bounded calls
-- `src/lib/shopify-graphql.ts` — GraphQL client (used for bargain discount-code creation)
-- `src/lib/shopify-embed.ts` — Shopify App Bridge/session token verification
-- `next.config.js` — `frame-ancestors 'self' https://*.myshopify.com https://admin.shopify.com` (required for embedding)
-- Webhooks: `src/app/api/webhooks/shopify` — abandoned cart, order, checkout, app/uninstalled
-- Scopes (`.env.example`): `read_checkouts,write_checkouts,read_orders,write_orders,read_customers,write_customers,read_products,write_products,read_merchant_managed_fulfillment_orders,write_webhooks,read_webhooks`
-- `app/uninstalled` webhook handling for cleanup
-- All dashboard pages already render inside admin.shopify.com iframe
+- **Install / auth** — `src/app/api/shopify/install` + `callback` implement OAuth with
+  expiring offline tokens and refresh-token rotation; `connect`, `pending-install`,
+  `session-token`, and `health` cover the install lifecycle.
+- **Admin API** — the app uses the **GraphQL Admin API only** (`2026-04`):
+  `shopifyGraphQL()` in `src/lib/shopify.ts` backs abandoned checkouts, products,
+  customer-name lookup, discount creation, billing, and image lookup. OAuth token
+  exchange (`/admin/oauth/access_token`) is the only non-GraphQL Admin call.
+- **Webhooks** — `src/app/api/webhooks/shopify` handles carts/checkouts, orders,
+  refunds, customers, uninstall, and subscription updates. Subscriptions are declared
+  in `shopify.app.toml` / `shopify.app.custom.toml` and registered by
+  `shopify app deploy`; the runtime does **not** create webhooks through the API.
+- **Compliance webhooks** — `customers/data_request`, `customers/redact`, and
+  `shop/redact` are declared with `compliance_topics` and handled with HMAC
+  verification, durable exports, and full store/customer deletion.
+- **Embedding** — App Bridge from Shopify's CDN, session-token exchange, and CSP
+  `frame-ancestors` for `*.myshopify.com` / `admin.shopify.com`.
+- **Scopes** — `read_orders,read_customers,read_products,write_discounts` only.
 
-**Verdict**: the technical "embedded app" surface is COMPLETE. Only the App Store *listing* and *billing-via-Shopify* gap remain.
-
----
-
-## 2. THE ONE REAL GAP — Shopify Billing
-
-Shopify's App Store policy **requires** apps that charge merchants to do so via Shopify Billing (not Stripe/Razorpay). CartGain currently charges via Razorpay in our dashboard.
-
-Two options:
-- **A. Migrate Starter/Growth/Pro to Shopify Billing** (recommended for App Store). Replace `/api/subscription` + `/api/payments` to create Shopify `applicationSubscriptions` and read `currentAppInstallation.activeSubscriptions`. Pros: Marketplace Payments, less churn, Shopify bills the merchant. Cons: Shopify keeps 20% rev-share on App Store installs; our existing rev-share invoicing becomes Shopify's responsibility to compute (we still owe merchants the 3/2.5/2% rev-share on recovered revenue — handle as a `UsageRecord` line item via Shopify's `usageSubscriptions`).
-- **B. Keep Razorpay, list app as "free" on App Store, charge inside our dashboard**. Pros: skip billing migration. Cons: Shopify rejects this — listing policy 3.0.5 says paid features must use Shopify Billing. We WILL be rejected. Don't take this path.
-
-**Decision**: Migrate to Shopify Billing. This is a 2-day engineering task — Yashwant doesn't need to do anything; I'll handle it after the App Store account is set up.
+**Verdict**: the technical app surface is complete. The remaining work is App Store
+listing assets, protected-customer-data approval, and final review.
 
 ---
 
-## 3. SUBMISSION CHECKLIST (in execution order)
+## 2. Billing
 
-### Phase A — Yashwant (this week, 30 min)
-1. **Create Shopify Partner account** at partners.shopify.com (free, no cost)
-2. Create a new **Custom App draft** (not "Public app" yet — stay in dev mode) named "CartGain"
-3. Add the `SHOPIFY_API_KEY` + `SHOPIFY_API_SECRET` to Vercel env vars (I'll wire the rest)
-4. Add `cart-gain.com/api/shopify/install` to **App URL** field
-5. Add `cart-gain.com/api/shopify/callback` to **Allowed redirection URIs**
-6. Paste the listing copy from §4 into the **App listing** editor (save draft — don't submit yet)
+App Store policy requires paid app features to use **Shopify Billing**. CartGain now
+does exactly that:
 
-### Phase B — AI partner (after Yashwant completes A, ~2 days)
-1. Migrate subscription creation to Shopify Billing (`applicationSubscriptions` GraphQL mutation)
-2. Replace Razorpay webhook with Shopify's `app_subscriptions/update` webhook
-3. Add `UsageSubscription` line items for rev-share on recovered carts (Shopify bills per-cycle)
-4. Generate 5 listing screenshots (1024×768) from the live dashboard using a dev store:
-   - Dashboard overview with recovered revenue chart
-   - Bargain page (the USP — must be screen #2)
-   - Campaigns page
-   - Analytics page
-   - Integrations page (Shopify connected state)
-5. Record a 30-second demo video showing a bargain → abandoned cart → WhatsApp recovery sequence
-6. Submit for Shopify review
+- Paid subscriptions are created with `appSubscriptionCreate` and cancelled with
+  `appSubscriptionCancel` (`src/lib/shopify-billing/`).
+- Revenue share is billed as capped **app usage records** with
+  `appUsageRecordCreate`; it is not collected by Razorpay.
+- `app_subscriptions/update` keeps local entitlement in sync.
+- Razorpay remains only as a **legacy cancellation path** for merchants who
+  subscribed before the migration. It is never used to start or collect an app charge.
 
-### Phase C — Shopify review (~2-3 weeks typical)
-1. Expect 2-3 rounds of feedback (common: missing billing clarification, privacy policy URL, GDPR data deletion webhook)
-2. We already have `/privacy`, `/terms`, `/dpa` — add `app/uninstalled` + `customers/redact` + `shop/redact` webhooks (gdpr compliance)
-3. Target: Approved by end of Week 3 after submission
+Billing prices are currency-specific (`src/lib/shopify-billing/plans.ts`). INR values
+are canonical; USD values are placeholders marked `[REQUIRES CONFIRMATION]` and must be
+confirmed before charging international merchants.
+
+**Custom distribution**: Shopify does not allow the Billing API for custom apps. A
+custom-distribution install can stay on the free tier or use a manually invoiced
+contract handled outside this codebase; it must not be sold as an App Store paid plan.
 
 ---
 
-## 4. LISTING COPY (paste into Shopify Partner dashboard — ready to use)
+## 3. Submission checklist
+
+### Phase A — account and app setup
+1. Confirm the Partner/Dev Dashboard app record and `SHOPIFY_API_KEY` /
+   `SHOPIFY_API_SECRET` in Vercel.
+2. Confirm App URL `https://cart-gain.com/api/shopify/install` and redirect URL
+   `https://cart-gain.com/api/shopify/callback`.
+3. Run `shopify app deploy --allow-updates --message "listing build"` so the declared
+   webhooks, scopes, and extensions match the code.
+4. Request **Protected customer data** access for **Name, Email, Phone** in the Dev
+   Dashboard. CartGain does not persist street addresses.
+5. Paste the listing copy from §4 and upload the assets from §5.
+
+### Phase B — review evidence
+1. Verify one full install from a development store, including App Bridge/session-token
+   auth inside the admin iframe.
+2. Exercise one storefront bargain and one abandoned-cart recovery end to end.
+3. Send the three compliance webhooks from the Dev Dashboard and confirm `200` plus the
+   documented deletion/export behaviour.
+4. Confirm billing: subscribe to Growth, verify `app_subscriptions/update`, then cancel
+   and verify `appSubscriptionCancel`.
+5. Capture screenshots and the demo video.
+
+### Phase C — Shopify review
+Expect requests for billing evidence, privacy/retention details, GDPR handling, and
+App Bridge checks. Respond with the exact code paths in this repository and the public
+policy URLs.
+
+---
+
+## 4. Listing copy
 
 ### App name (30 chars)
 ```
-CartGain — Abandoned Cart Recovery
+CartGain — Cart Recovery + Bargain
 ```
 
-### Subtitle / tagline (60 chars)
+### Subtitle (60 chars)
 ```
-Recover abandoned carts with WhatsApp + AI bargain at checkout
-```
-
-### Short description (140 chars, shown in search results)
-```
-AI-powered WhatsApp, Email & SMS recovery for D2C beauty brands. Plus the first AI bargain widget that recovers price-sensitive carts.
+Recover carts with WhatsApp + AI price negotiation
 ```
 
-### Long description (max 9000 chars — ~500 words)
+### Short description (140 chars)
+```
+Win back abandoned carts with WhatsApp and email, then turn price objections into sales with an AI bargain widget at checkout.
+```
 
-CartGain turns abandoned carts into confirmed sales for India's D2C skincare & beauty brands. Built specifically for high-AOV, WhatsApp-first stores where email alone just doesn't move the needle.
+### Long description
 
-**Why beauty founders choose CartGain**
+**Recover the carts you are already losing.**
 
-Email gets a 20% open rate. WhatsApp gets 85%. CartGain meets your customers on the channel they actually check — and recovers 5-6x more carts than email-only.
+Most shoppers leave without buying. CartGain brings them back with WhatsApp and email
+recovery, then gives price-sensitive shoppers a real way to say yes with AI price
+negotiation at checkout.
 
-Our customers typically see:
-- 18-25% recovery rate (industry benchmark for multi-channel)
-- Recovered revenue within the first 7 days of setup
-- A measurable lift in repeat purchases thanks to personalized recovery messages
+**WhatsApp-first recovery**
+- Automatic cart and checkout abandonment messages with product images
+- Email fallback and per-channel consent, with opt-out honoured instantly
+- Product-aware messages, tracked links, and single-use return offers
+- Up to five recovery messages per customer (three email, two WhatsApp)
 
-**The first AI bargain widget at checkout**
+**AI Bargain — a different way to close the sale**
+- Shoppers negotiate with an AI shopkeeper before they leave
+- You set the hidden floor and margin; the offer never goes below it
+- Three shopkeeper personalities, graduated counters, and walkout retention
+- Accepted deals create a one-use Shopify discount code automatically
+- Abandoned negotiations feed into recovery with the missed-deal context
 
-Price-sensitive buyers abandon the moment they see the price. CartGain's AI bargain widget opens a real negotiation before they leave — three distinct personas, graduated counters, walkout-retention logic, and bulk-order floors. When a bargain is accepted, a single-use Shopify discount code is generated automatically (24h expiry, 1 redemption). When a bargain is abandoned, it feeds straight into your recovery flow with the missed-deal context surfaced in every follow-up.
+**A dashboard that shows the money**
+- Recovered revenue, channel performance, win rate, and per-product breakdowns
+- Campaigns, consent-aware recipients, and delivery receipts
+- Storefront funnel, design/personality comparisons, and refund-adjusted net revenue
+- Bargain learning evidence is gated: live learning stays off until the merchant
+  enables it
 
-No other app on the Shopify App Store does this.
+**Built for Indian D2C, usable anywhere**
+- WhatsApp Business Cloud API support
+- DPDP-aligned and GDPR-aware handling; data encrypted in transit and at rest
+- GraphQL Admin API integration with the minimum scopes we need
+- RTO/COD risk scoring for Indian D2C stores
 
-**Three recovery channels, one dashboard**
+**Pricing that follows the outcome**
+Start free with the first 50 recovered carts. Paid plans bundle recovery and bargain
+usage, and our revenue share is capped so the bill stays predictable.
 
-- **WhatsApp Business API** — industry-leading 85% open rate with rich product images and direct reply buttons
-- **Email** — long-form brand storytelling that turns warm leads into repeat customers
-- **SMS** (early access) — time-sensitive nudges with automated discount codes
+### Main features
+1. AI bargain widget with hidden floors and automatic Shopify discount codes
+2. WhatsApp + email abandoned-cart recovery with explicit per-channel consent
+3. Product-aware copy, tracked links, and single-use offers
+4. Refund-aware recovery and bargain analytics
+5. RTO/COD risk scoring for Indian D2C
 
-**Dashboard that shows the money**
+### Pricing (Shopify Billing)
+- **Free** — ₹0/mo. 50 recovered carts, 30 bargain sessions, 5 accepted deals.
+- **Growth** — ₹1,499/mo (₹14,990/yr). 750 recovered carts, 300 sessions, 30 deals.
+  3.5% revenue share, capped at ₹5,000/mo. USD placeholder: $19/mo.
+- **Pro** — ₹3,999/mo (₹39,990/yr). 3,000 recovered carts, 1,500 sessions, 150 deals.
+  3% revenue share, capped at ₹10,000/mo. USD placeholder: $49/mo.
+- **Enterprise** — custom contract, unlimited usage.
 
-Real-time analytics on recovered revenue, channel performance, win rate, ROI per campaign — and per-product bargain analytics (acceptance rate, revenue saved, conversation logs you can replay).
-
-**Built for India, works everywhere**
-
-- WhatsApp Business API included — we handle setup, templates, compliance
-- Razorpay + UPI checkout support
-- DPDP Act 2023 + GDPR compliant; data encrypted at rest and in transit
-- Dedicated account manager on Growth & Pro plans
-
-**Pay only after we recover revenue**
-
-First 50 recovered carts are free. After that, a small monthly subscription + a 2-3% revenue share on the revenue we actually recover. We charge our fees on recovered revenue, not on every message sent — so our incentives stay aligned with yours.
-
-**Setup time**: 3-7 days. First recovered cart within a week. ROI positive within month one.
-
-### 5 main features (Shopify asks for these)
-1. AI bargain widget at checkout (patent-pending negotiation logic)
-2. WhatsApp + Email + SMS automated cart recovery
-3. AI-optimized send times and message copy
-4. Real-time recovered-revenue analytics with channel breakdown
-5. Built-in RTO/COD-fraud risk scoring for Indian D2C
-
-### Pricing (Shopify Billing tier names)
-- **Free** — ₹0/mo. First 50 recovered carts, all channels.
-- **Starter** — ₹999/mo + 3% rev share on carts recovered after the first 50.
-- **Growth** — ₹2,999/mo + 2.5% rev share. A/B testing, advanced analytics, priority support.
-- **Pro** — ₹8,999/mo + 2% rev share. White-label reports, dedicated account manager, SLA.
+Overage is billed through capped Shopify usage records (messages, extra accepted deals,
+extra recovered carts). Confirm the USD placeholders before charging international shops.
 
 ### Category
 Cart recovery · Marketing · Sales
 
-### App integrations shown on listing
-WhatsApp Business Cloud API · Resend (Email) · Razorpay · Shopify (billing)
+### Integrations shown on the listing
+WhatsApp Business Cloud API · Resend (email) · Shopify Admin GraphQL API · Shopify
+Billing
 
-### Required merchant resources (Shopify asks)
-- Privacy Policy URL: https://cart-gain.com/privacy
-- Terms of Service URL: https://cart-gain.com/terms
+### Required merchant resources
+- Privacy Policy: https://cart-gain.com/privacy
+- Terms of Service: https://cart-gain.com/terms
 - Data Processing Agreement: https://cart-gain.com/dpa
-- Support URL: https://wa.me/918708718426
-- Documentation URL: (TBD — we'll stand up docs.cart-gain.com in Phase B)
+- Security Policy: https://cart-gain.com/security-policy
+- Support: https://wa.me/918708718426
+- Documentation: (to be published before submission)
 
 ---
 
-## 5. IMAGE ASSETS NEEDED (Yashwant or I can produce)
+## 5. Image assets
 
 | Asset | Specs | Source |
-|------|-------|--------|
-| App icon | 1024×1024 PNG, transparent forbidden | Generate from CartGain logo |
-| 5 screenshots | 1024×768 PNG, dashboard views | AI partner — automate via dev store |
-| App preview video | 30-60s MP4, max 50MB | Record bargain → recovery flow |
-| Hero banner | 2000×700 JPG, no text overlay | Unsplash-style skincare photo |
-| Promo tile | 1240×500 PNG for "Featured" placement | Optional, post-approval |
+|---|---|---|
+| App icon | 1024×1024 PNG | CartGain logo |
+| 5 screenshots | 1024×768 PNG | Dashboard, bargain chat, campaigns, analytics, integrations |
+| App preview video | 30–60s MP4, max 50MB | Bargain → abandoned cart → WhatsApp recovery |
+| Hero banner | 2000×700 JPG | Product/brand photography |
+| Promo tile | 1240×500 PNG | Optional, post-approval |
+
+Capture the product demo from the signed-in dashboard Live Demo or a development store.
+Do not use the public `/demo` URL as an anonymous reviewer link: it redirects to login
+unless a session exists.
 
 ---
 
-## 6. REVIEW PITFALLS WE'LL PRE-EMPT
+## 6. Review pitfalls to pre-empt
 
 | Common rejection reason | Our pre-empt |
-|------|---|
-| Missing GDPR data deletion | Add `customers/redact` + `shop/redact` webhooks (Phase B step 3) |
-| Privacy policy missing data-retention info | Update `/privacy` page with explicit retention periods |
-| Billing not via Shopify | Migrate Razorpay → Shopify Billing (Phase B step 1) |
-| App Bridge embedded in new tab | Already inside iframe; verified via `shopify-embed.ts` |
-| No demo credentials for reviewers | Create `demo+reviewer@cart-gain.com` store with seeded data |
-| Broken links in description | Verify all listing URLs return 200 |
-| Slow app load inside Shopify | Add edge caching, verify cold-start time < 2s |
+|---|---|
+| Billing not via Shopify | Paid plans use Shopify Billing; Razorpay is legacy cancellation only |
+| Missing GDPR deletion | Three compliance webhooks declared in TOML and handled |
+| Privacy policy missing retention details | `/privacy` documents retention and deletion |
+| App Bridge embedded in a new tab | App Bridge CDN + session tokens + iframe CSP verified |
+| No reviewer demo | Provide reviewer credentials and a seeded development store |
+| Broken listing links | Verify every URL returns 200 before submission |
+| Claims not delivered by code | Listing copy matches implemented WhatsApp/email/bargain features; no SMS claim |
 
 ---
 
-## 7. COSTS & TIMELINE
+## 7. Costs and timeline
 
-- **Shopify Partner account**: ₹0 (free to join)
-- **App Store submission**: ₹0 (one-time, no recurring fee)
-- **Shopify Marketplace Fee**: 20% of revenue collected via Shopify Billing for App Store installs (built into Shopify's terms)
-- **Beta testing**: free with up to 5 dev stores before submission
-
-Total cash outlay for App Store launch: **₹0**
+- Shopify Partner account: free.
+- App Store submission: free.
+- Shopify Marketplace Fee: 20% of revenue collected through Shopify Billing on App
+  Store installs.
+- Development stores: free before submission.
 
 Timeline:
-- Week 1: Partner account + listing draft (Yashwant) + Shopify Billing migration (me)
-- Week 2: Screenshots, video, GDPR webhooks, polish
-- Week 3-4: Submit, address reviewer feedback
-- Week 5-6: Approve → public → outreach engine starts sending App Store links
+- Week 1: protected-data request, listing draft, billing verification.
+- Week 2: screenshots, video, compliance webhook evidence.
+- Week 3–4: submit and answer reviewer feedback.
 
 ---
 
-## 8. SUCCESS METRIC
+## 8. Success metric
 
-- 1 approved listing on Shopify App Store
-- 10 installs within 30 days of going public
-- 3 paying customers via Shopify Billing within 60 days
-- App Store rating ≥ 4.5 by day 90
+- One approved App Store listing.
+- Ten installs in the first 30 days.
+- Three paying customers through Shopify Billing within 60 days.
+- App Store rating ≥ 4.5 by day 90.
 
 ---
 
-*Last updated: Aug 4, 2026 by AI partner.*
+*Last updated: Nov 4, 2026.*

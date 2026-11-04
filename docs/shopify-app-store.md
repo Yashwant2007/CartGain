@@ -1,119 +1,138 @@
 # CartGain — Shopify App Store Submission Kit
 
 > Everything needed to get CartGain listed on the Shopify App Store.
-> Infrastructure work (this repo) is DONE: embedded-mode headers, App Bridge session tokens,
-> `shopify.app.toml`, `write_discounts` scope.
+> The app already uses the GraphQL Admin API only, App Bridge session tokens,
+> config-declared webhooks, and Shopify Billing.
 
 ---
 
-## 0. Prerequisites (Yashwant — 1 hour)
+## 0. Prerequisites
 
-- [ ] Shopify Partner account: https://partners.shopify.com (free; **$99 one-time** only if you choose the Partner-only plan — the Starter plan is free and includes App Store listing)
-- [ ] In Partner Dashboard → Apps → Create App → **CartGain**
-  - App URL: `https://cart-gain.com/api/shopify/install`
-  - Redirection URL: `https://cart-gain.com/api/shopify/callback`
-  - Add scopes: `read_checkouts write_checkouts read_orders write_orders read_customers write_customers read_products write_products read_discounts write_discounts read_merchant_managed_fulfillment_orders write_webhooks read_webhooks`
-- [ ] Set `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET` in Vercel to match this app
-- [ ] Add an App Store icon (1024×1024 PNG) and screenshots (see §4)
+- [ ] Shopify Partner/Dev Dashboard account.
+- [ ] App URL `https://cart-gain.com/api/shopify/install`.
+- [ ] Redirect URL `https://cart-gain.com/api/shopify/callback`.
+- [ ] `SHOPIFY_API_KEY` / `SHOPIFY_API_SECRET` set in Vercel and matching the app.
+- [ ] Scopes exactly
+      `read_orders,read_customers,read_products,write_discounts`.
+      Do not add checkout, customer-write, order-write, product-write, or webhook
+      scopes; the app does not use them.
+- [ ] Run `shopify app deploy --allow-updates` so webhooks, scopes, and extensions
+      match the repository.
+- [ ] App icon (1024×1024 PNG) and screenshots (see §4).
 
-## 1. ⚠️ IMPORTANT — scope change for existing stores
+## 1. Scope and API notes
 
-`write_discounts` (needed for AI bargain discount codes) is a NEW scope.
-Stores installed before this change must reconnect once:
+`write_discounts` is required for AI bargain and recovery discount codes. The app reads
+orders/customers/products and writes only discount codes. It does not request
+`read_all_orders`, `read_checkouts`, `write_checkouts`, `read_webhooks`, or
+`write_webhooks`.
 
-1. In CartGain dashboard → Integrations → disconnect the store
-2. Reconnect via Shopify → they'll see the new permission prompt → approve
+The Admin API surface is GraphQL-only (`2026-04`). Abandoned checkouts are read with
+`abandonedCheckouts`, products with `products`, customers with `customers`, discounts
+with `discountCodeBasicCreate`, and billing with `appSubscription*` /
+`appUsageRecordCreate`. The OAuth token exchange endpoint remains
+`/admin/oauth/access_token`.
 
-New installs are unaffected.
+Stores installed with older scope sets should reconnect once so Shopify grants the
+current scope set.
 
-## 2. Listing copy (ready to paste)
+## 2. Listing copy
 
-**App name:** CartGain — WhatsApp Cart Recovery + AI Bargaining
+**App name:** CartGain — Cart Recovery + Bargain
 **Category:** Sales channels → Marketing & Conversion (also select "Email marketing")
-**Tagline (short description):**
-> Recover abandoned carts with WhatsApp, Email & SMS — and let AI negotiate with bargain hunters at checkout.
+**Tagline:**
+> Recover abandoned carts with WhatsApp and email — and let AI negotiate with price-sensitive shoppers at checkout.
 
 **Description:**
 
 > **Recover the carts you're already losing.**
 >
-> On average, 7 in 10 visitors leave without buying. CartGain brings them back with
-> multi-channel WhatsApp + Email + SMS sequences — and then turns your biggest price
-> objections into sales with **AI price negotiation at checkout**.
+> Most visitors leave without buying. CartGain brings them back with WhatsApp and
+> email recovery, then turns price objections into sales with **AI price negotiation
+> at checkout**.
 >
-> **WhatsApp-first recovery (85% open rate vs 20% email)**
-> - Automatic cart-abandonment messages with product images
-> - Industry benchmark: 18–25% recovery vs 3–5% email-only
-> - 3–7 day setup, no code needed
+> **WhatsApp-first recovery**
+> - Automatic cart/checkout abandonment messages with product images
+> - Email fallback with explicit per-channel consent and instant opt-out
+> - Product-aware copy, tracked links, and single-use return offers
+> - Up to five recovery messages per customer (three email, two WhatsApp)
 >
-> **AI Bargain — no other app has this**
-> - Customers negotiate the price of your products with an AI shopkeeper
-> - You control the floor price and margin — the AI never goes below it
-> - Accepted deals auto-generate a Shopify discount code (usage limit 1, 24h)
-> - 3 personalities: Friendly Shopkeeper, Strict Negotiator, Playful Friend
-> - Bulk-order discounts, walkout retention ("wait — let me match that!"), returning-customer memory
-> - Built-in abuse & brand protection: a 6-layer firewall keeps profanity, jailbreaks and
->   prompt-injection from breaking character, and abusive messages don't burn negotiation attempts
+> **AI Bargain — no other app does this**
+> - Customers negotiate with an AI shopkeeper before they leave
+> - You control the hidden floor and margin; the AI never goes below it
+> - Accepted deals create a one-use Shopify discount code automatically
+> - Three personalities, graduated counters, walkout retention, bulk-order logic
+> - A six-layer abuse/profanity/prompt-injection firewall protects the conversation
 >
 > **Your dashboard**
-> - Revenue recovered, win rates, per-product breakdown
-> - Campaign builder with A/B testing and AI-optimized timing
-> - Revenue share pricing — we only earn when you do
+> - Recovered revenue, win rate, channel and per-product breakdowns
+> - Campaign builder with consent-aware recipients and delivery receipts
+> - Refund-adjusted net revenue and storefront funnel analytics
+> - RTO/COD risk scoring for Indian D2C
 >
-> **Privacy & compliance first**
-> - India DPDP Act 2023 aligned, encrypted at rest & in transit
-> - Opt-out honored instantly on every channel
+> **Privacy and compliance**
+> - India DPDP-aligned and GDPR-aware handling
+> - Minimum scopes, encrypted tokens, HMAC-verified webhooks, and retention limits
 >
-> Start free — first 50 recovered carts on us, no credit card.
+> Start free — the first 50 recovered carts are on us.
 
-**Keywords (tags):** cart recovery, abandoned cart, whatsapp marketing, sms marketing, email marketing, cart abandonment, sales recovery, d2c, checkout conversion
+**Keywords:** cart recovery, abandoned cart, whatsapp marketing, email marketing,
+cart abandonment, sales recovery, d2c, checkout conversion, ai bargaining
 
-## 3. Pricing plan setup (Partner Dashboard → Plans)
+Do not claim SMS: the sender implements email and WhatsApp only.
 
-| Plan | Price | App Store billing note |
-|---|---|---|
-| Free Trial | ₹0 / 14 days | Standard 14-day trial for all plans |
-| Starter | ₹999 / month | + 3% revenue share after first 50 recovered carts |
-| Growth | ₹2,999 / month | + 2.5% revenue share (recommended badge) |
-| Pro | ₹8,999 / month | + 2% revenue share |
+## 3. Pricing
 
-Revenue share is billed manually in CartGain (Razorpay invoices) — do NOT wire it into
-Shopify Billing. Use **one-time Shopify Billing** for the subscription amounts only.
+Paid plans must use Shopify Billing. Revenue share is billed as capped usage records;
+it is not invoiced through Razorpay.
 
-## 4. Screenshots & video (make these — 2 hours)
+| Plan | Monthly | Yearly | Included | Revenue share |
+|---|---:|---:|---|---|
+| Free | ₹0 | ₹0 | 50 recovered carts, 30 bargain sessions, 5 deals | — |
+| Growth | ₹1,499 | ₹14,990 | 750 carts, 300 sessions, 30 deals | 3.5%, capped ₹5,000/mo |
+| Pro | ₹3,999 | ₹39,990 | 3,000 carts, 1,500 sessions, 150 deals | 3%, capped ₹10,000/mo |
+| Enterprise | custom | custom | unlimited | contract |
 
-- **Screenshot 1:** WhatsApp recovery message preview (product image + CTA) — shows the core value
-- **Screenshot 2:** Dashboard with "Recovered revenue" chart — proof of results
-- **Screenshot 3:** AI Bargain widget mid-negotiation — THE differentiator, feature this first
-- **Screenshot 4:** Campaign builder — shows WhatsApp/SMS/Email sequence
-- **Screenshot 5:** Analytics — channel breakdown + per-product win rates
-- **Video (30–45s):** 1) cart abandoned → 2) WhatsApp message → 3) customer bargains with AI → 4) deal accepted, discount code applied → 5) order placed. Voiceover: "7 in 10 visitors leave. CartGain brings them back — and closes the deal."
+USD prices (Growth $19/mo, Pro $49/mo) and USD usage caps are placeholders marked
+`[REQUIRES CONFIRMATION]` in `src/lib/shopify-billing/plans.ts`. Confirm them before
+charging international merchants. Unsupported shop currencies make Shopify Billing
+unavailable rather than silently charging an INR amount as USD.
 
-Real store names/data preferred — use a demo store with your own product photos if needed.
+## 4. Screenshots and video
 
-**Fastest path to screenshots/video:** the pixel-perfect, self-contained demo lives at
-`https://cart-gain.com/demo` — a pure client-side AI-bargain widget (Lumina Beauty store,
-₹1,299 serum) with no merchant data or API calls required. It runs instantly in any browser,
-supports all 3 personas, and is ideal for capture #3 (AI Bargain mid-negotiation) and the video.
+- **Screenshot 1:** WhatsApp recovery preview (product image + CTA).
+- **Screenshot 2:** Recovered-revenue dashboard.
+- **Screenshot 3:** AI Bargain mid-negotiation — feature this first.
+- **Screenshot 4:** Campaign builder with email/WhatsApp sequence.
+- **Screenshot 5:** Analytics with channel and product breakdown.
+- **Video (30–45s):** abandoned cart → WhatsApp → AI negotiation → accepted deal with
+  discount code → order placed.
+
+Capture from a signed-in dashboard Live Demo or a development store. The public
+`/demo` route requires a session, so do not use it as an anonymous reviewer link.
 
 ## 5. Submission checklist
 
-- [ ] App icon + screenshots uploaded (§4)
-- [ ] Listing copy pasted (§2)
-- [ ] Pricing plans created (§3)
-- [ ] Privacy policy + terms + DPA URLs live (https://cart-gain.com/privacy, /terms, /dpa) + security policy (https://cart-gain.com/security-policy)
-- [ ] App serves embedded correctly: install from a test store → opens inside admin → connect → dashboard loads
-- [ ] `shopify app deploy` pushed app config (optional — dashboard config is authoritative)
-- [ ] "Uninstall" webhook handling verified (app/uninstalled → store deactivated)
-- [ ] Submit → review takes 1–7 business days → respond to any feedback fast
+- [ ] App icon + screenshots uploaded.
+- [ ] Listing copy pasted.
+- [ ] Shopify Billing plans created and subscription/cancel flow verified.
+- [ ] Protected customer data access requested for name/email/phone.
+- [ ] Privacy, terms, DPA, and security pages live.
+- [ ] `shopify app deploy` pushed the current scopes, webhooks, and extensions.
+- [ ] App installs inside the admin iframe and App Bridge session tokens work.
+- [ ] Compliance webhooks return `200`; invalid HMAC returns `401`.
+- [ ] Uninstall (`app/uninstalled`) deactivates/purges store data.
+- [ ] Submit and respond to reviewer feedback.
 
-## 6. Review-call tips (what Shopify checks)
+## 6. Review-call tips
 
-- App must load **inside** the Shopify admin iframe (embedded) — our CSP now allows this
-- No fake reviews / incentives for reviews
-- Billing must not charge before the trial ends
-- Data handling statement required — our privacy policy covers DPDP + GDPR language
+- App must load **inside** the Shopify admin iframe (embedded).
+- Paid features must use Shopify Billing.
+- No fake reviews or review incentives.
+- The app must not claim features it does not ship (no SMS claim).
+- Data handling statement must match `/privacy`, `/dpa`, and
+  `SHOPIFY_PROTECTED_DATA_READINESS.md`.
 
 ---
 
-*Last updated: 2026-08-02 by AI partner.*
+*Last updated: Nov 4, 2026.*

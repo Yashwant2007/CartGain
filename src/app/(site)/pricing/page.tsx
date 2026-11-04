@@ -141,6 +141,9 @@ export default function PricingPage() {
             <p className="text-xs text-blue-300/40 mt-3">
               Yearly prices shown per month. Growth ₹{displayPrice(PLANS.GROWTH).toLocaleString('en-IN')}/mo · Pro ₹{displayPrice(PLANS.PRO).toLocaleString('en-IN')}/mo
             </p>
+            <p className="text-xs text-blue-300/40 mt-1">
+              Billed through Shopify Billing in your store currency (for example US$19 Growth / US$49 Pro monthly).
+            </p>
           </div>
 
           {/* All plan cards including Free and Enterprise */}

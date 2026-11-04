@@ -26,7 +26,18 @@ function mockProduct(variants: Array<{ id: number; price: string }>) {
   ;(global as any).fetch = jest.fn(async () => ({
     ok: true,
     status: 200,
-    json: async () => ({ product: { variants } }),
+    json: async () => ({
+      data: {
+        product: {
+          variants: {
+            nodes: variants.map((variant) => ({
+              id: `gid://shopify/ProductVariant/${variant.id}`,
+              price: variant.price,
+            })),
+          },
+        },
+      },
+    }),
   }))
 }
 

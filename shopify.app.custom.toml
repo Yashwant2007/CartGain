@@ -28,7 +28,7 @@
 # Dashboard org (224514645). Created via `shopify app init`.
 client_id = "850b64332c8925413d0d6d8d39ede515"
 name = "CartGain Custom"
-description = "Recover abandoned carts with WhatsApp, Email and SMS — plus AI price negotiation at checkout that converts bargain hunters into buyers."
+description = "Recover abandoned carts with WhatsApp and Email — plus AI price negotiation at checkout that converts bargain hunters into buyers."
 # Custom-distribution host. Point this at the custom app's own deployment
 # (recommended: a dedicated subdomain on a second Vercel project). Replace if
 # you choose a different host.
@@ -75,7 +75,7 @@ api_version = "2026-04"
 # Identical to the public app — kept in sync with the runtime OAuth request in
 # src/app/api/shopify/connect/route.ts and src/lib/shopify-oauth.ts.
 # read_webhooks / write_webhooks are omitted (deprecated by Shopify).
-scopes = "read_checkouts,write_checkouts,read_orders,read_all_orders,read_customers,read_products,read_product_listings,read_discounts,write_discounts"
+scopes = "read_orders,read_customers,read_products,write_discounts"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
