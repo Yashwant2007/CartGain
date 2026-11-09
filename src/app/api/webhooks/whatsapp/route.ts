@@ -7,6 +7,7 @@ import { parseWhatsAppEvents, isWhatsAppOptInText, isWhatsAppOptOutText } from '
 import { resolveStoreIdByWhatsAppPhoneNumberId } from '@/lib/whatsapp/store-registry'
 import { recordOptOut } from '@/lib/opt-out'
 import { recordWhatsAppConsent } from '@/lib/recovery/recipients'
+import { classifyRecoverySentiment } from '@/lib/recovery/sentiment'
 import { resolveWhatsAppAppSecret, resolveWhatsAppPhoneNumberId, resolveWhatsAppVerifyToken } from '@/lib/whatsapp/config'
 
 export const dynamic = 'force-dynamic'
@@ -318,10 +319,41 @@ export async function POST(request: NextRequest) {
             })
           }
         } else {
-          logInfo('whatsapp', 'inbound_message', 'Inbound WhatsApp message received', {
-            from: event.from,
-            phoneNumberId: event.phoneNumberId,
-          })
+          // Any genuine reply (not START/STOP) is engagement: the sweep sees the
+          // newer lastInboundAt and stops the automated sequence. A negative
+          // reply is stronger — treat it as an unsubscribe on every resolved
+          // store so no further channel contacts the customer.
+          const sentiment = classifyRecoverySentiment(event.text)
+          if (sentiment === 'negative' && storeIds.length > 0 && event.from) {
+            let suppressed = 0
+            for (const storeId of storeIds) {
+              const ok = await recordOptOut(storeId, { phone: event.from }, 'negative_reply')
+                .then(() => true)
+                .catch((error) => {
+                  logWarn('whatsapp', 'inbound_negative', 'Failed to suppress negative WhatsApp reply', {
+                    from: event.from,
+                    phoneNumberId: event.phoneNumberId,
+                    storeId,
+                    error: error instanceof Error ? error.message : String(error),
+                  })
+                  return false
+                })
+              if (ok) suppressed++
+            }
+            if (suppressed > 0) {
+              logInfo('whatsapp', 'inbound_negative', 'Negative WhatsApp reply suppressed', {
+                from: event.from,
+                phoneNumberId: event.phoneNumberId,
+                stores: suppressed,
+              })
+            }
+          } else {
+            logInfo('whatsapp', 'inbound_message', 'Inbound WhatsApp message received', {
+              from: event.from,
+              phoneNumberId: event.phoneNumberId,
+              sentiment,
+            })
+          }
         }
       }
     }

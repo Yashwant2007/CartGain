@@ -276,4 +276,62 @@ describe('recovery sequence — one channel per sweep', () => {
     const result = await processAbandonedCarts(25)
     expect(result.messagesSent).toBe(0)
   })
+
+  it('stops the sequence once the customer replies', async () => {
+    prismaMock.campaign.findMany.mockResolvedValue([campaign()])
+    prismaMock.cart.findMany.mockResolvedValueOnce([cart()]).mockResolvedValue([])
+    prismaMock.customerIdentity.findMany.mockResolvedValueOnce([
+      {
+        id: 'recipient-replied',
+        phone: '+919999999999',
+        email: 'buyer@example.com',
+        shopifyCustomerId: null,
+        name: 'Buyer',
+        consentWhatsApp: true,
+        consentEmail: true,
+        consentSms: false,
+        suppressed: false,
+        optedOutAt: null,
+        lastSeenAt: new Date(),
+        createdAt: new Date(),
+        whatsappConsentAt: new Date(Date.now() - 2 * HOUR),
+        lastInboundAt: new Date(Date.now() - HOUR),
+      },
+    ])
+
+    const result = await processAbandonedCarts(25)
+
+    expect(result.messagesSent).toBe(0)
+    expect(whatsappMock).not.toHaveBeenCalled()
+    expect(emailMock).not.toHaveBeenCalled()
+  })
+
+  it('does not treat an inbound START as a reply and still sends', async () => {
+    prismaMock.campaign.findMany.mockResolvedValue([campaign()])
+    prismaMock.cart.findMany.mockResolvedValueOnce([cart()]).mockResolvedValue([])
+    const consentAt = new Date(Date.now() - HOUR)
+    prismaMock.customerIdentity.findMany.mockResolvedValueOnce([
+      {
+        id: 'recipient-started',
+        phone: '+919999999999',
+        email: 'buyer@example.com',
+        shopifyCustomerId: null,
+        name: 'Buyer',
+        consentWhatsApp: true,
+        consentEmail: true,
+        consentSms: false,
+        suppressed: false,
+        optedOutAt: null,
+        lastSeenAt: consentAt,
+        createdAt: consentAt,
+        whatsappConsentAt: consentAt,
+        lastInboundAt: consentAt,
+      },
+    ])
+
+    const result = await processAbandonedCarts(25)
+
+    expect(result.messagesSent).toBe(1)
+    expect(whatsappMock).toHaveBeenCalledTimes(1)
+  })
 })

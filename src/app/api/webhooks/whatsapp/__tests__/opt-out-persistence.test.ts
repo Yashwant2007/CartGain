@@ -166,6 +166,20 @@ describe('POST /api/webhooks/whatsapp — opt-out persistence', () => {
     expect(prismaMock.optOut.create).not.toHaveBeenCalled()
   })
 
+  it('suppresses the store on a negative reply that is not a STOP keyword', async () => {
+    const res = await POST(signedRequest(bodyWithText('not interested, leave me alone')))
+    expect(res.status).toBe(200)
+    expect(prismaMock.optOut.create).toHaveBeenCalledWith({
+      data: { storeId: 'only-store', reason: 'negative_reply', phone: '919876543210' },
+    })
+  })
+
+  it('does not suppress the store on a positive reply', async () => {
+    const res = await POST(signedRequest(bodyWithText('yes please send it')))
+    expect(res.status).toBe(200)
+    expect(prismaMock.optOut.create).not.toHaveBeenCalled()
+  })
+
   it('does not create a duplicate when the opt-out already exists', async () => {
     prismaMock.optOut.findUnique.mockResolvedValue({ id: 'existing' })
     const res = await POST(signedRequest(bodyWithText('STOP')))

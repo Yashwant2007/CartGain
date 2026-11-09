@@ -21,6 +21,62 @@ type CartItem = {
   createdAt: string
 }
 
+type TimelineStep = {
+  index: number
+  round: number
+  channel: string
+  scheduledAt: string
+  status: 'scheduled' | 'pending' | 'sent' | 'delivered' | 'skipped' | 'failed'
+  reasonCode: string | null
+  sentAt: string | null
+  deliveredAt: string | null
+  clickedAt: string | null
+  attempts: number
+}
+
+type CartTimeline = {
+  nextStepIndex: number | null
+  stopReason: string | null
+  steps: TimelineStep[]
+  campaign: {
+    id: string
+    name: string
+    channels: string[]
+    sendDelay: number
+    followUpDelay: number
+    maxFollowUps: number
+  } | null
+}
+
+const STOP_LABELS: Record<string, string> = {
+  converted: 'Stopped: the cart was purchased',
+  suppressed: 'Stopped: the customer opted out',
+  customer_replied: 'Stopped: the customer replied',
+  expired: 'Stopped: the campaign expired',
+  sequence_exhausted: 'Finished: every step was sent',
+}
+
+const STATUS_STYLES: Record<string, string> = {
+  scheduled: 'bg-slate-700/40 text-blue-300/70 border-slate-600',
+  pending: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
+  sent: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+  delivered: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+  skipped: 'bg-orange-500/10 text-orange-300 border-orange-500/30',
+  failed: 'bg-red-500/15 text-red-300 border-red-500/40',
+}
+
+function formatWhen(value: string | null): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return '—'
+  return date.toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
 export default function CartsPage() {
   const { storeId, loading: resolving, error: storeError } = useResolvedStoreId()
   const [carts, setCarts] = useState<CartItem[]>([])
@@ -30,6 +86,10 @@ export default function CartsPage() {
   const [sortField, setSortField] = useState<'abandonedAt' | 'totalValue'>('abandonedAt')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page, setPage] = useState(0)
+  const [timelineCart, setTimelineCart] = useState<CartItem | null>(null)
+  const [timeline, setTimeline] = useState<CartTimeline | null>(null)
+  const [timelineLoading, setTimelineLoading] = useState(false)
+  const [timelineError, setTimelineError] = useState<string | null>(null)
   const perPage = 20
 
   useEffect(() => {
@@ -54,6 +114,36 @@ export default function CartsPage() {
   const toggleSort = (field: typeof sortField) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortField(field); setSortDir('desc') }
+  }
+
+  const openTimeline = async (cart: CartItem) => {
+    if (!storeId) return
+    setTimelineCart(cart)
+    setTimeline(null)
+    setTimelineError(null)
+    setTimelineLoading(true)
+    try {
+      const res = await shopifySessionFetch(`/api/carts/${cart.id}/timeline?storeId=${storeId}`)
+      if (!res.ok) throw new Error('Failed to load timeline')
+      const data = await res.json()
+      setTimeline({
+        nextStepIndex: data.nextStepIndex ?? null,
+        stopReason: data.stopReason ?? null,
+        steps: Array.isArray(data.steps) ? data.steps : [],
+        campaign: data.campaign ?? null,
+      })
+    } catch {
+      setTimelineError('Could not load this cart’s recovery timeline.')
+    } finally {
+      setTimelineLoading(false)
+    }
+  }
+
+  const closeTimeline = () => {
+    setTimelineCart(null)
+    setTimeline(null)
+    setTimelineError(null)
+    setTimelineLoading(false)
   }
 
   const filtered = carts
@@ -136,6 +226,7 @@ export default function CartsPage() {
                     <th className="p-4 font-medium">Items</th>
                     <th className="p-4 font-medium">Status</th>
                     <th className="p-4 font-medium">Channel</th>
+                    <th className="p-4 font-medium">Sequence</th>
                     <th className="p-4 font-medium cursor-pointer select-none" onClick={() => toggleSort('abandonedAt')}>
                       <span className="inline-flex items-center gap-1">Date <ArrowUpDown className="w-3 h-3" /></span>
                     </th>
@@ -170,6 +261,15 @@ export default function CartsPage() {
                           </span>
                         ) : <span className="text-blue-300/40">—</span>}
                       </td>
+                      <td className="p-4">
+                        <button
+                          type="button"
+                          onClick={() => openTimeline(c)}
+                          className="px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-600/20 text-blue-300 border border-blue-500/30 hover:bg-blue-600/30 transition-colors"
+                        >
+                          View timeline
+                        </button>
+                      </td>
                       <td className="p-4 text-blue-300/60 whitespace-nowrap">{new Date(c.abandonedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                     </tr>
                   ))}
@@ -186,6 +286,108 @@ export default function CartsPage() {
             </div>
           )}
         </>
+      )}
+
+      {timelineCart && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={closeTimeline}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Recovery timeline"
+        >
+          <div
+            className="w-full max-w-lg max-h-[85vh] overflow-y-auto bg-slate-900 border border-blue-700/30 rounded-xl p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Recovery timeline</h2>
+                <p className="text-sm text-blue-300/60">
+                  {timelineCart.customerName || 'Guest'}
+                  {timelineCart.customerEmail ? ` · ${timelineCart.customerEmail}` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeTimeline}
+                aria-label="Close timeline"
+                className="p-1.5 rounded-lg text-blue-300/70 hover:bg-slate-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            {timeline?.campaign && (
+              <div className="text-xs text-blue-300/60">
+                {timeline.campaign.name} · {timeline.campaign.channels.join(' → ')} ·{' '}
+                {timeline.campaign.maxFollowUps} round{timeline.campaign.maxFollowUps === 1 ? '' : 's'} ·{' '}
+                {timeline.campaign.sendDelay}m delay / {timeline.campaign.followUpDelay}m between steps
+              </div>
+            )}
+
+            {timeline?.stopReason && (
+              <div className="rounded-lg border border-slate-600 bg-slate-800/60 px-3 py-2 text-sm text-blue-200">
+                {STOP_LABELS[timeline.stopReason] || timeline.stopReason}
+              </div>
+            )}
+
+            {timelineLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-12 rounded-lg bg-slate-800/40 animate-pulse" />
+                ))}
+              </div>
+            ) : timelineError ? (
+              <p className="text-sm text-red-300">{timelineError}</p>
+            ) : !timeline || timeline.steps.length === 0 ? (
+              <p className="text-sm text-blue-300/60">No recovery steps planned yet.</p>
+            ) : (
+              <ol className="space-y-2">
+                {timeline.steps.map((step) => {
+                  const isNext = timeline.nextStepIndex === step.index
+                  return (
+                    <li
+                      key={`${step.channel}-${step.index}`}
+                      className={`rounded-lg border p-3 ${
+                        isNext ? 'border-blue-500/60 bg-blue-600/10' : 'border-blue-700/20 bg-slate-800/30'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-2 text-sm font-medium text-white">
+                          {channelIcon(step.channel)}
+                          {step.channel.toUpperCase()}
+                          <span className="text-xs font-normal text-blue-300/50">
+                            round {step.round + 1} · step {step.index + 1}
+                          </span>
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
+                            STATUS_STYLES[step.status] || STATUS_STYLES.pending
+                          }`}
+                        >
+                          {isNext ? 'next' : step.status}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-blue-300/60 space-y-0.5">
+                        <div>Scheduled {formatWhen(step.scheduledAt)}</div>
+                        {step.sentAt && <div>Sent {formatWhen(step.sentAt)}</div>}
+                        {step.deliveredAt && <div>Delivered {formatWhen(step.deliveredAt)}</div>}
+                        {step.clickedAt && <div>Clicked {formatWhen(step.clickedAt)}</div>}
+                        {step.reasonCode && (
+                          <div className="text-orange-300/80">Reason: {step.reasonCode}</div>
+                        )}
+                        {step.status === 'failed' && (
+                          <div className="text-red-300/80">{step.attempts} attempt(s)</div>
+                        )}
+                      </div>
+                    </li>
+                  )
+                })}
+              </ol>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )

@@ -33,11 +33,18 @@ type PeriodData = {
     delivered: number
     clicked: number
     converted: number
+    skipped?: number
+    recoveredCarts?: number
     revenue: number
     deliveryRate: number
     clickRate: number
     conversionRate: number
   }>
+  recoveryAttribution?: {
+    byChannel: Array<{ channel: string; recoveredCarts: number; revenue: number; skipped: number }>
+    skipReasons: Array<{ reasonCode: string; count: number }>
+    totalSkipped: number
+  }
   insights?: {
     bestChannel: { channel: string; revenue: number; conversionRate: number } | null
     avgConversionTime: number | null
@@ -449,6 +456,27 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {current?.recoveryAttribution && current.recoveryAttribution.totalSkipped > 0 && (
+        <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
+          <h3 className="text-lg font-semibold text-cyan-300 mb-1">Why some reminders were skipped</h3>
+          <p className="text-xs text-blue-300/50 mb-4">
+            {current.recoveryAttribution.totalSkipped.toLocaleString('en-IN')} step(s) could not be
+            delivered. Each cart is attributed to exactly one channel.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {current.recoveryAttribution.skipReasons.map((row) => (
+              <div
+                key={row.reasonCode}
+                className="flex items-center justify-between gap-3 rounded-lg border border-blue-700/20 bg-slate-700/40 px-3 py-2"
+              >
+                <span className="text-sm text-blue-200">{skipReasonLabel(row.reasonCode)}</span>
+                <span className="text-sm font-medium text-cyan-300">{row.count.toLocaleString('en-IN')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {current?.insights && current.insights.tips.length > 0 && (
         <div className="bg-slate-800/50 border border-blue-700/30 rounded-xl p-6 backdrop-blur-sm">
           <h3 className="text-lg font-semibold text-cyan-300 mb-4">💡 Insights & Recommendations</h3>
@@ -482,6 +510,27 @@ export default function AnalyticsPage() {
       )}
     </div>
   )
+}
+
+const SKIP_REASON_LABELS: Record<string, string> = {
+  missing_phone: 'No WhatsApp number',
+  no_email_basis: 'No email consent basis',
+  no_recipient_record: 'No contact record',
+  email_suppressed: 'Email unsubscribed',
+  whatsapp_not_configured: 'WhatsApp not configured',
+  whatsapp_no_consent: 'No WhatsApp opt-in',
+  whatsapp_opted_out: 'WhatsApp opt-out',
+  customer_limit_reached: 'Plan per-customer cap',
+  whatsapp_engagement_limited: 'WhatsApp engagement limit',
+  retry_exhausted: 'Retries exhausted',
+  purchased: 'Cart purchased',
+  opted_out: 'Customer opted out',
+  suppressed: 'Customer suppressed',
+  merchant_disabled: 'Merchant disabled',
+}
+
+function skipReasonLabel(reasonCode: string): string {
+  return SKIP_REASON_LABELS[reasonCode] || reasonCode.replace(/_/g, ' ')
 }
 
 function ChannelBadge({ channel }: { channel: string }) {

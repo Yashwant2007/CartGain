@@ -43,7 +43,21 @@ export async function GET(
     const totalMessagesSent = messages.filter((m) => m.status === 'sent' || m.status === 'delivered').length
     const totalMessagesDelivered = messages.filter((m) => m.status === 'delivered').length
     const totalMessagesClicked = messages.filter((m) => m.clickedAt).length
-    const totalMessagesConverted = messages.filter((m) => m.convertedAt).length
+    // A converted cart can have several messages with `convertedAt` set. Count
+    // distinct carts so a two-step recovery is not counted twice.
+    const totalMessagesConverted = new Set(
+      messages.filter((m) => m.convertedAt).map((m) => m.cartId),
+    ).size
+
+    const skippedMessages = messages.filter((m) => m.status === 'skipped')
+    const skipReasonCounts = new Map<string, number>()
+    for (const message of skippedMessages) {
+      const reason = message.reasonCode || 'unknown'
+      skipReasonCounts.set(reason, (skipReasonCounts.get(reason) || 0) + 1)
+    }
+    const skipReasons = Array.from(skipReasonCounts.entries())
+      .map(([reasonCode, count]) => ({ reasonCode, count }))
+      .sort((a, b) => b.count - a.count)
 
     const deliveryRate = totalMessagesSent > 0 ? (totalMessagesDelivered / totalMessagesSent) * 100 : 0
     const clickRate = totalMessagesSent > 0 ? (totalMessagesClicked / totalMessagesSent) * 100 : 0
@@ -81,6 +95,20 @@ export async function GET(
     const totalRevenue = recoveredCartDetails.reduce((sum, rc) => sum + rc.netRevenue, 0)
     const revenuePerCart = recoveredCarts > 0 ? totalRevenue / recoveredCarts : 0
 
+    // Deduped per-cart channel attribution. RecoveredCart is one row per cart,
+    // so this cannot double-count a cart that received both channels.
+    const channelAttribution = new Map<string, { recoveredCarts: number; revenue: number }>()
+    for (const rc of recoveredCartDetails) {
+      const channel = rc.channel || 'unknown'
+      const entry = channelAttribution.get(channel) || { recoveredCarts: 0, revenue: 0 }
+      entry.recoveredCarts += 1
+      entry.revenue += rc.netRevenue
+      channelAttribution.set(channel, entry)
+    }
+    const recoveredCartsByChannel = Array.from(channelAttribution.entries()).map(
+      ([channel, value]) => ({ channel, ...value }),
+    )
+
     const analytics = {
       id: campaign.id,
       name: campaign.name,
@@ -97,6 +125,10 @@ export async function GET(
       recoveryRate,
       totalRevenue,
       revenuePerCart,
+      skippedMessages: skippedMessages.length,
+      skipReasons,
+      attributedRecoveredCarts: recoveredCartDetails.length,
+      recoveredCartsByChannel,
       createdAt: campaign.createdAt,
     }
 

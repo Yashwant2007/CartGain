@@ -60,4 +60,32 @@ describe('GET /api/campaigns/[id]/analytics — delivery truthfulness', () => {
     expect(body.analytics.totalMessagesDelivered).toBe(0)
     expect(body.analytics.deliveryRate).toBe(0)
   })
+
+  it('dedupes conversions by cart and surfaces skip reasons', async () => {
+    prismaMock.message.findMany.mockResolvedValue([
+      { cartId: 'cart_1', status: 'delivered', clickedAt: null, convertedAt: new Date() },
+      { cartId: 'cart_1', status: 'delivered', clickedAt: null, convertedAt: new Date() },
+      { cartId: 'cart_2', status: 'skipped', clickedAt: null, convertedAt: null, reasonCode: 'missing_phone' },
+      { cartId: 'cart_3', status: 'skipped', clickedAt: null, convertedAt: null, reasonCode: 'missing_phone' },
+      { cartId: 'cart_4', status: 'skipped', clickedAt: null, convertedAt: null, reasonCode: 'customer_replied' },
+    ])
+    prismaMock.recoveredCart.findMany.mockResolvedValue([
+      { cartId: 'cart_1', channel: 'email', netRevenue: 100 },
+      { cartId: 'cart_2', channel: 'whatsapp', netRevenue: 50 },
+    ])
+
+    const res = await GET(request(), { params: { id: 'camp_1' } })
+    const body = await res.json()
+
+    expect(body.analytics.totalMessagesConverted).toBe(1)
+    expect(body.analytics.skippedMessages).toBe(3)
+    expect(body.analytics.skipReasons[0]).toEqual({ reasonCode: 'missing_phone', count: 2 })
+    expect(body.analytics.attributedRecoveredCarts).toBe(2)
+    expect(body.analytics.recoveredCartsByChannel).toEqual(
+      expect.arrayContaining([
+        { channel: 'email', recoveredCarts: 1, revenue: 100 },
+        { channel: 'whatsapp', recoveredCarts: 1, revenue: 50 },
+      ]),
+    )
+  })
 })

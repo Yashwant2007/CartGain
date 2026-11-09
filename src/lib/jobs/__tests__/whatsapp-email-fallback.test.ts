@@ -362,7 +362,10 @@ describe('WhatsApp failures — sequential handoff to email', () => {
         suppressed: false,
         optedOutAt: null,
         lastSeenAt: new Date(),
+        // The 24h window was opened by the inbound START opt-in itself, not a
+        // later reply, so the automated sequence may still send.
         lastInboundAt: new Date(Date.now() - HOUR),
+        whatsappConsentAt: new Date(Date.now() - HOUR),
         createdAt: new Date(),
       },
     ])

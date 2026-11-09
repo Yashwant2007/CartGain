@@ -3,6 +3,7 @@ import {
   resolveNextStep,
   isStepDue,
   evaluateCampaignStop,
+  customerRepliedSinceConsent,
   isCampaignExpired,
   sanitizeChannels,
   clampRounds,
@@ -277,5 +278,77 @@ describe('evaluateCampaignStop — stopping conditions', () => {
         expiryDays: 7,
       }),
     ).toBe('expired')
+  })
+
+  it('stops automated recovery once the customer replies', () => {
+    expect(
+      evaluateCampaignStop({
+        cart: {},
+        identity: {
+          whatsappConsentAt: new Date(abandoned.getTime() - HOUR),
+          lastInboundAt: new Date(abandoned.getTime() + 5 * MIN),
+        },
+        next: resolveNextStep(sequence, []),
+        abandonedAt: abandoned,
+        now,
+      }),
+    ).toBe('customer_replied')
+  })
+
+  it('does not treat an inbound START opt-in as a reply', () => {
+    const consent = new Date(abandoned.getTime() + 5 * MIN)
+    expect(
+      evaluateCampaignStop({
+        cart: {},
+        identity: { whatsappConsentAt: consent, lastInboundAt: consent },
+        next: resolveNextStep(sequence, []),
+        abandonedAt: abandoned,
+        now,
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('customerRepliedSinceConsent', () => {
+  const abandoned = new Date('2026-01-01T10:00:00.000Z')
+
+  it('is false without an inbound message', () => {
+    expect(customerRepliedSinceConsent(null)).toBe(false)
+    expect(customerRepliedSinceConsent({})).toBe(false)
+  })
+
+  it('is true for a reply after consent', () => {
+    expect(
+      customerRepliedSinceConsent({
+        whatsappConsentAt: new Date(abandoned.getTime() - HOUR),
+        lastInboundAt: new Date(abandoned.getTime() + HOUR),
+      }),
+    ).toBe(true)
+  })
+
+  it('ignores replies that predate the cart abandonment', () => {
+    expect(
+      customerRepliedSinceConsent(
+        {
+          whatsappConsentAt: new Date(abandoned.getTime() - 5 * HOUR),
+          lastInboundAt: new Date(abandoned.getTime() - HOUR),
+        },
+        abandoned,
+      ),
+    ).toBe(false)
+  })
+
+  it('treats a first reply without recorded consent as engagement', () => {
+    expect(
+      customerRepliedSinceConsent({ lastInboundAt: new Date(abandoned.getTime() + HOUR) }, abandoned),
+    ).toBe(true)
+  })
+
+  it('excludes START even when it arrives just after a prior consent', () => {
+    const consent = new Date(abandoned.getTime() + 5 * MIN)
+    const start = new Date(consent.getTime() + 20 * 1000)
+    expect(
+      customerRepliedSinceConsent({ whatsappConsentAt: consent, lastInboundAt: start }, abandoned),
+    ).toBe(false)
   })
 })

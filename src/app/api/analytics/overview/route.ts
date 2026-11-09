@@ -83,13 +83,18 @@ async function computeChannelStats(storeId: string, startDate: Date, endDate: Da
     delivered: bigint
     clicked: bigint
     converted: bigint
+    skipped: bigint
   }>>(
     `SELECT
       channel,
       COUNT(*) as sent,
       COUNT(*) FILTER (WHERE status = 'delivered') as delivered,
       COUNT(*) FILTER (WHERE "clickedAt" IS NOT NULL) as clicked,
-      COUNT(*) FILTER (WHERE "convertedAt" IS NOT NULL) as converted
+      -- A cart can produce several messages on the same channel. Count each
+      -- converted cart ONCE (the old SUM over message rows double-counted a
+      -- customer who received a reminder and a follow-up).
+      COUNT(DISTINCT "cartId") FILTER (WHERE "convertedAt" IS NOT NULL) as converted,
+      COUNT(*) FILTER (WHERE status = 'skipped') as skipped
     FROM "Message"
     WHERE "campaignId" IN (SELECT id FROM "Campaign" WHERE "storeId" = $1)
       AND "createdAt" >= $2
@@ -104,10 +109,12 @@ async function computeChannelStats(storeId: string, startDate: Date, endDate: Da
   const channelRevenue = await prisma.$queryRawUnsafe<Array<{
     channel: string
     revenue: number
+    recoveredCarts: bigint
   }>>(
     `SELECT
       rc.channel,
-      COALESCE(SUM(rc."netRevenue"), 0) as revenue
+      COALESCE(SUM(rc."netRevenue"), 0) as revenue,
+      COUNT(*) as "recoveredCarts"
     FROM "RecoveredCart" rc
     WHERE rc."storeId" = $1
       AND rc."recoveredAt" >= $2
@@ -119,25 +126,34 @@ async function computeChannelStats(storeId: string, startDate: Date, endDate: Da
     endDate
   )
 
-  const revMap = new Map<string, number>()
+  const revMap = new Map<string, { revenue: number; recoveredCarts: number }>()
   for (const r of channelRevenue) {
-    revMap.set(r.channel.toLowerCase(), Number(r.revenue))
+    revMap.set(r.channel.toLowerCase(), {
+      revenue: Number(r.revenue),
+      recoveredCarts: Number(r.recoveredCarts),
+    })
   }
 
   return ['whatsapp', 'email'].map(channel => {
     const sentRow = channelSent.find((r: any) => r.channel === channel)
+    const sentiment = revMap.get(channel)
     const sent = Number(sentRow?.sent || 0)
     const delivered = Number(sentRow?.delivered || 0)
     const clicked = Number(sentRow?.clicked || 0)
     const converted = Number(sentRow?.converted || 0)
-    const revenue = revMap.get(channel) || 0
+    const skipped = Number(sentRow?.skipped || 0)
+    const revenue = sentiment?.revenue || 0
     return {
       channel: channel.charAt(0).toUpperCase() + channel.slice(1),
       sent,
       delivered,
       clicked,
       converted,
+      skipped,
       revenue,
+      // Attribution is deduped: one recovered cart counts once for the channel
+      // recorded on RecoveredCart, never once per message row.
+      recoveredCarts: sentiment?.recoveredCarts || 0,
       deliveryRate: sent > 0 ? Number(((delivered / sent) * 100).toFixed(1)) : 0,
       clickRate: sent > 0 ? Number(((clicked / sent) * 100).toFixed(1)) : 0,
       conversionRate: sent > 0 ? Number(((converted / sent) * 100).toFixed(1)) : 0,
@@ -145,8 +161,28 @@ async function computeChannelStats(storeId: string, startDate: Date, endDate: Da
   })
 }
 
+async function computeSkipReasons(storeId: string, startDate: Date, endDate: Date) {
+  const rows = await prisma.$queryRawUnsafe<Array<{ reasonCode: string | null; count: bigint }>>(
+    `SELECT "reasonCode", COUNT(*) as count
+    FROM "Message"
+    WHERE "campaignId" IN (SELECT id FROM "Campaign" WHERE "storeId" = $1)
+      AND "createdAt" >= $2
+      AND "createdAt" < $3
+      AND status = 'skipped'
+    GROUP BY "reasonCode"
+    ORDER BY count DESC`,
+    storeId,
+    startDate,
+    endDate
+  )
+  return rows.map((row) => ({
+    reasonCode: row.reasonCode || 'unknown',
+    count: Number(row.count),
+  }))
+}
+
 async function computePeriodData(storeId: string, userId: string, startDate: Date, endDate: Date) {
-  const [cartCounts, revenue, messagesSent, messageTotals, chartData, channelBreakdown] = await Promise.all([
+  const [cartCounts, revenue, messagesSent, messageTotals, chartData, channelBreakdown, skipReasons] = await Promise.all([
     prisma.$transaction([
       prisma.cart.count({
         where: { storeId, abandonedAt: { gte: startDate, lt: endDate } },
@@ -182,6 +218,7 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
     ),
     computeChartData(storeId, startDate, endDate),
     computeChannelStats(storeId, startDate, endDate),
+    computeSkipReasons(storeId, startDate, endDate),
   ])
 
   const [cartsAbandoned, cartsRecovered] = cartCounts
@@ -266,6 +303,19 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
     },
     chartData,
     channelStats: channelBreakdown,
+    // Attribution is per recovered cart, not per message. Kept separate from
+    // `channelStats.converted` (message rows) so the dashboard can show an
+    // honest channel contribution without double-counting multi-step carts.
+    recoveryAttribution: {
+      byChannel: channelBreakdown.map((c: any) => ({
+        channel: c.channel,
+        recoveredCarts: c.recoveredCarts,
+        revenue: c.revenue,
+        skipped: c.skipped,
+      })),
+      skipReasons,
+      totalSkipped: channelBreakdown.reduce((sum: number, c: any) => sum + (c.skipped || 0), 0),
+    },
     insights: {
       bestChannel: bestChannel ? {
         channel: bestChannel.channel,

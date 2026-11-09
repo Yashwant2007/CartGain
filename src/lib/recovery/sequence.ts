@@ -168,23 +168,57 @@ export function isCampaignExpired(
 export type CampaignStopReason =
   | 'converted'
   | 'suppressed'
+  | 'customer_replied'
   | 'expired'
   | 'sequence_exhausted'
 
+export type RecoveryIdentityLike = {
+  suppressed?: boolean | null
+  optedOutAt?: Date | string | null
+  /** Last inbound WhatsApp message from this contact. */
+  lastInboundAt?: Date | string | null
+  /** When explicit WhatsApp consent was last recorded (e.g. inbound START). */
+  whatsappConsentAt?: Date | string | null
+}
+
+/** Tolerance so a START/opt-in message does not count as a "reply": START sets
+ *  lastInboundAt and whatsappConsentAt at the same moment. */
+const REPLY_CONSENT_TOLERANCE_MS = 60 * 1000
+
+/** True when the contact wrote back after opting in (and, when provided, after
+ *  the cart was abandoned). Any such reply means a human conversation may be in
+ *  progress, so automated recovery must stop. Opt-ins (START) are excluded. */
+export function customerRepliedSinceConsent(
+  identity: RecoveryIdentityLike | null | undefined,
+  abandonedAt?: Date | string | null,
+): boolean {
+  if (!identity?.lastInboundAt) return false
+  const inbound = toTime(identity.lastInboundAt)
+  if (inbound === null) return false
+  if (abandonedAt !== undefined && abandonedAt !== null) {
+    const abandoned = toTime(abandonedAt)
+    if (abandoned !== null && inbound < abandoned) return false
+  }
+  const consent = identity.whatsappConsentAt ? toTime(identity.whatsappConsentAt) : null
+  if (consent === null) return true
+  return inbound > consent + REPLY_CONSENT_TOLERANCE_MS
+}
+
 export type CampaignStopInput = {
   cart: { convertedAt?: Date | string | null; isRecovered?: boolean | null }
-  identity?: { suppressed?: boolean | null; optedOutAt?: Date | string | null } | null
+  identity?: RecoveryIdentityLike | null
   next: NextStepResult
   abandonedAt: Date
   now: Date
   expiryDays?: number
 }
 
-/** Central "should this cart still be worked?" gate. Purchase, suppression and
- *  campaign expiry all stop the sequence immediately. */
+/** Central "should this cart still be worked?" gate. Purchase, suppression,
+ *  an engaged customer and campaign expiry all stop the sequence immediately. */
 export function evaluateCampaignStop(input: CampaignStopInput): CampaignStopReason | null {
   if (input.cart.convertedAt || input.cart.isRecovered) return 'converted'
   if (input.identity?.suppressed || input.identity?.optedOutAt) return 'suppressed'
+  if (customerRepliedSinceConsent(input.identity, input.abandonedAt)) return 'customer_replied'
   if (
     input.expiryDays !== undefined &&
     isCampaignExpired(input.abandonedAt, input.now, input.expiryDays)
@@ -193,6 +227,11 @@ export function evaluateCampaignStop(input: CampaignStopInput): CampaignStopReas
   }
   if (input.next.done) return 'sequence_exhausted'
   return null
+}
+
+function toTime(value: Date | string): number | null {
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime()
+  return Number.isFinite(time) ? time : null
 }
 
 function finiteMinutesToMs(minutes: number): number {

@@ -45,6 +45,7 @@ import {
   evaluateCampaignStop,
   MAX_ROUNDS,
 } from '@/lib/recovery/sequence'
+import { claimRecoveryStep } from '@/lib/recovery/claim'
 import { findShopifyCustomerContact } from '@/lib/shopify'
 import { cleanCustomerName } from '@/lib/names'
 
@@ -1037,28 +1038,18 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         lastAttemptAt: new Date(),
         reasonCode: null,
       }
-      try {
-        if (existingMessage) {
-          // Condition the claim on the status we just read so two overlapping
-          // sweeps cannot both retry the same failed row. The loser re-reads
-          // on its next pass instead of double-sending.
-          const claimed = await prisma.message.updateMany({
-            where: { id: existingMessage.id, status: existingMessage.status },
-            data: { ...claim, createdAt: new Date() },
-          })
-          if (claimed.count === 0) return { sent: 0, failed: 0 }
-          messageId = existingMessage.id
-        } else {
-          const created = await prisma.message.create({ data: claim })
-          messageId = created.id
-        }
-      } catch (claimErr: any) {
-        if (claimErr?.code === 'P2002') {
-          // Another worker claimed this cart/channel/step first.
-          return { sent: 0, failed: 0 }
-        }
-        throw claimErr
-      }
+      // Condition the claim on the status we just read so two overlapping
+      // sweeps cannot both retry the same failed row. The loser re-reads on its
+      // next pass instead of double-sending. A brand-new step is protected by
+      // the unique (cartId, channel, step) index (P2002).
+      const claimResult = await claimRecoveryStep(prisma, {
+        existing: existingMessage
+          ? { id: existingMessage.id, status: existingMessage.status }
+          : null,
+        claim: { ...claim, ...(existingMessage ? { createdAt: new Date() } : {}) },
+      })
+      if (!claimResult.claimed) return { sent: 0, failed: 0 }
+      messageId = claimResult.messageId ?? existingMessage?.id ?? ''
 
       if (composed.source === 'fallback' && composed.issues.some((i) => i.severity === 'block')) {
         console.warn(
