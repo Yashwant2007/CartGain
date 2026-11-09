@@ -522,6 +522,8 @@ export async function getWhatsAppAccountInfo(opts?: {
 export type WhatsAppTemplateContext = {
   /** Dynamic suffix for a url button configured as `<base>/{{1}}`. */
   buttonUrlSuffix?: string
+  /** Button text — 'Buy Now' for checkout, 'Make an Offer' for bargain. */
+  buttonText?: string
 }
 
 type TemplateBuilder = (
@@ -566,7 +568,11 @@ function buildTemplate(
     // No footer component: the approved template's footer is static text.
   }
   if (context?.buttonUrlSuffix) {
-    params.buttons = [{ type: 'url', text: 'Buy Now', url: context.buttonUrlSuffix }]
+    params.buttons = [{
+      type: 'url',
+      text: context.buttonText || 'Buy Now',
+      url: context.buttonUrlSuffix,
+    }]
   }
   return params
 }

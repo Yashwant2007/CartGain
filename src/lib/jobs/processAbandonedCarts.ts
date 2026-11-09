@@ -1114,6 +1114,13 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         const bargainLink = await linkFor('whatsapp', 'bargain')
         const productSummary = formatProductList(cartItems, 2)
         const firstItem = cartItems[0]
+        // Reminder 1 (step 0) → checkout link only. Reminder 2+ (step 1+) →
+        // bargain link only. Never both in the same message.
+        const linkType = step === 0 ? 'checkout' : 'bargain'
+        const linkRes = linkType === 'checkout' ? checkoutLink : bargainLink
+        const linkUrl = linkRes.url
+        const buttonSuffix = linkRes.code || undefined
+        const buttonText = linkType === 'bargain' ? 'Make an Offer' : 'Buy Now'
         const offerLine = buildRecoveryOfferLine({
           firstName,
           productSummary,
@@ -1122,6 +1129,8 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           discountLabel: offerValueLabel,
           currencySymbol,
           code: authorisedDiscount?.code,
+          linkType,
+          linkUrl,
         })
 
         const previousFailure = existingMessage?.status === 'failed'
@@ -1172,7 +1181,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             singleLineMessage(stripLeadingGreeting(composed.body, personalName)),
             offerLine,
             headerImage,
-            { buttonUrlSuffix: checkoutLink.code || undefined },
+            { buttonUrlSuffix: buttonSuffix, buttonText },
           )
           whatsappResult = await sendWhatsAppMessage({
             to: sanitizePhoneNumber(whatsappPhone!),

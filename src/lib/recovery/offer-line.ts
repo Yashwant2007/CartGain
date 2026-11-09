@@ -25,6 +25,10 @@ export type RecoveryOfferLineInput = {
   code?: string | null
   /** Currency symbol to show with the product price (e.g. ₹, $). */
   currencySymbol?: string | null
+  /** 'checkout' → reminder 1, 'bargain' → reminder 2+. Null = no link text. */
+  linkType?: 'checkout' | 'bargain' | null
+  /** Short redirect URL to append as text when linkType is set. */
+  linkUrl?: string | null
 }
 
 export function buildRecoveryOfferLine(input: RecoveryOfferLineInput): string {
@@ -51,5 +55,16 @@ export function buildRecoveryOfferLine(input: RecoveryOfferLineInput): string {
   }
 
   const nameBit = firstName ? `${firstName}, ` : ''
-  return `${nameBit}your ${products}${priceBit} is waiting 🛒${offer}. Grab it now!`
+  const base = `${nameBit}your ${products}${priceBit} is waiting 🛒${offer}. Grab it now!`
+
+  // Append one link as text so the customer can tap it even if the button
+  // doesn't render. Only one link per message — checkout on reminder 1,
+  // bargain on reminder 2+.
+  let linkLine = ''
+  if (input.linkType && input.linkUrl) {
+    const label = input.linkType === 'bargain' ? '💬 Bargain now:' : '🛒 Checkout:'
+    linkLine = `\n${label} ${input.linkUrl}`
+  }
+
+  return `${base}${linkLine}`
 }

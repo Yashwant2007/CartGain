@@ -222,8 +222,12 @@ describe('recovery message wiring', () => {
     expect(body[2]).toContain('SAVE15')
     expect(body[2]).toContain('15% off')
     expect(body[2]).toContain('Grab it now!')
-    expect(body[2]).not.toContain('https://')
+    expect(body[2]).toContain('https://cart-gain.com/r/lCheck123')
     expect(body[2]).not.toContain('to=bargain')
+    // Button should say "Buy Now" for the checkout link
+    expect(lastWhatsAppParams().buttons).toEqual([
+      { type: 'url', text: 'Buy Now', url: 'lCheck123' },
+    ])
   })
 
   it('never mentions a code when the merchant disabled discounts', async () => {
@@ -232,8 +236,11 @@ describe('recovery message wiring', () => {
     const body: string[] = lastWhatsAppParams().body
     expect(body[2]).not.toContain('code')
     expect(body[2]).toContain('Grab it now!')
-    expect(body[2]).not.toContain('https://')
+    expect(body[2]).toContain('https://cart-gain.com/r/lCheck123')
     expect(body[2]).not.toContain('to=bargain')
+    expect(lastWhatsAppParams().buttons).toEqual([
+      { type: 'url', text: 'Buy Now', url: 'lCheck123' },
+    ])
   })
 
   it('emails the offer, the checkout link and the bargain link', async () => {
