@@ -135,10 +135,11 @@ export default async function CartRecoveryPage({
           </div>
 
           <CaptureCustomerContact
-            cartToken={cart.cartId}
+            cartId={cart.cartId}
             shop={cart.store.domain}
             defaultName={cart.customerName || undefined}
             defaultPhone={cart.customerPhone || undefined}
+            defaultEmail={cart.customerEmail || undefined}
           />
 
           {productDescription && (
