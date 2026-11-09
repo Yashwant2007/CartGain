@@ -48,6 +48,8 @@ export const OPENERS: Record<'email' | 'whatsapp', string[]> = {
     'Picked the right things? ✨',
     'You left something behind 😅',
     'Psst… your cart misses you 😉',
+    'Your cart is looking lonely 😏',
+    'It’s just sitting there… 🛒',
   ],
 }
 

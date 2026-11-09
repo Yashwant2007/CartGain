@@ -560,13 +560,13 @@ function buildTemplate(
     header: wantsImageHeader ? { type: 'image', imageUrl: headerImage } : undefined,
     body: [
       nonEmpty(customerName, 'there'),
-      nonEmpty(bodyContent, 'Your cart is still saved and ready whenever you are.'),
+      nonEmpty(bodyContent, 'Your cart is waiting — grab it now! 🛒'),
       nonEmpty(offerLine, fallbackOfferLine),
     ],
     // No footer component: the approved template's footer is static text.
   }
   if (context?.buttonUrlSuffix) {
-    params.buttons = [{ type: 'url', text: 'Complete Purchase', url: context.buttonUrlSuffix }]
+    params.buttons = [{ type: 'url', text: 'Buy Now', url: context.buttonUrlSuffix }]
   }
   return params
 }
@@ -586,7 +586,7 @@ export const WhatsAppTemplates: Record<string, { name: string; generateParams: T
    *   Tap below to pick up where you left off ✨
    *
    * Footer: Powered by CartGain — cart-gain.com
-   * Button (static): Complete Purchase → https://cart-gain.com/r/{{1}}
+   * Button (static): Buy Now → https://cart-gain.com/r/{{1}}
    */
   abandoned_cart: {
     name: process.env.WHATSAPP_TEMPLATE_REMINDER || 'cart_reminders',
@@ -597,7 +597,7 @@ export const WhatsAppTemplates: Record<string, { name: string; generateParams: T
         offerLine,
         productImage,
         context,
-        'Your items are saved — tap below to pick up where you left off.',
+        'Your items are waiting — grab them now! 🛒',
       ),
   },
 
@@ -615,7 +615,7 @@ export const WhatsAppTemplates: Record<string, { name: string; generateParams: T
    *   Your cart is right here whenever you're ready 👉
    *
    * Footer: Powered by CartGain — cart-gain.com
-   * Button (static): Complete Order → https://cart-gain.com/r/{{1}}
+   * Button (static): Buy Now → https://cart-gain.com/r/{{1}}
    */
   abandoned_cart_followup: {
     name: process.env.WHATSAPP_TEMPLATE_FOLLOWUP || 'cart_followup',
@@ -644,7 +644,7 @@ export const WhatsAppTemplates: Record<string, { name: string; generateParams: T
    *   We won't keep messaging you about this cart.
    *
    * Footer: Powered by CartGain — cart-gain.com
-   * Button (static): Complete Now → https://cart-gain.com/r/{{1}}
+   * Button (static): Buy Now → https://cart-gain.com/r/{{1}}
    */
   abandoned_cart_urgent: {
     name: process.env.WHATSAPP_TEMPLATE_FINAL || 'cart_urgent',

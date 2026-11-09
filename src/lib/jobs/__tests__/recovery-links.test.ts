@@ -176,8 +176,9 @@ describe('recovery message wiring', () => {
 
     const body: string[] = lastWhatsAppParams().body
     expect(body[0]).toBe('Priya')
-    expect(body[2]).toMatch(/^Priya, Your /)
-    expect(body[2]).toContain('Priya,')
+    expect(body[2]).toMatch(/^Priya, your /)
+    expect(body[2]).toContain('is waiting 🛒')
+    expect(body[2]).toContain('Grab it now!')
   })
 
   it('falls back to the consented identity name and backfills the cart', async () => {
@@ -220,7 +221,8 @@ describe('recovery message wiring', () => {
     const body: string[] = lastWhatsAppParams().body
     expect(body[2]).toContain('SAVE15')
     expect(body[2]).toContain('15% off')
-    expect(body[2]).toContain('https://cart-gain.com/r/lCheck123')
+    expect(body[2]).toContain('Grab it now!')
+    expect(body[2]).not.toContain('https://')
     expect(body[2]).not.toContain('to=bargain')
   })
 
@@ -229,7 +231,8 @@ describe('recovery message wiring', () => {
 
     const body: string[] = lastWhatsAppParams().body
     expect(body[2]).not.toContain('code')
-    expect(body[2]).toContain('https://cart-gain.com/r/lCheck123')
+    expect(body[2]).toContain('Grab it now!')
+    expect(body[2]).not.toContain('https://')
     expect(body[2]).not.toContain('to=bargain')
   })
 
@@ -288,7 +291,7 @@ describe('recovery message wiring', () => {
     await processAbandonedCarts(25)
 
     expect(lastWhatsAppParams().buttons).toEqual([
-      { type: 'url', text: 'Complete Purchase', url: 'lCheck123' },
+      { type: 'url', text: 'Buy Now', url: 'lCheck123' },
     ])
   })
 

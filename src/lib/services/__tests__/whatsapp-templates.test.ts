@@ -78,7 +78,7 @@ describe('WhatsApp recovery templates', () => {
       buttonUrlSuffix: 'cart_1?c=wa',
     })
     expect(params.buttons).toEqual([
-      { type: 'url', text: 'Complete Purchase', url: 'cart_1?c=wa' },
+      { type: 'url', text: 'Buy Now', url: 'cart_1?c=wa' },
     ])
     expect(params.buttons?.[0].url).not.toContain('https://')
   })

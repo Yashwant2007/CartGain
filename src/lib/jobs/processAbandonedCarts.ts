@@ -1122,8 +1122,6 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           discountLabel: offerValueLabel,
           currencySymbol,
           code: authorisedDiscount?.code,
-          checkoutUrl: checkoutLink.url,
-          bargainUrl: bargainLink.url,
         })
 
         const previousFailure = existingMessage?.status === 'failed'

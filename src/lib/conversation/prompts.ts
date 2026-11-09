@@ -80,12 +80,8 @@ ${STAGE_OBJECTIVE[stage]}
 STYLE (how it should read)
 - Make it feel like a real shopkeeper speaking to ONE customer by name. Open warmly with the customer's first name ("Priya," "Arjun,") when it is in the FACTS — otherwise a simple friendly opener without a fake name.
 - Name the actual item(s) the customer chose ("the linen shirt you picked") instead of "your items". Use concrete detail ONLY from the item name/description above.
+- Be punchy and salesy — shoppers skim. Short sentences, one idea per line, no fluff. Use one light joke or playful aside if it lands naturally.
 - One warm, specific reason to come back (it is saved, the offer is theirs personally, checkout takes a minute) — not a list.
-- ${
-  voice.humorLevel === 'none'
-    ? 'Keep the tone straight.'
-    : 'One light, situational joke or playful aside at most, and only if it lands naturally.'
-}
 - Sound like a person who works at the store, not a marketing robot: contractions, short sentences, no exclamation-mark stacking.
 - If an authorised offer exists in the FACTS, weave it in as a personal gift to THIS customer: "I set aside [X]% off just for you, [Name] — use code [CODE]." Make the code feel reserved for them, not a mass promo.
 - Use emoji where it adds warmth (max ${maxEmojis(voice, facts.channel)}), but never more than one or two in a short WhatsApp message.
@@ -93,6 +89,7 @@ STYLE (how it should read)
 - Make the headline and CTA specific to THIS stage and THESE items. Never use a generic "Your cart is waiting" on every message.
 - Vary your opening and sentence rhythm. Do not reuse the previous message's opener, structure or joke.
 - If the item detail is present, use ONE concrete detail from it (colour, material, flavour, size) — never invent one.
+- NEVER repeat "saved" or "still saved" — say "waiting," "just chilling," "right where you left it," etc. Variety matters.
 
 FACTS (the ONLY things you are allowed to state)
 ${factsBlock(facts)}

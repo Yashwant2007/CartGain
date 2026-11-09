@@ -1,13 +1,9 @@
-// The WhatsApp `{{3}}` offer line. It is the only body variable that carries a
-// live link, so it must never be truncated in a way that cuts a URL in half.
-// Keep the text side bounded (product names are merchant-controlled and can be
-// arbitrarily long) and append the link verbatim at the end.
-//
-// The template already greets the customer with {{1}}, so this line does not
-// repeat the name. One short CTA is better than two long links: WhatsApp
-// collapses long messages behind "Read more", which hides the CTA.
+// The WhatsApp `{{3}}` offer line. Punchy, salesy, no repetition — one clear
+// CTA per message. Links go as separate template buttons, not inline text.
+// Keep it short so WhatsApp doesn't collapse it behind "Read more".
 
 const MAX_PRODUCT_CHARS = 45
+const MAX_NAME_CHARS = 28
 
 function oneLine(value: string | null | undefined): string {
   return (value || '').replace(/\s+/g, ' ').trim()
@@ -29,14 +25,11 @@ export type RecoveryOfferLineInput = {
   code?: string | null
   /** Currency symbol to show with the product price (e.g. ₹, $). */
   currencySymbol?: string | null
-  /** The single checkout CTA. */
-  checkoutUrl: string
-  /** Retained for callers that still pass it; no longer rendered. */
-  bargainUrl?: string | null
 }
 
 export function buildRecoveryOfferLine(input: RecoveryOfferLineInput): string {
   const products = shorten(oneLine(input.productSummary), MAX_PRODUCT_CHARS) || 'cart'
+  const firstName = shorten(oneLine(input.firstName), MAX_NAME_CHARS)
   const discount = oneLine(input.discountLabel)
   const code = oneLine(input.code)
 
@@ -49,17 +42,14 @@ export function buildRecoveryOfferLine(input: RecoveryOfferLineInput): string {
     priceBit += ')'
   }
 
-  // A code is only advertised when the merchant/Shopify actually produced one;
-  // the copy layer never invents a discount.
+  // A code is only advertised when the merchant/Shopify actually produced one.
   let offer = ''
   if (discount && code) {
-    offer = ` — I've set aside ${discount} for you. Use code ${code}`
+    offer = ` — ${discount}, code ${code}`
   } else if (code) {
-    offer = ` — use code ${code}`
+    offer = ` — code ${code}`
   }
 
-  const bargainLine = input.bargainUrl
-    ? `\n💬 Bargain now: ${input.bargainUrl}`
-    : ''
-  return `${input.firstName ? `${input.firstName}, ` : ''}Your ${products}${priceBit} is still saved.${offer}${bargainLine}\n🛒 Complete checkout: ${input.checkoutUrl}`
+  const nameBit = firstName ? `${firstName}, ` : ''
+  return `${nameBit}your ${products}${priceBit} is waiting 🛒${offer}. Grab it now!`
 }
