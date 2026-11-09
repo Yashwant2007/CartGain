@@ -20,8 +20,8 @@ Backing services
   ├─ PostgreSQL (Supabase, Prisma 5, relationMode="prisma")
   ├─ Redis (Bull queues + de-dup locks + rate limits)
   ├─ OpenAI / OpenAI-compatible fallback (Groq)
-  ├─ Razorpay (primary) + Cashfree (secondary) + Shopify Billing
-  ├─ WhatsApp (Meta Graph) · Resend (email) · MSG91 (SMS)
+  ├─ Shopify Billing (app charges) + Cashfree/Razorpay recovery adapters
+  ├─ WhatsApp (Meta Graph) · Resend (email)
 Observability: x-request-id corridor · structured logger (redacted) · alerter · /api/health
 ```
 
@@ -50,7 +50,7 @@ Customer ─▶ Bargain API ─▶ Session State Machine ─▶ Product Context
 |--------|----------------|-------|
 | Bargain safety | `src/lib/financial-safety.ts`, `offer-validation.ts`, `abuse.ts`, `intent.ts`, `negotiation-state.ts` | Multi-layer; high test density |
 | Recovery attribution | `src/lib/attribution.ts`, `bargain/goals.ts` | Evidence-based; refund-netted |
-| Payments | `lib/payment.ts` + `lib/payments/*` adapters; routes `api/payments/*`, `api/payment/*` (shims), `api/webhooks/payment/cashfree` | Single Razorpay webhook (`/api/payment/webhook`) — adapter route retired after owner confirmed the registered URL (ADR-009) |
+| Payments | Shopify Billing (`lib/shopify-billing/*`) for app charges; `lib/payments/*` recovery adapters and legacy Razorpay cancellation | Paid app plans must use Shopify Billing; custom distribution cannot use it |
 | Shopify | `lib/shopify*` adapters; `api/shopify/*`; `extensions/` | HMAC-verified webhooks, encrypted tokens, purge on uninstall |
 | Queue | `lib/jobs/*` + `lib/queue/` | Bull + ioredis in-process; NX dedupe; idempotent processors |
 | Observability | `lib/observability/*` | `captureError`/`logWarn` with redaction |

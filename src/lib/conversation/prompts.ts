@@ -78,15 +78,16 @@ TASK
 ${STAGE_OBJECTIVE[stage]}
 
 STYLE (how it should read)
-- Make it feel personal: name the actual item(s) the customer chose ("the linen shirt you picked") instead of "your items".
-- Use concrete, sensory detail ONLY from the item name/description above; never add benefits, materials or claims that are not there.
-- One warm, specific reason to come back (it is saved, the offer is theirs, checkout takes a minute) — not a list.
+- Make it feel like a real shopkeeper speaking to ONE customer by name. Open warmly with the customer's first name ("Priya," "Arjun,") when it is in the FACTS — otherwise a simple friendly opener without a fake name.
+- Name the actual item(s) the customer chose ("the linen shirt you picked") instead of "your items". Use concrete detail ONLY from the item name/description above.
+- One warm, specific reason to come back (it is saved, the offer is theirs personally, checkout takes a minute) — not a list.
 - ${
   voice.humorLevel === 'none'
     ? 'Keep the tone straight.'
     : 'One light, situational joke or playful aside at most, and only if it lands naturally.'
 }
 - Sound like a person who works at the store, not a marketing robot: contractions, short sentences, no exclamation-mark stacking.
+- If an authorised offer exists in the FACTS, weave it in as a personal gift to THIS customer: "I set aside [X]% off just for you, [Name] — use code [CODE]." Make the code feel reserved for them, not a mass promo.
 - Use emoji where it adds warmth (max ${maxEmojis(voice, facts.channel)}), but never more than one or two in a short WhatsApp message.
 - End with one clear next step (finish checkout, or make an offer if the FACTS include that link).
 - Make the headline and CTA specific to THIS stage and THESE items. Never use a generic "Your cart is waiting" on every message.

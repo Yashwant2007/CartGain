@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { cleanCustomerName } from './names'
 import { normalizeImageUrl, normalizeShopifyLineItems, toNumericId } from './shopify-line-items'
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000 // refresh 5 min before expiry
@@ -19,24 +20,8 @@ export class ShopifyReconnectRequiredError extends Error {
   }
 }
 
-const GENERIC_CUSTOMER_NAMES = new Set([
-  'customer',
-  'guest',
-  'guest customer',
-  'shopify customer',
-  'unknown',
-  'valued',
-  'valued customer',
-])
-
 export function cleanShopifyName(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  const cleaned = value.replace(/\s+/g, ' ').trim()
-  if (!cleaned) return null
-  // Placeholder names were being treated as real people, producing greetings
-  // like "Hi Valued". A missing name is better than a fake one.
-  if (GENERIC_CUSTOMER_NAMES.has(cleaned.toLowerCase())) return null
-  return cleaned
+  return cleanCustomerName(value)
 }
 
 // Shopify returns 429 (throttled) with a Retry-After header, and transient 5xx
@@ -590,66 +575,172 @@ type CustomerNameStore = {
   shopifyTokenExpiresAt: Date | null
 }
 
-const customerNameCache = new Map<string, { name: string | null; expiresAt: number }>()
-const CUSTOMER_NAME_CACHE_MS = 10 * 60 * 1000
+export type ShopifyCustomerContact = {
+  name: string | null
+  email: string | null
+  phone: string | null
+}
+
+type ShopifyMailingAddress = {
+  firstName?: string | null
+  lastName?: string | null
+  phone?: string | null
+}
+
+type ShopifyCustomerOrder = {
+  email?: string | null
+  phone?: string | null
+  billingAddress?: ShopifyMailingAddress | null
+  shippingAddress?: ShopifyMailingAddress | null
+}
+
+type ShopifyCustomerNode = {
+  firstName?: string | null
+  lastName?: string | null
+  displayName?: string | null
+  email?: string | null
+  phone?: string | null
+  defaultAddress?: ShopifyMailingAddress | null
+  addresses?: ShopifyMailingAddress[] | null
+  orders?: { nodes?: ShopifyCustomerOrder[] | null } | null
+}
+
+function fullName(parts: Array<string | null | undefined>): string | null {
+  const value = parts.map((part) => String(part || '').trim()).filter(Boolean).join(' ')
+  return value || null
+}
 
 /**
- * Guest checkouts often omit the shopper's name, but the same email may belong
- * to an existing Shopify customer. Resolve that customer's authoritative name
- * so recovery copy never falls back to "there" (or an old "Valued Customer"
- * placeholder). Best-effort: any Shopify failure returns null.
+ * Pick the best contact fields from a Shopify customer, their saved addresses,
+ * and recent orders. Customer accounts created by checkout often have only an
+ * email; a past order or saved address can still carry the real name/phone.
  */
+export function contactFromShopifyCustomer(
+  customer: ShopifyCustomerNode,
+  fallbackEmail?: string | null,
+): ShopifyCustomerContact {
+  const addressEmail = fallbackEmail || null
+  const email = customer.email || addressEmail || null
+  const addresses = customer.addresses || []
+  const orders = customer.orders?.nodes || []
+  const orderWithPhone = orders.find(
+    (order) => order.shippingAddress?.phone || order.billingAddress?.phone || order.phone,
+  )
+  const addressWithPhone = addresses.find((entry) => entry.phone)
+
+  const nameCandidates = [
+    fullName([customer.firstName, customer.lastName]),
+    fullName([
+      orderWithPhone?.shippingAddress?.firstName,
+      orderWithPhone?.shippingAddress?.lastName,
+    ]),
+    fullName([
+      orderWithPhone?.billingAddress?.firstName,
+      orderWithPhone?.billingAddress?.lastName,
+    ]),
+    ...addresses.map((entry) => fullName([entry.firstName, entry.lastName])),
+    customer.displayName,
+  ]
+  const name = nameCandidates
+    .map((candidate) => cleanCustomerName(candidate, email))
+    .find((candidate): candidate is string => Boolean(candidate)) || null
+
+  const phone =
+    customer.phone ||
+    customer.defaultAddress?.phone ||
+    addressWithPhone?.phone ||
+    orderWithPhone?.shippingAddress?.phone ||
+    orderWithPhone?.billingAddress?.phone ||
+    orderWithPhone?.phone ||
+    null
+
+  return { name, email, phone }
+}
+
+const customerContactCache = new Map<
+  string,
+  { contact: ShopifyCustomerContact | null; expiresAt: number }
+>()
+const CUSTOMER_CONTACT_CACHE_MS = 10 * 60 * 1000
+
+/**
+ * Resolve the customer's authoritative name, email and phone from Shopify.
+ *
+ * A signed-in customer already has these on their Shopify profile, but cart and
+ * checkout payloads frequently omit the phone (and sometimes the name). Looking
+ * the contact up by email (or customer id) lets recovery message them without
+ * waiting for them to type anything into our widget or the checkout form.
+ * Best-effort: any Shopify failure returns null.
+ */
+export async function findShopifyCustomerContact(
+  store: CustomerNameStore,
+  opts: { email?: string | null; customerId?: string | null },
+): Promise<ShopifyCustomerContact | null> {
+  const address = String(opts.email || '').trim().toLowerCase()
+  const customerId = toNumericId(opts.customerId)
+  if (!address && !customerId) return null
+
+  const key = `${store.id}:${address || `id:${customerId}`}`
+  const cached = customerContactCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) return cached.contact
+
+  let contact: ShopifyCustomerContact | null = null
+  try {
+    const query = address ? `email:${address}` : `id:${customerId}`
+    const data = await shopifyGraphQL<{
+      customers?: { nodes?: ShopifyCustomerNode[] | null } | null
+    }>(
+      store,
+      `#graphql
+        query CustomerContact($query: String!) {
+          customers(first: 1, query: $query) {
+            nodes {
+              firstName
+              lastName
+              displayName
+              email
+              phone
+              defaultAddress { firstName lastName phone }
+              addresses(first: 10) { firstName lastName phone }
+              orders(first: 5, reverse: true) {
+                nodes {
+                  email
+                  phone
+                  billingAddress { firstName lastName phone }
+                  shippingAddress { firstName lastName phone }
+                }
+              }
+            }
+          }
+        }
+      `,
+      { query },
+      5000,
+    )
+    const customer = data.customers?.nodes?.[0]
+    if (customer) contact = contactFromShopifyCustomer(customer, address || null)
+  } catch {
+    contact = null
+  }
+
+  customerContactCache.set(key, {
+    contact,
+    expiresAt: Date.now() + CUSTOMER_CONTACT_CACHE_MS,
+  })
+  if (customerContactCache.size > 500) {
+    const oldest = customerContactCache.keys().next().value
+    if (oldest) customerContactCache.delete(oldest)
+  }
+  return contact
+}
+
+/** Backwards-compatible name-only lookup. */
 export async function findShopifyCustomerNameByEmail(
   store: CustomerNameStore,
   email: string | null | undefined,
 ): Promise<string | null> {
-  const address = String(email || '').trim().toLowerCase()
-  if (!address) return null
-
-  const key = `${store.id}:${address}`
-  const cached = customerNameCache.get(key)
-  if (cached && cached.expiresAt > Date.now()) return cached.name
-
-  let name: string | null = null
-  try {
-    const data = await shopifyGraphQL<{
-      customers?: {
-        nodes?: Array<{
-          firstName?: string | null
-          lastName?: string | null
-          displayName?: string | null
-        }>
-      } | null
-    }>(
-      store,
-      `#graphql
-        query CustomerByEmail($query: String!) {
-          customers(first: 1, query: $query) {
-            nodes { firstName lastName displayName }
-          }
-        }
-      `,
-      { query: `email:${address}` },
-      5000,
-    )
-    const customer = data.customers?.nodes?.[0]
-    if (customer) {
-      name = cleanShopifyName(
-        `${customer.firstName || ''} ${customer.lastName || ''}`.trim() ||
-          customer.displayName ||
-          null,
-      )
-    }
-  } catch {
-    name = null
-  }
-
-  customerNameCache.set(key, { name, expiresAt: Date.now() + CUSTOMER_NAME_CACHE_MS })
-  if (customerNameCache.size > 500) {
-    const oldest = customerNameCache.keys().next().value
-    if (oldest) customerNameCache.delete(oldest)
-  }
-  return name
+  const contact = await findShopifyCustomerContact(store, { email })
+  return contact?.name ?? null
 }
 
 export async function fetchShopifyProductPrice(
@@ -986,7 +1077,7 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
 
     const lineItems = normalizeShopifyLineItems(checkout.line_items)
 
-    const phone = checkout.phone || checkout.billing_address?.phone || checkout.shipping_address?.phone || checkout.customer?.phone || null
+    const checkoutPhone = checkout.phone || checkout.billing_address?.phone || checkout.shipping_address?.phone || checkout.customer?.phone || null
     const firstName =
       checkout.billing_address?.first_name ||
       checkout.shipping_address?.first_name ||
@@ -999,16 +1090,28 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
       checkout.customer?.last_name ||
       checkout.customer?.default_address?.last_name ||
       ''
-    const email = checkout.email || checkout.customer?.email || null
-    const name =
-      cleanShopifyName(
-        `${firstName} ${lastName}`.trim() ||
-          checkout.billing_address?.name ||
-          checkout.shipping_address?.name ||
-          checkout.customer?.name ||
-          checkout.customer?.default_address?.name ||
-          null,
-      ) || (await findShopifyCustomerNameByEmail(store, email))
+    const checkoutEmail = checkout.email || checkout.customer?.email || null
+    const checkoutName = cleanShopifyName(
+      `${firstName} ${lastName}`.trim() ||
+        checkout.billing_address?.name ||
+        checkout.shipping_address?.name ||
+        checkout.customer?.name ||
+        checkout.customer?.default_address?.name ||
+        null,
+    )
+    // A signed-in customer already has a phone on their Shopify profile even
+    // when the checkout payload does not include it. Resolve once and use the
+    // authoritative contact for the cart + recipient registry.
+    const contact =
+      !checkoutPhone || !checkoutName
+        ? await findShopifyCustomerContact(store, {
+            email: checkoutEmail,
+            customerId: checkout.customer?.id ? String(checkout.customer.id) : null,
+          })
+        : null
+    const phone = checkoutPhone || contact?.phone || null
+    const email = checkoutEmail || contact?.email || null
+    const name = checkoutName || contact?.name || null
 
     try {
       await prisma.cart.upsert({

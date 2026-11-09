@@ -71,6 +71,30 @@ describe('sendWhatsAppMessage image handling', () => {
     expect(result.messageId).toBe('wamid.retry')
   })
 
+  it('drops an unsupported button before dropping the required image header', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(metaError(132000, 'Invalid parameter'))
+      .mockResolvedValueOnce(metaOk('wamid.buttonless'))
+    global.fetch = fetchMock as any
+
+    const result = await sendWhatsAppMessage({
+      to: '+918708718426',
+      templateName: 'cart_reminders',
+      templateParams: {
+        ...params,
+        buttons: [{ type: 'url', text: 'Complete Purchase', url: 'lCheck123' }],
+      },
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const retry = JSON.parse(fetchMock.mock.calls[1][1].body)
+    expect(retry.template.components.map((c: any) => c.type)).toEqual(['header', 'body'])
+    expect(headerLink(retry)).toBe(params.header.imageUrl)
+    expect(result.success).toBe(true)
+    expect(result.messageId).toBe('wamid.buttonless')
+  })
+
   it('does not swap the image for an unrelated rejection', async () => {
     const fetchMock = jest
       .fn()

@@ -85,6 +85,12 @@ jest.mock('@/lib/services/whatsapp', () => {
   return { ...actual, sendWhatsAppMessage: (...args: any[]) => sendWhatsAppMock(...args) }
 })
 
+jest.mock('@/lib/recovery/short-links', () => ({
+  getRecoveryShortLink: jest.fn(async ({ kind }: any) => {
+    const code = kind === 'checkout' ? 'lCheck123' : kind === 'bargain' ? 'lBarg1234' : 'lCart1234'
+    return { code, url: `https://cart-gain.com/r/${code}` }
+  }),
+}))
 jest.mock('@/lib/services/ai', () => ({ generatePersonalizedDiscount: jest.fn() }))
 jest.mock('@/lib/data-protection', () => ({ logDataAccess: jest.fn(async () => {}) }))
 jest.mock('@/lib/analytics/track', () => ({ track: jest.fn(async () => {}) }))
@@ -170,7 +176,8 @@ describe('recovery message wiring', () => {
 
     const body: string[] = lastWhatsAppParams().body
     expect(body[0]).toBe('Priya')
-    expect(body[2]).toMatch(/^Priya, /)
+    expect(body[2]).toMatch(/^Priya, Your /)
+    expect(body[2]).toContain('Priya,')
   })
 
   it('falls back to the consented identity name and backfills the cart', async () => {
@@ -203,7 +210,7 @@ describe('recovery message wiring', () => {
     })
   })
 
-  it('uses the merchant code and both working links when discounts are on', async () => {
+  it('uses the merchant code and one short checkout link when discounts are on', async () => {
     prismaMock.campaign.findMany.mockResolvedValue([
       campaign({ discountEnabled: true, discountType: 'percentage', discountValue: 15, discountCode: 'SAVE15' }),
     ])
@@ -213,17 +220,17 @@ describe('recovery message wiring', () => {
     const body: string[] = lastWhatsAppParams().body
     expect(body[2]).toContain('SAVE15')
     expect(body[2]).toContain('15% off')
-    expect(body[2]).toContain('https://acme.myshopify.com/discount/SAVE15?redirect=%2Fcart%2Fshopify_cart_1')
-    expect(body[2]).toContain('https://cart-gain.com/r/cart-1?c=whatsapp&to=bargain')
+    expect(body[2]).toContain('https://cart-gain.com/r/lCheck123')
+    expect(body[2]).not.toContain('to=bargain')
   })
 
   it('never mentions a code when the merchant disabled discounts', async () => {
     await processAbandonedCarts(25)
 
     const body: string[] = lastWhatsAppParams().body
-    expect(body[2]).not.toContain('Use code')
-    expect(body[2]).toContain('https://acme.myshopify.com/cart/shopify_cart_1')
-    expect(body[2]).toContain('to=bargain')
+    expect(body[2]).not.toContain('code')
+    expect(body[2]).toContain('https://cart-gain.com/r/lCheck123')
+    expect(body[2]).not.toContain('to=bargain')
   })
 
   it('emails the offer, the checkout link and the bargain link', async () => {
@@ -244,8 +251,8 @@ describe('recovery message wiring', () => {
     expect(sendEmailMock).toHaveBeenCalledTimes(1)
     const opts = abandonedTemplateMock.mock.calls[0][8] as any
     expect(opts.offer).toMatchObject({ code: 'SAVE10', value: 10, type: 'percentage' })
-    expect(opts.checkoutUrl).toBe('https://cart-gain.com/r/cart-1?c=email&to=checkout&code=SAVE10')
-    expect(opts.bargainUrl).toBe('https://cart-gain.com/r/cart-1?c=email&to=bargain')
+    expect(opts.checkoutUrl).toBe('https://cart-gain.com/r/lCheck123')
+    expect(opts.bargainUrl).toBe('https://cart-gain.com/r/lBarg1234')
   })
 
   it('always sends the image header the approved template declares', async () => {
@@ -254,7 +261,10 @@ describe('recovery message wiring', () => {
     await processAbandonedCarts(25)
 
     const header = lastWhatsAppParams().header
-    expect(header).toEqual({ type: 'image', imageUrl: 'https://cart-gain.com/logo.png' })
+    expect(header).toEqual({
+      type: 'image',
+      imageUrl: 'https://cart-gain.com/logo.png?width=400&height=400&crop=center',
+    })
   })
 
   it('prefers the cart product photo over the brand fallback', async () => {
@@ -270,18 +280,32 @@ describe('recovery message wiring', () => {
 
     expect(lastWhatsAppParams().header).toEqual({
       type: 'image',
-      imageUrl: 'https://cdn.shopify.com/sneaker.png',
+      imageUrl: 'https://cdn.shopify.com/sneaker.png?width=400&height=400&crop=center',
     })
   })
 
-  it('sends only the dynamic button suffix, never a full url', async () => {
-    process.env.WHATSAPP_TEMPLATE_BUTTON_BASE = 'https://cart-gain.com/r/'
-
+  it('sends only the short dynamic-button suffix, never a full url', async () => {
     await processAbandonedCarts(25)
 
     expect(lastWhatsAppParams().buttons).toEqual([
-      { type: 'url', text: 'Complete Purchase', url: 'shopify_cart_1?c=checkout&code=' },
+      { type: 'url', text: 'Complete Purchase', url: 'lCheck123' },
     ])
+  })
+
+  it('never uses an email address as the customer name', async () => {
+    prismaMock.cart.findMany.mockReset()
+    prismaMock.cart.findMany
+      .mockResolvedValueOnce([
+        cart({ customerName: 'yashwantkaushik43@gmail.com', customerEmail: 'yashwantkaushik43@gmail.com' }),
+      ])
+      .mockResolvedValue([])
+
+    await processAbandonedCarts(25)
+
+    const body: string[] = lastWhatsAppParams().body
+    expect(body[0]).toBe('Buyer')
+    expect(body[1]).not.toContain('gmail.com')
+    expect(body[2]).not.toContain('gmail.com')
   })
 
   it('processes every eligible store in one sweep instead of exactly one', async () => {

@@ -304,8 +304,8 @@ export function buildFallbackMessage(
   const bodies: Record<ConversationStage, string[]> = channel === 'whatsapp'
     ? {
         reminder_1: [
-          `${greeting} your ${itemText}${detailBit} is still saved 🛒 — ${total}.${offer} Come back whenever suits you.`,
-          `${greeting} we kept your ${itemText}${detailBit} in your cart ✨ — ${total}.${offer} Ready when you are.`,
+          `${greeting} your ${itemText}${detailBit} is still saved — ${total}.${offer} Come back whenever you like.`,
+          `${greeting} we held your ${itemText}${detailBit} for you ✨ — ${total}.${offer} Ready when you are.`,
           `${greeting} your ${itemText}${detailBit} is right where you left it — ${total}.${offer} No rush 🙂`,
         ],
         reminder_2: [

@@ -22,22 +22,39 @@ export const dynamic = 'force-dynamic'
  * customer always reaches their cart.
  */
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const cartId = params.id
-  const channel = req.nextUrl.searchParams.get('c') || undefined
-  const to = req.nextUrl.searchParams.get('to')
-  const requestedCode = req.nextUrl.searchParams.get('code')
+  const requestedChannel = req.nextUrl.searchParams.get('c') || undefined
+  let to = req.nextUrl.searchParams.get('to')
+  let requestedCode = req.nextUrl.searchParams.get('code')
+  let channel = requestedChannel
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/$/, '')
 
   let cart: { id: string; cartId: string; store: { domain: string } } | null = null
   try {
     cart = await prisma.cart.findUnique({
-      where: { id: cartId },
+      where: { id: params.id },
       select: { id: true, cartId: true, store: { select: { domain: true } } },
     })
+
+    // Compact links are `/r/<code>`, where code is not a cart id. Resolve the
+    // destination from the link record so the WhatsApp button stays short and
+    // still lands on the store checkout with the right discount.
+    if (!cart) {
+      const short = await prisma.recoveryShortLink.findUnique({ where: { code: params.id } })
+      if (short) {
+        to = short.kind
+        requestedCode = short.discountCode || requestedCode
+        channel = short.channel
+        cart = await prisma.cart.findUnique({
+          where: { id: short.cartId },
+          select: { id: true, cartId: true, store: { select: { domain: true } } },
+        })
+      }
+    }
   } catch (err) {
     console.error('Recovery redirect cart lookup failed (redirect continues):', err)
   }
 
+  const cartId = cart?.id || params.id
   let destination: string
   if (to === 'checkout' && cart?.store?.domain) {
     destination = buildStoreCheckoutLink({

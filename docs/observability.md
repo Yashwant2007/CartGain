@@ -25,7 +25,6 @@ Pairs with `docs/incident-response.md` (security incidents) — this document co
 | `SHOPIFY_OAUTH_STATE_SECRET` | Yes | Signs OAuth state tokens. |
 | `WHATSAPP_APP_SECRET` | Yes* | Verifies `X-Hub-Signature-256` on inbound WhatsApp webhooks (*fails closed* — set it or inbound messages 401). |
 | `WHATSAPP_BUSINESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | No | Outbound WhatsApp. |
-| `MSG91_AUTH_KEY`, `MSG91_SENDER_ID` | No | Outbound SMS. |
 | `RESEND_API_KEY`, `FROM_EMAIL` | Yes | Email delivery. |
 | `OPENAI_API_KEY` | Yes | AI content. |
 | `AI_FALLBACK_API_KEY`, `_BASE_URL`, `_MODEL` | No | Fallback AI tier (default Groq). |
@@ -71,7 +70,6 @@ All outbound calls are bounded so a dead provider can't pin a function:
 
 - Shopify admin/GraphQL API calls — `AbortSignal.timeout(5000–10000)` (`src/lib/shopify.ts`).
 - OpenAI primary/fallback — client `timeout: 20000/10000` (`src/lib/ai-client.ts`).
-- MSG91 (SMS send/DLR) — `AbortSignal.timeout(10000/5000)` (`src/lib/services/sms.ts`).
 - Meta WhatsApp send — `AbortSignal.timeout(10000)` (`src/lib/services/whatsapp.ts`).
 - Resend (email) — SDK default 10s. Razorpay — SDK default 90s.
 

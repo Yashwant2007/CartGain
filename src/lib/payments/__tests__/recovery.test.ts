@@ -67,7 +67,7 @@ describe('Payment Recovery', () => {
   describe('handlePaymentFailure', () => {
     const baseEvent: GatewayPaymentEvent = {
       id: 'evt_1',
-      gateway: 'razorpay',
+      gateway: 'cashfree',
       gatewayEventId: 'gateway_evt_1',
       orderRef: 'ord_1',
       merchantId: 'store_1',
@@ -119,7 +119,7 @@ describe('Payment Recovery', () => {
         paymentRetrySchedule: {},
         paymentChannelPriority: [],
         paymentIncentive: 0,
-        paymentEnabledGateways: ['razorpay'],
+        paymentEnabledGateways: ['cashfree'],
         createdAt: new Date(),
         updatedAt: new Date(),
       } as never)
@@ -128,7 +128,7 @@ describe('Payment Recovery', () => {
         id: 'attempt_1',
         merchantId: 'store_1',
         orderRef: 'ord_1',
-        gateway: 'razorpay',
+        gateway: 'cashfree',
         gatewayEventId: 'gateway_evt_1',
         amount: 2999,
         currency: 'INR',
@@ -163,7 +163,7 @@ describe('Payment Recovery', () => {
         paymentRetrySchedule: {},
         paymentChannelPriority: [],
         paymentIncentive: 0,
-        paymentEnabledGateways: ['razorpay'],
+        paymentEnabledGateways: ['cashfree'],
         createdAt: new Date(),
         updatedAt: new Date(),
       } as never)
@@ -192,7 +192,7 @@ describe('Payment Recovery', () => {
         paymentRetrySchedule: {},
         paymentChannelPriority: [],
         paymentIncentive: 0,
-        paymentEnabledGateways: ['razorpay'],
+        paymentEnabledGateways: ['cashfree'],
         createdAt: new Date(),
         updatedAt: new Date(),
       } as never)

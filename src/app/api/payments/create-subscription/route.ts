@@ -71,28 +71,32 @@ export async function POST(req: NextRequest) {
       period: normalizedPeriod,
       existingSub,
     })
-  } catch (error) {
-    if (error instanceof ShopifyReconnectRequiredError) {
-      return NextResponse.json(
-        {
-          error: 'Your Shopify connection has expired. Reconnect Shopify in Integrations, then try again.',
-          code: 'SHOPIFY_RECONNECT_REQUIRED',
-        },
-        { status: 409 },
-      )
-    }
+    } catch (error) {
+      if (error instanceof ShopifyReconnectRequiredError) {
+        return NextResponse.json(
+          {
+            error: 'Your Shopify connection has expired. Reconnect Shopify in Integrations, then try again.',
+            code: 'SHOPIFY_RECONNECT_REQUIRED',
+          },
+          { status: 409 },
+        )
+      }
 
-    await captureError({
-      level: 'error',
-      component: 'billing',
-      operation: 'create_subscription',
-      error,
-      req,
-      persist: true,
-      statusCode: 500,
-    })
-    return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 })
-  }
+      // Surface Shopify's actual rejection reason so merchants (and reviewers)
+      // can see why a charge couldn't be created instead of a generic message.
+      const message = error instanceof Error ? error.message : 'Failed to create subscription'
+
+      await captureError({
+        level: 'error',
+        component: 'billing',
+        operation: 'create_subscription',
+        error,
+        req,
+        persist: true,
+        statusCode: 500,
+      })
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
 }
 
 function shopifyUnavailableResponse(

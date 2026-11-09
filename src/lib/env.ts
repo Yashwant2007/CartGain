@@ -11,11 +11,7 @@ const CORE_VARS: Record<string, string> = {
   ENCRYPTION_KEY: 'Key used to encrypt stored API keys/secrets (openssl rand -base64 32)',
 }
 
-const PAYMENT_VARS: Record<string, string> = {
-  RAZORPAY_KEY_ID: 'Razorpay API key id',
-  RAZORPAY_KEY_SECRET: 'Razorpay API key secret',
-  RAZORPAY_WEBHOOK_SECRET: 'Razorpay webhook signature secret',
-}
+const PAYMENT_VARS: Record<string, string> = {}
 
 const AI_VARS: Record<string, string> = {
   OPENAI_API_KEY: 'OpenAI API key for AI-powered recovery content',

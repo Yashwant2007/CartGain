@@ -1,6 +1,7 @@
 import { createHash } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
+import { cleanCustomerName } from '@/lib/names'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { resolveActiveStoreIdByShopDomain } from '@/lib/stores/resolve-by-domain'
 import {
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     const email = normalizeRecipientEmail(text((body as any).email, 320))
     const phone = normalizeRecipientPhone(text((body as any).phone, 40))
-    const name = text((body as any).name, 120)
+    const name = cleanCustomerName(text((body as any).name, 120), email)
     const consentEmail = (body as any).consentEmail === true
     const consentWhatsApp = (body as any).consentWhatsApp === true
     const source = ALLOWED_SOURCES.has(String((body as any).source || ''))

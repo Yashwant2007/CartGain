@@ -10,6 +10,7 @@
 // attestation recorded from the recipients dashboard).
 
 import prisma from '@/lib/db'
+import { cleanCustomerName } from '@/lib/names'
 import { isValidEmail } from '@/lib/utils'
 import { normalizeWhatsAppPhone } from '@/lib/recovery/eligibility'
 
@@ -173,6 +174,7 @@ export async function upsertRecipient(input: RecipientContact): Promise<Recipien
   if (!storeId) return null
   const email = normalizeRecipientEmail(input.email)
   const phone = normalizeRecipientPhone(input.phone)
+  const name = cleanCustomerName(input.name, email)
   const shopifyCustomerId = input.shopifyCustomerId ? String(input.shopifyCustomerId).trim() : null
   if (!shopifyCustomerId && !email && !phone) return null
 
@@ -205,7 +207,7 @@ export async function upsertRecipient(input: RecipientContact): Promise<Recipien
         data: {
           storeId,
           shopifyCustomerId,
-          name: input.name?.trim() || null,
+          name,
           email,
           phone,
           emailConsentBasis: incomingBasis,
@@ -243,7 +245,7 @@ export async function upsertRecipient(input: RecipientContact): Promise<Recipien
     where: { id: primary.id },
     data: {
       shopifyCustomerId: shopifyCustomerId || merged.shopifyCustomerId,
-      name: input.name?.trim() || merged.name,
+      name: name || cleanCustomerName(merged.name, email || merged.email),
       email: email || merged.email,
       phone: phone || merged.phone,
       consentEmail: merged.consentEmail,

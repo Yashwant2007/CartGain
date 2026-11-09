@@ -139,7 +139,9 @@ These mirror the public app exactly (only the host differs). They must match
 
 - The scopes are pushed from `shopify.app.custom.toml` on deploy (identical to
   the public app):
-  `read_checkouts,write_checkouts,read_orders,read_all_orders,read_customers,read_products,read_product_listings,read_discounts,write_discounts`.
+  `read_orders,read_customers,read_products,write_discounts`.
+  The Admin API surface is GraphQL-only (`2026-04`); checkout, write, all-orders,
+  product-listing, and webhook scopes are not requested.
 - Because CartGain reads **customer and order** data, request **Protected
   customer data** access in the app's **API access** page (same as the public
   app). This is required even for custom apps.

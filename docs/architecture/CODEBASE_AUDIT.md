@@ -17,8 +17,8 @@
 | API | Next.js Route Handlers + NextAuth v4 (Credentials) |
 | DB | PostgreSQL (Supabase) via Prisma 5, `relationMode = "prisma"` |
 | Queue | Bull (`bull` + `ioredis`), in-process within Vercel serverless |
-| Messaging | Resend (email), WhatsApp webhook (Meta Graph), SMS via Resend/Razorpay paths |
-| Payments | Razorpay primary; Cashfree secondary; Shopify Billing (app subscription) |
+| Messaging | Resend (email), WhatsApp Cloud API (Meta Graph) |
+| Payments | Shopify Billing (app subscriptions + capped usage); Cashfree/Razorpay adapters retained for payment-recovery signals and legacy cancellation |
 | AI | OpenAI primary + OpenAI-compatible fallback (Groq, `gpt-oss-120b`) |
 | Tests | Jest 30 + ts-jest, 46 suites / 636 tests (all green) |
 | CI/CD | GitHub Actions: `backup.yml` (DB backup), `restore-test.yml` — **no CI workflow** |
@@ -30,8 +30,8 @@
   Shopify discount codes, daily goals, revenue-share attribution.
 - Recovery: abandoned-cart messages (email), recovery attribution lifecycle,
   cash-on-delivery nudges (COD→prepaid), RTO risk scoring.
-- Billing: Razorpay subscriptions, Shopify Billing reconcile, invoices,
-  revenue-share ledger.
+- Billing: Shopify Billing subscriptions + capped usage charges, invoices,
+  revenue-share ledger; Razorpay legacy cancellation only.
 - Security primitives that already exist (verified by reading the code):
   - `src/lib/env.ts` — runtime env validation with fail-fast for required vars.
   - `src/middleware.ts` — `x-request-id` trace corridor for `/api/*`.
@@ -124,7 +124,7 @@ install/pending-install flows present.
 ### 3.5 AI — `src/lib/ai-client.ts`, `src/lib/services/ai.ts`, quota + fallback.
 
 ### 3.6 Billing/subscription — `src/lib/payment.ts`, `src/lib/subscription.ts`,
-`src/lib/shopify-billing/*`, Razorpay subscriptions.
+`src/lib/shopify-billing/*`, Shopify Billing subscriptions.
 
 ---
 

@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import prisma from '@/lib/db'
 import { logDataAccess } from '@/lib/data-protection'
-import { cleanShopifyName, findShopifyCustomerNameByEmail, verifyShopifyWebhook } from '@/lib/shopify'
+import {
+  cleanShopifyName,
+  findShopifyCustomerContact,
+  findShopifyCustomerNameByEmail,
+  verifyShopifyWebhook,
+} from '@/lib/shopify'
 import { normalizeShopifyLineItems } from '@/lib/shopify-line-items'
 import { purgeStoreData, redactCustomer } from '@/lib/data-deletion'
 import {
@@ -481,15 +486,24 @@ async function handleCustomerSync(data: any, store: any) {
   if (id) cartMatch.push({ customerId: id })
   if (email) cartMatch.push({ customerEmail: email })
   if (phone) cartMatch.push({ customerPhone: phone })
-  if (name && cartMatch.length > 0) {
-    await prisma.cart
-      .updateMany({
-        where: { storeId: store.id, customerName: null, OR: cartMatch },
-        data: { customerName: name },
-      })
-      .catch((err) => {
-        console.error(`Cart name backfill failed for customer ${id || email || phone}:`, err?.message || err)
-      })
+  if (cartMatch.length > 0) {
+    const missing: Array<{ field: 'customerName' | 'customerEmail' | 'customerPhone'; value: string }> = []
+    if (name) missing.push({ field: 'customerName', value: name })
+    if (email) missing.push({ field: 'customerEmail', value: email })
+    if (phone) missing.push({ field: 'customerPhone', value: phone })
+    for (const item of missing) {
+      await prisma.cart
+        .updateMany({
+          where: { storeId: store.id, [item.field]: null, OR: cartMatch },
+          data: { [item.field]: item.value },
+        })
+        .catch((err) => {
+          console.error(
+            `Cart ${item.field} backfill failed for customer ${id || email || phone}:`,
+            err?.message || err,
+          )
+        })
+    }
   }
 
   await logDataAccess({
@@ -520,11 +534,22 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
 
   const cart = data
   const customerId = data.customer?.id ? String(data.customer.id) : null
-  const customerPhone = extractPhone(cart)
-  const customerEmail = cart.email || cart.customer?.email || null
-  const customerName =
-    extractName(cart) ||
-    (await findShopifyCustomerNameByEmail(store, customerEmail).catch(() => null))
+  const payloadPhone = extractPhone(cart)
+  const payloadEmail = cart.email || cart.customer?.email || null
+  const payloadName = extractName(cart)
+  // A signed-in shopper's phone/name live on the Shopify customer, not always
+  // on the cart payload. Resolve them so WhatsApp can send without asking the
+  // shopper to type anything into our widget or the checkout again.
+  const contact =
+    !payloadPhone || !payloadName
+      ? await findShopifyCustomerContact(store, {
+          email: payloadEmail,
+          customerId,
+        }).catch(() => null)
+      : null
+  const customerPhone = payloadPhone || contact?.phone || null
+  const customerEmail = payloadEmail || contact?.email || null
+  const customerName = payloadName || contact?.name || null
 
   await logDataAccess({
     actorType: 'system',
@@ -557,6 +582,10 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
       ...(customerEmail ? { customerEmail } : {}),
       ...(customerPhone ? { customerPhone } : {}),
       ...(customerName ? { customerName } : {}),
+      // Reset the abandonment clock on every cart update. A shopper still
+      // editing their cart is not abandoned yet; the reminder waits sendDelay
+      // minutes after their last activity instead of firing mid-session.
+      abandonedAt: new Date(),
       updatedAt: new Date(),
     },
     create: {

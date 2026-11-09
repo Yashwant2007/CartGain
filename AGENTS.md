@@ -41,6 +41,14 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 - Custom app: client_id `850b64332c8925413d0d6d8d39ede515`
   (`shopify.app.custom.toml`, app `CartGain Custom`, `custom.cart-gain.com`).
 - API version in use across `src/lib/shopify.ts`: `2026-04`.
+- Admin API is **GraphQL-only** (`shopifyGraphQL()`); the only non-GraphQL Admin
+  call is the OAuth token exchange. Webhooks are declared in the TOML configs and
+  registered by `shopify app deploy`; the runtime never creates webhooks.
+- OAuth scopes: `read_orders,read_customers,read_products,write_discounts`.
+  Abandoned checkouts need `read_orders`, not checkout scopes.
+- Paid plans use Shopify Billing (`appSubscription*` + capped
+  `appUsageRecordCreate`). Razorpay is legacy cancellation only. Custom
+  distribution cannot use Shopify Billing (free/manual contract).
 
 ## Bargain system map (key files)
 - `src/lib/services/bargain.ts` (~2755 lines) — negotiation engine: personas,
@@ -54,8 +62,9 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 - `src/lib/bargain/offers.ts` — `buildQuickOffers` (chips; never floor-derived).
 - `src/lib/bargain/engine.ts`, `goals.ts`, `discount.ts`, `product-fetcher.ts`,
   `gate.ts`, `policy.ts`, `offer-validation.ts`.
-- `src/lib/shopify.ts` — Shopify REST helpers (`fetchShopifyProducts`,
-  `fetchAbandonedCheckouts`, `syncAbandonedCheckouts`, OAuth/token refresh).
+- `src/lib/shopify.ts` — Shopify GraphQL Admin helpers (`shopifyGraphQL`,
+  `fetchShopifyProducts`, `fetchAbandonedCheckouts`, `syncAbandonedCheckouts`,
+  OAuth/token refresh); REST-shaped objects are returned for downstream callers.
 - `src/lib/whatsapp/discovery.ts` — Meta Graph WABA/phone-number discovery for
   the Recipients page (`discoverWhatsAppPhoneNumbers`); scans configured WABA ids
   and `/me/businesses`, dedupes WABAs. `src/lib/whatsapp/store-registry.ts`
@@ -78,6 +87,46 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   same consent action.
 
 ## Work log (most recent first)
+
+- `feat(recovery): capture checkout contact automatically and sync it to the
+  abandoned cart`. The checkout UI extension now mirrors Shopify's
+  `buyerIdentity` name/email/phone onto the cart we already captured as soon as
+  the shopper signs in or types it, so the abandoned-cart job has a contact
+  without re-entry or a button click. New public `POST
+  /api/recovery/checkout-contact` accepts only the unguessable checkout token
+  for a cart that already exists, fills only missing cart fields, upserts the
+  recipient registry, and never sets email/WhatsApp consent. The existing
+  explicit opt-in banner remains the only consent boundary and now also sends
+  `cartToken` so consent links the same cart. Also fixed the extension reading
+  the customer signal without `.current` (name was always blank) and extended
+  `handleCustomerSync` to backfill name/email/phone individually. Verified: Jest
+  **146 suites / 1566 tests**, tsc, lint and production build green; deployed to
+  Vercel (`/api/health` ok, DB/Redis/WhatsApp configured) and Shopify version
+  `cartgain-45`. Note: Meta's `131049` per-user marketing limit still means an
+  unsolicited WhatsApp marketing template may not deliver; email remains the
+  guaranteed channel and a customer-initiated WhatsApp chat opens the 24h
+  window.
+
+- `refactor(shopify): move the Admin API to GraphQL only and use Shopify Billing`
+  (committed `899831c7`, not deployed). Replaced every Admin REST resource call with GraphQL
+  (`2026-04`): `shopifyGraphQL()` in `src/lib/shopify.ts` now backs abandoned
+  checkouts, products, product price/detail, customer-name lookup, product
+  images, the OAuth callback shop read, and `/api/shopify/health`. The only
+  non-GraphQL Admin URL left is the OAuth token exchange. Webhook runtime
+  registration was deleted (`setupShopifyWebhooks` and friends); functional and
+  compliance topics live in `shopify.app.toml` / `shopify.app.custom.toml` and
+  are registered by `shopify app deploy`. OAuth scopes are now
+  `read_orders,read_customers,read_products,write_discounts` (checkout,
+  all-orders, product-listing, and deprecated webhook scopes removed). Billing
+  creation moved fully to Shopify Billing subscriptions plus capped app usage
+  records; Razorpay remains only as a legacy cancellation path. Updated the App
+  Store plan/listing docs, custom-distribution runbook, protected-data
+  readiness/review copy, README, env examples, and `FINAL_VERIFICATION.md` for
+  the GraphQL-only API, new scopes, Shopify Billing, and removed SMS/Razorpay
+  claims. Verified: Jest **145 suites / 1554 tests**, `tsc`, lint, and production
+  build green; `grep -R "admin/api" src | grep -v graphql.json` is empty. Not
+  deployed, so live 2026-04 schema responses, a fresh four-scope install, webhook
+  delivery, and a development-store billing subscribe/cancel are still pending.
 
 - `feat(bargain): make the products tab a working bargain toggle board`
   (committed `2793947a`, deployed release `2793947`). The Products tab now says
@@ -950,6 +999,9 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   extracted. Live/verified.
 
 ## Open / watch items
+- GraphQL-only Admin migration is local-only until deployed. Still unverified:
+  live 2026-04 schema responses, a fresh four-scope install, `shopify app deploy`
+  webhook delivery, and Shopify Billing subscribe/cancel on a development store.
 - Customer names are now captured on the public opt-in/cart/storefront forms and
   backfilled from customer/order webhooks. Existing production carts captured
   before `302b04d5` remain nameless; verify with a fresh shopper submission.

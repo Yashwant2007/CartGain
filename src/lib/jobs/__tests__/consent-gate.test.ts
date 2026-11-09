@@ -174,7 +174,7 @@ beforeEach(() => {
 })
 
 describe('recovery send-time consent gate', () => {
-  it('sends one WhatsApp courtesy reminder without explicit consent, but not email', async () => {
+  it('does not send WhatsApp without explicit consent, even as a courtesy reminder', async () => {
     prime()
     prismaMock.customerIdentity.create.mockResolvedValue(
       identity({ id: 'recipient-new', consentWhatsApp: false, consentEmail: false }),
@@ -182,24 +182,26 @@ describe('recovery send-time consent gate', () => {
 
     const result = await processAbandonedCarts(25)
 
-    expect(whatsappMock).toHaveBeenCalledTimes(1)
+    expect(whatsappMock).not.toHaveBeenCalled()
     expect(emailMock).not.toHaveBeenCalled()
-    expect(result.messagesSent).toBe(1)
+    expect(result.messagesSent).toBe(0)
   })
 
   it('sends a transactional email for a Shopify cart address without explicit consent', async () => {
     prime()
-    prismaMock.customerIdentity.create.mockImplementation(async ({ data }: any) => ({
-      ...identity({ id: 'recipient-new', consentWhatsApp: false, consentEmail: false }),
-      ...data,
-    }))
+    prismaMock.campaign.findMany.mockResolvedValue([
+      { ...campaign(), channels: ['email', 'whatsapp'] },
+    ])
+    prismaMock.customerIdentity.findMany.mockResolvedValue([
+      identity({ consentEmail: false, emailConsentBasis: 'transactional' }),
+    ])
 
     const result = await processAbandonedCarts(25)
 
     expect(emailMock).toHaveBeenCalledTimes(1)
     expect(emailMock.mock.calls[0][0].to).toBe('buyer@example.com')
-    expect(whatsappMock).toHaveBeenCalledTimes(1)
-    expect(result.messagesSent).toBe(2)
+    expect(whatsappMock).not.toHaveBeenCalled()
+    expect(result.messagesSent).toBe(1)
   })
 
   it('does not email a WhatsApp-only opt-in with no transactional basis', async () => {
@@ -225,8 +227,8 @@ describe('recovery send-time consent gate', () => {
     const result = await processAbandonedCarts(25)
 
     expect(whatsappMock).toHaveBeenCalledTimes(1)
-    expect(emailMock).toHaveBeenCalledTimes(1)
-    expect(result.messagesSent).toBe(2)
+    expect(emailMock).not.toHaveBeenCalled()
+    expect(result.messagesSent).toBe(1)
   })
 
   it('uses the consented identity phone when the cart has no phone', async () => {
@@ -243,7 +245,7 @@ describe('recovery send-time consent gate', () => {
       where: { id: 'cart-1' },
       data: { customerPhone: PHONE },
     })
-    expect(result.messagesSent).toBe(2)
+    expect(result.messagesSent).toBe(1)
   })
 
   it('ignores unsupported legacy channels instead of disabling supported ones', async () => {
@@ -276,10 +278,11 @@ describe('recovery send-time consent gate', () => {
       )
     })
 
-    // No matching identity → single courtesy WhatsApp is still sent.
-    await processAbandonedCarts(25)
+    // No matching identity → WhatsApp consent cannot be established, so no send.
+    const result = await processAbandonedCarts(25)
 
-    expect(whatsappMock).toHaveBeenCalledTimes(1)
+    expect(whatsappMock).not.toHaveBeenCalled()
+    expect(result.messagesSent).toBe(0)
   })
 
   it('stops every channel for a suppressed identity', async () => {
@@ -309,6 +312,9 @@ describe('recovery send-time consent gate', () => {
     delete process.env.WHATSAPP_PHONE_NUMBER_ID
     delete process.env.WHATSAPP_BUSINESS_TOKEN
     prime()
+    prismaMock.campaign.findMany.mockResolvedValue([
+      { ...campaign(), channels: ['email', 'whatsapp'] },
+    ])
     prismaMock.customerIdentity.findMany.mockResolvedValue([identity()])
 
     const result = await processAbandonedCarts(25)
@@ -332,12 +338,15 @@ describe('recovery send-time consent gate', () => {
         },
       ],
     })
+    prismaMock.campaign.findMany.mockResolvedValue([
+      { ...campaign(), channels: ['email', 'whatsapp'] },
+    ])
     prismaMock.customerIdentity.findMany.mockResolvedValue([identity()])
 
     await processAbandonedCarts(25)
 
     expect(emailMock).not.toHaveBeenCalled()
-    expect(whatsappMock).toHaveBeenCalledTimes(1)
+    expect(whatsappMock).not.toHaveBeenCalled()
   })
 
   it('retries after the backoff window has elapsed', async () => {
@@ -354,6 +363,9 @@ describe('recovery send-time consent gate', () => {
         },
       ],
     })
+    prismaMock.campaign.findMany.mockResolvedValue([
+      { ...campaign(), channels: ['email', 'whatsapp'] },
+    ])
     prismaMock.customerIdentity.findMany.mockResolvedValue([identity()])
 
     await processAbandonedCarts(25)
@@ -376,6 +388,9 @@ describe('recovery send-time consent gate', () => {
         },
       ],
     })
+    prismaMock.campaign.findMany.mockResolvedValue([
+      { ...campaign(), channels: ['email', 'whatsapp'] },
+    ])
     prismaMock.customerIdentity.findMany.mockResolvedValue([identity()])
 
     await processAbandonedCarts(25)

@@ -217,14 +217,32 @@ model Cart {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  store         Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  messages      Message[]
-  recoveredCart RecoveredCart?
+  store              Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  messages           Message[]
+  recoveredCart      RecoveredCart?
+  recoveryShortLinks RecoveryShortLink[]
 
   @@unique([storeId, cartId])
   @@index([storeId])
   @@index([storeId, isRecovered, abandonedAt])
   @@index([storeId, convertedAt, abandonedAt])
+}
+
+/// Compact, tracked links used in WhatsApp templates (where the URL button
+/// suffix is limited to 15 characters and long links make the message ugly).
+/// `/r/<code>` resolves the cart + destination, then records the click.
+model RecoveryShortLink {
+  code         String   @id
+  cartId       String
+  channel      String
+  kind         String // cart | bargain | checkout
+  discountCode String   @default("")
+  createdAt    DateTime @default(now())
+
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, channel, kind, discountCode])
+  @@index([cartId])
 }
 
 model Message {

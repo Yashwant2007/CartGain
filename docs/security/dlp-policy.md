@@ -3,7 +3,7 @@
 RecoveryFlow limits collection, access, export, and retention of merchant and customer data to the minimum required to operate the service.
 
 ## Scope
-- Production application data, logs, analytics, webhooks, emails, SMS, and support artifacts.
+- Production application data, logs, analytics, webhooks, emails, WhatsApp messages, and support artifacts.
 - All employees, contractors, and production systems that can access merchant or customer data.
 
 ## Controls

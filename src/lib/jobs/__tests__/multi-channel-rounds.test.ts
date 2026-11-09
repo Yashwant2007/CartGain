@@ -1,15 +1,12 @@
 /**
  * @jest-environment node
  *
- * Regression: the recovery job used to send at most ONE message per cart per
- * sweep and count every accepted message as a "step". A campaign with
- * WhatsApp + email therefore reminded the shopper on one channel only, and the
- * second channel arrived a whole follow-up delay later (or never, once the
- * message budget of `min(channels, maxFollowUps + 1)` was consumed).
- *
- * Expected behaviour now: a round touches every reachable channel, the next
- * round starts only after the follow-up delay, a channel that already sent in
- * the current round is skipped, and failures stay retryable at the same round.
+ * The recovery sweep is strictly sequential: one channel per sweep, in the
+ * merchant's configured order. A round is a full pass over the configured
+ * channels, so channels=[whatsapp,email] with maxFollowUps=2 schedules
+ * whatsapp(r0) → email(r0) → whatsapp(r1) → email(r1), each separated by the
+ * follow-up delay (floored at 30 minutes). Email and WhatsApp must never fire
+ * in the same sweep.
  */
 import { processAbandonedCarts } from '@/lib/jobs/processAbandonedCarts'
 import prisma from '@/lib/db'
@@ -163,50 +160,55 @@ beforeEach(() => {
   prismaMock.subscription.update.mockResolvedValue({})
 })
 
-describe('recovery rounds — every channel on the first reminder', () => {
-  it('sends WhatsApp AND email in the same round', async () => {
+describe('recovery sequence — one channel per sweep', () => {
+  it('sends only the first configured channel on the first sweep', async () => {
     prismaMock.campaign.findMany.mockResolvedValue([campaign()])
     prismaMock.cart.findMany.mockResolvedValueOnce([cart()]).mockResolvedValue([])
 
     const result = await processAbandonedCarts(25)
 
-    expect(result.messagesSent).toBe(2)
+    expect(result.messagesSent).toBe(1)
     expect(whatsappMock).toHaveBeenCalledTimes(1)
-    expect(emailMock).toHaveBeenCalledTimes(1)
-    const steps = prismaMock.message.create.mock.calls.map((c: any) => c[0].data.step)
-    expect(steps).toEqual([0, 0])
+    expect(emailMock).not.toHaveBeenCalled()
+    const created = prismaMock.message.create.mock.calls[0][0].data
+    expect(created).toMatchObject({ channel: 'whatsapp', step: 0 })
   })
 
-  it('sends the follow-up round to both channels once every channel completed round 0', async () => {
+  it('never sends two channels in the same sweep', async () => {
+    prismaMock.campaign.findMany.mockResolvedValue([campaign()])
+    prismaMock.cart.findMany.mockResolvedValueOnce([cart()]).mockResolvedValue([])
+
+    await processAbandonedCarts(25)
+
+    expect(prismaMock.message.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends the next configured channel on a later sweep once the first step completed', async () => {
     prismaMock.campaign.findMany.mockResolvedValue([campaign()])
     prismaMock.cart.findMany
       .mockResolvedValueOnce([
         cart({
-          messages: [
-            { channel: 'whatsapp', status: 'sent', step: 0 },
-            { channel: 'email', status: 'delivered', step: 0 },
-          ],
+          messages: [{ channel: 'whatsapp', status: 'sent', step: 0 }],
         }),
       ])
       .mockResolvedValue([])
 
     const result = await processAbandonedCarts(25)
 
-    expect(result.messagesSent).toBe(2)
-    const steps = prismaMock.message.create.mock.calls.map((c: any) => c[0].data.step)
-    expect(steps).toEqual([1, 1])
+    expect(result.messagesSent).toBe(1)
+    expect(whatsappMock).not.toHaveBeenCalled()
+    expect(emailMock).toHaveBeenCalledTimes(1)
+    const created = prismaMock.message.create.mock.calls[0][0].data
+    expect(created).toMatchObject({ channel: 'email', step: 1 })
   })
 
-  it('holds the follow-up until the follow-up delay has elapsed', async () => {
+  it('holds the next step until its scheduled follow-up delay has elapsed', async () => {
     prismaMock.campaign.findMany.mockResolvedValue([campaign()])
     prismaMock.cart.findMany
       .mockResolvedValueOnce([
         cart({
           abandonedAt: new Date(Date.now() - 30 * 60 * 1000),
-          messages: [
-            { channel: 'whatsapp', status: 'sent', step: 0 },
-            { channel: 'email', status: 'sent', step: 0 },
-          ],
+          messages: [{ channel: 'whatsapp', status: 'sent', step: 0 }],
         }),
       ])
       .mockResolvedValue([])
@@ -218,14 +220,32 @@ describe('recovery rounds — every channel on the first reminder', () => {
     expect(emailMock).not.toHaveBeenCalled()
   })
 
-  it('skips the channel that already sent this round and retries only the other', async () => {
+  it('retries only the current failed step, not the next channel', async () => {
     prismaMock.campaign.findMany.mockResolvedValue([campaign()])
     prismaMock.cart.findMany
       .mockResolvedValueOnce([
         cart({
+          messages: [{ channel: 'whatsapp', status: 'failed', step: 0, attempts: 0 }],
+        }),
+      ])
+      .mockResolvedValue([])
+
+    const result = await processAbandonedCarts(25)
+
+    expect(result.messagesSent).toBe(1)
+    expect(whatsappMock).toHaveBeenCalledTimes(1)
+    expect(emailMock).not.toHaveBeenCalled()
+  })
+
+  it('advances to the follow-up round after the scheduled interval', async () => {
+    prismaMock.campaign.findMany.mockResolvedValue([campaign()])
+    prismaMock.cart.findMany
+      .mockResolvedValueOnce([
+        cart({
+          abandonedAt: new Date(Date.now() - 7 * HOUR),
           messages: [
             { channel: 'whatsapp', status: 'sent', step: 0 },
-            { channel: 'email', status: 'failed', step: 0 },
+            { channel: 'email', status: 'delivered', step: 1 },
           ],
         }),
       ])
@@ -234,8 +254,10 @@ describe('recovery rounds — every channel on the first reminder', () => {
     const result = await processAbandonedCarts(25)
 
     expect(result.messagesSent).toBe(1)
-    expect(whatsappMock).not.toHaveBeenCalled()
-    expect(emailMock).toHaveBeenCalledTimes(1)
+    expect(whatsappMock).toHaveBeenCalledTimes(1)
+    expect(emailMock).not.toHaveBeenCalled()
+    const created = prismaMock.message.create.mock.calls[0][0].data
+    expect(created).toMatchObject({ channel: 'whatsapp', step: 2 })
   })
 
   it('stops after maxFollowUps rounds', async () => {
@@ -245,7 +267,7 @@ describe('recovery rounds — every channel on the first reminder', () => {
         cart({
           messages: [
             { channel: 'whatsapp', status: 'sent', step: 0 },
-            { channel: 'email', status: 'sent', step: 0 },
+            { channel: 'email', status: 'sent', step: 1 },
           ],
         }),
       ])

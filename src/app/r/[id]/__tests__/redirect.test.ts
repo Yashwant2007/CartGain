@@ -2,6 +2,7 @@ jest.mock('@/lib/db', () => ({
   __esModule: true,
   default: {
     cart: { findUnique: jest.fn() },
+    recoveryShortLink: { findUnique: jest.fn() },
     message: { findFirst: jest.fn(), update: jest.fn() },
     analytics: { upsert: jest.fn() },
   },
@@ -66,6 +67,28 @@ describe('GET /r/[id] — recovery redirect', () => {
       params: { id: 'cart_1' },
     })
     expect(location(res)).toBe('https://shop.myshopify.com/cart/shopify_cart_123')
+  })
+
+  it('resolves a compact /r/<code> link to the store checkout', async () => {
+    prismaMock.cart.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(cart)
+    prismaMock.recoveryShortLink.findUnique.mockResolvedValue({
+      code: 'lCheck123',
+      cartId: 'cart_1',
+      channel: 'whatsapp',
+      kind: 'checkout',
+      discountCode: 'GAINABC123',
+    })
+
+    const res = await GET(request(''), { params: { id: 'lCheck123' } })
+
+    expect(prismaMock.recoveryShortLink.findUnique).toHaveBeenCalledWith({
+      where: { code: 'lCheck123' },
+    })
+    expect(location(res)).toBe(
+      'https://shop.myshopify.com/discount/GAINABC123?redirect=%2Fcart%2Fshopify_cart_123'
+    )
   })
 
   it('records the click on the most recent sent message', async () => {

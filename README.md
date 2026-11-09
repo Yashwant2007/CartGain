@@ -21,8 +21,9 @@ with shoppers in real time — safely, within merchant-set price floors.
 - **RTO & payment recovery** — COD→prepaid nudges, RTO risk scoring, payment
   retry campaigns.
 - **Analytics** — recovered revenue, ROI, campaign A/B tests, bargain KPIs.
-- **Billing** — Razorpay subscriptions and Shopify Billing (app subscription)
-  with invoices and a revenue-share ledger.
+- **Billing** — Shopify Billing for app subscriptions and capped usage charges,
+  with a revenue-share ledger. Razorpay remains only as a legacy cancellation
+  path for pre-migration merchants.
 
 ## Tech stack
 
@@ -33,7 +34,7 @@ with shoppers in real time — safely, within merchant-set price floors.
 | Database | PostgreSQL (Supabase) |
 | Queue | Bull + ioredis (in-process on Vercel serverless) |
 | Auth | NextAuth.js v4 (credentials, 2FA/TOTP) |
-| Payments | Razorpay (primary) + Cashfree (secondary), Shopify Billing |
+| Payments | Shopify Billing (app charges); discount codes via Admin API |
 | WhatsApp | Meta Graph API (webhook, HMAC-verified) |
 | Email | Resend |
 | AI | OpenAI (primary) + OpenAI-compatible fallback (Groq) |
@@ -52,8 +53,10 @@ npm run dev
 Open http://localhost:3000
 
 Required env: `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`,
-`ENCRYPTION_KEY`, `RESEND_API_KEY`, Razorpay keys. See `.env.example` for the
-full list. Validate any missing variable with:
+`ENCRYPTION_KEY`, `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `RESEND_API_KEY`,
+`OPENAI_API_KEY`. Razorpay keys are only needed for legacy subscription
+cancellation. See `.env.example` for the full list. Validate any missing
+variable with:
 `npm run typecheck` and the `/api/health` endpoint (renders missing vars).
 
 ## Scripts
@@ -64,7 +67,7 @@ full list. Validate any missing variable with:
 | `npm run build` | `prisma generate && next build` |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Jest (unit + integration, 640+ tests) |
+| `npm test` | Jest (unit + integration, 1,550+ tests) |
 | `npm run vercel-build` | Vercel production build (`prisma migrate deploy && prisma generate && next build`) |
 
 ## Database migrations

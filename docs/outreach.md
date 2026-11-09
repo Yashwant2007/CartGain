@@ -20,7 +20,7 @@
 - #1 reason carts are abandoned is the price (extra costs / "too expensive" — Baymard keeps this ~48-50%)
 - No recovery reminder fixes a price objection — the customer just replies STOP
 - CartGain's **AI shopkeeper negotiates at checkout in real time**: lowball → counter → deal
-- Whatever still abandons gets recovered via WhatsApp + Email + SMS (18–25% benchmark)
+- Whatever still abandons gets recovered via WhatsApp + email (industry benchmarks vary by store)
 
 **The one-line pitch:**
 > They recover carts after people leave. We turn "too expensive" into "sold" before they do — and recover what's left.
@@ -78,7 +78,7 @@ and a real detail from their store if possible (e.g. a specific product).
 > - AI shopkeeper counters lowballs, handles walkouts ("match Amazon?"), and finds a deal
 > - Floor price is a hard, engine-level limit — never a prompt
 > - Accepted deals auto-generate a Shopify discount code
-> - WhatsApp + Email + SMS recovery catches whatever still walks away
+> - WhatsApp + email recovery catches whatever still walks away
 >
 > Watch a real negotiation here: https://cart-gain.com/demo (takes 30 seconds)
 >

@@ -174,4 +174,4 @@ Apps → your app → **API access requests** → **Protected customer data acce
 
 ---
 
-*Last updated: Nov 4, 2026.*
+*Last updated: Nov 5, 2026.*

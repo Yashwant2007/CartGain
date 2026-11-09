@@ -135,4 +135,4 @@ Capture from a signed-in dashboard Live Demo or a development store. The public
 
 ---
 
-*Last updated: Nov 4, 2026.*
+*Last updated: Nov 5, 2026.*

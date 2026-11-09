@@ -202,16 +202,17 @@ describe('processAbandonedCarts — A/B variant config is applied', () => {
       variantA: { maxFollowUps: 1 },
       variantB: { maxFollowUps: 1 },
     })
-    // Round 0 is complete (both channels accepted a message), so this is
-    // round 1. The variant allows only one round, so the follow-up must be
-    // skipped; the campaign budget (two rounds) would have allowed it.
+    // Round 0 is complete (the ordered pair whatsapp:0 then email:1 was sent),
+    // so the next step would be whatsapp:2. The variant allows only one round,
+    // so the follow-up must be skipped; the campaign budget (two rounds) would
+    // have allowed it.
     prismaMock.cart.findMany
       .mockResolvedValueOnce([
         cart({
           customerEmail: 'buyer@example.com',
           messages: [
             { channel: 'whatsapp', status: 'sent', step: 0 },
-            { channel: 'email', status: 'sent', step: 0 },
+            { channel: 'email', status: 'sent', step: 1 },
           ],
         }),
       ])

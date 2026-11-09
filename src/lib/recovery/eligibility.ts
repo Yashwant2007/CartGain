@@ -11,7 +11,6 @@ import { isValidPhone } from '@/lib/utils'
 
 export type WhatsAppBlockCode =
   | 'eligible'
-  | 'courtesy_single'
   | 'cart_converted'
   | 'store_inactive'
   | 'whatsapp_not_configured'
@@ -89,15 +88,11 @@ export function evaluateWhatsAppEligibility(
     return block('identity_mismatch', 'Consent is recorded for a different phone number')
   }
 
-  // No explicit WhatsApp consent: allow a single courtesy reminder so the
-  // shopper still gets one nudge. Subsequent rounds are blocked by the caller
-  // (processSingleCart checks for an already-sent WhatsApp message).
+  // Explicit WhatsApp consent is mandatory for business-initiated template
+  // delivery. A customer who has not opted in cannot receive WhatsApp
+  // recovery messages — use another eligible channel (email) instead.
   if (!identity || identity.consentWhatsApp !== true) {
-    return {
-      eligible: true,
-      code: 'courtesy_single',
-      reason: 'No explicit WhatsApp consent — single courtesy reminder only',
-    }
+    return block('no_consent', 'Recipient has not explicitly opted in to WhatsApp')
   }
 
   return { eligible: true, code: 'eligible', reason: 'Recipient can receive WhatsApp' }

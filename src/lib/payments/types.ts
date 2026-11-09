@@ -1,4 +1,4 @@
-export type GatewayName = 'razorpay' | 'cashfree' | 'payu' | 'stripe'
+export type GatewayName = 'cashfree' | 'payu' | 'stripe'
 
 export type FailureCategory =
   | 'bank_downtime'

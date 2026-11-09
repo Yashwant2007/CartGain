@@ -1,108 +1,91 @@
 import { buildRecoveryOfferLine } from '../offer-line'
 
-const checkout = 'https://cart-gain.com/r/cart_1?c=whatsapp&to=checkout&code=GAINABC123'
-const bargain = 'https://cart-gain.com/r/cart_1?c=whatsapp&to=bargain'
+const checkout = 'https://cart-gain.com/r/lCheck123'
 
 describe('buildRecoveryOfferLine', () => {
-  it('fills name, product, discount, code, checkout link and bargain link in order', () => {
+  it('weaves the customer name + personal discount into the offer line', () => {
     const line = buildRecoveryOfferLine({
       firstName: 'Priya',
       productSummary: 'Snowboard',
       discountLabel: '10% off',
       code: 'GAINABC123',
+      currencySymbol: '₹',
       checkoutUrl: checkout,
-      bargainUrl: bargain,
+      bargainUrl: 'https://cart-gain.com/r/lOldBargain',
     })
 
     expect(line).toContain('Priya')
-    expect(line).toContain('Snowboard')
-    expect(line).toContain('10% off')
+    expect(line).toContain('Priya, Your Snowboard is still saved.')
+    expect(line).toContain("I've set aside 10% off for you.")
     expect(line).toContain('code GAINABC123')
     expect(line).toContain(checkout)
-    expect(line).toContain(bargain)
-    expect(line.indexOf(bargain)).toBeLessThan(line.indexOf(checkout))
-    expect(line).toContain('🛒')
-    expect(line).toContain('💬 Bargain now:')
-    expect(line).toContain('🛒 Checkout:')
+    expect(line).not.toContain('lOldBargain')
+    expect(line).not.toContain('Bargain now')
+    expect(line).toContain('🛒 Complete checkout:')
   })
 
-  it('keeps a live checkout and bargain link when there is no discount', () => {
-    const checkoutWithoutCode = 'https://cart-gain.com/r/cart_1?c=whatsapp&to=checkout'
+  it('keeps a live checkout link when there is no discount', () => {
     const line = buildRecoveryOfferLine({
-      firstName: 'Priya',
       productSummary: 'Snowboard',
-      checkoutUrl: checkoutWithoutCode,
-      bargainUrl: bargain,
+      checkoutUrl: checkout,
     })
 
-    expect(line).toContain('is saved 🛒')
-    expect(line).toContain(checkoutWithoutCode)
-    expect(line).toContain(bargain)
+    expect(line).toContain('is still saved.')
+    expect(line).toContain(checkout)
     expect(line).not.toContain(' — code ')
   })
 
-  it('collapses whitespace and newlines so the template body stays one line', () => {
+  it('collapses whitespace in product text but keeps the CTA on its own line', () => {
     const line = buildRecoveryOfferLine({
-      firstName: '  Priya  ',
       productSummary: 'Snowboard\n  and bindings',
       discountLabel: '10%   off',
       code: ' GAINABC123 ',
       checkoutUrl: checkout,
-      bargainUrl: bargain,
     })
 
-    expect(line).not.toMatch(/\s{2,}/)
-    expect(line).not.toContain('\n')
+    expect(line).not.toMatch(/[^\n]\s{2,}/)
+    expect(line).toContain('\n🛒 Complete checkout:')
     expect(line).toContain('Snowboard and bindings')
   })
 
-  it('never truncates either URL when product names are huge', () => {
+  it('never truncates the URL when product names are huge', () => {
     const line = buildRecoveryOfferLine({
-      firstName: 'Priya',
       productSummary: `${'Very long product name '.repeat(40)}Snowboard`,
       discountLabel: '10% off',
       code: 'GAINABC123',
       checkoutUrl: checkout,
-      bargainUrl: bargain,
     })
 
     expect(line).toContain(checkout)
-    expect(line).toContain(bargain)
     expect(line).toContain('…')
-    expect(line.length).toBeLessThan(700)
+    expect(line.length).toBeLessThan(300)
   })
 
   it('still produces a non-empty line when every descriptive field is missing', () => {
-    const line = buildRecoveryOfferLine({ checkoutUrl: checkout, bargainUrl: bargain })
-    expect(line).toContain('is saved 🛒')
+    const line = buildRecoveryOfferLine({ checkoutUrl: checkout })
+    expect(line).toContain('Your cart is still saved.')
     expect(line).toContain(checkout)
-    expect(line).toContain(bargain)
   })
 
-  it('includes product price and qty when provided', () => {
+  it('includes currency, price and qty when provided', () => {
     const line = buildRecoveryOfferLine({
-      firstName: 'Priya',
       productSummary: 'Snowboard',
       productPrice: 299,
       productQty: 2,
-      discountLabel: '10% off',
-      code: 'GAINABC123',
+      currencySymbol: '₹',
       checkoutUrl: checkout,
-      bargainUrl: bargain,
     })
 
-    expect(line).toContain('299.00')
+    expect(line).toContain('₹299.00')
     expect(line).toContain('× 2')
   })
 
-  it('uses fallback "your cart" when product summary is empty', () => {
+  it('uses fallback "cart" when product summary is empty', () => {
     const line = buildRecoveryOfferLine({
-      firstName: 'Priya',
       productSummary: '',
       checkoutUrl: checkout,
-      bargainUrl: bargain,
     })
 
-    expect(line).toContain('your cart is saved 🛒')
+    expect(line).toContain('Your cart is still saved.')
   })
 })

@@ -1,34 +1,66 @@
-# Final Verification - All Requested Changes
+# Final Verification — Shopify GraphQL Admin API Migration
 
-## 1. Groq/Fallback Usage
-- [x] Added AI_FORCE_FALLBACK env override in ai-client.ts (forces fallback when true/1)
-- [x] Existing failover logic preserved (tries primary first unless forced)
-- [x] All failover tests pass (8/8 in provider-failover.test.ts)
-- [x] Groq configured with baseURL https://api.groq.com/openai/v1, model openai/gpt-oss-120b
+**Date**: Nov 5, 2026
+**State**: code complete, verified locally, and committed as `899831c7`; **not deployed**.
 
-## 2. Attempt Counting (No "normal talks" counted as attempts)
-- [x] Storefront (/api/bargain/offer): only counts when customerOffer != null (numeric)
-- [x] Demo (/app/demo): only counts when offer != null (extracted numeric price)
-- [x] Consistent behavior across both surfaces
-- [x] Tests still pass
+## 1. Admin API surface
 
-## 3. Storefront UI Cleanup
-- [x] Removed "Tell me about this product" quick chip from BargainWidget
-- [x] More professional, cleaner interface
-- [x] No other quick offer presets modified (keep existing safe quick offers)
+- [x] `src/lib/shopify.ts` exposes `SHOPIFY_API_VERSION = '2026-04'` and
+      `shopifyGraphQL()`; all Admin resource calls go through it.
+- [x] Abandoned checkouts use `abandonedCheckouts` (open checkouts only).
+- [x] Products/listings, product price/detail, and customer-name lookup use
+      `products` / `customers`.
+- [x] Product images use a GraphQL `product` query with Redis/memory caching.
+- [x] OAuth callback reads the shop with GraphQL `shop { email shopOwnerName }`.
+- [x] Shopify health uses GraphQL `shop { name }`.
+- [x] `grep -R "admin/api" src | grep -v graphql.json` returns no Admin REST calls.
+      The only non-GraphQL Admin URL is the OAuth token-exchange endpoint.
 
-## 4. WhatsApp Templates (3-step)
-- [x] Verified reminder/followup/urgent templates match exact specs
-- [x] Proper variable mapping {{1}}, {{2}}, {{3}} with URLs
-- [x] AI generates body content with Groq/OpenAI failover
-- [x] Personalized discounts and codes used from campaigns
+## 2. Webhooks
 
-## 5. GDPR Webhooks
-- [x] customers/data_request, customers/redact, shop/redact implemented
-- [x] HMAC verification with 200/401 contract tested
-- [x] Absolute URLs configured
+- [x] Functional + compliance topics are declared in `shopify.app.toml` and
+      `shopify.app.custom.toml`.
+- [x] Runtime webhook registration removed (`setupShopifyWebhooks`,
+      `createShopifyWebhook`, `createShopifyWebhookIfMissing` deleted).
+- [x] Compliance tests no longer assert a runtime/config sync path; HMAC `200/401`
+      contract remains covered.
 
-## 6. Scopes
-- [x] read_all_orders and read_product_listings added to both toml and OAuth
+## 3. Scopes
 
-All 782 tests pass (58 suites). Latest commit: 47b1f00d
+- [x] `read_orders,read_customers,read_products,write_discounts` in runtime OAuth,
+      both TOML files, and both env examples.
+- [x] Removed checkout, all-orders, product-listing, and deprecated webhook scopes.
+
+## 4. Billing
+
+- [x] Paid plans use Shopify Billing subscriptions + capped app usage records.
+- [x] Razorpay remains only as a legacy cancellation path.
+- [x] USD prices/caps remain explicit `[REQUIRES CONFIRMATION]` placeholders.
+
+## 5. Documentation
+
+- [x] `SHOPIFY_APP_STORE.md` — current scopes, GraphQL-only API, Shopify Billing,
+      corrected pricing, WhatsApp/email-only listing copy.
+- [x] `docs/shopify-app-store.md` — submission kit aligned to the code.
+- [x] `docs/shopify-custom-distribution.md` — no runtime webhook registration; custom
+      apps cannot use Shopify Billing.
+- [x] `SHOPIFY_PROTECTED_DATA_READINESS.md` — GraphQL data flow, consent, scopes, and
+      protected-field request (name/email/phone; no address persistence).
+- [x] `docs/security/shopify-review.md` — current four-scope questionnaire answer.
+
+## 6. Local verification
+
+```
+npm run typecheck   ✅
+npm run lint        ✅ no warnings or errors
+npm test            ✅ 145 suites / 1554 tests
+npm run build       ✅ production build
+```
+
+## 7. Not yet verified
+
+- Live Shopify 2026-04 GraphQL schema responses against a connected store.
+- A fresh OAuth install with the four-scope set.
+- Live webhook delivery after `shopify app deploy`.
+- Shopify Billing subscribe/cancel against a development store.
+- Production deploy and `/api/health` release check.

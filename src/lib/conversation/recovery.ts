@@ -104,8 +104,10 @@ export function singleLineMessage(body: string): string {
 export function stripLeadingGreeting(body: string, customerName?: string | null): string {
   const first = (customerName || '').split(' ')[0]?.trim()
   const patterns: RegExp[] = [
-    /^(hi|hey|hello|yo|dear)\s+[^,!.?]{1,30},\s*/i,
-    /^(hi|hey|hello|yo|dear)\s+[^,!.?]{1,30}[.!]\s+/i,
+    // Email addresses contain dots, so the generic patterns below stop early.
+    /^(hi|hey|hello|yo|dear)[,]?\s+[^\s,]+@[^\s,]+[,!.]?\s*/i,
+    /^(hi|hey|hello|yo|dear)\s+[^,]{1,60},\s*/i,
+    /^(hi|hey|hello|yo|dear)\s+[^,]{1,60}[.!]\s+/i,
   ]
   if (first) {
     const safe = first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

@@ -164,6 +164,9 @@ describe('processAbandonedCarts — opt-out is channel-agnostic', () => {
     expect(result.messagesSent).toBe(0)
     expect(emailMock).not.toHaveBeenCalled()
     expect(whatsappMock).not.toHaveBeenCalled()
-    expect(prismaMock.message.create).not.toHaveBeenCalled()
+    // A supplied step is recorded as skipped so the sequence advances, but
+    // nothing is actually sent.
+    const created = prismaMock.message.create.mock.calls.map((c: any) => c[0].data)
+    expect(created.every((d: any) => d.status === 'skipped')).toBe(true)
   })
 })

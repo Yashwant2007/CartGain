@@ -87,9 +87,9 @@ routes and discount generator are thin callers.
   If Shopify's price can't be verified it refuses (`503`) — it never falls back to a
   client-supplied price (that would defeat the floor).
 - **Refund netting on already-invoiced revenue share** is frozen (see 1.3.4) — surfaced by alert.
-- **Existing stores** must have `orders/cancelled` + `refunds/create` webhooks subscribed. The
-  subscription list now includes them for new installs; existing stores need a re-run of
-  `setupShopifyWebhooks` (or re-install) for those topics to start arriving.
+- **Existing stores** must have `orders/cancelled` + `refunds/create` webhooks subscribed.
+  They are declared in `shopify.app.toml`; run `shopify app deploy` (or re-install) for
+  those topics to start arriving. The runtime does not register webhooks.
 
 ---
 

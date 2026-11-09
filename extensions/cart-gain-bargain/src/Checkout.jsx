@@ -1,6 +1,6 @@
 import '@shopify/ui-extensions/preact';
 import { render } from 'preact';
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 
 const MAX_ATTEMPTS = 3;
 const PROFIT_PERCENT = 25;
@@ -95,13 +95,42 @@ function RecoveryOptIn() {
   const [state, setState] = useState('idle');
   const phone = api.buyerIdentity?.phone?.current || '';
   const email = api.buyerIdentity?.email?.current || '';
+  const customer = api.buyerIdentity?.customer?.current;
   const name =
-    [api.buyerIdentity?.customer?.firstName, api.buyerIdentity?.customer?.lastName]
-      .filter(Boolean)
-      .join(' ') ||
-    api.buyerIdentity?.customer?.name ||
-    api.buyerIdentity?.name ||
+    [customer?.firstName, customer?.lastName].filter(Boolean).join(' ') ||
+    customer?.name ||
     '';
+  const shopDomain = api.shop?.myshopifyDomain || '';
+  const checkoutToken = api.checkoutToken?.current || '';
+  const lastSynced = useRef('');
+
+  // Shopify fills buyerIdentity as the shopper signs in or types their details,
+  // often before the checkout webhook reaches the backend. Mirror that contact
+  // onto the captured cart immediately so an abandoned cart has a name/email/
+  // phone without the shopper re-entering anything or clicking a button.
+  //
+  // This is contact capture, not marketing consent: consent flags stay off and
+  // the explicit opt-in button below remains the only way to turn them on.
+  useEffect(() => {
+    if (!shopDomain || !checkoutToken) return;
+    if (!phone && !email && !name) return;
+    const key = [checkoutToken, name, email, phone].join('|');
+    if (lastSynced.current === key) return;
+    lastSynced.current = key;
+    fetch('https://cart-gain.com/api/recovery/checkout-contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        shop: shopDomain,
+        cartToken: checkoutToken,
+        name: name || null,
+        email: email || null,
+        phone: phone || null,
+      }),
+    }).catch((err) => {
+      console.error('Failed to sync checkout contact:', err);
+    });
+  }, [shopDomain, checkoutToken, name, email, phone]);
 
   if (!phone && !email) return null;
 
@@ -113,7 +142,8 @@ function RecoveryOptIn() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          shop: api.shop?.myshopifyDomain || '',
+          shop: shopDomain,
+          cartToken: checkoutToken || null,
           name: name || null,
           email: email || null,
           phone: phone || null,

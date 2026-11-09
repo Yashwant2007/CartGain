@@ -178,9 +178,10 @@ export async function sendWhatsAppMessage({
     // Compatibility retries. Meta's wording is opaque, so translate the two
     // approval mismatches we can actually fix:
     //   132001 = template not found for that language → try en_US
-    //   132000/131008 = component/param mismatch → drop the header first, then
-    //   (only if it still fails) drop the button too. Dropping everything at
-    //   once would break an approved dynamic URL button.
+    //   132000/131008 = component/param mismatch → drop the button first (the
+    //   common case: the approved template has a static button), then drop the
+    //   header only if it still fails. The approved recovery templates all
+    //   require an image header, so the header must be the last thing removed.
     if (!attempt.ok && templateName) {
       const codeOf = () => attempt.json?.error?.code
       if (codeOf() === 132001) {
@@ -189,17 +190,17 @@ export async function sendWhatsAppMessage({
       }
       if (codeOf() === 132000 || codeOf() === 131008) {
         const components: any[] = body.template?.components || []
-        const withoutHeader = components.filter((c) => c.type !== 'header')
-        if (withoutHeader.length !== components.length) {
-          body.template.components = withoutHeader
+        const withoutButton = components.filter((c) => c.type !== 'button')
+        if (withoutButton.length !== components.length) {
+          body.template.components = withoutButton
           attempt = await post(body)
         }
       }
       if (codeOf() === 132000 || codeOf() === 131008) {
         const components: any[] = body.template?.components || []
-        const bodyOnly = components.filter((c) => c.type === 'body')
-        if (bodyOnly.length !== components.length) {
-          body.template.components = bodyOnly
+        const withoutHeader = components.filter((c) => c.type !== 'header')
+        if (withoutHeader.length !== components.length) {
+          body.template.components = withoutHeader
           attempt = await post(body)
         }
       }
@@ -505,7 +506,7 @@ export async function getWhatsAppAccountInfo(opts?: {
 // be swapped for another without changing code):
 //   {{1}} = customer first name        (never empty — falls back to "there")
 //   {{2}} = AI-written body line       (validated, single line)
-//   {{3}} = offer line                 (code + 10% off + bargain link; never empty)
+//   {{3}} = offer line                 (product + price + code + one short link)
 //
 // IMPORTANT — components must match the APPROVED template exactly. Meta
 // rejects the entire send with (#132000) when we pass a component the template
@@ -514,9 +515,9 @@ export async function getWhatsAppAccountInfo(opts?: {
 //   * a header image is only sent when WHATSAPP_TEMPLATE_IMAGE_HEADER=true
 //     (i.e. the approved template has an IMAGE header);
 //   * a static footer is never sent as a parameter — it lives in the template;
-//   * the URL button is only sent when WHATSAPP_TEMPLATE_BUTTON_BASE is set,
-//     which means the approved button is dynamic (https://cart-gain.com/r/{{1}}).
-//     Sending a FULL url as the button parameter produces a broken double-url.
+//   * the URL button is sent when the caller passes a dynamic suffix (the short
+//     code); if the approved button is static, Meta rejects it and the sender
+//     retries without the button. Sending a FULL url produces a broken url.
 
 export type WhatsAppTemplateContext = {
   /** Dynamic suffix for a url button configured as `<base>/{{1}}`. */
