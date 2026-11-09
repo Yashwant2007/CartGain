@@ -53,12 +53,13 @@ export function buildRecoveryOfferLine(input: RecoveryOfferLineInput): string {
   // the copy layer never invents a discount.
   let offer = ''
   if (discount && code) {
-    const nameBit = input.firstName ? `${input.firstName}, ` : ''
-    offer = ` — ${nameBit}I've set aside ${discount} for you. Use code ${code}`
+    offer = ` — I've set aside ${discount} for you. Use code ${code}`
   } else if (code) {
-    const nameBit = input.firstName ? `${input.firstName}, ` : ''
-    offer = ` — ${nameBit}use code ${code}`
+    offer = ` — use code ${code}`
   }
 
-  return `${input.firstName ? `${input.firstName}, ` : ''}Your ${products}${priceBit} is still saved.${offer}\n🛒 Complete checkout: ${input.checkoutUrl}`
+  const bargainLine = input.bargainUrl
+    ? `\n💬 Bargain now: ${input.bargainUrl}`
+    : ''
+  return `${input.firstName ? `${input.firstName}, ` : ''}Your ${products}${priceBit} is still saved.${offer}${bargainLine}\n🛒 Complete checkout: ${input.checkoutUrl}`
 }

@@ -1111,6 +1111,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
               : `${currencySymbol}${authorisedDiscount.value} off`
           : ''
         const checkoutLink = await linkFor('whatsapp', 'checkout')
+        const bargainLink = await linkFor('whatsapp', 'bargain')
         const productSummary = formatProductList(cartItems, 2)
         const firstItem = cartItems[0]
         const offerLine = buildRecoveryOfferLine({
@@ -1122,6 +1123,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           currencySymbol,
           code: authorisedDiscount?.code,
           checkoutUrl: checkoutLink.url,
+          bargainUrl: bargainLink.url,
         })
 
         const previousFailure = existingMessage?.status === 'failed'

@@ -19,8 +19,8 @@ describe('buildRecoveryOfferLine', () => {
     expect(line).toContain("I've set aside 10% off for you.")
     expect(line).toContain('code GAINABC123')
     expect(line).toContain(checkout)
-    expect(line).not.toContain('lOldBargain')
-    expect(line).not.toContain('Bargain now')
+    expect(line).toContain('lOldBargain')
+    expect(line).toContain('💬 Bargain now:')
     expect(line).toContain('🛒 Complete checkout:')
   })
 
