@@ -60,6 +60,7 @@ const CHARACTERS: Record<
 const AVATAR_CSS = `
 .cg-avatar { transform-origin: 50% 78%; will-change: transform; }
 .cg-avatar--idle, .cg-avatar--listening { animation: cgAvBreathe 3.6s ease-in-out infinite; }
+.cg-av-wave { animation: cgAvWave 2.4s ease-in-out infinite; transform-box: fill-box; }
 .cg-avatar--thinking, .cg-avatar--curious { animation: cgAvSway 2.5s ease-in-out infinite; }
 .cg-avatar--negotiating, .cg-avatar--happy { animation: cgAvBob 1.05s ease-in-out infinite; }
 .cg-avatar--surprised { animation: cgAvPop .42s cubic-bezier(.2,.9,.3,1.4); }
@@ -71,6 +72,7 @@ const AVATAR_CSS = `
 .cg-av-confetti { animation: cgAvConfetti 1.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
 .cg-av-glow { animation: cgAvGlow 1.2s ease-in-out infinite; }
 @keyframes cgAvBreathe { 0%,100% { transform: scale(1) translateY(0); } 50% { transform: scale(1.025) translateY(-1px); } }
+@keyframes cgAvWave { 0%,100% { transform: rotate(0deg); } 25% { transform: rotate(18deg); } 50% { transform: rotate(-4deg); } 75% { transform: rotate(12deg); } }
 @keyframes cgAvSway { 0%,100% { transform: rotate(0deg) translateY(0); } 50% { transform: rotate(2.2deg) translateY(-1px); } }
 @keyframes cgAvBob { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-2px) rotate(-1deg); } }
 @keyframes cgAvBounce { 0%,100% { transform: translateY(0) scale(1); } 40% { transform: translateY(-2px) scale(1.04); } 70% { transform: translateY(0) scale(.99); } }
@@ -182,6 +184,15 @@ export function ShopkeeperAvatar({
           <ellipse cx="32" cy="31" rx="17" ry="19" fill={character.skin} />
           <ellipse cx="32" cy="30" rx="14.5" ry="15.5" fill={character.skin} opacity="0.35" />
 
+          {/* Arms + hands — wave on greeting/happy states */}
+          <g className={animate && (expression === 'idle' || expression === 'listening' || expression === 'happy' || expression === 'celebrating') ? 'cg-av-wave' : undefined} style={{ transformOrigin: '46px 44px' }}>
+            <path d="M46 44c2 2 4 5 4 9" fill="none" stroke={character.outfit} strokeWidth="3.2" strokeLinecap="round" />
+            <circle cx="50" cy="53" r="2.6" fill={character.skin} />
+          </g>
+          <g>
+            <path d="M18 44c-2 2-4 5-4 9" fill="none" stroke={character.outfit} strokeWidth="3.2" strokeLinecap="round" />
+            <circle cx="14" cy="53" r="2.6" fill={character.skin} />
+          </g>
           {personality === 'friendly_shopkeeper' && (
             <>
               <path d="M15 29c0-11 7.5-18 17-18s17 7 17 18c-3.5-4.5-8.5-7-17-7s-13.5 2.5-17 7z" fill={character.hair} />

@@ -1941,9 +1941,27 @@ export default function BargainWidget({
         .cartgain-bargain a:focus-visible,
         .cartgain-bargain input:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px }
         .cartgain-bargain .cg-composer:focus-within {
-          border-color: #a5b4fc;
-          box-shadow: 0 0 0 4px rgba(99,102,241,0.16), 0 4px 12px rgba(15,23,42,0.10);
+          border-color: #818cf8;
+          box-shadow: 0 0 0 4px rgba(99,102,241,0.22), 0 8px 20px rgba(99,102,241,0.14);
           background: #ffffff;
+          transform: translateY(-1px);
+        }
+        .cartgain-bargain .cg-composer .cg-btn-send--inline {
+          background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+          color: #ffffff;
+          border-radius: 12px;
+          padding: 0 16px;
+          height: 44px;
+          font-weight: 700;
+          box-shadow: 0 4px 12px rgba(99,102,241,0.35);
+          transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+        }
+        .cartgain-bargain .cg-composer .cg-btn-send--inline:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 16px rgba(99,102,241,0.45);
+        }
+        .cartgain-bargain .cg-composer .cg-btn-send--inline:active:not(:disabled) {
+          transform: translateY(0);
         }
 
         .cg-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0 }
