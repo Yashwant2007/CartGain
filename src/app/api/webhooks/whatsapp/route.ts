@@ -58,7 +58,23 @@ async function resolveInboundStoreIds(
       take: 20,
     })
     .catch(() => [] as Array<{ storeId: string }>)
-  return Array.from(new Set([...carts, ...identities].map((c) => c.storeId)))
+  const resolved = Array.from(new Set([...carts, ...identities].map((c) => c.storeId)))
+  if (resolved.length > 0) return resolved
+
+  // Last resort for the shared sender: if there is exactly one active store,
+  // attribute the inbound message to it so START/STOP and the 24h window are
+  // recorded instead of being silently dropped.
+  try {
+    const activeStores = await prisma.store.findMany({
+      where: { isActive: true },
+      select: { id: true },
+      take: 2,
+    })
+    if (activeStores.length === 1) return [activeStores[0].id]
+  } catch {
+    // ignore
+  }
+  return []
 }
 
 async function recordInboundWindow(storeIds: string[], phone: string): Promise<void> {

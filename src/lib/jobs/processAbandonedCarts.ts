@@ -413,16 +413,19 @@ let cursor: string | undefined
 
       if (carts.length === 0) break
 
-      // ── Same-batch customer dedupe ──────────────────────────────────────
-      // The cart-token / checkout-token dual-family rows can represent the SAME
-      // abandonment as two Cart rows for one customer. At most ONE message per
-      // customer per batch, otherwise a recovery cycle can spam the same buyer
-      // twice. Trade-off (documented in docs): two genuinely different carts of
-      // the same customer in one batch get queued to the next cycle.
       const seenCustomers = new Set<string>()
+      // Shopify creates a new checkout token per cart edit/visit, so one
+      // shopper can produce several Cart rows for the same product. Treat
+      // those as a single abandonment: at most ONE sequence per customer per
+      // product per store sweep. Different products still get their own
+      // sequence. Carts without contact info can't be deduped and pass through.
       const candidates = carts.filter((cart: any) => {
-        const key = (cart.customerEmail || cart.customerPhone || '').toLowerCase().trim()
-        if (!key) return true
+        const customerKey = (cart.customerEmail || cart.customerPhone || '').toLowerCase().trim()
+        if (!customerKey) return true
+        const productKey = Array.isArray(cart.items)
+          ? cart.items.map((i: any) => String(i?.name || '').toLowerCase().trim()).filter(Boolean).sort().join('|')
+          : ''
+        const key = `${customerKey}::${productKey}`
         if (seenCustomers.has(key)) return false
         seenCustomers.add(key)
         return true
@@ -537,6 +540,35 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     // A purchase may land between the sweep's SELECT and this cart's turn.
     // Never message a cart that has already converted.
     if (cart.convertedAt || cart.isRecovered) return { sent: 0, failed: 0 }
+
+    // Cross-cart dedupe: if any cart for the same customer (same email/phone)
+    // already has a sent/delivered message on WhatsApp, skip WhatsApp for this
+    // cart. Email can still be sent if it hasn't been used yet.
+    const customerEmailForDedupe = cart.customerEmail?.toLowerCase().trim()
+    const customerPhoneForDedupe = cart.customerPhone?.replace(/\D/g, '')
+    let whatsappAlreadySentForCustomer = false
+    if (customerEmailForDedupe || customerPhoneForDedupe) {
+      const orConditions: Array<Record<string, string>> = []
+      if (customerEmailForDedupe) orConditions.push({ customerEmail: cart.customerEmail })
+      if (customerPhoneForDedupe) orConditions.push({ customerPhone: cart.customerPhone })
+
+      if (orConditions.length > 0) {
+        const existingSent = await prisma.message.findMany({
+          where: {
+            cart: {
+              storeId: store.id,
+              OR: orConditions,
+            },
+            status: { in: ['sent', 'delivered'] },
+            channel: 'whatsapp',
+          },
+          take: 1,
+        })
+        if (Array.isArray(existingSent) && existingSent.length > 0) {
+          whatsappAlreadySentForCustomer = true
+        }
+      }
+    }
 
     // Resolve the A/B variant FIRST: its channels/delays/step-budget override the
     // campaign defaults, and every decision below (step guard, delay guard,
@@ -733,6 +765,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     } else {
       if (!whatsappPhone) channelSkipReason = 'missing_phone'
       else if (!whatsappEligibility.eligible) channelSkipReason = whatsappEligibility.code
+      else if (whatsappAlreadySentForCustomer) channelSkipReason = 'whatsapp_already_sent_for_customer'
     }
 
     if (channelSkipReason) {
@@ -747,7 +780,6 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         step,
         reason: channelSkipReason,
       })
-      console.log(`[recovery] cart=${cart.id} step=${step} ${channel} skipped: ${channelSkipReason}`)
       return { sent: 0, failed: 0 }
     }
 
@@ -1283,6 +1315,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       phone: cart.customerPhone,
       channel: ch as 'email' | 'whatsapp',
     }).catch(() => {})
+
     if (subscription) {
       await incrementCartsUsedCounter(campaign.userId, subscription.id)
       if (isOverageChannel(ch)) {
