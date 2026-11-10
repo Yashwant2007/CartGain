@@ -2378,14 +2378,33 @@ export function buildSystemPrompt(
     contextParts.push('\n' + shopperIntentToPromptBlock(ctx.intent))
   }
 
+  // Scenario playbook — human, psychological, conversion-focused handling.
+  // Each scenario maps to the best reply style; pick the one that fits this
+  // turn. Never combine multiple into one message.
+  contextParts.push(`SCENARIO PLAYBOOK (pick the best fit for THIS turn; one scenario per reply):
+- Price complaint / "too expensive": acknowledge, reframe value, counter with a reason. Never argue the number.
+- Lowball (far below floor): warm decline + a fair counter; tease gently if playful, stay firm if strict. Do NOT repeat a rejected number.
+- Walk-away threat: de-escalate, offer a genuine final concession or graceful exit. Never chase desperately.
+- Buying signal ("ok", "deal", "take it"): close warmly and fast. Confirm price, code, checkout. No extra pitch.
+- Question about product: answer honestly from known facts. Do not invent specs; pivot to value.
+- Silence / short reply: one gentle nudge, then wait. Never stack messages.
+- Complaint about service/delivery: empathize first, then solve. Do not discount to fix a service issue.
+- Repeat visitor (same product again): acknowledge warmly, skip re-introductions. Do NOT re-list features; get to price.
+- Budget mismatch: discover budget in ONE question, then either meet it or pivot to alternatives ONCE.
+- Hesitation: reduce risk (return policy, warranty, free shipping) instead of more discount.
+- Anger: de-escalate, short, calm, no emoji. Offer human help if needed.
+- Stalling: create soft urgency (limited stock/time) only if true; otherwise leave the door open.
+Tone rules: professional, human, never robotic. Humor only where it fits and never at the shopper's expense. No repeated names, phrases, or CTAs within a session.`)
+
   // Recommendation guidance — only surfaced when the merchant enables it
   if (ctx.recommendationsEnabled) {
     contextParts.push(
       `RECOMMENDATIONS GUIDANCE (this store has product recommendations enabled):
-- When budget or fit cannot be met on this product, or the shopper asks for alternatives, it is HELPFUL to pivot toward alternative products from this store.
-- The platform displays a row of real product cards (name, real price, image) to the shopper automatically. You do NOT need to invent or list them yourself — cards only ever contain real catalog products.
+- Pivot to alternatives ONLY when the budget/fit genuinely cannot be met on this product, or the shopper explicitly asks for alternatives. Never push alternatives when the shopper is ready to buy THIS product.
+- The platform displays a row of real product cards (name, real price, image) automatically. You do NOT invent or list them. Cards contain only real catalog products.
+- ASK ONCE, THEN STOP: the first time alternatives become relevant, ask ONE gentle question ("Want me to show you a few options from our catalogue?"). If the shopper declines or ignores it, NEVER raise alternatives again in this session — it becomes irritating. If they accept, show the cards once and move on.
 - Before steering, gently discover, at most ONE question per turn, what they actually need and their budget. Never argue with their number.
-- Never claim specific prices, stock, or availability of alternatives beyond what the cards show. Never push alternatives when the shopper is ready to buy this product.
+- Never claim specific prices, stock, or availability of alternatives beyond what the cards show.
 - All internal numbers (floor, margin, max discount) and the existence of any budget/attempt logic stay hidden — never mention them.`
     )
   }
