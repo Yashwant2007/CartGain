@@ -1,4 +1,5 @@
 import { resolveWhatsAppAccessToken } from './config'
+import { getBreaker } from '@/lib/resilience/circuit-breaker'
 
 export type DiscoveredWhatsAppNumber = {
   id: string
@@ -37,10 +38,14 @@ function configuredWabaIds(): string[] {
 async function graphGet(path: string, accessToken: string): Promise<{ ok: boolean; body: any }> {
   const version = process.env.WHATSAPP_API_VERSION || 'v22.0'
   try {
-    const response = await fetch(`https://graph.facebook.com/${version}/${path}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      signal: AbortSignal.timeout(10000),
-    })
+    // Fail fast when Meta is unreachable: after repeated *thrown* errors the
+    // breaker short-circuits discovery instead of stacking 10s timeouts.
+    const response = await getBreaker('whatsapp-discovery', { failureThreshold: 5, cooldownMs: 30_000 }).execute(() =>
+      fetch(`https://graph.facebook.com/${version}/${path}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(10000),
+      })
+    )
     const body = await response.json().catch(() => ({}))
     return { ok: response.ok, body }
   } catch (error: any) {
