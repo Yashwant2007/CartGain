@@ -88,6 +88,29 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(bargain): seed the default learning config for every store`. Stores no
+  longer need a manual Settings save to get a `BargainLearningConfig` row (the
+  gap left `/demo` learning off for new stores and for two production stores
+  without a row). New `ensureLearningConfig()` in
+  `src/lib/bargain/learning/service.ts` reads the row and, when missing,
+  creates it with bare `{ storeId }` so the schema defaults apply — production
+  learning stays OFF, demo learning ON, identical to the originally seeded
+  stores — absorbs a P2002 seed race by re-reading, and is a graceful no-op
+  when the model is unavailable. Wired into two places only: the Shopify OAuth
+  callback seeds the row right after a store connects (best-effort, can never
+  block an install), and `previewDemoLearning` ensures it on the first
+  meaningful demo turn so existing stores self-heal. The production read paths
+  (`resolveSessionLearning`, `/api/bargain/offer`) stay read-only and never
+  seed; the merchant GET keeps `configured` meaning "a persisted row exists".
+  Also verified the whole Open/watch list line by line against live
+  production (release `4ca03b3` = HEAD at the time): GraphQL-only Admin is
+  deployed and working (fresh carts synced 2026-11-10 on `test4cg`), fresh
+  shopper carts now capture name+email+phone, `test4cg.myshopify.com` is an
+  active connected store, live consents exist (3 WhatsApp / 2 email), 2
+  WhatsApp reminders reached `read`, and `fetchShopifyCarts` is fully gone.
+  Verified: Jest **163 suites / 1700 tests**, tsc, lint and production build
+  green.
+
 - `feat(recovery): capture checkout contact automatically and sync it to the
   abandoned cart`. The checkout UI extension now mirrors Shopify's
   `buyerIdentity` name/email/phone onto the cart we already captured as soon as
@@ -999,31 +1022,22 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   extracted. Live/verified.
 
 ## Open / watch items
-- GraphQL-only Admin migration is local-only until deployed. Still unverified:
-  live 2026-04 schema responses, a fresh four-scope install, `shopify app deploy`
-  webhook delivery, and Shopify Billing subscribe/cancel on a development store.
-- Customer names are now captured on the public opt-in/cart/storefront forms and
-  backfilled from customer/order webhooks. Existing production carts captured
-  before `302b04d5` remain nameless; verify with a fresh shopper submission.
-- Recovery is consent-first after the opt-in change: `processAbandonedCarts`
-  requires `consentEmail` for email and explicit WhatsApp consent, and
-  `processRecoveryJourneys` requires channel consent. Production had **0**
-  email/WhatsApp consents at the time of the change, so existing carts will not
-  be messaged until shoppers use the new form/checkout action (intended). The
-  checkout extension is released as `cartgain-38`, but the theme app embed must
-  still be enabled in the theme editor before capture renders.
-- There is currently **no active connected Shopify store** in production: the
-  rows that still have an encrypted access token are `isActive=false`, and the
-  active rows have `apiKey=null`. The public opt-in endpoint therefore answers
-  404 "Store not found" and the abandoned-cart sweep has no store to process.
-  A merchant must reinstall/reconnect before live consent or reminder delivery
-  can be verified (`/api/health` checks app credentials, not store tokens).
+- GraphQL-only Admin API is deployed and working (live release matches HEAD;
+  fresh carts sync on `test4cg` via `shopifyGraphQL`). Still unverified
+  merchant-side: a fresh four-scope install, `shopify app deploy` webhook
+  delivery, and Shopify Billing subscribe/cancel on a development store.
+- Recovery is consent-first and live consents now exist (3 WhatsApp / 2 email,
+  2 reminders read). The checkout extension is released as `cartgain-38`+;
+  the theme app embed must still be enabled in the theme editor before the
+  storefront capture renders.
 - The public opt-in endpoint verifies product title/link/image server-side to
   avoid branded spam/phishing, but it is still a public form with no email
   double-opt-in; per-IP/contact rate limits reduce abuse. Add confirmation mail
   if consent proof needs to be stronger for a compliance review.
-- Campaigns can still store `sms`/`push` channel selections, but the recovery
-  sender only implements email/WhatsApp; those selections are ignored.
+- Campaign create/update validation only accepts `email`/`whatsapp`
+  (`campaignChannelSchema`), and the recovery sender filters to implemented
+  channels; a few legacy production rows still store `sms` selections, which
+  are ignored everywhere they are read.
 - Storefront invitations only replace the direct-chat drawer after a merchant
   publishes an experience (`experiencePublished` exists). Draft-only stores keep
   the prior behavior on purpose; the dashboard preview uses the draft and emits
@@ -1031,10 +1045,6 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 - Experience analytics only count published storefronts. A design table can be
   empty while the session funnel has data (pre-experience sessions are grouped
   under `unknown` by design/personality); that is expected, not no data.
-- New stores do not get a `BargainLearningConfig` row automatically, so
-  `/demo` learning stays off for them until the merchant opens Settings →
-  Bargain learning and saves (the existing 8 stores were seeded). Production
-  learning is deliberately off until enabled there.
 - WhatsApp inbound is unblocked: production `/api/health` now reports
   `checks.whatsapp.appSecret: true` with `verifyToken` and `configured` true
   (secret set in Vercel). Local `.env` WhatsApp credentials are still
@@ -1048,8 +1058,5 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   confirmed by Shopify's scanner (it loads the app in the admin iframe); the
   code side is verified (script + meta served in `<head>`, token exchanged via
   `/api/shopify/embed-auth`), the dashboard verdict still has to be observed.
-- `fetchShopifyCarts` (`/admin/api/2026-04/carts.json`) is not a real Shopify REST
-  resource and is only referenced by tests (`shopify-retry.test.ts`); production
-  cart sync uses `syncAbandonedCheckouts`. Fix it if it's ever wired in.
 - `/demo` real code/details only engage when the signed-in merchant has a connected
   Shopify store; new-signup accounts get sample products + sample codes.
