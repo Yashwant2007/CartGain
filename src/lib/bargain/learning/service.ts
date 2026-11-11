@@ -81,6 +81,43 @@ export async function loadLearningConfig(
   }
 }
 
+/**
+ * Load the store's learning config, creating the default row when missing.
+ *
+ * New stores used to get no BargainLearningConfig row, so demo learning stayed
+ * off until a merchant opened Settings → Bargain learning and saved once (only
+ * the original stores were seeded). Creating the row with bare `{ storeId }`
+ * relies on the schema defaults, which match `learningConfigDefaults()`
+ * exactly: production learning stays OFF (enabled=false) and demo learning is
+ * ON (demoEnabled=true) — the same posture as the seeded stores. Read paths
+ * that must never write (`resolveSessionLearning`, the offer route) keep using
+ * `loadLearningConfig`.
+ */
+export async function ensureLearningConfig(
+  storeId: string,
+): Promise<LearningConfigView | null> {
+  try {
+    const model = (prisma as any).bargainLearningConfig
+    if (!model?.findUnique) return null
+    let row = await model.findUnique({ where: { storeId } })
+    if (!row && model.create) {
+      try {
+        row = await model.create({ data: { storeId } })
+      } catch (err: any) {
+        // A concurrent first reader created the row already.
+        if (err?.code !== 'P2002') throw err
+        row = await model.findUnique({ where: { storeId } })
+      }
+    }
+    return mapConfig(row)
+  } catch (err: any) {
+    if (err?.code !== 'P2021' && err?.code !== 'P2022') {
+      console.warn('[bargain-learning] config ensure failed:', err?.message ?? err)
+    }
+    return null
+  }
+}
+
 function productionMode(config: LearningConfigView): LearningMode {
   if (!config.enabled) return 'baseline'
   return config.shadowMode ? 'shadow' : 'active'
@@ -468,7 +505,9 @@ export async function previewDemoLearning(params: {
   demoSessionId?: string | null
 }): Promise<ResolvedLearning | null> {
   try {
-    const config = await loadLearningConfig(params.storeId)
+    // ensure (not just load): a store without a config row must still get
+    // demo learning, exactly like the originally seeded stores.
+    const config = await ensureLearningConfig(params.storeId)
     const mode = demoMode(config)
     if (!config || mode === 'baseline') return null
     const context = { ...params.context, config }

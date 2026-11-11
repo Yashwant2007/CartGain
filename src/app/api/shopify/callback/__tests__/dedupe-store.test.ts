@@ -23,6 +23,7 @@ jest.mock('@/lib/db', () => ({
     campaign: { count: jest.fn(), create: jest.fn() },
     aiSuggestion: { create: jest.fn() },
     bargainConfig: { upsert: jest.fn() },
+    bargainLearningConfig: { findUnique: jest.fn(), create: jest.fn() },
   },
 }))
 
@@ -207,6 +208,19 @@ describe('Shopify install callback — store de-duplication', () => {
         }),
       }),
     )
+  })
+
+  it('seeds the default bargain-learning config for the connected store', async () => {
+    prismaMock.store.findFirst.mockResolvedValue(null)
+
+    await GET(makeRequest())
+
+    // The store created by the install is store-new (see the create mock);
+    // the seed must rely on schema defaults only (production learning off,
+    // demo learning on) and never block the install.
+    expect(prismaMock.bargainLearningConfig.create).toHaveBeenCalledWith({
+      data: { storeId: 'store-new' },
+    })
   })
 
   it('falls back to the Admin API shop owner for offline-token installs', async () => {

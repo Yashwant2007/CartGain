@@ -10,6 +10,7 @@ import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
 import { mintNextAuthSessionCookie } from '@/lib/session-cookie'
 import { shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
+import { ensureLearningConfig } from '@/lib/bargain/learning/service'
 
 export const dynamic = 'force-dynamic'
 
@@ -299,6 +300,13 @@ export async function GET(req: NextRequest) {
           shopifyTokenExpiresAt: tokenExpiresAt,
         },
       })
+
+      // Give every freshly connected store the default learning config row so
+      // demo learning works from the first turn (production learning stays
+      // OFF until the merchant enables it in Settings). Best-effort only:
+      // ensureLearningConfig swallows its own failures and must never block
+      // an install.
+      await ensureLearningConfig(storeId)
     }
 
     await track({

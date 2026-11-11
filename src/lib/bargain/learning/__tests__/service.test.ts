@@ -1,5 +1,5 @@
 const mockPrisma: any = {
-  bargainLearningConfig: { findUnique: jest.fn() },
+  bargainLearningConfig: { findUnique: jest.fn(), create: jest.fn() },
   bargainLearningArmStat: { findMany: jest.fn(), upsert: jest.fn() },
   bargainLearningEvent: { create: jest.fn() },
   bargainSession: { update: jest.fn() },
@@ -56,6 +56,7 @@ describe('bargain learning service', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockPrisma.bargainLearningConfig.findUnique.mockResolvedValue(null)
+    mockPrisma.bargainLearningConfig.create.mockResolvedValue(null)
     mockPrisma.bargainLearningArmStat.findMany.mockResolvedValue([])
     mockPrisma.bargainLearningArmStat.upsert.mockResolvedValue({})
     mockPrisma.bargainLearningEvent.create.mockResolvedValue({ id: 'event-1' })
@@ -71,6 +72,8 @@ describe('bargain learning service', () => {
     expect(result).toBeNull()
     expect(mockPrisma.bargainLearningEvent.create).not.toHaveBeenCalled()
     expect(mockPrisma.bargainSession.update).not.toHaveBeenCalled()
+    // The production path stays read-only: it must never seed a row.
+    expect(mockPrisma.bargainLearningConfig.create).not.toHaveBeenCalled()
   })
 
   test('rejects a session that belongs to another store', async () => {
@@ -241,6 +244,47 @@ describe('bargain learning service', () => {
       context,
     })
     expect(result).toBeNull()
+  })
+
+  test('demo preview seeds the default config for a store without a row', async () => {
+    mockPrisma.bargainLearningConfig.findUnique.mockResolvedValue(null)
+    mockPrisma.bargainLearningConfig.create.mockResolvedValue(
+      configRow({ enabled: false, shadowMode: true, demoEnabled: true }),
+    )
+    const result = await previewDemoLearning({
+      storeId: 'store-1',
+      demoSessionId: 'demo-1',
+      context,
+    })
+
+    // Bare `{ storeId }` relies on the schema defaults, which match
+    // learningConfigDefaults(): production learning off, demo learning on.
+    expect(mockPrisma.bargainLearningConfig.create).toHaveBeenCalledWith({
+      data: { storeId: 'store-1' },
+    })
+    expect(result?.selection.mode).toBe('demo')
+    expect(mockPrisma.bargainLearningEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ environment: 'demo', sessionId: null }),
+      }),
+    )
+  })
+
+  test('a concurrent seed race is absorbed and the row is re-read', async () => {
+    const raced: any = new Error('unique constraint')
+    raced.code = 'P2002'
+    mockPrisma.bargainLearningConfig.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(configRow({ enabled: false, shadowMode: true, demoEnabled: true }))
+    mockPrisma.bargainLearningConfig.create.mockRejectedValue(raced)
+
+    const result = await previewDemoLearning({
+      storeId: 'store-1',
+      context,
+    })
+
+    expect(result?.selection.mode).toBe('demo')
+    expect(mockPrisma.bargainLearningConfig.findUnique).toHaveBeenCalledTimes(2)
   })
 
   test('turn events persist safe agent attribution', async () => {
