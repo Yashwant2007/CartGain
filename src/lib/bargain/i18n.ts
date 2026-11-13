@@ -107,6 +107,9 @@ export type UiKey =
   | 'railLabel'
   | 'priceHeld'
   | 'shopkeeperOnline'
+  | 'shippingCost'
+  | 'orderTotal'
+  | 'freeShipping'
 
 const I18N: Record<UiLang, Record<UiKey, string>> = {
   en: {
@@ -190,6 +193,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     railLabel: 'Down from {from} to {to}',
     priceHeld: 'Your price is held while you chat',
     shopkeeperOnline: 'Shopkeeper online',
+    shippingCost: 'Shipping',
+    orderTotal: 'Total',
+    freeShipping: 'Free shipping',
     tabChat: 'Chat',
     tabDeal: 'Deal',
   },
@@ -276,6 +282,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     railLabel: '{from} se {to} tak',
     priceHeld: 'Chat ke dauran aapki price hold hai',
     shopkeeperOnline: 'Dukaandar online',
+    shippingCost: 'Shipping',
+    orderTotal: 'Total',
+    freeShipping: 'Free shipping',
   },
   hi: {
     farewell_friendly: 'समझ गया दोस्त, दरवाज़ा हमेशा खुला है। अगर मन बदले तो बता देना। ध्यान रखना!',
@@ -360,6 +369,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     railLabel: '{from} से घटकर {to}',
     priceHeld: 'बातचीत के दौरान आपकी कीमत सुरक्षित रहती है',
     shopkeeperOnline: 'दुकानदार ऑनलाइन',
+    shippingCost: 'शिपिंग',
+    orderTotal: 'कुल',
+    freeShipping: 'मुफ़्त शिपिंग',
   },
   ta: {
     farewell_friendly: 'புரிந்தது நண்பரே, கதவு எப்போதும் திறந்தே உள்ளது. மனம் மாறினால் சொல்லுங்கள். பார்த்துக்கொள்ளுங்கள்!',
@@ -444,6 +456,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     railLabel: '{from} இலிருந்து {to} வரை',
     priceHeld: 'பேசுவதின்போது உங்கள் விலை பாதுகாக்கப்படுகிறது',
     shopkeeperOnline: 'கடைக்காரர் ஆன்லைன்',
+    shippingCost: 'ஷிப்பிங்',
+    orderTotal: 'மொத்தம்',
+    freeShipping: 'இலவச ஷிப்பிங்',
   },
   te: {
     farewell_friendly: 'అర్థమైంది స్నేహితుడా, తలుపు ఎప్పుడూ తెరిచే ఉంది. మనసు మారితే చెప్పండి. జాగ్రత్త!',
@@ -528,6 +543,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     railLabel: '{from} నుండి {to} వరకు',
     priceHeld: 'మాట్లాడుతున్నప్పుడు మీ ధర రాఖబడుతుంది',
     shopkeeperOnline: 'దుకాణాదారు ఆన్‌లైన్',
+    shippingCost: 'షిప్పింగ్',
+    orderTotal: 'మొత్తం',
+    freeShipping: 'ఉచిత షిప్పింగ్',
   },
   bn: {
     farewell_friendly: 'বুঝেছি বন্ধু, দরজা সবসময় খোলা। মন বদলালে জানিয়ে দিও। ভালো থেকো!',
@@ -612,6 +630,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     railLabel: '{from} থেকে {to}',
     priceHeld: 'কথা বলার সময় আপনার দাম ধরে রাখা হয়',
     shopkeeperOnline: 'দোকানি অনলাইন',
+    shippingCost: 'শিপিং',
+    orderTotal: 'মোট',
+    freeShipping: 'ফ্রি শিপিং',
   },
   mr: {
     farewell_friendly: 'समजलो मित्रा, दार नेहमी उघडे आहे. मन बदललं तर सांग. काळजी घ्या!',
@@ -696,6 +717,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     railLabel: '{from} पासून {to} पर्यंत',
     priceHeld: 'बातचीतदरम्यान तुमची किंमत सुरक्षित राहते',
     shopkeeperOnline: 'दुकानदार ऑनलाइन',
+    shippingCost: 'शिपिंग',
+    orderTotal: 'एकूण',
+    freeShipping: 'मोफत शिपिंग',
   },
   gu: {
     farewell_friendly: 'સમજ્યો મિત્ર, દરવાજો હંમેશા ખુલ્લો છે. મન બદલાય તો કહેજે. કાળજી રાખજો!',
@@ -780,6 +804,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     railLabel: '{from} થી {to} સુધી',
     priceHeld: 'વાતચીત દરમિયાન તમારી કિંમત સુરક્ષિત રહે છે',
     shopkeeperOnline: 'દુકાનદાર ઓનલાઇન',
+    shippingCost: 'શિપિંગ',
+    orderTotal: 'કુલ',
+    freeShipping: 'મફત શિપિંગ',
   },
   pa: {
     farewell_friendly: 'ਸਮਝ ਗਿਆ ਮਿੱਤਰਾ, ਦਰਵਾਜ਼ਾ ਹਮੇਸ਼ਾ ਖੁੱਲ੍ਹਾ ਹੈ। ਮਨ ਬਦਲੇ ਤਾਂ ਦੱਸ ਦੇਣਾ। ਖ਼ਿਆਲ ਰੱਖੀਂ!',
@@ -864,6 +891,9 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     railLabel: '{from} ਤੋਂ {to} ਤੱਕ',
     priceHeld: 'ਗੱਲ ਬਾਤ ਦੌਰਾਨ ਤੁਹਾਡੀ ਕੀਮਤ ਸੁਰੱਖਿਅਤ ਰਹਿੰਦੀ ਹੈ',
     shopkeeperOnline: 'ਦੁਕਾਨਦਾਰ ਆਨਲਾਈਨ',
+    shippingCost: 'ਸ਼ਿਪਿੰਗ',
+    orderTotal: 'ਕੁੱਲ',
+    freeShipping: 'ਮੁਫ਼ਤ ਸ਼ਿਪਿੰਗ',
   },
 }
 

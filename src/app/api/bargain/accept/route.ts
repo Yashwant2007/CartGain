@@ -13,6 +13,8 @@ import { validateOffer } from '@/lib/bargain/offer-validation'
 import { bargainCampaignStatus, couponMentionedInMessages } from '@/lib/bargain/policy'
 import { track } from '@/lib/analytics/track'
 import { recordLearningAcceptance } from '@/lib/bargain/learning/outcomes'
+import { createQuote, acceptQuote, findQuoteBySessionId } from '@/lib/bargain/quote'
+import { detectPaymentIntent } from '@/lib/bargain/payment'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,6 +58,7 @@ export async function POST(request: NextRequest) {
     // Idempotent replay — already accepted sessions resurface the issued code
     // instead of double-counting the deal or re-creating the rev share event.
     if (bargainSession.status === 'accepted' && bargainSession.discountCode) {
+      const existingQuote = await findQuoteBySessionId(bargainSession.id).catch(() => null)
       return NextResponse.json({
         sessionId: bargainSession.id,
         finalPrice: bargainSession.finalPrice,
@@ -63,6 +66,7 @@ export async function POST(request: NextRequest) {
           ((bargainSession.originalPrice - (bargainSession.finalPrice ?? bargainSession.originalPrice)) / bargainSession.originalPrice) * 100
         ),
         discountCode: bargainSession.discountCode,
+        quoteToken: existingQuote?.token ?? null,
         shopifyStatus: 'created',
         purchaseUrl:
           bargainSession.purchaseUrl ??
@@ -195,6 +199,16 @@ export async function POST(request: NextRequest) {
       recentCustomerMessages.some((m) => (m.metadata as any)?.couponMentioned === true)
     const couponsAllowed = config?.couponStackingEnabled === true
 
+    // Module 5 — payment intent for the quote conditions (informational; the
+    // price path is unchanged). Prefer the server-tagged metadata, else classify
+    // from the transcript.
+    const paymentIntent =
+      (recentCustomerMessages.find((m) => (m.metadata as any)?.paymentIntent)?.metadata as any)?.paymentIntent ??
+      detectPaymentIntent(
+        recentCustomerMessages[0]?.content ?? '',
+        recentCustomerMessages.slice(1).map((m) => m.content),
+      )
+
     const validation = validateOffer({
       requestedPrice: finalPrice,
       originalPrice: currentPrice,
@@ -274,10 +288,12 @@ export async function POST(request: NextRequest) {
         select: { status: true, discountCode: true, finalPrice: true, originalPrice: true, purchaseUrl: true, variantId: true, bulkQuantity: true },
       })
       if (refreshed?.status === 'accepted' && refreshed.discountCode) {
+        const existingQuote = await findQuoteBySessionId(bargainSession.id).catch(() => null)
         return NextResponse.json({
           sessionId: bargainSession.id,
           finalPrice: refreshed.finalPrice ?? refreshed.originalPrice,
           discountCode: refreshed.discountCode,
+          quoteToken: existingQuote?.token ?? null,
           shopifyStatus: 'created',
           purchaseUrl:
             refreshed.purchaseUrl ??
@@ -394,11 +410,44 @@ export async function POST(request: NextRequest) {
 
     await recordLearningAcceptance(bargainSession.id)
 
+    // ── MODULE 3 — secure quote ──
+    // Best-effort, additive, flag-gated. The discount code above is already the
+    // authoritative artifact; the quote adds a signed, revocable, audited record
+    // of the same deal. A failure here must NEVER fail the accept response.
+    let quoteToken: string | null = null
+    try {
+      const quote = await createQuote({
+        storeId: bargainSession.storeId,
+        sessionId: bargainSession.id,
+        cartToken,
+        shopifyProductId: bargainSession.shopifyProductId,
+        variantId: bargainSession.variantId,
+        quantity: executable.bulkQuantity,
+        originalPrice: currentPrice,
+        finalPrice: executable.finalPrice,
+        discountPercent,
+        floorPrice: minPrice,
+        currency: bargainSession.store.currency,
+        customerEmail,
+        shopifyCustomerId,
+        customerFingerprint: bargainSession.customerFingerprint,
+        discountCode: shopifyCode.code,
+        conditions: paymentIntent !== 'unknown' ? { paymentIntent } : {},
+      })
+      if (quote) {
+        await acceptQuote(quote)
+        quoteToken = quote.token
+      }
+    } catch (quoteErr) {
+      console.error('[BARGAIN_ACCEPT_QUOTE]', (quoteErr as Error)?.message ?? quoteErr)
+    }
+
     return NextResponse.json({
       sessionId: bargainSession.id,
       finalPrice: executable.finalPrice,
       discountPercent,
       discountCode: shopifyCode.code,
+      quoteToken,
       shopifyStatus: shopifyCode.status,
       purchaseUrl,
       currency: bargainSession.store.currency,

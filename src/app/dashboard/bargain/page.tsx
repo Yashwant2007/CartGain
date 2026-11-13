@@ -26,6 +26,11 @@ import {
   ShoppingBag,
   Receipt,
   Palette,
+  Truck,
+  Wallet,
+  Package,
+  AlertTriangle,
+  Pause,
 } from 'lucide-react'
 import { DemoPanel } from './demo-panel'
 import { ProductCatalogPanel } from './product-catalog'
@@ -71,6 +76,15 @@ type BargainConfig = {
   dwellNudgeEnabled: boolean
   dwellSeconds: number
   dwellReminderSeconds: number
+  shippingAwareEnabled: boolean
+  shippingFlatCost: number | null
+  freeShippingThreshold: number | null
+  paymentAwareEnabled: boolean
+  prepaidIncentivePercent: number | null
+  bundleNegotiationEnabled: boolean
+  bundleDiscountPercent: number | null
+  emergencyPaused: boolean
+  aiPaused: boolean
 }
 
 // All supported negotiation languages (mirrors SUPPORTED_LANGUAGES in the engine).
@@ -662,6 +676,138 @@ void fetchConfig()
                       </Field>
                     </div>
                   )}
+                </ConfigCard>
+
+                {/* Shipping-aware negotiation */}
+                <ConfigCard
+                  className="lg:col-span-2"
+                  icon={Truck}
+                  title="Shipping & delivery"
+                  description="Let the AI show the real total (item + shipping) and use your free-shipping threshold as a value-add instead of a deeper discount. It never reveals your margin floor."
+                >
+                  <ToggleRow
+                    title="Negotiate with shipping awareness"
+                    description="The agent tells shoppers the honest shipping charge and, when they’re close, that a little more unlocks free shipping. Totals are always item + shipping — no surprises at checkout."
+                    checked={configForm.shippingAwareEnabled ?? false}
+                    onChange={v => setConfigForm({ ...configForm, shippingAwareEnabled: v })}
+                  />
+                  {configForm.shippingAwareEnabled && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field
+                        label="Flat shipping charge"
+                        hint="What you charge for shipping below the free threshold. Enter 0 if you always ship free."
+                      >
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={configForm.shippingFlatCost ?? 0}
+                          onChange={e => setConfigForm({ ...configForm, shippingFlatCost: Math.max(0, parseFloat(e.target.value) || 0) })}
+                          className={CONTROL_CLS}
+                        />
+                      </Field>
+                      <Field
+                        label="Free shipping over (optional)"
+                        hint="Order subtotal at or above which shipping is free. Leave blank for no free-shipping offer."
+                      >
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          placeholder="No free-shipping offer"
+                          value={configForm.freeShippingThreshold ?? ''}
+                          onChange={e => {
+                            const raw = e.target.value.trim()
+                            setConfigForm({ ...configForm, freeShippingThreshold: raw === '' ? null : Math.max(0, parseFloat(raw) || 0) })
+                          }}
+                          className={CONTROL_CLS}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </ConfigCard>
+
+                {/* Payment-method-aware negotiation */}
+                <ConfigCard
+                  className="lg:col-span-2"
+                  icon={Wallet}
+                  title="Payment method"
+                  description="Detect whether the shopper intends to pay online or Cash on Delivery, then steer COD toward prepaid to cut return-to-origin risk. It never reveals your margin floor."
+                >
+                  <ToggleRow
+                    title="Negotiate with payment awareness"
+                    description="When a shopper signals COD, the AI warmly offers your COD→prepaid saving (set under RTO settings) to switch to prepaid. Prepaid buyers are acknowledged and closed faster."
+                    checked={configForm.paymentAwareEnabled ?? false}
+                    onChange={v => setConfigForm({ ...configForm, paymentAwareEnabled: v })}
+                  />
+                  {configForm.paymentAwareEnabled && (
+                    <Field
+                      label="Extra prepaid incentive (optional)"
+                      hint="An extra % the AI may pass on for a prepaid close. 0 = none. Always clamped above your floor. The COD→prepaid saving itself is configured in your RTO settings."
+                    >
+                      <input
+                        type="number"
+                        min={0}
+                        max={30}
+                        step="0.5"
+                        value={configForm.prepaidIncentivePercent ?? 0}
+                        onChange={e => setConfigForm({ ...configForm, prepaidIncentivePercent: Math.min(30, Math.max(0, parseFloat(e.target.value) || 0)) })}
+                        className={CONTROL_CLS}
+                      />
+                    </Field>
+                  )}
+                </ConfigCard>
+
+                {/* Bundle / multi-item negotiation */}
+                <ConfigCard
+                  className="lg:col-span-2"
+                  icon={Package}
+                  title="Bundle & multi-item deals"
+                  description="When a shopper asks for several products together, offer one deterministic bundle price instead of redirecting them. The server computes a single discount that keeps every item at or above its own floor — the AI never invents a combined number."
+                >
+                  <ToggleRow
+                    title="Offer bundle prices"
+                    description="Detects multi-product requests and resolves the distinct products (from the shopper's cart or by name). Each item stays at or above its own floor."
+                    checked={configForm.bundleNegotiationEnabled ?? false}
+                    onChange={v => setConfigForm({ ...configForm, bundleNegotiationEnabled: v })}
+                  />
+                  {configForm.bundleNegotiationEnabled && (
+                    <Field
+                      label="Desired bundle discount (%)"
+                      hint="The % off the combined list total. Clamped down to the tightest per-item floor, so it can never breach a merchant floor."
+                    >
+                      <input
+                        type="number"
+                        min={0}
+                        max={90}
+                        step="1"
+                        value={configForm.bundleDiscountPercent ?? 10}
+                        onChange={e => setConfigForm({ ...configForm, bundleDiscountPercent: Math.min(90, Math.max(0, parseFloat(e.target.value) || 0)) })}
+                        className={CONTROL_CLS}
+                      />
+                    </Field>
+                  )}
+                </ConfigCard>
+
+                {/* Emergency controls */}
+                <ConfigCard
+                  className="lg:col-span-2"
+                  icon={AlertTriangle}
+                  title="Emergency controls"
+                  description="Pause bargaining or the AI agent instantly, server-side. Save a snapshot of the current config before risky changes so you can restore it in one click."
+                >
+                  <ToggleRow
+                    title="Pause all bargaining"
+                    description="Immediately stops every active negotiation with a 'temporarily paused' message. Use during incidents or maintenance."
+                    checked={configForm.emergencyPaused ?? false}
+                    onChange={v => setConfigForm({ ...configForm, emergencyPaused: v })}
+                  />
+                  <ToggleRow
+                    title="Pause AI agent (rule-based only)"
+                    description="Forces the deterministic rule-based engine; the AI model is not called. Use if the provider is misbehaving."
+                    checked={configForm.aiPaused ?? false}
+                    onChange={v => setConfigForm({ ...configForm, aiPaused: v })}
+                  />
                 </ConfigCard>
 
                 {/* Daily goal & campaign */}

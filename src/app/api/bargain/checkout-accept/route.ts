@@ -12,6 +12,7 @@ import { track } from '@/lib/analytics/track'
 import { redisIncr, redisExpire } from '@/lib/redis'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { normalizeShopDomain, shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
+import { loadQuoteByToken, revalidateQuote, markQuoteCheckoutPending } from '@/lib/bargain/quote'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, discountPercent, code, orderLevel, bulkQuantity, shopifyCustomerId, customerEmail } = body
+    const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, discountPercent, code, orderLevel, bulkQuantity, shopifyCustomerId, customerEmail, quoteToken } = body
 
     if (
       typeof shopDomain !== 'string' || !shopDomain ||
@@ -172,6 +173,30 @@ export async function POST(request: NextRequest) {
       originalPrice: currentPrice,
       bulkQuantity: safeBulk ?? undefined,
     })
+
+    // ── MODULE 3 — revalidate a supplied quote ──
+    // Optional and additive: when the caller hands us the signed quote token, we
+    // re-check it against the CURRENT price/floor before minting. No token means
+    // the legacy path is unchanged. A stale/expired/revoked quote is refused.
+    if (typeof quoteToken === 'string' && quoteToken) {
+      const quote = await loadQuoteByToken(quoteToken)
+      if (quote) {
+        if (quote.storeId !== store.id) {
+          return NextResponse.json({ message: 'Quote does not belong to this store' }, { status: 409, headers })
+        }
+        if (quote.discountCode && quote.discountCode !== code) {
+          return NextResponse.json({ message: 'Quote code mismatch' }, { status: 409, headers })
+        }
+        const verdict = revalidateQuote(quote, { price: currentPrice, floor: minPrice })
+        if (!verdict.ok) {
+          return NextResponse.json(
+            { message: 'This deal has expired or changed — please renegotiate.', reason: verdict.reason, code: `QUOTE_REJECTED_${verdict.reason}` },
+            { status: 409, headers },
+          )
+        }
+        await markQuoteCheckoutPending(quote)
+      }
+    }
 
     // 2b) Live availability + machine reason codes. Only an explicit false from
     // Shopify blocks (null = unverifiable = don't block).

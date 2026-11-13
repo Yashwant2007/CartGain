@@ -20,6 +20,7 @@ import { computeRefundNetting, isMessageAttributable } from '@/lib/attribution'
 import { attributeBargainGoal, netBargainGoalRefund } from '@/lib/bargain/goals'
 import { recordLearningRefund } from '@/lib/bargain/learning/outcomes'
 import { attributeBargainPurchase, netBargainPurchaseRefund } from '@/lib/bargain/purchase'
+import { findQuoteByDiscountCode, redeemQuote } from '@/lib/bargain/quote'
 import { reconcileShopifySubscription, downgradeSubscriptionToFree } from '@/lib/shopify-billing/service'
 import { mapShopifyStatus } from '@/lib/shopify-billing/subscriptions'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS, resolvePlanId, getPlan } from '@/lib/payment'
@@ -821,6 +822,26 @@ async function processOrderCreate(data: any, store: any, domain: string) {
     })
   } catch (err) {
     console.error('[BARGAIN_PURCHASE_ATTRIBUTE]', err)
+  }
+
+  // ── MODULE 3 — redeem any secure quote this order used ──
+  // Best-effort + flag-gated. Single-use is enforced by the quote CAS; the order
+  // id makes a re-delivered webhook idempotent. Never blocks the webhook.
+  try {
+    const appliedCodes: string[] = Array.isArray(data.discount_codes)
+      ? data.discount_codes.map((dc: any) => (dc && dc.code) || null).filter(Boolean)
+      : []
+    for (const applied of appliedCodes) {
+      const quote = await findQuoteByDiscountCode(store.id, applied)
+      if (quote && quote.status !== 'REDEEMED') {
+        await redeemQuote({
+          quote: { id: quote.id, status: quote.status, orderId: quote.orderId, storeId: quote.storeId },
+          orderId: shopifyOrderId ?? '',
+        })
+      }
+    }
+  } catch (err) {
+    console.error('[BARGAIN_QUOTE_REDEEM]', err)
   }
 
   if (!cart.convertedAt) {

@@ -184,3 +184,107 @@ export async function generateBargainDiscountCode(opts: {
     }
   }
 }
+
+/**
+ * Create a Shopify discountCodeBasic that applies a single (floor-safe) percent
+ * to a set of DISTINCT bundle products. The percentage is chosen upstream so
+ * every item stays at/above its own floor; the code is scoped to the bundle
+ * products and requires the full bundle value in the cart, so it can never be
+ * farmed by adding a single cheap line item.
+ */
+export async function generateBargainBundleDiscountCode(opts: {
+  store: Store
+  items: { productId: string; variantId?: string | null }[]
+  listTotal: number
+  offerTotal: number
+  discountPercent: number
+  code: string
+  customerEmail?: string | null
+  cartToken?: string | null
+  shopifyCustomerId?: string | null
+}): Promise<GeneratedBargainDiscount> {
+  const { store, items, code, customerEmail, cartToken } = opts
+  const discountPercent = Math.max(0, Math.min(100, Math.round(opts.discountPercent * 100) / 100))
+
+  const productGids = Array.from(
+    new Set(
+      items
+        .map((it) => (it.productId ? `gid://shopify/Product/${it.productId.replace(/^gid:\/\/shopify\/Product\//, '')}` : null))
+        .filter((g): g is string => !!g),
+    ),
+  )
+  if (productGids.length < 2) {
+    return { code, status: 'failed', error: 'A bundle needs at least two distinct products' }
+  }
+  if (discountPercent <= 0 || discountPercent >= 100) {
+    return { code, status: 'failed', error: 'Invalid bundle discount' }
+  }
+
+  const shopDomain = store.domain.includes('.') ? store.domain : `${store.domain}.myshopify.com`
+
+  let accessToken: string | null = null
+  try {
+    accessToken = await getAccessToken(store)
+  } catch {
+    return { code, status: 'failed', error: 'Could not retrieve Shopify access token' }
+  }
+  if (!accessToken) {
+    return { code, status: 'pending', error: 'Shopify not connected — code stored pending sync' }
+  }
+
+  const ONE_DAY = 24 * 60 * 60
+  const startsAt = new Date().toISOString()
+  const expiresAt = new Date(Date.now() + ONE_DAY * 1000).toISOString()
+  const minimumSubtotal = fromMinorUnits(toMinorUnits(opts.listTotal))
+
+  const mutation = `
+    mutation discountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
+      discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
+        codeDiscountNode {
+          id
+          codeDiscount {
+            ... on DiscountCodeBasic {
+              codes(first: 1) { nodes { code } }
+            }
+          }
+        }
+        userErrors { field message }
+      }
+    }
+  `
+
+  const discountValue = { percentage: discountPercent }
+  const basicCodeDiscount: any = {
+    title: `Bargain bundle ${code}`,
+    code,
+    startsAt,
+    endsAt: expiresAt,
+    usageLimit: 1,
+    appliesOncePerCustomer: true,
+    customerSelection: buildCustomerSelection(opts.shopifyCustomerId),
+    combinesWith: { orderDiscounts: false, productDiscounts: true, shippingDiscounts: false },
+    value: discountValue,
+    customerGets: {
+      value: discountValue,
+      items: { products: { productsToAdd: productGids } },
+    },
+    minimumSubtotal,
+  }
+
+  try {
+    const data = await queryShopifyGraphQL<any>(shopDomain, accessToken, mutation, { basicCodeDiscount })
+    const userErrors = data?.discountCodeBasicCreate?.userErrors
+    if (userErrors && userErrors.length > 0) {
+      return { code, status: 'failed', error: userErrors[0].message || 'Shopify rejected the bundle code' }
+    }
+    const createdCode = data?.discountCodeBasicCreate?.codeDiscountNode?.codeDiscount?.codes?.nodes?.[0]?.code || code
+    return {
+      code: createdCode,
+      status: 'created',
+      ...(customerEmail ? { customerEmail } : {}),
+      ...(cartToken ? { cartToken } : {}),
+    }
+  } catch (err: any) {
+    return { code, status: 'failed', error: err?.message || 'Shopify GraphQL request failed' }
+  }
+}

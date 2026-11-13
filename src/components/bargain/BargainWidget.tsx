@@ -187,6 +187,12 @@ export default function BargainWidget({
   const [returning, setReturning] = useState(false)
   const [endedReason, setEndedReason] = useState<'accepted' | 'rejected' | 'expired' | 'abandoned' | 'optout' | null>(null)
   const [floorReached, setFloorReached] = useState(false)
+  const [shippingInfo, setShippingInfo] = useState<{
+    total: number
+    shippingCost: number
+    freeShipping: boolean
+    upsell: string | null
+  } | null>(null)
   // Server-authoritative round count. The offer route increments attemptsUsed
   // atomically and (importantly) DECREMENTS it again when a turn is rejected as
   // abuse, so counting our own bubbles would drift. The API reports the truth;
@@ -753,6 +759,7 @@ export default function BargainWidget({
       if (data.discountCode) setDiscountCode(data.discountCode)
       if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
       if (data.floorReached === true) setFloorReached(true)
+      if (data.shipping && typeof data.shipping.total === 'number') setShippingInfo(data.shipping)
       if (typeof data.attemptsUsed === 'number') setAttemptsUsed(data.attemptsUsed)
       if (data.goal) setGoal(data.goal)
       if (data.finalPrice != null) setFinalPrice(data.finalPrice)
@@ -950,6 +957,7 @@ export default function BargainWidget({
     setLimit(null)
     setRecommendations(null)
     setFloorReached(false)
+    setShippingInfo(null)
     setRejection(null)
     setActiveTab('chat')
     void startSession()
@@ -1471,6 +1479,26 @@ export default function BargainWidget({
                         />
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* Shipping transparency (Module 4) — honest total + free-shipping value-add */}
+                {shippingInfo && decision !== 'accept' && (
+                  <div style={{ alignSelf: 'flex-start', width: '100%', animation: 'cgMsgIn 0.2s ease-out' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, margin: '2px 6px', fontSize: 12, color: '#475569' }}>
+                      <span style={{ fontWeight: 600 }}>
+                        {t('shippingCost')}: {shippingInfo.freeShipping ? t('freeShipping') : `${currencySymbol}${shippingInfo.shippingCost}`}
+                      </span>
+                      <span style={{ color: '#cbd5e1' }}>·</span>
+                      <span>
+                        {t('orderTotal')}: <strong style={{ color: '#0f172a' }}>{currencySymbol}{shippingInfo.total}</strong>
+                      </span>
+                    </div>
+                    {shippingInfo.upsell && (
+                      <div style={{ margin: '2px 6px 0', fontSize: 12, color: '#4f46e5', fontWeight: 600 }}>
+                        {shippingInfo.upsell}
+                      </div>
+                    )}
                   </div>
                 )}
 

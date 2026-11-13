@@ -33,6 +33,7 @@ jest.mock('@/lib/db', () => ({
       update: jest.fn(),
     },
     bargainConfig: { findUnique: jest.fn() },
+    merchantConfig: { findUnique: jest.fn() },
     bargainProduct: { findUnique: jest.fn() },
     bargainMessage: { create: jest.fn() },
     // The route persists messages + session state inside $transaction([...]).
@@ -67,6 +68,7 @@ jest.mock('@/lib/shopify', () => ({
 const prismaMock = prisma as unknown as {
   bargainSession: { findUnique: jest.Mock; updateMany: jest.Mock; update: jest.Mock }
   bargainConfig: { findUnique: jest.Mock }
+  merchantConfig: { findUnique: jest.Mock }
   bargainProduct: { findUnique: jest.Mock }
   bargainMessage: { create: jest.Mock }
 }
@@ -136,6 +138,7 @@ beforeEach(() => {
     recommendationsEnabled: false,
     alternativeRecommendationsEnabled: false,
   })
+  prismaMock.merchantConfig.findUnique.mockResolvedValue(null)
   prismaMock.bargainProduct.findUnique.mockResolvedValue({ minPrice: 300, isBargainable: true })
 })
 

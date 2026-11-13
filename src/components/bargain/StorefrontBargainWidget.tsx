@@ -132,6 +132,12 @@ export default function StorefrontBargainWidget({
   // Daily-goal strip: seeded from the config fetch, refreshed on every demo
   // turn (progress/pace come only from the server).
   const [goalState, setGoalState] = useState<BargainDemoGoal | undefined>(goalProp)
+  const [shippingInfo, setShippingInfo] = useState<{
+    total: number
+    shippingCost: number
+    freeShipping: boolean
+    upsell: string | null
+  } | null>(null)
   useEffect(() => {
     if (goalProp) setGoalState(goalProp)
   }, [goalProp])
@@ -339,6 +345,7 @@ export default function StorefrontBargainWidget({
         setPersona(ENGINE_TO_LOCAL[data.persona])
       }
       if (data.goal) setGoalState(data.goal)
+      if (data.shipping && typeof data.shipping.total === 'number') setShippingInfo(data.shipping)
 
       const nextAttempt = attempts + 1
       // A joke offer far below the floor gets a persona reply but must not burn
@@ -691,6 +698,16 @@ export default function StorefrontBargainWidget({
               </div>
             )}
           </div>
+
+          {shippingInfo && (
+            <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-xs text-gray-600">
+              <div className="flex items-center justify-between">
+                <span>Shipping: {shippingInfo.freeShipping ? 'Free' : money(currency, shippingInfo.shippingCost)}</span>
+                <span>Total: <strong className="text-gray-900">{money(currency, shippingInfo.total)}</strong></span>
+              </div>
+              {shippingInfo.upsell && <p className="mt-1 text-indigo-600 font-medium">{shippingInfo.upsell}</p>}
+            </div>
+          )}
 
           <div className="flex gap-2">
             <input

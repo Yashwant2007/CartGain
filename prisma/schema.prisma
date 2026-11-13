@@ -165,6 +165,7 @@ model Store {
   bargainLearningAudits      BargainLearningAudit[]
   bargainExperienceEvents    BargainExperienceEvent[]
   bargainExperiencePublishes BargainExperiencePublish[]
+  bargainQuotes              BargainQuote[]
 
   @@unique([userId, domain])
   @@index([userId])
@@ -450,6 +451,27 @@ model BargainConfig {
   dwellNudgeEnabled                 Boolean   @default(false) // master toggle for the product-page dwell nudge
   dwellSeconds                      Int       @default(60) // visible seconds on a product page before the first nudge
   dwellReminderSeconds              Int       @default(60) // seconds after the first nudge before the reminder
+  // ── Shipping-aware negotiation (Module 4) ──
+  // Shopify's real shipping zones are not exposed to third-party apps, so the
+  // merchant declares a simple truthful model: a flat charge and an optional
+  // free-shipping order threshold. Drives total-cost transparency in chat and a
+  // free-shipping-threshold value-add instead of a deeper discount. OFF by default.
+  shippingAwareEnabled              Boolean   @default(false)
+  shippingFlatCost                  Float? // flat shipping charge below the threshold
+  freeShippingThreshold             Float? // order subtotal at/above which shipping is free
+  // ── Payment-method-aware negotiation (Module 5) ──
+  // Detect the shopper's intended payment method and steer COD toward prepaid
+  // (reusing MerchantConfig.rtoIncentive / rtoReductionEnabled), plus an optional
+  // extra % for a prepaid close. Never breaches the hidden floor. OFF by default.
+  paymentAwareEnabled               Boolean   @default(false)
+  prepaidIncentivePercent           Float? // extra % the agent may pass for a prepaid close (0..30)
+  // ── Bundle / multi-item negotiation (Module 6) ──
+  // When on, a request for DISTINCT products (from the shopper's cart or by name)
+  // becomes a deterministic, floor-safe bundle offer instead of a plain redirect.
+  // The server computes one uniform % that keeps EVERY item at/above its own
+  // floor; the AI never invents a combined price. OFF by default.
+  bundleNegotiationEnabled          Boolean   @default(false)
+  bundleDiscountPercent             Float? // desired bundle % off the list total (floor-clamped)
   // ── Bargain Experience Studio (shopkeeper personality + storefront invitations) ──
   shopkeeperPersonality             String    @default("friendly_shopkeeper") // friendly_shopkeeper | strict_shopkeeper | playful_shopkeeper
   invitationDesign                  String    @default("smart-assistant") // smart-assistant | playful-bargain-club | unlock-your-deal | human-shopkeeper
@@ -471,6 +493,10 @@ model BargainConfig {
   // the live storefront until Publish copies the draft here.
   experienceDraft                   Json?
   experiencePublished               Json?
+  // ── Emergency controls (Module 8) ──
+  emergencyPaused                   Boolean   @default(false) // pause all bargaining server-side
+  aiPaused                          Boolean   @default(false) // force rule-based fallback only
+  previousConfigSnapshot            Json? // last good config for one-click restore
   createdAt                         DateTime  @default(now())
   updatedAt                         DateTime  @updatedAt
 
@@ -546,6 +572,8 @@ model BargainSession {
   experiencePersonality     String?
   experienceVersion         Int?
   experienceVisitorKey      String?
+  // ── Dual-agent experiment (Module 7) ──
+  experimentArm             String? // control | treatment
   startedAt                 DateTime  @default(now())
   expiredAt                 DateTime
   updatedAt                 DateTime  @updatedAt
@@ -567,6 +595,79 @@ model BargainSession {
   @@index([customerFingerprint])
   @@index([status])
   @@index([expiredAt])
+}
+
+// ── Secure bargain quotes (Module 3) ────────────────────────────────────────
+// A first-party, server-issued price lock. The Shopify discount code stays the
+// executable artifact; the quote is the authoritative lifecycle + audit record:
+// a signed non-guessable token (the only id ever exposed), buyer binding,
+// single-use atomic redemption, expiry, and revocation. Additive — stores with
+// the flag off keep the legacy discount-code-only path untouched.
+model BargainQuote {
+  id                  String   @id @default(cuid())
+  storeId             String
+  sessionId           String? // originating bargain session, when known
+  cartToken           String? // Shopify cart token the quote was bound to
+  shopifyProductId    String
+  variantId           String?
+  quantity            Int      @default(1)
+  originalPrice       Float
+  finalPrice          Float
+  discountPercent     Int
+  // Internal acceptance threshold. NEVER returned to a client — it exists so a
+  // checkout-time revalidation can re-clamp without re-deriving the merchant
+  // floor from a possibly-changed config.
+  floorPrice          Float
+  currency            String   @default("INR")
+  customerEmail       String?
+  shopifyCustomerId   String?
+  customerFingerprint String?
+  // The only identifier a client ever sees. Signed (HMAC) + random, so it can
+  // neither be guessed nor forged, and it is bound to this exact quote id.
+  token               String   @unique
+  // CREATED → ACCEPTED → CHECKOUT_PENDING → REDEEMED
+  // terminal side-states: EXPIRED | REVOKED | INVALIDATED | CANCELLED
+  status              String   @default("CREATED")
+  // Payment-method / shipping / bundle conditions (Modules 4–6). Empty for now.
+  conditions          Json     @default("{}")
+  discountCode        String? // the Shopify code minted for this quote
+  orderId             String? // Shopify order that redeemed it (single-use)
+  revokeReason        String?
+  expiresAt           DateTime
+  acceptedAt          DateTime?
+  checkoutStartedAt   DateTime?
+  redeemedAt          DateTime?
+  revokedAt           DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  store  Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  events BargainQuoteEvent[]
+
+  @@index([storeId])
+  @@index([storeId, status])
+  @@index([sessionId])
+  @@index([discountCode])
+  @@index([cartToken])
+  @@index([expiresAt])
+}
+
+// Immutable audit trail for every quote transition. Append-only: rows are never
+// updated or deleted by application code (cascade only when the quote is gone).
+model BargainQuoteEvent {
+  id         String   @id @default(cuid())
+  quoteId    String
+  storeId    String
+  type       String // created | accepted | checkout_pending | redeemed | expired | revoked | invalidated | cancelled | revalidated
+  fromStatus String?
+  toStatus   String?
+  detail     Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  quote BargainQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+  @@index([storeId])
 }
 
 model BargainMessage {

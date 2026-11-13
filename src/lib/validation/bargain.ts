@@ -53,6 +53,19 @@ export const bargainConfigUpsertSchema = z.object({
   dwellNudgeEnabled: z.boolean().optional(),
   dwellSeconds: z.number().int().min(5).max(600).optional(),
   dwellReminderSeconds: z.number().int().min(5).max(600).optional(),
+  // ── Shipping-aware negotiation (Module 4) ──
+  shippingAwareEnabled: z.boolean().optional(),
+  shippingFlatCost: z.number().min(0).max(1_000_000).nullable().optional(),
+  freeShippingThreshold: z.number().min(0).max(1_000_000).nullable().optional(),
+  // ── Payment-method-aware negotiation (Module 5) ──
+  paymentAwareEnabled: z.boolean().optional(),
+  prepaidIncentivePercent: z.number().min(0).max(30).nullable().optional(),
+  // ── Bundle / multi-item negotiation (Module 6) ──
+  bundleNegotiationEnabled: z.boolean().optional(),
+  bundleDiscountPercent: z.number().min(0).max(90).nullable().optional(),
+  // ── Emergency controls (Module 8) ──
+  emergencyPaused: z.boolean().optional(),
+  aiPaused: z.boolean().optional(),
 })
 
 export type BargainConfigUpsertInput = z.infer<typeof bargainConfigUpsertSchema>

@@ -161,6 +161,28 @@ export type BargainOfferSuccess = {
   attemptsUsed?: number
   /** Active daily-goal view, refreshed alongside each turn (see BargainGoalView). */
   goal?: BargainGoalView
+  /**
+   * Shipping transparency (Module 4), present only when the merchant enabled
+   * shipping-aware negotiation. Honest shipping cost + total for the standing
+   * price, plus a truthful free-shipping upsell line. Never carries the floor.
+   */
+  shipping?: {
+    total: number
+    shippingCost: number
+    freeShipping: boolean
+    subtotal: number
+    remainingForFreeShipping: number
+    unitsForFreeShipping: number | null
+    upsell: string | null
+  } | null
+  /**
+   * Payment-method awareness (Module 5), present only when the merchant enabled
+   * it. The shopper's detected intent and the public COD→prepaid saving (if any).
+   */
+  payment?: {
+    intent: 'prepaid' | 'cod' | 'unknown'
+    prepaidSaving: number | null
+  } | null
   recommendations?: BargainRecommendation[]
   recommendationReason?: string
   abuseDetected?: boolean

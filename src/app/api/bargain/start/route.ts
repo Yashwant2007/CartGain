@@ -321,6 +321,15 @@ export async function POST(request: NextRequest) {
           experiencePersonality: hasPublishedExperience ? experience.personality : null,
           experienceVersion: hasPublishedExperience ? experience.publishedVersion : null,
           experienceVisitorKey: data.customerFingerprint ?? null,
+          // Deterministic holdout arm (Module 7): hash of (store+product+visitor)
+          // so identical conditions land in the same arm, while still splitting
+          // traffic ~50/50 across the population.
+          experimentArm: (() => {
+            const seed = `${data.storeId}|${data.shopifyProductId}|${data.customerFingerprint ?? data.cartToken ?? ''}`
+            let h = 0
+            for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+            return h % 2 === 0 ? 'treatment' : 'control'
+          })(),
           startedAt: now,
           expiredAt,
           messages: {

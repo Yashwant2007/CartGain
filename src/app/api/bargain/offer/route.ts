@@ -10,6 +10,9 @@ import { detectLanguage } from '@/lib/bargain/language'
 import { logDataAccess } from '@/lib/data-protection'
 import { clampOfferToSafety } from '@/lib/bargain/engine'
 import { detectCouponMention, detectMultiProductRequest } from '@/lib/bargain/policy'
+import { normalizeShippingConfig, computeShipping, shippingUpsellLine } from '@/lib/bargain/shipping'
+import { normalizePaymentConfig, detectPaymentIntent, prepaidSaving } from '@/lib/bargain/payment'
+import { buildBundle, validateBundleOffer, allocateDiscount, bundleSummary, type BundleItem } from '@/lib/bargain/bundle'
 import { walkoutOutcome } from '@/lib/bargain/negotiation-state'
 import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
 import { analyzeIntent } from '@/lib/bargain/intent'
@@ -20,6 +23,8 @@ import { publishedPersonality } from '@/lib/bargain/experience/config'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
 import { searchRecommendations, recommendationReason, type RecommendationCard, type RecommendationReason, type RecommendationContext } from '@/lib/bargain/recommendations'
 import { fetchShopifyProducts } from '@/lib/shopify'
+import { toNumericId } from '@/lib/shopify-line-items'
+import { generateBargainBundleDiscountCode } from '@/lib/bargain/discount'
 import { issueRetentionDiscount, buildBargainClaimUrl } from '@/lib/bargain/purchase'
 import { track } from '@/lib/analytics/track'
 import { resolveSessionLearning, recordLearningEvent, loadLearningConfig } from '@/lib/bargain/learning/service'
@@ -37,6 +42,116 @@ function detectedLang(sessionOrConfig: string | null | undefined, customerMessag
 // "alternatives" sub-toggle are on (server-side guard; never client-side).
 function recoEnabledForMessages(config: Partial<{ recommendationsEnabled: boolean | null; alternativeRecommendationsEnabled: boolean | null }>): boolean {
   return config.recommendationsEnabled === true && config.alternativeRecommendationsEnabled === true
+}
+
+const BUNDLE_STOPWORDS = new Set([
+  'this', 'that', 'with', 'have', 'want', 'need', 'both', 'them', 'they', 'your', 'yours',
+  'please', 'price', 'deal', 'bundle', 'together', 'also', 'plus', 'and', 'the', 'for',
+  'can', 'you', 'get', 'give', 'would', 'could', 'about', 'some', 'more', 'less', 'than',
+  'what', 'when', 'will', 'make', 'take', 'these', 'those', 'from', 'into', 'over', 'just',
+])
+
+/** Significant lowercase tokens from the shopper's message (for title matching). */
+function bundleTokens(message: string): string[] {
+  return Array.from(
+    new Set(
+      message
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter((t) => t.length >= 4 && !BUNDLE_STOPWORDS.has(t)),
+    ),
+  )
+}
+
+function titleMatchesTokens(title: string, tokens: string[]): boolean {
+  const t = title.toLowerCase()
+  return tokens.some((tok) => t.includes(tok))
+}
+
+/**
+ * Resolve the DISTINCT products of a requested bundle. Prefers the shopper's
+ * own cart (real products + real prices) and also matches products the shopper
+ * named against the store catalog. Every item's floor is computed server-side;
+ * non-bargainable products are dropped so a bundle can never discount below a
+ * merchant floor. Returns null when fewer than two distinct products remain.
+ */
+async function resolveBundleItems(opts: {
+  storeId: string
+  store: any
+  cartToken: string | null
+  anchor: { productId: string; title: string; price: number }
+  message: string
+}): Promise<BundleItem[] | null> {
+  const candidates: { productId: string; variantId?: string | null; title: string; price: number; quantity: number }[] = []
+  const seen = new Set<string>()
+  const push = (c: { productId?: string | null; variantId?: string | null; title?: string; price?: number; quantity?: number }) => {
+    const productId = c.productId ? String(c.productId) : ''
+    const price = Number(c.price)
+    if (!productId || seen.has(productId) || !Number.isFinite(price) || price <= 0) return
+    seen.add(productId)
+    candidates.push({
+      productId,
+      variantId: c.variantId ?? null,
+      title: c.title || 'Item',
+      price,
+      quantity: Math.max(1, Math.floor(c.quantity ?? 1)),
+    })
+  }
+
+  push({ productId: opts.anchor.productId, title: opts.anchor.title, price: opts.anchor.price, quantity: 1 })
+
+  if (opts.cartToken) {
+    try {
+      const cart = await prisma.cart.findUnique({
+        where: { storeId_cartId: { storeId: opts.storeId, cartId: opts.cartToken } },
+        select: { items: true },
+      })
+      const items = Array.isArray(cart?.items) ? (cart!.items as any[]) : []
+      for (const it of items) {
+        push({
+          productId: toNumericId(it?.productId),
+          variantId: toNumericId(it?.variantId) ?? null,
+          title: typeof it?.name === 'string' ? it.name : it?.title,
+          price: Number(it?.price),
+          quantity: Number(it?.quantity) || 1,
+        })
+      }
+    } catch {
+      // cart lookup is best-effort; fall through to catalog matching
+    }
+  }
+
+  const tokens = bundleTokens(opts.message)
+  if (tokens.length > 0) {
+    try {
+      const catalog = await fetchShopifyProducts(opts.store, { limit: 100 })
+      for (const p of catalog.products ?? []) {
+        const title = String(p?.title ?? '')
+        if (!title || !titleMatchesTokens(title, tokens)) continue
+        const price = Number(p?.variants?.[0]?.price)
+        push({ productId: toNumericId(p?.id) ?? String(p?.id ?? ''), title, price, quantity: 1 })
+      }
+    } catch {
+      // catalog match is best-effort
+    }
+  }
+
+  if (candidates.length < 2) return null
+
+  const floors = await Promise.all(
+    candidates.map((c) =>
+      computeMinPrice({ storeId: opts.storeId, shopifyProductId: c.productId, originalPrice: c.price }).catch(() => null),
+    ),
+  )
+  const items: BundleItem[] = []
+  candidates.forEach((c, i) => {
+    const f = floors[i]
+    if (!f || !f.isBargainable) return
+    items.push({ ...c, floor: Math.min(f.minPrice, c.price) })
+  })
+
+  return items.length >= 2 ? items : null
 }
 // POST /api/bargain/offer — customer sends a message, AI responds
 export async function POST(request: NextRequest) {
@@ -106,6 +221,9 @@ export async function POST(request: NextRequest) {
     })
     if (!config || !config.enabled) {
       return NextResponse.json({ message: 'Bargaining disabled' }, { status: 403 })
+    }
+    if ((config as any).emergencyPaused === true) {
+      return NextResponse.json({ message: 'Bargaining is temporarily paused by the merchant.', paused: true }, { status: 503 })
     }
 
     // §24 Coupon-stacking detection — deterministic classifier on the customer's
@@ -249,6 +367,113 @@ export async function POST(request: NextRequest) {
     // for budget-fit alternatives when reco is enabled.
     const bundleRequested = detectMultiProductRequest(data.message)
     if (bundleRequested) {
+      // ── §27 BUNDLE NEGOTIATION (Module 6) ──
+      // When the merchant opted in, try to resolve the distinct products and
+      // mint a deterministic, floor-safe bundle offer. The AI never invents a
+      // combined number — the server computes one uniform % that keeps every
+      // item at/above its own floor, and Shopify's code is scoped to those
+      // products with the full bundle value as the minimum subtotal.
+      let bundleOffer: {
+        items: ReturnType<typeof allocateDiscount>
+        listTotal: number
+        offerTotal: number
+        discountPercent: number
+        currencySymbol: string
+        code: string | null
+        codeStatus: 'created' | 'pending' | 'failed' | 'none'
+      } | null = null
+
+      const bundleEnabled = config.bundleNegotiationEnabled === true
+      if (bundleEnabled) {
+        try {
+          const items = await resolveBundleItems({
+            storeId: bargainSession.storeId,
+            store: bargainSession.store,
+            cartToken: bargainSession.cartToken ?? null,
+            anchor: { productId: bargainSession.shopifyProductId, title: productTitle ?? 'Item', price: bargainSession.originalPrice },
+            message: data.message,
+          })
+          if (items) {
+            const desiredPct = config.bundleDiscountPercent ?? 10
+            const quote = buildBundle(items, { discountPercent: desiredPct })
+            if (quote && validateBundleOffer(quote).ok) {
+              const code = `BUNDLE${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+              // Mint the Shopify code only when a store is connected; otherwise
+              // return the deterministic quote without a code (pending sync).
+              let codeStatus: 'created' | 'pending' | 'failed' | 'none' = 'none'
+              let createdCode: string | null = null
+              try {
+                const generated = await generateBargainBundleDiscountCode({
+                  store: bargainSession.store,
+                  items: quote.items.map((it) => ({ productId: it.productId, variantId: it.variantId })),
+                  listTotal: quote.listTotal,
+                  offerTotal: quote.offerTotal,
+                  discountPercent: quote.discountPercent,
+                  code,
+                  customerEmail: bargainSession.customerEmail,
+                  cartToken: bargainSession.cartToken,
+                })
+                codeStatus = generated.status === 'created' ? 'created' : generated.status === 'pending' ? 'pending' : 'failed'
+                createdCode = generated.status === 'created' ? generated.code : null
+              } catch {
+                codeStatus = 'failed'
+              }
+              bundleOffer = {
+                items: allocateDiscount(quote.items, quote.offerTotal),
+                listTotal: quote.listTotal,
+                offerTotal: quote.offerTotal,
+                discountPercent: quote.discountPercent,
+                currencySymbol,
+                code: createdCode ?? (codeStatus === 'pending' ? code : null),
+                codeStatus,
+              }
+              await track({
+                name: 'cartgain_bundle_offer',
+                storeId: bargainSession.storeId,
+                properties: { items: quote.items.length, offerTotal: quote.offerTotal, discountPercent: quote.discountPercent },
+              })
+            }
+          }
+        } catch {
+          bundleOffer = null
+        }
+      }
+
+      if (bundleOffer) {
+        const reply = `Bundle deal: ${bundleSummary(bundleOffer.items.map((a) => ({ productId: a.productId, title: a.title, price: a.listPrice, floor: 0, quantity: a.quantity })), currencySymbol)} — ${currencySymbol}${bundleOffer.offerTotal} (was ${currencySymbol}${bundleOffer.listTotal}, ${bundleOffer.discountPercent}% off).`
+        await prisma.$transaction([
+          prisma.bargainMessage.create({
+            data: {
+              sessionId: bargainSession.id, role: 'customer', content: data.message,
+              offeredPrice: customerOffer ?? null,
+              metadata: { bundleRequested: true, couponMentioned: couponMentioned || undefined } as any,
+            },
+          }),
+          prisma.bargainMessage.create({
+            data: {
+              sessionId: bargainSession.id, role: 'ai', content: reply,
+              metadata: { decision: 'chat', tactic: 'bundle_offer', policy: 'bundle_negotiation', bundleRequested: true } as any,
+            },
+          }),
+        ])
+        return NextResponse.json({
+          reply,
+          decision: 'chat',
+          sessionStatus: 'active',
+          sessionId: bargainSession.id,
+          bundleOffer: {
+            items: bundleOffer.items,
+            listTotal: bundleOffer.listTotal,
+            offerTotal: bundleOffer.offerTotal,
+            discountPercent: bundleOffer.discountPercent,
+            currencySymbol: bundleOffer.currencySymbol,
+            code: bundleOffer.code,
+            codeStatus: bundleOffer.codeStatus,
+          },
+        })
+      }
+
+      // Default fallback: redirect to per-item bargaining (preserves prior behaviour).
       let bundleReco: RecommendationCard[] | null = null
       if (recoEnabledForMessages(config) && intentAnalysis.budget != null) {
         try {
@@ -493,6 +718,28 @@ export async function POST(request: NextRequest) {
 
     const shopkeeperPersonality = publishedPersonality(config)
 
+    // Shipping-aware negotiation (Module 4) — merchant's public shipping rule
+    // only (never the floor). Off unless the merchant enabled it.
+    const shippingConfig = normalizeShippingConfig(config)
+
+    // Payment-method awareness (Module 5) — reuse the merchant's existing RTO /
+    // payment settings (read-only; no row is created on this public path). The
+    // prepaid lever is public; the floor is not, and the engine clamp still owns it.
+    const merchantConfig = await prisma.merchantConfig.findUnique({
+      where: { storeId: bargainSession.storeId },
+      select: { rtoReductionEnabled: true, rtoIncentive: true },
+    })
+    const paymentConfig = normalizePaymentConfig({
+      paymentAwareEnabled: config.paymentAwareEnabled,
+      prepaidIncentivePercent: config.prepaidIncentivePercent,
+      rtoReductionEnabled: merchantConfig?.rtoReductionEnabled,
+      rtoIncentive: merchantConfig?.rtoIncentive,
+    })
+    const paymentIntent = detectPaymentIntent(
+      data.message,
+      bargainSession.messages.filter((m: any) => m.role === 'customer').map((m: any) => m.content as string),
+    )
+
     const ctx: NegotiationContext = {
       storeName: bargainSession.store.name,
       currencySymbol,
@@ -523,6 +770,8 @@ export async function POST(request: NextRequest) {
       couponsAllowed,
       recommendationsEnabled: recoEnabledForMessages(config),
       ...(learningResolved ? { learning: learningResolved.guidance } : {}),
+      ...(shippingConfig.enabled ? { shipping: shippingConfig } : {}),
+      ...(paymentConfig.enabled ? { payment: { intent: paymentIntent, config: paymentConfig } } : {}),
     }
 
     const history = bargainSession.messages
@@ -854,6 +1103,7 @@ export async function POST(request: NextRequest) {
           metadata: {
             ...(bulkQuantity ? { bulkQuantity } : {}),
             ...(couponMentioned ? { couponMentioned: true } : {}),
+            ...(paymentConfig.enabled && paymentIntent !== 'unknown' ? { paymentIntent } : {}),
           } as any,
         },
       }),
@@ -916,6 +1166,20 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Shipping transparency (Module 4) — deterministic total + truthful
+    // free-shipping value-add for the widget, computed from the standing price.
+    // Never carries the floor. Omitted entirely when the feature is off.
+    const shippingView = shippingConfig.enabled
+      ? (() => {
+          const quote = computeShipping({
+            config: shippingConfig,
+            unitPrice: safeCounter ?? customerOffer ?? bargainSession.originalPrice,
+            quantity: bulkQuantity ?? 1,
+          })
+          return { ...quote, upsell: shippingUpsellLine(quote, currencySymbol, { config: shippingConfig }) }
+        })()
+      : null
+
     return NextResponse.json({
       reply: result.reply,
       decision: result.decision,
@@ -933,6 +1197,10 @@ export async function POST(request: NextRequest) {
       // abuse turn that was rolled back below is reported correctly.
       attemptsUsed: effectiveAttemptsUsed,
       goal: publicGoalView(goalCtx),
+      ...(shippingView ? { shipping: shippingView } : {}),
+      ...(paymentConfig.enabled
+        ? { payment: { intent: paymentIntent, prepaidSaving: prepaidSaving(paymentConfig) } }
+        : {}),
       ...(isAbuseNoConsume ? { abuseDetected: true, abuseCategory: (result.metadata as any)?.category } : {}),
       ...(recommendations && recoReason
         ? {

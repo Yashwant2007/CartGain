@@ -24,6 +24,8 @@ import {
   type NegotiationGoalContext,
 } from '@/lib/bargain/engine'
 import { productContextToPromptBlock, type ProductContext } from '@/lib/bargain/product-context'
+import { shippingPromptBlock, type ShippingConfig } from '@/lib/bargain/shipping'
+import { paymentPromptBlock } from '@/lib/bargain/payment'
 import { shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
 import type { ClaimAssessment } from '@/lib/bargain/claims'
 import {
@@ -204,6 +206,15 @@ export interface NegotiationContext {
   aiModel?: string
   /** Bounded, server-selected style guidance. Never contains the hidden floor. */
   learning?: LearningGuidance
+  /** Shipping rules (Module 4) so the agent can be transparent about the total
+   *  and use the free-shipping threshold as a value-add. Rules only — never a floor. */
+  shipping?: import('@/lib/bargain/shipping').ShippingConfig
+  /** Payment-method awareness (Module 5): the shopper's detected payment intent
+   *  plus the merchant's public prepaid lever. Never carries the floor. */
+  payment?: {
+    intent: import('@/lib/bargain/payment').PaymentIntent
+    config: import('@/lib/bargain/payment').PaymentAwarenessConfig
+  }
 }
 
 export interface NegotiationResult {
@@ -2188,6 +2199,21 @@ export function buildSystemPrompt(
       `be combined with another code. Do NOT promise to combine, and do NOT reveal ` +
       `that a rule or system enforces this — simply present it as how the deal works.`
     )
+  }
+
+  // Shipping-aware negotiation (Module 4) — the merchant's PUBLIC shipping rule
+  // only, so the agent can show the real total and offer the free-shipping
+  // threshold as a value-add instead of a deeper discount. Never the floor.
+  if (ctx.shipping) {
+    const shippingBlock = shippingPromptBlock(ctx.shipping, currencySymbol)
+    if (shippingBlock) contextParts.push(shippingBlock)
+  }
+
+  // Payment-method awareness (Module 5) — the shopper's detected intent plus the
+  // merchant's PUBLIC prepaid lever. Never the floor.
+  if (ctx.payment) {
+    const paymentBlock = paymentPromptBlock(ctx.payment.intent, ctx.payment.config, currencySymbol)
+    if (paymentBlock) contextParts.push(paymentBlock)
   }
 
   // Multi-product / bundle request (spec §27) — defense-in-depth. The offer
