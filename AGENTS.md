@@ -88,6 +88,30 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(bargain): Phase 5 accepted-deal follow-up reminders` (committed
+  `644eb88f`, deployed release `644eb88`). Shoppers who accept a bargain but
+  never pay now get honest reminders while their locked price is still valid.
+  `BargainConfig` gained `dealFollowupEnabled` (default **off**),
+  `dealFollowupDelaysMinutes` (Json, default `[15,180,1200]`) and
+  `dealFollowupMax` (default 3); new `BargainDealFollowup` ledger with
+  `@@unique(sessionId, stage, channel)` makes every stage/channel send
+  idempotent (migration `20261113180000_add_deal_followup`, applied on deploy).
+  Pure `src/lib/bargain/deal-followup.ts` owns `normalizeDelays`, `dueStage`
+  and the email/WhatsApp copy (no invented scarcity; expiry mentioned only when
+  known; HTML escapes and rejects unsafe URLs). `processBargainDealFollowups`
+  re-reads the session before every send and skips anything purchased, expired,
+  or no longer `accepted`, prefers email, and uses WhatsApp free-form only
+  inside Meta's 24h window with explicit consent (`canSendToIdentity`); a
+  completed purchase or opt-out stops all reminders. Authed route
+  `/api/jobs/bargain-deal-followups`, and the existing cart sweep calls the job
+  best-effort (a failure never breaks the sweep). Dashboard "Accepted-deal
+  follow-up" card + validation fields. Verified: Jest **170 suites / 1787
+  tests**, tsc, lint and production build green; live `/api/health` release
+  `644eb88`, status ok, env missing `[]`; unauthenticated job route 401; the
+  migration and both new tables/columns confirmed in production. Note: this
+  completes Phase 5 of the 16-phase master upgrade (Modules 3–8 shipped in
+  `5931005e`).
+
 - `feat(bargain): seed the default learning config for every store`. Stores no
   longer need a manual Settings save to get a `BargainLearningConfig` row (the
   gap left `/demo` learning off for new stores and for two production stores
