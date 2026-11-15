@@ -497,6 +497,12 @@ model BargainConfig {
   emergencyPaused                   Boolean   @default(false) // pause all bargaining server-side
   aiPaused                          Boolean   @default(false) // force rule-based fallback only
   previousConfigSnapshot            Json? // last good config for one-click restore
+  // ── Accepted-deal follow-up (Phase 5) ──
+  // When a shopper accepts a bargain but never pays, remind them about the
+  // still-valid locked price. OFF by default; consent is always required.
+  dealFollowupEnabled               Boolean   @default(false)
+  dealFollowupDelaysMinutes         Json? // e.g. [15, 180, 1200]
+  dealFollowupMax                   Int       @default(3)
   createdAt                         DateTime  @default(now())
   updatedAt                         DateTime  @updatedAt
 
@@ -683,6 +689,26 @@ model BargainMessage {
 
   @@index([sessionId])
   @@index([createdAt])
+}
+
+/// One accepted-deal reminder (Phase 5). Idempotent per (session, stage,
+/// channel) so a re-run can never double-send. A stage is a configured delay
+/// after acceptance; `channel` is email or whatsapp.
+model BargainDealFollowup {
+  id         String   @id @default(cuid())
+  storeId    String
+  sessionId  String
+  stage      Int
+  channel    String // email | whatsapp
+  status     String   @default("sent") // sent | failed | skipped
+  providerId String?
+  detail     Json     @default("{}")
+  sentAt     DateTime @default(now())
+
+  @@unique([sessionId, stage, channel])
+  @@index([storeId])
+  @@index([sessionId])
+  @@index([sentAt])
 }
 
 // ── Storefront experience analytics ─────────────────────────────────────────

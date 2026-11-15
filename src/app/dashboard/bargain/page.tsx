@@ -31,6 +31,7 @@ import {
   Package,
   AlertTriangle,
   Pause,
+  Bell,
 } from 'lucide-react'
 import { DemoPanel } from './demo-panel'
 import { ProductCatalogPanel } from './product-catalog'
@@ -85,6 +86,9 @@ type BargainConfig = {
   bundleDiscountPercent: number | null
   emergencyPaused: boolean
   aiPaused: boolean
+  dealFollowupEnabled: boolean
+  dealFollowupDelaysMinutes: number[] | null
+  dealFollowupMax: number
 }
 
 // All supported negotiation languages (mirrors SUPPORTED_LANGUAGES in the engine).
@@ -808,6 +812,41 @@ void fetchConfig()
                     checked={configForm.aiPaused ?? false}
                     onChange={v => setConfigForm({ ...configForm, aiPaused: v })}
                   />
+                </ConfigCard>
+
+                {/* Accepted-deal follow-up */}
+                <ConfigCard
+                  className="lg:col-span-2"
+                  icon={Bell}
+                  title="Accepted-deal follow-up"
+                  description="When a shopper accepts a bargain but never pays, gently remind them while their locked price is still valid. Consent is always required; a completed purchase stops all reminders."
+                >
+                  <ToggleRow
+                    title="Remind shoppers who accepted but didn't pay"
+                    description="Sends a short, honest reminder at each delay below. Stops automatically on purchase, expiry, or opt-out."
+                    checked={configForm.dealFollowupEnabled ?? false}
+                    onChange={v => setConfigForm({ ...configForm, dealFollowupEnabled: v })}
+                  />
+                  {configForm.dealFollowupEnabled && (
+                    <Field
+                      label="Reminder delays (minutes, comma-separated)"
+                      hint="Up to 5 delays after acceptance. Default: 15, 180, 1200 (15 min, 3 h, 20 h)."
+                    >
+                      <input
+                        type="text"
+                        value={(configForm.dealFollowupDelaysMinutes ?? [15, 180, 1200]).join(', ')}
+                        onChange={e => setConfigForm({
+                          ...configForm,
+                          dealFollowupDelaysMinutes: e.target.value
+                            .split(',')
+                            .map(s => parseInt(s.trim(), 10))
+                            .filter(n => Number.isFinite(n) && n > 0)
+                            .slice(0, 5),
+                        })}
+                        className={CONTROL_CLS}
+                      />
+                    </Field>
+                  )}
                 </ConfigCard>
 
                 {/* Daily goal & campaign */}

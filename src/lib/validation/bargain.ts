@@ -66,6 +66,10 @@ export const bargainConfigUpsertSchema = z.object({
   // ── Emergency controls (Module 8) ──
   emergencyPaused: z.boolean().optional(),
   aiPaused: z.boolean().optional(),
+  // ── Accepted-deal follow-up (Phase 5) ──
+  dealFollowupEnabled: z.boolean().optional(),
+  dealFollowupDelaysMinutes: z.array(z.number().int().min(1).max(60 * 24 * 7)).max(5).nullable().optional(),
+  dealFollowupMax: z.number().int().min(1).max(5).optional(),
 })
 
 export type BargainConfigUpsertInput = z.infer<typeof bargainConfigUpsertSchema>

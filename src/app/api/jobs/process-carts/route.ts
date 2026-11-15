@@ -7,6 +7,7 @@ import { getRedis, redisSet, redisGet } from '@/lib/redis'
 import prisma from '@/lib/db'
 import { requireJobAuth } from '@/lib/job-auth'
 import { claimSweepSlot } from '@/lib/jobs/sweep-slot'
+import { processBargainDealFollowups } from '@/lib/jobs/processBargainDealFollowups'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -142,11 +143,22 @@ export async function GET(request: NextRequest) {
       if (result.nextCursor) {
         await saveStoreCursor(result.nextCursor)
       }
+
+      // Phase 5 — accepted-bargain deal follow-ups. Best-effort: a failure here
+      // must never break the cart sweep.
+      let dealFollowups: Awaited<ReturnType<typeof processBargainDealFollowups>> | null = null
+      try {
+        dealFollowups = await processBargainDealFollowups(25)
+      } catch (err) {
+        console.error('Bargain deal follow-up error:', err)
+      }
+
       return NextResponse.json({
         message: 'Carts processed',
         status: 'processed',
         syncedCheckouts,
         result,
+        dealFollowups,
       })
     }
 
