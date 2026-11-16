@@ -6,7 +6,7 @@
 // clamped); the merchant floor never reaches these components.
 
 import type { ReactNode } from 'react'
-import { Tag, Zap, ShieldCheck, Loader2, ShoppingBag, CheckCheck, Clock3 } from 'lucide-react'
+import { Tag, Zap, ShieldCheck, Loader2, ShoppingBag, CheckCheck, Clock3, Sparkles } from 'lucide-react'
 import type { UiKey } from '@/lib/bargain/i18n'
 import type { BargainDecision, BargainMessage, BargainRecommendation, BargainDemoGoal, BargainGoalView } from '@/lib/bargain/api-types'
 
@@ -774,6 +774,15 @@ export function RecoCard({
         }}>
           {card.title}
         </div>
+        {card.reason && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 4, marginTop: 3,
+            fontSize: 11.5, fontWeight: 600, color: '#6d28d9',
+          }}>
+            <Sparkles size={12} color="#8b5cf6" aria-hidden="true" />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{card.reason}</span>
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 800, fontSize: 15, color: '#15803d' }}>{fmt(card.price)}</span>
           {card.compareAtPrice != null && card.compareAtPrice > card.price && (

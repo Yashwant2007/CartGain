@@ -88,6 +88,28 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(bargain): merchant FAQ, conversation-state reactions, and a real holdout
+  experiment` (**uncommitted**). Closed three gaps found by auditing the specs
+  line by line. (1) Merchant FAQ: `BargainConfig.merchantFaq` (migration
+  `20261113190000_add_merchant_faq`, **not yet applied to production**),
+  `sanitizeMerchantFaq` in `product-context.ts` (≤20 entries, 160/500 chars,
+  dedupe, disallowed-claim scrub), a `[MERCHANT_PROVIDED]` prompt block fed by
+  `product-fetcher.ts`, validation in `validation/bargain.ts`, and an “Answer
+  bank (FAQ)” editor on Settings → Bargain. (2) Master Phase 9 conversation
+  state: `priorityReaction()` overrides the avatar for COMPLETED/REJECTED/
+  CANCELLED/EXPIRED/hesitation/human-support turns in both widgets, and the demo
+  route now returns the same `conversationState` as `/offer`. (3) Master Phase
+  14: `experimentArm` cohorts are now measured in `/api/analytics/bargain`
+  (sessions, accepted, verified purchases only, net/gross/refunded revenue, avg
+  discount, per-arm evidence) and rendered as a Holdout experiment table; the
+  `BARGAIN_DUAL_AGENT` flag is finally real — when on, `control` skips the
+  learning layer while `treatment` keeps it (flag off = no behavior change).
+  Also fixed the Module 8 emergency controls: `emergencyPaused` now blocks
+  `/api/bargain/start` (503), not just later turns, and the previously dead
+  `aiPaused` toggle now forces the deterministic rule engine (`aiSource:
+  'reflex'`) with no provider call. Verified: `prisma generate`, tsc, lint and
+  the full Jest suite green (**171 suites / 1821 tests**).
+
 - `feat(bargain): Phase 5 accepted-deal follow-up reminders` (committed
   `644eb88f`, deployed release `644eb88`). Shoppers who accept a bargain but
   never pay now get honest reminders while their locked price is still valid.

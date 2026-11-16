@@ -56,6 +56,7 @@ beforeEach(() => {
       purchaseValue: 900,
       experienceDesign: 'unlock-your-deal',
       experiencePersonality: 'strict_shopkeeper',
+      experimentArm: 'treatment',
       _count: { messages: 3 },
     },
     {
@@ -69,6 +70,7 @@ beforeEach(() => {
       purchaseValue: null,
       experienceDesign: null,
       experiencePersonality: null,
+      experimentArm: 'control',
       _count: { messages: 0 },
     },
   ])
@@ -109,4 +111,27 @@ it('scopes every query to the authenticated store and selected window', async ()
   expect(prismaMock.bargainSession.findMany).toHaveBeenCalledWith(expect.objectContaining({
     where: expect.objectContaining({ storeId: 'store-1' }),
   }))
+})
+
+it('reports deterministic holdout cohorts and counts only verified purchases', async () => {
+  const body = await (await GET(request())).json()
+  const treatment = body.experiments.arms.find((row: any) => row.key === 'treatment')
+  const control = body.experiments.arms.find((row: any) => row.key === 'control')
+  expect(treatment).toMatchObject({ sessions: 1, accepted: 1, purchased: 1, revenue: 900, evidence: 'insufficient' })
+  expect(control).toMatchObject({ sessions: 1, accepted: 0, purchased: 0, revenue: 0 })
+  expect(body.experiments.enabled).toBe(false)
+  expect(body.experiments.note).toMatch(/observational/i)
+})
+
+it('marks the experiment as active when the dual-agent flag is enabled', async () => {
+  const prev = process.env.BARGAIN_DUAL_AGENT
+  process.env.BARGAIN_DUAL_AGENT = 'true'
+  try {
+    const body = await (await GET(request())).json()
+    expect(body.experiments.enabled).toBe(true)
+    expect(body.experiments.note).toMatch(/baseline engine/i)
+  } finally {
+    if (prev == null) delete process.env.BARGAIN_DUAL_AGENT
+    else process.env.BARGAIN_DUAL_AGENT = prev
+  }
 })

@@ -124,6 +124,22 @@ describe('POST /api/bargain/start — hardening', () => {
     expect(upsertArg.update.enabled).toBeUndefined()
   })
 
+  it('refuses (503) immediately when the merchant emergency pause is on', async () => {
+    prismaMock.bargainConfig.upsert.mockResolvedValue({
+      enabled: true,
+      emergencyPaused: true,
+      sessionTimeout: 600,
+      maxAttempts: 3,
+      aiPersona: 'friendly_shopkeeper',
+      language: 'auto',
+      minProfitPercent: 20,
+    })
+    const res = await POST(makeRequest({}))
+    expect(res.status).toBe(503)
+    const body = await res.json()
+    expect(body).toMatchObject({ paused: true })
+  })
+
   it('syncs the shop currency only when the store is still on the default', async () => {
     await POST(makeRequest({ currency: 'INR' }))
     expect(prismaMock.store.update).toHaveBeenCalledWith({

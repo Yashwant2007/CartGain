@@ -14,6 +14,7 @@ export type ShopperIntent =
   | 'COMPARISON'
   | 'PRODUCT_QUESTION'
   | 'PURCHASE_READY'
+  | 'PURCHASE_HESITATION'
   | 'WALKOUT'
   | 'GENERIC_CHAT'
   | 'RECOMMENDATION_REQUEST'
@@ -22,12 +23,34 @@ export type ShopperIntent =
 export type ShopperObjection =
   | null
   | 'PRICE'
+  | 'SHIPPING'
+  | 'SHIPPING_DELAY'
+  | 'QUALITY'
+  | 'TRUST'
+  | 'BUDGET'
+  | 'PRODUCT_INFORMATION'
+  | 'COMPARISON'
   | 'FIT_VARIANT'
   | 'AVAILABILITY'
-  | 'TRUST'
-  | 'SHIPPING_DELAY'
+  | 'PURCHASE_HESITATION'
   | 'PAYMENT_FRICTION'
   | 'VALUE'
+
+/**
+ * The nine top-level objection categories the Master Upgrade Phase 1 asks for.
+ * `ShopperObjection` is the finer-grained internal label; this maps it onto the
+ * published taxonomy used for reporting and intent→action routing.
+ */
+export type ObjectionCategory =
+  | 'PRICE_OBJECTION'
+  | 'SHIPPING_OBJECTION'
+  | 'QUALITY_OBJECTION'
+  | 'TRUST_OBJECTION'
+  | 'BUDGET_OBJECTION'
+  | 'PRODUCT_INFORMATION'
+  | 'COMPARISON_OBJECTION'
+  | 'PURCHASE_HESITATION'
+  | 'OTHER_OR_UNKNOWN'
 
 /** How the shopper framed the number they shared. */
 export type BudgetType = 'maximum' | 'approximate' | 'minimum' | null
@@ -45,6 +68,8 @@ export interface IntentAnalysis {
   priceComplaint: boolean
   /** Rough product topic the shopper is after (e.g. "for oily skin"), if detectable. */
   need: string | null
+  /** Published nine-category objection taxonomy (Phase 1 intent→action routing). */
+  category: ObjectionCategory
 }
 
 const RE = {
@@ -59,6 +84,9 @@ const RE = {
   purchaseReady: /\b(i'?ll\s+(take|buy|get|lock)|take\s+it\b|deal\s+done|checkout|order\s+it|buying\s+it|ready\s+to\s+order|let'?s\s+(do\s+it|lock|wrap\s+it|close)|lock\s+(it|this|the\s+deal)|finaliz(e|ing)|accept\s+the\s+(price|deal))/i,
   mismatch: /\b(not\s+my\s+size|different\s+(size|colour|color|variant)|need(ed|s)?\s+it\s+in|available\s+in\s+my|wrong\s+(size|variant)|only\s+(left|have)\s+in)/i,
   trust: /\b(original|genuine|authentic|real|fake|duplicate|trust\b|reviews?|rating|scam|legit|certified)/i,
+  quality: /\b(quality|durab(le|ility)|last\s+(long|for)|lasts\s+\w+|sturdy|flimsy|cheap(?:ly)?\s+made|well\s+made|build\s+quality|how\s+is\s+the\s+(build|quality)|broke|broken|defect(?:ive)?|damaged|worth\s+the\s+material)\b/i,
+  availability: /\b(out\s+of\s+stock|in\s+stock|sold\s+out|restock|back\s+in\s+stock|when\s+.*(back|available)|is\s+it\s+available|do\s+you\s+(still\s+)?have\s+it)\b/i,
+  hesitation: /\b(let\s+me\s+think|i'?ll\s+think|think\s+(about\s+it|it\s+over)|maybe\s+later|not\s+sure|not\s+ready|need\s+to\s+think|come\s+back\s+to|decide\s+later|sleep\s+on\s+it|not\s+right\s+now|just\s+(looking|browsing)|have\s+to\s+(check|ask)|let\s+me\s+(check|see|ask))\b/i,
   shipping: /\b(shipping|deliver(y)?|delivery|arrive|reache?s?\s+me|tomorrow|urgent|today|expe?dited|by\s+(monday|friday|the\s+weekend))/i,
   payment: /\b(cash|upi|gpay|phonepe|paytm|cod|emi|net\s+banking|crdit|card\s+payment|payment\s+option)/i,
   walkout: /\b(bye|goodbye|leaving|walk\s+away|finding\s+elsewhere|go(s)?\s+elsewhere|not\s+interested|never\s+mind|forget\s+it|skip\s+it|moving\s+on|i'?ll\s+pass)/i,
@@ -136,6 +164,9 @@ export function analyzeIntent(message: string): IntentAnalysis {
   const purchaseIntent = hits('purchaseReady', 'purchase_signal')
   const mismatch = hits('mismatch', 'variant_mismatch')
   const trust = hits('trust', 'trust_signal')
+  const quality = hits('quality', 'quality_signal')
+  const availability = hits('availability', 'availability_signal')
+  const hesitation = hits('hesitation', 'hesitation_signal')
   const shipping = hits('shipping', 'shipping_signal')
   const payment = hits('payment', 'payment_signal')
   const recRequest = hits('recommendationRequest', 'recommendation_request')
@@ -146,9 +177,10 @@ export function analyzeIntent(message: string): IntentAnalysis {
 
   let intent: ShopperIntent = 'UNKNOWN'
   if (isWalkout) intent = 'WALKOUT'
+  else if (hesitation) intent = 'PURCHASE_HESITATION'
   else if (purchaseIntent && !comparisonIntent) intent = 'PURCHASE_READY'
   else if (mismatch) intent = 'PRODUCT_MISMATCH'
-  else if (productQ || trust) intent = 'PRODUCT_QUESTION'
+  else if (productQ || trust || quality || availability) intent = 'PRODUCT_QUESTION'
   else if (comparisonIntent) intent = 'COMPARISON'
   else if (recRequest) intent = 'RECOMMENDATION_REQUEST'
   else if (discovery) intent = 'PRODUCT_DISCOVERY'
@@ -157,11 +189,19 @@ export function analyzeIntent(message: string): IntentAnalysis {
   else if (valueIntent) intent = 'VALUE_UNCLEAR'
   else if (message.trim().length > 0) intent = 'GENERIC_CHAT'
 
+  // Specific, non-price signals win over the generic price signal so that
+  // e.g. "shipping cost is a lot" is a SHIPPING objection, not a PRICE one.
   let objection: ShopperObjection = null
-  if (budgetIntent || priceIntent || isMoney || priceComplaint) objection = 'PRICE'
-  else if (mismatch) objection = 'FIT_VARIANT'
+  if (mismatch) objection = 'FIT_VARIANT'
+  else if (availability) objection = 'AVAILABILITY'
   else if (trust) objection = 'TRUST'
-  else if (shipping) objection = 'SHIPPING_DELAY'
+  else if (quality) objection = 'QUALITY'
+  else if (shipping) objection = 'SHIPPING'
+  else if (comparisonIntent) objection = 'COMPARISON'
+  else if (hesitation) objection = 'PURCHASE_HESITATION'
+  else if (budgetIntent || budget) objection = 'BUDGET'
+  else if (priceIntent || isMoney || priceComplaint) objection = 'PRICE'
+  else if (productQ) objection = 'PRODUCT_INFORMATION'
   else if (payment) objection = 'PAYMENT_FRICTION'
   else if (valueIntent) objection = 'VALUE'
 
@@ -174,6 +214,35 @@ export function analyzeIntent(message: string): IntentAnalysis {
     budgetType: budget?.type ?? null,
     priceComplaint,
     need,
+    category: objectionCategory(objection),
+  }
+}
+
+/** Map the fine-grained objection onto the published nine-category taxonomy. */
+export function objectionCategory(objection: ShopperObjection): ObjectionCategory {
+  switch (objection) {
+    case 'PRICE':
+    case 'VALUE':
+      return 'PRICE_OBJECTION'
+    case 'BUDGET':
+      return 'BUDGET_OBJECTION'
+    case 'SHIPPING':
+    case 'SHIPPING_DELAY':
+      return 'SHIPPING_OBJECTION'
+    case 'QUALITY':
+      return 'QUALITY_OBJECTION'
+    case 'TRUST':
+      return 'TRUST_OBJECTION'
+    case 'PRODUCT_INFORMATION':
+    case 'FIT_VARIANT':
+    case 'AVAILABILITY':
+      return 'PRODUCT_INFORMATION'
+    case 'COMPARISON':
+      return 'COMPARISON_OBJECTION'
+    case 'PURCHASE_HESITATION':
+      return 'PURCHASE_HESITATION'
+    default:
+      return 'OTHER_OR_UNKNOWN'
   }
 }
 
@@ -186,6 +255,7 @@ const INTENT_LABEL: Record<ShopperIntent, string> = {
   COMPARISON: 'comparing price elsewhere',
   PRODUCT_QUESTION: 'asking a product-information question before deciding',
   PURCHASE_READY: 'ready to buy, price is the last step',
+  PURCHASE_HESITATION: 'interested but not ready — needs reassurance or time, not necessarily a discount',
   WALKOUT: 'threatening to leave the negotiation',
   GENERIC_CHAT: 'casual conversation',
   RECOMMENDATION_REQUEST: 'asking for other product options from this store',
@@ -194,12 +264,35 @@ const INTENT_LABEL: Record<ShopperIntent, string> = {
 
 const OBJECTION_LABEL: Record<NonNullable<ShopperObjection>, string> = {
   PRICE: 'price objection — respond with value framing and a concrete counter',
+  BUDGET: 'budget objection — the shopper has a hard ceiling; meet it if the floor allows, otherwise pivot to alternatives ONCE',
+  SHIPPING: 'shipping-cost objection — explain the real shipping options/incentives; do not discount the product to hide shipping',
+  QUALITY: 'quality/durability concern — explain verified materials/build/benefits only; never invent certifications',
   FIT_VARIANT: 'variant/size mismatch — steer to the matching option if verified, otherwise honestly say you cannot confirm availability',
   AVAILABILITY: 'availability concern — only state verified stock; never fabricate',
   TRUST: 'trust/authenticity concern — use only merchant-approved selling points; never invent credentials',
   SHIPPING_DELAY: 'shipping/timeline concern — do not promise delivery times you cannot verify',
+  COMPARISON: 'comparison objection — explain factual, verified differentiators; never invent a competitor price',
+  PRODUCT_INFORMATION: 'product-information need — answer from verified facts before any discount',
+  PURCHASE_HESITATION: 'purchase hesitation — reassure and reduce friction; do NOT rush to a discount',
   PAYMENT_FRICTION: 'payment-method concern — reassure with the store\'s real options if known, otherwise offer checkout details',
   VALUE: 'value uncertainty — break what the price includes',
+}
+
+// Published intent→action mapping (Phase 1). Pure lookup, no side effects.
+const CATEGORY_ACTION: Record<ObjectionCategory, string> = {
+  PRICE_OBJECTION: 'smart bargaining',
+  SHIPPING_OBJECTION: 'explain delivery options and eligible shipping incentives',
+  QUALITY_OBJECTION: 'explain verified product benefits',
+  TRUST_OBJECTION: 'provide genuine policies and verified information',
+  BUDGET_OBJECTION: 'recommend alternatives or permitted offers',
+  PRODUCT_INFORMATION: 'act as product expert',
+  COMPARISON_OBJECTION: 'explain factual differentiators',
+  PURCHASE_HESITATION: 'reduce friction and reassure; do not lead with a discount',
+  OTHER_OR_UNKNOWN: 'ask a natural clarification question',
+}
+
+export function objectionAction(category: ObjectionCategory): string {
+  return CATEGORY_ACTION[category]
 }
 
 // Compact prompt block placed in the SHOPPER INTENT section.
@@ -210,6 +303,10 @@ export function shopperIntentToPromptBlock(analysis: IntentAnalysis): string {
   ]
   if (analysis.objection) {
     lines.push(`- Objection detected: ${OBJECTION_LABEL[analysis.objection]}`)
+    lines.push(`- Objection category: ${analysis.category} → recommended action: ${objectionAction(analysis.category)}`)
+  }
+  if (analysis.intent === 'PURCHASE_HESITATION') {
+    lines.push(`- The shopper is hesitating, not rejecting. Do NOT lead with a discount — reduce friction, answer the real concern, and give them room.`)
   }
   if (analysis.priceComplaint) {
     lines.push(

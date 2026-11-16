@@ -208,6 +208,30 @@ describe('offer route — attempt budget (chat must not cost an attempt)', () =>
     expect(body.reply).not.toMatch(/used all your attempts/i)
   })
 
+  it('never calls the AI provider when the merchant paused the AI agent', async () => {
+    prismaMock.bargainConfig.findUnique.mockResolvedValue({
+      enabled: true,
+      aiPaused: true,
+      maxAttempts: 3,
+      aiPersona: 'friendly_shopkeeper',
+      language: 'auto',
+      couponsAllowed: false,
+      recommendationsEnabled: false,
+      alternativeRecommendationsEnabled: false,
+    })
+    prismaMock.bargainSession.findUnique.mockResolvedValue(activeSession(0))
+
+    const res = await POST(makeRequest('give me 300'))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(modelCalls).toBe(0)
+    expect(body.reply).toBeTruthy()
+    expect(prismaMock.bargainSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ lastAiSource: 'reflex' }) }),
+    )
+  })
+
   it('refuses only a final offer that is genuinely below the floor', async () => {
     prismaMock.bargainSession.findUnique.mockResolvedValue(activeSession(2))
 

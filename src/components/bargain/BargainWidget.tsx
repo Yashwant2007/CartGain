@@ -17,6 +17,7 @@ import {
   type AvatarEvent,
 } from '@/lib/bargain/experience/expressions'
 import { resolveShopkeeperPersonality } from '@/lib/bargain/experience/personality'
+import { priorityReaction } from '@/lib/bargain/conversation-state'
 import { trackExperienceEvent } from '@/lib/bargain/experience/analytics'
 import { PERSONALITY_META, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
 import type {
@@ -756,6 +757,11 @@ export default function BargainWidget({
         originalPrice: livePrice,
         decision: data.decision,
       }))
+      // Unambiguous states (completed / hesitation / human handoff) override the
+      // heuristic face so the shopkeeper never looks like it is still selling
+      // after the conversation has clearly moved on.
+      const stateFace = data.conversationState ? priorityReaction(data.conversationState) : null
+      if (stateFace) setExpression(stateFace)
       if (data.discountCode) setDiscountCode(data.discountCode)
       if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
       if (data.floorReached === true) setFloorReached(true)

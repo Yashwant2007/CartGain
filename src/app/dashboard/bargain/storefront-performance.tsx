@@ -14,6 +14,7 @@ import {
   ShoppingBag,
   TrendingUp,
   Users,
+  FlaskConical,
 } from 'lucide-react'
 
 type ConceptRow = {
@@ -43,9 +44,28 @@ type ConceptRow = {
   evidence: 'sufficient' | 'directional' | 'insufficient'
 }
 
+type ExperimentArmRow = {
+  key: string
+  label: string
+  sessions: number
+  accepted: number
+  purchased: number
+  netPurchases: number
+  revenue: number
+  grossRevenue: number
+  refundedRevenue: number
+  refundedPurchases: number
+  avgDiscountPercent: number
+  sessionAcceptRate: number
+  purchaseRate: number
+  revenuePerSession: number
+  evidence: ConceptRow['evidence']
+}
+
 type Performance = {
   windowDays: number
   funnel: { started: number; accepted: number; purchased: number; revenue: number; grossRevenue: number; refundedRevenue: number; fullyRefundedPurchases: number }
+  experiments: { enabled: boolean; arms: ExperimentArmRow[]; note: string }
   experience: {
     impressions: number
     clicks: number
@@ -207,6 +227,7 @@ export function StorefrontPerformance() {
 
           <ConceptTable title="Invitation designs" rows={exp.designs} empty="No design telemetry yet." />
           <ConceptTable title="Shopkeeper personalities" rows={exp.personalities} empty="No personality telemetry yet." />
+          <ExperimentTable experiments={data.experiments} />
 
           <div className="text-xs text-blue-300/50 flex gap-2">
             <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -305,6 +326,62 @@ function ConceptTable({ title, rows, empty }: { title: string; rows: ConceptRow[
           </table>
         </div>
       )}
+    </div>
+  )
+}
+
+function ExperimentTable({ experiments }: { experiments: Performance['experiments'] }) {
+  if (!experiments || experiments.arms.length === 0) return null
+  return (
+    <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl overflow-hidden">
+      <div className="px-5 py-3 border-b border-blue-800/30 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-blue-100 font-semibold flex items-center gap-2">
+          <FlaskConical className="w-4 h-4 text-violet-400" /> Holdout experiment
+        </div>
+        <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
+          experiments.enabled
+            ? 'bg-violet-950/60 text-violet-300 border-violet-800/50'
+            : 'bg-slate-800/60 text-blue-300/60 border-blue-800/40'
+        }`}>
+          {experiments.enabled ? 'Active A/B' : 'Observational'}
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-950/60 text-blue-300/80">
+            <tr>
+              <th className="text-left px-4 py-2">Cohort</th>
+              <th className="text-right px-4 py-2">Sessions</th>
+              <th className="text-right px-4 py-2">Accepted</th>
+              <th className="text-right px-4 py-2">Purchased</th>
+              <th className="text-right px-4 py-2">Revenue / session</th>
+              <th className="text-right px-4 py-2">Avg discount</th>
+              <th className="text-right px-4 py-2">Evidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {experiments.arms.map((arm) => (
+              <tr key={arm.key} className="border-t border-blue-800/20 text-blue-100">
+                <td className="px-4 py-2.5">
+                  <div className="font-medium">{arm.label}</div>
+                  <div className="text-[11px] text-blue-300/50">
+                    {arm.purchaseRate}% purchase rate · {arm.sessionAcceptRate}% accepted
+                  </div>
+                </td>
+                <td className="px-4 py-2.5 text-right">{arm.sessions.toLocaleString('en-IN')}</td>
+                <td className="px-4 py-2.5 text-right">{arm.accepted.toLocaleString('en-IN')}</td>
+                <td className="px-4 py-2.5 text-right">{arm.purchased.toLocaleString('en-IN')}</td>
+                <td className="px-4 py-2.5 text-right text-emerald-300">₹{arm.revenuePerSession.toLocaleString('en-IN')}</td>
+                <td className="px-4 py-2.5 text-right">{arm.avgDiscountPercent}%</td>
+                <td className="px-4 py-2.5 text-right"><EvidenceBadge value={arm.evidence} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="px-5 py-3 text-xs text-blue-300/60 flex gap-2 border-t border-blue-800/20">
+        <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {experiments.note}
+      </p>
     </div>
   )
 }

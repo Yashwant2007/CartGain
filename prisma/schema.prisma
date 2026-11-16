@@ -438,6 +438,7 @@ model BargainConfig {
   abuseStrictness                   String    @default("standard") // lenient | standard | strict — tolerance for repeated disrespect (security layers never relax)
   approvedSellingPoints             String[]  @default([]) // merchant-vetted claims the AI may use ("machine-washable", "7-day replacement")
   disallowedClaims                  String[]  @default([]) // claims NEVER passed to the AI (unverified review/medical/beauty claims)
+  merchantFaq                       Json      @default("[]") // merchant-approved Q&A facts ([{question, answer}]) the AI may answer truthfully
   recommendationsEnabled            Boolean   @default(true) // master toggle for cross-sell suggestions
   alternativeRecommendationsEnabled Boolean   @default(true) // "also consider" suggestions
   complementRecommendationsEnabled  Boolean   @default(true) // "you may also need" suggestions

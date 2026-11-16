@@ -13,6 +13,14 @@ export {
 export const CLAIM_ITEM = z.string().trim().min(1, 'Claim cannot be empty').max(200, 'Claim is too long (max 200 chars)')
 export const CLAIM_LIST = z.array(CLAIM_ITEM).max(50).default([])
 
+// Merchant-approved FAQ the AI may answer from (stored as JSONB). Bounded so a
+// merchant can never blow up the prompt or smuggle huge instruction blocks in.
+export const FAQ_ITEM = z.object({
+  question: z.string().trim().min(1, 'Question cannot be empty').max(160, 'Question is too long (max 160 chars)'),
+  answer: z.string().trim().min(1, 'Answer cannot be empty').max(500, 'Answer is too long (max 500 chars)'),
+})
+export const FAQ_LIST = z.array(FAQ_ITEM).max(20, 'Maximum 20 FAQs').default([])
+
 export const bargainConfigUpsertSchema = z.object({
   enabled: z.boolean().optional(),
   maxAttempts: z.number().int().min(1).max(10).optional(),
@@ -46,6 +54,7 @@ export const bargainConfigUpsertSchema = z.object({
   abuseStrictness: z.enum(['lenient', 'standard', 'strict']).optional(),
   approvedSellingPoints: CLAIM_LIST.optional(),
   disallowedClaims: CLAIM_LIST.optional(),
+  merchantFaq: FAQ_LIST.optional(),
   recommendationsEnabled: z.boolean().optional(),
   alternativeRecommendationsEnabled: z.boolean().optional(),
   couponStackingEnabled: z.boolean().optional(),

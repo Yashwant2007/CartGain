@@ -4,6 +4,7 @@ import {
   rankRecommendations,
   searchRecommendations,
   recommendationReason,
+  recommendationReasonForCard,
 } from '../recommendations'
 
 const store = { id: 's1', domain: 'demo.myshopify.com', apiKey: null, shopifyRefreshToken: null, shopifyTokenExpiresAt: null }
@@ -102,6 +103,32 @@ describe('rankRecommendations', () => {
     const a = rankRecommendations(candidates(), { budget: 500 })
     const b = rankRecommendations(candidates(), { budget: 500 })
     expect(a.cards.map(c => c.productId)).toEqual(b.cards.map(c => c.productId))
+  })
+
+  it('attaches a non-empty honest reason to every card', () => {
+    const { cards } = rankRecommendations(candidates(), { budget: 200, need: 'acne' })
+    expect(cards.every(c => typeof c.reason === 'string' && c.reason.length > 0)).toBe(true)
+  })
+})
+
+describe('recommendationReasonForCard', () => {
+  const base = { title: 'Acne Care Gel', productType: 'skincare', tags: ['acne'], price: 199, compareAtPrice: null, onSale: false, available: true, budgetFit: 'unknown' as const }
+
+  it('prefers the budget fit when the shopper shared one', () => {
+    expect(recommendationReasonForCard({ ...base, budgetFit: 'under' })).toMatch(/budget/i)
+  })
+
+  it('mentions a live sale', () => {
+    expect(recommendationReasonForCard({ ...base, onSale: true, compareAtPrice: 299 })).toMatch(/sale/i)
+  })
+
+  it('matches the stated need against the title/type/tags', () => {
+    expect(recommendationReasonForCard(base, { need: 'acne' })).toMatch(/looking for/i)
+  })
+
+  it('falls back to a safe generic reason and never invents benefits', () => {
+    const reason = recommendationReasonForCard(base, { need: 'winter jacket' })
+    expect(reason).toBe('Another option in this store')
   })
 })
 

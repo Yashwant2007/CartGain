@@ -21,6 +21,8 @@ export interface RecommendationCard {
   onSale: boolean
   budgetFit: BudgetFit
   tags: string[]
+  /** Short, honest "why this suits you" rationale — verified facts only. */
+  reason: string
 }
 
 export type RecommendationReason = 'requested' | 'budget' | 'lowball' | 'discovery'
@@ -135,6 +137,29 @@ export interface RankedCard {
   tags: string[]
   budgetFit: BudgetFit
   handle: string | null
+  reason: string
+}
+
+/**
+ * A short, honest reason a card suits the shopper. Built ONLY from verified
+ * catalogue facts (availability, sale status, price vs budget, title/type/tag
+ * match against the shopper's stated need). Never invents benefits.
+ */
+export function recommendationReasonForCard(
+  c: { title: string; productType: string | null; tags: string[]; price: number; compareAtPrice: number | null; onSale: boolean; available: boolean; budgetFit: BudgetFit },
+  opts: { need?: string | null; referencePrice?: number | null } = {},
+): string {
+  if (c.budgetFit === 'under') return 'Fits the budget you shared'
+  if (c.onSale) return 'On sale right now'
+  const need = opts.need?.toLowerCase().trim()
+  if (need) {
+    const tokens = need.split(/[^a-z0-9]+/).filter(Boolean)
+    const haystack = `${c.title} ${c.productType ?? ''} ${c.tags.join(' ')}`.toLowerCase()
+    if (tokens.some((t) => haystack.includes(t))) return 'Matches what you were looking for'
+  }
+  if (opts.referencePrice != null && c.price < opts.referencePrice) return 'A more affordable option'
+  if (c.compareAtPrice != null && c.compareAtPrice > c.price) return 'Discounted from the usual price'
+  return 'Another option in this store'
 }
 
 /** Rank candidates and produce ranked cards (keeps the most relevant 5). */
@@ -172,6 +197,10 @@ export function rankRecommendations(
       tags: c.tags.slice(0, 6),
       budgetFit,
       handle: c.handle,
+      reason: recommendationReasonForCard(
+        { title: c.title, productType: c.productType, tags: c.tags, price: c.price, compareAtPrice: c.compareAtPrice, onSale: c.onSale, available: c.available, budgetFit },
+        { need: opts.need ?? null, referencePrice: opts.referencePrice ?? null },
+      ),
     }
   })
 

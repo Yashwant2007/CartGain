@@ -32,6 +32,9 @@ import {
   AlertTriangle,
   Pause,
   Bell,
+  HelpCircle,
+  Plus,
+  Trash2,
 } from 'lucide-react'
 import { DemoPanel } from './demo-panel'
 import { ProductCatalogPanel } from './product-catalog'
@@ -71,6 +74,7 @@ type BargainConfig = {
   abuseStrictness: string
   approvedSellingPoints: string[]
   disallowedClaims: string[]
+  merchantFaq?: { question: string; answer: string }[]
   recommendationsEnabled: boolean
   alternativeRecommendationsEnabled: boolean
   couponStackingEnabled: boolean
@@ -279,10 +283,14 @@ void fetchConfig()
     setSavingConfig(true)
     setConfigMessage(null)
     try {
+      // Drop half-filled FAQ rows so an in-progress row never blocks a save.
+      const merchantFaq = (configForm.merchantFaq ?? [])
+        .map(faq => ({ question: faq.question.trim(), answer: faq.answer.trim() }))
+        .filter(faq => faq.question.length > 0 && faq.answer.length > 0)
       const res = await shopifySessionFetch('/api/bargain/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeId, ...configForm }),
+        body: JSON.stringify({ storeId, ...configForm, merchantFaq }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -611,6 +619,88 @@ void fetchConfig()
                         placeholder={'cures skin problems\nworld #1 brand'}
                       />
                     </Field>
+                  </div>
+
+                  {/* Merchant-approved FAQ / answer bank */}
+                  <div className="mt-4 rounded-xl border border-blue-800/30 bg-slate-950/40 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 text-sm font-medium text-blue-200">
+                          <HelpCircle className="h-4 w-4 text-blue-400" aria-hidden="true" />
+                          Answer bank (FAQ)
+                        </div>
+                        <p className="mt-1 text-sm text-blue-300/60">
+                          Answers the AI may give word-for-word when a shopper asks. It answers only from these and never invents beyond them.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setConfigForm({
+                            ...configForm,
+                            merchantFaq: [...(configForm.merchantFaq ?? []), { question: '', answer: '' }],
+                          })
+                        }
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-blue-700/50 bg-blue-900/30 px-3 py-1.5 text-sm font-medium text-blue-200 transition hover:border-blue-500 hover:bg-blue-900/50 hover:text-white"
+                      >
+                        <Plus className="h-4 w-4" aria-hidden="true" /> Add Q&amp;A
+                      </button>
+                    </div>
+
+                    {(configForm.merchantFaq ?? []).length === 0 ? (
+                      <p className="mt-3 rounded-lg border border-dashed border-blue-800/40 px-3 py-4 text-center text-sm text-blue-300/50">
+                        No approved answers yet. Add one so the shopkeeper can answer common questions confidently.
+                      </p>
+                    ) : (
+                      <div className="mt-3 space-y-3">
+                        {(configForm.merchantFaq ?? []).map((faq, index) => (
+                          <div
+                            key={index}
+                            className="grid gap-2 rounded-lg border border-blue-800/25 bg-slate-900/40 p-3 sm:grid-cols-[1fr_1.4fr_auto] sm:items-start"
+                          >
+                            <input
+                              type="text"
+                              value={faq.question}
+                              maxLength={160}
+                              aria-label={`FAQ ${index + 1} question`}
+                              onChange={e => {
+                                const next = [...(configForm.merchantFaq ?? [])]
+                                next[index] = { ...next[index], question: e.target.value }
+                                setConfigForm({ ...configForm, merchantFaq: next })
+                              }}
+                              placeholder="Question (e.g. Is it good for oily skin?)"
+                              className={CONTROL_CLS}
+                            />
+                            <textarea
+                              rows={2}
+                              value={faq.answer}
+                              maxLength={500}
+                              aria-label={`FAQ ${index + 1} answer`}
+                              onChange={e => {
+                                const next = [...(configForm.merchantFaq ?? [])]
+                                next[index] = { ...next[index], answer: e.target.value }
+                                setConfigForm({ ...configForm, merchantFaq: next })
+                              }}
+                              placeholder="Approved answer, exactly as the AI may say it"
+                              className={CONTROL_CLS}
+                            />
+                            <button
+                              type="button"
+                              aria-label={`Remove FAQ ${index + 1}`}
+                              onClick={() =>
+                                setConfigForm({
+                                  ...configForm,
+                                  merchantFaq: (configForm.merchantFaq ?? []).filter((_, i) => i !== index),
+                                })
+                              }
+                              className="inline-flex h-10 items-center justify-center rounded-lg border border-blue-800/40 px-3 text-blue-300/70 transition hover:border-red-500/60 hover:bg-red-950/30 hover:text-red-300 sm:h-full"
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </ConfigCard>
 

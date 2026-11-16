@@ -23,6 +23,7 @@ import {
   publicGoalView,
 } from '@/lib/bargain/goals'
 import { analyzeIntent } from '@/lib/bargain/intent'
+import { deriveConversationState } from '@/lib/bargain/conversation-state'
 import { assessCustomerClaims } from '@/lib/bargain/claims'
 import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
 import { enginePersonaFor } from '@/lib/bargain/experience/personality'
@@ -534,12 +535,23 @@ export async function POST(request: NextRequest) {
         }
       : undefined
 
+    const conversationState = deriveConversationState({
+      attemptsUsed,
+      walkoutTriggered: body.walkoutTriggered === true,
+      dealAccepted: result.decision === 'accept',
+      intent: intentAnalysis.intent,
+      objection: intentAnalysis.objection,
+      offersPriceSignal: intentAnalysis.offersPriceSignal,
+      recommendationsEnabled: recoEnabled,
+    })
+
     return NextResponse.json({
       reply: result.reply,
       decision: result.decision,
       counterOffer: result.counterOffer ?? null,
       tactic: result.tactic ?? 'conversational',
       sentiment: result.sentiment ?? 'neutral',
+      conversationState,
       persona,
       abuse: (result.metadata as any)?.abuse === true,
       goal: demoGoal,

@@ -13,6 +13,7 @@ import {
   type ProductPromotion,
   type MerchantProductOverrides,
   type ShopifyProductSource,
+  sanitizeMerchantFaq,
 } from '@/lib/bargain/product-context'
 
 const CACHE_ENABLED = true
@@ -33,22 +34,24 @@ async function loadOverrides(storeId: string, shopifyProductId: string): Promise
   const [configRow, productRow] = await Promise.all([
     prisma.bargainConfig.findUnique({
       where: { storeId },
-      select: { approvedSellingPoints: true, disallowedClaims: true },
+      select: { approvedSellingPoints: true, disallowedClaims: true, merchantFaq: true },
     }),
     prisma.bargainProduct.findUnique({
       where: { storeId_shopifyProductId: { storeId, shopifyProductId } },
       select: { approvedSellingPoints: true, disallowedClaims: true },
     }),
   ])
+  const disallowedClaims = dedupe([
+    ...(configRow?.disallowedClaims ?? []),
+    ...(productRow?.disallowedClaims ?? []),
+  ])
   return {
     approvedSellingPoints: dedupe([
       ...(configRow?.approvedSellingPoints ?? []),
       ...(productRow?.approvedSellingPoints ?? []),
     ]),
-    disallowedClaims: dedupe([
-      ...(configRow?.disallowedClaims ?? []),
-      ...(productRow?.disallowedClaims ?? []),
-    ]),
+    disallowedClaims,
+    merchantFaq: sanitizeMerchantFaq(configRow?.merchantFaq, disallowedClaims),
   }
 }
 

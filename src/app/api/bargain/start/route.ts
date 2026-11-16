@@ -116,6 +116,15 @@ export async function POST(request: NextRequest) {
       update: {},
     })
 
+    // Module 8 — the merchant's emergency pause is enforced at session start,
+    // not only on later turns, so a paused store cannot accrue new shoppers.
+    if ((config as any).emergencyPaused === true) {
+      return NextResponse.json(
+        { message: 'Bargaining is temporarily paused by the merchant.', paused: true },
+        { status: 503 },
+      )
+    }
+
     // Plan gate — bargain sessions are a hard quota on every tier.
     // Return a 402 so the widget can surface the plan-limit card.
     const gate = await getBargainGate(data.storeId)

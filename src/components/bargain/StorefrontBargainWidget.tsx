@@ -7,6 +7,7 @@ import { currencySymbolFor } from '@/lib/bargain/i18n'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { reciprocalCounter, isAbsurdOffer, absurdOfferReply, type NegotiationContext } from '@/lib/bargain/engine'
 import { GoalStrip } from '@/components/bargain/BargainPrimitives'
+import { isConversationState, priorityReaction } from '@/lib/bargain/conversation-state'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import {
   expressionForEvent,
@@ -388,6 +389,10 @@ export default function StorefrontBargainWidget({
         decision: data.decision,
         ended,
       }))
+      const stateFace = isConversationState(data.conversationState)
+        ? priorityReaction(data.conversationState)
+        : null
+      if (stateFace) setExpression(stateFace)
     } catch (err: any) {
       console.warn('[StorefrontBargain] API failed, using local fallback:', err.message)
       const nextAttempt = attempts + 1

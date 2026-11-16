@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainOfferSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
-import { negotiateStep, ruleBasedDecision, buildOpeningMessage, buildCustomerContext, computeMinPrice, retentionOffer, quotedFloor, type NegotiationContext } from '@/lib/services/bargain'
+import { negotiateStep, ruleBasedDecision, chatFallback, buildOpeningMessage, buildCustomerContext, computeMinPrice, retentionOffer, quotedFloor, type NegotiationContext } from '@/lib/services/bargain'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { detectWalkout, extractQuantity, extractPrice } from '@/lib/bargain/text'
 import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
@@ -16,6 +16,7 @@ import { buildBundle, validateBundleOffer, allocateDiscount, bundleSummary, type
 import { walkoutOutcome } from '@/lib/bargain/negotiation-state'
 import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
 import { analyzeIntent } from '@/lib/bargain/intent'
+import { deriveConversationState } from '@/lib/bargain/conversation-state'
 import { assessCustomerClaims } from '@/lib/bargain/claims'
 import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
 import { enginePersonaFor } from '@/lib/bargain/experience/personality'
@@ -28,6 +29,7 @@ import { generateBargainBundleDiscountCode } from '@/lib/bargain/discount'
 import { issueRetentionDiscount, buildBargainClaimUrl } from '@/lib/bargain/purchase'
 import { track } from '@/lib/analytics/track'
 import { resolveSessionLearning, recordLearningEvent, loadLearningConfig } from '@/lib/bargain/learning/service'
+import { isFeatureEnabled } from '@/lib/feature-flags'
 
 export const dynamic = 'force-dynamic'
 
@@ -684,7 +686,42 @@ export async function POST(request: NextRequest) {
         'PURCHASE_READY',
       ].includes(intentAnalysis.intent)
 
-    const learningResolved = !learningContextIsReady || learningQuarantined
+    // Module 8 — emergency "Pause AI agent" keeps negotiation alive on the
+    // deterministic rule engine only. It never calls a provider, so it is safe
+    // when a merchant needs to stop AI spend or a misbehaving model instantly.
+    const aiPaused = (config as any).aiPaused === true
+    const runNegotiationStep = async (
+      negotiationCtx: NegotiationContext,
+      negotiationHistory: typeof history,
+      message: string,
+      offer: number | undefined,
+    ) => {
+      if (!aiPaused) {
+        return negotiateStep(negotiationCtx, negotiationHistory, message, offer, bargainSession.id)
+      }
+      if (offer != null) {
+        const ruled = ruleBasedDecision(offer, negotiationCtx)
+        return {
+          ...ruled,
+          metadata: { ...(ruled.metadata ?? {}), aiSource: 'reflex', aiFallbackReason: 'merchant_paused_ai' },
+        }
+      }
+      return {
+        reply: chatFallback(message, negotiationCtx, negotiationHistory.length),
+        decision: 'chat' as const,
+        tactic: 'conversational' as const,
+        sentiment: 'neutral' as const,
+        metadata: { aiSource: 'reflex', aiFallbackReason: 'merchant_paused_ai' },
+      }
+    }
+
+    // Module 7 / Phase 14 — real holdout experiment. When the dual-agent flag is
+    // on, the deterministic `control` arm keeps the baseline engine (no learning
+    // guidance, no ±5% nudge) while `treatment` gets the learning layer. With the
+    // flag off nothing changes, so this is a safe, reversible A/B switch.
+    const dualAgentExperiment = isFeatureEnabled('BARGAIN_DUAL_AGENT')
+    const holdoutControl = dualAgentExperiment && (bargainSession as any).experimentArm === 'control'
+    const learningResolved = !learningContextIsReady || learningQuarantined || holdoutControl
       ? null
       : await resolveSessionLearning({
       session: {
@@ -825,7 +862,7 @@ export async function POST(request: NextRequest) {
       }
 
       // First walkout → retention offer (one meaningful extra concession)
-      const retentionResult = await negotiateStep(ctx, history, data.message, customerOffer ?? undefined, bargainSession.id)
+      const retentionResult = await runNegotiationStep(ctx, history, data.message, customerOffer ?? undefined)
       // Deterministic final safety validator: whatever the negotiation produced,
       // the price actually offered is clamped into [minPrice, originalPrice].
       const retentionPrice = clampOfferToSafety({
@@ -871,7 +908,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── NORMAL NEGOTIATION (incl. bulk) ──
-    const result = await negotiateStep(ctx, history, data.message, customerOffer ?? undefined, bargainSession.id)
+    const result = await runNegotiationStep(ctx, history, data.message, customerOffer ?? undefined)
     const resultMeta = (result.metadata ?? {}) as Record<string, any>
     const aiSource =
       typeof resultMeta.aiSource === 'string' && resultMeta.aiSource
@@ -912,7 +949,7 @@ export async function POST(request: NextRequest) {
     // the shopper's tap can reach POST /api/bargain/accept, the only path that
     // mints the discount code. Marking it 'accepted' here stranded the deal with
     // no code (the accept route can only claim an active session).
-    const sessionStatus =
+    const sessionStatus: string =
       result.decision === 'reject' ? 'rejected' : 'active'
 
     // Roll back the attempt if the turn doesn't consume it
@@ -1180,10 +1217,21 @@ export async function POST(request: NextRequest) {
         })()
       : null
 
+    const conversationState = deriveConversationState({
+      sessionStatus,
+      attemptsUsed: effectiveAttemptsUsed,
+      dealAccepted: result.decision === 'accept' || sessionStatus === 'accepted',
+      intent: intentAnalysis.intent,
+      objection: intentAnalysis.objection,
+      offersPriceSignal: intentAnalysis.offersPriceSignal,
+      recommendationsEnabled: recoEnabledForMessages(config),
+    })
+
     return NextResponse.json({
       reply: result.reply,
       decision: result.decision,
       counterOffer: safeCounter,
+      conversationState,
       sessionStatus,
       finalPrice: updatedSession.finalPrice,
       sessionId: bargainSession.id,

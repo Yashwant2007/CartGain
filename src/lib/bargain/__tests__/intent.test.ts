@@ -1,4 +1,4 @@
-import { analyzeIntent, extractBudget, extractNeed, shopperIntentToPromptBlock, intentShortLabel } from '../intent'
+import { analyzeIntent, extractBudget, extractNeed, shopperIntentToPromptBlock, intentShortLabel, objectionAction } from '../intent'
 
 describe('analyzeIntent', () => {
   it('classifies price-driven messages', () => {
@@ -10,7 +10,8 @@ describe('analyzeIntent', () => {
   it('classifies budget constraints', () => {
     const a = analyzeIntent("i only have 500 rupees to spend")
     expect(a.intent).toBe('BUDGET_CONSTRAINT')
-    expect(a.objection).toBe('PRICE')
+    expect(a.objection).toBe('BUDGET')
+    expect(a.category).toBe('BUDGET_OBJECTION')
   })
 
   it('classifies comparison to other stores', () => {
@@ -71,7 +72,7 @@ describe('shopperIntentToPromptBlock', () => {
   it('mentions the objection when one was detected', () => {
     const block = shopperIntentToPromptBlock(analyzeIntent('i have a tight budget of 400'))
     expect(block).toContain('Objection detected')
-    expect(block).toContain('price objection')
+    expect(block).toContain('budget objection')
   })
 
   it('prompts honesty for product questions outside the verified context', () => {
@@ -88,7 +89,7 @@ describe('shopperIntentToPromptBlock', () => {
 
 describe('intentShortLabel', () => {
   it('joins intent and objection', () => {
-    expect(intentShortLabel(analyzeIntent('only have 300 budget'))).toBe('BUDGET_CONSTRAINT:PRICE')
+    expect(intentShortLabel(analyzeIntent('only have 300 budget'))).toBe('BUDGET_CONSTRAINT:BUDGET')
   })
 })
 
@@ -141,5 +142,52 @@ describe('extractNeed', () => {
 
   it('returns null when nothing need-shaped appears', () => {
     expect(extractNeed('what is your best price')).toBeNull()
+  })
+})
+
+describe('analyzeIntent — Phase 1 objection taxonomy', () => {
+  it('detects a quality concern', () => {
+    const a = analyzeIntent('is the build quality good? will it last long?')
+    expect(a.objection).toBe('QUALITY')
+    expect(a.category).toBe('QUALITY_OBJECTION')
+  })
+
+  it('detects purchase hesitation without treating it as a rejection', () => {
+    const a = analyzeIntent('let me think about it, not sure yet')
+    expect(a.intent).toBe('PURCHASE_HESITATION')
+    expect(a.objection).toBe('PURCHASE_HESITATION')
+    expect(a.category).toBe('PURCHASE_HESITATION')
+  })
+
+  it('detects an availability concern', () => {
+    const a = analyzeIntent('is it in stock or sold out?')
+    expect(a.objection).toBe('AVAILABILITY')
+    expect(a.category).toBe('PRODUCT_INFORMATION')
+  })
+
+  it('classifies a shipping objection', () => {
+    const a = analyzeIntent('the shipping cost is a lot for me')
+    expect(a.objection).toBe('SHIPPING')
+    expect(a.category).toBe('SHIPPING_OBJECTION')
+  })
+
+  it('classifies comparison', () => {
+    const a = analyzeIntent('amazon has it for less')
+    expect(a.category).toBe('COMPARISON_OBJECTION')
+  })
+
+  it('classifies a plain price objection', () => {
+    const a = analyzeIntent('this is too expensive')
+    expect(a.category).toBe('PRICE_OBJECTION')
+  })
+
+  it('maps an unknown message to OTHER_OR_UNKNOWN', () => {
+    expect(analyzeIntent('hi there').category).toBe('OTHER_OR_UNKNOWN')
+  })
+
+  it('exposes the intent→action mapping', () => {
+    expect(objectionAction('PRICE_OBJECTION')).toBe('smart bargaining')
+    expect(objectionAction('QUALITY_OBJECTION')).toBe('explain verified product benefits')
+    expect(objectionAction('PURCHASE_HESITATION')).toMatch(/friction/i)
   })
 })

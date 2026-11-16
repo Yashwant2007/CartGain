@@ -8,6 +8,8 @@
  * price claim of its own (floor/manufacturing values stay server-side).
  */
 
+import type { ConversationState } from './conversation-state'
+
 // ── postMessage protocol (theme ⇄ iframe) ────────────────────────────────
 export type CgParentMessage =
   | { type: 'cg_get_height'; height?: never }
@@ -185,6 +187,8 @@ export type BargainOfferSuccess = {
   } | null
   recommendations?: BargainRecommendation[]
   recommendationReason?: string
+  /** Deterministic conversational state for this turn (Phase 9). */
+  conversationState?: ConversationState
   abuseDetected?: boolean
   abuseCategory?: string
   terminal?: boolean
@@ -237,4 +241,12 @@ export type BargainRecommendation = {
   onSale: boolean
   budgetFit: 'under' | 'over' | 'unknown'
   tags: string[]
+  /** Short, honest "why this suits you" rationale (verified facts only). */
+  reason: string
+}
+
+export type BargainRecommendationContext = {
+  budget: number | null
+  need: string | null
+  reason: 'requested' | 'budget' | 'lowball' | 'discovery'
 }

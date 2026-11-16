@@ -1,0 +1,95 @@
+import {
+  CONVERSATION_STATES,
+  deriveConversationState,
+  conversationStateGuidance,
+  conversationStateReaction,
+  priorityReaction,
+  canTransitionConversation,
+  isTerminalConversationState,
+  isConversationState,
+} from '../conversation-state'
+
+describe('conversation state machine (Phase 9)', () => {
+  it('covers every spec state', () => {
+    const required = [
+      'GREETING', 'PRODUCT_DISCOVERY', 'INTENT_DETECTION', 'OBJECTION_HANDLING',
+      'NEGOTIATION', 'COUNTER_OFFER', 'ALTERNATIVE_RECOMMENDATION', 'DEAL_ACCEPTED',
+      'SECURE_CHECKOUT', 'PURCHASE_VERIFICATION', 'COMPLETED', 'CUSTOMER_HESITATION',
+      'REJECTED', 'EXPIRED', 'CANCELLED', 'HUMAN_SUPPORT_REQUIRED',
+    ]
+    for (const s of required) expect(CONVERSATION_STATES).toContain(s)
+  })
+
+  it('derives terminal states from session facts first', () => {
+    expect(deriveConversationState({ sessionStatus: 'purchased', attemptsUsed: 3 })).toBe('COMPLETED')
+    expect(deriveConversationState({ sessionStatus: 'rejected', attemptsUsed: 3 })).toBe('REJECTED')
+    expect(deriveConversationState({ sessionStatus: 'expired', attemptsUsed: 3 })).toBe('EXPIRED')
+    expect(deriveConversationState({ sessionStatus: 'abandoned', attemptsUsed: 3 })).toBe('CANCELLED')
+  })
+
+  it('maps accepted → DEAL_ACCEPTED and checkoutStarted → SECURE_CHECKOUT', () => {
+    expect(deriveConversationState({ sessionStatus: 'accepted', attemptsUsed: 2 })).toBe('DEAL_ACCEPTED')
+    expect(deriveConversationState({ sessionStatus: 'accepted', attemptsUsed: 2, checkoutStarted: true })).toBe('SECURE_CHECKOUT')
+  })
+
+  it('treats a walkout as hesitation, never termination', () => {
+    expect(deriveConversationState({ attemptsUsed: 1, walkoutTriggered: true })).toBe('CUSTOMER_HESITATION')
+    expect(deriveConversationState({ attemptsUsed: 1, intent: 'WALKOUT' })).toBe('CUSTOMER_HESITATION')
+  })
+
+  it('opens in GREETING before any attempt', () => {
+    expect(deriveConversationState({ attemptsUsed: 0 })).toBe('GREETING')
+  })
+
+  it('routes a price bid to COUNTER_OFFER and a non-price objection to OBJECTION_HANDLING', () => {
+    expect(deriveConversationState({ attemptsUsed: 1, intent: 'PRICE_ONLY', offersPriceSignal: true })).toBe('COUNTER_OFFER')
+    expect(deriveConversationState({ attemptsUsed: 1, intent: 'PRODUCT_QUESTION', objection: 'TRUST' })).toBe('OBJECTION_HANDLING')
+    expect(deriveConversationState({ attemptsUsed: 1, intent: 'PRODUCT_QUESTION', objection: 'QUALITY' })).toBe('OBJECTION_HANDLING')
+  })
+
+  it('routes discovery/recommendation intents', () => {
+    expect(deriveConversationState({ attemptsUsed: 1, intent: 'PRODUCT_DISCOVERY' })).toBe('PRODUCT_DISCOVERY')
+    expect(deriveConversationState({ attemptsUsed: 1, intent: 'RECOMMENDATION_REQUEST', recommendationsEnabled: true })).toBe('ALTERNATIVE_RECOMMENDATION')
+  })
+
+  it('hands off to a human when flagged', () => {
+    expect(deriveConversationState({ attemptsUsed: 1, needHumanSupport: true })).toBe('HUMAN_SUPPORT_REQUIRED')
+  })
+
+  it('never allows a terminal state to move (except human handoff from a few)', () => {
+    expect(isTerminalConversationState('COMPLETED')).toBe(true)
+    expect(canTransitionConversation('COMPLETED', 'NEGOTIATION')).toBe(false)
+    expect(canTransitionConversation('REJECTED', 'NEGOTIATION')).toBe(false)
+    expect(canTransitionConversation('EXPIRED', 'NEGOTIATION')).toBe(false)
+    expect(canTransitionConversation('DEAL_ACCEPTED', 'SECURE_CHECKOUT')).toBe(true)
+    expect(canTransitionConversation('GREETING', 'NEGOTIATION')).toBe(true)
+  })
+
+  it('has guidance and a reaction for every state', () => {
+    for (const s of CONVERSATION_STATES) {
+      expect(conversationStateGuidance(s).length).toBeGreaterThan(10)
+      expect(typeof conversationStateReaction(s)).toBe('string')
+    }
+  })
+
+  it('validates state strings', () => {
+    expect(isConversationState('NEGOTIATION')).toBe(true)
+    expect(isConversationState('nope')).toBe(false)
+  })
+})
+
+describe('priorityReaction', () => {
+  it('lets unambiguous terminal/hesitation states win the avatar face', () => {
+    expect(priorityReaction('COMPLETED')).toBe('celebrating')
+    expect(priorityReaction('REJECTED')).toBe('disappointed')
+    expect(priorityReaction('EXPIRED')).toBe('disappointed')
+    expect(priorityReaction('CUSTOMER_HESITATION')).toBe('skeptical')
+    expect(priorityReaction('HUMAN_SUPPORT_REQUIRED')).toBe('error')
+  })
+
+  it('leaves mid-negotiation states to the finer-grained reaction logic', () => {
+    expect(priorityReaction('NEGOTIATION')).toBeNull()
+    expect(priorityReaction('COUNTER_OFFER')).toBeNull()
+    expect(priorityReaction('DEAL_ACCEPTED')).toBeNull()
+  })
+})

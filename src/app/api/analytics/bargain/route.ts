@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { DESIGN_VARIANT_META, PERSONALITY_META } from '@/lib/bargain/experience/types'
+import { isFeatureEnabled } from '@/lib/feature-flags'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest) {
         purchaseRefundStatus: true,
         experienceDesign: true,
         experiencePersonality: true,
+        experimentArm: true,
         _count: { select: { messages: true } },
       },
     }),
@@ -184,6 +186,35 @@ export async function GET(request: NextRequest) {
     .map(([key, value]) => conceptRow(key, 'personality', value))
     .sort((a, b) => b.impressions - a.impressions || b.sessions - a.sessions)
 
+  // Phase 14 — deterministic holdout cohorts recorded on every session at start.
+  // Only verified purchases count; an accepted bargain is never a sale.
+  const arms = new Map<string, ExperimentMetrics>()
+  for (const s of sessions) {
+    const key =
+      s.experimentArm === 'control' || s.experimentArm === 'treatment'
+        ? s.experimentArm
+        : 'unassigned'
+    const arm = experimentBucket(arms, key)
+    arm.sessions++
+    if (s.finalPrice !== null) {
+      arm.accepted++
+      if (s.originalPrice > 0) {
+        arm.discountSum += ((s.originalPrice - s.finalPrice) / s.originalPrice) * 100
+        arm.discountN++
+      }
+    }
+    if (s.purchasedAt) {
+      arm.purchased++
+      arm.revenue += s.purchaseValue ?? 0
+      arm.grossRevenue += s.purchaseGrossValue ?? s.purchaseValue ?? 0
+      arm.refundedRevenue += s.purchaseRefundedAmount ?? 0
+      if (s.purchaseRefundStatus === 'fully_refunded') arm.refundedPurchases++
+    }
+  }
+  const experimentRows = Array.from(arms.entries())
+    .map(([key, value]) => experimentRow(key, value))
+    .sort((a, b) => b.sessions - a.sessions)
+
   const clickToChat = rate(eventTotal.chat_open, eventTotal.invitation_click)
   const chatToSession = rate(started, eventTotal.chat_open)
 
@@ -213,6 +244,13 @@ export async function GET(request: NextRequest) {
       discountPercents.length > 0
         ? Math.round((discountPercents.reduce((a, b) => a + b, 0) / discountPercents.length) * 10) / 10
         : 0,
+    experiments: {
+      enabled: isFeatureEnabled('BARGAIN_DUAL_AGENT'),
+      arms: experimentRows,
+      note: isFeatureEnabled('BARGAIN_DUAL_AGENT')
+        ? 'Control keeps the baseline engine; treatment receives the learning layer. Cohorts are assigned deterministically per store + product + visitor.'
+        : 'Cohorts are recorded but no engine difference is active, so differences are observational — not causal. Enable the dual-agent flag to run a real A/B.',
+    },
     series: Array.from(byDay.values()).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
     experience: {
       impressions: eventTotal.invitation_impression,
@@ -264,6 +302,70 @@ type EventTotals = {
   invitation_impression: number
   invitation_click: number
   chat_open: number
+}
+
+type ExperimentMetrics = {
+  sessions: number
+  accepted: number
+  purchased: number
+  revenue: number
+  grossRevenue: number
+  refundedRevenue: number
+  refundedPurchases: number
+  discountSum: number
+  discountN: number
+}
+
+function experimentBucket(map: Map<string, ExperimentMetrics>, key: string): ExperimentMetrics {
+  let bucket = map.get(key)
+  if (!bucket) {
+    bucket = {
+      sessions: 0,
+      accepted: 0,
+      purchased: 0,
+      revenue: 0,
+      grossRevenue: 0,
+      refundedRevenue: 0,
+      refundedPurchases: 0,
+      discountSum: 0,
+      discountN: 0,
+    }
+    map.set(key, bucket)
+  }
+  return bucket
+}
+
+function experimentRow(key: string, m: ExperimentMetrics) {
+  const pct = (num: number, den: number) => (den > 0 ? Math.round((num / den) * 1000) / 10 : 0)
+  const label =
+    key === 'control'
+      ? 'Control (baseline engine)'
+      : key === 'treatment'
+        ? 'Treatment (learning layer)'
+        : 'Unassigned (legacy sessions)'
+  const evidence =
+    m.sessions >= 30 && m.purchased >= 3
+      ? 'sufficient'
+      : m.sessions >= 10
+        ? 'directional'
+        : 'insufficient'
+  return {
+    key,
+    label,
+    sessions: m.sessions,
+    accepted: m.accepted,
+    purchased: m.purchased,
+    netPurchases: m.purchased - m.refundedPurchases,
+    revenue: Math.round(m.revenue * 100) / 100,
+    grossRevenue: Math.round(m.grossRevenue * 100) / 100,
+    refundedRevenue: Math.round(m.refundedRevenue * 100) / 100,
+    refundedPurchases: m.refundedPurchases,
+    avgDiscountPercent: m.discountN > 0 ? Math.round((m.discountSum / m.discountN) * 10) / 10 : 0,
+    sessionAcceptRate: pct(m.accepted, m.sessions),
+    purchaseRate: pct(m.purchased, m.sessions),
+    revenuePerSession: m.sessions > 0 ? Math.round((m.revenue / m.sessions) * 100) / 100 : 0,
+    evidence: evidence as 'sufficient' | 'directional' | 'insufficient',
+  }
 }
 
 function conceptBucket(map: Map<string, ConceptMetrics>, key: string): ConceptMetrics {

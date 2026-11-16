@@ -27,6 +27,7 @@ import { productContextToPromptBlock, type ProductContext } from '@/lib/bargain/
 import { shippingPromptBlock, type ShippingConfig } from '@/lib/bargain/shipping'
 import { paymentPromptBlock } from '@/lib/bargain/payment'
 import { shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
+import { deriveConversationState, conversationStateGuidance } from '@/lib/bargain/conversation-state'
 import type { ClaimAssessment } from '@/lib/bargain/claims'
 import {
   negotiationStyleGuidance,
@@ -2402,6 +2403,23 @@ export function buildSystemPrompt(
   // Deterministic shopper-intent classification for the current message
   if (ctx.intent) {
     contextParts.push('\n' + shopperIntentToPromptBlock(ctx.intent))
+  }
+
+  // Deterministic conversation state (Phase 9) — one clear instruction for
+  // THIS turn so the shopkeeper never loops, contradicts itself, or claims an
+  // order is complete. Derived purely from authoritative signals.
+  {
+    const convoState = deriveConversationState({
+      sessionStatus: ctx.dealAccepted ? 'accepted' : 'active',
+      attemptsUsed: ctx.attemptsUsed,
+      walkoutTriggered: ctx.walkoutTriggered,
+      dealAccepted: ctx.dealAccepted,
+      intent: ctx.intent?.intent ?? null,
+      objection: ctx.intent?.objection ?? null,
+      offersPriceSignal: ctx.intent?.offersPriceSignal,
+      recommendationsEnabled: ctx.recommendationsEnabled,
+    })
+    contextParts.push(`\nCONVERSATION STATE: ${convoState}\n- ${conversationStateGuidance(convoState)}`)
   }
 
   // Scenario playbook — human, psychological, conversion-focused handling.
