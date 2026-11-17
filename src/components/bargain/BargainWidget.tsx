@@ -1135,9 +1135,9 @@ export default function BargainWidget({
                 position: 'relative',
                 width: '100%',
                 background: '#ffffff',
-                borderRadius: 18,
+                borderRadius: 28,
                 border: '1px solid #e0e7ff',
-                boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 12px 32px rgba(79,70,229,0.10)',
+                boxShadow: '0 4px 12px rgba(15,23,42,0.08), 0 20px 48px rgba(79,70,229,0.14)',
                 overflow: 'hidden',
                 // Inline embed: a proper chat window the parent iframe grows to
                 // match via cg_resize (the controller clamps 60–2400px). An
@@ -1517,11 +1517,11 @@ export default function BargainWidget({
                     background: 'linear-gradient(180deg, #ffffff, #f6fefa)',
                     border: '1px solid #bbf7d0',
                     padding: '20px 18px',
-                    borderRadius: 18,
+                    borderRadius: 24,
                     textAlign: 'center',
                     margin: '4px 0 2px',
-                    animation: 'cgMsgIn 0.25s ease-out',
-                    boxShadow: '0 6px 24px rgba(22,163,74,0.14)',
+                    animation: 'cgMsgIn 0.3s cubic-bezier(0.34,1.56,0.64,1)',
+                    boxShadow: '0 8px 32px rgba(22,163,74,0.18)',
                   }}>
                     <div style={{
                       width: 56,
@@ -1849,12 +1849,12 @@ export default function BargainWidget({
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
-                  borderRadius: 16,
+                  borderRadius: 24,
                   border: '1px solid #dbe3ee',
-                  background: '#ffffff',
-                  padding: '5px 5px 5px 16px',
-                  boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
-                  transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+                  background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+                  padding: '6px 6px 6px 18px',
+                  boxShadow: '0 6px 20px rgba(15,23,42,0.08)',
+                  transition: 'border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease',
                   opacity: sessionEnded ? 0.55 : 1,
                 }}>
                   <input
