@@ -95,4 +95,23 @@ describe('recovery links', () => {
       'https://shop.myshopify.com'
     )
   })
+
+  it('never fabricates a cart path when the recovery URL was denied or invalid', () => {
+    expect(
+      buildStoreCheckoutLink({
+        domain: 'shop.myshopify.com',
+        shopifyCartId: 'cart_token_abc123',
+        recoveryUrlStatus: 'ACCESS_DENIED',
+      })
+    ).toBe('https://shop.myshopify.com')
+
+    expect(
+      buildStoreCheckoutLink({
+        domain: 'shop.myshopify.com',
+        shopifyCartId: 'cart_token_abc123',
+        recoveryUrlStatus: 'EXPIRED_OR_INVALID',
+        discountCode: 'GAINABC123',
+      })
+    ).toBe('https://shop.myshopify.com/discount/GAINABC123')
+  })
 })

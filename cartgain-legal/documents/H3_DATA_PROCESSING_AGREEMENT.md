@@ -26,6 +26,7 @@
 | Communication preferences, opt-in/opt-out status | Customers |
 | Message delivery status, engagement (clicks, replies) | Customers |
 | AI Bargain interaction (messages, offers, negotiated price) | Customers |
+| Shopify abandoned-checkout recovery URL (encrypted; cleared after retention) | Customers |
 
 ---
 

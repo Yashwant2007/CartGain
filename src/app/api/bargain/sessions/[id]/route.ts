@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { logDataAccess } from '@/lib/data-protection'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +33,16 @@ export async function GET(
     if (!store) {
       return NextResponse.json({ message: 'Forbidden' }, { status: 403 })
     }
+
+    await logDataAccess({
+      actorType: 'merchant',
+      actorId: session.user.id,
+      action: 'read',
+      resourceType: 'bargain_session',
+      resourceId: bargainSession.id,
+      purpose: 'merchant dashboard bargain session transcript',
+      metadata: { storeId: bargainSession.storeId, messages: bargainSession.messages.length },
+    })
 
     return NextResponse.json({ session: bargainSession })
   } catch (error) {

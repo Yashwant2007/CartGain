@@ -133,6 +133,13 @@ model Store {
   whatsappPhoneNumberId String?   @unique
   shopifyRefreshToken   String?
   shopifyTokenExpiresAt DateTime?
+  // Capability state for AbandonedCheckout.abandonedCheckoutUrl (Shopify
+  // protected customer data Level 2). UNKNOWN until first probed, AVAILABLE
+  // when the URL field is readable, ACCESS_DENIED when Shopify rejects it,
+  // RETRIEVAL_FAILED for transient API errors. Lets the sweep skip a denied
+  // field instead of breaking discovery on every run.
+  abandonedCheckoutUrlAccess      String    @default("UNKNOWN")
+  abandonedCheckoutUrlCheckedAt   DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -214,6 +221,15 @@ model Cart {
   recoveredAt   DateTime?
   recoveredVia  String? // sms, whatsapp, email, push
   convertedAt   DateTime? // set when an order is placed for this cart (any source) — stops further messaging, NOT a credit
+  // Recovery link availability is independent of recovery status. Legacy rows
+  // (null) had a token and are treated as AVAILABLE. Values: AVAILABLE,
+  // MISSING, ACCESS_DENIED, RETRIEVAL_FAILED, EXPIRED_OR_INVALID, NOT_REQUIRED.
+  recoveryUrlStatus      String?
+  // The full Shopify recovery URL is sensitive (it contains the checkout
+  // secret). It is only persisted AES-256-GCM encrypted; the non-secret
+  // checkout token remains in cartId for building resume links.
+  recoveryUrlEncrypted   String?
+  recoveryUrlCheckedAt   DateTime?
   abandonedAt   DateTime  @default(now())
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

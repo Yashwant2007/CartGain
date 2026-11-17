@@ -1,6 +1,16 @@
 import crypto from 'crypto'
+import { logReference } from './logging'
 import { cleanCustomerName } from './names'
 import { normalizeImageUrl, normalizeShopifyLineItems, toNumericId } from './shopify-line-items'
+import {
+  extractCheckoutTokenFromRecoveryUrl,
+  encryptRecoveryUrlForStorage,
+  isRecoveryUrlAccessDenied,
+  normalizeStoreUrlAccessState,
+  validateShopifyRecoveryUrl,
+  type RecoveryUrlStatus,
+  type StoreUrlAccessState,
+} from './recovery/checkout-url'
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000 // refresh 5 min before expiry
 export const SHOPIFY_API_VERSION = '2026-04'
@@ -408,23 +418,11 @@ export async function fetchShopifyShopInfo(
 }
 
 /**
- * Extract the checkout/cart token from Shopify's recovery URL. GraphQL exposes
- * `abandonedCheckoutUrl` instead of the REST `token` field; recovery URLs look
- * like `.../checkouts/<token>/recover?...`.
+ * Extract the checkout/cart token from Shopify's recovery URL. Kept as a
+ * compatibility export; validation lives in `recovery/checkout-url.ts`.
  */
 export function extractShopifyCheckoutToken(recoveryUrl: string | null | undefined): string | null {
-  if (!recoveryUrl) return null
-  try {
-    const url = new URL(recoveryUrl)
-    const explicit = url.searchParams.get('token')
-    if (explicit) return explicit
-    const segments = url.pathname.split('/').filter(Boolean)
-    const recoverIndex = segments.indexOf('recover')
-    if (recoverIndex > 0) return segments[recoverIndex - 1] || null
-    return segments[segments.length - 1] || null
-  } catch {
-    return null
-  }
+  return extractCheckoutTokenFromRecoveryUrl(recoveryUrl)
 }
 
 function addressFromGraphQL(address: any): any | null {
@@ -439,57 +437,79 @@ function addressFromGraphQL(address: any): any | null {
   }
 }
 
-/** List open abandoned checkouts through the GraphQL Admin API. */
-export async function fetchAbandonedCheckouts(
+export type AbandonedCheckoutFetchResult = {
+  checkouts: any[]
+  urlAccess: StoreUrlAccessState
+  urlStatusCounts: Record<string, number>
+  checkedAt: Date
+  /** Present only when the recovery URL query was denied (no URLs are in logs). */
+  deniedReason?: string
+}
+
+type AbandonedCheckoutCoreNode = {
+  id: string
+  completedAt?: string | null
+  createdAt: string
+  totalPriceSet?: { shopMoney?: { amount?: string | null; currencyCode?: string | null } | null } | null
+  customer?: {
+    id: string
+    email?: string | null
+    phone?: string | null
+    firstName?: string | null
+    lastName?: string | null
+    displayName?: string | null
+    defaultAddress?: any | null
+  } | null
+  billingAddress?: any | null
+  shippingAddress?: any | null
+  lineItems?: {
+    nodes?: Array<{
+      title?: string | null
+      quantity?: number | null
+      sku?: string | null
+      image?: { url?: string | null } | null
+      originalUnitPriceSet?: { shopMoney?: { amount?: string | null } | null } | null
+      product?: { id?: string | null; featuredImage?: { url?: string | null } | null } | null
+      variant?: { id?: string | null; title?: string | null } | null
+    }>
+  } | null
+}
+
+/** How long a denied capability is trusted before re-probing (approval may land). */
+const URL_ACCESS_DENIED_TTL_MS = 6 * 60 * 60 * 1000
+
+/**
+ * List open abandoned checkouts through the GraphQL Admin API with the recovery
+ * URL isolated into its own query.
+ *
+ * Shopify's `abandonedCheckoutUrl` requires Level 2 protected customer data
+ * access (from 2026-11-23). Selecting it in the same query as core checkout
+ * fields risks nulling the entire response on ACCESS_DENIED, so Query A never
+ * asks for it. Query B is optional: a denial marks the capability and leaves
+ * core checkout discovery (and webhook capture) working.
+ */
+export async function fetchAbandonedCheckoutsDetailed(
   store: {
     id: string
     domain: string
     apiKey: string | null
     shopifyRefreshToken: string | null
     shopifyTokenExpiresAt: Date | null
+    abandonedCheckoutUrlAccess?: string | null
+    abandonedCheckoutUrlCheckedAt?: Date | null
   },
-  limit: number = 50
-): Promise<any[]> {
-  const data = await shopifyGraphQL<{
-    abandonedCheckouts?: {
-      nodes?: Array<{
-        id: string
-        abandonedCheckoutUrl: string
-        completedAt?: string | null
-        createdAt: string
-        totalPriceSet?: { shopMoney?: { amount?: string | null; currencyCode?: string | null } | null } | null
-        customer?: {
-          id: string
-          email?: string | null
-          phone?: string | null
-          firstName?: string | null
-          lastName?: string | null
-          displayName?: string | null
-          defaultAddress?: any | null
-        } | null
-        billingAddress?: any | null
-        shippingAddress?: any | null
-        lineItems?: {
-          nodes?: Array<{
-            title?: string | null
-            quantity?: number | null
-            sku?: string | null
-            image?: { url?: string | null } | null
-            originalUnitPriceSet?: { shopMoney?: { amount?: string | null } | null } | null
-            product?: { id?: string | null; featuredImage?: { url?: string | null } | null } | null
-            variant?: { id?: string | null; title?: string | null } | null
-          }>
-        } | null
-      }>
-    } | null
-  }>(
+  limit: number = 50,
+): Promise<AbandonedCheckoutFetchResult> {
+  const first = Math.min(Math.max(limit, 1), 250)
+  const checkedAt = new Date()
+
+  const coreData = await shopifyGraphQL<{ abandonedCheckouts?: { nodes?: AbandonedCheckoutCoreNode[] } | null }>(
     store,
     `#graphql
-      query AbandonedCheckouts($first: Int!) {
+      query AbandonedCheckoutsCore($first: Int!) {
         abandonedCheckouts(first: $first, reverse: true) {
           nodes {
             id
-            abandonedCheckoutUrl
             completedAt
             createdAt
             totalPriceSet { shopMoney { amount currencyCode } }
@@ -519,52 +539,142 @@ export async function fetchAbandonedCheckouts(
         }
       }
     `,
-    { first: Math.min(Math.max(limit, 1), 250) },
+    { first },
     10000,
   )
 
-  return (data.abandonedCheckouts?.nodes || [])
-    .filter((node) => !node.completedAt)
-    .map((node) => {
-      const token = extractShopifyCheckoutToken(node.abandonedCheckoutUrl)
-      if (!token) return null
-      const customer = node.customer
-      const shopMoney = node.totalPriceSet?.shopMoney
-      return {
-        id: toNumericId(node.id) ?? node.id,
-        token,
-        cart_token: token,
-        created_at: node.createdAt,
-        total_price: shopMoney?.amount ?? null,
-        currency: shopMoney?.currencyCode ?? null,
-        email: customer?.email ?? null,
-        phone: customer?.phone ?? null,
-        customer: customer
-          ? {
-              id: toNumericId(customer.id) ?? customer.id,
-              email: customer.email ?? null,
-              phone: customer.phone ?? null,
-              first_name: customer.firstName ?? null,
-              last_name: customer.lastName ?? null,
-              name: customer.displayName ?? null,
-              default_address: addressFromGraphQL(customer.defaultAddress),
+  const coreNodes = (coreData.abandonedCheckouts?.nodes || []).filter((node) => !node.completedAt)
+
+  let urlAccess = normalizeStoreUrlAccessState(store.abandonedCheckoutUrlAccess)
+  let deniedReason: string | undefined
+  const urlById = new Map<string, { status: RecoveryUrlStatus; url?: string; token?: string }>()
+
+  const deniedRecently =
+    urlAccess === 'ACCESS_DENIED' &&
+    store.abandonedCheckoutUrlCheckedAt instanceof Date &&
+    Date.now() - store.abandonedCheckoutUrlCheckedAt.getTime() < URL_ACCESS_DENIED_TTL_MS
+
+  if (coreNodes.length > 0 && !deniedRecently) {
+    try {
+      const urlData = await shopifyGraphQL<{
+        abandonedCheckouts?: { nodes?: Array<{ id: string; abandonedCheckoutUrl?: string | null }> } | null
+      }>(
+        store,
+        `#graphql
+          query AbandonedCheckoutRecoveryUrls($first: Int!) {
+            abandonedCheckouts(first: $first, reverse: true) {
+              nodes {
+                id
+                abandonedCheckoutUrl
+              }
             }
-          : null,
-        billing_address: addressFromGraphQL(node.billingAddress),
-        shipping_address: addressFromGraphQL(node.shippingAddress),
-        line_items: (node.lineItems?.nodes || []).map((item) => ({
-          title: item.title,
-          quantity: item.quantity,
-          sku: item.sku,
-          price: item.originalUnitPriceSet?.shopMoney?.amount ?? null,
-          image_url: normalizeImageUrl(item.image) || normalizeImageUrl(item.product?.featuredImage),
-          product_id: toNumericId(item.product?.id),
-          variant_id: toNumericId(item.variant?.id),
-          variant_title: item.variant?.title ?? null,
-        })),
+          }
+        `,
+        { first },
+        10000,
+      )
+      urlAccess = 'AVAILABLE'
+      for (const node of urlData.abandonedCheckouts?.nodes || []) {
+        const validation = validateShopifyRecoveryUrl(node.abandonedCheckoutUrl)
+        if (validation.valid) {
+          urlById.set(node.id, {
+            status: 'AVAILABLE',
+            url: node.abandonedCheckoutUrl || undefined,
+            token: validation.token,
+          })
+        } else {
+          urlById.set(node.id, {
+            status: validation.reason === 'missing' ? 'MISSING' : 'EXPIRED_OR_INVALID',
+          })
+        }
       }
+    } catch (error) {
+      if (isRecoveryUrlAccessDenied(error)) {
+        urlAccess = 'ACCESS_DENIED'
+        deniedReason = 'ACCESS_DENIED'
+      } else {
+        urlAccess = 'RETRIEVAL_FAILED'
+        deniedReason = 'RETRIEVAL_FAILED'
+      }
+      // Never let a URL failure erase the core checkout data.
+    }
+  }
+
+  const checkouts: any[] = []
+  const statuses: RecoveryUrlStatus[] = []
+
+  for (const node of coreNodes) {
+    const link = urlById.get(node.id)
+    const status: RecoveryUrlStatus = link?.status
+      ?? (urlAccess === 'ACCESS_DENIED'
+        ? 'ACCESS_DENIED'
+        : urlAccess === 'RETRIEVAL_FAILED'
+          ? 'RETRIEVAL_FAILED'
+          : 'MISSING')
+    statuses.push(status)
+    if (!link?.token) continue
+
+    const customer = node.customer
+    const shopMoney = node.totalPriceSet?.shopMoney
+    checkouts.push({
+      id: toNumericId(node.id) ?? node.id,
+      token: link.token,
+      cart_token: link.token,
+      recovery_url_status: status,
+      // Encrypted before persistence. Null when ENCRYPTION_KEY is unavailable.
+      recovery_url_encrypted: link.url ? encryptRecoveryUrlForStorage(link.url) : null,
+      created_at: node.createdAt,
+      total_price: shopMoney?.amount ?? null,
+      currency: shopMoney?.currencyCode ?? null,
+      email: customer?.email ?? null,
+      phone: customer?.phone ?? null,
+      customer: customer
+        ? {
+            id: toNumericId(customer.id) ?? customer.id,
+            email: customer.email ?? null,
+            phone: customer.phone ?? null,
+            first_name: customer.firstName ?? null,
+            last_name: customer.lastName ?? null,
+            name: customer.displayName ?? null,
+            default_address: addressFromGraphQL(customer.defaultAddress),
+          }
+        : null,
+      billing_address: addressFromGraphQL(node.billingAddress),
+      shipping_address: addressFromGraphQL(node.shippingAddress),
+      line_items: (node.lineItems?.nodes || []).map((item) => ({
+        title: item.title,
+        quantity: item.quantity,
+        sku: item.sku,
+        price: item.originalUnitPriceSet?.shopMoney?.amount ?? null,
+        image_url: normalizeImageUrl(item.image) || normalizeImageUrl(item.product?.featuredImage),
+        product_id: toNumericId(item.product?.id),
+        variant_id: toNumericId(item.variant?.id),
+        variant_title: item.variant?.title ?? null,
+      })),
     })
-    .filter((checkout): checkout is NonNullable<typeof checkout> => checkout != null)
+  }
+
+  const urlStatusCounts: Record<string, number> = {}
+  for (const status of statuses) urlStatusCounts[status] = (urlStatusCounts[status] || 0) + 1
+
+  return { checkouts, urlAccess, urlStatusCounts, checkedAt, deniedReason }
+}
+
+/** Backward-compatible list helper returning only checkouts with a valid token. */
+export async function fetchAbandonedCheckouts(
+  store: {
+    id: string
+    domain: string
+    apiKey: string | null
+    shopifyRefreshToken: string | null
+    shopifyTokenExpiresAt: Date | null
+    abandonedCheckoutUrlAccess?: string | null
+    abandonedCheckoutUrlCheckedAt?: Date | null
+  },
+  limit: number = 50,
+): Promise<any[]> {
+  const result = await fetchAbandonedCheckoutsDetailed(store, limit)
+  return result.checkouts
 }
 
 type CustomerNameStore = {
@@ -1042,9 +1152,9 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
     return 0
   }
 
-  let checkouts: any[]
+  let result: AbandonedCheckoutFetchResult
   try {
-    checkouts = await fetchAbandonedCheckouts(store, 50)
+    result = await fetchAbandonedCheckoutsDetailed(store, 50)
   } catch (error) {
     if (error instanceof ShopifyReconnectRequiredError) {
       console.log(`🔌 ${store.domain}: ${error.message}`)
@@ -1061,14 +1171,78 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
     return 0
   }
 
+  const { checkouts, urlAccess, urlStatusCounts, checkedAt, deniedReason } = result
+  const prisma = (await import('@/lib/db')).default
+
+  // Cache the store's recovery-URL capability so a denied field is skipped
+  // instead of breaking checkout discovery on every sweep.
+  const capabilityChanged =
+    normalizeStoreUrlAccessState(store.abandonedCheckoutUrlAccess) !== urlAccess
+  if (capabilityChanged || !store.abandonedCheckoutUrlCheckedAt) {
+    await prisma.store
+      .update({
+        where: { id: store.id },
+        data: {
+          abandonedCheckoutUrlAccess: urlAccess,
+          abandonedCheckoutUrlCheckedAt: checkedAt,
+        },
+      })
+      .catch((err: any) => {
+        console.error(`Failed to persist checkout URL capability for ${store.domain}:`, err?.message || err)
+      })
+  }
+
+  if (urlAccess !== 'AVAILABLE') {
+    console.warn(
+      `[recovery-url] store=${store.id} access=${urlAccess} statuses=${JSON.stringify(urlStatusCounts)}` +
+        (deniedReason ? ` reason=${deniedReason}` : ''),
+    )
+  }
+  try {
+    const { track } = await import('@/lib/analytics/track')
+    await track({
+      name: 'cartgain_checkout_url_access',
+      storeId: store.id,
+      properties: { access: urlAccess, statuses: urlStatusCounts, denied: Boolean(deniedReason) },
+    })
+  } catch {}
+  try {
+    const { logDataAccess } = await import('@/lib/data-protection')
+    await logDataAccess({
+      actorType: 'system',
+      action: 'read',
+      resourceType: 'cart_recovery_url',
+      resourceId: store.id,
+      purpose: 'abandoned checkout recovery',
+      actorId: store.userId,
+      metadata: {
+        field: 'abandonedCheckoutUrl',
+        access: urlAccess,
+        statuses: urlStatusCounts,
+        // Never log the URL or token.
+      },
+    })
+  } catch {}
+  if (urlAccess === 'ACCESS_DENIED' && capabilityChanged) {
+    try {
+      const { sendAlert } = await import('@/lib/alerter')
+      await sendAlert(
+        'Shopify abandoned checkout URL access denied',
+        `Store ${store.domain} could not read AbandonedCheckout.abandonedCheckoutUrl. ` +
+          'Level 2 protected customer data access may not be approved. Core checkout discovery and webhook capture continue; ' +
+          'recovery links use an honest storefront fallback until access is granted.',
+        { storeId: store.id, access: urlAccess, statuses: urlStatusCounts },
+      )
+    } catch {}
+  }
+
   if (checkouts.length === 0) {
-    console.log(`No abandoned checkouts found for ${store.domain} in last 24h`)
+    console.log(`No resumeable abandoned checkouts found for ${store.domain} in last 24h`)
     return 0
   }
 
   console.log(`Found ${checkouts.length} abandoned checkouts for ${store.domain}`)
 
-  const prisma = (await import('@/lib/db')).default
   let synced = 0
 
   for (const checkout of checkouts) {
@@ -1119,6 +1293,11 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
         update: {
           items: lineItems,
           totalValue: checkout.total_price ? parseFloat(checkout.total_price) : 0,
+          recoveryUrlStatus: checkout.recovery_url_status || 'AVAILABLE',
+          recoveryUrlCheckedAt: checkedAt,
+          ...(checkout.recovery_url_encrypted
+            ? { recoveryUrlEncrypted: checkout.recovery_url_encrypted }
+            : {}),
           ...(email ? { customerEmail: email } : {}),
           ...(phone ? { customerPhone: phone } : {}),
           ...(name ? { customerName: name } : {}),
@@ -1136,6 +1315,9 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
           customerName: name,
           currency: checkout.currency || 'USD',
           abandonedAt: checkout.created_at ? new Date(checkout.created_at) : new Date(),
+          recoveryUrlStatus: checkout.recovery_url_status || 'AVAILABLE',
+          recoveryUrlEncrypted: checkout.recovery_url_encrypted || null,
+          recoveryUrlCheckedAt: checkedAt,
         },
       })
 
@@ -1150,7 +1332,7 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
         customerPhone: phone,
         updatedAt: new Date(),
       }).catch((err: any) => {
-        console.error(`Recipient registry sync failed for checkout ${token}:`, err?.message || err)
+        console.error(`Recipient registry sync failed for checkout ${logReference(token)}:`, err?.message || err)
         return null
       })
       // The identity may already know the customer's name/phone from a
@@ -1169,7 +1351,7 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
       }
       synced++
     } catch (err) {
-      console.error(`Failed to sync checkout ${token}:`, err)
+      console.error(`Failed to sync checkout ${logReference(token)}:`, err)
     }
   }
 

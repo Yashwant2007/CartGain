@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import prisma from '@/lib/db'
 import { logDataAccess } from '@/lib/data-protection'
+import { logReference } from '@/lib/logging'
 import {
   cleanShopifyName,
   findShopifyCustomerContact,
@@ -9,6 +10,7 @@ import {
   verifyShopifyWebhook,
 } from '@/lib/shopify'
 import { normalizeShopifyLineItems } from '@/lib/shopify-line-items'
+import { encryptRecoveryUrlForStorage, validateShopifyRecoveryUrl } from '@/lib/recovery/checkout-url'
 import { purgeStoreData, redactCustomer } from '@/lib/data-deletion'
 import {
   collectCustomerData,
@@ -263,7 +265,11 @@ async function handleCustomerRedact(data: any, store: any, shopDomain: string) {
   }
   const customerIdNorm = normalizeCustomerId(customerId)
   const matchId = customerIdNorm || customerId
-  const result = await redactCustomer(shopDomain, matchId)
+  const customerEmail =
+    typeof data?.customer?.email === 'string' ? data.customer.email : null
+  const customerPhone =
+    typeof data?.customer?.phone === 'string' ? data.customer.phone : null
+  const result = await redactCustomer(shopDomain, matchId, customerEmail, customerPhone)
   await logDataAccess({
     actorType: 'system',
     action: 'delete',
@@ -556,7 +562,7 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
     actorType: 'system',
     action: 'read',
     resourceType: 'cart',
-    resourceId: String(cart.id || cart.token),
+    resourceId: cart.id ? String(cart.id) : logReference(cart.token),
     purpose: 'shopify webhook cart sync',
     actorId: store.userId,
     metadata: {
@@ -568,6 +574,14 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
 
   const items = normalizeShopifyLineItems(cart.line_items || cart.items)
   const totalValue = resolveCartTotal(cart, items)
+  // The webhook always carries a usable cart/checkout token, even when the
+  // optional abandonedCheckoutUrl field is omitted (Level 2 protected data).
+  // Persist the full URL only when Shopify sent one, encrypted at rest.
+  const payloadRecoveryUrl = validateShopifyRecoveryUrl(cart.abandoned_checkout_url)
+  const recoveryUrlEncrypted =
+    payloadRecoveryUrl.valid && cart.abandoned_checkout_url
+      ? encryptRecoveryUrlForStorage(cart.abandoned_checkout_url)
+      : null
 
   await prisma.cart.upsert({
     where: {
@@ -588,6 +602,9 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
       // minutes after their last activity instead of firing mid-session.
       abandonedAt: new Date(),
       updatedAt: new Date(),
+      recoveryUrlStatus: 'AVAILABLE',
+      recoveryUrlCheckedAt: new Date(),
+      ...(recoveryUrlEncrypted ? { recoveryUrlEncrypted } : {}),
     },
     create: {
       storeId: store.id,
@@ -599,6 +616,9 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
       customerPhone,
       customerName,
       currency: cart.currency || 'USD',
+      recoveryUrlStatus: 'AVAILABLE',
+      recoveryUrlEncrypted,
+      recoveryUrlCheckedAt: new Date(),
     },
   })
 
@@ -611,7 +631,7 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
     customerPhone,
     updatedAt: new Date(),
   }).catch((err) => {
-    console.error(`Recipient registry sync failed for cart ${cart.token}:`, err?.message || err)
+    console.error(`Recipient registry sync failed for cart ${logReference(cart.token)}:`, err?.message || err)
     return null
   })
 
@@ -650,7 +670,7 @@ async function handleCartUpdate(data: any, store: any, domain: string) {
         },
       })
       .catch((err) => {
-        console.error(`Product journey cleanup failed for cart ${cart.token}:`, err?.message || err)
+        console.error(`Product journey cleanup failed for cart ${logReference(cart.token)}:`, err?.message || err)
       })
   }
 }

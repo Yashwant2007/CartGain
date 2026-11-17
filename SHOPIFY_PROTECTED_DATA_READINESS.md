@@ -8,13 +8,21 @@ policy, or is explicitly marked pending/`[REQUIRES CONFIRMATION]`.
 > Status: **Category 2 readiness (protected customer data: name, email, phone).
 > Code and policy are complete; the Dev Dashboard access request, backup evidence,
 > and a fresh live-store verification remain before submission.** CartGain does not
-> query or persist street addresses.
+> query or persist street addresses. The reviewer-facing evidence pack lives in
+> `compliance/shopify-level-2/`.
+>
+> **Level 2 update (2026-11-16):** Shopify now requires Level 2 protected customer
+> data access for `AbandonedCheckout.abandonedCheckoutUrl` on all API versions from
+> **2026-11-23**. CartGain already needs Level 2 for names/emails/phones; the access
+> request must explicitly include abandoned-checkout recovery URLs. The code now
+> isolates that field, records availability, and falls back safely when Shopify denies
+> it (see §2.1). Approval status must be confirmed by Shopify Partner Support.
 
 ## 1. Customer data stored
 
 | Model | Customer data stored |
 |---|---|
-| `Cart` | email, phone, name, cart items, customer key |
+| `Cart` | email, phone, name, cart items, customer key, checkout token; the full Shopify recovery URL **only encrypted** (`recoveryUrlEncrypted`) when available |
 | `Message` | email, phone, channel, content, status, click tracking |
 | `RecoveredCart` | email, phone, name, attribution records |
 | `CustomerIdentity` | email/phone, per-channel consent and provenance |
@@ -45,6 +53,36 @@ Shopify storefront (carts/checkouts/orders webhooks)
 - Shopify access tokens are AES-256-GCM encrypted (`src/lib/encryption.ts`).
 - No analytics SDK, ad targeting, or model training on customer data.
 
+### 2.1 Abandoned-checkout recovery URL (Level 2)
+
+`AbandonedCheckout.abandonedCheckoutUrl` contains a checkout resume secret. From
+2026-11-23 Shopify returns `ACCESS_DENIED` for that field unless the app has
+**Level 2** protected customer data access.
+
+- **Isolated query.** Core abandoned-checkout discovery (items, totals, contact,
+  timestamps) never selects `abandonedCheckoutUrl`. A second, optional GraphQL query
+  requests only the URL. A denial therefore cannot null the core response.
+- **Capability cache.** `Store.abandonedCheckoutUrlAccess` records `UNKNOWN`,
+  `AVAILABLE`, `ACCESS_DENIED`, or `RETRIEVAL_FAILED` with a check timestamp. A denial
+  is skipped for 6 hours (approval may land) and alerted once on transition; discovery
+  keeps running.
+- **Per-cart status.** `Cart.recoveryUrlStatus` records `AVAILABLE`, `MISSING`,
+  `ACCESS_DENIED`, `RETRIEVAL_FAILED`, `EXPIRED_OR_INVALID`, or `NOT_REQUIRED`.
+  Recovery scheduling and messaging are unchanged; the status only controls whether a
+  direct Shopify checkout resume link is safe to build.
+- **No fabricated URLs.** Only a non-secret checkout token extracted from a validated
+  HTTPS checkout URL is used. If the URL is missing, denied, or invalid, tracked
+  checkout links stay inside the recovery flow (`/cart/<id>`) and the storefront CTA
+  falls back to the merchant store root. We never synthesize `/cart/<checkoutId>`.
+- **Encrypted at rest.** When a URL is available it is stored AES-256-GCM
+  (`ENCRYPTION_KEY`, existing `src/lib/encryption.ts`). If the key is unavailable the
+  URL is not persisted; only the token/status are kept.
+- **Never exposed.** Full recovery URLs are not written to logs, analytics, alerts, AI
+  prompts, browser responses, or merchant APIs. Observability records only store id,
+  status counts, and a denial reason.
+- **Webhook path.** `checkouts/*` and `carts/*` webhooks always carry a usable token;
+  they mark the cart `AVAILABLE` without depending on the optional URL field.
+
 ## 3. GDPR / CDP webhook handling
 
 The three mandatory topics are declared in `shopify.app.toml` and
@@ -54,7 +92,7 @@ them. The runtime deliberately does **not** create webhooks through the Admin AP
 | Webhook topic | Handler | Behaviour |
 |---|---|---|
 | `shop/redact` | `purgeStoreData(store)` | Deletes store-scoped customer data |
-| `customers/redact` | `redactCustomer(shop, id, email)` | Deletes carts/messages/recovery/customer data and customer bargain sessions |
+| `customers/redact` | `redactCustomer(shop, id, email, phone)` | Deletes carts/messages/recovery/customer data and customer bargain sessions; reuses cart-derived email/phone when Shopify omits them |
 | `customers/data_request` | collect + persist + email | Builds a JSON export with `collectCustomerData`, stores a `CustomerDataExport`, emails the store owner, and audit-logs it. The merchant can download it from `/dashboard/data`. |
 | `app/uninstalled` | `purgeStoreData(store)` | Full store data purge on uninstall |
 
@@ -70,9 +108,11 @@ is the single source of truth for store/customer deletion.
 - STOP/unsubscribe is honoured by every send path; suppression records are retained.
 - Storefront capture and the checkout UI extension collect explicit email/WhatsApp
   consent; the public opt-in route resolves product context server-side.
-- Retention job (`src/app/api/jobs/data-retention/route.ts`): cart PII anonymized after
-  **90 days**, bargain sessions deleted after **90 days**, access logs deleted after
-  **180 days**, customer data exports after **180 days**, stale tokens after **7 days**.
+- Retention job (`src/app/api/jobs/data-retention/route.ts`): cart contact/name/
+  customer id/items/encrypted recovery URL cleared after **90 days** and the token
+  replaced with `anon_<row id>`; message bodies/provider ids redacted at 90 days;
+  bargain sessions deleted after **90 days**; access logs and DSR exports after
+  **180 days**; stale tokens after **7 days**.
 
 ## 5. Scope minimization
 
@@ -131,11 +171,11 @@ checkout but does not query or persist street addresses.
 | L1-8 | Retention periods | `/api/jobs/data-retention` (90/90/180/180/7 days). | ✅ code |
 | L1-9 | Encrypt at rest and in transit | TLS, AES-256-GCM secrets, Supabase managed encryption. | ✅ |
 | L2-1 | Encrypt backups | `docs/security/backup.md`; attach restore evidence. | ⚠️ evidence pending |
-| L2-2 | Separate test and production data | `TEST_DATABASE_URL` policy; distinct databases/secrets. | ✅ |
+| L2-2 | Separate test and production data | `src/lib/env-separation.ts` + `src/lib/db.ts` runtime guard; `TEST_DATABASE_URL`; `PRODUCTION_DB_HOSTS`; preview resolves to staging. | ✅ code |
 | L2-3 | Data loss prevention strategy | `docs/dlp-strategy.md` + `docs/security/dlp-policy.md`. | ✅ |
 | L2-4 | Limit staff access | `docs/staff-access-policy.md`. | ✅ |
 | L2-5 | Strong staff passwords | `src/lib/auth-utils.ts` + 2FA/TOTP enforcement. | ✅ code |
-| L2-6 | Access log to protected data | `DataAccessLog` + `logDataAccess()`; dashboard `/dashboard/data`. | ✅ code |
+| L2-6 | Access log to protected data | `DataAccessLog` + redacting `logDataAccess()` for merchant reads, webhooks, DSRs and recovery-URL status; dashboard `/dashboard/data`; 180-day retention. | ✅ code |
 | L2-7 | Security incident response | `docs/incident-response.md`. | ✅ |
 
 ## 9. Dev Dashboard — what to request
@@ -174,4 +214,4 @@ Apps → your app → **API access requests** → **Protected customer data acce
 
 ---
 
-*Last updated: Nov 5, 2026.*
+*Last updated: Nov 17, 2026. Reviewer pack: `compliance/shopify-level-2/`.*

@@ -144,10 +144,11 @@ export default function PrivacyPolicyPage() {
                   We retain your data for as long as your account is active or as needed to provide services. Applied retention limits:
                 </p>
                 <ul className="list-disc pl-5 space-y-2 mt-3">
-                  <li><strong>Cart data:</strong> Customer contact details and cart contents are anonymized 90 days after abandonment.</li>
+                  <li><strong>Cart data:</strong> Customer contact details, cart contents, the Shopify customer id and any stored checkout recovery URL are anonymized or cleared 90 days after abandonment; the cart token is replaced with an opaque identifier.</li>
                   <li><strong>Bargain sessions:</strong> AI negotiation sessions and messages are deleted 90 days after they start.</li>
                   <li><strong>Negotiation learning:</strong> Learning outcomes and session-linked learning data are pruned after 90 days; detailed learning events follow the store&apos;s retention setting (180 days by default).</li>
                   <li><strong>Storefront experience events:</strong> Invitation impressions, clicks, and chat-open events are retained for 180 days and then pruned.</li>
+                  <li><strong>Communication logs:</strong> Message bodies and provider message ids are redacted 90 days after the cart is abandoned; delivery status counts are retained for reporting.</li>
                   <li><strong>Access logs:</strong> Internal audit logs of data access are deleted after 180 days.</li>
                   <li><strong>Verification tokens:</strong> Password-reset / verification tokens are deleted shortly after expiry.</li>
                   <li><strong>Opt-out / suppression records:</strong> kept for as long as needed to honor your customers&apos; choices.</li>

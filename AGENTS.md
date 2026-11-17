@@ -88,6 +88,36 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(recovery): survive Shopify Level 2 denial of abandoned checkout URLs`.
+  Shopify turns `AbandonedCheckout.abandonedCheckoutUrl` into a
+  Level 2 protected-customer-data field on **2026-11-23**. The abandoned-checkout
+  sweep no longer selects it in the core GraphQL query: `fetchAbandonedCheckoutsDetailed`
+  runs Query A (items, totals, contact, timestamps) and an optional Query B (id + URL
+  only). A denial marks `Store.abandonedCheckoutUrlAccess` (`UNKNOWN`/`AVAILABLE`/
+  `ACCESS_DENIED`/`RETRIEVAL_FAILED`, 6h denial TTL) and never erases core checkout
+  data; transitions alert and emit `cartgain_checkout_url_access` plus a
+  `cart_recovery_url` access-log entry with status counts only. `Cart` gained
+  `recoveryUrlStatus` (`AVAILABLE`/`MISSING`/`ACCESS_DENIED`/`RETRIEVAL_FAILED`/
+  `EXPIRED_OR_INVALID`/`NOT_REQUIRED`), `recoveryUrlEncrypted` (AES-256-GCM via the
+  existing `encrypt()`; URL skipped if the key is unavailable), and
+  `recoveryUrlCheckedAt`; webhook cart/checkout capture marks carts `AVAILABLE` and
+  encrypts a URL only when Shopify sends one. New pure
+  `src/lib/recovery/checkout-url.ts` validates HTTPS checkout URLs, extracts only
+  the non-secret token, and decides resume eligibility. `buildStoreCheckoutLink`
+  and `/r/[id]` now treat denied/missing/invalid URLs as non-resumable: tracked
+  checkout links stay in the recovery flow (`/cart/<id>`) and the cart page shows
+  “Continue Shopping” to the merchant storefront instead of fabricating
+  `/cart/<checkoutId>`. Migration `20261116120000_add_checkout_recovery_access` is
+  additive (nullable columns + store capability default; **not applied to
+  production**). Docs: `SHOPIFY_PROTECTED_DATA_READINESS.md` §2.1 and
+  `docs/security/shopify-review.md` state the Level 2 request, encrypted-at-rest,
+  logging, retention and fallback behavior. Verified: `prisma validate`,
+  `prisma generate`, `tsc --noEmit`, `npm run lint`, full Jest **172 suites /
+  1834 tests**, targeted recovery/webhook/shopify suites **28 / 237**, and
+  `npm run build` green. Deployment and a fresh four-scope install/billing check
+  remain; the app is still in App Store review, so Partner Support must confirm
+  Level 2 before Nov 23.
+
 - `feat(bargain): merchant FAQ, conversation-state reactions, and a real holdout
   experiment` (**uncommitted**). Closed three gaps found by auditing the specs
   line by line. (1) Merchant FAQ: `BargainConfig.merchantFaq` (migration

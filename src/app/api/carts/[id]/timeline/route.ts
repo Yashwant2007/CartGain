@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { authenticate } from '@/lib/auth-context'
 import { buildCartTimeline } from '@/lib/recovery/timeline'
+import { logDataAccess } from '@/lib/data-protection'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,6 +41,16 @@ export async function GET(
     if (!cart) {
       return NextResponse.json({ message: 'Cart not found' }, { status: 404 })
     }
+
+    await logDataAccess({
+      actorType: 'merchant',
+      actorId: auth.ctx.userId,
+      action: 'read',
+      resourceType: 'cart_timeline',
+      resourceId: cart.id,
+      purpose: 'merchant dashboard cart timeline',
+      metadata: { storeId },
+    })
 
     // Prefer the campaign that actually produced the messages (the merchant may
     // have edited or replaced the active campaign since), then fall back to the

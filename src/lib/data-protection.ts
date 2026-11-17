@@ -81,6 +81,8 @@ export function redactSensitive<T>(value: T, depth = 0): T {
 
 export async function logDataAccess(input: DataAccessLogInput): Promise<void> {
   try {
+    // Unit tests and early boot paths may not have the audit table available.
+    if (!(prisma as any)?.dataAccessLog?.create) return
     await prisma.dataAccessLog.create({
       data: {
         actorType: input.actorType,

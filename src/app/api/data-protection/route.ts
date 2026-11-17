@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { logDataAccess } from '@/lib/data-protection'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +49,16 @@ export async function GET(request: NextRequest) {
         take: 50,
       }),
     ])
+
+    await logDataAccess({
+      actorType: 'merchant',
+      actorId: session.user.id,
+      action: 'read',
+      resourceType: 'data_protection_dashboard',
+      resourceId: store.id,
+      purpose: 'merchant dashboard data protection records',
+      metadata: { exports: exports.length, auditLogs: logs.length },
+    })
 
     return NextResponse.json({
       store: { id: store.id, domain: store.domain },

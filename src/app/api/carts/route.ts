@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { cartCreateSchema, validateOrThrow, handleValidationError } from '@/lib/validation'
 import { authenticate, hasPermission } from '@/lib/auth-context'
+import { logDataAccess } from '@/lib/data-protection'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,6 +43,16 @@ export async function GET(request: NextRequest) {
     const hasMore = carts.length > take
     const items = hasMore ? carts.slice(0, take) : carts
     const nextCursor = hasMore ? items[items.length - 1].id : null
+
+    await logDataAccess({
+      actorType: 'merchant',
+      actorId: auth.ctx.userId,
+      action: 'read',
+      resourceType: 'cart_list',
+      resourceId: storeId,
+      purpose: 'merchant dashboard cart list',
+      metadata: { count: items.length, hasMore },
+    })
 
     return NextResponse.json({ carts: items, nextCursor, hasMore })
   } catch (error) {

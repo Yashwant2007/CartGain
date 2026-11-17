@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from '@prisma/client'
+import { validateEnvironmentSeparation } from '@/lib/env-separation'
 
 // Suppress url.parse() deprecation from dependencies (ioredis, etc.)
 if (typeof process !== 'undefined' && process.noDeprecation === undefined) {
@@ -9,10 +10,26 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-function resolveDatabaseUrl(): string | undefined {
-  const appDataEnv = (process.env.APP_DATA_ENV || process.env.NODE_ENV || 'development').toLowerCase()
+function separationCheck() {
+  const result = validateEnvironmentSeparation({
+    appDataEnv: process.env.APP_DATA_ENV,
+    vercelEnv: process.env.VERCEL_ENV,
+    nodeEnv: process.env.NODE_ENV,
+    databaseUrl: process.env.DATABASE_URL,
+    testDatabaseUrl: process.env.TEST_DATABASE_URL,
+    productionDbHosts: process.env.PRODUCTION_DB_HOSTS,
+  })
+  for (const warning of result.warnings) {
+    console.warn(`[environment] ${warning}`)
+  }
+  if (result.errors.length > 0) {
+    throw new Error(`Environment separation check failed: ${result.errors.join('; ')}`)
+  }
+  return result.dataEnvironment
+}
 
-  if (appDataEnv === 'production') {
+function resolveDatabaseUrl(dataEnvironment: string): string | undefined {
+  if (dataEnvironment === 'production') {
     return process.env.DATABASE_URL
   }
 
@@ -20,14 +37,11 @@ function resolveDatabaseUrl(): string | undefined {
 }
 
 function createPrismaClient(): PrismaClient {
-  const databaseUrl = resolveDatabaseUrl()
+  const dataEnvironment = separationCheck()
+  const databaseUrl = resolveDatabaseUrl(dataEnvironment)
 
   if (!databaseUrl) {
     return new PrismaClient()
-  }
-
-  if ((process.env.APP_DATA_ENV || process.env.NODE_ENV || 'development').toLowerCase() !== 'production' && !process.env.TEST_DATABASE_URL && process.env.NODE_ENV !== 'test') {
-    console.warn('TEST_DATABASE_URL is not set. Test and production data are not fully separated yet.')
   }
 
   // Use pooled URL for serverless (PgBouncer) — do NOT force connection_limit=1

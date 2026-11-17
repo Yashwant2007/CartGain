@@ -14,6 +14,8 @@
  * in another was a real bug class).
  */
 
+import { cartHasResumeToken } from './checkout-url'
+
 export type RecoveryLinkKind = 'cart' | 'bargain' | 'checkout'
 
 const CODE_RE = /^[A-Za-z0-9_-]{3,40}$/
@@ -65,10 +67,21 @@ export function buildStoreCheckoutLink(opts: {
   domain: string
   shopifyCartId?: string | null
   discountCode?: string | null
+  /**
+   * Cart.recoveryUrlStatus. A missing/denied/invalid Shopify recovery URL
+   * means the cart token cannot resume the original checkout — land on the
+   * storefront instead of fabricating `/cart/<invalid-token>`.
+   */
+  recoveryUrlStatus?: string | null
 }): string {
   const domain = normalizeDomain(opts.domain)
-  const cartToken = (opts.shopifyCartId || '').trim()
-  const cartPath = cartToken ? `/cart/${encodeURIComponent(cartToken)}` : ''
+  const resumable = cartHasResumeToken({
+    cartId: opts.shopifyCartId,
+    recoveryUrlStatus: opts.recoveryUrlStatus,
+  })
+  const cartPath = resumable
+    ? `/cart/${encodeURIComponent((opts.shopifyCartId || '').trim())}`
+    : ''
   if (isSafeDiscountCode(opts.discountCode)) {
     const redirect = cartPath ? `?redirect=${encodeURIComponent(cartPath)}` : ''
     return `https://${domain}/discount/${encodeURIComponent(opts.discountCode)}${redirect}`

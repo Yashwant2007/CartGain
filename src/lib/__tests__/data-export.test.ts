@@ -146,7 +146,8 @@ describe('collectCustomerData', () => {
       optOuts: 1,
       identities: 1,
     })
-    expect(payload.carts[0].cartId).toBe('tok_abc')
+    expect(payload.carts[0]).not.toHaveProperty('cartId')
+    expect(payload.bargainSessions[0]).not.toHaveProperty('cartToken')
     expect(payload.carts[0].recoveredValue).toBe(95)
     expect(payload.customers[0].shopifyCustomerId).toBe('9001')
     expect(payload.bargainSessions[0].discountCode).toBe('SAVE15')

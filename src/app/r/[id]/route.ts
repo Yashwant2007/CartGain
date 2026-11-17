@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { buildStoreCheckoutLink, isSafeDiscountCode } from '@/lib/recovery/links'
+import { cartHasResumeToken } from '@/lib/recovery/checkout-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,11 +29,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   let channel = requestedChannel
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/$/, '')
 
-  let cart: { id: string; cartId: string; store: { domain: string } } | null = null
+  let cart: { id: string; cartId: string; recoveryUrlStatus: string | null; store: { domain: string } } | null = null
   try {
     cart = await prisma.cart.findUnique({
       where: { id: params.id },
-      select: { id: true, cartId: true, store: { select: { domain: true } } },
+      select: { id: true, cartId: true, recoveryUrlStatus: true, store: { select: { domain: true } } },
     })
 
     // Compact links are `/r/<code>`, where code is not a cart id. Resolve the
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         channel = short.channel
         cart = await prisma.cart.findUnique({
           where: { id: short.cartId },
-          select: { id: true, cartId: true, store: { select: { domain: true } } },
+          select: { id: true, cartId: true, recoveryUrlStatus: true, store: { select: { domain: true } } },
         })
       }
     }
@@ -56,12 +57,20 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   const cartId = cart?.id || params.id
   let destination: string
-  if (to === 'checkout' && cart?.store?.domain) {
-    destination = buildStoreCheckoutLink({
-      domain: cart.store.domain,
-      shopifyCartId: cart.cartId,
-      discountCode: isSafeDiscountCode(requestedCode) ? requestedCode : null,
-    })
+  if (to === 'checkout' && cart) {
+    if (cartHasResumeToken(cart)) {
+      destination = buildStoreCheckoutLink({
+        domain: cart.store.domain,
+        shopifyCartId: cart.cartId,
+        recoveryUrlStatus: cart.recoveryUrlStatus,
+        discountCode: isSafeDiscountCode(requestedCode) ? requestedCode : null,
+      })
+    } else {
+      // The original checkout cannot be resumed (URL missing/denied/invalid).
+      // Keep the click inside the recovery flow and show the saved items with
+      // an honest storefront CTA instead of a fabricated Shopify URL.
+      destination = `${appUrl}/cart/${cartId}?from=checkout`
+    }
   } else if (to === 'bargain') {
     destination = `${appUrl}/cart/${cartId}?focus=bargain#bargain`
   } else {

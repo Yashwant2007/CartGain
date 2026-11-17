@@ -6,6 +6,7 @@ import { recordWhatsAppConsent } from '@/lib/recovery/recipients'
 import { recordOptOut } from '@/lib/opt-out'
 import { isWhatsAppConfigured, resolveWhatsAppPhoneNumberId } from '@/lib/whatsapp/config'
 import { resolveWhatsAppAppSecret } from '@/lib/whatsapp/config'
+import { logDataAccess } from '@/lib/data-protection'
 
 export const dynamic = 'force-dynamic'
 
@@ -88,6 +89,16 @@ export async function GET(request: NextRequest) {
       orderBy: [{ lastSeenAt: 'desc' }, { createdAt: 'desc' }],
       take: 500,
     })) as unknown as RecipientRow[]
+
+    await logDataAccess({
+      actorType: 'merchant',
+      actorId: auth.ctx.userId,
+      action: 'read',
+      resourceType: 'recipient_list',
+      resourceId: store.id,
+      purpose: 'merchant dashboard recipient list',
+      metadata: { count: rows.length },
+    })
 
     const decorated = rows.map((recipient) => {
       const reason = reasonFor(recipient)

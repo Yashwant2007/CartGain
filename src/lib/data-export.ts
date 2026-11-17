@@ -134,7 +134,6 @@ export async function collectCustomerData(input: {
     })),
     carts: carts.map(c => ({
       id: c.id,
-      cartId: c.cartId,
       email: c.customerEmail,
       phone: c.customerPhone,
       name: c.customerName,
@@ -187,7 +186,6 @@ export async function collectCustomerData(input: {
     bargainSessions: sessions.map(s => ({
       id: s.id,
       shopifyProductId: s.shopifyProductId,
-      cartToken: s.cartToken,
       email: s.customerEmail,
       phone: s.customerPhone,
       originalPrice: s.originalPrice,

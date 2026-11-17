@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { logDataAccess } from '@/lib/data-protection'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +36,16 @@ export async function GET(request: NextRequest) {
     const cursor = request.nextUrl.searchParams.get('cursor') ?? undefined
 
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+    await logDataAccess({
+      actorType: 'merchant',
+      actorId: session.user.id,
+      action: 'read',
+      resourceType: 'bargain_session_list',
+      resourceId: storeId,
+      purpose: 'merchant dashboard bargain sessions',
+      metadata: { days, status: status || 'all' },
+    })
 
     const where: any = {
       storeId,

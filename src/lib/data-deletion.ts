@@ -200,6 +200,13 @@ export async function redactCustomer(
 
   const storeId = store.id
   let affected = 0
+  const emailVariants = (value?: string | null) =>
+    value ? Array.from(new Set([value.trim().toLowerCase(), value.trim()])).filter(Boolean) : []
+  const phoneVariants = (value?: string | null) => {
+    const digits = (value || '').replace(/\D/g, '')
+    if (!digits) return []
+    return Array.from(new Set([digits, `+${digits}`]))
+  }
 
   // Shopify may deliver the id raw or as "gid://shopify/Customer/<id>" — match
   // both forms, since the cart-sync path has historically stored raw numerics.
@@ -215,8 +222,8 @@ export async function redactCustomer(
       storeId,
       OR: [
         ...idVariants.map((id) => ({ customerId: id })),
-        ...(customerEmail ? [{ customerEmail }] : []),
-        ...(customerPhone ? [{ customerPhone }] : []),
+        ...(customerEmail ? emailVariants(customerEmail).map((email) => ({ customerEmail: email })) : []),
+        ...(customerPhone ? phoneVariants(customerPhone).map((phone) => ({ customerPhone: phone })) : []),
       ],
     },
     select: { id: true, cartId: true },
@@ -233,6 +240,18 @@ export async function redactCustomer(
     await prisma.bargainSession.deleteMany({
       where: { cartToken: cart.cartId, storeId },
     })
+    const cartJourneys = await prisma.recoveryJourney.findMany({
+      where: { storeId, cartId: cart.cartId },
+      select: { id: true },
+    })
+    if (cartJourneys.length > 0) {
+      await prisma.recoveryReminder.deleteMany({
+        where: { journeyId: { in: cartJourneys.map((j) => j.id) } },
+      })
+      await prisma.recoveryJourney.deleteMany({
+        where: { id: { in: cartJourneys.map((j) => j.id) } },
+      })
+    }
     const full = await prisma.cart.findUnique({
       where: { id: cart.id },
       select: { customerEmail: true, customerPhone: true },
@@ -245,14 +264,25 @@ export async function redactCustomer(
 
   // Recipient registry + behavioural journeys. These hold the consent record
   // and the queue; leaving them behind would keep a "redacted" person eligible
-  // for a future WhatsApp send.
+  // for a future WhatsApp send. Match on the ids in the request AND every
+  // email/phone we found on the customer's carts, because Shopify's redact
+  // payload may omit contact fields.
+  const allEmails = new Set<string>()
+  for (const email of [...Array.from(cartEmails), customerEmail || '']) {
+    for (const variant of emailVariants(email)) allEmails.add(variant)
+  }
+  const allPhones = new Set<string>()
+  for (const phone of [...Array.from(cartPhones), customerPhone || '']) {
+    for (const variant of phoneVariants(phone)) allPhones.add(variant)
+  }
+
   const identities = await prisma.customerIdentity.findMany({
     where: {
       storeId,
       OR: [
         ...idVariants.map((id) => ({ shopifyCustomerId: id })),
-        ...(customerEmail ? [{ email: customerEmail.toLowerCase().trim() }] : []),
-        ...(customerPhone ? [{ phone: customerPhone.replace(/\D/g, '') }, { phone: `+${customerPhone.replace(/\D/g, '')}` }] : []),
+        ...Array.from(allEmails).map((email) => ({ email })),
+        ...Array.from(allPhones).map((phone) => ({ phone })),
       ],
     },
     select: { id: true },
@@ -282,8 +312,8 @@ export async function redactCustomer(
         storeId,
         OR: [
           ...idVariants.map((id) => ({ customerId: id })),
-          ...(customerEmail ? [{ email: customerEmail.toLowerCase().trim() }] : []),
-          ...(customerPhone ? [{ phone: customerPhone.replace(/\D/g, '') }] : []),
+          ...Array.from(allEmails).map((email) => ({ email })),
+          ...Array.from(allPhones).map((phone) => ({ phone })),
         ],
       },
     })
@@ -291,7 +321,14 @@ export async function redactCustomer(
 
   // Customer profile + derived insight rows.
   const cust = await prisma.customer.findFirst({
-    where: { storeId, customerId: { in: idVariants } },
+    where: {
+      storeId,
+      OR: [
+        { customerId: { in: idVariants } },
+        ...Array.from(allEmails).map((email) => ({ email })),
+        ...Array.from(allPhones).map((phone) => ({ phone })),
+      ],
+    },
   })
   if (cust) {
     await prisma.customerInsight.deleteMany({ where: { customerId: cust.id } })
@@ -301,8 +338,8 @@ export async function redactCustomer(
 
   // Any bargain sessions matched by email or phone (the caller can provide
   // either; session data includes both in most flows).
-  const emailMatches = [...Array.from(cartEmails), ...(customerEmail ? [customerEmail] : [])]
-  const phoneMatches = [...Array.from(cartPhones), ...(customerPhone ? [customerPhone] : [])]
+  const emailMatches = Array.from(allEmails)
+  const phoneMatches = Array.from(allPhones)
   const sessionIds = new Set<string>()
   const sessionMatch = await prisma.bargainSession.findMany({
     where: {
@@ -324,10 +361,8 @@ export async function redactCustomer(
 
   // Consent/opt-out rows hold raw email/phone for that customer — remove them
   // too; keeping them would retain the PCD customers/redact requires deleting.
-  const optEmails = Array.from(cartEmails)
-  if (customerEmail) optEmails.push(customerEmail)
-  const optPhones = Array.from(cartPhones)
-  if (customerPhone) optPhones.push(customerPhone)
+  const optEmails = Array.from(allEmails)
+  const optPhones = Array.from(allPhones)
   if (optEmails.length > 0 || optPhones.length > 0) {
     const optRes = await prisma.optOut.deleteMany({
       where: {
@@ -344,7 +379,13 @@ export async function redactCustomer(
   // Customer data exports collected for this customer (customers/data_request
   // deliveries) contain their personal data — remove them too.
   const exportCleanup = await prisma.customerDataExport.deleteMany({
-    where: { storeId, shopifyCustomerId: { in: idVariants } },
+    where: {
+      storeId,
+      OR: [
+        { shopifyCustomerId: { in: idVariants } },
+        ...Array.from(allEmails).map((email) => ({ email })),
+      ],
+    },
   })
   affected += exportCleanup.count
 

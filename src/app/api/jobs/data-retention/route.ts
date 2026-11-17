@@ -44,17 +44,78 @@ export async function POST(request: NextRequest) {
     const experienceEventCutoff = new Date(now.getTime() - EXPERIENCE_EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000)
 
     // 1. Anonymize old carts (keep the row for billing/analytics integrity,
-    //    remove all PII so the data can no longer identify a person).
-    const anonymized = await prisma.cart.updateMany({
+    //    remove all PII so the data can no longer identify a person). This
+    //    includes phone/name-only carts (no email), the Shopify customer id,
+    //    the cart/checkout token, and the encrypted recovery URL. The opaque
+    //    `anon_<row id>` cartId keeps the unique key stable without retaining
+    //    a resumable Shopify token.
+    let anonymizedCount = 0
+    try {
+      anonymizedCount = await prisma.$executeRawUnsafe(
+        `UPDATE "Cart"
+            SET "customerEmail" = NULL,
+                "customerPhone" = NULL,
+                "customerName" = NULL,
+                "customerId" = NULL,
+                "items" = '[]'::jsonb,
+                "cartId" = 'anon_' || "id",
+                "recoveryUrlEncrypted" = NULL,
+                "recoveryUrlStatus" = 'EXPIRED_OR_INVALID',
+                "recoveryUrlCheckedAt" = NOW(),
+                "updatedAt" = NOW()
+          WHERE "abandonedAt" < $1
+            AND (
+              "customerEmail" IS NOT NULL OR
+              "customerPhone" IS NOT NULL OR
+              "customerName" IS NOT NULL OR
+              "customerId" IS NOT NULL OR
+              "recoveryUrlEncrypted" IS NOT NULL
+            )`,
+        cartCutoff,
+      )
+    } catch (err: any) {
+      const missingNewColumns =
+        err?.code === 'P2022' ||
+        (err?.code === 'P2010' && /column .* does not exist/i.test(String(err?.message || '')))
+      if (!missingNewColumns) throw err
+      console.warn(
+        '[retention] checkout-recovery columns are missing; anonymizing legacy PII fields only',
+      )
+      const fallback = await prisma.cart.updateMany({
+        where: {
+          abandonedAt: { lt: cartCutoff },
+          OR: [
+            { customerEmail: { not: null } },
+            { customerPhone: { not: null } },
+            { customerName: { not: null } },
+            { customerId: { not: null } },
+          ],
+        },
+        data: {
+          customerEmail: null,
+          customerPhone: null,
+          customerName: null,
+          customerId: null,
+          items: '[]',
+        },
+      })
+      anonymizedCount = fallback.count
+    }
+
+    // Message bodies can contain names, products and offers. Once the cart is
+    // past retention, keep the delivery row for aggregate analytics but remove
+    // the content and the provider id (a WhatsApp/Resend identifier).
+    const redactedMessages = await prisma.message.updateMany({
       where: {
-        abandonedAt: { lt: cartCutoff },
-        customerEmail: { not: null },
+        cart: { abandonedAt: { lt: cartCutoff } },
+        OR: [
+          { content: { not: '[redacted after retention period]' } },
+          { providerId: { not: null } },
+        ],
       },
       data: {
-        customerEmail: null,
-        customerPhone: null,
-        customerName: null,
-        items: '[]',
+        content: '[redacted after retention period]',
+        providerId: null,
       },
     })
 
@@ -109,7 +170,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       message: 'Data retention applied',
       status: 'ok',
-      anonymizedCarts: anonymized.count,
+      anonymizedCarts: anonymizedCount,
+      redactedMessages: redactedMessages.count,
       deletedBargainSessions: bargainSessions.count,
       deletedBargainLearningEvents: learningEventCount,
       deletedBargainLearningOutcomes: learningOutcomes.count,
@@ -119,6 +181,7 @@ export async function POST(request: NextRequest) {
       deletedCustomerDataExports: exports.count,
       policy: {
         cartPIIAnonymizedAfterDays: CART_RETENTION_DAYS,
+        messageContentRedactedAfterDays: CART_RETENTION_DAYS,
         bargainSessionsDeletedAfterDays: BARGAIN_RETENTION_DAYS,
         bargainLearningEventsDeletedAfterDays: LEARNING_EVENT_RETENTION_DAYS,
         bargainLearningOutcomesDeletedAfterDays: LEARNING_OUTCOME_RETENTION_DAYS,

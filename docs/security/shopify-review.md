@@ -28,3 +28,27 @@ negotiation transcript. Billing/shipping contact names and phones may be read
 transiently from an abandoned checkout to fill a missing recovery name/phone; street
 addresses are neither queried nor persisted. App charges use Shopify Billing, not a
 third-party payment gateway.
+
+## Abandoned-checkout recovery URLs (Level 2)
+
+`AbandonedCheckout.abandonedCheckoutUrl` is requested only to let a consenting shopper
+resume the checkout they already started. Shopify requires Level 2 protected customer
+data access for this field from 2026-11-23. The field is requested in an isolated
+GraphQL query, the full URL is never logged or exposed, and when available it is
+stored AES-256-GCM encrypted. If access is not granted, CartGain records the denial,
+keeps core abandoned-checkout discovery and webhook capture running, and routes
+tracked checkout links to the shopper's saved cart with an honest storefront fallback.
+CartGain does not create or mutate checkouts, customers, orders, or products.
+
+## Technical safeguards
+
+Sensitive merchant reads, webhook processing, data-subject exports, deletions, and
+recovery-URL access decisions are written to `DataAccessLog` with redacted metadata.
+Logs never contain raw cart/checkout tokens, emails, phones, or recovery URLs; token
+correlation uses a SHA-256 prefix. Cart PII, items, message bodies, provider ids and
+encrypted recovery URLs are cleared by the 90-day retention job. Data-subject exports
+omit cart/checkout tokens, and customer redaction matches both the Shopify customer id
+and cart-derived email/phone. Production/test separation is enforced at runtime: a
+non-production process pointed at `PRODUCTION_DB_HOSTS` refuses to start, and preview
+deployments resolve to a staging data environment. The reviewer evidence pack is in
+`compliance/shopify-level-2/`.

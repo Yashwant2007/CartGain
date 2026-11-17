@@ -9,6 +9,7 @@ import CaptureCustomerContact from './CaptureCustomerName'
 import { getExperienceConfig } from '@/lib/bargain/experience/config'
 import { getAbandonedBargainContextForCartToken } from '@/lib/bargain/hooks'
 import { fetchShopifyProductDetail } from '@/lib/shopify'
+import { buildStoreCheckoutLink } from '@/lib/recovery/links'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,7 +52,12 @@ export default async function CartRecoveryPage({
     shopifyProductId: item.shopifyProductId || '',
   }))
   const storeId = cart.store.id
-  const checkoutUrl = `https://${cart.store.domain}/cart/${cart.cartId}`
+  const checkoutUrl = buildStoreCheckoutLink({
+    domain: cart.store.domain,
+    shopifyCartId: cart.cartId,
+    recoveryUrlStatus: cart.recoveryUrlStatus,
+  })
+  const canResumeCheckout = checkoutUrl.includes('/cart/')
 
   // Published storefront experience: when a merchant has published an
   // invitation (design + CTA + avatar), show the engaging StorefrontInvitation
@@ -187,11 +193,13 @@ export default async function CartRecoveryPage({
             href={checkoutUrl}
             className="block w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-center font-semibold rounded-xl hover:shadow-lg hover:shadow-cyan-500/50 transition-all active:scale-95"
           >
-            Complete Your Purchase
+            {canResumeCheckout ? 'Complete Your Purchase' : 'Continue Shopping'}
           </a>
 
           <p className="text-center text-xs text-blue-400/60 mt-4">
-            Secured checkout via {cart.store.name}
+            {canResumeCheckout
+              ? `Secured checkout via ${cart.store.name}`
+              : `Return to ${cart.store.name} to finish your order`}
           </p>
         </div>
       </main>

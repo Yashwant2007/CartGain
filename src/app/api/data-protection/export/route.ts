@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { logDataAccess } from '@/lib/data-protection'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +31,16 @@ export async function GET(request: NextRequest) {
     if (exportRow.store.userId !== session.user.id) {
       return NextResponse.json({ message: 'Forbidden' }, { status: 403 })
     }
+
+    await logDataAccess({
+      actorType: 'merchant',
+      actorId: session.user.id,
+      action: 'export',
+      resourceType: 'customer_data_export',
+      resourceId: exportRow.id,
+      purpose: 'merchant downloaded shopify customer data export',
+      metadata: { storeId: exportRow.storeId },
+    })
 
     // Deliver the payload as a file attachment so it downloads, not logs.
     const filename = `cartgain-customer-data-export-${exportRow.id}.json`
