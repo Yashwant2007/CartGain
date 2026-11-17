@@ -17,6 +17,12 @@
 
 import type { ShopperIntent, ShopperObjection } from './intent'
 import type { ExpressionState } from './experience/expressions'
+import {
+  SESSION_STATUS,
+  isSessionStatus,
+  isTerminal as isTerminalSessionStatus,
+  type SessionStatus,
+} from './negotiation-state'
 
 export const CONVERSATION_STATES = [
   'GREETING',
@@ -53,6 +59,29 @@ const TERMINAL: ReadonlySet<ConversationState> = new Set<ConversationState>([
 
 export function isTerminalConversationState(state: ConversationState): boolean {
   return TERMINAL.has(state)
+}
+
+const NEGOTIABLE_CONVERSATION_STATES: ReadonlySet<ConversationState> = new Set<ConversationState>([
+  'GREETING',
+  'PRODUCT_DISCOVERY',
+  'INTENT_DETECTION',
+  'OBJECTION_HANDLING',
+  'NEGOTIATION',
+  'COUNTER_OFFER',
+  'ALTERNATIVE_RECOMMENDATION',
+  'CUSTOMER_HESITATION',
+])
+
+export function isNegotiableConversationState(state: ConversationState): boolean {
+  return NEGOTIABLE_CONVERSATION_STATES.has(state)
+}
+
+const TERMINAL_SESSION_CONVERSATION: Partial<Record<SessionStatus, ConversationState>> = {
+  [SESSION_STATUS.ACCEPTED]: 'DEAL_ACCEPTED',
+  [SESSION_STATUS.REJECTED]: 'REJECTED',
+  [SESSION_STATUS.EXPIRED]: 'EXPIRED',
+  [SESSION_STATUS.ABANDONED]: 'CANCELLED',
+  [SESSION_STATUS.PURCHASED]: 'COMPLETED',
 }
 
 // Legal forward transitions. Broad on purpose (a shopkeeper can move between
@@ -104,15 +133,14 @@ export interface ConversationStateInput {
  * inputs always produce the same state, and the language model never decides it.
  */
 export function deriveConversationState(input: ConversationStateInput): ConversationState {
-  const status = input.sessionStatus ?? 'active'
+  const status = isSessionStatus(input.sessionStatus) ? input.sessionStatus : SESSION_STATUS.ACTIVE
+  const terminalConversation = isTerminalSessionStatus(status) ? TERMINAL_SESSION_CONVERSATION[status] : undefined
 
   // Terminal session facts win over everything else.
-  if (status === 'purchased' || input.purchaseVerified) return 'COMPLETED'
-  if (status === 'rejected') return 'REJECTED'
-  if (status === 'expired') return 'EXPIRED'
-  if (status === 'abandoned') return 'CANCELLED'
+  if (status === SESSION_STATUS.PURCHASED || input.purchaseVerified) return 'COMPLETED'
+  if (terminalConversation && status !== SESSION_STATUS.ACCEPTED) return terminalConversation
   if (input.needHumanSupport) return 'HUMAN_SUPPORT_REQUIRED'
-  if (status === 'accepted' || input.dealAccepted) {
+  if (status === SESSION_STATUS.ACCEPTED || input.dealAccepted) {
     return input.checkoutStarted ? 'SECURE_CHECKOUT' : 'DEAL_ACCEPTED'
   }
 

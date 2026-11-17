@@ -22,13 +22,27 @@ import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-mo
 import { enginePersonaFor } from '@/lib/bargain/experience/personality'
 import { publishedPersonality } from '@/lib/bargain/experience/config'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
-import { searchRecommendations, recommendationReason, type RecommendationCard, type RecommendationReason, type RecommendationContext } from '@/lib/bargain/recommendations'
+import {
+  searchRecommendations,
+  recommendationReason,
+  decideRecommendation,
+  allowsRecommendations,
+  readRecommendationHistory,
+  recommendationShownMetadata,
+  withRecommendationShown,
+  type RecommendationCard,
+  type RecommendationReason,
+  type RecommendationContext,
+  type RecommendationDecision,
+} from '@/lib/bargain/recommendations'
 import { fetchShopifyProducts } from '@/lib/shopify'
 import { toNumericId } from '@/lib/shopify-line-items'
 import { issueRetentionDiscount, buildBargainClaimUrl } from '@/lib/bargain/purchase'
 import { track } from '@/lib/analytics/track'
 import { resolveSessionLearning, recordLearningEvent, loadLearningConfig } from '@/lib/bargain/learning/service'
 import { isFeatureEnabled } from '@/lib/feature-flags'
+import { bargainRequestMetrics } from '@/lib/bargain/request-metrics'
+import type { BargainDecision, BargainOfferSuccess } from '@/lib/bargain/api-types'
 
 export const dynamic = 'force-dynamic'
 
@@ -154,8 +168,52 @@ async function resolveBundleItems(opts: {
 
   return items.length >= 2 ? items : null
 }
+
+function duplicateTurnMatch(messages: any[], turnId: string): { customer: any; ai: any | null } | null {
+  let customerIndex = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]
+    if (message?.role === 'customer' && (message.metadata as any)?.turnId === turnId) {
+      customerIndex = i
+      break
+    }
+  }
+  if (customerIndex < 0) return null
+  const customer = messages[customerIndex]
+  const sameTurnAi = [...messages].reverse()
+    .find((message: any) => message?.role === 'ai' && (message.metadata as any)?.turnId === turnId)
+  const nextMessage = messages[customerIndex + 1]
+  const ai = sameTurnAi ?? (nextMessage?.role === 'ai' ? nextMessage : null)
+  return { customer, ai }
+}
+
+function duplicateTurnPayload(session: any, ai: any | null): BargainOfferSuccess {
+  const meta = (ai?.metadata ?? {}) as Record<string, any>
+  const decision: BargainDecision =
+    meta.decision === 'idle' || meta.decision === 'chat' || meta.decision === 'counter' || meta.decision === 'accept' || meta.decision === 'reject'
+      ? meta.decision
+      : 'chat'
+  const status: string = session.status
+  return {
+    reply: typeof ai?.content === 'string' ? ai.content : '',
+    decision,
+    counterOffer: ai?.offeredPrice != null ? Number(ai.offeredPrice) : session.currentOffer ?? null,
+    sessionStatus: status,
+    sessionId: session.id,
+    finalPrice: session.finalPrice ?? null,
+    attemptsUsed: session.attemptsUsed,
+    duplicateTurn: true,
+    ...(status !== 'active' ? { terminal: true } : {}),
+    ...(meta.tactic === 'final_offer' || meta.reason === 'budget_spent_but_acceptable' ? { floorReached: true } : {}),
+    discountCode: session.discountCode ?? null,
+    purchaseUrl: session.purchaseUrl ?? null,
+    claimUrl: session.claimToken ? buildBargainClaimUrl(session.claimToken) : null,
+  }
+}
+
 // POST /api/bargain/offer — customer sends a message, AI responds
 export async function POST(request: NextRequest) {
+  const endTotal = bargainRequestMetrics.startTimer('offer_total')
   try {
     const rate = await checkSimpleRateLimit(`bargain_offer_${clientIp(request.headers)}`)
     if (!rate.allowed) {
@@ -167,9 +225,11 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const data = validateOrThrow(bargainOfferSchema, body)
+    const turnMetadata = data.turnId ? { turnId: data.turnId } : {}
     const customerOffer = extractPrice(data.message)
     const isWalkout = detectWalkout(data.message)
 
+    const endDbLoad = bargainRequestMetrics.startTimer('offer_db_load')
     const bargainSession = await prisma.bargainSession.findUnique({
       where: { id: data.sessionId },
       include: {
@@ -177,10 +237,29 @@ export async function POST(request: NextRequest) {
         store: true,
       },
     })
+    endDbLoad()
 
     if (!bargainSession) {
       return NextResponse.json({ message: 'Bargain session not found' }, { status: 404 })
     }
+
+    if (data.turnId) {
+      const matchedTurn = duplicateTurnMatch(bargainSession.messages, data.turnId)
+      if (matchedTurn) {
+        const duplicateOwnership = assertSessionOwnership(bargainSession, {
+          customerFingerprint: data.customerFingerprint,
+          customerEmail: data.customerEmail,
+          cartToken: data.cartToken,
+          tokenOk: verifySessionToken(bargainSession.id, data.sessionToken),
+        })
+        if (!duplicateOwnership.ok) {
+          return NextResponse.json({ message: duplicateOwnership.reason }, { status: 403 })
+        }
+        return NextResponse.json(duplicateTurnPayload(bargainSession, matchedTurn.ai), { status: 200 })
+      }
+    }
+
+    const recoHistory = readRecommendationHistory(bargainSession.messages)
     if (bargainSession.status !== 'active') {
       const termLang = detectedLang(bargainSession.language, data.message)
       const terminalReplies: Record<string, string> = {
@@ -302,6 +381,7 @@ export async function POST(request: NextRequest) {
     // only pays for it when the AI actually speaks. Never returns null: when
     // Shopify is unreachable it degrades to a fetchFailed context that forbids
     // the AI from inventing product facts.
+    const endProduct = bargainRequestMetrics.startTimer('offer_product_context')
     const productCtx = await buildProductContext({
       store: bargainSession.store,
       storeId: bargainSession.storeId,
@@ -311,6 +391,7 @@ export async function POST(request: NextRequest) {
       baseUrl: `https://${bargainSession.store.domain}`,
       fallbackTitle: productTitle ?? null,
     })
+    endProduct()
 
     // Deterministic shopper-intent classification of the current message. Cheap,
     // predictable, and merchant-controlled — the LLM is told about it, it never
@@ -429,13 +510,13 @@ export async function POST(request: NextRequest) {
             data: {
               sessionId: bargainSession.id, role: 'customer', content: data.message,
               offeredPrice: customerOffer ?? null,
-              metadata: { bundleRequested: true, couponMentioned: couponMentioned || undefined } as any,
+              metadata: { ...turnMetadata, bundleRequested: true, couponMentioned: couponMentioned || undefined } as any,
             },
           }),
           prisma.bargainMessage.create({
             data: {
               sessionId: bargainSession.id, role: 'ai', content: reply,
-              metadata: { decision: 'chat', tactic: 'bundle_offer', policy: 'bundle_negotiation', bundleRequested: true } as any,
+              metadata: { ...turnMetadata, decision: 'chat', tactic: 'bundle_offer', policy: 'bundle_negotiation', bundleRequested: true } as any,
             },
           }),
         ])
@@ -460,6 +541,7 @@ export async function POST(request: NextRequest) {
       let bundleReco: RecommendationCard[] | null = null
       if (recoEnabledForMessages(config) && intentAnalysis.budget != null) {
         try {
+          const endBundleReco = bargainRequestMetrics.startTimer('bundle_recommendations')
           const outcome = await searchRecommendations(
             {
               store: bargainSession.store,
@@ -470,7 +552,13 @@ export async function POST(request: NextRequest) {
             },
             fetchShopifyProducts,
             bargainSession.originalPrice,
+            {
+              history: recoHistory,
+              strictBudget: intentAnalysis.budget != null,
+              reason: 'budget',
+            },
           )
+          endBundleReco()
           bundleReco = outcome.cards.length > 0 ? outcome.cards : null
         } catch (e) {
           bundleReco = null
@@ -485,13 +573,14 @@ export async function POST(request: NextRequest) {
           data: {
             sessionId: bargainSession.id, role: 'customer', content: data.message,
             offeredPrice: customerOffer ?? null,
-            metadata: { bundleRequested: true, couponMentioned: couponMentioned || undefined } as any,
+            metadata: { ...turnMetadata, bundleRequested: true, couponMentioned: couponMentioned || undefined } as any,
           },
         }),
         prisma.bargainMessage.create({
           data: {
             sessionId: bargainSession.id, role: 'ai', content: reply,
             metadata: {
+              ...turnMetadata,
               decision: 'chat', tactic: 'bundle_redirect',
               policy: 'multi_product_not_supported', bundleRequested: true,
             } as any,
@@ -569,12 +658,15 @@ export async function POST(request: NextRequest) {
           `Done! ${currencySymbol}${finalPrice.toFixed(2)} works for me — that's my last round, so let's lock it in. Tap "Accept" and your discount code is generated.`
         await prisma.$transaction([
           prisma.bargainMessage.create({
-            data: { sessionId: bargainSession.id, role: 'customer', content: data.message, offeredPrice: customerOffer },
+            data: {
+              sessionId: bargainSession.id, role: 'customer', content: data.message, offeredPrice: customerOffer,
+              metadata: { ...turnMetadata } as any,
+            },
           }),
           prisma.bargainMessage.create({
             data: {
               sessionId: bargainSession.id, role: 'ai', content: acceptReply, offeredPrice: finalPrice,
-              metadata: { decision: 'accept', tactic: 'accept_final_round', reason: 'budget_spent_but_acceptable' } as any,
+              metadata: { ...turnMetadata, decision: 'accept', tactic: 'accept_final_round', reason: 'budget_spent_but_acceptable' } as any,
             },
           }),
           prisma.bargainSession.update({
@@ -600,12 +692,15 @@ export async function POST(request: NextRequest) {
       const rejectReply = uiText(lang, 'attempts_exhausted')
       await prisma.$transaction([
         prisma.bargainMessage.create({
-          data: { sessionId: bargainSession.id, role: 'customer', content: data.message, offeredPrice: customerOffer ?? null },
+          data: {
+            sessionId: bargainSession.id, role: 'customer', content: data.message, offeredPrice: customerOffer ?? null,
+            metadata: { ...turnMetadata } as any,
+          },
         }),
         prisma.bargainMessage.create({
           data: {
             sessionId: bargainSession.id, role: 'ai', content: rejectReply,
-            metadata: { tactic: 'reject_graceful', reason: 'attempts_exhausted' } as any,
+            metadata: { ...turnMetadata, tactic: 'reject_graceful', reason: 'attempts_exhausted' } as any,
           },
         }),
         prisma.bargainSession.update({
@@ -677,22 +772,27 @@ export async function POST(request: NextRequest) {
       message: string,
       offer: number | undefined,
     ) => {
-      if (!aiPaused) {
-        return negotiateStep(negotiationCtx, negotiationHistory, message, offer, bargainSession.id)
-      }
-      if (offer != null) {
-        const ruled = ruleBasedDecision(offer, negotiationCtx)
-        return {
-          ...ruled,
-          metadata: { ...(ruled.metadata ?? {}), aiSource: 'reflex', aiFallbackReason: 'merchant_paused_ai' },
+      const endAi = bargainRequestMetrics.startTimer(aiPaused ? 'reflex_turn' : 'ai_turn')
+      try {
+        if (!aiPaused) {
+          return await negotiateStep(negotiationCtx, negotiationHistory, message, offer, bargainSession.id)
         }
-      }
-      return {
-        reply: chatFallback(message, negotiationCtx, negotiationHistory.length),
-        decision: 'chat' as const,
-        tactic: 'conversational' as const,
-        sentiment: 'neutral' as const,
-        metadata: { aiSource: 'reflex', aiFallbackReason: 'merchant_paused_ai' },
+        if (offer != null) {
+          const ruled = ruleBasedDecision(offer, negotiationCtx)
+          return {
+            ...ruled,
+            metadata: { ...(ruled.metadata ?? {}), aiSource: 'reflex', aiFallbackReason: 'merchant_paused_ai' },
+          }
+        }
+        return {
+          reply: chatFallback(message, negotiationCtx, negotiationHistory.length),
+          decision: 'chat' as const,
+          tactic: 'conversational' as const,
+          sentiment: 'neutral' as const,
+          metadata: { aiSource: 'reflex', aiFallbackReason: 'merchant_paused_ai' },
+        }
+      } finally {
+        endAi()
       }
     }
 
@@ -816,12 +916,15 @@ export async function POST(request: NextRequest) {
         const farewell = farewellReplies[ctx.persona] ?? farewellReplies.friendly_shopkeeper
         await prisma.$transaction([
           prisma.bargainMessage.create({
-            data: { sessionId: bargainSession.id, role: 'customer', content: data.message, offeredPrice: customerOffer ?? null },
+            data: {
+              sessionId: bargainSession.id, role: 'customer', content: data.message, offeredPrice: customerOffer ?? null,
+              metadata: { ...turnMetadata } as any,
+            },
           }),
           prisma.bargainMessage.create({
             data: {
               sessionId: bargainSession.id, role: 'ai', content: farewell,
-              metadata: { tactic: 'walkout_final', reason: hadRetention ? 'second_walkout' : 'no_attempts_left' } as any,
+              metadata: { ...turnMetadata, tactic: 'walkout_final', reason: hadRetention ? 'second_walkout' : 'no_attempts_left' } as any,
             },
           }),
           prisma.bargainSession.update({
@@ -861,14 +964,14 @@ export async function POST(request: NextRequest) {
           data: {
             sessionId: bargainSession.id, role: 'customer', content: data.message,
             offeredPrice: customerOffer ?? null,
-            metadata: { bulkQuantity } as any,
+            metadata: { ...turnMetadata, bulkQuantity } as any,
           },
         }),
         prisma.bargainMessage.create({
           data: {
             sessionId: bargainSession.id, role: 'ai', content: retentionReply,
             offeredPrice: retentionPrice,
-            metadata: { decision: 'counter', tactic: 'walkout_retention', sentiment: 'urgent' } as any,
+            metadata: { ...turnMetadata, decision: 'counter', tactic: 'walkout_retention', sentiment: 'urgent' } as any,
           },
         }),
         prisma.bargainSession.update({
@@ -1047,6 +1150,8 @@ export async function POST(request: NextRequest) {
     // financial secret (floor / margin / max discount) ever reaches the customer.
     let recommendations: RecommendationCard[] | null = null
     let recoReason: RecommendationReason | null = null
+    let recoDecision: RecommendationDecision = 'DO_NOT_RECOMMEND'
+    let recommendationHistory = recoHistory
     const recoEnabled = recoEnabledForMessages(config)
 
     if (intentAnalysis.budget != null) {
@@ -1070,14 +1175,43 @@ export async function POST(request: NextRequest) {
 
     if (recoEnabled) {
       const budget = intentAnalysis.budget ?? null
-      recoReason = recommendationReason(
-        intentAnalysis.intent,
-        (result.metadata as any)?.recommendationsRequested === true,
+      const eligibility = decideRecommendation({
+        intent: intentAnalysis,
+        message: data.message,
+        sessionStatus,
+        engineDecision: result.decision,
+        walkout: isWalkout,
+        acceptingDeal: result.decision === 'accept' || sessionStatus === 'accepted',
+        purchased: false,
         budget,
-        customerOffer,
         minPrice,
-      )
+      })
+      recoDecision = eligibility.decision
+      if (allowsRecommendations(recoDecision)) {
+        const aiRequested = (result.metadata as any)?.recommendationsRequested === true
+        recoReason = eligibility.decision === 'SHOW_COMPLEMENTARY_PRODUCT'
+          ? 'complementary'
+          : recommendationReason(intentAnalysis.intent, aiRequested, budget, customerOffer, minPrice)
+        if (!recoReason && eligibility.decision === 'RECOMMEND_ALTERNATIVES') {
+          recoReason = budget != null ? 'budget' : 'requested'
+        }
+      }
       if (recoReason) {
+        const similarProductRaw = !productCtx || productCtx.fetchFailed ? null : {
+          id: bargainSession.shopifyProductId,
+          title: productCtx.title,
+          product_type: productCtx.productType,
+          vendor: productCtx.vendor,
+          tags: (productCtx.tags ?? []).join(','),
+          status: 'active',
+          variants: (productCtx.variants ?? []).map((v) => ({
+            id: v.variantId,
+            title: v.title,
+            price: v.price,
+            available: v.available,
+          })),
+        }
+        const endRecommendations = bargainRequestMetrics.startTimer('recommendations')
         const outcome = await searchRecommendations(
           {
             store: bargainSession.store,
@@ -1088,14 +1222,29 @@ export async function POST(request: NextRequest) {
           },
           fetchShopifyProducts,
           bargainSession.originalPrice,
+          {
+            history: recoHistory,
+            strictBudget: budget != null,
+            objection: intentAnalysis.objection,
+            similarProductRaw,
+            reason: recoReason,
+            limit: 2,
+          },
         )
+        endRecommendations()
         recommendations = outcome.cards.length > 0 ? outcome.cards : null
         if (recommendations) {
+          recommendationHistory = withRecommendationShown(recoHistory, {
+            productIds: recommendations.map((card) => card.productId),
+            reason: recoReason,
+            decision: recoDecision,
+          })
           await track({
             name: 'cartgain_recommendation_requested',
             storeId: bargainSession.storeId,
             properties: {
               reason: recoReason,
+              decision: recoDecision,
               budget: budget ?? undefined,
               need: intentAnalysis.need ?? undefined,
             },
@@ -1106,6 +1255,7 @@ export async function POST(request: NextRequest) {
             properties: {
               count: recommendations.length,
               reason: recoReason,
+              decision: recoDecision,
               truncated: outcome.truncated,
             },
           })
@@ -1113,12 +1263,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const recommendationMetadata = recommendations && recoReason
+      ? recommendationShownMetadata({
+          productIds: recommendations.map((card) => card.productId),
+          reason: recoReason,
+          decision: recoDecision,
+        })
+      : {}
+
     const [customerMsg, aiMsg, updatedSession] = await prisma.$transaction([
       prisma.bargainMessage.create({
         data: {
           sessionId: bargainSession.id, role: 'customer', content: data.message,
           offeredPrice: customerOffer ?? null,
           metadata: {
+            ...turnMetadata,
             ...(bulkQuantity ? { bulkQuantity } : {}),
             ...(couponMentioned ? { couponMentioned: true } : {}),
             ...(paymentConfig.enabled && paymentIntent !== 'unknown' ? { paymentIntent } : {}),
@@ -1134,7 +1293,7 @@ export async function POST(request: NextRequest) {
           // AI ever offering it. Only real counters (decision counter/accept)
           // carry an offeredPrice.
           offeredPrice: safeCounter,
-          metadata: { decision: result.decision, tactic: result.tactic, sentiment: result.sentiment, ...(result.metadata ?? {}) } as any,
+          metadata: { ...turnMetadata, decision: result.decision, tactic: result.tactic, sentiment: result.sentiment, ...(result.metadata ?? {}), ...recommendationMetadata } as any,
         },
       }),
       prisma.bargainSession.update({
@@ -1169,7 +1328,7 @@ export async function POST(request: NextRequest) {
         budget: intentAnalysis.budget,
         recommendationEligible: learningResolved.selection.features.recommendationEligible,
         value: safeCounter,
-        dedupeKey: `turn:${bargainSession.id}:${bargainSession.messages.length}:${result.decision}`,
+        dedupeKey: `turn:${bargainSession.id}:${bargainSession.messages.filter((m: any) => m.role === 'customer' || m.role === 'ai').length}:${result.decision}`,
         properties: {
           decision: result.decision,
           tactic: result.tactic ?? null,
@@ -1231,9 +1390,16 @@ export async function POST(request: NextRequest) {
         ? { payment: { intent: paymentIntent, prepaidSaving: prepaidSaving(paymentConfig) } }
         : {}),
       ...(isAbuseNoConsume ? { abuseDetected: true, abuseCategory: (result.metadata as any)?.category } : {}),
+      ...(recoEnabled
+        ? {
+            recommendationDecision: recoDecision,
+            recommendationHistory,
+          }
+        : {}),
       ...(recommendations && recoReason
         ? {
             recommendations,
+            recommendationReason: recoReason,
             recommendationContext: {
               budget: intentAnalysis.budget ?? null,
               need: intentAnalysis.need ?? null,
@@ -1247,5 +1413,7 @@ export async function POST(request: NextRequest) {
     if (validationResponse) return validationResponse
     console.error('[BARGAIN_OFFER]', error)
     return NextResponse.json({ message: 'Something went wrong' }, { status: 500 })
+  } finally {
+    endTotal()
   }
 }

@@ -22,6 +22,12 @@
     },
     "src/app/api/bargain/sessions/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/bargain/offer/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/bargain/demo/route.ts": {
+      "maxDuration": 60
     }
   },
   "regions": [

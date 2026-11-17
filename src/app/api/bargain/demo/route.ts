@@ -33,11 +33,17 @@ import { fetchShopifyProducts } from '@/lib/shopify'
 import {
   searchRecommendations,
   recommendationReason,
+  decideRecommendation,
+  allowsRecommendations,
+  readRecommendationHistory,
+  withRecommendationShown,
   type RecommendationCard,
   type RecommendationContext,
+  type RecommendationDecision,
 } from '@/lib/bargain/recommendations'
 import type { BargainDemoGoal } from '@/lib/bargain/api-types'
 import { previewDemoLearning, learningSelectionForClient, recordLearningEvent, loadLearningConfig } from '@/lib/bargain/learning/service'
+import { bargainRequestMetrics } from '@/lib/bargain/request-metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -148,6 +154,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const endTotal = bargainRequestMetrics.startTimer('demo_total')
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
@@ -258,6 +265,14 @@ export async function POST(request: NextRequest) {
           offeredPrice: typeof m?.offeredPrice === 'number' ? clamp(m.offeredPrice, 0, 1_000_000) : undefined,
         })).filter((m: { content: string }) => m.content.length > 0)
       : []
+    const recoHistory = readRecommendationHistory(
+      Array.isArray(body.history)
+        ? body.history.slice(-12).map((m: any) => ({
+            metadata: m?.metadata,
+            createdAt: m?.createdAt,
+          }))
+        : [],
+    )
 
     // Offer-direction read over the replayed history so the demo negotiates on
     // the same serious/not-serious signal as the live storefront.
@@ -421,13 +436,22 @@ export async function POST(request: NextRequest) {
     const acceptedPrice = typeof body.finalPrice === 'number' ? clamp(body.finalPrice, 1, 1_000_000) : undefined
     const ctx2 = dealAccepted ? { ...ctx, dealAccepted, acceptedPrice } : ctx
 
+    const turnStartedAt = Date.now()
+    let turnSource: string | undefined
     let result: NegotiationResult
     try {
       result = await negotiateStep(ctx2, history, message, offer ?? undefined, `demo_${session.user.id}`)
+      turnSource = typeof (result as any)?.metadata?.aiSource === 'string' ? (result as any).metadata.aiSource : undefined
     } catch {
       result = offer != null
         ? ruleBasedDecision(offer, ctx2)
         : { reply: chatFallback(message, ctx2, history.length), decision: 'chat', tactic: 'demo_fallback', sentiment: 'neutral' }
+      turnSource = typeof (result as any)?.metadata?.aiSource === 'string' ? (result as any).metadata.aiSource : undefined
+    } finally {
+      bargainRequestMetrics.record(
+        turnSource === 'reflex' || turnSource === 'emergency' ? 'demo_reflex_turn' : 'demo_ai_turn',
+        Date.now() - turnStartedAt,
+      )
     }
 
     const demoMeta = (result.metadata ?? {}) as Record<string, any>
@@ -486,39 +510,87 @@ export async function POST(request: NextRequest) {
     // recommendations are a bonus, never a blocker.
     let recommendations: RecommendationCard[] | null = null
     let recommendationContext: RecommendationContext | null = null
+    let recoDecision: RecommendationDecision = 'DO_NOT_RECOMMEND'
+    let recommendationHistory = recoHistory
     const recoEnabled = merchant.config?.recommendationsEnabled === true
       && merchant.config?.alternativeRecommendationsEnabled === true
     if (recoEnabled && merchant.store) {
-      const reason = recommendationReason(
-        intentAnalysis.intent,
-        (result.metadata as any)?.recommendationsRequested === true,
-        intentAnalysis.budget ?? null,
-        offer ?? null,
+      const budget = intentAnalysis.budget ?? null
+      const eligibility = decideRecommendation({
+        intent: intentAnalysis,
+        message: message,
+        sessionStatus: dealAccepted ? 'accepted' : undefined,
+        engineDecision: result.decision,
+        walkout: body.walkoutTriggered === true || intentAnalysis.intent === 'WALKOUT',
+        acceptingDeal: dealAccepted || result.decision === 'accept',
+        purchased: false,
+        budget,
         minPrice,
-      )
-      if (reason) {
+      })
+      recoDecision = eligibility.decision
+      if (allowsRecommendations(recoDecision)) {
+        const aiRequested = (result.metadata as any)?.recommendationsRequested === true
+        recommendationContext = eligibility.decision === 'SHOW_COMPLEMENTARY_PRODUCT'
+          ? { budget, need: intentAnalysis.need ?? null, reason: 'complementary' }
+          : (() => {
+              const reason = recommendationReason(intentAnalysis.intent, aiRequested, budget, offer ?? null, minPrice)
+                ?? (eligibility.decision === 'RECOMMEND_ALTERNATIVES' ? (budget != null ? 'budget' : 'requested') : null)
+              return reason ? { budget, need: intentAnalysis.need ?? null, reason } : null
+            })()
+      }
+      if (recommendationContext) {
         try {
+          const similarProductRaw = ctx.product?.fetchFailed ? null : {
+            id: shopifyProductId ?? ctx.product?.productId ?? '',
+            title: ctx.product?.title ?? productTitle ?? '',
+            product_type: ctx.product?.productType ?? null,
+            vendor: ctx.product?.vendor ?? null,
+            tags: (ctx.product?.tags ?? []).join(','),
+            status: 'active',
+            variants: (ctx.product?.variants ?? []).map((v) => ({
+              id: v.variantId,
+              title: v.title,
+              price: v.price,
+              available: v.available,
+            })),
+          }
           const out = await searchRecommendations(
             {
               store: merchant.store,
               shopifyProductId: shopifyProductId ?? '',
               currency: merchant.store.currency,
-              budget: intentAnalysis.budget ?? null,
+              budget,
               need: intentAnalysis.need ?? null,
             },
             fetchShopifyProducts,
             originalPrice,
+            {
+              history: recoHistory,
+              strictBudget: budget != null,
+              objection: intentAnalysis.objection,
+              similarProductRaw,
+              reason: recommendationContext.reason,
+              limit: 2,
+            },
           )
           if (out.cards.length > 0) {
             recommendations = out.cards
+            recommendationHistory = withRecommendationShown(recoHistory, {
+              productIds: recommendations.map((card) => card.productId),
+              reason: recommendationContext.reason,
+              decision: recoDecision,
+            })
             recommendationContext = {
-              budget: intentAnalysis.budget ?? null,
+              budget,
               need: intentAnalysis.need ?? null,
-              reason,
+              reason: recommendationContext.reason,
             }
+          } else {
+            recommendationContext = null
           }
         } catch (err: any) {
           console.warn('[BARGAIN_DEMO] recommendation fetch failed', err?.message ?? err)
+          recommendationContext = null
         }
       }
     }
@@ -556,12 +628,24 @@ export async function POST(request: NextRequest) {
       abuse: (result.metadata as any)?.abuse === true,
       goal: demoGoal,
       ...(learningResolved ? { learning: learningSelectionForClient(learningResolved.selection), learningSessionId } : {}),
+      ...(recoEnabled
+        ? {
+            recommendationDecision: recoDecision,
+            recommendationHistory,
+          }
+        : {}),
       ...(recommendations && recommendationContext
-        ? { recommendations, recommendationContext }
+        ? {
+            recommendations,
+            recommendationReason: recommendationContext.reason,
+            recommendationContext,
+          }
         : {}),
     })
   } catch (err: any) {
     console.error('[BARGAIN_DEMO]', err?.message ?? err)
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
+  } finally {
+    endTotal()
   }
 }

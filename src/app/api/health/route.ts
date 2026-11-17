@@ -12,6 +12,7 @@ import {
   resolveWhatsAppVerifyToken,
 } from '@/lib/whatsapp/config'
 import { getShopifyApiKey } from '@/lib/shopify-app-bridge'
+import { bargainRequestMetrics, type StageLatency } from '@/lib/bargain/request-metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,6 +56,7 @@ interface HealthStatus {
       appBridgeReady: boolean
     }
     version: string
+    performance: { stages: StageLatency[] }
   }
 }
 
@@ -237,6 +239,7 @@ export async function GET() {
         appBridgeReady: Boolean(shopifyApiKey),
       },
       version: '1.0.0',
+      performance: { stages: bargainRequestMetrics.snapshot() },
     },
   }
 

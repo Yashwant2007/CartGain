@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainRecommendEventSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
+import { recommendationEventMetadata, type RecommendationFeedbackAction } from '@/lib/bargain/recommendations'
 import { track } from '@/lib/analytics/track'
 
 export const dynamic = 'force-dynamic'
@@ -9,6 +10,16 @@ export const dynamic = 'force-dynamic'
 // POST /api/bargain/recommend/event — shopper interacted with a recommendation
 // card (viewed / added to cart). Validates session ownership, then records the
 // analytics event. Never returns recommendation data — this is write-only.
+
+const EVENT_NAMES: Record<RecommendationFeedbackAction, string> = {
+  shown: 'cartgain_recommendation_shown',
+  viewed: 'cartgain_recommendation_viewed',
+  clicked: 'cartgain_recommendation_clicked',
+  added: 'cartgain_recommended_product_added',
+  dismissed: 'cartgain_recommendation_dismissed',
+  rejected: 'cartgain_recommendation_rejected',
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -32,8 +43,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: ownership.reason }, { status: 403 })
     }
 
+    await prisma.bargainMessage.create({
+      data: {
+        sessionId: bargainSession.id,
+        role: 'system',
+        content: 'recommendation_feedback',
+        metadata: recommendationEventMetadata({
+          action: data.action as RecommendationFeedbackAction,
+          productId: data.productId,
+        }) as any,
+      },
+    })
+
     await track({
-      name: data.action === 'added' ? 'cartgain_recommended_product_added' : 'cartgain_recommendation_clicked',
+      name: EVENT_NAMES[data.action as RecommendationFeedbackAction],
       storeId: bargainSession.storeId,
       properties: {
         productId: data.productId,

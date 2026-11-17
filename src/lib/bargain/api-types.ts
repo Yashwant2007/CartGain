@@ -9,6 +9,14 @@
  */
 
 import type { ConversationState } from './conversation-state'
+import type {
+  RecommendationCard,
+  RecommendationContext,
+  RecommendationDecision,
+  RecommendationHistory,
+} from './recommendations'
+
+export type { RecommendationContext, RecommendationDecision, RecommendationHistory } from './recommendations'
 
 // ── postMessage protocol (theme ⇄ iframe) ────────────────────────────────
 export type CgParentMessage =
@@ -140,6 +148,7 @@ export type BargainStartSuccess = {
 export type BargainOfferBody = {
   sessionId: string
   message: string
+  turnId?: string | null
   customerFingerprint?: string | null
   cartToken?: string | null
   customerEmail?: string | null
@@ -187,6 +196,9 @@ export type BargainOfferSuccess = {
   } | null
   recommendations?: BargainRecommendation[]
   recommendationReason?: string
+  recommendationContext?: RecommendationContext | null
+  recommendationDecision?: RecommendationDecision
+  recommendationHistory?: RecommendationHistory
   /** Deterministic conversational state for this turn (Phase 9). */
   conversationState?: ConversationState
   abuseDetected?: boolean
@@ -196,6 +208,7 @@ export type BargainOfferSuccess = {
   discountCode?: string | null
   purchaseUrl?: string | null
   claimUrl?: string | null
+  duplicateTurn?: boolean
 }
 
 /** Terminal / non-OK offer responses the widget must handle gracefully. */
@@ -228,25 +241,6 @@ export type BargainAcceptSuccess = {
 }
 
 // ── Recommendations (server-built, sanitized) ────────────────────────────
-export type BargainRecommendation = {
-  productId: string
-  variantId: string
-  title: string
-  price: number
-  compareAtPrice?: number | null
-  currency: string
-  imageUrl: string | null
-  productUrl: string | null
-  available: boolean
-  onSale: boolean
-  budgetFit: 'under' | 'over' | 'unknown'
-  tags: string[]
-  /** Short, honest "why this suits you" rationale (verified facts only). */
-  reason: string
-}
+export type BargainRecommendation = RecommendationCard
 
-export type BargainRecommendationContext = {
-  budget: number | null
-  need: string | null
-  reason: 'requested' | 'budget' | 'lowball' | 'discovery'
-}
+export type BargainRecommendationContext = RecommendationContext

@@ -14,6 +14,7 @@ import { computeMinPrice } from '@/lib/services/bargain'
 import { getBargainGate } from '@/lib/bargain/gate'
 import { track } from '@/lib/analytics/track'
 import { recordLearningPurchase } from '@/lib/bargain/learning/outcomes'
+import { SESSION_STATUS } from '@/lib/bargain/negotiation-state'
 
 export function appBaseUrl(): string {
   return (process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com').replace(/\/$/, '')
@@ -221,7 +222,7 @@ export async function attributeBargainPurchase(params: PurchaseAttribution): Pro
       const claim = await tx.bargainSession.updateMany({
         where: { id: session.id, purchasedOrderId: null },
         data: {
-          status: 'purchased',
+          status: SESSION_STATUS.PURCHASED,
           purchasedAt: new Date(),
           purchasedOrderId: shopifyOrderId,
           purchaseValue: base,

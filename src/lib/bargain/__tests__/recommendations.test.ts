@@ -1,11 +1,20 @@
 import {
+  allowsRecommendations,
+  decideRecommendation,
   normalizeRecoCandidate,
-  scoreRecoCandidate,
+  normalizeProductId,
   rankRecommendations,
-  searchRecommendations,
+  readRecommendationHistory,
+  recommendationEventMetadata,
+  recommendationExcludedProductIds,
   recommendationReason,
   recommendationReasonForCard,
+  recommendationShownMetadata,
+  scoreRecoCandidate,
+  searchRecommendations,
+  withRecommendationShown,
 } from '../recommendations'
+import { analyzeIntent } from '../intent'
 
 const store = { id: 's1', domain: 'demo.myshopify.com', apiKey: null, shopifyRefreshToken: null, shopifyTokenExpiresAt: null }
 const fetchNone: any = async () => ({ products: [], nextCursor: null, prevCursor: null, error: null })
@@ -179,6 +188,179 @@ describe('searchRecommendations', () => {
   it('propagates a normalized error from fetchProducts when available', async () => {
     const out = await searchRecommendations({ store, shopifyProductId: '1', currency: 'INR' }, fetchNone)
     expect(out.cards).toEqual([])
+  })
+})
+
+describe('decideRecommendation', () => {
+  const base = { minPrice: 300 }
+
+  it('routes a discount request to the current product (A)', () => {
+    const a = analyzeIntent('can you give me a discount?')
+    const out = decideRecommendation({ ...base, intent: a, message: 'can you give me a discount?' })
+    expect(a.shopperCategory).toBe('A')
+    expect(out.decision).toBe('NEGOTIATE_CURRENT_PRODUCT')
+    expect(out.recommend).toBe(false)
+  })
+
+  it('routes a hard budget under the floor to alternatives (B)', () => {
+    const message = 'i only have 200 rupees to spend'
+    const a = analyzeIntent(message)
+    const out = decideRecommendation({ ...base, intent: a, message, budget: 200 })
+    expect(a.shopperCategory).toBe('B')
+    expect(out.decision).toBe('RECOMMEND_ALTERNATIVES')
+    expect(out.recommend).toBe(true)
+  })
+
+  it('routes a quality question to a clarifying answer (C)', () => {
+    const message = 'is the build quality good?'
+    const a = analyzeIntent(message)
+    const out = decideRecommendation({ ...base, intent: a, message })
+    expect(a.shopperCategory).toBe('C')
+    expect(out.decision).toBe('ASK_CLARIFYING_QUESTION')
+  })
+
+  it('routes product information to a verified answer (D)', () => {
+    const message = 'what material is it made of?'
+    const a = analyzeIntent(message)
+    const out = decideRecommendation({ ...base, intent: a, message })
+    expect(a.shopperCategory).toBe('D')
+    expect(out.decision).toBe('ASK_CLARIFYING_QUESTION')
+  })
+
+  it('routes trust concerns to a verified answer (E)', () => {
+    const message = 'is this genuine or fake?'
+    const a = analyzeIntent(message)
+    const out = decideRecommendation({ ...base, intent: a, message })
+    expect(a.shopperCategory).toBe('E')
+    expect(out.decision).toBe('ASK_CLARIFYING_QUESTION')
+  })
+
+  it('routes comparison to current-product negotiation (F)', () => {
+    const message = 'amazon is selling this cheaper'
+    const a = analyzeIntent(message)
+    const out = decideRecommendation({ ...base, intent: a, message })
+    expect(a.shopperCategory).toBe('F')
+    expect(out.decision).toBe('NEGOTIATE_CURRENT_PRODUCT')
+  })
+
+  it('routes fit and availability to a clarifying answer (G)', () => {
+    const message = 'do you have this in size L? i need it in L'
+    const a = analyzeIntent(message)
+    const out = decideRecommendation({ ...base, intent: a, message })
+    expect(a.shopperCategory).toBe('G')
+    expect(out.decision).toBe('ASK_CLARIFYING_QUESTION')
+  })
+
+  it('routes purchase-ready shoppers to checkout (H)', () => {
+    const message = "ok deal done, i'll take it"
+    const a = analyzeIntent(message)
+    const out = decideRecommendation({ ...base, intent: a, message })
+    expect(a.shopperCategory).toBe('H')
+    expect(out.decision).toBe('PROCEED_TO_CHECKOUT')
+  })
+
+  it('routes hesitation and walkout without an ask back to negotiation (I)', () => {
+    const message = 'let me think about it'
+    const a = analyzeIntent(message)
+    const out = decideRecommendation({ ...base, intent: a, message, walkout: true })
+    expect(a.shopperCategory).toBe('I')
+    expect(out.decision).toBe('RESUME_NEGOTIATION')
+  })
+
+  it('routes an explicit alternatives ask to alternatives (J)', () => {
+    const message = 'show me other options'
+    const a = analyzeIntent(message)
+    const out = decideRecommendation({ ...base, intent: a, message })
+    expect(a.shopperCategory).toBe('J')
+    expect(out.decision).toBe('RECOMMEND_ALTERNATIVES')
+  })
+
+  it('routes a complement ask to complementary cards (K)', () => {
+    const message = 'what goes with this?'
+    const a = analyzeIntent(message)
+    const out = decideRecommendation({ ...base, intent: a, message })
+    expect(a.shopperCategory).toBe('K')
+    expect(out.decision).toBe('SHOW_COMPLEMENTARY_PRODUCT')
+  })
+
+  it('suppresses recommendations after acceptance or a purchase', () => {
+    const a = analyzeIntent('show me other options')
+    expect(decideRecommendation({ ...base, intent: a, sessionStatus: 'accepted' }).decision).toBe('DO_NOT_RECOMMEND')
+    expect(decideRecommendation({ ...base, intent: a, purchased: true }).decision).toBe('DO_NOT_RECOMMEND')
+    expect(decideRecommendation({ ...base, intent: a, acceptingDeal: true }).decision).toBe('DO_NOT_RECOMMEND')
+  })
+
+  it('suppresses recommendations on terminal engine turns', () => {
+    const a = analyzeIntent('show me other options')
+    expect(decideRecommendation({ ...base, intent: a, sessionStatus: 'rejected' }).recommend).toBe(false)
+    expect(decideRecommendation({ ...base, intent: a, engineDecision: 'accept' }).recommend).toBe(false)
+    expect(allowsRecommendations('RESUME_NEGOTIATION')).toBe(false)
+  })
+})
+
+describe('recommendation history', () => {
+  const messageAt = (at: string, metadata: Record<string, unknown>) => ({ metadata, createdAt: at })
+
+  it('rebuilds shown and feedback state from persisted message metadata', () => {
+    const history = readRecommendationHistory([
+      messageAt('2026-01-01T00:00:00.000Z', recommendationShownMetadata({ productIds: ['gid://shopify/Product/2'], reason: 'budget', decision: 'RECOMMEND_ALTERNATIVES' })),
+      messageAt('2026-01-01T00:01:00.000Z', recommendationEventMetadata({ action: 'dismissed', productId: '2' })),
+      messageAt('2026-01-01T00:02:00.000Z', recommendationEventMetadata({ action: 'rejected', productId: '3' })),
+    ])
+    expect(normalizeProductId('gid://shopify/Product/2')).toBe('2')
+    expect(history.shownProductIds).toContain('2')
+    expect(history.dismissedProductIds).toContain('2')
+    expect(history.rejectedProductIds).toContain('3')
+    expect(history.lastShownProductIds).toEqual(['2'])
+    expect(history.entries.find((entry) => entry.productId === '2')?.actions).toEqual(expect.arrayContaining(['shown', 'dismissed']))
+    expect(recommendationExcludedProductIds(history)).toEqual(expect.arrayContaining(['2', '3']))
+  })
+
+  it('never repeats rejected or dismissed products and finds new alternatives', async () => {
+    const history = readRecommendationHistory([
+      messageAt('2026-01-01T00:00:00.000Z', recommendationShownMetadata({ productIds: ['2', '3'] })),
+      messageAt('2026-01-01T00:01:00.000Z', recommendationEventMetadata({ action: 'rejected', productId: '2' })),
+      messageAt('2026-01-01T00:02:00.000Z', recommendationEventMetadata({ action: 'dismissed', productId: '3' })),
+    ])
+    const fetch = async () => ({
+      products: [
+        rawProduct({ id: '2', title: 'Old rejected', handle: 'old-1' }),
+        rawProduct({ id: '3', title: 'Old dismissed', handle: 'old-2' }),
+        rawProduct({ id: '4', title: 'Fresh A', handle: 'fresh-a', variants: [{ id: 'v4', price: 180, available: true }] }),
+        rawProduct({ id: '5', title: 'Fresh B', handle: 'fresh-b', variants: [{ id: 'v5', price: 190, available: true }] }),
+      ],
+      nextCursor: null, prevCursor: null, error: null,
+    })
+    const first = await searchRecommendations({ store, shopifyProductId: '1', currency: 'INR', budget: 200 }, fetch, null, { history, strictBudget: true })
+    expect(first.cards.map((c) => c.productId).sort()).toEqual(['4', '5'])
+    const nextHistory = withRecommendationShown(history, { productIds: first.cards.map((c) => c.productId) })
+    const second = await searchRecommendations({ store, shopifyProductId: '1', currency: 'INR', budget: 200 }, fetch, null, { history: nextHistory, strictBudget: true })
+    expect(second.cards).toEqual([])
+  })
+
+  it('returns no cards when nothing suitable is left', async () => {
+    const out = await searchRecommendations(
+      { store, shopifyProductId: '1', currency: 'INR', budget: 100 },
+      async () => ({
+        products: [rawProduct({ id: '2', variants: [{ id: 'v2', price: 900, available: true }] })],
+        nextCursor: null, prevCursor: null, error: null,
+      }),
+      null,
+      { strictBudget: true },
+    )
+    expect(out.cards).toEqual([])
+  })
+
+  it('caps a bundle of alternatives at two cards and keeps them unique', async () => {
+    const out = await searchRecommendations(
+      { store, shopifyProductId: '1', currency: 'INR' },
+      async () => ({
+        products: ['2', '3', '4', '5'].map((id) => rawProduct({ id, title: `Option ${id}`, handle: `option-${id}`, variants: [{ id: `v${id}`, price: 100, available: true }] })),
+        nextCursor: null, prevCursor: null, error: null,
+      }),
+    )
+    expect(out.cards).toHaveLength(2)
+    expect(new Set(out.cards.map((c) => c.productId)).size).toBe(2)
   })
 })
 

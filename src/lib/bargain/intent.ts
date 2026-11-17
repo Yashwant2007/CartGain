@@ -55,6 +55,30 @@ export type ObjectionCategory =
 /** How the shopper framed the number they shared. */
 export type BudgetType = 'maximum' | 'approximate' | 'minimum' | null
 
+export type ShopperIntentCategoryCode = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K'
+
+export const SHOPPER_INTENT_CATEGORIES = {
+  A: { code: 'A', name: 'DISCOUNT_REQUEST', intent: 'PRICE_ONLY' },
+  B: { code: 'B', name: 'BUDGET_CONSTRAINT', intent: 'BUDGET_CONSTRAINT' },
+  C: { code: 'C', name: 'QUALITY_CONCERN', intent: 'PRODUCT_QUESTION' },
+  D: { code: 'D', name: 'PRODUCT_INFORMATION', intent: 'PRODUCT_QUESTION' },
+  E: { code: 'E', name: 'TRUST_CONCERN', intent: 'PRODUCT_QUESTION' },
+  F: { code: 'F', name: 'COMPARISON', intent: 'COMPARISON' },
+  G: { code: 'G', name: 'FIT_OR_AVAILABILITY', intent: 'PRODUCT_MISMATCH' },
+  H: { code: 'H', name: 'PURCHASE_READY', intent: 'PURCHASE_READY' },
+  I: { code: 'I', name: 'HESITATION_WALKOUT_OR_UNKNOWN', intent: 'UNKNOWN' },
+  J: { code: 'J', name: 'ALTERNATIVES_REQUEST', intent: 'RECOMMENDATION_REQUEST' },
+  K: { code: 'K', name: 'COMPLEMENT_REQUEST', intent: 'PRODUCT_DISCOVERY' },
+} as const
+
+export type ShopperIntentCategoryName = (typeof SHOPPER_INTENT_CATEGORIES)[ShopperIntentCategoryCode]['name']
+
+export interface ShopperIntentCategory {
+  code: ShopperIntentCategoryCode
+  name: ShopperIntentCategoryName
+  intent: ShopperIntent
+}
+
 export interface IntentAnalysis {
   intent: ShopperIntent
   objection: ShopperObjection
@@ -70,6 +94,8 @@ export interface IntentAnalysis {
   need: string | null
   /** Published nine-category objection taxonomy (Phase 1 intent→action routing). */
   category: ObjectionCategory
+  shopperCategory: ShopperIntentCategoryCode
+  shopperCategoryName: ShopperIntentCategoryName
 }
 
 const RE = {
@@ -131,6 +157,8 @@ export function extractBudget(message: string): { amount: number; type: NonNulla
 }
 
 const NEED_PATTERN = /\b(?:instead\s+of|in\s+place\s+of|koi\s+aur|any\s+other|something\s+(?:like|in|for|within)|looking\s+for|need(?:ed)?\s+(?:something|a|an)|want(?:ed)?\s+(?:something|a|an)|for\s+(?:my|the|that)|suits?\s+my|under\s+(?:my|the)\s+range)\s+([a-z][a-z0-9'\- ]{1,28})/i
+
+const COMPLEMENT_RE = /\b(go(?:es)?\s+with|pair(?:s|ed)?\s+with|match(?:es)?\s+with|combine|bundle\s+with|also\s+need|add\s+to\s+(?:my|this|the)\s+(?:order|cart)|complete\s+the\s+(?:look|set|kit)|accessor(?:y|ies)|together\s+with|what\s+else\s+(?:goes|works)|with\s+this\s+(?:one|item|product))\b/i
 
 /** Deterministically pull a short product topic from the message, if any. */
 export function extractNeed(message: string): string | null {
@@ -205,7 +233,7 @@ export function analyzeIntent(message: string): IntentAnalysis {
   else if (payment) objection = 'PAYMENT_FRICTION'
   else if (valueIntent) objection = 'VALUE'
 
-  return {
+  const analysis: Omit<IntentAnalysis, 'shopperCategory' | 'shopperCategoryName'> = {
     intent,
     objection,
     signals,
@@ -216,6 +244,45 @@ export function analyzeIntent(message: string): IntentAnalysis {
     need,
     category: objectionCategory(objection),
   }
+  const shopperCategory = classifyShopperIntentCategory(analysis, message)
+  return {
+    ...analysis,
+    shopperCategory: shopperCategory.code,
+    shopperCategoryName: shopperCategory.name,
+  }
+}
+
+type IntentForCategory = Pick<IntentAnalysis, 'intent' | 'objection' | 'category' | 'priceComplaint' | 'budget' | 'budgetType' | 'offersPriceSignal'>
+
+export function classifyShopperIntentCategory(analysis: IntentForCategory, message?: string): ShopperIntentCategory {
+  const build = (code: ShopperIntentCategoryCode): ShopperIntentCategory => ({
+    ...SHOPPER_INTENT_CATEGORIES[code],
+    intent: analysis.intent,
+  })
+  const text = message ?? ''
+
+  if (COMPLEMENT_RE.test(text)) return build('K')
+  if (analysis.intent === 'RECOMMENDATION_REQUEST' || analysis.intent === 'PRODUCT_DISCOVERY') return build('J')
+  if (analysis.intent === 'PURCHASE_READY') return build('H')
+  if (
+    analysis.intent === 'WALKOUT' ||
+    analysis.intent === 'PURCHASE_HESITATION' ||
+    analysis.intent === 'UNKNOWN' ||
+    analysis.intent === 'GENERIC_CHAT'
+  ) return build('I')
+  if (analysis.objection === 'TRUST') return build('E')
+  if (analysis.objection === 'QUALITY') return build('C')
+  if (analysis.intent === 'PRODUCT_QUESTION' || analysis.objection === 'PRODUCT_INFORMATION' || analysis.objection === 'SHIPPING' || analysis.objection === 'SHIPPING_DELAY' || analysis.objection === 'PAYMENT_FRICTION') return build('D')
+  if (analysis.intent === 'COMPARISON' || analysis.objection === 'COMPARISON') return build('F')
+  if (analysis.intent === 'PRODUCT_MISMATCH' || analysis.objection === 'FIT_VARIANT' || analysis.objection === 'AVAILABILITY') return build('G')
+  if (analysis.intent === 'BUDGET_CONSTRAINT' || analysis.objection === 'BUDGET') return build('B')
+  if (analysis.priceComplaint || analysis.objection === 'PRICE' || analysis.objection === 'VALUE' || analysis.intent === 'PRICE_ONLY' || analysis.intent === 'VALUE_UNCLEAR') return build('A')
+  return build('I')
+}
+
+export function hasExplicitRecommendationAsk(analysis: IntentForCategory, message?: string): boolean {
+  const category = classifyShopperIntentCategory(analysis, message)
+  return category.code === 'J' || category.code === 'K'
 }
 
 /** Map the fine-grained objection onto the published nine-category taxonomy. */
@@ -297,9 +364,13 @@ export function objectionAction(category: ObjectionCategory): string {
 
 // Compact prompt block placed in the SHOPPER INTENT section.
 export function shopperIntentToPromptBlock(analysis: IntentAnalysis): string {
+  const category = analysis.shopperCategory && SHOPPER_INTENT_CATEGORIES[analysis.shopperCategory]
+    ? SHOPPER_INTENT_CATEGORIES[analysis.shopperCategory]
+    : classifyShopperIntentCategory(analysis)
   const lines = [
     `SHOPPER INTENT (deterministic classification of the current message — reason about it, but never say "my model says"):`,
     `- Intent: ${INTENT_LABEL[analysis.intent]}`,
+    `- Shopper category: ${category.code} (${category.name})`,
   ]
   if (analysis.objection) {
     lines.push(`- Objection detected: ${OBJECTION_LABEL[analysis.objection]}`)

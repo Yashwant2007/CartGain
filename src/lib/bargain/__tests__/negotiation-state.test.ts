@@ -1,7 +1,11 @@
 import {
+  SESSION_STATUS,
   SESSION_STATUSES,
   SESSION_TRANSITIONS,
+  PURCHASE_SOURCE_STATUSES,
   canTransition,
+  checkSessionTransition,
+  canRecoverLegacyAccept,
   isTerminal,
   isNegotiable,
   walkoutOutcome,
@@ -13,8 +17,10 @@ import { detectWalkout } from '../text'
 describe('bargain session state machine', () => {
   it('exposes every persisted status', () => {
     expect(SESSION_STATUSES).toEqual([
-      'active', 'accepting', 'accepted', 'rejected', 'expired', 'abandoned',
+      'active', 'accepting', 'accepted', 'rejected', 'expired', 'abandoned', 'purchased',
     ])
+    expect(SESSION_STATUS.PURCHASED).toBe('purchased')
+    expect(isSessionStatus('purchased')).toBe(true)
   })
 
   it('allows only legal forward transitions', () => {
@@ -30,13 +36,26 @@ describe('bargain session state machine', () => {
     const illegal: Array<[SessionStatus, SessionStatus]> = [
       ['expired', 'accepted'],
       ['expired', 'active'],
+      ['expired', 'accepting'],
       ['rejected', 'accepted'],
-      ['accepted', 'active'],
+      ['rejected', 'active'],
+      ['rejected', 'accepting'],
+      ['abandoned', 'accepted'],
       ['abandoned', 'active'],
+      ['abandoned', 'accepting'],
       ['accepted', 'rejected'],
-      ['accepting', 'active'],
+      ['accepting', 'rejected'],
       ['accepting', 'expired'],
-      ['accepted', 'accepting'],
+      ['accepting', 'abandoned'],
+      ['accepting', 'purchased'],
+      ['active', 'purchased'],
+      ['purchased', 'active'],
+      ['purchased', 'accepting'],
+      ['purchased', 'accepted'],
+      ['purchased', 'rejected'],
+      ['purchased', 'expired'],
+      ['purchased', 'abandoned'],
+      ['purchased', 'purchased'],
     ]
     for (const [from, to] of illegal) {
       expect(canTransition(from, to)).toBe(false)
@@ -44,7 +63,7 @@ describe('bargain session state machine', () => {
   })
 
   it('marks terminal statuses', () => {
-    for (const s of ['accepted', 'rejected', 'expired', 'abandoned']) {
+    for (const s of ['accepted', 'rejected', 'expired', 'abandoned', 'purchased']) {
       expect(isTerminal(s as SessionStatus)).toBe(true)
     }
     expect(isTerminal('active')).toBe(false)
@@ -60,10 +79,68 @@ describe('bargain session state machine', () => {
 
   it('guards the transition table against typos', () => {
     // every key maps to valid statuses and every status is a key
+    for (const status of SESSION_STATUSES) {
+      expect(Object.prototype.hasOwnProperty.call(SESSION_TRANSITIONS, status)).toBe(true)
+    }
     for (const [from, tos] of Object.entries(SESSION_TRANSITIONS)) {
       expect(isSessionStatus(from)).toBe(true)
       for (const to of tos) expect(isSessionStatus(to)).toBe(true)
     }
+  })
+
+  it('allows accepting → active rollback when the Shopify code creation fails', () => {
+    expect(canTransition('accepting', 'active')).toBe(true)
+    expect(checkSessionTransition('accepting', 'active')).toEqual({
+      ok: true, from: 'accepting', to: 'active', kind: 'rollback',
+    })
+  })
+
+  it('allows accepted → accepting → accepted only for legacy no-code recovery', () => {
+    expect(canTransition('accepted', 'accepting')).toBe(true)
+    expect(canTransition('accepting', 'accepted')).toBe(true)
+    expect(checkSessionTransition('accepted', 'accepting')).toEqual({
+      ok: true, from: 'accepted', to: 'accepting', kind: 'legacy-recovery',
+    })
+    expect(canRecoverLegacyAccept({ status: 'accepted', discountCode: null })).toBe(true)
+    expect(canRecoverLegacyAccept({ status: 'accepted' })).toBe(true)
+    expect(canRecoverLegacyAccept({ status: 'accepted', discountCode: 'BARGAIN-1234' })).toBe(false)
+    expect(canRecoverLegacyAccept({ status: 'active', discountCode: null })).toBe(false)
+    expect(canRecoverLegacyAccept({ status: 'purchased', discountCode: null })).toBe(false)
+  })
+
+  it('allows purchase settlement only from an accepted or walked-away session', () => {
+    expect(PURCHASE_SOURCE_STATUSES).toEqual(['accepted', 'rejected', 'expired', 'abandoned'])
+    for (const from of PURCHASE_SOURCE_STATUSES) {
+      expect(canTransition(from, 'purchased')).toBe(true)
+      expect(checkSessionTransition(from, 'purchased')).toEqual({
+        ok: true, from, to: 'purchased', kind: 'purchase',
+      })
+    }
+    for (const from of ['active', 'accepting', 'purchased'] as SessionStatus[]) {
+      expect(canTransition(from, 'purchased')).toBe(false)
+    }
+  })
+
+  it('validates from/to with an explicit reason', () => {
+    expect(checkSessionTransition('nope', 'active')).toEqual({
+      ok: false, from: 'nope', to: 'active', reason: 'INVALID_FROM',
+    })
+    expect(checkSessionTransition('active', 'nope')).toEqual({
+      ok: false, from: 'active', to: 'nope', reason: 'INVALID_TO',
+    })
+    expect(checkSessionTransition('purchased', 'accepted')).toEqual({
+      ok: false, from: 'purchased', to: 'accepted', reason: 'ILLEGAL_TRANSITION',
+    })
+    expect(checkSessionTransition('active', 'accepted')).toEqual({
+      ok: true, from: 'active', to: 'accepted', kind: 'forward',
+    })
+  })
+
+  it('makes purchased absorbing', () => {
+    expect(isTerminal('purchased')).toBe(true)
+    expect(isNegotiable('purchased')).toBe(false)
+    expect(SESSION_TRANSITIONS.purchased).toEqual([])
+    for (const to of SESSION_STATUSES) expect(canTransition('purchased', to)).toBe(false)
   })
 })
 

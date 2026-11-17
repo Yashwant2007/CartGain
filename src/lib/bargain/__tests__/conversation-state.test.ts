@@ -6,8 +6,10 @@ import {
   priorityReaction,
   canTransitionConversation,
   isTerminalConversationState,
+  isNegotiableConversationState,
   isConversationState,
 } from '../conversation-state'
+import { SESSION_STATUS, type SessionStatus } from '../negotiation-state'
 
 describe('conversation state machine (Phase 9)', () => {
   it('covers every spec state', () => {
@@ -75,6 +77,40 @@ describe('conversation state machine (Phase 9)', () => {
   it('validates state strings', () => {
     expect(isConversationState('NEGOTIATION')).toBe(true)
     expect(isConversationState('nope')).toBe(false)
+  })
+
+  it('keeps a purchased session COMPLETED even with conflicting negotiation flags', () => {
+    const purchased = {
+      sessionStatus: SESSION_STATUS.PURCHASED,
+      attemptsUsed: 4,
+      dealAccepted: true,
+      checkoutStarted: true,
+      walkoutTriggered: true,
+      needHumanSupport: true,
+      intent: 'PRICE_ONLY' as const,
+      offersPriceSignal: true,
+    }
+    const state = deriveConversationState(purchased)
+    expect(state).toBe('COMPLETED')
+    expect(isTerminalConversationState(state)).toBe(true)
+    expect(isNegotiableConversationState(state)).toBe(false)
+    expect(canTransitionConversation(state, 'NEGOTIATION')).toBe(false)
+    expect(priorityReaction(state)).toBe('celebrating')
+  })
+
+  it('never derives a negotiable state from a terminal session status', () => {
+    const terminal: SessionStatus[] = [
+      SESSION_STATUS.ACCEPTED,
+      SESSION_STATUS.REJECTED,
+      SESSION_STATUS.EXPIRED,
+      SESSION_STATUS.ABANDONED,
+      SESSION_STATUS.PURCHASED,
+    ]
+    for (const sessionStatus of terminal) {
+      const state = deriveConversationState({ sessionStatus, attemptsUsed: 3, intent: 'PRICE_ONLY', offersPriceSignal: true })
+      expect(isNegotiableConversationState(state)).toBe(false)
+      expect(canTransitionConversation(state, 'NEGOTIATION')).toBe(false)
+    }
   })
 })
 

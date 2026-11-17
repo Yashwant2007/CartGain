@@ -44,6 +44,7 @@ import {
   attributeBargainPurchase,
   netBargainPurchaseRefund,
 } from '@/lib/bargain/purchase'
+import { SESSION_STATUS, PURCHASE_SOURCE_STATUSES, isTerminal, canTransition } from '@/lib/bargain/negotiation-state'
 
 const mockPrisma = prisma as any
 const mockDiscount = generateBargainDiscountCode as jest.Mock
@@ -259,6 +260,9 @@ describe('attributeBargainPurchase', () => {
 
     const claimWhere = tx.bargainSession.updateMany.mock.calls[0][0].where
     expect(claimWhere).toEqual({ id: 'sess1', purchasedOrderId: null })
+    expect(tx.bargainSession.updateMany.mock.calls[0][0].data.status).toBe(SESSION_STATUS.PURCHASED)
+    expect(isTerminal(SESSION_STATUS.PURCHASED)).toBe(true)
+    for (const from of PURCHASE_SOURCE_STATUSES) expect(canTransition(from, SESSION_STATUS.PURCHASED)).toBe(true)
     expect(tx.analytics.upsert).toHaveBeenCalledTimes(1)
     expect(tx.bargainRevenueShareEvent.create).toHaveBeenCalledTimes(1)
     const createArg = tx.bargainRevenueShareEvent.create.mock.calls[0][0].data

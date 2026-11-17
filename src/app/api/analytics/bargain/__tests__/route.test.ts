@@ -5,6 +5,7 @@ import { GET } from '@/app/api/analytics/bargain/route'
 import prisma from '@/lib/db'
 import { getServerSession } from 'next-auth/next'
 import { NextRequest } from 'next/server'
+import { bargainRequestMetrics } from '@/lib/bargain/request-metrics'
 
 jest.mock('next-auth/next', () => ({ getServerSession: jest.fn() }))
 jest.mock('@/lib/auth', () => ({ authOptions: {} }))
@@ -28,12 +29,17 @@ const prismaMock = prisma as unknown as {
 }
 const authMock = getServerSession as jest.Mock
 
+afterAll(() => {
+  bargainRequestMetrics.reset()
+})
+
 function request(days = 30) {
   return new NextRequest(`https://cart-gain.com/api/analytics/bargain?storeId=store-1&days=${days}`)
 }
 
 beforeEach(() => {
   jest.clearAllMocks()
+  bargainRequestMetrics.reset()
   authMock.mockResolvedValue({ user: { id: 'user-1' } })
   prismaMock.store.findFirst.mockResolvedValue({ id: 'store-1' })
   prismaMock.bargainMessage.findMany.mockResolvedValue([{ sessionId: 's1' }])
@@ -124,6 +130,20 @@ it('reports deterministic holdout cohorts and counts only verified purchases', a
   expect(control).toMatchObject({ sessions: 1, accepted: 0, purchased: 0, revenue: 0 })
   expect(body.experiments.enabled).toBe(false)
   expect(body.experiments.note).toMatch(/observational/i)
+})
+
+it('exposes in-process request metrics without changing learning-derived performance', async () => {
+  bargainRequestMetrics.record('offer_total', 12)
+
+  const body = await (await GET(request())).json()
+
+  expect(body.requestMetrics).toEqual(expect.arrayContaining([
+    expect.objectContaining({ stage: 'offer_total', count: 1, p50: 12 }),
+  ]))
+  expect(body.performance).toMatchObject({
+    samples: 0,
+    note: expect.stringContaining('learning events'),
+  })
 })
 
 it('marks the experiment as active when the dual-agent flag is enabled', async () => {

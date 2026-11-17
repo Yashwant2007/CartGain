@@ -7,6 +7,12 @@ export interface RateLimitOptions {
   key?: string
 }
 
+export function retryAfterSeconds(resetTime: number, now: number = Date.now()): number {
+  if (!Number.isFinite(resetTime) || resetTime <= 0 || !Number.isFinite(now)) return 1
+  const seconds = Math.ceil((resetTime - now) / 1000)
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : 1
+}
+
 export async function withRateLimit(
   request: NextRequest,
   handler: () => Promise<NextResponse>,
@@ -24,7 +30,7 @@ export async function withRateLimit(
       {
         status: 429,
         headers: {
-          'Retry-After': String(Math.ceil(result.resetTime / 1000)),
+          'Retry-After': String(retryAfterSeconds(result.resetTime)),
           'X-RateLimit-Limit': String(maxAttempts),
           'X-RateLimit-Remaining': '0',
         },

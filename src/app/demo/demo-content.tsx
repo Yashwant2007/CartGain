@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useSession, signOut } from 'next-auth/react'
-import { Send, Sparkles, MessageCircle, CheckCircle2, RotateCcw, ArrowRight, ShoppingBag, Lock, BadgeCheck, ShieldCheck, Check, Copy, ExternalLink, CheckCheck, Clock3, Loader2, Store } from 'lucide-react'
+import { Send, Sparkles, MessageCircle, CheckCircle2, RotateCcw, ArrowRight, ShoppingBag, Lock, BadgeCheck, ShieldCheck, Check, Copy, CheckCheck, Clock3, Loader2, Store } from 'lucide-react'
 import {
   buildOpeningMessage,
   ruleBasedDecision,
@@ -18,8 +18,10 @@ import {
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { buildQuickOffers } from '@/lib/bargain/offers'
 import { currencySymbolFor } from '@/lib/bargain/i18n'
-import type { BargainRecommendation } from '@/lib/bargain/api-types'
+import type { BargainRecommendation, RecommendationHistory } from '@/lib/bargain/api-types'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
+import BargainRecommendationPanel from '@/components/bargain/BargainRecommendationPanel'
+import { createConversationId, useConversationAutoScroll } from '@/components/bargain/conversation-utils'
 import {
   expressionForEvent,
   expressionForShopperMessage,
@@ -29,6 +31,7 @@ import {
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 
 type ChatMsg = {
+  id: string
   role: 'customer' | 'ai'
   content: string
   offeredPrice?: number | null
@@ -148,6 +151,8 @@ export default function DemoContent() {
   // Storefront-parity feature state: verified recommendation cards + the real
   // one-use discount code minted on accept.
   const [recommendations, setRecommendations] = useState<BargainRecommendation[]>([])
+  const [recommendationReason, setRecommendationReason] = useState<string | null>(null)
+  const [recommendationHistory, setRecommendationHistory] = useState<RecommendationHistory | null>(null)
   const [discountCode, setDiscountCode] = useState<string | null>(null)
   const [codeStatus, setCodeStatus] = useState<'idle' | 'minting' | 'ready' | 'failed'>('idle')
   const [copied, setCopied] = useState(false)
@@ -160,6 +165,16 @@ export default function DemoContent() {
   const [catalogSource, setCatalogSource] = useState<'demo' | 'store'>('demo')
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  const {
+    unread: conversationUnread,
+    handleScroll: handleConversationScroll,
+    noteSent: noteConversationSent,
+    jumpToLatest: jumpToLatestMessage,
+  } = useConversationAutoScroll({
+    scrollRef,
+    messageCount: messages.length,
+    activityKey: thinking || showThinking,
+  })
   const sessionIdRef = useRef(0)
   const learningSessionIdRef = useRef('')
   // True once a deal was accepted in this exchange, so a stray follow-up chat
@@ -195,10 +210,6 @@ export default function DemoContent() {
     () => buildQuickOffers({ lastCounter, listedPrice: product.price, sessionEnded: !!ended, decision: ended ? 'accept' : 'counter' }),
     [lastCounter, product.price, ended],
   )
-
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [messages, thinking, recommendations])
 
   // Claim the one-time demo on mount — enforcement happens server-side
   useEffect(() => {
@@ -257,13 +268,15 @@ export default function DemoContent() {
     }
     sessionIdRef.current += 1
     dealAcceptedRef.current = false
-    setMessages([{ role: 'ai', content: buildOpeningMessage(ctx) }])
+    setMessages([{ id: createConversationId('d'), role: 'ai', content: buildOpeningMessage(ctx) }])
     setAvatarExpression(expressionForEvent(AVATAR_PERSONALITY[persona], 'CHAT_OPENED'))
     setAttemptsUsed(0)
     setEnded(null)
     setFinalPrice(null)
     setThinking(false)
     setRecommendations([])
+    setRecommendationReason(null)
+    setRecommendationHistory(null)
     setDiscountCode(null)
     setCodeStatus('idle')
     setCopied(false)
@@ -282,6 +295,8 @@ export default function DemoContent() {
     setThinking(false)
     setAvatarExpression('listening')
     setRecommendations([])
+    setRecommendationReason(null)
+    setRecommendationHistory(null)
     setDiscountCode(null)
     setCodeStatus('idle')
     setCopied(false)
@@ -404,7 +419,11 @@ export default function DemoContent() {
           else decision = 'counter'
           if (Array.isArray(data.recommendations) && data.recommendations.length > 0) {
             setRecommendations(data.recommendations)
+          } else {
+            setRecommendations([])
           }
+          if (typeof data.recommendationReason === 'string') setRecommendationReason(data.recommendationReason)
+          if (data.recommendationHistory) setRecommendationHistory(data.recommendationHistory)
         }
       } catch {}
 
@@ -459,10 +478,11 @@ export default function DemoContent() {
     if (decision === 'accept') dealAcceptedRef.current = true
 
     const sid = sessionIdRef.current
-    setMessages(prev => [...prev, { role: 'customer', content: userText, offeredPrice: offer, delivery: 'sending' }])
+    setMessages(prev => [...prev, { id: createConversationId('c'), role: 'customer', content: userText, offeredPrice: offer, delivery: 'sending' }])
     window.setTimeout(() => { if (sessionIdRef.current === sid) markDelivered() }, TICK_MS)
     setAttemptsUsed(nextAttempt)
     setInput('')
+    noteConversationSent()
     setThinking(true)
     setShowThinking(false)
     thinkingShownAtRef.current = 0
@@ -497,7 +517,7 @@ export default function DemoContent() {
       const seenFor = Date.now() - thinkingShownAtRef.current
       const hold = minThinkingMs(reply) - seenFor
       if (hold > 0) await wait(hold)
-      setMessages(prev => [...prev, { role: 'ai', content: reply, offeredPrice: counterOffer }])
+      setMessages(prev => [...prev, { id: createConversationId('a'), role: 'ai', content: reply, offeredPrice: counterOffer }])
       setThinking(false)
       setShowThinking(false)
       if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
@@ -518,8 +538,9 @@ export default function DemoContent() {
     if (ended || thinking) return
     const reply = SKIP_REPLIES[persona].replace('₹PRICE', `${currencySymbol}${product.price}`)
     const sid = sessionIdRef.current
-    setMessages(prev => [...prev, { role: 'customer', content: "Actually, I'll just buy it at the full price.", delivery: 'sending' }])
+    setMessages(prev => [...prev, { id: createConversationId('c'), role: 'customer', content: "Actually, I'll just buy it at the full price.", delivery: 'sending' }])
     setInput('')
+    noteConversationSent()
     setAvatarExpression('listening')
     setThinking(true)
     setShowThinking(false)
@@ -540,7 +561,7 @@ export default function DemoContent() {
       const seenFor = Date.now() - thinkingShownAtRef.current
       const hold = minThinkingMs(reply) - seenFor
       if (hold > 0) await wait(hold)
-      setMessages(prev => [...prev, { role: 'ai', content: reply }])
+      setMessages(prev => [...prev, { id: createConversationId('a'), role: 'ai', content: reply }])
       setThinking(false)
       setShowThinking(false)
       if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
@@ -815,9 +836,16 @@ export default function DemoContent() {
             </div>
 
             {/* Messages */}
-            <div ref={scrollRef} className="h-[420px] overflow-y-auto p-4 sm:p-6 space-y-4 bg-gradient-to-b from-slate-950/40 to-transparent">
-              {messages.map((m, i) => (
-                <div key={i} className={`flex ${m.role === 'customer' ? 'justify-end' : 'justify-start'}`}>
+            <div
+              ref={scrollRef}
+              className="h-[420px] overflow-y-auto p-4 sm:p-6 space-y-4 bg-gradient-to-b from-slate-950/40 to-transparent"
+              onScroll={handleConversationScroll}
+              role="log"
+              aria-live="polite"
+              aria-label="Negotiation conversation"
+            >
+              {messages.map((m) => (
+                <div key={m.id} className={`flex ${m.role === 'customer' ? 'justify-end' : 'justify-start'}`}>
                   <div
                     className={`max-w-[86%] px-3.5 py-2.5 text-sm ${
                       m.role === 'customer'
@@ -840,63 +868,6 @@ export default function DemoContent() {
                 </div>
               ))}
 
-              {/* Verified recommendation cards (only when a real store is connected) */}
-              {recommendations.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-[11px] font-semibold tracking-wide uppercase text-blue-300/70">
-                    You might also like
-                  </div>
-                  {recommendations.map(card => (
-                    <div key={card.productId} className="flex gap-3 p-2.5 bg-slate-950/50 border border-blue-800/30 rounded-xl">
-                      {card.imageUrl ? (
-                        <Image
-                          src={card.imageUrl}
-                          alt={card.title}
-                          width={48}
-                          height={48}
-                          unoptimized
-                          loading="lazy"
-                          className="rounded-md object-cover"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-md bg-blue-900/40 flex items-center justify-center shrink-0">
-                          <ShoppingBag className="w-5 h-5 text-blue-300" />
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-blue-100 line-clamp-2">{card.title}</div>
-                        <div className="flex items-baseline gap-2 mt-1 flex-wrap">
-                          <span className="text-sm font-bold text-emerald-300">
-                            {currencySymbolFor(card.currency) || currencySymbol}{card.price.toLocaleString('en-IN')}
-                          </span>
-                          {card.compareAtPrice != null && card.compareAtPrice > card.price && (
-                            <span className="text-xs text-blue-300/50 line-through">
-                              {currencySymbolFor(card.currency) || currencySymbol}{card.compareAtPrice.toLocaleString('en-IN')}
-                            </span>
-                          )}
-                          {card.onSale && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-900/40 text-emerald-300">On sale</span>
-                          )}
-                          {card.budgetFit === 'over' && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-900/40 text-amber-300">Over budget</span>
-                          )}
-                        </div>
-                        {card.productUrl && (
-                          <a
-                            href={card.productUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-300 hover:text-blue-200 underline underline-offset-2"
-                          >
-                            View product <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
               {(thinking || showThinking) && (
                 <div className="flex justify-start">
                   <div className="bg-slate-800 border border-blue-800/30 rounded-2xl rounded-bl-md px-4 py-2.5 flex items-center gap-1.5">
@@ -907,6 +878,24 @@ export default function DemoContent() {
                 </div>
               )}
             </div>
+
+            {conversationUnread > 0 && (
+              <div className="flex justify-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => { jumpToLatestMessage() }}
+                  className="px-3 py-1 rounded-full text-[11px] font-semibold bg-primary-600 text-white"
+                >
+                  Jump to latest ({conversationUnread})
+                </button>
+              </div>
+            )}
+
+            <BargainRecommendationPanel
+              recommendations={recommendations}
+              reason={recommendationReason}
+              history={recommendationHistory}
+            />
 
             {/* Quick-offer chips — same rules as the live storefront widget */}
             {!ended && quickOffers.length > 0 && (

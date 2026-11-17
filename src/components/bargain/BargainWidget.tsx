@@ -32,21 +32,23 @@ import type {
   CgParentMessage,
   PlanLimit,
   PublicBargainSession,
+  RecommendationHistory,
 } from '@/lib/bargain/api-types'
 import {
   ChatSkeleton,
-  DealInfoPanel,
   GoalStrip,
   MessageBubble,
   PriceRail,
   ProductContextCard,
   ProductThumb,
   QuickChip,
-  RecoCard,
   RoundMeter,
   StateCard,
   TypingIndicator,
 } from '@/components/bargain/BargainPrimitives'
+import BargainOfferSummary from '@/components/bargain/BargainOfferSummary'
+import BargainRecommendationPanel, { type RecommendationEventAction } from '@/components/bargain/BargainRecommendationPanel'
+import { createConversationId, useConversationAutoScroll } from '@/components/bargain/conversation-utils'
 
 // Stable per-device+cart bargain identity. Persists across tabs/refreshes on the
 // same browser (localStorage deviceId seeded on first visit) and is blended with
@@ -202,10 +204,11 @@ export default function BargainWidget({
   const [rejection, setRejection] = useState<BargainRejection | null>(null)
   const [activeTab, setActiveTab] = useState<'chat' | 'info'>('chat')
   const [recommendations, setRecommendations] = useState<BargainRecommendation[] | null>(null)
+  const [recommendationReason, setRecommendationReason] = useState<string | null>(null)
+  const [recommendationHistory, setRecommendationHistory] = useState<RecommendationHistory | null>(null)
   // Daily-goal strip (public view): real server progress + close time only.
   // Seeded from /start, refreshed on every offer turn.
   const [goal, setGoal] = useState<BargainGoalView | null>(null)
-  const [atBottom, setAtBottom] = useState(true)
   const [announcer, setAnnouncer] = useState('')
   // Embed mode: a FIXED panel height. Never calc(100dvh — the iframe has no
   // viewport height of its own (theme blocks start it at 180–220px), and our
@@ -277,9 +280,8 @@ export default function BargainWidget({
   const thinkingTimerRef = useRef<number | null>(null)
   const thinkingShownAtRef = useRef(0)
   const requestAbortRef = useRef<AbortController | null>(null)
-  // Remembers the last FAILED action so "Try again" can replay exactly that
-  // call — no double-submits, no lost offers.
-  const lastFailedRef = useRef<{ kind: 'start' | 'offer' | 'accept'; payload?: string } | null>(null)
+  const requestSeqRef = useRef(0)
+  const lastFailedRef = useRef<{ kind: 'start' | 'offer' | 'accept'; payload?: string; turnId?: string } | null>(null)
   const coarsePointer = useRef(false)
 
   useEffect(() => () => requestAbortRef.current?.abort(), [])
@@ -289,6 +291,16 @@ export default function BargainWidget({
 
   const thinking = loading && decision !== 'accept'
   const thinkingVisible = thinking && showThinking
+  const {
+    unread: conversationUnread,
+    handleScroll: handleConversationScroll,
+    noteSent: noteConversationSent,
+    jumpToLatest: jumpToLatestMessage,
+  } = useConversationAutoScroll({
+    scrollRef,
+    messageCount: messages.length,
+    activityKey: thinkingVisible,
+  })
 
   // Send-sequence timing (see sendMessage): tick, then a beat, then thinking,
   // then a length-scaled minimum thinking beat before the reply is revealed.
@@ -400,24 +412,6 @@ export default function BargainWidget({
     mq.addEventListener?.('change', update)
     return () => mq.removeEventListener?.('change', update)
   }, [])
-
-  // Scroll policy: the newest reply is ALWAYS brought into view — a customer
-  // who can't see the answer is the complaint we must never have. The only
-  // exception: they are actively reading older history (scrolled up within the
-  // last 2.5s); their own send always jumps back to the bottom.
-  const lastInteractRef = useRef(0)
-  const scrollToBottom = useCallback(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
-  }, [])
-
-  useEffect(() => {
-    if (messages.length === 0) return
-    if (Date.now() - lastInteractRef.current < 2500 && !atBottom) return
-    const t = requestAnimationFrame(() => scrollToBottom())
-    return () => cancelAnimationFrame(t)
-  }, [messages, thinkingVisible, atBottom, scrollToBottom])
 
   // Lock the host page from scrolling while the floating chat is open.
   useEffect(() => {
@@ -640,10 +634,13 @@ export default function BargainWidget({
     return String(msg)
   }
 
-  async function sendMessage(text?: string) {
+  async function sendMessage(text?: string, retryTurnId?: string) {
     if (!sessionId || busyRef.current) return
     const msg = (text ?? input).trim()
     if (!msg) { setError('Type a message'); return }
+    const seq = ++requestSeqRef.current
+    const turnId = retryTurnId ?? createConversationId('turn')
+    const localId = retryTurnId ?? createConversationId('c')
     busyRef.current = true
     setLoading(true)
     setError(null)
@@ -652,14 +649,15 @@ export default function BargainWidget({
     const controller = new AbortController()
     requestAbortRef.current = controller
     const requestTimer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-    const localId = `c-${Date.now()}`
     setExpression(expressionForShopperMessage(personality, msg, livePrice))
-    setMessages(prev => [
-      ...prev,
-      { id: localId, role: 'customer', content: msg, offeredPrice: parseDraftOffer(msg), createdAt: new Date().toISOString(), delivery: 'sending' },
-    ])
+    setMessages(prev => prev.some((m) => m.id === localId)
+      ? prev
+      : [
+          ...prev,
+          { id: localId, role: 'customer', content: msg, offeredPrice: parseDraftOffer(msg), createdAt: new Date().toISOString(), delivery: 'sending' },
+        ])
     setInput('')
-    setAtBottom(true)
+    noteConversationSent()
     // Human send rhythm: your bubble paints instantly, a single delivered tick
     // lands almost immediately, the three-dot "thinking" bubble appears a beat
     // later, and the reply is never yanked in faster than a typed pace. None of
@@ -680,7 +678,7 @@ export default function BargainWidget({
       const res = await fetch(`${apiBase}/api/bargain/offer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, message: msg, ...buyerIdentity() }),
+        body: JSON.stringify({ sessionId, message: msg, turnId, ...buyerIdentity() }),
         signal: controller.signal,
       })
       const data = (await res.json()) as BargainOfferSuccess & {
@@ -695,7 +693,7 @@ export default function BargainWidget({
           setSessionEnded(true)
           setEndedReason('expired')
           setMessages(prev => [...prev, {
-            id: `s-${Date.now()}`, role: 'system' as const, content: t('terminal_expired'),
+            id: createConversationId('s'), role: 'system' as const, content: t('terminal_expired'),
             offeredPrice: null, createdAt: new Date().toISOString(),
           }])
           lastFailedRef.current = null
@@ -711,7 +709,7 @@ export default function BargainWidget({
           if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
           if (data.finalPrice != null) setFinalPrice(data.finalPrice)
           setMessages(prev => [...prev, {
-            id: `s-${Date.now()}`, role: 'system', content: data.message ?? 'Session ended.',
+            id: createConversationId('s'), role: 'system', content: data.message ?? 'Session ended.',
             offeredPrice: null, createdAt: new Date().toISOString(),
           }])
           if (data.status === 'rejected') setDecision('reject')
@@ -742,16 +740,21 @@ export default function BargainWidget({
       // Reveal the reply only after the tick has landed and the thinking bubble
       // has been visible for a natural beat — never slower than the network.
       await thinkingReady
+      if (seq !== requestSeqRef.current) return
       const seenFor = Date.now() - thinkingShownAtRef.current
       const hold = minThinkingMs(data.reply) - seenFor
       if (hold > 0) await wait(hold)
-      setMessages(prev => [
-        ...prev,
-        {
-          id: `a-${Date.now()}`, role: 'ai', content: data.reply,
-          offeredPrice: data.counterOffer ?? null, createdAt: new Date().toISOString(),
-        },
-      ])
+      if (seq !== requestSeqRef.current) return
+      const aiId = `${turnId}-a`
+      setMessages(prev => prev.some((m) => m.id === aiId)
+        ? prev
+        : [
+            ...prev,
+            {
+              id: aiId, role: 'ai', content: data.reply,
+              offeredPrice: data.counterOffer ?? null, createdAt: new Date().toISOString(),
+            },
+          ])
       // An "accept" decision is the shopkeeper MEETING the shopper's number and
       // asking them to confirm — the deal is not locked until they tap Accept
       // (which mints the code via POST /api/bargain/accept). Only a terminal
@@ -778,29 +781,32 @@ export default function BargainWidget({
       if (typeof data.attemptsUsed === 'number') setAttemptsUsed(data.attemptsUsed)
       if (data.goal) setGoal(data.goal)
       if (data.finalPrice != null) setFinalPrice(data.finalPrice)
-      if (Array.isArray(data.recommendations) && data.recommendations.length > 0) {
-        setRecommendations(data.recommendations)
-      }
+      setRecommendations(Array.isArray(data.recommendations) && data.recommendations.length > 0 ? data.recommendations : null)
+      if (typeof data.recommendationReason === 'string') setRecommendationReason(data.recommendationReason)
+      if (data.recommendationHistory) setRecommendationHistory(data.recommendationHistory)
       lastFailedRef.current = null
     } catch (err: any) {
+      if (seq !== requestSeqRef.current) return
       fireAvatar('API_ERROR')
-      lastFailedRef.current = { kind: 'offer', payload: msg }
+      lastFailedRef.current = { kind: 'offer', payload: msg, turnId }
       setError(errorCopy(err))
     } finally {
       window.clearTimeout(ackTimer)
       window.clearTimeout(requestTimer)
       if (requestAbortRef.current === controller) requestAbortRef.current = null
       if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
-      markMessageDelivered(localId)
-      setShowThinking(false)
-      setLoading(false)
-      busyRef.current = false
+      if (seq === requestSeqRef.current) {
+        markMessageDelivered(localId)
+        setShowThinking(false)
+        setLoading(false)
+        busyRef.current = false
+      }
     }
   }
 
   // Shopper interacted with a recommendation card — record it server-side. This
   // is write-only analytics; the server never returns card data from it.
-  async function fireRecoEvent(action: 'clicked' | 'added', card: BargainRecommendation) {
+  async function fireRecoEvent(action: RecommendationEventAction, card: BargainRecommendation) {
     if (!sessionId) return
     try {
       await fetch(`${apiBase}/api/bargain/recommend/event`, {
@@ -822,9 +828,13 @@ export default function BargainWidget({
   // Add a recommended product to the storefront cart (only works when the
   // widget runs on the Shopify storefront origin). Falls back to the product
   // page so the flow never dead-ends.
+  function handleRecommendationEvent(action: RecommendationEventAction, card: BargainRecommendation) {
+    void fireRecoEvent(action, card)
+    if (action === 'added') void addRecoToCart(card)
+  }
+
   async function addRecoToCart(card: BargainRecommendation) {
     if (!card.available) return
-    fireRecoEvent('added', card)
     if (typeof window === 'undefined' || !card.variantId) {
       if (card.productUrl) window.open(card.productUrl, '_blank', 'noopener')
       return
@@ -864,7 +874,7 @@ export default function BargainWidget({
       setMessages(prev => [
         ...prev,
         {
-          id: `s-${Date.now()}`, role: 'system',
+          id: createConversationId('s'), role: 'system',
           content: t('optOutMsg'),
           offeredPrice: null, createdAt: new Date().toISOString(),
         },
@@ -915,7 +925,7 @@ export default function BargainWidget({
           setMessages(prev => [
             ...prev,
             {
-              id: `s-${Date.now()}`,
+              id: createConversationId('s'),
               role: 'system' as const,
               content: data.message ?? t('tryAgain'),
               offeredPrice: null,
@@ -939,7 +949,7 @@ export default function BargainWidget({
       setMessages(prev => [
         ...prev,
         {
-          id: `s-${Date.now()}`,
+          id: createConversationId('s'),
           role: 'system',
           content: `${t('greatDeal')} ${currencySymbol}${(data.finalPrice ?? livePrice).toFixed(2)} — ${t('copy')} ${data.discountCode ?? ''} ${t('codeApply')}`,
           createdAt: new Date().toISOString(),
@@ -973,6 +983,8 @@ export default function BargainWidget({
     setEndedReason(null)
     setLimit(null)
     setRecommendations(null)
+    setRecommendationReason(null)
+    setRecommendationHistory(null)
     setFloorReached(false)
     setShippingInfo(null)
     setRejection(null)
@@ -985,7 +997,7 @@ export default function BargainWidget({
     const last = lastFailedRef.current
     if (!last) return
     if (last.kind === 'start') await startSession()
-    else if (last.kind === 'offer' && last.payload) await sendMessage(last.payload)
+    else if (last.kind === 'offer' && last.payload) await sendMessage(last.payload, last.turnId)
     else if (last.kind === 'accept') await acceptDeal()
   }
 
@@ -1400,7 +1412,7 @@ export default function BargainWidget({
             />
           )}
 
-          {activeTab === 'chat' && avatarEnabled && !unavailable && !limit && (
+          {avatarEnabled && !unavailable && !limit && (
             <ShopkeeperStage
               personality={personality}
               expression={expression}
@@ -1418,12 +1430,7 @@ export default function BargainWidget({
             aria-live="polite"
             aria-relevant="additions"
             aria-label={t('tabChat')}
-            onScroll={(e) => {
-              const el = e.currentTarget
-              const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-              setAtBottom(nearBottom)
-              if (!nearBottom) lastInteractRef.current = Date.now()
-            }}
+            onScroll={handleConversationScroll}
             style={{
               flex: 1,
               overflowY: 'auto',
@@ -1436,68 +1443,47 @@ export default function BargainWidget({
               minHeight: 0,
             }}
           >
-            {activeTab !== 'chat' ? (
-              <DealInfoPanel
-                t={t}
-                currencySymbol={currencySymbol}
+            {activeTab === 'info' && (
+              <BargainOfferSummary
                 originalPrice={livePrice}
                 finalPrice={finalPrice}
+                lastCounter={lastCounter}
+                currencySymbol={currencySymbol}
                 decision={decision}
                 discountCode={discountCode}
                 productTitle={productCtx.title}
-                sessEnded={sessionEnded}
+                sessionEnded={sessionEnded}
               />
-            ) : (
-              <>
-                {/* Product context — what we're negotiating, shown once at top.
-                Hidden in embedded mode: the chat header already shows the
-                product, price and persona, and the slim window needs every
-                pixel for the actual conversation. */}
-                {!isEmbed && messages.length > 0 && (
-                  <ProductContextCard
-                    image={productCtx.image}
-                    title={productCtx.title}
-                    currencySymbol={currencySymbol}
-                    price={livePrice}
-                    mode={mode}
-                  />
-                )}
+            )}
 
-                {messages.length === 0 && (
-                  <ChatSkeleton t={t} />
-                )}
+            {/* Product context — what we're negotiating, shown once at top.
+            Hidden in embedded mode: the chat header already shows the
+            product, price and persona, and the slim window needs every
+            pixel for the actual conversation. */}
+            {!isEmbed && messages.length > 0 && (
+              <ProductContextCard
+                image={productCtx.image}
+                title={productCtx.title}
+                currencySymbol={currencySymbol}
+                price={livePrice}
+                mode={mode}
+              />
+            )}
 
-                {messages.map((m, idx) => (
-                  <MessageBubble
-                    key={m.id}
-                    m={m}
-                    t={t}
-                    currencySymbol={currencySymbol}
-                    personaChip={personaChip}
-                    isFinal={floorReached && idx === messages.length - 1 && m.offeredPrice != null}
-                  />
-                ))}
+            {messages.length === 0 && (
+              <ChatSkeleton t={t} />
+            )}
 
-                {/* Product recommendation cards (server-verified alternatives) */}
-                {recommendations && recommendations.length > 0 && (
-                  <div style={{ alignSelf: 'flex-start', width: '100%', animation: 'cgMsgIn 0.2s ease-out' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: '#6366f1', margin: '10px 6px 8px' }}>
-                      {t('alternativesTitle')}
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {recommendations.map(card => (
-                        <RecoCard
-                          key={card.productId}
-                          card={card}
-                          currencySymbol={currencySymbolFor(card.currency)}
-                          t={t}
-                          onView={(c) => fireRecoEvent('clicked', c)}
-                          onAdd={addRecoToCart}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
+            {messages.map((m, idx) => (
+              <MessageBubble
+                key={m.id}
+                m={m}
+                t={t}
+                currencySymbol={currencySymbol}
+                personaChip={personaChip}
+                isFinal={floorReached && idx === messages.length - 1 && m.offeredPrice != null}
+              />
+            ))}
 
                 {/* Shipping transparency (Module 4) — honest total + free-shipping value-add */}
                 {shippingInfo && decision !== 'accept' && (
@@ -1764,9 +1750,22 @@ export default function BargainWidget({
                     </div>
                   </StateCard>
                 )}
-              </>
-            )}
           </div>
+
+          {activeTab === 'chat' && conversationUnread > 0 && (
+            <button
+              type="button"
+              onClick={() => { jumpToLatestMessage() }}
+              style={{
+                alignSelf: 'center', margin: '-34px auto 6px', zIndex: 2,
+                background: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: 999,
+                padding: '5px 12px', fontSize: 11.5, fontWeight: 700,
+                boxShadow: '0 4px 14px rgba(79,70,229,0.28)',
+              }}
+            >
+              Jump to latest ({conversationUnread})
+            </button>
+          )}
 
           {/* ── Counter-offer accept bar ── */}
           {!sessionEnded && decision !== 'accept' && lastCounter != null && !unavailable && (
@@ -1786,6 +1785,15 @@ export default function BargainWidget({
                 </div>
               )}
             </div>
+          )}
+
+          {activeTab === 'chat' && (
+            <BargainRecommendationPanel
+              recommendations={recommendations}
+              reason={recommendationReason}
+              history={recommendationHistory}
+              onEvent={handleRecommendationEvent}
+            />
           )}
 
           {/* ── Offer composer ── */}

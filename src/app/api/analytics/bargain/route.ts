@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { DESIGN_VARIANT_META, PERSONALITY_META } from '@/lib/bargain/experience/types'
 import { isFeatureEnabled } from '@/lib/feature-flags'
+import { bargainRequestMetrics } from '@/lib/bargain/request-metrics'
 
 export const dynamic = 'force-dynamic'
 
@@ -284,6 +285,7 @@ export async function GET(request: NextRequest) {
       degradedSamples: latencyRows.filter((row) => Boolean(row.failureCategory)).length,
       note: 'AI turn latency from production learning events. Provider failover attempts share one bounded deadline.',
     },
+    requestMetrics: bargainRequestMetrics.snapshot(),
     experiments: {
       enabled: isFeatureEnabled('BARGAIN_DUAL_AGENT'),
       arms: experimentRows,

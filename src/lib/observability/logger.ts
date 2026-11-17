@@ -17,7 +17,7 @@ import type { NextRequest } from 'next/server'
 import prisma from '@/lib/db'
 import { redactSensitive } from '@/lib/data-protection'
 import { sendAlert } from '@/lib/alerter'
-import { redisSetNX, redisIncr, redisExpire } from '@/lib/redis'
+import { redisSetNXOrNull, redisIncr, redisExpire } from '@/lib/redis'
 import { currentRelease, currentEnvironment } from './version'
 
 export type LogLevel = 'info' | 'warn' | 'error' | 'critical'
@@ -127,44 +127,57 @@ function emitLog(entry: StructuredLog): void {
   else console.log(line)
 }
 
-/** 10-minute cooldown per component::operation for CRITICAL alert emails. */
+const CRITICAL_ALERT_TTL_MS = 10 * 60 * 1000
+const SPIKE_ALERT_TTL_MS = 15 * 60 * 1000
+const MAX_LOCAL_ALERT_COOLDOWNS = 1000
+
+const localAlertCooldowns = new Map<string, number>()
+
+export function claimLocalAlertCooldown(
+  cooldowns: Map<string, number>,
+  key: string,
+  ttlMs: number,
+  now: number = Date.now(),
+): boolean {
+  const until = cooldowns.get(key)
+  if (until !== undefined && until > now) return false
+  cooldowns.set(key, now + ttlMs)
+  if (cooldowns.size > MAX_LOCAL_ALERT_COOLDOWNS) {
+    cooldowns.forEach((expiresAt, k) => {
+      if (expiresAt <= now) cooldowns.delete(k)
+    })
+    while (cooldowns.size >= MAX_LOCAL_ALERT_COOLDOWNS) {
+      const oldest = cooldowns.keys().next().value
+      if (oldest === undefined) break
+      cooldowns.delete(oldest)
+    }
+  }
+  return true
+}
+
+async function claimAlertSend(key: string, ttlMs: number): Promise<boolean> {
+  const claimed = await redisSetNXOrNull(key, '1', ttlMs)
+  if (claimed !== null) return claimed
+  return claimLocalAlertCooldown(localAlertCooldowns, key, ttlMs)
+}
+
 async function notifyCriticalDeduped(component: string, operation: string, entry: StructuredLog): Promise<void> {
   const cooldownKey = `alert:critical:${component}:${operation}`
-  try {
-    const fresh = await redisSetNX(cooldownKey, '1', 10 * 60 * 1000)
-    if (!fresh) return // alert already sent recently
-  } catch {
-    // Redis down — fall back to a per-process cooldown map.
-    if (criticalCooldowns.has(cooldownKey)) return
-    criticalCooldowns.set(cooldownKey, Date.now())
-    setTimeout(() => criticalCooldowns.delete(cooldownKey), 10 * 60 * 1000).unref?.()
-  }
+  if (!(await claimAlertSend(cooldownKey, CRITICAL_ALERT_TTL_MS))) return
   await sendAlert(
     `[CRITICAL] ${component} failed — ${operation}`,
     `${entry.message}\n\nTrace: ${entry.traceId || 'n/a'} · Release: ${entry.release || 'n/a'} · Env: ${entry.environment || 'n/a'}`,
   ).catch(() => {})
 }
 
-const criticalCooldowns = new Map<string, number>()
-
-/** 15-minute cooldown per component for error-spike alerts. */
 async function notifySpikeDeduped(component: string, operation: string, entry: StructuredLog): Promise<void> {
   const spikeKey = `alert:spike:${component}`
-  try {
-    const fresh = await redisSetNX(spikeKey, '1', 15 * 60 * 1000)
-    if (!fresh) return
-  } catch {
-    if (spikeCooldowns.has(spikeKey)) return
-    spikeCooldowns.set(spikeKey, Date.now())
-    setTimeout(() => spikeCooldowns.delete(spikeKey), 15 * 60 * 1000).unref?.()
-  }
+  if (!(await claimAlertSend(spikeKey, SPIKE_ALERT_TTL_MS))) return
   await sendAlert(
     `Error spike detected — ${component}`,
     `More than ${SPIKE_THRESHOLD} errors from [${component}] in the last hour while processing [${operation}].\n\nRecent: ${entry.message}\nTrace: ${entry.traceId || 'n/a'} · Release: ${entry.release || 'n/a'}`,
   ).catch(() => {})
 }
-
-const spikeCooldowns = new Map<string, number>()
 
 const SPIKE_THRESHOLD = 20
 const SPIKE_WINDOW_SECONDS = 3600

@@ -17,7 +17,9 @@ import {
   type ExpressionState,
 } from '@/lib/bargain/experience/expressions'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
-import type { BargainDemoGoal } from '@/lib/bargain/api-types'
+import type { BargainDemoGoal, BargainRecommendation, RecommendationHistory } from '@/lib/bargain/api-types'
+import BargainRecommendationPanel from '@/components/bargain/BargainRecommendationPanel'
+import { createConversationId, useConversationAutoScroll } from '@/components/bargain/conversation-utils'
 
 type Line =
   | { kind: 'item'; id: string; variantId?: string | null; title: string; price: number; image?: string }
@@ -64,11 +66,6 @@ function money(currency: string, n: number): string {
   return `${currencySymbolFor(currency)}${n.toFixed(2)}`
 }
 
-// Stable per-message id for React keys + optimistic delivery tracking.
-function uid(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-}
-
 type ChatLine = {
   role: string
   content: string
@@ -111,6 +108,7 @@ export default function StorefrontBargainWidget({
   goal: goalProp,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const isCart = line.kind === 'cart'
   const productId = !isCart ? line.id : null
@@ -139,6 +137,9 @@ export default function StorefrontBargainWidget({
     freeShipping: boolean
     upsell: string | null
   } | null>(null)
+  const [recommendations, setRecommendations] = useState<BargainRecommendation[] | null>(null)
+  const [recommendationReason, setRecommendationReason] = useState<string | null>(null)
+  const [recommendationHistory, setRecommendationHistory] = useState<RecommendationHistory | null>(null)
   useEffect(() => {
     if (goalProp) setGoalState(goalProp)
   }, [goalProp])
@@ -147,6 +148,16 @@ export default function StorefrontBargainWidget({
   // The "thinking" dots are held back until the delivered tick has landed, so
   // the sequence reads naturally: message → delivered tick → thinking → reply.
   const [showThinking, setShowThinking] = useState(false)
+  const {
+    unread: conversationUnread,
+    handleScroll: handleConversationScroll,
+    noteSent: noteConversationSent,
+    jumpToLatest: jumpToLatestMessage,
+  } = useConversationAutoScroll({
+    scrollRef,
+    messageCount: messages.length,
+    activityKey: showThinking,
+  })
   const thinkingTimerRef = useRef<number | null>(null)
   const thinkingShownAtRef = useRef(0)
   // Synchronous in-flight guard: blocks a second Enter/click that lands before
@@ -199,6 +210,9 @@ export default function StorefrontBargainWidget({
     setDiscountCode(null)
     setCodeSaved(false)
     setError(null)
+    setRecommendations(null)
+    setRecommendationReason(null)
+    setRecommendationHistory(null)
   }
 
   // Local fallback pacing (only used if the API is unreachable) — the same
@@ -271,7 +285,7 @@ export default function StorefrontBargainWidget({
   }, [])
 
   const pushAi = useCallback((content: string, price?: number) => {
-    setMessages((prev) => [...prev, { role: 'ai', content, price, id: uid(), delivery: 'delivered' }])
+    setMessages((prev) => [...prev, { role: 'ai', content, price, id: createConversationId('f'), delivery: 'delivered' }])
   }, [])
 
   const handleSend = async () => {
@@ -286,13 +300,14 @@ export default function StorefrontBargainWidget({
     const offer = extractPrice(userText)
     const isWalkout = detectWalkout(userText)
     busyRef.current = true
-    const userMsgId = uid()
+    const userMsgId = createConversationId('f')
     setExpression(expressionForShopperMessage(avatarPersonality, userText, originalPrice))
     setMessages((prev) => [
       ...prev,
       { role: 'customer', content: userText, price: offer ?? undefined, id: userMsgId, delivery: 'sending' },
     ])
     setInput('')
+    noteConversationSent()
     setLoading(true)
     setError(null)
     // Optimistic delivery ack: flip the clock to a single tick almost
@@ -356,6 +371,9 @@ export default function StorefrontBargainWidget({
       }
       if (data.goal) setGoalState(data.goal)
       if (data.shipping && typeof data.shipping.total === 'number') setShippingInfo(data.shipping)
+      setRecommendations(Array.isArray(data.recommendations) && data.recommendations.length > 0 ? data.recommendations : null)
+      if (typeof data.recommendationReason === 'string') setRecommendationReason(data.recommendationReason)
+      if (data.recommendationHistory) setRecommendationHistory(data.recommendationHistory)
 
       const nextAttempt = attempts + 1
       // A joke offer far below the floor gets a persona reply but must not burn
@@ -673,7 +691,14 @@ export default function StorefrontBargainWidget({
             <p className="text-xs text-indigo-500 font-medium">{PERSONA_DISPLAY[persona]}</p>
           </div>
 
-          <div className="space-y-2 max-h-56 overflow-y-auto" role="log" aria-live="polite" aria-label="Negotiation conversation">
+          <div
+            ref={scrollRef}
+            className="space-y-2 max-h-56 overflow-y-auto"
+            role="log"
+            aria-live="polite"
+            aria-label="Negotiation conversation"
+            onScroll={handleConversationScroll}
+          >
             {messages.map((msg) => {
               const isCustomer = msg.role === 'customer'
               return (
@@ -728,6 +753,27 @@ export default function StorefrontBargainWidget({
               {shippingInfo.upsell && <p className="mt-1 text-indigo-600 font-medium">{shippingInfo.upsell}</p>}
             </div>
           )}
+
+          {conversationUnread > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => { jumpToLatestMessage() }}
+                style={{
+                  background: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: 999,
+                  padding: '5px 12px', fontSize: 11.5, fontWeight: 700,
+                }}
+              >
+                Jump to latest ({conversationUnread})
+              </button>
+            </div>
+          )}
+
+          <BargainRecommendationPanel
+            recommendations={recommendations}
+            reason={recommendationReason}
+            history={recommendationHistory}
+          />
 
           <div className="flex gap-2">
             <input
