@@ -65,10 +65,6 @@ jest.mock('@/lib/financial-safety', () => ({
   })),
 }))
 
-jest.mock('@/lib/bargain/offer-validation', () => ({
-  validateOffer: jest.fn(() => ({ ok: true })),
-}))
-
 jest.mock('@/lib/bargain/policy', () => ({
   bargainCampaignStatus: jest.fn(() => 'active'),
   couponMentionedInMessages: jest.fn(() => false),
@@ -142,6 +138,31 @@ beforeEach(() => {
 })
 
 describe('POST /api/bargain/accept — legacy "accepted, no code" recovery', () => {
+  it('refuses an expired session before minting a code', async () => {
+    prismaMock.bargainSession.findUnique.mockResolvedValue(
+      session({ expiredAt: new Date(Date.now() - 60_000) }),
+    )
+
+    const res = await POST(makeRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(body.reason).toBe('SESSION_EXPIRED')
+    expect(mintMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses to mint a code while bargaining is paused', async () => {
+    prismaMock.bargainSession.findUnique.mockResolvedValue(session())
+    prismaMock.bargainConfig.findUnique.mockResolvedValue({ emergencyPaused: true })
+
+    const res = await POST(makeRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(body.reason).toBe('BARGAIN_PAUSED')
+    expect(mintMock).not.toHaveBeenCalled()
+  })
+
   it('claims a stranded accepted session (no code) and mints the deal', async () => {
     prismaMock.bargainSession.findUnique.mockResolvedValue(session())
 

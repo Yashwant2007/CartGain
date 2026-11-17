@@ -146,7 +146,7 @@ export async function issueRetentionDiscount(sessionId: string): Promise<IssuedB
     floorPrice: minPrice,
     shopifyCustomerId,
   })
-  if (result.status === 'failed') return null
+  if (result.status !== 'created' || !result.verified) return null
 
   const purchaseUrl = buildBargainCheckoutUrl({
     domain: session.store.domain,

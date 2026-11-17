@@ -1,4 +1,9 @@
 import { generateBargainDiscountCode, buildCustomerSelection } from '@/lib/bargain/discount'
+import {
+  buildBasicCodeDiscount,
+  buildDiscountValue,
+  resolveDiscountTarget,
+} from '@/lib/shopify/discount'
 
 jest.mock('@/lib/shopify', () => ({
   getAccessToken: jest.fn(),
@@ -99,5 +104,50 @@ describe('buildCustomerSelection', () => {
     expect(buildCustomerSelection(null)).toEqual({ all: true })
     expect(buildCustomerSelection(undefined)).toEqual({ all: true })
     expect(buildCustomerSelection('  ')).toEqual({ all: true })
+  })
+})
+
+describe('Shopify 2026-04 discount input', () => {
+  it('uses context, nested value and nested minimum subtotal', () => {
+    const input = buildBasicCodeDiscount({
+      store: STORE,
+      code: 'BARGAIN-ABC123',
+      title: 'Bargain BARGAIN-ABC123',
+      value: { kind: 'percentage', percentage: 20 },
+      target: resolveDiscountTarget({ productId: '12345' }),
+      minimumSubtotal: 100,
+      shopifyCustomerId: '999',
+    })
+    expect(input).toMatchObject({
+      code: 'BARGAIN-ABC123',
+      context: { customers: { add: ['gid://shopify/Customer/999'] } },
+      customerGets: {
+        value: { percentage: 0.2 },
+        items: { products: { productsToAdd: ['gid://shopify/Product/12345'] } },
+      },
+      minimumRequirement: {
+        subtotal: { greaterThanOrEqualToSubtotal: '100.00' },
+      },
+    })
+    expect(input).not.toHaveProperty('customerSelection')
+    expect(input).not.toHaveProperty('value')
+    expect(input).not.toHaveProperty('minimumSubtotal')
+    expect(input).not.toHaveProperty('summary')
+  })
+
+  it('maps a ProductVariant GID sent in the product field to productVariantsToAdd', () => {
+    expect(resolveDiscountTarget({ productId: 'gid://shopify/ProductVariant/42' })).toEqual({
+      scope: 'variant',
+      variantGids: ['gid://shopify/ProductVariant/42'],
+    })
+  })
+
+  it('keeps fixed decimal amounts as strings and percentages between 0 and 1', () => {
+    expect(buildDiscountValue({ kind: 'fixed', amount: 25 })).toEqual({
+      discountAmount: { amount: '25.00', appliesOnEachItem: false },
+    })
+    expect(buildDiscountValue({ kind: 'percentage', percentage: 12.5 })).toEqual({
+      percentage: 0.125,
+    })
   })
 })

@@ -25,7 +25,6 @@ import { buildProductContext } from '@/lib/bargain/product-fetcher'
 import { searchRecommendations, recommendationReason, type RecommendationCard, type RecommendationReason, type RecommendationContext } from '@/lib/bargain/recommendations'
 import { fetchShopifyProducts } from '@/lib/shopify'
 import { toNumericId } from '@/lib/shopify-line-items'
-import { generateBargainBundleDiscountCode } from '@/lib/bargain/discount'
 import { issueRetentionDiscount, buildBargainClaimUrl } from '@/lib/bargain/purchase'
 import { track } from '@/lib/analytics/track'
 import { resolveSessionLearning, recordLearningEvent, loadLearningConfig } from '@/lib/bargain/learning/service'
@@ -399,35 +398,17 @@ export async function POST(request: NextRequest) {
             const desiredPct = config.bundleDiscountPercent ?? 10
             const quote = buildBundle(items, { discountPercent: desiredPct })
             if (quote && validateBundleOffer(quote).ok) {
-              const code = `BUNDLE${Math.random().toString(36).slice(2, 8).toUpperCase()}`
-              // Mint the Shopify code only when a store is connected; otherwise
-              // return the deterministic quote without a code (pending sync).
-              let codeStatus: 'created' | 'pending' | 'failed' | 'none' = 'none'
-              let createdCode: string | null = null
-              try {
-                const generated = await generateBargainBundleDiscountCode({
-                  store: bargainSession.store,
-                  items: quote.items.map((it) => ({ productId: it.productId, variantId: it.variantId })),
-                  listTotal: quote.listTotal,
-                  offerTotal: quote.offerTotal,
-                  discountPercent: quote.discountPercent,
-                  code,
-                  customerEmail: bargainSession.customerEmail,
-                  cartToken: bargainSession.cartToken,
-                })
-                codeStatus = generated.status === 'created' ? 'created' : generated.status === 'pending' ? 'pending' : 'failed'
-                createdCode = generated.status === 'created' ? generated.code : null
-              } catch {
-                codeStatus = 'failed'
-              }
+              // A bundled price is a proposal, not an issued deal. No Shopify
+              // code exists until the shopper accepts and the server revalidates
+              // the floor at that moment; never show a code from a chat turn.
               bundleOffer = {
                 items: allocateDiscount(quote.items, quote.offerTotal),
                 listTotal: quote.listTotal,
                 offerTotal: quote.offerTotal,
                 discountPercent: quote.discountPercent,
                 currencySymbol,
-                code: createdCode ?? (codeStatus === 'pending' ? code : null),
-                codeStatus,
+                code: null,
+                codeStatus: 'none',
               }
               await track({
                 name: 'cartgain_bundle_offer',

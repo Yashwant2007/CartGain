@@ -180,7 +180,13 @@ export async function POST(request: NextRequest) {
     // are set together and ordered).
     const config = await prisma.bargainConfig.findUnique({
       where: { storeId: bargainSession.storeId },
-      select: { campaignStart: true, campaignEnd: true, couponStackingEnabled: true },
+      select: {
+        campaignStart: true,
+        campaignEnd: true,
+        couponStackingEnabled: true,
+        emergencyPaused: true,
+        maxAttempts: true,
+      },
     })
     const campaignActive = bargainCampaignStatus(config, new Date()) === 'active'
 
@@ -216,6 +222,10 @@ export async function POST(request: NextRequest) {
       variantAvailable,
       productAvailable,
       campaignActive,
+      sessionExpired: bargainSession.expiredAt.getTime() <= Date.now(),
+      emergencyPaused: config?.emergencyPaused === true,
+      attemptsUsed: Math.max(0, bargainSession.attemptsUsed - 1),
+      maxAttempts: config?.maxAttempts ?? 3,
       couponMentioned,
       couponsAllowed,
     })
@@ -353,14 +363,16 @@ export async function POST(request: NextRequest) {
       shopifyCode = { code, status: 'failed', error: err?.message ?? 'unknown' }
     }
 
-    if (shopifyCode.status === 'failed') {
+    if (shopifyCode.status !== 'created') {
       await prisma.bargainSession.updateMany({
         where: { id: bargainSession.id, status: 'accepting' },
         data: { status: 'active' },
       })
       return NextResponse.json({
-        message: `Discount code creation failed — please try again. ${shopifyCode.error || ''}`,
-      }, { status: 500 })
+        message: shopifyCode.status === 'pending'
+          ? 'Your offer is ready, but this store is not connected to Shopify yet. Please try again shortly.'
+          : `Discount code creation failed — please try again. ${shopifyCode.error || ''}`,
+      }, { status: shopifyCode.status === 'pending' ? 503 : 500 })
     }
 
     // Commit the acceptance atomically: meters + system message + session update

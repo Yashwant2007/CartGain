@@ -307,7 +307,7 @@ function CartGainBargainWidget() {
       } else if (result.decision === 'accept') {
         newStep = 'deal';
         newFinal = offer;
-        newCode = `BARGAIN_${Date.now().toString(36).toUpperCase()}`;
+        newCode = null;
       }
 
       setMessages((prev) => [...prev, { role: 'ai', content: result.reply, price: result.counterOffer }]);
@@ -321,8 +321,9 @@ function CartGainBargainWidget() {
   };
 
   const applyBargainDiscount = async () => {
-    if (!discountCode || !finalPrice) return;
+    if (!finalPrice) return;
     setLoading(true);
+    setError(null);
     try {
       const shopDomain = api.shop?.myshopifyDomain || '';
       if (!shopDomain) throw new Error('Shop domain not available');
@@ -348,7 +349,7 @@ function CartGainBargainWidget() {
           originalPrice,
           finalPrice,
           discountPercent: Math.round((1 - finalPrice / originalPrice) * 100),
-          code: discountCode,
+          ...(discountCode ? { code: discountCode } : {}),
           orderLevel: isThankYou,
           shopifyCustomerId,
           customerEmail,
@@ -357,6 +358,11 @@ function CartGainBargainWidget() {
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Failed to create discount code');
+      const issuedCode = data.code;
+      if (typeof issuedCode !== 'string' || !issuedCode) {
+        throw new Error('Shopify did not confirm a discount code');
+      }
+      setDiscountCode(issuedCode);
 
       if (isThankYou) {
         // Order already placed — nothing to apply now; the code is for the next
@@ -367,7 +373,7 @@ function CartGainBargainWidget() {
 
       const result = await api.applyDiscountCodeChange({
         type: 'addDiscountCode',
-        code: discountCode,
+        code: issuedCode,
       });
       if (result.type === 'error') {
         throw new Error(result.message || 'Failed to apply discount code');
@@ -473,13 +479,17 @@ function CartGainBargainWidget() {
                     <s-text color="subdued">You saved ₹{(originalPrice - finalPrice).toFixed(2)}</s-text>
                   </>
                 )}
-                <s-text color="subdued">Discount code: {discountCode}</s-text>
+                {discountCode ? (
+                  <s-text color="subdued">Discount code: {discountCode}</s-text>
+                ) : (
+                  <s-text color="subdued">Your price is locked. Confirm below to create a one-time checkout code.</s-text>
+                )}
                 {error && <s-banner tone="critical" heading="Error">{error}</s-banner>}
                 {isThankYou ? (
                   codeSaved ? (
                     <s-text color="subdued">Code is ready — apply it when you check out next time.</s-text>
                   ) : (
-                    <s-button onClick={applyBargainDiscount} disabled={loading || !discountCode || !finalPrice}>
+                    <s-button onClick={applyBargainDiscount} disabled={loading || !finalPrice}>
                       {loading ? 'Generating...' : 'Get My Code'}
                     </s-button>
                   )

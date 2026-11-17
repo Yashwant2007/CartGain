@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import prisma from '@/lib/db'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
+import { generateBargainCode } from '@/lib/bargain/purchase'
 import { computeMinPrice } from '@/lib/services/bargain'
 import { fetchShopifyProductPrice, fetchShopifyProductDetail } from '@/lib/shopify'
 import { buildExecutablePrice, clampOrderPercentForProduct } from '@/lib/financial-safety'
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     if (
       typeof shopDomain !== 'string' || !shopDomain ||
-      typeof code !== 'string' || !code || code.length > 100 ||
+      (code != null && (typeof code !== 'string' || code.length > 100)) ||
       !originalPrice || !finalPrice
     ) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400, headers })
@@ -139,12 +140,16 @@ export async function POST(request: NextRequest) {
     const rawBulk = bulkQuantity != null ? Math.floor(Number(bulkQuantity)) : null
     const safeBulk = rawBulk != null && Number.isFinite(rawBulk) && rawBulk >= 1 ? rawBulk : null
 
+    // Codes are server-issued. A client may echo a previously returned code to
+    // retry safely, but it can never invent one and show it as a real code.
+    let issuedCode = typeof code === 'string' && code.trim() ? code.trim() : generateBargainCode()
+
     // ── IDEMPOTENT REPLAY ──
     // The client can retry with the SAME code (flaky network / double tap). A
     // retried request must never mint a second Shopify code (Shopify would reject
     // the duplicate and surface a 500) or double-meter the deal.
     const existing = await prisma.bargainSession.findFirst({
-      where: { storeId: store.id, discountCode: code, status: 'accepted' },
+      where: { storeId: store.id, discountCode: issuedCode, status: 'accepted' },
       select: { discountCode: true },
     })
     if (existing?.discountCode) {
@@ -184,8 +189,11 @@ export async function POST(request: NextRequest) {
         if (quote.storeId !== store.id) {
           return NextResponse.json({ message: 'Quote does not belong to this store' }, { status: 409, headers })
         }
-        if (quote.discountCode && quote.discountCode !== code) {
-          return NextResponse.json({ message: 'Quote code mismatch' }, { status: 409, headers })
+        if (quote.discountCode) {
+          if (issuedCode !== quote.discountCode && code) {
+            return NextResponse.json({ message: 'Quote code mismatch' }, { status: 409, headers })
+          }
+          issuedCode = quote.discountCode
         }
         const verdict = revalidateQuote(quote, { price: currentPrice, floor: minPrice })
         if (!verdict.ok) {
@@ -211,7 +219,7 @@ export async function POST(request: NextRequest) {
     // configured AND outside it — no window means always active.
     const config = await prisma.bargainConfig.findUnique({
       where: { storeId: store.id },
-      select: { campaignStart: true, campaignEnd: true },
+      select: { campaignStart: true, campaignEnd: true, emergencyPaused: true },
     })
     const campaignActive = bargainCampaignStatus(config, new Date()) === 'active'
 
@@ -222,6 +230,7 @@ export async function POST(request: NextRequest) {
       variantAvailable,
       productAvailable,
       campaignActive,
+      emergencyPaused: config?.emergencyPaused === true,
     })
     if (!validation.ok) {
       return NextResponse.json(
@@ -296,14 +305,18 @@ export async function POST(request: NextRequest) {
       originalPrice: currentPrice,
       finalPrice: finalPriceSafe,
       discountPercent: calculatedPercent,
-      code,
+      code: issuedCode,
       bulkQuantity: safeBulk,
       floorPrice: minPrice,
       shopifyCustomerId: normalizedCustomerId,
     })
 
-    if (result.status === 'failed') {
-      return NextResponse.json({ message: result.error || 'Failed to create discount code' }, { status: 500, headers })
+    if (result.status !== 'created') {
+      return NextResponse.json({
+        message: result.status === 'pending'
+          ? 'This store is not connected to Shopify yet. Please try again shortly.'
+          : result.error || 'Failed to create discount code',
+      }, { status: result.status === 'pending' ? 503 : 500, headers })
     }
 
     // ── RECORD THE DEAL ──

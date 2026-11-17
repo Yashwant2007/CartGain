@@ -142,6 +142,8 @@ export default function StorefrontBargainWidget({
   useEffect(() => {
     if (goalProp) setGoalState(goalProp)
   }, [goalProp])
+
+  useEffect(() => () => requestAbortRef.current?.abort(), [])
   // The "thinking" dots are held back until the delivered tick has landed, so
   // the sequence reads naturally: message → delivered tick → thinking → reply.
   const [showThinking, setShowThinking] = useState(false)
@@ -150,6 +152,7 @@ export default function StorefrontBargainWidget({
   // Synchronous in-flight guard: blocks a second Enter/click that lands before
   // the `loading` state re-render, so a message is never sent twice.
   const busyRef = useRef(false)
+  const requestAbortRef = useRef<AbortController | null>(null)
 
   const originalPrice = line.kind === 'cart' ? line.total : line.price
   const minPrice = Math.round(originalPrice * (1 - minProfitPercent / 100) * 100) / 100
@@ -258,6 +261,7 @@ export default function StorefrontBargainWidget({
   // while a long one is never padded.
   const TICK_MS = 100
   const THINKING_DELAY_MS = 60
+  const REQUEST_TIMEOUT_MS = 25_000
   const minThinkingMs = (reply: string) =>
     Math.min(220, Math.max(90, reply.length * 2))
   const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
@@ -273,6 +277,10 @@ export default function StorefrontBargainWidget({
   const handleSend = async () => {
     if (!input.trim() || loading || busyRef.current) return
     const userText = input.trim()
+    requestAbortRef.current?.abort()
+    const controller = new AbortController()
+    requestAbortRef.current = controller
+    const requestTimer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
     // Complaint-aware: the same parser the server runs. A message like
     // "729 is too much" is not an offer, so the bubble must not tag it as one.
     const offer = extractPrice(userText)
@@ -334,6 +342,7 @@ export default function StorefrontBargainWidget({
           walkoutTriggered: isWalkout,
           bulkQuantity: isCart ? undefined : null,
         }),
+        signal: controller.signal,
       })
 
       const data = await res.json()
@@ -375,7 +384,8 @@ export default function StorefrontBargainWidget({
       if (data.decision === 'accept') {
         setStep('deal')
         setFinalPrice(data.counterOffer ?? offer)
-        setDiscountCode(`BARGAIN_${Date.now().toString(36).toUpperCase()}`)
+        setDiscountCode(null)
+        setCodeSaved(false)
       } else if (ended === 'rejected') {
         setStep('rejected')
       } else {
@@ -468,7 +478,8 @@ export default function StorefrontBargainWidget({
       } else if (result.decision === 'accept') {
         setStep('deal')
         setFinalPrice(result.counterOffer ?? offer)
-        setDiscountCode(`BARGAIN_${Date.now().toString(36).toUpperCase()}`)
+        setDiscountCode(null)
+        setCodeSaved(false)
       } else {
         setStep('chat')
       }
@@ -493,6 +504,8 @@ export default function StorefrontBargainWidget({
       setAttempts(nextAttempt)
     } finally {
       window.clearTimeout(ack)
+      window.clearTimeout(requestTimer)
+      if (requestAbortRef.current === controller) requestAbortRef.current = null
       if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
       markDelivered(userMsgId)
       setShowThinking(false)
@@ -502,7 +515,7 @@ export default function StorefrontBargainWidget({
   }
 
   const saveDeal = async () => {
-    if (!discountCode || !finalPrice || !shop) return
+    if (!finalPrice || !shop) return
     setLoading(true)
     setError(null)
     try {
@@ -516,12 +529,14 @@ export default function StorefrontBargainWidget({
           originalPrice,
           finalPrice,
           discountPercent: Math.round((1 - finalPrice / originalPrice) * 100),
-          code: discountCode,
+          ...(discountCode ? { code: discountCode } : {}),
           orderLevel: isCart,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || 'Failed to create discount code')
+      if (typeof data.code !== 'string' || !data.code) throw new Error('Shopify did not confirm a discount code')
+      setDiscountCode(data.code)
       setCodeSaved(true)
     } catch (err: any) {
       setError(err.message || 'Failed to create discount code')
@@ -749,20 +764,26 @@ export default function StorefrontBargainWidget({
           </div>
 
           <div className="bg-gray-100 rounded-lg p-3 space-y-2">
-            <p className="text-xs text-gray-500">Use this single-use code at checkout, valid 24h:</p>
-            <div className="flex items-center justify-center gap-2">
-              <code className="text-indigo-600 font-mono font-bold text-sm tracking-wider bg-indigo-100 rounded-lg px-3 py-1">
-                {discountCode}
-              </code>
-              <button
-                type="button"
-                className={`${ghostCls} text-xs`}
-                onClick={copyCode}
-                aria-label={copied ? 'Copied to clipboard' : 'Copy discount code'}
-              >
-                {copied ? 'Copied ✓' : 'Copy'}
-              </button>
-            </div>
+            {codeSaved && discountCode ? (
+              <>
+                <p className="text-xs text-gray-500">Use this single-use code at checkout, valid 24h:</p>
+                <div className="flex items-center justify-center gap-2">
+                  <code className="text-indigo-600 font-mono font-bold text-sm tracking-wider bg-indigo-100 rounded-lg px-3 py-1">
+                    {discountCode}
+                  </code>
+                  <button
+                    type="button"
+                    className={`${ghostCls} text-xs`}
+                    onClick={copyCode}
+                    aria-label={copied ? 'Copied to clipboard' : 'Copy discount code'}
+                  >
+                    {copied ? 'Copied ✓' : 'Copy'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-gray-500">Your price is locked. Confirm below to create a one-time checkout code.</p>
+            )}
           </div>
 
           {error && <p className="text-xs text-red-500 bg-red-50 rounded-lg p-2">{error}</p>}
@@ -776,9 +797,15 @@ export default function StorefrontBargainWidget({
           )}
 
           <div className="flex justify-center gap-2 pt-1">
-            <a href={checkoutUrl} className={buttonCls + ' no-underline'}>
-              Go to Checkout
-            </a>
+            {codeSaved && discountCode ? (
+              <a href={checkoutUrl} className={buttonCls + ' no-underline'}>
+                Go to Checkout
+              </a>
+            ) : (
+              <button type="button" className={buttonCls} disabled>
+                Go to Checkout
+              </button>
+            )}
             <button type="button" className={ghostCls} onClick={openBargain}>
               Bargain again
             </button>

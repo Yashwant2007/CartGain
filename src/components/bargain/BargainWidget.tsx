@@ -276,10 +276,13 @@ export default function BargainWidget({
   // the actual network round-trip.
   const thinkingTimerRef = useRef<number | null>(null)
   const thinkingShownAtRef = useRef(0)
+  const requestAbortRef = useRef<AbortController | null>(null)
   // Remembers the last FAILED action so "Try again" can replay exactly that
   // call — no double-submits, no lost offers.
   const lastFailedRef = useRef<{ kind: 'start' | 'offer' | 'accept'; payload?: string } | null>(null)
   const coarsePointer = useRef(false)
+
+  useEffect(() => () => requestAbortRef.current?.abort(), [])
 
   const currencySymbol = currencySymbolFor(currency)
   const t = (key: UiKey, vars?: Record<string, string | number>) => uiText(language, key, vars)
@@ -291,6 +294,7 @@ export default function BargainWidget({
   // then a length-scaled minimum thinking beat before the reply is revealed.
   const TICK_MS = 100
   const THINKING_DELAY_MS = 60
+  const REQUEST_TIMEOUT_MS = 25_000
   const minThinkingMs = (reply: string) => Math.min(220, Math.max(90, reply.length * 2))
   const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
   const personaChip = persona ? PERSONA_CHIP[persona] : undefined
@@ -644,6 +648,10 @@ export default function BargainWidget({
     setLoading(true)
     setError(null)
     setNotice(null)
+    requestAbortRef.current?.abort()
+    const controller = new AbortController()
+    requestAbortRef.current = controller
+    const requestTimer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
     const localId = `c-${Date.now()}`
     setExpression(expressionForShopperMessage(personality, msg, livePrice))
     setMessages(prev => [
@@ -673,6 +681,7 @@ export default function BargainWidget({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, message: msg, ...buyerIdentity() }),
+        signal: controller.signal,
       })
       const data = (await res.json()) as BargainOfferSuccess & {
         message?: string
@@ -779,6 +788,8 @@ export default function BargainWidget({
       setError(errorCopy(err))
     } finally {
       window.clearTimeout(ackTimer)
+      window.clearTimeout(requestTimer)
+      if (requestAbortRef.current === controller) requestAbortRef.current = null
       if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
       markMessageDelivered(localId)
       setShowThinking(false)
@@ -1947,7 +1958,7 @@ export default function BargainWidget({
           {isEmbed && (
             <style dangerouslySetInnerHTML={{ __html: `
               .cg-embed-mini { position: absolute; inset: 0; z-index: 99999; background: #ffffff; display: flex; }
-              .cg-embed-mini .cg-mini-inner { display: flex; align-items: center; gap: 10; padding: 10px 12px; width: 100%; border-radius: 14px; border: 1px solid #e0e7ff; background: #fafbff; }
+              .cg-embed-mini .cg-mini-inner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; width: 100%; border-radius: 14px; border: 1px solid #e0e7ff; background: #fafbff; }
             ` }} />
           )}
         </div>
@@ -2023,13 +2034,13 @@ export default function BargainWidget({
           box-shadow: -10px 18px 48px rgba(15,23,42,0.18), 0 2px 8px rgba(15,23,42,0.08);
           background: #ffffff;
         }
-        .cg-mini-inner { display: flex; align-items: center; gap: 10; padding: 10px 12px; width: 100%; height: 100%; }
+        .cg-mini-inner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; width: 100%; height: 100%; }
         .cg-mini-copy { flex: 1; min-width: 0; }
         .cg-mini-copy > div:first-child { font-weight: 800; font-size: 13.5; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .cg-mini-copy > div:last-child { font-size: 11.5; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         .cartgain-bargain .cg-icon-btn {
-          background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10;
+          background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
           color: #64748b; cursor: pointer; width: 40px; height: 40px;
           display: inline-flex; align-items: center; justify-content: center;
           transition: all 0.15s ease; outline: none; flex-shrink: 0;
@@ -2038,9 +2049,9 @@ export default function BargainWidget({
         .cg-link { touch-action: manipulation }
 
         .cg-btn {
-          border: none; border-radius: 12; cursor: pointer;
-          display: inline-flex; align-items: center; justify-content: center; gap: 7;
-          font-weight: 800; font-size: 15; outline: none; touch-action: manipulation;
+          border: none; border-radius: 12px; cursor: pointer;
+          display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+          font-weight: 800; font-size: 15px; outline: none; touch-action: manipulation;
           transition: all 0.18s ease; padding: 12px 16px; min-height: 48px;
         }
         .cg-btn:disabled { opacity: 0.55; cursor: default }
@@ -2057,7 +2068,7 @@ export default function BargainWidget({
         .cg-btn-send {
           width: 100%; background: linear-gradient(135deg, #6366f1, #4f46e5); color: #ffffff;
           box-shadow: 0 4px 16px rgba(79,70,229,0.42); min-height: 56px;
-          border-radius: 14;
+          border-radius: 14px;
         }
         .cg-btn-send:not(:disabled):hover { background: linear-gradient(135deg, #4f46e5, #4338ca); box-shadow: 0 6px 20px rgba(79,70,229,0.5) }
         .cg-btn-send:active { transform: translateY(1px) }
@@ -2076,7 +2087,7 @@ export default function BargainWidget({
         }
         .cg-btn-ghost:hover { background: #f8fafc }
 
-        .cg-card-cta { display: flex; gap: 8; justify-content: center; flex-wrap: wrap; margin-top: 14px }
+        .cg-card-cta { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 14px }
 
         .cg-skel-bar {
           height: 9px; border-radius: 999px; background: #e8ecf4;

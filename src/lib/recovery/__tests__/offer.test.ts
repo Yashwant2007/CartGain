@@ -24,10 +24,37 @@ const campaign = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
+const activeNode = (code: string) => ({
+  id: 'gid://shopify/DiscountCodeNode/1',
+  codeDiscount: {
+    status: 'ACTIVE',
+    endsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    usageLimit: 1,
+    codes: { nodes: [{ code }] },
+  },
+})
+
+const mockCreate = () => {
+  getAccessTokenMock.mockResolvedValue('token')
+  graphqlMock.mockImplementation((_shop: string, _token: string, query: string, variables: any) => {
+    if (query.includes('discountCodeBasicCreate')) {
+      return Promise.resolve({
+        discountCodeBasicCreate: {
+          userErrors: [],
+          codeDiscountNode: activeNode(variables.basicCodeDiscount.code),
+        },
+      })
+    }
+    if (query.includes('discountCodeLookup')) {
+      return Promise.resolve({ codeDiscountNodes: { nodes: [activeNode(variables.query)] } })
+    }
+    return Promise.resolve({})
+  })
+}
+
 beforeEach(() => {
   jest.clearAllMocks()
-  getAccessTokenMock.mockResolvedValue('token')
-  graphqlMock.mockResolvedValue({ discountCodeBasicCreate: { userErrors: [] } })
+  mockCreate()
 })
 
 describe('resolveRecoveryOffer', () => {
@@ -84,10 +111,19 @@ describe('resolveRecoveryOffer', () => {
       code: buildRecoveryCode('cart_1'),
       usageLimit: 1,
       appliesOncePerCustomer: true,
-      customerSelection: { all: true },
-      value: { percentage: 15 },
-      minimumSubtotal: 1200,
+      context: { all: 'ALL' },
+      customerGets: {
+        value: { percentage: 0.15 },
+        items: { all: true },
+      },
+      minimumRequirement: {
+        subtotal: { greaterThanOrEqualToSubtotal: '1200.00' },
+      },
     })
+    expect(variables.basicCodeDiscount).not.toHaveProperty('customerSelection')
+    expect(variables.basicCodeDiscount).not.toHaveProperty('value')
+    expect(variables.basicCodeDiscount).not.toHaveProperty('minimumSubtotal')
+    expect(variables.basicCodeDiscount).not.toHaveProperty('summary')
   })
 
   it('is deterministic per cart so retries cannot create duplicate codes', async () => {
@@ -106,11 +142,19 @@ describe('resolveRecoveryOffer', () => {
     expect(first?.code).toBe(second?.code)
   })
 
-  it('treats "already exists" as success (retry-safe)', async () => {
-    graphqlMock.mockResolvedValue({
-      discountCodeBasicCreate: {
-        userErrors: [{ field: ['code'], message: 'Code is already in use', code: 'TAKEN' }],
-      },
+  it('treats "already exists" as success when readback confirms the code', async () => {
+    graphqlMock.mockImplementation((_shop: string, _token: string, query: string, variables: any) => {
+      if (query.includes('discountCodeBasicCreate')) {
+        return Promise.resolve({
+          discountCodeBasicCreate: {
+            userErrors: [{ field: ['code'], message: 'Code is already in use', code: 'TAKEN' }],
+          },
+        })
+      }
+      if (query.includes('discountCodeLookup')) {
+        return Promise.resolve({ codeDiscountNodes: { nodes: [activeNode(variables.query)] } })
+      }
+      return Promise.resolve({})
     })
     const offer = await resolveRecoveryOffer({
       campaign: campaign(),
@@ -153,7 +197,7 @@ describe('resolveRecoveryOffer', () => {
       cartTotal: 100,
     })
     const [, , , variables] = graphqlMock.mock.calls[0]
-    expect(variables.basicCodeDiscount.value.percentage).toBe(90)
+    expect(variables.basicCodeDiscount.customerGets.value.percentage).toBe(0.9)
   })
 
   it('supports fixed-amount offers', async () => {
@@ -164,8 +208,8 @@ describe('resolveRecoveryOffer', () => {
       cartTotal: 200,
     })
     const [, , , variables] = graphqlMock.mock.calls[0]
-    expect(variables.basicCodeDiscount.value).toEqual({
-      discountAmount: { amount: 25, appliesOnEachItem: false },
+    expect(variables.basicCodeDiscount.customerGets.value).toEqual({
+      discountAmount: { amount: '25.00', appliesOnEachItem: false },
     })
   })
 })

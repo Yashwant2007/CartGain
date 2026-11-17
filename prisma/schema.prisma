@@ -576,7 +576,7 @@ model BargainSession {
   purchaseRefundStatus      String? // partially_refunded | fully_refunded
   purchaseRefundEventIds    String[]  @default([]) // idempotency ledger for refund/cancel webhooks
   attemptsUsed              Int       @default(0)
-  status                    String    @default("active") // active, accepted, rejected, expired, abandoned
+  status                    String    @default("active") // active, accepting, accepted, rejected, expired, abandoned
   language                  String    @default("auto") // auto, en, hinglish, hi, ta, te, bn, mr, gu, kn, ml, pa, or
   environment               String    @default("production") // production, demo
   learningStrategy          String?
@@ -611,6 +611,7 @@ model BargainSession {
   // One order = one bargain purchase attribution, per store. Shopify order ids
   // are per-shop sequences, so the constraint is store-scoped.
   @@unique([storeId, purchasedOrderId])
+  @@unique([storeId, discountCode])
   @@index([storeId])
   @@index([storeId, status])
   @@index([cartToken])
@@ -669,6 +670,7 @@ model BargainQuote {
 
   @@index([storeId])
   @@index([storeId, status])
+  @@unique([storeId, discountCode])
   @@index([sessionId])
   @@index([discountCode])
   @@index([cartToken])

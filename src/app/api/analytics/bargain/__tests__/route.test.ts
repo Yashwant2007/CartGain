@@ -15,6 +15,7 @@ jest.mock('@/lib/db', () => ({
     bargainSession: { findMany: jest.fn() },
     bargainMessage: { findMany: jest.fn() },
     bargainExperienceEvent: { groupBy: jest.fn(), findMany: jest.fn() },
+    bargainLearningEvent: { findMany: jest.fn() },
   },
 }))
 
@@ -23,6 +24,7 @@ const prismaMock = prisma as unknown as {
   bargainSession: { findMany: jest.Mock }
   bargainMessage: { findMany: jest.Mock }
   bargainExperienceEvent: { groupBy: jest.Mock; findMany: jest.Mock }
+  bargainLearningEvent: { findMany: jest.Mock }
 }
 const authMock = getServerSession as jest.Mock
 
@@ -40,6 +42,7 @@ beforeEach(() => {
     { eventType: 'invitation_click', designVariant: 'unlock-your-deal', personality: 'strict_shopkeeper', _count: { _all: 5 } },
     { eventType: 'chat_open', designVariant: 'unlock-your-deal', personality: 'strict_shopkeeper', _count: { _all: 4 } },
   ])
+  prismaMock.bargainLearningEvent.findMany.mockResolvedValue([])
   prismaMock.bargainExperienceEvent.findMany.mockResolvedValue([
     { visitorKey: 'v1', designVariant: 'unlock-your-deal', personality: 'strict_shopkeeper' },
     { visitorKey: 'v2', designVariant: 'unlock-your-deal', personality: 'strict_shopkeeper' },

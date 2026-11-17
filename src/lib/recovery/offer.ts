@@ -4,8 +4,7 @@
  */
 
 import crypto from 'crypto'
-import { getAccessToken } from '@/lib/shopify'
-import { queryShopifyGraphQL } from '@/lib/shopify-graphql'
+import { createShopifyDiscountCode } from '@/lib/shopify/discount'
 import { ConversationDiscount } from '@/lib/conversation/facts'
 
 export type RecoveryOffer = ConversationDiscount & {
@@ -54,79 +53,22 @@ async function createShopifyCode(opts: {
   type: 'percentage' | 'fixed'
   minimumSubtotal?: number
 }): Promise<boolean> {
-  const shop = opts.store.domain.includes('.')
-    ? opts.store.domain
-    : `${opts.store.domain}.myshopify.com`
-
-  let token: string | null = null
-  try {
-    token = await getAccessToken(opts.store)
-  } catch {
-    return false
-  }
-  if (!token) return false
-
   const now = new Date()
   const endsAt = new Date(now.getTime() + CODE_TTL_DAYS * 24 * 60 * 60 * 1000)
-
-  const mutation = `
-    mutation recoveryDiscountCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
-      discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
-        codeDiscountNode {
-          id
-          codeDiscount {
-            ... on DiscountCodeBasic {
-              codes(first: 1) {
-                nodes { code }
-              }
-            }
-          }
-        }
-        userErrors { field message code }
-      }
-    }
-  `
-
-  const value =
-    opts.type === 'percentage'
-      ? { percentage: opts.value }
-      : { discountAmount: { amount: Number(opts.value.toFixed(2)), appliesOnEachItem: false } }
-
-  const basicCodeDiscount: any = {
-    title: `Cart recovery ${opts.code}`,
+  const result = await createShopifyDiscountCode({
+    store: opts.store,
     code: opts.code,
-    startsAt: now.toISOString(),
-    endsAt: endsAt.toISOString(),
-    usageLimit: 1,
-    appliesOncePerCustomer: true,
-    customerSelection: { all: true },
-    combinesWith: { orderDiscounts: false, productDiscounts: true, shippingDiscounts: false },
-    value,
-    customerGets: {
-      items: { all: true },
-      value,
-    },
-    summary:
+    title: `Cart recovery ${opts.code}`,
+    startsAt: now,
+    endsAt,
+    value:
       opts.type === 'percentage'
-        ? `Cart recovery offer: ${opts.value}% off`
-        : `Cart recovery offer: ${opts.value.toFixed(2)} off`,
-  }
-
-  if (opts.minimumSubtotal && opts.minimumSubtotal > 0) {
-    basicCodeDiscount.minimumSubtotal = Math.round(opts.minimumSubtotal * 100) / 100
-  }
-
-  try {
-    const data = await queryShopifyGraphQL<any>(shop, token, mutation, {
-      basicCodeDiscount,
-    })
-    const errors: Array<{ message?: string; code?: string }> =
-      data?.discountCodeBasicCreate?.userErrors ?? []
-    if (errors.length === 0) return true
-    return errors.every((e) => `${e.code ?? ''} ${e.message ?? ''}`.toLowerCase().includes('already'))
-  } catch {
-    return false
-  }
+        ? { kind: 'percentage', percentage: opts.value }
+        : { kind: 'fixed', amount: opts.value },
+    target: { scope: 'order' },
+    minimumSubtotal: opts.minimumSubtotal,
+  })
+  return result.status === 'created' && result.verified
 }
 
 export async function resolveRecoveryOffer(opts: {

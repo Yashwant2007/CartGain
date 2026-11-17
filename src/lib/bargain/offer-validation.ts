@@ -15,6 +15,8 @@ export type OfferValidationReason =
   | 'VARIANT_UNAVAILABLE'
   | 'PRODUCT_UNAVAILABLE'
   | 'CAMPAIGN_EXPIRED'
+  | 'SESSION_EXPIRED'
+  | 'BARGAIN_PAUSED'
   | 'COUPON_STACKING_BLOCKED'
 
 export interface ValidateOfferInput {
@@ -26,6 +28,8 @@ export interface ValidateOfferInput {
   variantAvailable?: boolean | null
   productAvailable?: boolean | null
   campaignActive?: boolean | null
+  sessionExpired?: boolean
+  emergencyPaused?: boolean
   couponMentioned?: boolean
   couponsAllowed?: boolean
 }
@@ -48,6 +52,8 @@ const HUMAN: Record<OfferValidationReason, string | null> = {
   VARIANT_UNAVAILABLE: 'That specific option isn\'t available right now — ask about another variant.',
   PRODUCT_UNAVAILABLE: 'This item is currently unavailable — let\'s find a similar one.',
   CAMPAIGN_EXPIRED: 'That offer window has ended — a fresh deal can be started anytime.',
+  SESSION_EXPIRED: 'This bargaining session has expired. Please start a fresh one.',
+  BARGAIN_PAUSED: 'Bargaining is paused for this store right now. Please try again later.',
   COUPON_STACKING_BLOCKED: 'This price can\'t be combined with another discount code.',
 }
 
@@ -75,6 +81,12 @@ export function validateOffer(input: ValidateOfferInput): OfferValidationResult 
     return reject('INVALID_PRICE')
   }
 
+  if (input.emergencyPaused === true) {
+    return reject('BARGAIN_PAUSED')
+  }
+  if (input.sessionExpired === true) {
+    return reject('SESSION_EXPIRED')
+  }
   if (input.couponMentioned && input.couponsAllowed === false) {
     return reject('COUPON_STACKING_BLOCKED')
   }

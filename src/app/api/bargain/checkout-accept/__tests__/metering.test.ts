@@ -107,6 +107,26 @@ beforeEach(() => {
 })
 
 describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
+  it('issues the code server-side when the client does not supply one', async () => {
+    const res = await POST(makeRequest({ code: undefined }))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(body.code).toMatch(/^BARGAIN-[0-9A-F]{8}$/)
+    expect(mintMock).toHaveBeenCalledTimes(1)
+    expect(mintMock.mock.calls[0][0].code).toBe(body.code)
+  })
+
+  it('refuses a pending code and never records an accepted deal', async () => {
+    mintMock.mockResolvedValueOnce({ code: 'BARGAIN_PENDING', status: 'pending', verified: false })
+    const res = await POST(makeRequest())
+
+    expect(res.status).toBe(503)
+    expect(prismaMock.bargainSession.create).not.toHaveBeenCalled()
+    expect(recordDealOpsMock).not.toHaveBeenCalled()
+  })
+
   it('mints a Shopify code AND meters the deal when quota remains', async () => {
     const res = await POST(makeRequest())
     const body = await res.json()

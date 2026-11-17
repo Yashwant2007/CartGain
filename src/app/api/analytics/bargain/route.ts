@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
   const days = Number.isFinite(daysRaw) ? Math.min(Math.max(Math.trunc(daysRaw), 1), 365) : 30
   const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
-  const [sessions, eventCounts, uniqueVisitorRows] = await Promise.all([
+  const [sessions, eventCounts, uniqueVisitorRows, latencyRows] = await Promise.all([
     prisma.bargainSession.findMany({
       where: { storeId: store.id, startedAt: { gte: start } },
       select: {
@@ -74,6 +74,17 @@ export async function GET(request: NextRequest) {
       select: { visitorKey: true, designVariant: true, personality: true },
       distinct: ['visitorKey', 'designVariant', 'personality'],
     }),
+    prisma.bargainLearningEvent.findMany({
+      where: {
+        storeId: store.id,
+        environment: 'production',
+        createdAt: { gte: start },
+        latencyMs: { not: null },
+      },
+      select: { latencyMs: true, agentSource: true, failureCategory: true },
+      orderBy: { createdAt: 'desc' },
+      take: 10_000,
+    }),
   ])
 
   const sessionIds = sessions.map((s) => s.id)
@@ -103,6 +114,26 @@ export async function GET(request: NextRequest) {
     .map((s) => ((s.originalPrice - (s.finalPrice as number)) / s.originalPrice) * 100)
 
   const rate = (num: number, den: number) => (den > 0 ? Math.round((num / den) * 1000) / 10 : 0)
+  const latencySamples = latencyRows
+    .map((row) => row.latencyMs)
+    .filter((ms): ms is number => typeof ms === 'number' && Number.isFinite(ms) && ms >= 0)
+    .sort((a, b) => a - b)
+  const percentile = (p: number): number => {
+    if (latencySamples.length === 0) return 0
+    const index = Math.min(latencySamples.length - 1, Math.ceil((p / 100) * latencySamples.length) - 1)
+    return Math.round(latencySamples[Math.max(0, index)])
+  }
+  const latencyBySource: Record<string, { samples: number; p95Ms: number }> = {}
+  for (const source of ['primary', 'fallback', 'emergency', 'reflex', 'unknown']) {
+    const values = latencyRows
+      .filter((row) => (row.agentSource || 'unknown') === source && typeof row.latencyMs === 'number')
+      .map((row) => row.latencyMs as number)
+      .sort((a, b) => a - b)
+    if (values.length) {
+      const index = Math.min(values.length - 1, Math.ceil(0.95 * values.length) - 1)
+      latencyBySource[source] = { samples: values.length, p95Ms: Math.round(values[Math.max(0, index)]) }
+    }
+  }
 
   // Daily series (session start day) for the funnel chart.
   const byDay = new Map<string, { date: string; started: number; accepted: number; purchased: number; revenue: number }>()
@@ -244,6 +275,15 @@ export async function GET(request: NextRequest) {
       discountPercents.length > 0
         ? Math.round((discountPercents.reduce((a, b) => a + b, 0) / discountPercents.length) * 10) / 10
         : 0,
+    performance: {
+      samples: latencySamples.length,
+      p50Ms: percentile(50),
+      p95Ms: percentile(95),
+      p99Ms: percentile(99),
+      bySource: latencyBySource,
+      degradedSamples: latencyRows.filter((row) => Boolean(row.failureCategory)).length,
+      note: 'AI turn latency from production learning events. Provider failover attempts share one bounded deadline.',
+    },
     experiments: {
       enabled: isFeatureEnabled('BARGAIN_DUAL_AGENT'),
       arms: experimentRows,

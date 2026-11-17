@@ -6,6 +6,9 @@ import {
   getFallbackAiClient,
   getPrimaryAiClient,
   fallbackModelName,
+  primaryTimeoutMs,
+  fallbackTimeoutMs,
+  bargainTotalTimeoutMs,
   handleAiFailure,
   classifyAiFailure,
   type AiFailureCategory,
@@ -2733,6 +2736,25 @@ export async function negotiateStep(
 
   const attemptStartedAt = Date.now()
   const requestStartedAt = trace?.startedAt ?? attemptStartedAt
+  const remainingMs = requestStartedAt + bargainTotalTimeoutMs() - attemptStartedAt
+  if (remainingMs <= 0) {
+    const emergency = customerOffer != null
+      ? ruleBasedDecision(customerOffer, ctx)
+      : { reply: chatFallback(customerMessage, ctx, history.length), decision: 'chat' as const, tactic: 'conversational', sentiment: 'neutral' }
+    reportAiDegradation('all_tiers_failed', 'tier=deadline failure=timeout')
+    return {
+      ...emergency,
+      metadata: {
+        ...(emergency.metadata ?? {}),
+        aiSource: 'emergency',
+        aiModel: servedModel,
+        aiLatencyMs: 0,
+        aiTotalLatencyMs: Date.now() - requestStartedAt,
+        failureCategory: 'timeout',
+      },
+    }
+  }
+  const attemptTimeoutMs = Math.max(1, Math.min(tier === 'fallback' ? fallbackTimeoutMs() : primaryTimeoutMs(), remainingMs))
   try {
     const completion = await ai.chat.completions.create({
       model,
@@ -2740,7 +2762,7 @@ export async function negotiateStep(
       temperature: 0.85,
       max_completion_tokens: compact ? FALLBACK_MAX_TOKENS : BARGAIN_MAX_TOKENS,
       response_format: { type: 'json_object' },
-    })
+    }, { signal: AbortSignal.timeout(attemptTimeoutMs) })
     const aiLatencyMs = Date.now() - attemptStartedAt
 
     const raw = completion.choices[0]?.message?.content ?? ''

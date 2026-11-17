@@ -129,7 +129,7 @@ function sessionFixture(over: Record<string, any> = {}) {
 describe('issueRetentionDiscount', () => {
   beforeEach(() => {
     ;(computeMinPrice as jest.Mock).mockResolvedValue({ minPrice: 700 })
-    ;(generateBargainDiscountCode as jest.Mock).mockImplementation(async (o: any) => ({ code: o.code, status: 'created' }))
+    ;(generateBargainDiscountCode as jest.Mock).mockImplementation(async (o: any) => ({ code: o.code, status: 'created', verified: true }))
   })
 
   it('mints a code at the last price WE offered when the deal was not accepted', async () => {
@@ -188,6 +188,19 @@ describe('issueRetentionDiscount', () => {
 
     const discountArg = (generateBargainDiscountCode as jest.Mock).mock.calls[0][0]
     expect(discountArg.shopifyCustomerId).toBeNull()
+  })
+
+  it('never persists a code Shopify has not confirmed', async () => {
+    ;(prisma.bargainSession.findUnique as jest.Mock).mockResolvedValue(sessionFixture())
+    ;(prisma.bargainMessage.findFirst as jest.Mock).mockResolvedValue({ offeredPrice: 820 })
+    ;(generateBargainDiscountCode as jest.Mock).mockResolvedValue({
+      code: 'BARGAIN-PENDING',
+      status: 'pending',
+      verified: false,
+    })
+
+    expect(await issueRetentionDiscount('sess1')).toBeNull()
+    expect(prisma.bargainSession.update).not.toHaveBeenCalled()
   })
 
   it('resurfaces an already-issued code (idempotent)', async () => {

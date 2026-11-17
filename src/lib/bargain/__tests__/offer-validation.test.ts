@@ -45,6 +45,12 @@ describe('validateOffer', () => {
     expect(validateOffer({ ...base, couponMentioned: true, couponsAllowed: true }).ok).toBe(true)
   })
 
+  it('blocks an expired session and a merchant pause', () => {
+    expect(validateOffer({ ...base, sessionExpired: true }).reason).toBe('SESSION_EXPIRED')
+    expect(validateOffer({ ...base, emergencyPaused: true }).reason).toBe('BARGAIN_PAUSED')
+    expect(validateOffer({ ...base, sessionExpired: false, emergencyPaused: false }).ok).toBe(true)
+  })
+
   it('blocks when the negotiation budget is spent', () => {
     const r = validateOffer({ ...base, attemptsUsed: 3, maxAttempts: 3 })
     expect(r.reason).toBe('NEGOTIATION_LIMIT_REACHED')
@@ -64,6 +70,8 @@ describe('validateOffer', () => {
       'VARIANT_UNAVAILABLE',
       'PRODUCT_UNAVAILABLE',
       'CAMPAIGN_EXPIRED',
+      'SESSION_EXPIRED',
+      'BARGAIN_PAUSED',
       'COUPON_STACKING_BLOCKED',
     ]
     for (const reason of reasons) {

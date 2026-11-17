@@ -90,6 +90,15 @@ export function fallbackTimeoutMs(): number {
   return timeoutFromEnv('AI_FALLBACK_TIMEOUT_MS', DEFAULT_FALLBACK_TIMEOUT_MS)
 }
 
+// One shopper turn must never stack 10s primary + 20s fallback + 10s primary
+// retries. Every attempt shares this deadline; the provider call gets only the
+// time left in the budget.
+const DEFAULT_BARGAIN_TOTAL_TIMEOUT_MS = 18_000
+
+export function bargainTotalTimeoutMs(): number {
+  return timeoutFromEnv('BARGAIN_AI_TOTAL_TIMEOUT_MS', DEFAULT_BARGAIN_TOTAL_TIMEOUT_MS)
+}
+
 function providerMaxRetries(): number {
   const raw = envTrimmed('AI_PROVIDER_MAX_RETRIES')
   if (!raw) return DEFAULT_PROVIDER_MAX_RETRIES
@@ -124,7 +133,7 @@ export function decorateForFallback(client: any, requestedModel: string): OpenAI
       if (prop === 'chat') {
         return {
           completions: {
-            create: async (params: any) => {
+            create: async (params: any, options?: any) => {
               const req: any = { ...params, model }
               // Groq's gpt-oss models are reasoning models: at the default
               // effort the hidden reasoning can eat the whole completion
@@ -136,11 +145,11 @@ export function decorateForFallback(client: any, requestedModel: string): OpenAI
                 req.reasoning_effort = 'low'
               }
               try {
-                return await rawCreate(req)
+                return await rawCreate(req, options)
               } catch (err: any) {
                 if (req.response_format && err?.status === 400 && isFormatUnsupported(err)) {
                   const { response_format, ...rest } = req
-                  return await rawCreate(rest)
+                  return await rawCreate(rest, options)
                 }
                 throw err
               }

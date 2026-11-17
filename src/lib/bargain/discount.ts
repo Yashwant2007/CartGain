@@ -1,8 +1,18 @@
-import { queryShopifyGraphQL } from '@/lib/shopify-graphql'
-import { getAccessToken } from '@/lib/shopify'
-import { exactPercentOff, toMinorUnits, fromMinorUnits, isAtOrAboveFloor } from '@/lib/financial-safety'
+import {
+  buildBasicCodeDiscount,
+  createShopifyDiscountCode,
+  friendlyDiscountError,
+  resolveDiscountTarget,
+  toShopifyGid,
+} from '@/lib/shopify/discount'
+import {
+  chargedUnitPriceMinor,
+  exactPercentOff,
+  fromMinorUnits,
+  isAtOrAboveFloor,
+  toMinorUnits,
+} from '@/lib/financial-safety'
 
-// regenerate types for safety
 type Store = {
   id: string
   name: string
@@ -14,30 +24,30 @@ type Store = {
   shopifyTokenExpiresAt: Date | null
 }
 
-// Discount code with (optional) customer binding to reduce sharing.
 export type GeneratedBargainDiscount = {
   code: string
   status: 'created' | 'pending' | 'failed'
   error?: string
   customerEmail?: string
   cartToken?: string
-}
-
-// Shopify `customerSelection` for a discount.
-export function buildCustomerSelection(
-  shopifyCustomerId?: string | null,
-): { all: true } | { customers: { add: string[] } } {
-  const id = shopifyCustomerId?.trim()
-  if (id) {
-    const gid = id.startsWith('gid://') ? id : `gid://shopify/Customer/${id}`
-    return { customers: { add: [gid] } }
-  }
-  return { all: true }
+  discountNodeId?: string
+  endsAt?: string
+  verified: boolean
 }
 
 /**
- * Create a Shopify discountCodeBasic for an accepted bargain.
+ * Kept for older callers/tests. Shopify 2026-04 uses `context`, not the
+ * deprecated `customerSelection`; the create helper converts this shape.
  */
+export function buildCustomerSelection(
+  shopifyCustomerId?: string | null
+): { all: true } | { customers: { add: string[] } } {
+  const gid = toShopifyGid('Customer', shopifyCustomerId)
+  if (gid) return { customers: { add: [gid] } }
+  return { all: true }
+}
+
+/** Create a verified Shopify basic code for an accepted bargain. */
 export async function generateBargainDiscountCode(opts: {
   store: Store
   shopifyProductId?: string | null
@@ -52,145 +62,63 @@ export async function generateBargainDiscountCode(opts: {
   floorPrice?: number | null
   shopifyCustomerId?: string | null
 }): Promise<GeneratedBargainDiscount> {
-  const { store, shopifyProductId, variantId, originalPrice, finalPrice, code, customerEmail, cartToken } = opts
-  const bulkQuantity = Math.max(1, Math.floor(opts.bulkQuantity ?? 1))
-
-  const discountPercent = exactPercentOff(originalPrice, finalPrice)
+  const { store, code, customerEmail, cartToken } = opts
+  const bulkQuantity = Math.min(100, Math.max(1, Math.floor(opts.bulkQuantity ?? 1)))
+  const discountPercent = exactPercentOff(opts.originalPrice, opts.finalPrice)
   const floorMinor = toMinorUnits(opts.floorPrice ?? 0)
+
   if (opts.floorPrice != null && floorMinor > 0) {
-    const chargeMinor = Math.round(toMinorUnits(originalPrice) * (1 - discountPercent / 100))
+    const chargeMinor = chargedUnitPriceMinor(opts.originalPrice, discountPercent)
     if (!isAtOrAboveFloor(chargeMinor, floorMinor)) {
-      return { code, status: 'failed', error: 'Discount would breach merchant floor' }
-    }
-  }
-  const minimumSubtotal = fromMinorUnits(toMinorUnits(originalPrice) * bulkQuantity)
-
-  const scope: 'order' | 'product' | 'variant' = variantId
-    ? 'variant'
-    : shopifyProductId
-      ? 'product'
-      : 'order'
-
-  const shopDomain = store.domain.includes('.')
-    ? store.domain
-    : `${store.domain}.myshopify.com`
-
-  let accessToken: string | null = null
-  try {
-    accessToken = await getAccessToken(store)
-  } catch (err) {
-    return {
-      code,
-      status: 'failed',
-      error: 'Could not retrieve Shopify access token',
-    }
-  }
-
-  if (!accessToken) {
-    return {
-      code,
-      status: 'pending',
-      error: 'Shopify not connected — code stored pending sync',
-    }
-  }
-
-  const ONE_DAY = 24 * 60 * 60
-  const startsAt = new Date().toISOString()
-  const expiresAt = new Date(Date.now() + ONE_DAY * 1000).toISOString()
-
-  const variantGid = variantId ? `gid://shopify/ProductVariant/${variantId}` : null
-  const productGid = shopifyProductId ? `gid://shopify/Product/${shopifyProductId}` : null
-
-  const mutation = `
-    mutation discountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
-      discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
-        codeDiscountNode {
-          id
-          codeDiscount {
-            ... on DiscountCodeBasic {
-              codes(first: 1) {
-                nodes {
-                  code
-                }
-              }
-            }
-          }
-        }
-        userErrors { field message }
-      }
-    }
-  `
-
-  const discountValue = {
-    percentage: discountPercent,
-  }
-
-  const basicCodeDiscount: any = {
-    title: `Bargain ${code}`,
-    code,
-    startsAt,
-    endsAt: expiresAt,
-    usageLimit: 1,
-    appliesOncePerCustomer: true,
-    customerSelection: buildCustomerSelection(opts.shopifyCustomerId),
-    combinesWith: { orderDiscounts: false, productDiscounts: true, shippingDiscounts: false },
-    value: discountValue,
-    customerGets: {
-      value: discountValue,
-      items: scope === 'order' ? { all: true } : {},
-    },
-    minimumSubtotal,
-  }
-
-  if (scope === 'product' && productGid) {
-    basicCodeDiscount.customerGets.items = { products: { productsToAdd: [productGid] } }
-  } else if (scope === 'variant' && variantGid) {
-    basicCodeDiscount.customerGets.items = { productVariants: { productsToAdd: [variantGid] } }
-  } else {
-    basicCodeDiscount.customerGets.items = { all: true }
-  }
-
-  const variables = {
-    basicCodeDiscount,
-  }
-
-  try {
-    const data = await queryShopifyGraphQL<any>(
-      shopDomain,
-      accessToken,
-      mutation,
-      variables
-    )
-    const userErrors = data?.discountCodeBasicCreate?.userErrors
-    if (userErrors && userErrors.length > 0) {
       return {
         code,
         status: 'failed',
-        error: userErrors[0].message || 'Shopify rejected the discount code',
+        verified: false,
+        error: 'Discount would breach merchant floor',
       }
     }
-    const createdCode = data?.discountCodeBasicCreate?.codeDiscountNode?.codeDiscount?.codes?.nodes?.[0]?.code || code
-    return {
-      code: createdCode,
-      status: 'created',
-      ...(customerEmail ? { customerEmail } : {}),
-      ...(cartToken ? { cartToken } : {}),
-    }
-  } catch (err: any) {
+  }
+  if (discountPercent <= 0) {
     return {
       code,
       status: 'failed',
-      error: err?.message || 'Shopify GraphQL request failed',
+      verified: false,
+      error: 'No discount to issue',
     }
+  }
+
+  const target = resolveDiscountTarget({
+    productId: opts.shopifyProductId,
+    variantId: opts.variantId,
+  })
+  const minimumSubtotal = fromMinorUnits(toMinorUnits(opts.originalPrice) * bulkQuantity)
+
+  const result = await createShopifyDiscountCode({
+    store,
+    code,
+    title: `Bargain ${code}`,
+    value: { kind: 'percentage', percentage: discountPercent },
+    target,
+    minimumSubtotal,
+    shopifyCustomerId: opts.shopifyCustomerId,
+  })
+
+  return {
+    code: result.code,
+    status: result.status,
+    verified: result.verified,
+    ...(result.error ? { error: friendlyDiscountError(result.error) } : {}),
+    ...(result.discountNodeId ? { discountNodeId: result.discountNodeId } : {}),
+    ...(result.endsAt ? { endsAt: result.endsAt } : {}),
+    ...(customerEmail ? { customerEmail } : {}),
+    ...(cartToken ? { cartToken } : {}),
   }
 }
 
 /**
- * Create a Shopify discountCodeBasic that applies a single (floor-safe) percent
- * to a set of DISTINCT bundle products. The percentage is chosen upstream so
- * every item stays at/above its own floor; the code is scoped to the bundle
- * products and requires the full bundle value in the cart, so it can never be
- * farmed by adding a single cheap line item.
+ * Create a verified Shopify basic code for a multi-product bundle. The caller
+ * supplies a floor-safe percentage; eligibility is the bundle product set and
+ * the minimum subtotal prevents using the code on a single cheap item.
  */
 export async function generateBargainBundleDiscountCode(opts: {
   store: Store
@@ -205,86 +133,40 @@ export async function generateBargainBundleDiscountCode(opts: {
 }): Promise<GeneratedBargainDiscount> {
   const { store, items, code, customerEmail, cartToken } = opts
   const discountPercent = Math.max(0, Math.min(100, Math.round(opts.discountPercent * 100) / 100))
-
   const productGids = Array.from(
     new Set(
       items
-        .map((it) => (it.productId ? `gid://shopify/Product/${it.productId.replace(/^gid:\/\/shopify\/Product\//, '')}` : null))
-        .filter((g): g is string => !!g),
-    ),
+        .map((item) => toShopifyGid('Product', item.productId))
+        .filter((gid): gid is string => !!gid)
+    )
   )
   if (productGids.length < 2) {
-    return { code, status: 'failed', error: 'A bundle needs at least two distinct products' }
+    return { code, status: 'failed', verified: false, error: 'A bundle needs at least two distinct products' }
   }
   if (discountPercent <= 0 || discountPercent >= 100) {
-    return { code, status: 'failed', error: 'Invalid bundle discount' }
+    return { code, status: 'failed', verified: false, error: 'Invalid bundle discount' }
   }
 
-  const shopDomain = store.domain.includes('.') ? store.domain : `${store.domain}.myshopify.com`
-
-  let accessToken: string | null = null
-  try {
-    accessToken = await getAccessToken(store)
-  } catch {
-    return { code, status: 'failed', error: 'Could not retrieve Shopify access token' }
-  }
-  if (!accessToken) {
-    return { code, status: 'pending', error: 'Shopify not connected — code stored pending sync' }
-  }
-
-  const ONE_DAY = 24 * 60 * 60
-  const startsAt = new Date().toISOString()
-  const expiresAt = new Date(Date.now() + ONE_DAY * 1000).toISOString()
-  const minimumSubtotal = fromMinorUnits(toMinorUnits(opts.listTotal))
-
-  const mutation = `
-    mutation discountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
-      discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
-        codeDiscountNode {
-          id
-          codeDiscount {
-            ... on DiscountCodeBasic {
-              codes(first: 1) { nodes { code } }
-            }
-          }
-        }
-        userErrors { field message }
-      }
-    }
-  `
-
-  const discountValue = { percentage: discountPercent }
-  const basicCodeDiscount: any = {
-    title: `Bargain bundle ${code}`,
+  const result = await createShopifyDiscountCode({
+    store,
     code,
-    startsAt,
-    endsAt: expiresAt,
-    usageLimit: 1,
-    appliesOncePerCustomer: true,
-    customerSelection: buildCustomerSelection(opts.shopifyCustomerId),
-    combinesWith: { orderDiscounts: false, productDiscounts: true, shippingDiscounts: false },
-    value: discountValue,
-    customerGets: {
-      value: discountValue,
-      items: { products: { productsToAdd: productGids } },
-    },
-    minimumSubtotal,
-  }
+    title: `Bargain bundle ${code}`,
+    value: { kind: 'percentage', percentage: discountPercent },
+    target: { scope: 'product', productGids },
+    minimumSubtotal: fromMinorUnits(toMinorUnits(opts.listTotal)),
+    shopifyCustomerId: opts.shopifyCustomerId,
+  })
 
-  try {
-    const data = await queryShopifyGraphQL<any>(shopDomain, accessToken, mutation, { basicCodeDiscount })
-    const userErrors = data?.discountCodeBasicCreate?.userErrors
-    if (userErrors && userErrors.length > 0) {
-      return { code, status: 'failed', error: userErrors[0].message || 'Shopify rejected the bundle code' }
-    }
-    const createdCode = data?.discountCodeBasicCreate?.codeDiscountNode?.codeDiscount?.codes?.nodes?.[0]?.code || code
-    return {
-      code: createdCode,
-      status: 'created',
-      ...(customerEmail ? { customerEmail } : {}),
-      ...(cartToken ? { cartToken } : {}),
-    }
-  } catch (err: any) {
-    return { code, status: 'failed', error: err?.message || 'Shopify GraphQL request failed' }
+  return {
+    code: result.code,
+    status: result.status,
+    verified: result.verified,
+    ...(result.error ? { error: friendlyDiscountError(result.error) } : {}),
+    ...(result.discountNodeId ? { discountNodeId: result.discountNodeId } : {}),
+    ...(result.endsAt ? { endsAt: result.endsAt } : {}),
+    ...(customerEmail ? { customerEmail } : {}),
+    ...(cartToken ? { cartToken } : {}),
   }
 }
+
+export { buildBasicCodeDiscount }

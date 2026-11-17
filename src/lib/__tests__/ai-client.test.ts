@@ -18,7 +18,8 @@ describe('decorateForFallback', () => {
     await (decorated as any).chat.completions.create({ model: 'gpt-4o-mini', messages: [] })
 
     expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'llama-3.3-70b-versatile' })
+      expect.objectContaining({ model: 'llama-3.3-70b-versatile' }),
+      undefined,
     )
     expect(create.mock.calls[0][0].model).not.toBe('gpt-4o-mini')
   })
@@ -30,7 +31,17 @@ describe('decorateForFallback', () => {
 
     await (decorated as any).chat.completions.create({ model: 'gpt-4o-mini', messages, temperature: 0.5 })
 
-    expect(create).toHaveBeenCalledWith(expect.objectContaining({ messages, temperature: 0.5 }))
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ messages, temperature: 0.5 }), undefined)
+  })
+
+  it('forwards request options so provider calls can be aborted', async () => {
+    const create = jest.fn().mockResolvedValue({ ok: true })
+    const decorated = decorateForFallback(fakeChatCompletions(create), 'llama-3.3-70b-versatile')
+    const options = { signal: new AbortController().signal }
+
+    await (decorated as any).chat.completions.create({ model: 'gpt-4o-mini', messages: [] }, options)
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ model: 'llama-3.3-70b-versatile' }), options)
   })
 
   it('passes properties other than chat through to the raw client', () => {
