@@ -48,7 +48,15 @@ import {
 } from '@/components/bargain/BargainPrimitives'
 import BargainOfferSummary from '@/components/bargain/BargainOfferSummary'
 import BargainRecommendationPanel, { type RecommendationEventAction } from '@/components/bargain/BargainRecommendationPanel'
-import { createConversationId, useConversationAutoScroll } from '@/components/bargain/conversation-utils'
+import {
+  createConversationId,
+  minThinkingMs,
+  REQUEST_TIMEOUT_MS,
+  THINKING_DELAY_MS,
+  TICK_MS,
+  useConversationAutoScroll,
+  wait,
+} from '@/components/bargain/conversation-utils'
 
 // Stable per-device+cart bargain identity. Persists across tabs/refreshes on the
 // same browser (localStorage deviceId seeded on first visit) and is blended with
@@ -302,13 +310,6 @@ export default function BargainWidget({
     activityKey: thinkingVisible,
   })
 
-  // Send-sequence timing (see sendMessage): tick, then a beat, then thinking,
-  // then a length-scaled minimum thinking beat before the reply is revealed.
-  const TICK_MS = 100
-  const THINKING_DELAY_MS = 60
-  const REQUEST_TIMEOUT_MS = 25_000
-  const minThinkingMs = (reply: string) => Math.min(220, Math.max(90, reply.length * 2))
-  const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
   const personaChip = persona ? PERSONA_CHIP[persona] : undefined
   const shopkeeperName = PERSONALITY_META.find((p) => p.id === personality)?.name ?? t('shopkeeperOnline')
   const latestAiLine = [...messages].reverse().find((m) => m.role === 'ai')?.content
@@ -388,7 +389,7 @@ export default function BargainWidget({
       <code style={{ fontWeight: 800, color: '#b45309', letterSpacing: 0.6 }}>{discountCode}</code>
       {purchaseUrl && (
         <div style={{ marginTop: 10 }}>
-          <a href={purchaseUrl} className="cg-btn cg-btn-primary" style={{ display: 'inline-flex' }}>
+          <a href={purchaseUrl} target="_top" rel="noopener noreferrer" onClick={(e) => { e.preventDefault(); try { window.open(purchaseUrl, '_blank', 'noopener,noreferrer') } catch { window.location.href = purchaseUrl } }} className="cg-btn cg-btn-primary" style={{ display: 'inline-flex' }}>
             Checkout at your price
           </a>
         </div>
@@ -1308,7 +1309,7 @@ export default function BargainWidget({
                   <span style={{ fontWeight: 700, color: '#059669', flexShrink: 0 }}>{t('shopkeeperOnline')}</span>
                   <span style={{ color: '#cbd5e1', flexShrink: 0 }}>·</span>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 1 }}>
-                    {productCtx.title ? productCtx.title : 'This item'}
+                    {productCtx.title || t('thisItem')}
                   </span>
                 </div>
               </div>
@@ -1327,7 +1328,7 @@ export default function BargainWidget({
               )}
               <button
                 onClick={closePanel}
-                aria-label="Close"
+                aria-label={t('close')}
                 className="cg-icon-btn"
                 style={{ width: 40, height: 40, borderRadius: 11 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#334155' }}
@@ -1353,7 +1354,8 @@ export default function BargainWidget({
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 5,
-                      padding: '8px 12px',
+                      padding: '10px 14px',
+                      minHeight: 40,
                       background: activeTab === tab.key ? '#eef2ff' : 'transparent',
                       color: activeTab === tab.key ? '#4f46e5' : '#64748b',
                       border: '1px solid transparent',
@@ -1384,7 +1386,7 @@ export default function BargainWidget({
                 )}
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#64748b', fontSize: 11, minWidth: 0 }}>
                   <ShieldCheck size={12} style={{ color: '#94a3b8', flexShrink: 0 }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('privateNote')}</span>
+                  <span className="cg-private-note" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('privateNote')}</span>
                 </span>
                 <a
                   href={linkout ? `${linkout}?ai_opt_out=1` : undefined}
@@ -1399,7 +1401,7 @@ export default function BargainWidget({
           </div>
 
           {/* ── Today's goal: real server progress (public projection) ── */}
-          <GoalStrip goal={goal} currencySymbol={currencySymbol} />
+          <GoalStrip goal={goal} currencySymbol={currencySymbol} t={t} />
 
           {/* ── Price progress rail: listed → best on the table ── */}
           {showPriceRail && (
@@ -1453,6 +1455,7 @@ export default function BargainWidget({
                 discountCode={discountCode}
                 productTitle={productCtx.title}
                 sessionEnded={sessionEnded}
+                t={t}
               />
             )}
 
@@ -1592,7 +1595,7 @@ export default function BargainWidget({
                     )}
                     {purchaseUrl && (
                       <div style={{ marginTop: 12 }}>
-                        <a href={purchaseUrl} className="cg-btn cg-btn-primary" style={{ display: 'inline-flex' }}>
+                        <a href={purchaseUrl} target="_top" rel="noopener noreferrer" onClick={(e) => { e.preventDefault(); try { window.open(purchaseUrl, '_blank', 'noopener,noreferrer') } catch { window.location.href = purchaseUrl } }} className="cg-btn cg-btn-primary" style={{ display: 'inline-flex' }}>
                           Checkout at your price
                         </a>
                       </div>
@@ -1711,13 +1714,13 @@ export default function BargainWidget({
                   }}>
                     <div style={{ fontWeight: 800, color: '#4338ca', marginBottom: 5, fontSize: 14 }}>
                       {limit.code === 'bargain_sessions_exhausted'
-                        ? 'This month\u2019s bargain sessions are used up'
-                        : 'This month\u2019s slate of deals has been filled'}
+                        ? 'This month’s bargain sessions are used up'
+                        : 'This month’s slate of deals has been filled'}
                     </div>
                     <div style={{ color: '#475569', marginBottom: 12 }}>
                       {limit.code === 'bargain_sessions_exhausted'
-                        ? 'New bargain sessions reopen when the plan resets each month. The limit depends on the store\u2019s plan.'
-                        : 'Bargaining is active but the plan\u2019s monthly deal limit is full for now. It resets with the next billing period.'}
+                        ? 'New bargain sessions reopen when the plan resets each month. The limit depends on the store’s plan.'
+                        : 'Bargaining is active but the plan’s monthly deal limit is full for now. It resets with the next billing period.'}
                     </div>
                     <a
                       href={limit.upgradeUrl ?? 'https://cart-gain.com/pricing'}
@@ -1725,7 +1728,7 @@ export default function BargainWidget({
                       rel="noreferrer"
                       className="cg-btn cg-btn-primary"
                     >
-                      View plans &amp; limits
+                      {t('viewPlans')}
                     </a>
                   </div>
                 )}
@@ -1745,7 +1748,7 @@ export default function BargainWidget({
                         </button>
                       )}
                       {!sessionEnded && !lastFailedRef.current && (
-                        <button type="button" className="cg-btn cg-btn-ghost" onClick={() => setError(null)}>Dismiss</button>
+                        <button type="button" className="cg-btn cg-btn-ghost" onClick={() => setError(null)}>{t('dismiss')}</button>
                       )}
                     </div>
                   </StateCard>
@@ -1753,18 +1756,19 @@ export default function BargainWidget({
           </div>
 
           {activeTab === 'chat' && conversationUnread > 0 && (
-            <button
-              type="button"
-              onClick={() => { jumpToLatestMessage() }}
-              style={{
-                alignSelf: 'center', margin: '-34px auto 6px', zIndex: 2,
-                background: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: 999,
-                padding: '5px 12px', fontSize: 11.5, fontWeight: 700,
-                boxShadow: '0 4px 14px rgba(79,70,229,0.28)',
-              }}
-            >
-              Jump to latest ({conversationUnread})
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '6px 12px 2px', background: '#ffffff' }}>
+              <button
+                type="button"
+                onClick={() => { jumpToLatestMessage() }}
+                style={{
+                  background: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: 999,
+                  padding: '6px 14px', minHeight: 40, fontSize: 11.5, fontWeight: 700,
+                  boxShadow: '0 4px 14px rgba(79,70,229,0.28)',
+                }}
+              >
+                {t('jumpToLatest', { n: conversationUnread })}
+              </button>
+            </div>
           )}
 
           {/* ── Counter-offer accept bar ── */}
@@ -1793,6 +1797,7 @@ export default function BargainWidget({
               reason={recommendationReason}
               history={recommendationHistory}
               onEvent={handleRecommendationEvent}
+              ariaLabel={t('alternativesTitle')}
             />
           )}
 
@@ -1854,6 +1859,8 @@ export default function BargainWidget({
                 }}>
                   <input
                     ref={inputRef}
+                    id="cg-bargain-input"
+                    name="cg-bargain-message"
                     type="text"
                     inputMode="text"
                     autoComplete="off"
@@ -1938,7 +1945,7 @@ export default function BargainWidget({
                   <CheckCircle2 size={16} />
                   <span>{t('dealComplete')}</span>
                   <code style={{ fontWeight: 800, color: '#4f46e5' }}>{discountCode}</code>
-                  <button type="button" className="cg-icon-btn" onClick={copyCode} aria-label="Copy">
+                  <button type="button" className="cg-icon-btn" onClick={copyCode} aria-label={t('copy')}>
                     {copied ? '✓' : t('copy')}
                   </button>
                 </div>
@@ -1959,7 +1966,7 @@ export default function BargainWidget({
             <button type="button" onClick={() => setMinimised(false)} aria-label={t('makeOffer')} className="cg-icon-btn" style={{ width: 44, height: 44 }}>
               <MessageCircle size={18} />
             </button>
-            <button type="button" onClick={closePanel} aria-label="Close" className="cg-icon-btn" style={{ width: 44, height: 44 }}>
+            <button type="button" onClick={closePanel} aria-label={t('close')} className="cg-icon-btn" style={{ width: 44, height: 44 }}>
               <X size={17} />
             </button>
           </div>
@@ -2089,6 +2096,7 @@ export default function BargainWidget({
         @media (max-width: 380px) {
           .cg-send-label { max-width: 92px }
           .cg-btn-send--inline { padding: 0 13px }
+          .cartgain-bargain .cg-private-note { display: none }
         }
         .cg-btn-ghost {
           background: #ffffff; color: #475569; border: 1px solid #e2e8f0; text-decoration: none;

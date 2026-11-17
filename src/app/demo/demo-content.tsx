@@ -17,11 +17,18 @@ import {
 } from '@/lib/bargain/engine'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { buildQuickOffers } from '@/lib/bargain/offers'
-import { currencySymbolFor } from '@/lib/bargain/i18n'
+import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import type { BargainRecommendation, RecommendationHistory } from '@/lib/bargain/api-types'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import BargainRecommendationPanel from '@/components/bargain/BargainRecommendationPanel'
-import { createConversationId, useConversationAutoScroll } from '@/components/bargain/conversation-utils'
+import {
+  createConversationId,
+  minThinkingMs,
+  THINKING_DELAY_MS,
+  TICK_MS,
+  useConversationAutoScroll,
+  wait,
+} from '@/components/bargain/conversation-utils'
 import {
   expressionForEvent,
   expressionForShopperMessage,
@@ -125,17 +132,12 @@ const DEMO_CODES: Record<string, string> = {
 // Profit margin the demo "merchant" protects — 25% off is the floor
 const DEMO_PROFIT_PERCENT = 25
 const MAX_ATTEMPTS = 3
-// Human send rhythm: message → delivered tick → thinking → reply
-const TICK_MS = 100
-const THINKING_DELAY_MS = 60
-const minThinkingMs = (reply: string) => Math.min(220, Math.max(90, reply.length * 2))
-const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
-
 export default function DemoContent() {
   const { data: session, status } = useSession()
   const [product, setProduct] = useState<DemoProduct>(PRODUCTS[0])
   const [persona, setPersona] = useState<Persona>('friendly_shopkeeper')
   const [language, setLanguage] = useState<string>('auto')
+  const t = (key: UiKey, vars?: Record<string, string | number>) => uiText(language, key, vars)
   const [started, setStarted] = useState(false)
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
@@ -884,9 +886,9 @@ export default function DemoContent() {
                 <button
                   type="button"
                   onClick={() => { jumpToLatestMessage() }}
-                  className="px-3 py-1 rounded-full text-[11px] font-semibold bg-primary-600 text-white"
+                  className="min-h-10 px-4 py-2 rounded-full text-[11px] font-semibold bg-primary-600 text-white"
                 >
-                  Jump to latest ({conversationUnread})
+                  {t('jumpToLatest', { n: conversationUnread })}
                 </button>
               </div>
             )}
@@ -895,6 +897,7 @@ export default function DemoContent() {
               recommendations={recommendations}
               reason={recommendationReason}
               history={recommendationHistory}
+              ariaLabel={t('alternativesTitle')}
             />
 
             {/* Quick-offer chips — same rules as the live storefront widget */}
@@ -921,7 +924,7 @@ export default function DemoContent() {
                     <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-emerald-100">
-                        Deal agreed at {currencySymbol}{finalPrice?.toFixed(2)}
+                        {t('dealAgreedAt', { price: `${currencySymbol}${finalPrice?.toFixed(2)}` })}
                       </div>
                       <div className="text-xs text-emerald-200/70">
                         {product.real && codeStatus === 'ready'

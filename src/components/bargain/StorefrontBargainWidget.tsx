@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { ShoppingCart, CheckCheck, Clock3 } from 'lucide-react'
-import { currencySymbolFor } from '@/lib/bargain/i18n'
+import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { reciprocalCounter, isAbsurdOffer, absurdOfferReply, type NegotiationContext } from '@/lib/bargain/engine'
 import { GoalStrip } from '@/components/bargain/BargainPrimitives'
@@ -19,7 +19,15 @@ import {
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import type { BargainDemoGoal, BargainRecommendation, RecommendationHistory } from '@/lib/bargain/api-types'
 import BargainRecommendationPanel from '@/components/bargain/BargainRecommendationPanel'
-import { createConversationId, useConversationAutoScroll } from '@/components/bargain/conversation-utils'
+import {
+  createConversationId,
+  minThinkingMs,
+  REQUEST_TIMEOUT_MS,
+  THINKING_DELAY_MS,
+  TICK_MS,
+  useConversationAutoScroll,
+  wait,
+} from '@/components/bargain/conversation-utils'
 
 type Line =
   | { kind: 'item'; id: string; variantId?: string | null; title: string; price: number; image?: string }
@@ -273,12 +281,7 @@ export default function StorefrontBargainWidget({
   //   4. the reply arrives, and is never yanked in faster than a typed pace
   // The minimum is length-scaled so a one-word reply still feels considered,
   // while a long one is never padded.
-  const TICK_MS = 100
-  const THINKING_DELAY_MS = 60
-  const REQUEST_TIMEOUT_MS = 25_000
-  const minThinkingMs = (reply: string) =>
-    Math.min(220, Math.max(90, reply.length * 2))
-  const wait = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms))
+  const t = (key: UiKey, vars?: Record<string, string | number>) => uiText(language, key, vars)
 
   const markDelivered = useCallback((id: string) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, delivery: 'delivered' } : m)))
@@ -632,6 +635,7 @@ export default function StorefrontBargainWidget({
           goal={goalState}
           currencySymbol={currencySymbolFor(currency)}
           internal
+          t={t}
         />
       )}
 
@@ -639,7 +643,7 @@ export default function StorefrontBargainWidget({
         personality={avatarPersonality}
         expression={expression}
         name={`${PERSONA_NAME[persona]} · Shopkeeper`}
-        status="Online"
+        status={t('online')}
         line={stageLine}
       />
 
@@ -670,7 +674,7 @@ export default function StorefrontBargainWidget({
           <p className="text-xs leading-relaxed text-gray-600">{PersonaOpenings[persona](title, originalPrice, (n) => money(currency, n))}</p>
 
           <div className="text-[11px] text-indigo-600 bg-indigo-50 rounded-md px-3 py-1.5">
-            This store runs: <span className="font-semibold">{PERSONA_DISPLAY[persona]}</span>
+            {t('thisStoreRuns', { persona: PERSONA_DISPLAY[persona] })}
           </div>
 
           <button
@@ -679,7 +683,7 @@ export default function StorefrontBargainWidget({
             onClick={() => { reactAvatar('CHAT_OPENED'); setStep('chat') }}
             aria-label="Start price negotiation"
           >
-            Negotiate Price
+            {t('negotiate')}
           </button>
         </div>
       )}
@@ -761,10 +765,10 @@ export default function StorefrontBargainWidget({
                 onClick={() => { jumpToLatestMessage() }}
                 style={{
                   background: '#4f46e5', color: '#ffffff', border: 'none', borderRadius: 999,
-                  padding: '5px 12px', fontSize: 11.5, fontWeight: 700,
+                  padding: '6px 14px', minHeight: 40, fontSize: 11.5, fontWeight: 700,
                 }}
               >
-                Jump to latest ({conversationUnread})
+                {t('jumpToLatest', { n: conversationUnread })}
               </button>
             </div>
           )}
@@ -773,6 +777,7 @@ export default function StorefrontBargainWidget({
             recommendations={recommendations}
             reason={recommendationReason}
             history={recommendationHistory}
+            ariaLabel={t('alternativesTitle')}
           />
 
           <div className="flex gap-2">

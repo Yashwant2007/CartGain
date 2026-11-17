@@ -7,7 +7,7 @@
 
 import type { ReactNode } from 'react'
 import { Tag, Zap, ShieldCheck, Loader2, ShoppingBag, CheckCheck, Clock3, Sparkles } from 'lucide-react'
-import type { UiKey } from '@/lib/bargain/i18n'
+import { uiText, type UiKey } from '@/lib/bargain/i18n'
 import type { BargainDecision, BargainMessage, BargainRecommendation, BargainDemoGoal, BargainGoalView } from '@/lib/bargain/api-types'
 
 export type UiText = (key: UiKey, vars?: Record<string, string | number>) => string
@@ -376,10 +376,12 @@ export function GoalStrip({
   goal,
   currencySymbol,
   internal = false,
+  t = (key, vars) => uiText('en', key, vars),
 }: {
   goal?: BargainDemoGoal | BargainGoalView | null
   currencySymbol: string
   internal?: boolean
+  t?: UiText
 }) {
   if (!goal || !(goal.targetValue > 0)) return null
 
@@ -406,8 +408,8 @@ export function GoalStrip({
     <div
       className="cg-goal"
       role="group"
-      aria-label={`Today's goal: ${fmt(done)} of ${fmt(goal.targetValue)}${
-        closeLabel ? `, closes ${closeLabel}` : ''
+      aria-label={`${t('todaysGoal')}: ${fmt(done)} of ${fmt(goal.targetValue)}${
+        closeLabel ? `, ${t('goalCloses', { time: closeLabel })}` : ''
       }`}
       style={{
         flexShrink: 0,
@@ -440,7 +442,7 @@ export function GoalStrip({
             minWidth: 0,
           }}
         >
-          Today&apos;s goal
+          {t('todaysGoal')}
           {strategy && (
             <span
               style={{
@@ -470,7 +472,7 @@ export function GoalStrip({
           {fmt(done)} / {fmt(goal.targetValue)}
           {closeLabel && (
             <span style={{ fontWeight: 700, color: '#b45309' }}>
-              {' '}· closes {closeLabel}
+              {' '}· {t('goalCloses', { time: closeLabel })}
             </span>
           )}
         </span>
@@ -756,6 +758,8 @@ export function RecoCard({
         <img
           src={card.imageUrl}
           alt={card.title}
+          width={62}
+          height={62}
           loading="lazy"
           style={{ width: 62, height: 62, borderRadius: 10, objectFit: 'cover', background: '#eef2ff', flexShrink: 0 }}
         />

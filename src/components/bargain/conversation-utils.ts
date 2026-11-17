@@ -2,6 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState, type RefObject, type UIEvent } from 'react'
 
+export const TICK_MS = 100
+export const THINKING_DELAY_MS = 60
+export const REQUEST_TIMEOUT_MS = 25_000
+export function minThinkingMs(reply: string): number {
+  return Math.min(220, Math.max(90, reply.length * 2))
+}
+export function wait(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms))
+}
+
 export function createConversationId(prefix = 'cg'): string {
   const uuid = globalThis.crypto?.randomUUID?.()
   return `${prefix}-${uuid ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`}`

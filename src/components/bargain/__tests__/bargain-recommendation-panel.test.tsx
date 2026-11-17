@@ -116,4 +116,47 @@ describe('BargainRecommendationPanel', () => {
     expect(screen.getByText('Alpha Runner')).toBeTruthy()
     expect(screen.queryByText('Duplicate')).toBeNull()
   })
+
+  it('is a labelled group, caps expanded cards at two, and bounds their height', () => {
+    const fourth = { ...cards[0], productId: '44', title: 'Delta Cap' }
+    const { container } = render(
+      <BargainRecommendationPanel
+        recommendations={[cards[0], cards[1], cards[2], fourth]}
+        ariaLabel="Suggested alternatives"
+      />,
+    )
+    const group = screen.getByRole('group', { name: 'Suggested alternatives' })
+    expect(group.getAttribute('data-cg-recommendation-panel')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: '2 better matches found' }))
+    const list = container.querySelector('[data-cg-recommendation-panel] > div:last-child') as HTMLElement
+    expect(list.style.maxHeight).toBe('min(180px, 28dvh)')
+    expect(screen.getByText('Alpha Runner')).toBeTruthy()
+    expect(screen.getByText('Beta Tee')).toBeTruthy()
+    expect(screen.queryByText('Delta Cap')).toBeNull()
+  })
+
+  it('uses 40px touch targets for every expanded action', () => {
+    const { container } = render(<BargainRecommendationPanel recommendations={[cards[0]]} />)
+    fireEvent.click(screen.getByRole('button', { name: '1 better matches found' }))
+    const controls = Array.from(container.querySelectorAll('[data-cg-recommendation-panel] a, [data-cg-recommendation-panel] button'))
+    expect(controls.length).toBe(5)
+    for (const control of controls) {
+      const height = parseInt((control as HTMLElement).style.minHeight, 10)
+      expect(height).toBeGreaterThanOrEqual(40)
+      expect(height).toBeLessThanOrEqual(44)
+    }
+  })
+
+  it('never emits duplicate viewed or clicked events across repeated expansion', () => {
+    const onEvent = jest.fn()
+    render(<BargainRecommendationPanel recommendations={[cards[0]]} onEvent={onEvent} />)
+    const toggle = screen.getByRole('button', { name: '1 better matches found' })
+    fireEvent.click(toggle)
+    fireEvent.click(screen.getAllByRole('link', { name: /View/ })[0])
+    fireEvent.click(screen.getByRole('button', { name: '1 better matches found' }))
+    fireEvent.click(screen.getByRole('button', { name: '1 better matches found' }))
+    fireEvent.click(screen.getAllByRole('link', { name: /View/ })[0])
+    expect(onEvent.mock.calls.filter(([action]) => action === 'viewed')).toHaveLength(1)
+    expect(onEvent.mock.calls.filter(([action]) => action === 'clicked')).toHaveLength(1)
+  })
 })

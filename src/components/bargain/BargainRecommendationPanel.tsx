@@ -14,6 +14,7 @@ type Props = {
   reason?: string | null
   history?: RecommendationHistory | null
   onEvent?: (action: RecommendationEventAction, card: BargainRecommendation) => void
+  ariaLabel?: string
 }
 
 function cardKey(card: BargainRecommendation): string {
@@ -89,8 +90,8 @@ function RecommendationRow({
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
               background: '#ffffff', border: '1px solid #c7d2fe', color: '#4338ca',
-              borderRadius: 8, padding: '5px 9px', fontSize: 11.5, fontWeight: 700,
-              textDecoration: 'none', minHeight: 30,
+              borderRadius: 8, padding: '8px 12px', fontSize: 11.5, fontWeight: 700,
+              textDecoration: 'none', minHeight: 40,
             }}
           >
             View <ExternalLink size={11} />
@@ -102,8 +103,8 @@ function RecommendationRow({
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
               background: '#4f46e5', border: 'none', color: '#ffffff',
-              borderRadius: 8, padding: '5px 9px', fontSize: 11.5, fontWeight: 700,
-              cursor: card.available ? 'pointer' : 'default', opacity: card.available ? 1 : 0.5, minHeight: 30,
+              borderRadius: 8, padding: '8px 12px', fontSize: 11.5, fontWeight: 700,
+              cursor: card.available ? 'pointer' : 'default', opacity: card.available ? 1 : 0.5, minHeight: 40,
             }}
           >
             <ShoppingCart size={11} /> Add
@@ -113,7 +114,7 @@ function RecommendationRow({
             onClick={() => onHide('rejected', card)}
             style={{
               background: '#ffffff', border: '1px solid #e2e8f0', color: '#64748b',
-              borderRadius: 8, padding: '5px 9px', fontSize: 11.5, fontWeight: 600, minHeight: 30,
+              borderRadius: 8, padding: '8px 12px', fontSize: 11.5, fontWeight: 600, minHeight: 40,
             }}
           >
             Not for me
@@ -125,7 +126,7 @@ function RecommendationRow({
             style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               background: '#ffffff', border: '1px solid #e2e8f0', color: '#94a3b8',
-              borderRadius: 8, width: 30, minHeight: 30,
+              borderRadius: 8, width: 40, minHeight: 40,
             }}
           >
             <X size={12} />
@@ -141,6 +142,7 @@ export default function BargainRecommendationPanel({
   reason,
   history,
   onEvent,
+  ariaLabel = 'Suggested alternatives',
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [hidden, setHidden] = useState<Set<string>>(() => new Set())
@@ -201,10 +203,15 @@ export default function BargainRecommendationPanel({
   if (visible.length === 0) return null
 
   return (
-    <div style={{
-      flexShrink: 0, width: '100%', minWidth: 0, overflow: 'hidden',
-      background: '#ffffff', borderTop: '1px solid #eef2f7',
-    }} data-cg-recommendation-panel>
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      style={{
+        flexShrink: 0, width: '100%', minWidth: 0, overflow: 'hidden',
+        background: '#ffffff', borderTop: '1px solid #eef2f7',
+      }}
+      data-cg-recommendation-panel
+    >
       <button
         type="button"
         aria-expanded={expanded}
@@ -216,7 +223,7 @@ export default function BargainRecommendationPanel({
         style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 7,
           padding: '9px 13px', background: '#fafbff', border: 'none',
-          color: '#4338ca', cursor: 'pointer', textAlign: 'left', minWidth: 0,
+          color: '#4338ca', cursor: 'pointer', textAlign: 'left', minWidth: 0, minHeight: 44,
         }}
       >
         <ChevronDown size={14} style={{
@@ -233,7 +240,7 @@ export default function BargainRecommendationPanel({
       </button>
       {expanded && (
         <div style={{
-          maxHeight: 180, overflowY: 'auto', overscrollBehavior: 'contain',
+          maxHeight: 'min(180px, 28dvh)', overflowY: 'auto', overscrollBehavior: 'contain',
           display: 'flex', flexDirection: 'column', gap: 7,
           padding: '8px 10px 10px', minWidth: 0,
         }}>

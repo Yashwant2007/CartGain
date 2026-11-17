@@ -18,8 +18,8 @@ const STAGE_CSS = `
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 10px;
+  padding: 10px 12px;
   overflow: hidden;
   flex-shrink: 0;
   border-bottom: 1px solid #eef2f7;
@@ -72,23 +72,20 @@ const STAGE_CSS = `
   position: absolute;
   inset: -8px;
   border-radius: 50%;
-  border: 1px solid rgba(99,102,241,0.24);
+  border: 1px solid rgba(99,102,241,0.45);
   pointer-events: none;
-  animation: cgStageHalo 2.8s ease-in-out infinite;
+  opacity: 0;
 }
 .cg-stage[data-expression="thinking"] .cg-stage-halo,
 .cg-stage[data-expression="curious"] .cg-stage-halo {
-  border-color: rgba(99,102,241,0.45);
-  animation-duration: 1.15s;
+  opacity: 1;
+  animation: cgStageHalo 1.15s ease-in-out infinite;
 }
 .cg-stage[data-expression="celebrating"] .cg-stage-halo {
+  opacity: 1;
   border-color: rgba(22,163,74,0.4);
   box-shadow: 0 0 0 6px rgba(34,197,94,0.08);
-}
-.cg-stage[data-expression="disappointed"] .cg-stage-halo,
-.cg-stage[data-expression="declining"] .cg-stage-halo,
-.cg-stage[data-expression="error"] .cg-stage-halo {
-  border-color: rgba(148,163,184,0.35);
+  animation: cgStageHalo .9s ease-in-out 1;
 }
 .cg-stage-copy {
   position: relative;
@@ -171,8 +168,10 @@ const STAGE_CSS = `
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @media (max-width: 380px) {
-  .cg-stage { gap: 10px; padding: 10px 12px; }
-  .cg-stage-bubble { font-size: 11.5px; padding: 8px 10px; }
+  .cg-stage { gap: 8px; padding: 9px 10px; }
+  .cg-stage-spot, .cg-stage::before { display: none; }
+  .cg-stage-name { font-size: 12px; margin-bottom: 4px; }
+  .cg-stage-bubble { font-size: 11px; padding: 7px 9px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cg-stage-halo, .cg-stage-bubble { animation: none !important; }

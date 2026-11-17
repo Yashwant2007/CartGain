@@ -64,4 +64,34 @@ describe('ShopkeeperAvatar reactions', () => {
     expect(getByText('Playful Shopkeeper')).toBeTruthy()
     expect(getByText('Let me check what I can do…')).toBeTruthy()
   })
+
+  it('settles celebratory and reaction animations instead of looping them forever', () => {
+    const { container } = render(
+      <ShopkeeperAvatar personality="friendly_shopkeeper" expression="celebrating" />,
+    )
+    const css = container.querySelector('style')?.textContent ?? ''
+    expect(css).toContain('.cg-avatar--celebrating { animation: cgAvCelebrate .9s ease-in-out 1; }')
+    expect(css).toContain('.cg-av-confetti { animation: cgAvConfetti 1.4s ease-out 1 forwards;')
+    expect(css).not.toMatch(/\.cg-avatar--celebrating[^}]*infinite/)
+    expect(css).toContain('@media (prefers-reduced-motion: reduce)')
+  })
+
+  it('only animates the stage halo for thinking and celebrating', () => {
+    const { container } = render(
+      <ShopkeeperStage
+        personality="friendly_shopkeeper"
+        expression="idle"
+        name="Alex"
+        status="Online"
+        line="Hello"
+      />,
+    )
+    const css = container.querySelectorAll('style')
+    const stageCss = Array.from(css).map((node) => node.textContent ?? '').join('\n')
+    expect(stageCss).toContain('opacity: 0;')
+    expect(stageCss).toContain('[data-expression="thinking"] .cg-stage-halo')
+    expect(stageCss).toContain('[data-expression="celebrating"] .cg-stage-halo')
+    expect(stageCss).not.toContain('[data-expression="error"] .cg-stage-halo')
+    expect(stageCss).not.toContain('cgStageHalo 2.8s')
+  })
 })

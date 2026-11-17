@@ -87,3 +87,43 @@ describe('uiText', () => {
     expect(Object.keys(CURRENCY_SYMBOLS).length).toBeGreaterThanOrEqual(10)
   })
 })
+
+describe('localized widget chrome keys', () => {
+  const chromeKeys = [
+    'dealAgreed', 'dealClosed', 'dealAtGlance', 'yourNegotiation',
+    'todaysGoal', 'goalCloses', 'thisStoreRuns', 'jumpToLatest',
+    'dismiss', 'close', 'thisItem', 'viewPlans', 'dealAgreedAt',
+  ] as const
+
+  it('keeps English defaults identical to the previous hard-coded chrome', () => {
+    expect(uiText('en', 'dealAgreed')).toBe('Deal agreed')
+    expect(uiText('en', 'dealClosed')).toBe('Deal closed')
+    expect(uiText('en', 'dealAtGlance')).toBe('Deal at a glance')
+    expect(uiText('en', 'yourNegotiation')).toBe('Your negotiation')
+    expect(uiText('en', 'todaysGoal')).toBe("Today's goal")
+    expect(uiText('en', 'goalCloses', { time: '5:30 PM' })).toBe('closes 5:30 PM')
+    expect(uiText('en', 'thisStoreRuns', { persona: 'Friendly' })).toBe('This store runs: Friendly')
+    expect(uiText('en', 'jumpToLatest', { n: 3 })).toBe('Jump to latest (3)')
+    expect(uiText('en', 'dismiss')).toBe('Dismiss')
+    expect(uiText('en', 'close')).toBe('Close')
+    expect(uiText('en', 'thisItem')).toBe('This item')
+    expect(uiText('en', 'viewPlans')).toBe('View plans & limits')
+    expect(uiText('en', 'dealAgreedAt', { price: '₹450' })).toBe('Deal agreed at ₹450')
+  })
+
+  it('defines every chrome key for every supported language', () => {
+    for (const lang of I18N_LANGS) {
+      for (const key of chromeKeys) {
+        const value = uiText(lang, key, { persona: 'Friendly', n: 2, time: '5:30 PM', price: '₹450' })
+        expect(value.length).toBeGreaterThan(0)
+        expect(value).not.toBe(key)
+        expect(value).not.toContain('{')
+      }
+    }
+  })
+
+  it('localizes the jump and store-running labels', () => {
+    expect(uiText('hi', 'jumpToLatest', { n: 2 })).toBe('नवीनतम पर जाएँ (2)')
+    expect(uiText('hinglish', 'thisStoreRuns', { persona: 'Strict' })).toBe('Yeh store chala raha hai: Strict')
+  })
+})

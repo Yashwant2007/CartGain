@@ -2,6 +2,7 @@
 
 import { CheckCircle2, Tag } from 'lucide-react'
 import type { BargainDecision } from '@/lib/bargain/api-types'
+import { uiText, type UiKey } from '@/lib/bargain/i18n'
 
 type Props = {
   originalPrice: number
@@ -12,6 +13,7 @@ type Props = {
   discountCode?: string | null
   productTitle?: string | null
   sessionEnded?: boolean
+  t?: (key: UiKey, vars?: Record<string, string | number>) => string
 }
 
 export default function BargainOfferSummary({
@@ -23,6 +25,7 @@ export default function BargainOfferSummary({
   discountCode,
   productTitle,
   sessionEnded,
+  t = (key, vars) => uiText('en', key, vars),
 }: Props) {
   const agreed = decision === 'accept' && finalPrice != null
   const shownPrice = agreed ? finalPrice : lastCounter
@@ -44,12 +47,12 @@ export default function BargainOfferSummary({
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: agreed ? '#15803d' : '#4f46e5', textTransform: 'uppercase', letterSpacing: 0.4 }}>
-          {agreed ? 'Deal agreed' : sessionEnded ? 'Deal closed' : 'Deal at a glance'}
+          {t(agreed ? 'dealAgreed' : sessionEnded ? 'dealClosed' : 'dealAtGlance')}
         </div>
         <div title={productTitle ?? undefined} style={{
           fontSize: 12, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
-          {productTitle || 'Your negotiation'}
+          {productTitle || t('yourNegotiation')}
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end', minWidth: 0 }}>

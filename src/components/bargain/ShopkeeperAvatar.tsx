@@ -64,11 +64,11 @@ const AVATAR_CSS = `
 .cg-avatar--negotiating, .cg-avatar--happy { animation: cgAvBob 1.05s ease-in-out infinite; }
 .cg-avatar--surprised { animation: cgAvPop .42s cubic-bezier(.2,.9,.3,1.4); }
 .cg-avatar--amused { animation: cgAvBounce .8s ease-in-out infinite; }
-.cg-avatar--celebrating { animation: cgAvCelebrate .72s ease-in-out infinite; }
+.cg-avatar--celebrating { animation: cgAvCelebrate .9s ease-in-out 1; }
 .cg-avatar--disappointed, .cg-avatar--declining, .cg-avatar--error { animation: cgAvShake .52s ease-in-out; }
 .cg-av-blink { animation: cgAvBlink 4.6s infinite; transform-box: fill-box; transform-origin: center; }
 .cg-av-think-dot { animation: cgAvThink 1.2s ease-in-out infinite; }
-.cg-av-confetti { animation: cgAvConfetti 1.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.cg-av-confetti { animation: cgAvConfetti 1.4s ease-out 1 forwards; transform-box: fill-box; transform-origin: center; }
 .cg-av-glow { animation: cgAvGlow 1.2s ease-in-out infinite; }
 @keyframes cgAvBreathe { 0%,100% { transform: scale(1) translateY(0); } 50% { transform: scale(1.025) translateY(-1px); } }
 @keyframes cgAvSway { 0%,100% { transform: rotate(0deg) translateY(0); } 50% { transform: rotate(2.2deg) translateY(-1px); } }
