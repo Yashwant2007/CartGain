@@ -88,6 +88,41 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(bargain): polish storefront UI and add read-only Shopify verification`
+  (committed `4298e395`, deployed release `4298e39`). Localized remaining
+  storefront chrome in both widgets and `/demo` (`todaysGoal`, `thisStoreRuns`,
+  `jumpToLatest`, `dealAgreed*`, `viewPlans`, close/copy/dismiss), kept the plan
+  limit upgrade link, expanded touch targets to 40–44px, moved the jump control
+  into normal flow, made stage/avatar animations finite and reduced base halo
+  motion, compacted `ShopkeeperStage` on small screens, and centralized timing
+  in `conversation-utils.ts` (`TICK_MS`, `THINKING_DELAY_MS`,
+  `REQUEST_TIMEOUT_MS`, `minThinkingMs`, `wait`). `BargainRecommendationPanel`
+  gained a labelled `role="group"`, 40px actions and viewport-capped scroll. New
+  `src/lib/shopify/verification.ts` + authenticated `GET/POST
+  /api/shopify/verify` report granted/missing scopes and active/all
+  subscriptions, with optional read-only discount-code lookup; no Shopify
+  mutation is performed. Verified: Jest **192 suites / 1952 tests**, tsc, lint,
+  full build green; live `/api/health` `status=ok`, release `4298e39`, DB/Redis/
+  env/AI/email/WhatsApp/Shopify ok, `missing=[]`; `/`, `/bargain/embed`,
+  `/api/bargain/experience`, `/privacy`, `/dpa`, `/terms` 200, `/demo` 307 to
+  login, `/api/shopify/verify` 401 unauthenticated. Still blocked: no real
+  browser/visual acceptance pass, and a suitable test store plus merchant
+  approval are needed for a fresh four-scope install, discount redemption, and
+  billing subscribe/cancel.
+
+- `feat(bargain): rebuild 3.0 storefront experience and reliability`
+  (committed `eb8ea217`, deployed release `eb8ea21`). Completed the 3.0
+  conversation-first rebuild with verified/deduped/capped recommendation cards,
+  persistent suppression and `viewed` events, negotiation-status SSOT with
+  transition rollback/legacy recovery, Redis alert dedupe, request metrics in
+  `/api/health`, `retryAfterSeconds`, and 60s `maxDuration`. Hardened
+  `/api/bargain/offer` with `turnId` idempotency (duplicate turns return
+  `duplicateTurn: true` without persistence/billing/consumption), persisted
+  `turnId` in message metadata, and added demo latency instrumentation. The
+  widget keeps the deal tab from replacing chat and reuses the same `turnId`
+  for retries. Verified: Jest **189 suites / 1930 tests**, tsc, lint, build
+  green; live health ok with all checks healthy.
+
 - `feat(recovery): survive Shopify Level 2 denial of abandoned checkout URLs`.
   Shopify turns `AbandonedCheckout.abandonedCheckoutUrl` into a
   Level 2 protected-customer-data field on **2026-11-23**. The abandoned-checkout
