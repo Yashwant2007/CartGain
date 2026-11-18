@@ -89,7 +89,8 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 ## Work log (most recent first)
 
 - `feat(bargain): wire the living shopkeeper into conversations` (committed
-  `afe3516a`, not deployed). Both storefront widgets and the Experience Studio
+  `afe3516a`, tests in `58bc529a`, greeting/checkout fix in `17a68756`, not
+  deployed). Both storefront widgets and the Experience Studio
   now drive one resolved `ShopkeeperAnimation` from real conversation events:
   body state, facial expression, gesture, position, character style and
   essential-motion-only mode. `ShopkeeperStage` renders the resolved state and
@@ -99,7 +100,7 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   essential-motion toggle, and per-personality strategy labels. The AI prompt
   gains a strategy block that changes negotiation style only, never pricing
   rules. Added living-shopkeeper resolver and widget tests. Verified: tsc, lint,
-  Jest **195 suites / 1985 tests**, and full build green. Not deployed.
+  Jest **197 suites / 2006 tests**, and full build green. Not deployed.
 
 - `feat(bargain): checkout close/lock, remembered purchases, and final real code`
   (committed `b1510a8f`, not deployed). Opening checkout now closes the Bargain
