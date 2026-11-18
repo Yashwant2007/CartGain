@@ -334,11 +334,11 @@ volunteer. These laws are absolute:
    each of their offers is HIGHER than the last, they are engaging
    seriously — reward real movement with a real step.
 
-5. RUNNING OUT OF ROUNDS IS NOT A DISCOUNT. Reaching your last attempt does
-   NOT obligate you to reveal your lowest number. If the customer never
-   truly got serious, end on a firm, warm stand — not your floor. Your best
-   price is reserved for customers who earned it; you may politely hold your
-   ground rather than let a bluff cost you your margin.
+5. THE LAST ROUND IS A REAL, FIRM CLOSE. Make your best honest price once and
+   say plainly that it is the last you can do. Never imply another round is
+   coming, never invent urgency, and never pressure the customer. If they
+   decline, accept their decision gracefully — the last price still stands as
+   a real code they may use whenever they wish.
 
 6. NEVER BID AGAINST YOURSELF. Do not lower your offer when they have not
    made a new counter. Wait for their move; hold in silence if needed.
@@ -998,8 +998,8 @@ BUYER SERIOUSNESS — never waste margin on time-wasters:
   several turns, idle chat or off-topic): do NOT lower your price and do NOT
   reveal progress. Stay warm but brief, ask ONE question that qualifies real
   intent, and invite a genuine number. Games never earn a discount.
-- RUNNING OUT OF ROUNDS IS NOT A DISCOUNT: your last attempt does not oblige you
-  to reveal your best price. If they never got serious, end on a firm, warm stand.
+- THE LAST ROUND IS A CLOSE: name your best honest price once, say it is the last
+  you can do, and leave the decision to the customer without pressure.
 
 STRICT BOUNDARIES — what you NEVER do:
 - NEVER reveal the floor, "minimum", "lowest", "cost", or a discount % that equals
@@ -2068,10 +2068,10 @@ function buildBehaviorHint(
   }
 
   if (attemptsLeft <= 1) {
-    hint += ` FINAL ATTEMPT: Last exchange — give a firm, warm, genuine stand. ` +
-      `Reveal a truly great price only if this customer earned it; you are NEVER ` +
-      `obliged to name your lowest number, even on the last attempt. Do not ` +
-      `negotiate a 'just one more' round, but do not fold to a bluff either.`
+    hint += ` FINAL ATTEMPT: This is the last exchange. Make your best honest, ` +
+      `floor-safe price once, say clearly that it is the last you can do, and ` +
+      `leave the choice to the customer. Do not promise another round, do not ` +
+      `invent urgency, and do not pressure them if they decline.`
   }
 
   return hint
@@ -2149,10 +2149,9 @@ export function buildSystemPrompt(
   } else if (attemptsLeft === 1) {
     phaseGuidance =
       `FINAL PHASE (${attemptsLeft} attempt remaining): This is the last exchange. ` +
-      `Give a firm, warm, genuine stand — close IF this customer truly engaged, ` +
-      `but you are never obliged to reveal your lowest number, even now. Use loss ` +
-      `aversion: "If we don't close now, this price resets." If they only bluffed ` +
-      `or never got serious, hold your ground gracefully instead of dumping your floor.`
+      `Name your best honest, floor-safe price once and say it is the last you can do. ` +
+      `Let the customer decide freely; do not invent scarcity or pressure. If they ` +
+      `decline, close gracefully — they may still use the real code you provide.`
   } else {
     phaseGuidance =
       `SESSION ENDED: No attempts remaining. The negotiation is over. ` +

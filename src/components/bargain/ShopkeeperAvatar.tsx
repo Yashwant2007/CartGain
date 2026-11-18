@@ -1,61 +1,38 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import type { CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import type { ExpressionState } from '@/lib/bargain/experience/expressions'
+import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
+import { characterProfile, supportsGestureLayer, type GestureName } from '@/lib/bargain/experience/character'
 
 interface Props {
   personality: ShopkeeperPersonality
   expression?: ExpressionState
+  /** Living Shopkeeper body state. Falls back to the face when omitted. */
+  state?: AvatarState
+  /** Body language for the current state. */
+  gesture?: GestureName
+  /** Visual rendering style of the character. */
+  characterStyle?: CharacterStyle
   size?: 'sm' | 'md' | 'lg' | 'xl'
   motionEnabled?: boolean
+  /** Disable decorative (nonessential) motion: idle loops, blink, confetti. */
+  essentialMotionOnly?: boolean
   className?: string
 }
 
 const SIZE_MAP = { sm: 38, md: 48, lg: 64, xl: 96 }
 
-const COLORS: Record<ShopkeeperPersonality, { bg: string; accent: string }> = {
-  friendly_shopkeeper: { bg: '#eef2ff', accent: '#4f46e5' },
-  strict_shopkeeper: { bg: '#f1f5f9', accent: '#475569' },
-  playful_shopkeeper: { bg: '#fef3c7', accent: '#d97706' },
-}
-
-const CHARACTERS: Record<
-  ShopkeeperPersonality,
-  {
-    skin: string
-    skinShade: string
-    hair: string
-    outfit: string
-    detail: string
-    glasses: boolean
-  }
-> = {
-  friendly_shopkeeper: {
-    skin: '#f2c6a8',
-    skinShade: '#d99b72',
-    hair: '#3b2a22',
-    outfit: '#4f46e5',
-    detail: '#16a34a',
-    glasses: false,
-  },
-  strict_shopkeeper: {
-    skin: '#e8c7a8',
-    skinShade: '#c99b73',
-    hair: '#243247',
-    outfit: '#334155',
-    detail: '#0f172a',
-    glasses: true,
-  },
-  playful_shopkeeper: {
-    skin: '#bd7f59',
-    skinShade: '#965d3d',
-    hair: '#2b1a14',
-    outfit: '#ea580c',
-    detail: '#fbbf24',
-    glasses: false,
-  },
-}
+/**
+ * Expressions whose animation is an endless idle loop rather than a
+ * state change. In "essential motion only" mode these are switched off so a
+ * merchant can ship the calmest possible storefront without losing the
+ * reactions that carry meaning.
+ */
+const LOOPING_EXPRESSIONS: ReadonlySet<ExpressionState> = new Set<ExpressionState>([
+  'idle', 'listening', 'thinking', 'curious', 'negotiating', 'happy', 'amused',
+])
 
 const AVATAR_CSS = `
 .cg-avatar { transform-origin: 50% 78%; will-change: transform; }
@@ -70,17 +47,53 @@ const AVATAR_CSS = `
 .cg-av-think-dot { animation: cgAvThink 1.2s ease-in-out infinite; }
 .cg-av-confetti { animation: cgAvConfetti 1.4s ease-out 1 forwards; transform-box: fill-box; transform-origin: center; }
 .cg-av-glow { animation: cgAvGlow 1.2s ease-in-out infinite; }
+.cg-av-figure { display: block; transform-origin: 50% 80%; transform-box: fill-box; }
+.cg-avatar--state-entering .cg-av-figure { animation: cgAvEnter .58s cubic-bezier(.2,.9,.3,1.1); }
+.cg-avatar--state-greeting .cg-av-figure { animation: cgAvGreet 1.8s ease-in-out infinite; }
+.cg-avatar--state-typing .cg-av-figure { animation: cgAvBob 1.2s ease-in-out infinite; }
+.cg-avatar--state-walking .cg-av-figure { animation: cgAvStepBody .5s ease-in-out infinite; }
+.cg-avatar--state-guiding_to_checkout .cg-av-figure { animation: cgAvGuideBody 1.6s ease-in-out infinite; }
+.cg-avatar--state-goodbye .cg-av-figure { animation: cgAvBye .7s ease-in-out; }
+.cg-gesture--wave .cg-gesture-wave { animation: cgAvWave 1.1s ease-in-out infinite; transform-box: fill-box; transform-origin: 15% 85%; }
+.cg-gesture--crossed_arms .cg-gesture-cross { animation: cgAvCrossIn .45s ease-out; transform-box: fill-box; transform-origin: 50% 50%; }
+.cg-gesture--point .cg-gesture-point { animation: cgAvPointIn .45s cubic-bezier(.2,.9,.3,1.3); transform-box: fill-box; transform-origin: 100% 50%; }
+.cg-gesture--chin .cg-gesture-chin { animation: cgAvChin .95s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+.cg-gesture--thumbs_up .cg-gesture-thumbs { animation: cgAvThumbs .7s cubic-bezier(.2,.9,.3,1.4); transform-box: fill-box; transform-origin: 50% 100%; }
+.cg-gesture--dance .cg-gesture-dance { animation: cgAvDance .55s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+.cg-gesture--open_palms .cg-gesture-open { animation: cgAvOpen 1.1s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+.cg-gesture--guide .cg-gesture-guide { animation: cgAvGuide .95s ease-in-out infinite; transform-box: fill-box; transform-origin: 0% 50%; }
+.cg-gesture--shrug .cg-gesture-shrug { animation: cgAvShrug .85s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+.cg-gesture--walk .cg-gesture-walk { animation: cgAvStep .5s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+.cg-gesture--nod .cg-av-figure { animation: cgAvNod .6s ease-in-out; transform-box: fill-box; transform-origin: 50% 20%; }
+.cg-gesture--lean_in .cg-av-figure { animation: cgAvLean 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 80%; }
 @keyframes cgAvBreathe { 0%,100% { transform: scale(1) translateY(0); } 50% { transform: scale(1.025) translateY(-1px); } }
 @keyframes cgAvSway { 0%,100% { transform: rotate(0deg) translateY(0); } 50% { transform: rotate(2.2deg) translateY(-1px); } }
 @keyframes cgAvBob { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-2px) rotate(-1deg); } }
 @keyframes cgAvBounce { 0%,100% { transform: translateY(0) scale(1); } 40% { transform: translateY(-2px) scale(1.04); } 70% { transform: translateY(0) scale(.99); } }
 @keyframes cgAvCelebrate { 0%,100% { transform: translateY(0) scale(1); } 35% { transform: translateY(-4px) scale(1.07) rotate(-2deg); } 65% { transform: translateY(-1px) scale(1.03) rotate(2deg); } }
 @keyframes cgAvPop { 0% { transform: scale(.9); } 55% { transform: scale(1.09); } 100% { transform: scale(1); } }
-@keyframes cgAvShake { 0%,100% { transform: translateX(0) rotate(0); } 25% { transform: translateX(-1.5px) rotate(-1.5deg); } 50% { transform: translateX(1.5px) rotate(1.5deg); } 75% { transform: translateX(-1px) rotate(-1deg); } }
+@keyframes cgAvShake { 0%,100% { transform: translateX(0) rotate(0deg); } 25% { transform: translateX(-1.5px) rotate(-1.5deg); } 50% { transform: translateX(1.5px) rotate(1.5deg); } 75% { transform: translateX(-1px) rotate(-1deg); } }
 @keyframes cgAvBlink { 0%, 91%, 97%, 100% { transform: scaleY(1); } 94% { transform: scaleY(.08); } }
 @keyframes cgAvThink { 0%,100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-1px); } }
 @keyframes cgAvConfetti { 0% { opacity: 1; transform: translate(0,0) scale(1); } 100% { opacity: 0; transform: translate(var(--cg-x), var(--cg-y)) scale(.35); } }
 @keyframes cgAvGlow { 0%,100% { opacity: .35; } 50% { opacity: .9; } }
+@keyframes cgAvEnter { 0% { transform: translateX(26px) scale(.9); opacity: .2; } 60% { transform: translateX(-4px) scale(1.04); opacity: 1; } 100% { transform: translateX(0) scale(1); opacity: 1; } }
+@keyframes cgAvGreet { 0%,100% { transform: rotate(-1.5deg) translateY(0); } 50% { transform: rotate(1.5deg) translateY(-1px); } }
+@keyframes cgAvWave { 0%,100% { transform: rotate(-12deg); } 50% { transform: rotate(14deg); } }
+@keyframes cgAvCrossIn { 0% { transform: translateY(8px); opacity: .2; } 100% { transform: translateY(0); opacity: 1; } }
+@keyframes cgAvPointIn { 0% { transform: translateX(-8px); opacity: .2; } 100% { transform: translateX(0); opacity: 1; } }
+@keyframes cgAvChin { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-1.5px) rotate(-3deg); } }
+@keyframes cgAvThumbs { 0% { transform: translateY(6px) scale(.8); opacity: .2; } 70% { transform: translateY(-2px) scale(1.08); opacity: 1; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
+@keyframes cgAvDance { 0%,100% { transform: rotate(-3deg) translateY(0); } 50% { transform: rotate(3deg) translateY(-2px); } }
+@keyframes cgAvOpen { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes cgAvGuide { 0%,100% { transform: translate(0,0); } 50% { transform: translate(3px,2px); } }
+@keyframes cgAvShrug { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes cgAvStep { 0%,100% { transform: translateX(0); opacity: .5; } 50% { transform: translateX(3px); opacity: 1; } }
+@keyframes cgAvNod { 0%,100% { transform: rotate(0deg); } 40% { transform: rotate(4deg); } 70% { transform: rotate(-2deg); } }
+@keyframes cgAvLean { 0%,100% { transform: scale(1) translateY(0); } 50% { transform: scale(1.06) translateY(-1px); } }
+@keyframes cgAvStepBody { 0%,100% { transform: translateX(0) rotate(0deg); } 50% { transform: translateX(2px) rotate(1.5deg); } }
+@keyframes cgAvGuideBody { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-1.5px) rotate(-1.5deg); } }
+@keyframes cgAvBye { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(4px) scale(.94); opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .cg-avatar, .cg-avatar * { animation: none !important; } }
 `
 
@@ -94,15 +107,32 @@ function moodIndex(expression: ExpressionState): number {
 export function ShopkeeperAvatar({
   personality,
   expression = 'idle',
+  state,
+  gesture = 'rest',
+  characterStyle = 'signature',
   size = 'md',
   motionEnabled = true,
+  essentialMotionOnly = false,
   className = '',
 }: Props) {
   const [reducedMotion, setReducedMotion] = useState(false)
   const px = SIZE_MAP[size]
-  const palette = COLORS[personality]
-  const character = CHARACTERS[personality]
+  const profile = characterProfile(personality)
+  const palette = profile.palette
+  const character = {
+    skin: profile.palette.skin,
+    skinShade: profile.palette.skinShade,
+    hair: profile.palette.hair,
+    outfit: profile.palette.outfit,
+    apron: profile.palette.apron,
+    detail: profile.palette.detail,
+    glasses: profile.accessory === 'glasses',
+  }
   const animate = motionEnabled && !reducedMotion
+  // Decorative motion (idle loops, blinking, confetti) is the first thing to
+  // go when a merchant asks for essential-only motion.
+  const decorative = animate && !essentialMotionOnly
+  const showGestures = animate && supportsGestureLayer(characterStyle)
   const happyEyes = expression === 'happy' || expression === 'celebrating'
   const wink = expression === 'amused'
   const wideEyes = expression === 'surprised'
@@ -139,11 +169,106 @@ export function ShopkeeperAvatar({
     return () => mq.removeEventListener('change', handler)
   }, [])
 
+  const expressionClass = animate && (!LOOPING_EXPRESSIONS.has(expression) || !essentialMotionOnly)
+    ? `cg-avatar--${expression}`
+    : ''
   const rootClass = [
     'cg-avatar',
-    animate ? `cg-avatar--${expression}` : '',
+    expressionClass,
+    state ? `cg-avatar--state-${state}` : '',
+    showGestures && gesture !== 'rest' ? `cg-gesture--${gesture}` : '',
     className,
   ].filter(Boolean).join(' ')
+
+  const gestureLayer = (() => {
+    if (!showGestures || gesture === 'rest') return null
+    const skin = character.skin
+    const shade = character.skinShade
+    const outfit = character.outfit
+    switch (gesture) {
+      case 'wave':
+        return (
+          <g className="cg-gesture-wave">
+            <path d="M43 32 q4-7 8-10" stroke={outfit} strokeWidth="4.5" fill="none" strokeLinecap="round" />
+            <rect x="49" y="17" width="9" height="12" rx="4.5" fill={skin} />
+            <path d="M51.5 18v-3.2M54.5 17.6v-4M57.5 18.4v-3" stroke={shade} strokeWidth="1.3" strokeLinecap="round" fill="none" />
+          </g>
+        )
+      case 'crossed_arms':
+        return (
+          <g className="cg-gesture-cross">
+            <rect x="14" y="50" width="36" height="7" rx="3.5" fill={outfit} />
+            <rect x="16" y="45" width="33" height="7" rx="3.5" fill={character.apron} transform="rotate(-9 32 48)" />
+            <circle cx="14" cy="53" r="3.6" fill={skin} />
+            <circle cx="50" cy="49" r="3.6" fill={skin} />
+          </g>
+        )
+      case 'point':
+        return (
+          <g className="cg-gesture-point">
+            <path d="M43 53 q8-2 12-8" stroke={outfit} strokeWidth="5" fill="none" strokeLinecap="round" />
+            <path d="M54 46 l7-3.4" stroke={skin} strokeWidth="3" strokeLinecap="round" fill="none" />
+            <circle cx="46" cy="51" r="3.8" fill={skin} />
+          </g>
+        )
+      case 'chin':
+        return (
+          <g className="cg-gesture-chin">
+            <path d="M34 42 q7 0 9 5" stroke={outfit} strokeWidth="5" fill="none" strokeLinecap="round" />
+            <circle cx="40" cy="47" r="4.4" fill={skin} />
+          </g>
+        )
+      case 'thumbs_up':
+        return (
+          <g className="cg-gesture-thumbs">
+            <path d="M14 57 q-2-7 4-9" stroke={outfit} strokeWidth="4" fill="none" strokeLinecap="round" />
+            <circle cx="17" cy="52" r="5" fill={skin} />
+            <rect x="15" y="43" width="4" height="8" rx="2" fill={skin} transform="rotate(-16 17 47)" />
+          </g>
+        )
+      case 'dance':
+        return (
+          <g className="cg-gesture-dance">
+            <path d="M6 40 l4-3M58 40 l-4-3" stroke={palette.accent} strokeWidth="1.8" strokeLinecap="round" opacity=".7" fill="none" />
+            <circle cx="11" cy="53" r="3.2" fill={skin} />
+            <circle cx="53" cy="53" r="3.2" fill={skin} />
+          </g>
+        )
+      case 'lean_in':
+        return null
+      case 'open_palms':
+        return (
+          <g className="cg-gesture-open">
+            <circle cx="19" cy="54" r="4" fill={skin} />
+            <circle cx="45" cy="54" r="4" fill={skin} />
+            <path d="M19 54 q0-4 3-5.4M45 54 q0-4-3-5.4" stroke={shade} strokeWidth="1.3" fill="none" strokeLinecap="round" />
+          </g>
+        )
+      case 'guide':
+        return (
+          <g className="cg-gesture-guide">
+            <path d="M41 48 q9 4 13 10" stroke={outfit} strokeWidth="5" fill="none" strokeLinecap="round" />
+            <path d="M53 57 l6 3" stroke={skin} strokeWidth="3" strokeLinecap="round" fill="none" />
+          </g>
+        )
+      case 'shrug':
+        return (
+          <g className="cg-gesture-shrug">
+            <path d="M12 57 q4-9 11-6M52 57 q-4-9-11-6" stroke={outfit} strokeWidth="4" fill="none" strokeLinecap="round" />
+          </g>
+        )
+      case 'walk':
+        return (
+          <g className="cg-gesture-walk">
+            <path d="M9 57h7M48 57h7" stroke={palette.accent} strokeWidth="2" strokeLinecap="round" opacity=".6" fill="none" />
+          </g>
+        )
+      case 'nod':
+        return null
+      default:
+        return null
+    }
+  })()
 
   return (
     <>
@@ -153,6 +278,9 @@ export function ShopkeeperAvatar({
         data-personality={personality}
         data-expression={expression}
         data-mood={moodIndex(expression)}
+        data-avatar-state={state ?? ''}
+        data-gesture={gesture}
+        data-character-style={characterStyle}
         role="img"
         aria-label={`Shopkeeper avatar - ${personality.replace(/_/g, ' ')}, ${expression}`}
         style={{
@@ -173,28 +301,29 @@ export function ShopkeeperAvatar({
           transition: 'box-shadow 180ms ease, border-color 180ms ease',
         }}
       >
+        <span className="cg-av-figure">
         <svg width={px} height={px} viewBox="0 0 64 64" aria-hidden="true">
           <path d="M8 64c0-12 10-19 24-19s24 7 24 19" fill={character.outfit} />
-          <path d="M23 49h18l-3 15H26z" fill={character.detail} opacity="0.9" />
+          <path d="M23 49h18l-3 15H26z" fill={character.apron} opacity="0.95" />
           <path d="M27 44h10v8c0 3-2 5-5 5s-5-2-5-5z" fill={character.skinShade} />
           <circle cx="16" cy="33" r="4" fill={character.skin} />
           <circle cx="48" cy="33" r="4" fill={character.skin} />
           <ellipse cx="32" cy="31" rx="17" ry="19" fill={character.skin} />
           <ellipse cx="32" cy="30" rx="14.5" ry="15.5" fill={character.skin} opacity="0.35" />
 
-          {personality === 'friendly_shopkeeper' && (
+          {profile.hair === 'swept_fringe' && (
             <>
               <path d="M15 29c0-11 7.5-18 17-18s17 7 17 18c-3.5-4.5-8.5-7-17-7s-13.5 2.5-17 7z" fill={character.hair} />
               <path d="M17 26c5-4.5 10-6.5 15-6.5S42 21.5 47 26" fill="none" stroke={character.hair} strokeWidth="3" strokeLinecap="round" />
             </>
           )}
-          {personality === 'strict_shopkeeper' && (
+          {profile.hair === 'side_part' && (
             <>
               <path d="M15 28c0-10 7.5-17 17-17 8 0 14 4.5 16 11-6-3-11-4.5-17-4.5-5 0-10 2-16 6.5z" fill={character.hair} />
               <path d="M17 27c7-3.5 13-4.5 19-4.5 4.5 0 8 1 12 3" fill="none" stroke={character.hair} strokeWidth="2.5" strokeLinecap="round" />
             </>
           )}
-          {personality === 'playful_shopkeeper' && (
+          {profile.hair === 'spiky_curls' && (
             <>
               <path d="M15 28c0-10.5 7.5-17 17-17s17 6.5 17 17c-3-4-8-6-17-6s-14 2-17 6z" fill={character.hair} />
               <circle cx="18" cy="23" r="3.7" fill={character.hair} />
@@ -214,7 +343,7 @@ export function ShopkeeperAvatar({
             </g>
           )}
 
-          <g className={animate && !happyEyes && !wink && !wideEyes ? 'cg-av-blink' : undefined}>
+          <g className={decorative && !happyEyes && !wink && !wideEyes ? 'cg-av-blink' : undefined}>
             {happyEyes ? (
               <g fill="none" stroke="#1f2937" strokeWidth="2.1" strokeLinecap="round">
                 <path d="M21.5 32.5q3.5-4 7 0" />
@@ -311,12 +440,12 @@ export function ShopkeeperAvatar({
             <path d="M49 21c2.6 0 4 2 4 4.2 0 2-1.7 3.8-4 5.8-2.3-2-4-3.8-4-5.8 0-2.2 1.4-4.2 4-4.2z" fill="#60a5fa" opacity="0.9" />
           )}
 
-          {expression === 'celebrating' && (
+          {expression === 'celebrating' && decorative && (
             <g>
-              <circle cx="14" cy="15" r="1.6" fill="#f59e0b" className={animate ? 'cg-av-confetti' : undefined} style={{ '--cg-x': '-6px', '--cg-y': '-7px' } as React.CSSProperties} />
-              <circle cx="50" cy="14" r="1.4" fill="#ec4899" className={animate ? 'cg-av-confetti' : undefined} style={{ '--cg-x': '6px', '--cg-y': '-8px', animationDelay: '.25s' } as React.CSSProperties} />
-              <circle cx="12" cy="31" r="1.2" fill="#22c55e" className={animate ? 'cg-av-confetti' : undefined} style={{ '--cg-x': '-7px', '--cg-y': '3px', animationDelay: '.5s' } as React.CSSProperties} />
-              <circle cx="52" cy="30" r="1.7" fill="#3b82f6" className={animate ? 'cg-av-confetti' : undefined} style={{ '--cg-x': '7px', '--cg-y': '2px', animationDelay: '.7s' } as React.CSSProperties} />
+              <circle cx="14" cy="15" r="1.6" fill="#f59e0b" className="cg-av-confetti" style={{ '--cg-x': '-6px', '--cg-y': '-7px' } as React.CSSProperties} />
+              <circle cx="50" cy="14" r="1.4" fill="#ec4899" className="cg-av-confetti" style={{ '--cg-x': '6px', '--cg-y': '-8px', animationDelay: '.25s' } as React.CSSProperties} />
+              <circle cx="12" cy="31" r="1.2" fill="#22c55e" className="cg-av-confetti" style={{ '--cg-x': '-7px', '--cg-y': '3px', animationDelay: '.5s' } as React.CSSProperties} />
+              <circle cx="52" cy="30" r="1.7" fill="#3b82f6" className="cg-av-confetti" style={{ '--cg-x': '7px', '--cg-y': '2px', animationDelay: '.7s' } as React.CSSProperties} />
             </g>
           )}
 
@@ -326,11 +455,14 @@ export function ShopkeeperAvatar({
               <path d="M53 43l3 .8" />
             </g>
           )}
+
+          {gestureLayer}
         </svg>
+        </span>
       </div>
     </>
   )
 }
 
-export type { ExpressionState }
+export type { ExpressionState, AvatarState, GestureName, CharacterStyle }
 export default ShopkeeperAvatar

@@ -88,6 +88,34 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(bargain): checkout close/lock, remembered purchases, and final real code`
+  (**uncommitted**). Opening checkout now closes the Bargain panel (`closePanel()`
+  / `cg_close` in embed mode) and records the moment server-side via new
+  `POST /api/bargain/checkout-open` (rate-limited, session-bound, one-time
+  `checkoutOpenedAt`). `/api/bargain/start` then returns 409 `locked:true` until a
+  verified Shopify `orders/create` webhook for the same buyer arrives; the widget
+  shows a locked state, the last purchase, and Continue checkout instead of any
+  restart/chat/terminal card. New `BargainPurchaseMemory` (migration
+  `20261118190000_add_checkout_lock_and_purchase_memory`, **not applied to
+  production**) stores real line-item history from `orders/create`;
+  `rememberConfirmedOrder()` writes it and unlocks matching sessions by
+  `checkoutPurchaseAt`/`checkoutPurchaseOrderId`. Purchase lookups require an
+  email/cart/phone/fingerprint identity, so anonymous shoppers never see
+  store-wide purchase data. The final attempt (attempts exhausted, walkout, and
+  normal reject) now issues one real retention discount **before** persistence
+  with a deterministic floor-safe final quote, appends calm localized
+  `final_code_offer` copy, and returns `discountCode`/`purchaseUrl`/`claimUrl`
+  once; prompt/rule copy no longer threatens that a price will reset. Added new
+  i18n keys in every supported language, a pure `checkout-lock.ts`, and tests
+  for lock helpers, checkout-open ownership, start lock/no-leak, purchase memory,
+  final-code offer, and widget checkout/locked UI. Verified: Prisma format/
+  validate/generate, `tsc --noEmit`, Jest **194 suites / 1963 tests**, lint, and
+  full build green. Still uncommitted and not deployed, so live
+  `/api/health.release` remains `b586f7e`; the migration and a real Shopify
+  checkout/purchase still need production verification. Open question: the unlock
+  currently accepts any verified order after `checkoutOpenedAt`, including the
+  bargain order itself; confirm whether only a *different* order should reopen.
+
 - `feat(bargain): polish storefront UI and add read-only Shopify verification`
   (committed `4298e395`, deployed release `4298e39`). Localized remaining
   storefront chrome in both widgets and `/demo` (`todaysGoal`, `thisStoreRuns`,

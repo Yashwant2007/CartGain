@@ -2,11 +2,24 @@
 
 import ShopkeeperAvatar from './ShopkeeperAvatar'
 import type { ExpressionState } from '@/lib/bargain/experience/expressions'
-import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
+import type { GestureName } from '@/lib/bargain/experience/character'
+import { POSITION_DESCRIPTORS, type AvatarPosition } from '@/lib/bargain/experience/positions'
+import type { CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 
 interface Props {
   personality: ShopkeeperPersonality
   expression: ExpressionState
+  /** Living Shopkeeper body state. */
+  state?: AvatarState
+  /** Body language for the current state. */
+  gesture?: GestureName
+  /** Where the character is standing (explicit position manager). */
+  position?: AvatarPosition
+  /** Visual rendering style of the character. */
+  characterStyle?: CharacterStyle
+  /** Disable decorative (nonessential) motion. */
+  essentialMotionOnly?: boolean
   name: string
   status: string
   line: string
@@ -24,8 +37,8 @@ const STAGE_CSS = `
   flex-shrink: 0;
   border-bottom: 1px solid #eef2f7;
   background:
-    radial-gradient(circle at 16% 36%, rgba(99,102,241,0.16), transparent 34%),
-    radial-gradient(circle at 78% 8%, rgba(251,191,36,0.12), transparent 28%),
+    radial-gradient(circle at 16% 36%, rgba(99,102,241,0.22), transparent 38%),
+    radial-gradient(circle at 78% 8%, rgba(251,191,36,0.18), transparent 32%),
     linear-gradient(135deg, #f8faff 0%, #ffffff 68%);
 }
 .cg-stage::before {
@@ -167,11 +180,12 @@ const STAGE_CSS = `
   from { opacity: 0; transform: translateY(4px) scale(0.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-@media (max-width: 380px) {
+@media (max-width: 480px) {
   .cg-stage { gap: 8px; padding: 9px 10px; }
   .cg-stage-spot, .cg-stage::before { display: none; }
   .cg-stage-name { font-size: 12px; margin-bottom: 4px; }
   .cg-stage-bubble { font-size: 11px; padding: 7px 9px; }
+  .cg-stage-avatar::after { width: 52px; height: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cg-stage-halo, .cg-stage-bubble { animation: none !important; }

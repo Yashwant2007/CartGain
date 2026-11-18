@@ -123,6 +123,11 @@ export type UiKey =
   | 'thisItem'
   | 'viewPlans'
   | 'dealAgreedAt'
+  | 'final_code_offer'
+  | 'checkout_locked_title'
+  | 'checkout_locked_body'
+  | 'last_bought'
+  | 'continue_checkout'
 
 const I18N: Record<UiLang, Record<UiKey, string>> = {
   en: {
@@ -223,6 +228,11 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     close: 'Close',
     thisItem: 'This item',
     viewPlans: 'View plans & limits',
+    final_code_offer: "That's the last I can do — here's a real one-time code at {price}: {code}. If you'd rather wait, that's completely fine; the choice is yours.",
+    checkout_locked_title: 'Your checkout is open',
+    checkout_locked_body: "We've closed bargain chat while you finish this order. Come back after you buy something, and I'll be ready with a fresh deal.",
+    last_bought: 'Last bought: {product} for {price} on {date}.',
+    continue_checkout: 'Continue checkout',
     dealAgreedAt: 'Deal agreed at {price}',
   },
   hinglish: {
@@ -323,6 +333,11 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     close: 'Band karein',
     thisItem: 'Yeh item',
     viewPlans: 'Plans aur limits dekhein',
+    final_code_offer: "Yahi main aakhri kar sakta hoon — yahaan {price} ka asli one-time code hai: {code}. Agar aap rukna chahte hain, bilkul theek hai; faisla aapka hai.",
+    checkout_locked_title: 'Aapka checkout khul gaya hai',
+    checkout_locked_body: 'Is order ko poora karte hue maine bargain chat band kar diya hai. Kuch khareedne ke baad wapas aayein, main naye deal ke saath yahin rahunga.',
+    last_bought: 'Aakhri kharida: {product}, {price}, {date}.',
+    continue_checkout: 'Checkout jaari rakhein',
     dealAgreedAt: 'Deal {price} par pakka',
   },
   hi: {
@@ -423,6 +438,11 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     close: 'बंद करें',
     thisItem: 'यह वस्तु',
     viewPlans: 'प्लान और सीमाएँ देखें',
+    final_code_offer: 'यही मैं अंतिम कर सकता हूँ — यह {price} का वास्तविक one-time कोड है: {code}। अगर आप प्रतीक्षा करना चाहें, बिलकुल ठीक है; निर्णय आपका है।',
+    checkout_locked_title: 'आपका चेकआउट खुल गया है',
+    checkout_locked_body: 'इस ऑर्डर को पूरा करते समय मैंने बार्गेन चैट बंद कर दी है। खरीदारी के बाद वापस आएँ, मैं नए सौदे के साथ यहीं रहूँगा।',
+    last_bought: 'अंतिम खरीद: {product}, {price}, {date}।',
+    continue_checkout: 'चेकआउट जारी रखें',
     dealAgreedAt: '{price} पर सौदा तय',
   },
   ta: {
@@ -523,6 +543,11 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     close: 'மூடு',
     thisItem: 'இந்தப் பொருள்',
     viewPlans: 'திட்டங்களையும் வரம்புகளையும் காண்க',
+    final_code_offer: 'என்னால் இதுவே இறுதியாக முடியும் — இதோ {price}க்கான உண்மையான one-time குறியீடு: {code}. காத்திருக்க விரும்பினால் அதுவும் சரி; முடிவு உங்களுடையது.',
+    checkout_locked_title: 'உங்கள் செக்ஆவுட் திறக்கப்பட்டது',
+    checkout_locked_body: 'இந்த ஆர்டரை முடிக்கும் போது பேரம் பேசும் அரட்டையை மூடிவிட்டேன். ஏதாவது வாங்கிய பிறகு மீண்டும் வாருங்கள்; புதிய ஒப்பந்தத்துடன் இங்கே இருப்பேன்.',
+    last_bought: 'கடைசியாக வாங்கியது: {product}, {price}, {date}.',
+    continue_checkout: 'செக்ஆவுட் தொடருங்கள்',
     dealAgreedAt: '{price}க்கு ஒப்பந்தம் உறுதி',
   },
   te: {
@@ -623,6 +648,11 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     close: 'మూసివేయి',
     thisItem: 'ఈ వస్తువు',
     viewPlans: 'ప్లాన్లు మరియు పరిమితులు చూడండి',
+    final_code_offer: 'నేను చేయగలిగినది ఇదే చివరి — ఇదిగో {price} కోసం నిజమైన one-time కోడ్: {code}. వేచి ఉండాలనుకుంటే అది కూడా సరే; నిర్ణయం మీదే.',
+    checkout_locked_title: 'మీ చెకౌట్ తెరుచుకుంది',
+    checkout_locked_body: 'ఈ ఆర్డర్ పూర్తయ్యేవరకు బేరం చాట్ మూసివేశాను. ఏదైనా కొన్న తర్వాత తిరిగి రండి; కొత్త డీల్ తో ఇక్కడే ఉంటాను.',
+    last_bought: 'చివరిగా కొన్నది: {product}, {price}, {date}.',
+    continue_checkout: 'చెకౌట్ కొనసాగించండి',
     dealAgreedAt: '{price}కి డీల్ ఖరారైంది',
   },
   bn: {
@@ -723,6 +753,11 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     close: 'বন্ধ করুন',
     thisItem: 'এই পণ্য',
     viewPlans: 'প্ল্যান ও সীমা দেখুন',
+    final_code_offer: 'আমি শেষ যা করতে পারি এটি — এখানে {price} এর জন্য একটি বাস্তব one-time কোড: {code}। আপনি অপেক্ষা করতে চাইলে তাও সম্পূর্ণ ঠিক; সিদ্ধান্ত আপনার।',
+    checkout_locked_title: 'আপনার চেকআউট খুলে গেছে',
+    checkout_locked_body: 'এই অর্ডার শেষ করার সময় আমি দর কষাকষি চ্যাট বন্ধ করে দিয়েছি। কিছু কেনার পর আবার আসুন; নতুন ডিল নিয়ে এখানেই থাকব।',
+    last_bought: 'সবশেষ কেনা: {product}, {price}, {date}।',
+    continue_checkout: 'চেকআউট চালিয়ে যান',
     dealAgreedAt: '{price} এ ডিল চূড়ান্ত',
   },
   mr: {
@@ -823,6 +858,11 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     close: 'बंद करा',
     thisItem: 'ही वस्तू',
     viewPlans: 'प्लान व मर्यादा पहा',
+    final_code_offer: 'मी करू शकतो ते हे शेवटचे — इथे {price} साठी खरा one-time कोड आहे: {code}. तुम्ही थांबू इच्छित असाल तर तेही fully ठीक आहे; निर्णय तुमचा आहे.',
+    checkout_locked_title: 'तुमचा चेकआउट उघडला आहे',
+    checkout_locked_body: 'हा ऑर्डर पूर्ण करताना मी बार्गेनिंग चॅट बंद केली आहे. काहीतरी खरेदी केल्यावर परता या; नवीन डिलसह मी येथेच असेन.',
+    last_bought: 'शेवटची खरेदी: {product}, {price}, {date}.',
+    continue_checkout: 'चेकआउट सुरू ठेवा',
     dealAgreedAt: '{price} ला सौदा झाला',
   },
   gu: {
@@ -923,6 +963,11 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     close: 'બંધ કરો',
     thisItem: 'આ વસ્તુ',
     viewPlans: 'પ્લાન અને મર્યાદાઓ જુઓ',
+    final_code_offer: 'હું કરી શકું તે છેલ્લી વાત આ છે — અહીં {price} માટે વાસ્તવિક one-time કોડ છે: {code}. તમે રાહ જોવા માંગો તો પણ સંપૂર્ણપણે ઠીક છે; નિર્ણય તમારો છે.',
+    checkout_locked_title: 'તમારું ચેકઆઉટ ખુલી ગયું છે',
+    checkout_locked_body: 'આ ઓર્ડર પૂરો કરતી વખતે મેં સોદાબાજી ચેટ બંધ કરી દીધી છે. કંઈક ખરીદ્યા પછી પાછા આવો; નવા સોદા સાથે હું અહીં જ રહીશ.',
+    last_bought: 'છેલ્લી ખરીદી: {product}, {price}, {date}.',
+    continue_checkout: 'ચેકઆઉટ ચાલુ રાખો',
     dealAgreedAt: '{price} પર સોદો થઈ ગયો',
   },
   pa: {
@@ -1023,6 +1068,11 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     close: 'ਬੰਦ ਕਰੋ',
     thisItem: 'ਇਹ ਚੀਜ਼',
     viewPlans: 'ਪਲਾਨ ਅਤੇ ਸੀਮਾਵਾਂ ਵੇਖੋ',
+    final_code_offer: 'ਮੈਂ ਕਰ ਸਕਦਾ ਹਾਂ ਇਹੀ ਆਖਰੀ ਗੱਲ — ਇੱਥੇ {price} ਲਈ ਅਸਲੀ one-time ਕੋਡ ਹੈ: {code}। ਜੇ ਤੁਸੀਂ ਉਡੀਕਣਾ ਚਾਹੋ ਤਾਂ ਵੀ ਬਿਲਕੁਲ ਠੀਕ ਹੈ; ਫੈਸਲਾ ਤੁਹਾਡਾ ਹੈ।',
+    checkout_locked_title: 'ਤੁਹਾਡਾ ਚੈੱਕਆਊਟ ਖੁੱਲ ਗਿਆ ਹੈ',
+    checkout_locked_body: 'ਇਸ ਆਰਡਰ ਨੂੰ ਪੂਰਾ ਕਰਦੇ ਸਮੇਂ ਮੈਂ ਸੌਦੇਬਾਜ਼ੀ ਚੈਟ ਬੰਦ ਕਰ ਦਿੱਤੀ ਹੈ। ਕੁਝ ਖਰੀਦਣ ਤੋਂ ਬਾਅਦ ਵਾਪਸ ਆਓ; ਨਵੇਂ ਸੌਦੇ ਨਾਲ ਮੈਂ ਇੱਥੇ ਹੀ ਰਹਾਂਗਾ।',
+    last_bought: 'ਆਖਰੀ ਖਰੀਦ: {product}, {price}, {date}.',
+    continue_checkout: 'ਚੈੱਕਆਊਟ ਜਾਰੀ ਰੱਖੋ',
     dealAgreedAt: '{price} ਤੇ ਸੌਦਾ ਹੋ ਗਿਆ',
   },
 }

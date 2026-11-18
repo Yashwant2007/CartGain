@@ -12,6 +12,14 @@ import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { getBargainGate, recordBargainSessionOp, BARGAIN_SESSIONS_EXHAUSTED } from '@/lib/bargain/gate'
 import { generateClaimToken } from '@/lib/bargain/purchase'
 import { signSessionToken } from '@/lib/bargain/session-bind'
+import {
+  bargainSessionIdentityClauses,
+  isCheckoutLocked,
+  latestPurchase,
+  purchaseDisplayName,
+  purchaseMemoryIdentityClauses,
+  type PurchaseMemory,
+} from '@/lib/bargain/checkout-lock'
 import { logDataAccess } from '@/lib/data-protection'
 import { track } from '@/lib/analytics/track'
 
@@ -33,7 +41,7 @@ function publicSession(s: any) {
     attemptsUsed: s.attemptsUsed,
     language: s.language,
     startedAt: s.startedAt,
-    expiresAt: s.expiredAt,
+    expiresAt: s.expiresAt,
     messages: (Array.isArray(s.messages) ? s.messages : []).map((m: any) => ({
       id: m.id,
       role: m.role,
@@ -41,6 +49,19 @@ function publicSession(s: any) {
       offeredPrice: m.offeredPrice ?? null,
       createdAt: m.createdAt,
     })),
+  }
+}
+
+function publicLastBought(purchase: PurchaseMemory | null, currency: string) {
+  if (!purchase) return null
+  const symbol = currencySymbolFor(purchase.currency || currency)
+  return {
+    productTitle: purchaseDisplayName(purchase),
+    price: purchase.price ?? null,
+    priceLabel: purchase.price != null ? `${symbol}${purchase.price.toFixed(2)}` : null,
+    currency: purchase.currency || currency,
+    purchasedAt: purchase.purchasedAt.toISOString(),
+    orderId: purchase.shopifyOrderId,
   }
 }
 
@@ -188,11 +209,65 @@ export async function POST(request: NextRequest) {
     // Fully anonymous browsers without any identifier still get the per-store+
     // product singleton guard below.
     const buyerId = data.customerFingerprint || (customerEmail ? `email:${customerEmail}` : null)
-    const identityClauses = [
-      ...(data.customerFingerprint ? [{ customerFingerprint: data.customerFingerprint }] : []),
-      ...(data.cartToken ? [{ cartToken: data.cartToken }] : []),
-      ...(customerEmail ? [{ customerEmail }] : []),
-    ]
+    const identityClauses = bargainSessionIdentityClauses({
+      customerFingerprint: data.customerFingerprint,
+      cartToken: data.cartToken,
+      customerEmail,
+      customerPhone: data.customerPhone,
+    })
+    const purchaseIdentityClauses = purchaseMemoryIdentityClauses({
+      customerEmail,
+      cartToken: data.cartToken,
+      customerPhone: data.customerPhone,
+    })
+
+    const [lockSession, purchaseMemories] = await Promise.all([
+      prisma.bargainSession.findFirst({
+        where: {
+          storeId: data.storeId,
+          checkoutOpenedAt: { not: null },
+          ...(identityClauses.length > 0
+            ? { OR: identityClauses }
+            : { customerFingerprint: null, customerEmail: null, cartToken: null }),
+        },
+        orderBy: { checkoutOpenedAt: 'desc' },
+        select: {
+          checkoutOpenedAt: true,
+          checkoutPurchaseAt: true,
+        },
+      }),
+      purchaseIdentityClauses.length > 0
+        ? prisma.bargainPurchaseMemory.findMany({
+            where: {
+              storeId: data.storeId,
+              OR: purchaseIdentityClauses,
+            },
+            orderBy: { purchasedAt: 'desc' },
+            take: 25,
+            select: {
+              shopifyOrderId: true,
+              shopifyProductId: true,
+              variantId: true,
+              productTitle: true,
+              price: true,
+              currency: true,
+              purchasedAt: true,
+            },
+          })
+        : Promise.resolve([]),
+    ])
+
+    const lastBoughtPurchase = latestPurchase(purchaseMemories as PurchaseMemory[])
+    const lastBought = publicLastBought(lastBoughtPurchase, store.currency)
+    if (lockSession && isCheckoutLocked(lockSession, purchaseMemories)) {
+      return NextResponse.json({
+        message: 'Finish your current order before starting a new bargain.',
+        locked: true,
+        lastBought,
+        goal: publicGoalView(goalCtx),
+      }, { status: 409 })
+    }
+
     const experience = fromDb(config, 'published')
     const hasPublishedExperience = Boolean(config?.experiencePublished)
     const shopkeeperPersonality = experience.personality
@@ -231,6 +306,7 @@ export async function POST(request: NextRequest) {
         }),
         expiresAt: existing.expiredAt.toISOString(),
         existingSession: true,
+        lastBought,
         goal: publicGoalView(goalCtx),
       }, { status: 200 })
     }
@@ -256,6 +332,7 @@ export async function POST(request: NextRequest) {
           sessionId: anonExisting.id,
           sessionToken: signSessionToken(anonExisting.id) ?? undefined,
           existingSession: true,
+          lastBought,
           goal: publicGoalView(goalCtx),
         }, { status: 200 })
       }
@@ -273,6 +350,10 @@ export async function POST(request: NextRequest) {
       cartToken: data.cartToken || null,
     })
     const returning = !!(customerContext && (customerEmail || data.customerFingerprint || data.cartToken))
+    const rememberedContext = lastBoughtPurchase
+      ? `Verified last purchase: ${purchaseDisplayName(lastBoughtPurchase)}${lastBought?.priceLabel ? ` for ${lastBought.priceLabel}` : ''}.`
+      : null
+    const customerContextWithMemory = [customerContext, rememberedContext].filter(Boolean).join('. ')
 
     const ctx: NegotiationContext = {
       storeName: store.name,
@@ -286,7 +367,7 @@ export async function POST(request: NextRequest) {
       aiModel: config.aiModel ?? undefined,
       productTitle: undefined,
       language,
-      customerContext,
+      customerContext: customerContextWithMemory,
       negotiationMode: (config.negotiationMode as NegotiationContext['negotiationMode']) ?? 'balanced',
       ...(isNegotiationStyle(config.negotiationStyle) ? { negotiationStyle: config.negotiationStyle } : {}),
       abuseStrictness: isAbuseStrictness(config.abuseStrictness) ? config.abuseStrictness : 'standard',
@@ -397,6 +478,7 @@ export async function POST(request: NextRequest) {
       openingMessage: openingReply,
       expiresAt: expiredAt.toISOString(),
       returning,
+      lastBought,
       goal: publicGoalView(goalCtx),
     }, { status: 201 })
   } catch (error) {

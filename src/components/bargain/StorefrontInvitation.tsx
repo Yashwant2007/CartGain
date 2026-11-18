@@ -112,12 +112,13 @@ export default function StorefrontInvitation({
         width: '100%',
         maxWidth: 320,
         padding: experience.compact ? '10px 14px' : '14px 18px',
-        borderRadius: 16,
-        background: experience.accentColor ? `linear-gradient(135deg, ${accent}15 0%, #ffffff 100%)` : design.bg,
-        border: `1px solid ${accent}44`,
+        borderRadius: 24,
+        background: experience.accentColor ? `linear-gradient(135deg, ${accent}18 0%, #ffffff 100%)` : design.bg,
+        border: `1px solid ${accent}55`,
         boxShadow: design.shadow,
         cursor: 'pointer',
-        transition: animate ? 'transform 200ms ease, box-shadow 200ms ease' : 'none',
+        transform: animate && expression === 'curious' ? 'translateY(-3px)' : 'none',
+        transition: animate ? 'transform 220ms cubic-bezier(0.34,1.56,0.64,1), box-shadow 220ms ease' : 'none',
         textAlign: 'left',
       }}
       onFocus={() => setExpression('listening')}
@@ -135,7 +136,7 @@ export default function StorefrontInvitation({
         <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.4 }}>{copy}</div>
         <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 6, color: accent, fontWeight: 700, fontSize: 13 }}>
           {cta}
-          <span aria-hidden>→</span>
+          <span aria-hidden style={{ display: 'inline-block', transition: 'transform 0.2s ease', transform: expression === 'curious' ? 'translateX(3px)' : 'none' }}>→</span>
         </div>
       </div>
     </button>

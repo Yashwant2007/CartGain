@@ -23,6 +23,10 @@ jest.mock('@/lib/db', () => ({
     store: { findUnique: jest.fn(), update: jest.fn() },
     bargainConfig: { upsert: jest.fn(), findUnique: jest.fn() },
     bargainProduct: { findUnique: jest.fn() },
+    bargainSession: { findFirst: jest.fn(), create: jest.fn() },
+    bargainPurchaseMemory: { findMany: jest.fn() },
+    cart: { findUnique: jest.fn(), update: jest.fn() },
+    $transaction: jest.fn(async (ops: any[]) => Promise.all(ops)),
   },
 }))
 
@@ -71,6 +75,10 @@ const prismaMock = prisma as unknown as {
   store: { findUnique: jest.Mock; update: jest.Mock }
   bargainConfig: { upsert: jest.Mock; findUnique: jest.Mock }
   bargainProduct: { findUnique: jest.Mock }
+  bargainSession: { findFirst: jest.Mock; create: jest.Mock }
+  bargainPurchaseMemory: { findMany: jest.Mock }
+  cart: { findUnique: jest.Mock; update: jest.Mock }
+  $transaction: jest.Mock
 }
 
 function makeRequest(body: Record<string, unknown>) {
@@ -96,6 +104,18 @@ const baseStore = {
   apiKey: 'shpat_x',
 }
 
+function enableBargaining() {
+  prismaMock.bargainConfig.upsert.mockResolvedValue({
+    enabled: true,
+    sessionTimeout: 600,
+    maxAttempts: 3,
+    aiPersona: 'friendly_shopkeeper',
+    language: 'auto',
+    minProfitPercent: 20,
+  })
+  prismaMock.bargainConfig.findUnique.mockResolvedValue({ enabled: true, minProfitPercent: 20 })
+}
+
 beforeEach(() => {
   jest.clearAllMocks()
   prismaMock.store.findUnique.mockResolvedValue({ ...baseStore })
@@ -111,6 +131,11 @@ beforeEach(() => {
   })
   prismaMock.bargainConfig.findUnique.mockResolvedValue({ enabled: false, minProfitPercent: 20 })
   prismaMock.bargainProduct.findUnique.mockResolvedValue(null)
+  prismaMock.bargainSession.findFirst.mockResolvedValue(null)
+  prismaMock.bargainSession.create.mockResolvedValue({ id: 'session-1', messages: [] })
+  prismaMock.bargainPurchaseMemory.findMany.mockResolvedValue([])
+  prismaMock.cart.findUnique.mockResolvedValue(null)
+  prismaMock.cart.update.mockResolvedValue({})
 })
 
 describe('POST /api/bargain/start — hardening', () => {
@@ -157,5 +182,45 @@ describe('POST /api/bargain/start — hardening', () => {
   it('rejects unsupported currency values (no store write)', async () => {
     await POST(makeRequest({ currency: 'ZZZ' }))
     expect(prismaMock.store.update).not.toHaveBeenCalled()
+  })
+
+  it('locks bargaining after checkout until a newer verified purchase arrives', async () => {
+    enableBargaining()
+    prismaMock.bargainSession.findFirst.mockResolvedValueOnce({
+      checkoutOpenedAt: new Date('2026-11-18T10:00:00Z'),
+      checkoutPurchaseAt: null,
+    })
+    prismaMock.bargainPurchaseMemory.findMany.mockResolvedValue([{
+      shopifyOrderId: 'order-77',
+      shopifyProductId: 'gid://shopify/Product/55',
+      variantId: null,
+      productTitle: 'Trail Runner',
+      price: 79,
+      currency: 'USD',
+      purchasedAt: new Date('2026-11-10T10:00:00Z'),
+    }])
+
+    const res = await POST(makeRequest({ cartToken: 'cart-1' }))
+    const body = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(body.locked).toBe(true)
+    expect(body.lastBought).toMatchObject({
+      productTitle: 'Trail Runner',
+      priceLabel: '$79.00',
+      orderId: 'order-77',
+    })
+    expect(prismaMock.bargainSession.create).not.toHaveBeenCalled()
+  })
+
+  it('never shows store-wide purchase history to a shopper with no identity', async () => {
+    enableBargaining()
+
+    const res = await POST(makeRequest({}))
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(prismaMock.bargainPurchaseMemory.findMany).not.toHaveBeenCalled()
+    expect(body.lastBought).toBeNull()
   })
 })

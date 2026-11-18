@@ -21,7 +21,7 @@ import {
 import { computeRefundNetting, isMessageAttributable } from '@/lib/attribution'
 import { attributeBargainGoal, netBargainGoalRefund } from '@/lib/bargain/goals'
 import { recordLearningRefund } from '@/lib/bargain/learning/outcomes'
-import { attributeBargainPurchase, netBargainPurchaseRefund } from '@/lib/bargain/purchase'
+import { attributeBargainPurchase, rememberConfirmedOrder, netBargainPurchaseRefund } from '@/lib/bargain/purchase'
 import { findQuoteByDiscountCode, redeemQuote } from '@/lib/bargain/quote'
 import { reconcileShopifySubscription, downgradeSubscriptionToFree } from '@/lib/shopify-billing/service'
 import { mapShopifyStatus } from '@/lib/shopify-billing/subscriptions'
@@ -802,6 +802,23 @@ async function processOrderCreate(data: any, store: any, domain: string) {
   const discountAmount = parseFloat(data.total_discounts || '0')
   const netAmount = Math.max(0, grossAmount - discountAmount)
   const discountUsed = discountAmount > 0
+
+  try {
+    await rememberConfirmedOrder({
+      storeId: store.id,
+      shopifyOrderId: shopifyOrderId ?? '',
+      email: orderEmail,
+      phone: orderPhone,
+      cartToken: preferredToken ?? null,
+      checkoutToken: fallbackToken ?? null,
+      customerId: orderCustomerId ? normalizeCustomerId(orderCustomerId) || orderCustomerId : null,
+      purchasedAt: orderCreatedAt,
+      currency: data.currency || null,
+      lineItems: Array.isArray(data.line_items) ? data.line_items : [],
+    })
+  } catch (err) {
+    console.error('[BARGAIN_PURCHASE_MEMORY]', err)
+  }
 
   // ── AI Salesperson: attribute confirmed bargain orders to the daily goal ──
   // Idempotent per shopifyOrderId; never blocks cart recovery if it fails.

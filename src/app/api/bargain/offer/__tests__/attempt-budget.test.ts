@@ -45,6 +45,18 @@ jest.mock('@/lib/data-protection', () => ({
   logDataAccess: jest.fn(async () => {}),
 }))
 
+jest.mock('@/lib/bargain/purchase', () => {
+  const actual = jest.requireActual('@/lib/bargain/purchase')
+  return {
+    ...actual,
+    issueRetentionDiscount: jest.fn(async (_sessionId: string, fallbackPrice?: number | null) => ({
+      code: 'BARGAIN-FINAL',
+      finalPrice: fallbackPrice ?? 300,
+      purchaseUrl: 'https://shop.example/discount/BARGAIN-FINAL',
+    })),
+  }
+})
+
 jest.mock('@/lib/analytics/track', () => ({
   track: jest.fn(async () => {}),
 }))
@@ -206,6 +218,20 @@ describe('offer route — attempt budget (chat must not cost an attempt)', () =>
     // sessions), so the customer hit "Cannot accept — session is accepted."
     expect(body.sessionStatus).toBe('active')
     expect(body.reply).not.toMatch(/used all your attempts/i)
+  })
+
+  it('gives a real final code and leaves the decision to the shopper when the last offer loses', async () => {
+    prismaMock.bargainSession.findUnique.mockResolvedValue(activeSession(2))
+
+    const res = await POST(makeRequest('I can do 100'))
+    const body = await res.json()
+
+    expect(body.decision).toBe('reject')
+    expect(body.sessionStatus).toBe('rejected')
+    expect(body.discountCode).toBe('BARGAIN-FINAL')
+    expect(body.purchaseUrl).toContain('BARGAIN-FINAL')
+    expect(body.reply).toMatch(/last i can do/i)
+    expect(body.reply).toMatch(/choice is yours/i)
   })
 
   it('never calls the AI provider when the merchant paused the AI agent', async () => {

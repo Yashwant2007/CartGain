@@ -37,7 +37,7 @@ import {
 } from '@/lib/bargain/recommendations'
 import { fetchShopifyProducts } from '@/lib/shopify'
 import { toNumericId } from '@/lib/shopify-line-items'
-import { issueRetentionDiscount, buildBargainClaimUrl } from '@/lib/bargain/purchase'
+import { issueRetentionDiscount, buildBargainClaimUrl, type IssuedBargainCode } from '@/lib/bargain/purchase'
 import { track } from '@/lib/analytics/track'
 import { resolveSessionLearning, recordLearningEvent, loadLearningConfig } from '@/lib/bargain/learning/service'
 import { isFeatureEnabled } from '@/lib/feature-flags'
@@ -51,6 +51,21 @@ export const dynamic = 'force-dynamic'
 function detectedLang(sessionOrConfig: string | null | undefined, customerMessage: string): string {
   if (sessionOrConfig && sessionOrConfig !== 'auto') return sessionOrConfig
   return detectLanguage(customerMessage) ?? 'auto'
+}
+
+function finalQuoteFor(session: any, minPrice: number): number {
+  const floor = quotedFloor({ minPrice, originalPrice: session.originalPrice })
+  const cap = Math.max(floor, session.originalPrice - Math.max(1, session.originalPrice * 0.01))
+  const lastAi = [...(Array.isArray(session.messages) ? session.messages : [])].reverse()
+    .find((m: any) => m.role === 'ai' && m.offeredPrice != null)
+  const offered = lastAi?.offeredPrice ?? session.currentOffer
+  if (offered == null) return Math.round(cap * 100) / 100
+  return Math.round(Math.min(cap, Math.max(floor, offered)) * 100) / 100
+}
+
+function withFinalCode(reply: string, lang: string, retention: IssuedBargainCode, currencySymbol: string): string {
+  const price = `${currencySymbol}${retention.finalPrice.toFixed(2)}`
+  return `${reply} ${uiText(lang, 'final_code_offer', { price, code: retention.code })}`
 }
 
 // Recommendations are surfaced only when BOTH the master toggle and the
@@ -689,7 +704,11 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      const rejectReply = uiText(lang, 'attempts_exhausted')
+      const finalQuote = finalQuoteFor(bargainSession, minPrice)
+      const retention = await issueRetentionDiscount(bargainSession.id, finalQuote).catch(() => null)
+      const rejectReply = retention
+        ? withFinalCode(uiText(lang, 'attempts_exhausted'), lang, retention, currencySymbol)
+        : `${uiText(lang, 'attempts_exhausted')} ${uiText(lang, 'farewell_friendly')}`
       await prisma.$transaction([
         prisma.bargainMessage.create({
           data: {
@@ -700,7 +719,7 @@ export async function POST(request: NextRequest) {
         prisma.bargainMessage.create({
           data: {
             sessionId: bargainSession.id, role: 'ai', content: rejectReply,
-            metadata: { ...turnMetadata, tactic: 'reject_graceful', reason: 'attempts_exhausted' } as any,
+            metadata: { ...turnMetadata, tactic: 'reject_graceful', reason: 'attempts_exhausted', ...(retention ? { discountCode: retention.code } : {}) } as any,
           },
         }),
         prisma.bargainSession.update({
@@ -708,9 +727,6 @@ export async function POST(request: NextRequest) {
           data: { status: 'rejected', currentOffer: customerOffer ?? bargainSession.currentOffer },
         }),
       ])
-      // No deal reached — still hand the customer the last price we offered so
-      // the sale isn't lost, with a link straight into their purchase window.
-      const retention = await issueRetentionDiscount(bargainSession.id).catch(() => null)
       return NextResponse.json({
         reply: rejectReply,
         decision: 'reject',
@@ -913,7 +929,12 @@ export async function POST(request: NextRequest) {
           strict_negotiator: uiText(lang, 'farewell_strict'),
           playful_friend: uiText(lang, 'farewell_playful'),
         } as Record<string, string>
-        const farewell = farewellReplies[ctx.persona] ?? farewellReplies.friendly_shopkeeper
+        const baseFarewell = farewellReplies[ctx.persona] ?? farewellReplies.friendly_shopkeeper
+        const finalQuote = finalQuoteFor(bargainSession, minPrice)
+        const retention = await issueRetentionDiscount(bargainSession.id, lastCounter ?? finalQuote).catch(() => null)
+        const farewell = retention
+          ? withFinalCode(baseFarewell, lang, retention, currencySymbol)
+          : baseFarewell
         await prisma.$transaction([
           prisma.bargainMessage.create({
             data: {
@@ -924,7 +945,7 @@ export async function POST(request: NextRequest) {
           prisma.bargainMessage.create({
             data: {
               sessionId: bargainSession.id, role: 'ai', content: farewell,
-              metadata: { ...turnMetadata, tactic: 'walkout_final', reason: hadRetention ? 'second_walkout' : 'no_attempts_left' } as any,
+              metadata: { ...turnMetadata, tactic: 'walkout_final', reason: hadRetention ? 'second_walkout' : 'no_attempts_left', ...(retention ? { discountCode: retention.code } : {}) } as any,
             },
           }),
           prisma.bargainSession.update({
@@ -932,7 +953,6 @@ export async function POST(request: NextRequest) {
             data: { status: 'abandoned', currentOffer: customerOffer ?? bargainSession.currentOffer },
           }),
         ])
-        const retention = await issueRetentionDiscount(bargainSession.id).catch(() => null)
         return NextResponse.json({
           reply: farewell,
           decision: 'reject',
@@ -1271,6 +1291,16 @@ export async function POST(request: NextRequest) {
         })
       : {}
 
+    let customerReply = result.reply
+    let terminalRetention: IssuedBargainCode | null = null
+    if (sessionStatus === 'rejected') {
+      const finalQuote = finalQuoteFor(bargainSession, minPrice)
+      terminalRetention = await issueRetentionDiscount(bargainSession.id, safeCounter ?? finalQuote).catch(() => null)
+      customerReply = terminalRetention
+        ? withFinalCode(result.reply, lang, terminalRetention, currencySymbol)
+        : `${result.reply} ${uiText(lang, 'farewell_friendly')}`
+    }
+
     const [customerMsg, aiMsg, updatedSession] = await prisma.$transaction([
       prisma.bargainMessage.create({
         data: {
@@ -1286,14 +1316,14 @@ export async function POST(request: NextRequest) {
       }),
       prisma.bargainMessage.create({
         data: {
-          sessionId: bargainSession.id, role: 'ai', content: result.reply,
+          sessionId: bargainSession.id, role: 'ai', content: customerReply,
           // Financial safety: a pure-chat reply (no AI counter) must NOT
           // persist `offeredPrice` — otherwise `minPrice` would be written as an
           // accept-able offer and the customer could lock the floor without the
           // AI ever offering it. Only real counters (decision counter/accept)
           // carry an offeredPrice.
           offeredPrice: safeCounter,
-          metadata: { ...turnMetadata, decision: result.decision, tactic: result.tactic, sentiment: result.sentiment, ...(result.metadata ?? {}), ...recommendationMetadata } as any,
+          metadata: { ...turnMetadata, decision: result.decision, tactic: result.tactic, sentiment: result.sentiment, ...(result.metadata ?? {}), ...(terminalRetention ? { discountCode: terminalRetention.code } : {}), ...recommendationMetadata } as any,
         },
       }),
       prisma.bargainSession.update({
@@ -1368,12 +1398,20 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({
-      reply: result.reply,
+      reply: customerReply,
       decision: result.decision,
       counterOffer: safeCounter,
       conversationState,
       sessionStatus,
       finalPrice: updatedSession.finalPrice,
+      ...(terminalRetention
+        ? {
+            discountCode: terminalRetention.code,
+            finalPrice: terminalRetention.finalPrice,
+            purchaseUrl: terminalRetention.purchaseUrl,
+            claimUrl: bargainSession.claimToken ? buildBargainClaimUrl(bargainSession.claimToken) : null,
+          }
+        : {}),
       sessionId: bargainSession.id,
       // §10 floor-reached: backend-determined, boolean-only. Tells the UI the
       // AI just presented its best (= last) price so the customer gets a

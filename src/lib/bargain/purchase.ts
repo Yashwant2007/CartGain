@@ -15,6 +15,7 @@ import { getBargainGate } from '@/lib/bargain/gate'
 import { track } from '@/lib/analytics/track'
 import { recordLearningPurchase } from '@/lib/bargain/learning/outcomes'
 import { SESSION_STATUS } from '@/lib/bargain/negotiation-state'
+import { bargainSessionIdentityClauses } from '@/lib/bargain/checkout-lock'
 
 export function appBaseUrl(): string {
   return (process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com').replace(/\/$/, '')
@@ -73,7 +74,10 @@ export type IssuedBargainCode = {
  * a missing purchaseUrl). Returns null when there is nothing meaningful to give
  * (no offer at/above floor, or Shopify rejected the code).
  */
-export async function issueRetentionDiscount(sessionId: string): Promise<IssuedBargainCode | null> {
+export async function issueRetentionDiscount(
+  sessionId: string,
+  fallbackPrice?: number | null,
+): Promise<IssuedBargainCode | null> {
   const session = await prisma.bargainSession.findUnique({
     where: { id: sessionId },
     include: { store: true },
@@ -102,7 +106,7 @@ export async function issueRetentionDiscount(sessionId: string): Promise<IssuedB
     orderBy: { createdAt: 'desc' },
     select: { offeredPrice: true },
   })
-  const offered = lastAi?.offeredPrice ?? session.currentOffer ?? null
+  const offered = fallbackPrice ?? lastAi?.offeredPrice ?? session.currentOffer ?? null
   if (offered == null) return null
 
   const { minPrice } = await computeMinPrice({
@@ -175,6 +179,72 @@ export async function issueRetentionDiscount(sessionId: string): Promise<IssuedB
   })
 
   return { code: result.code, finalPrice: price, purchaseUrl }
+}
+
+export interface ConfirmedOrderMemory {
+  storeId: string
+  shopifyOrderId: string
+  email?: string | null
+  phone?: string | null
+  cartToken?: string | null
+  checkoutToken?: string | null
+  customerId?: string | null
+  purchasedAt: Date
+  currency?: string | null
+  lineItems?: any[] | null
+}
+
+function normalizeMemoryProductId(value: unknown): string {
+  if (value == null) return ''
+  const raw = String(value)
+  return raw.startsWith('gid://shopify/Product/') ? raw.replace('gid://shopify/Product/', '') : raw
+}
+
+export async function rememberConfirmedOrder(params: ConfirmedOrderMemory): Promise<void> {
+  if (!params.shopifyOrderId) return
+
+  const items = Array.isArray(params.lineItems) ? params.lineItems : []
+  const rows = (items.length > 0 ? items : [null]).map((item: any) => ({
+    storeId: params.storeId,
+    shopifyOrderId: params.shopifyOrderId,
+    customerEmail: params.email ?? null,
+    customerPhone: params.phone ?? null,
+    cartToken: params.cartToken ?? null,
+    customerId: params.customerId ?? null,
+    shopifyProductId: normalizeMemoryProductId(item?.product_id ?? item?.product?.id) || '',
+    variantId: item?.variant_id != null ? String(item.variant_id) : null,
+    productTitle: item?.title || item?.name || null,
+    price: Number.isFinite(Number(item?.price)) ? Number(item.price) * Math.max(1, Number(item?.quantity) || 1) : null,
+    currency: params.currency ?? null,
+    purchasedAt: params.purchasedAt,
+  }))
+
+  await prisma.bargainPurchaseMemory.createMany({ data: rows, skipDuplicates: true }).catch(() => {})
+
+  const sessionOrs = [
+    ...bargainSessionIdentityClauses({
+      customerEmail: params.email,
+      cartToken: params.cartToken,
+      customerPhone: params.phone,
+    }),
+    ...(params.checkoutToken && params.checkoutToken !== params.cartToken
+      ? [{ cartToken: params.checkoutToken }]
+      : []),
+  ]
+  if (sessionOrs.length === 0) return
+
+  await prisma.bargainSession.updateMany({
+    where: {
+      storeId: params.storeId,
+      checkoutOpenedAt: { not: null, lte: params.purchasedAt },
+      checkoutPurchaseAt: null,
+      OR: sessionOrs,
+    },
+    data: {
+      checkoutPurchaseAt: params.purchasedAt,
+      checkoutPurchaseOrderId: params.shopifyOrderId,
+    },
+  }).catch(() => {})
 }
 
 export type PurchaseAttribution = {

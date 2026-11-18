@@ -89,6 +89,13 @@ function bargainFingerprint(cartRef: string): string | null {
   }
 }
 
+type LastBoughtView = {
+  productTitle: string
+  priceLabel: string | null
+  purchasedAt: string
+  orderId: string
+}
+
 type Props = {
   storeId: string
   shopifyProductId: string
@@ -191,6 +198,8 @@ export default function BargainWidget({
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [discountCode, setDiscountCode] = useState<string | null>(null)
   const [purchaseUrl, setPurchaseUrl] = useState<string | null>(null)
+  const [checkoutLocked, setCheckoutLocked] = useState(false)
+  const [lastBought, setLastBought] = useState<LastBoughtView | null>(null)
   const [shopifyStatus, setShopifyStatus] = useState<'created' | 'pending' | 'failed' | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
   const [timeLeft, setTimeLeft] = useState<number | null>(null)
@@ -319,6 +328,16 @@ export default function BargainWidget({
       ? t('checkOfferError')
       : latestAiLine?.replace(/\s+/g, ' ').trim() || t('makeOfferSub')
   const savings = decision === 'accept' && finalPrice != null ? livePrice - finalPrice : null
+  const lastBoughtDate = (() => {
+    if (!lastBought) return ''
+    const date = new Date(lastBought.purchasedAt)
+    if (Number.isNaN(date.getTime())) return ''
+    try {
+      return date.toLocaleDateString(language && language !== 'auto' ? language : undefined)
+    } catch {
+      return date.toLocaleDateString('en-US')
+    }
+  })()
 
   // The last price the shopkeeper actually put on the table (server-issued
   // counter). Used for the "Accept" bar and quick-offer chips. Never computed,
@@ -375,6 +394,27 @@ export default function BargainWidget({
 
   const unavailable = rejection != null && /UNAVAILABLE/i.test(rejection.reason)
 
+  async function openCheckout(url: string) {
+    if (!url) return
+    try {
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch {
+      window.location.href = url
+    }
+    if (sessionId) {
+      try {
+        void fetch(`${apiBase}/api/bargain/checkout-open`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, ...buyerIdentity(), sessionToken }),
+          keepalive: true,
+        })
+      } catch {}
+    }
+    setCheckoutLocked(true)
+    closePanel()
+  }
+
   // A deal that ended without an explicit accept still leaves the shopper with
   // the last price we offered — a one-use code plus a link that applies it, so
   // the visit still ends in a purchase window rather than a dead end.
@@ -389,7 +429,7 @@ export default function BargainWidget({
       <code style={{ fontWeight: 800, color: '#b45309', letterSpacing: 0.6 }}>{discountCode}</code>
       {purchaseUrl && (
         <div style={{ marginTop: 10 }}>
-          <a href={purchaseUrl} target="_top" rel="noopener noreferrer" onClick={(e) => { e.preventDefault(); try { window.open(purchaseUrl, '_blank', 'noopener,noreferrer') } catch { window.location.href = purchaseUrl } }} className="cg-btn cg-btn-primary" style={{ display: 'inline-flex' }}>
+          <a href={purchaseUrl} target="_top" rel="noopener noreferrer" onClick={(e) => { e.preventDefault(); void openCheckout(purchaseUrl) }} className="cg-btn cg-btn-primary" style={{ display: 'inline-flex' }}>
             Checkout at your price
           </a>
         </div>
@@ -552,8 +592,18 @@ export default function BargainWidget({
         code?: string
         planId?: string
         upgradeUrl?: string
+        locked?: boolean
+        lastBought?: LastBoughtView | null
       }
       if (!res.ok) {
+        if (res.status === 409 && data.locked) {
+          setCheckoutLocked(true)
+          setLastBought(data.lastBought ?? null)
+          setSessionEnded(true)
+          setMessages([])
+          if (data.goal) setGoal(data.goal)
+          return
+        }
         if (res.status === 402 && data.code) {
           setLimit({ code: data.code, planId: data.planId, upgradeUrl: data.upgradeUrl })
           setSessionEnded(true)
@@ -561,9 +611,11 @@ export default function BargainWidget({
         }
         throw new Error(data.message ?? 'Could not start bargaining')
       }
+      setCheckoutLocked(false)
       setSessionId(data.sessionId)
       if (data.sessionToken) setSessionToken(data.sessionToken)
       setExpiresAt(data.expiresAt ?? null)
+      setLastBought(data.lastBought ?? null)
       if (data.returning) setReturning(true)
       if (data.goal) setGoal(data.goal)
       if (data.existingSession) fireAvatar('SESSION_RESTORED')
@@ -686,6 +738,11 @@ export default function BargainWidget({
         message?: string
         terminal?: boolean
         status?: 'accepted' | 'rejected' | 'expired' | 'abandoned'
+      }
+      if (data.sessionStatus && data.sessionStatus !== 'active') {
+        setSessionEnded(true)
+        if (data.sessionStatus === 'expired') setEndedReason('expired')
+        if (data.sessionStatus === 'rejected') setDecision('reject')
       }
       if (!res.ok) {
         if (res.status === 410) {
@@ -971,6 +1028,7 @@ export default function BargainWidget({
   // "Start a new negotiation" — a fully fresh session (the backend only reuses
   // ACTIVE sessions, so a terminal one always starts anew).
   function restartNegotiation() {
+    if (checkoutLocked) return
     setSessionId(null)
     setMessages([])
     setInput('')
@@ -1057,13 +1115,13 @@ export default function BargainWidget({
   // drawer mode the start waits for the controller's first cg_product_update
   // (or a short deadline) so a variant picked before opening is honored.
   useEffect(() => {
-    if (!isEmbed || !open || minimised || sessionId || loading || busyRef.current) return
+    if (!isEmbed || !open || minimised || checkoutLocked || sessionId || loading || busyRef.current) return
     if (isDrawer && productPending) return
     void startSession()
     // startSession is a stable function declaration; the run is already gated
     // by sessionId/loading/busyRef so re-renders never double-start.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEmbed, isDrawer, productPending, open, minimised, sessionId, loading])
+  }, [isEmbed, isDrawer, productPending, open, minimised, checkoutLocked, sessionId, loading])
 
   const closePanel = useCallback(() => {
     if (isDrawer && typeof window !== 'undefined') {
@@ -1512,7 +1570,7 @@ export default function BargainWidget({
                 {thinkingVisible && <TypingIndicator personaChip={personaChip} t={t} />}
 
                 {/* ── Accepted deal card — conversion hero ── */}
-                {decision === 'accept' && finalPrice != null && (
+                {!checkoutLocked && decision === 'accept' && finalPrice != null && (
                   <div style={{
                     background: 'linear-gradient(180deg, #ffffff, #f6fefa)',
                     border: '1px solid #bbf7d0',
@@ -1595,7 +1653,7 @@ export default function BargainWidget({
                     )}
                     {purchaseUrl && (
                       <div style={{ marginTop: 12 }}>
-                        <a href={purchaseUrl} target="_top" rel="noopener noreferrer" onClick={(e) => { e.preventDefault(); try { window.open(purchaseUrl, '_blank', 'noopener,noreferrer') } catch { window.location.href = purchaseUrl } }} className="cg-btn cg-btn-primary" style={{ display: 'inline-flex' }}>
+          <a href={purchaseUrl} target="_top" rel="noopener noreferrer" onClick={(e) => { e.preventDefault(); void openCheckout(purchaseUrl) }} className="cg-btn cg-btn-primary" style={{ display: 'inline-flex' }}>
                           Checkout at your price
                         </a>
                       </div>
@@ -1606,8 +1664,37 @@ export default function BargainWidget({
                   </div>
                 )}
 
+                {checkoutLocked && (
+                  <StateCard
+                    icon={<CheckCircle2 size={18} />}
+                    tone="indigo"
+                    title={t('checkout_locked_title')}
+                    body={t('checkout_locked_body')}
+                  >
+                    {lastBought && (
+                      <div style={{
+                        padding: '10px 12px', borderRadius: 12, background: '#f8fafc',
+                        border: '1px solid #e2e8f0', fontSize: 12.5, color: '#475569', fontWeight: 600,
+                      }}>
+                        {t('last_bought', {
+                          product: lastBought.productTitle,
+                          price: lastBought.priceLabel ?? '—',
+                          date: lastBoughtDate || '—',
+                        })}
+                      </div>
+                    )}
+                    {purchaseUrl && (
+                      <div className="cg-card-cta">
+                        <a href={purchaseUrl} target="_top" rel="noopener noreferrer" className="cg-btn cg-btn-primary" style={{ display: 'inline-flex' }}>
+                          {t('continue_checkout')}
+                        </a>
+                      </div>
+                    )}
+                  </StateCard>
+                )}
+
                 {/* ── Terminal state cards ── */}
-                {!limit && sessionEnded && decision === 'reject' && !unavailable && (
+                {!checkoutLocked && !limit && sessionEnded && decision === 'reject' && !unavailable && (
                   <StateCard
                     icon={<Tag size={18} />}
                     tone="amber"
@@ -1626,7 +1713,7 @@ export default function BargainWidget({
                   </StateCard>
                 )}
 
-                {!limit && sessionEnded && endedReason === 'expired' && !unavailable && (
+                {!checkoutLocked && !limit && sessionEnded && endedReason === 'expired' && !unavailable && (
                   <StateCard
                     icon={<Clock size={18} />}
                     tone="slate"
@@ -1645,7 +1732,7 @@ export default function BargainWidget({
                   </StateCard>
                 )}
 
-                {!limit && sessionEnded && endedReason !== 'expired' && decision === 'idle' && !unavailable && (
+                {!checkoutLocked && !limit && sessionEnded && endedReason !== 'expired' && decision === 'idle' && !unavailable && (
                   <StateCard
                     icon={<RotateCcw size={18} />}
                     tone="slate"
@@ -1665,7 +1752,7 @@ export default function BargainWidget({
                 )}
 
                 {/* Product unavailable */}
-                {!limit && unavailable && rejection && (
+                {!checkoutLocked && !limit && unavailable && rejection && (
                   <StateCard
                     icon={<AlertCircle size={18} />}
                     tone="rose"
@@ -1684,7 +1771,7 @@ export default function BargainWidget({
                 )}
 
                 {/* Other backend rejections (coupon stacking / campaign / price moved) */}
-                {!limit && sessionEnded === false && rejection && !unavailable && (
+                {!checkoutLocked && !limit && sessionEnded === false && rejection && !unavailable && (
                   <StateCard
                     icon={<ShieldCheck size={18} />}
                     tone="indigo"
@@ -1734,7 +1821,7 @@ export default function BargainWidget({
                 )}
 
                 {/* Network / generic error */}
-                {!limit && error && (
+                {!checkoutLocked && !limit && error && (
                   <StateCard
                     icon={<AlertCircle size={18} />}
                     tone="rose"
@@ -1926,7 +2013,7 @@ export default function BargainWidget({
           )}
 
           {/* ── Accepted conversion footer ── */}
-          {!limit && decision === 'accept' && discountCode != null && (
+          {!checkoutLocked && !limit && decision === 'accept' && discountCode != null && (
             <div style={{
               padding: '10px 14px 14px',
               background: '#ffffff',

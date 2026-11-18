@@ -12,6 +12,7 @@ jest.mock('@/lib/db', () => ({
     bargainMessage: { findFirst: jest.fn() },
     cart: { findUnique: jest.fn() },
     bargainRevenueShareEvent: { findUnique: jest.fn(), update: jest.fn() },
+    bargainPurchaseMemory: { createMany: jest.fn() },
     analytics: { findUnique: jest.fn(), update: jest.fn() },
     subscription: { update: jest.fn() },
     $transaction: jest.fn(),
@@ -41,6 +42,7 @@ import {
   generateBargainCode,
   generateClaimToken,
   issueRetentionDiscount,
+  rememberConfirmedOrder,
   attributeBargainPurchase,
   netBargainPurchaseRefund,
 } from '@/lib/bargain/purchase'
@@ -385,5 +387,59 @@ describe('netBargainPurchaseRefund', () => {
     expect(data.purchaseRefundedAmount).toBe(1000)
     expect(data.purchaseRefundStatus).toBe('fully_refunded')
     expect(tx.analytics.update.mock.calls[0][0].data.bargainPurchases).toBe(0)
+  })
+})
+
+describe('rememberConfirmedOrder', () => {
+  it('stores verified line items and unlocks checkout sessions for the same buyer', async () => {
+    mockPrisma.bargainPurchaseMemory.createMany.mockResolvedValue({ count: 1 })
+    mockPrisma.bargainSession.updateMany.mockResolvedValue({ count: 2 })
+    const purchasedAt = new Date('2026-11-18T10:05:00Z')
+
+    await rememberConfirmedOrder({
+      storeId: 'store1',
+      shopifyOrderId: 'order-77',
+      email: 'buyer@example.com',
+      cartToken: 'cart-1',
+      checkoutToken: 'checkout-1',
+      purchasedAt,
+      currency: 'USD',
+      lineItems: [{
+        product_id: 'gid://shopify/Product/55',
+        variant_id: 99,
+        title: 'Trail Runner',
+        price: '79.00',
+        quantity: 2,
+      }],
+    })
+
+    expect(mockPrisma.bargainPurchaseMemory.createMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: [expect.objectContaining({
+        storeId: 'store1',
+        shopifyOrderId: 'order-77',
+        shopifyProductId: '55',
+        productTitle: 'Trail Runner',
+        price: 158,
+        currency: 'USD',
+        purchasedAt,
+      })],
+      skipDuplicates: true,
+    }))
+    expect(mockPrisma.bargainSession.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        storeId: 'store1',
+        checkoutPurchaseAt: null,
+        checkoutOpenedAt: { not: null, lte: purchasedAt },
+        OR: expect.arrayContaining([
+          { customerEmail: 'buyer@example.com' },
+          { cartToken: 'cart-1' },
+          { cartToken: 'checkout-1' },
+        ]),
+      }),
+      data: {
+        checkoutPurchaseAt: purchasedAt,
+        checkoutPurchaseOrderId: 'order-77',
+      },
+    }))
   })
 })

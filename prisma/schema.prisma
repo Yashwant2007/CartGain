@@ -107,17 +107,17 @@ model CustomerDataExport {
 }
 
 model Store {
-  id                    String    @id @default(cuid())
-  userId                String
-  name                  String
-  platform              String // shopify, woocommerce, magento, bigcommerce, custom
-  domain                String
-  currency              String    @default("USD")
-  timezone              String    @default("UTC")
-  isActive              Boolean   @default(true)
-  webhookUrl            String?
-  apiKey                String?
-  apiSecret             String?
+  id                            String    @id @default(cuid())
+  userId                        String
+  name                          String
+  platform                      String // shopify, woocommerce, magento, bigcommerce, custom
+  domain                        String
+  currency                      String    @default("USD")
+  timezone                      String    @default("UTC")
+  isActive                      Boolean   @default(true)
+  webhookUrl                    String?
+  apiKey                        String?
+  apiSecret                     String?
   // Optional per-store webhook signing secret (encrypted at rest). Public
   // Shopify apps sign every webhook with the app's client secret, so this is
   // usually null and verification falls back to SHOPIFY_API_SECRET. It exists
@@ -125,23 +125,23 @@ model Store {
   // secret differs from ours — can be verified against its OWN secret instead
   // of trusting a globally-shared key. Binding verification to the shop closes
   // replay/forgery across tenants when secrets are not globally shared.
-  webhookSecret         String?
+  webhookSecret                 String?
   // WhatsApp Cloud API business number id (Meta "phone_number_id"). Lets an
   // inbound WhatsApp webhook — e.g. a customer replying STOP — map back to the
   // store that owns the number so the opt-out is persisted against that store's
   // contact list. Null until the number is registered for the store.
-  whatsappPhoneNumberId String?   @unique
-  shopifyRefreshToken   String?
-  shopifyTokenExpiresAt DateTime?
+  whatsappPhoneNumberId         String?   @unique
+  shopifyRefreshToken           String?
+  shopifyTokenExpiresAt         DateTime?
   // Capability state for AbandonedCheckout.abandonedCheckoutUrl (Shopify
   // protected customer data Level 2). UNKNOWN until first probed, AVAILABLE
   // when the URL field is readable, ACCESS_DENIED when Shopify rejects it,
   // RETRIEVAL_FAILED for transient API errors. Lets the sweep skip a denied
   // field instead of breaking discovery on every run.
-  abandonedCheckoutUrlAccess      String    @default("UNKNOWN")
-  abandonedCheckoutUrlCheckedAt   DateTime?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  abandonedCheckoutUrlAccess    String    @default("UNKNOWN")
+  abandonedCheckoutUrlCheckedAt DateTime?
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
 
   user                       User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   carts                      Cart[]
@@ -158,6 +158,7 @@ model Store {
   bargainConfig              BargainConfig?
   bargainProducts            BargainProduct[]
   bargainSessions            BargainSession[]
+  bargainPurchaseMemories    BargainPurchaseMemory[]
   customerDataExports        CustomerDataExport[]
   bargainDailyGoals          BargainDailyGoal[]
   bargainDailyGoalIncrements BargainDailyGoalIncrement[]
@@ -207,32 +208,32 @@ model Campaign {
 }
 
 model Cart {
-  id            String    @id @default(cuid())
-  storeId       String
-  cartId        String // External cart ID
-  customerId    String?
-  customerEmail String?
-  customerPhone String?
-  customerName  String?
-  items         Json
-  totalValue    Float
-  currency      String    @default("USD")
-  isRecovered   Boolean   @default(false) // true ONLY when WE recovered it (attributed) — drives credit/billing/reporting
-  recoveredAt   DateTime?
-  recoveredVia  String? // sms, whatsapp, email, push
-  convertedAt   DateTime? // set when an order is placed for this cart (any source) — stops further messaging, NOT a credit
+  id                   String    @id @default(cuid())
+  storeId              String
+  cartId               String // External cart ID
+  customerId           String?
+  customerEmail        String?
+  customerPhone        String?
+  customerName         String?
+  items                Json
+  totalValue           Float
+  currency             String    @default("USD")
+  isRecovered          Boolean   @default(false) // true ONLY when WE recovered it (attributed) — drives credit/billing/reporting
+  recoveredAt          DateTime?
+  recoveredVia         String? // sms, whatsapp, email, push
+  convertedAt          DateTime? // set when an order is placed for this cart (any source) — stops further messaging, NOT a credit
   // Recovery link availability is independent of recovery status. Legacy rows
   // (null) had a token and are treated as AVAILABLE. Values: AVAILABLE,
   // MISSING, ACCESS_DENIED, RETRIEVAL_FAILED, EXPIRED_OR_INVALID, NOT_REQUIRED.
-  recoveryUrlStatus      String?
+  recoveryUrlStatus    String?
   // The full Shopify recovery URL is sensitive (it contains the checkout
   // secret). It is only persisted AES-256-GCM encrypted; the non-secret
   // checkout token remains in cartId for building resume links.
-  recoveryUrlEncrypted   String?
-  recoveryUrlCheckedAt   DateTime?
-  abandonedAt   DateTime  @default(now())
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  recoveryUrlEncrypted String?
+  recoveryUrlCheckedAt DateTime?
+  abandonedAt          DateTime  @default(now())
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   store              Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
   messages           Message[]
@@ -494,6 +495,12 @@ model BargainConfig {
   invitationDesign                  String    @default("smart-assistant") // smart-assistant | playful-bargain-club | unlock-your-deal | human-shopkeeper
   avatarEnabled                     Boolean   @default(true)
   motionEnabled                     Boolean   @default(true)
+  // ── Living Shopkeeper Engine ──
+  // Visual rendering style of the character: signature | minimal.
+  characterStyle                    String    @default("signature")
+  // When true only state-changing (essential) motion runs — idle loops, blink,
+  // confetti and the halo are disabled for the calmest possible storefront.
+  essentialMotionOnly               Boolean   @default(false)
   invitationCtaLabel                String?
   invitationCopy                    String?
   invitationGreeting                String?
@@ -568,6 +575,9 @@ model BargainSession {
   discountCodeCartToken     String? // cartToken the code was bound to (prevents sharing)
   claimToken                String?   @unique // opaque token for the post-bargain purchase-window link
   purchaseUrl               String? // checkout link that applies the issued code (purchase window)
+  checkoutOpenedAt          DateTime? // shopper opened checkout; chat closes until a real order arrives
+  checkoutPurchaseAt        DateTime? // any confirmed order from this buyer after checkout opened
+  checkoutPurchaseOrderId   String? // Shopify order id that unlocked this checkout lock
   purchasedAt               DateTime? // when an order confirmed using this bargain code
   purchasedOrderId          String? // Shopify order id — idempotent purchase attribution (scoped to the store: Shopify order ids are per-shop sequences)
   purchaseValue             Float? // recognized net value of the bargain purchase (after refunds)
@@ -617,8 +627,37 @@ model BargainSession {
   @@index([cartToken])
   @@index([customerEmail])
   @@index([customerFingerprint])
+  @@index([checkoutOpenedAt])
   @@index([status])
   @@index([expiredAt])
+}
+
+// Verified Shopify order history used only to remember a buyer's last purchase
+// and to reopen bargain chat after an order. Written from orders/create; no
+// inferred or demo data is ever stored here.
+model BargainPurchaseMemory {
+  id               String   @id @default(cuid())
+  storeId          String
+  shopifyOrderId   String
+  customerEmail    String?
+  customerPhone    String?
+  cartToken        String?
+  customerId       String?
+  shopifyProductId String?
+  variantId        String?
+  productTitle     String?
+  price            Float?
+  currency         String?
+  purchasedAt      DateTime
+  createdAt        DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, shopifyOrderId, shopifyProductId], map: "BargainPurchaseMemory_order_key")
+  @@index([storeId, customerEmail, purchasedAt], map: "BargainPurchaseMemory_email_date_idx")
+  @@index([storeId, cartToken, purchasedAt], map: "BargainPurchaseMemory_cart_date_idx")
+  @@index([storeId, customerId, purchasedAt], map: "BargainPurchaseMemory_customer_date_idx")
+  @@index([storeId, purchasedAt], map: "BargainPurchaseMemory_store_date_idx")
 }
 
 // ── Secure bargain quotes (Module 3) ────────────────────────────────────────
@@ -628,13 +667,13 @@ model BargainSession {
 // single-use atomic redemption, expiry, and revocation. Additive — stores with
 // the flag off keep the legacy discount-code-only path untouched.
 model BargainQuote {
-  id                  String   @id @default(cuid())
+  id                  String    @id @default(cuid())
   storeId             String
   sessionId           String? // originating bargain session, when known
   cartToken           String? // Shopify cart token the quote was bound to
   shopifyProductId    String
   variantId           String?
-  quantity            Int      @default(1)
+  quantity            Int       @default(1)
   originalPrice       Float
   finalPrice          Float
   discountPercent     Int
@@ -642,18 +681,18 @@ model BargainQuote {
   // checkout-time revalidation can re-clamp without re-deriving the merchant
   // floor from a possibly-changed config.
   floorPrice          Float
-  currency            String   @default("INR")
+  currency            String    @default("INR")
   customerEmail       String?
   shopifyCustomerId   String?
   customerFingerprint String?
   // The only identifier a client ever sees. Signed (HMAC) + random, so it can
   // neither be guessed nor forged, and it is bound to this exact quote id.
-  token               String   @unique
+  token               String    @unique
   // CREATED → ACCEPTED → CHECKOUT_PENDING → REDEEMED
   // terminal side-states: EXPIRED | REVOKED | INVALIDATED | CANCELLED
-  status              String   @default("CREATED")
+  status              String    @default("CREATED")
   // Payment-method / shipping / bundle conditions (Modules 4–6). Empty for now.
-  conditions          Json     @default("{}")
+  conditions          Json      @default("{}")
   discountCode        String? // the Shopify code minted for this quote
   orderId             String? // Shopify order that redeemed it (single-use)
   revokeReason        String?
@@ -662,15 +701,15 @@ model BargainQuote {
   checkoutStartedAt   DateTime?
   redeemedAt          DateTime?
   revokedAt           DateTime?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   store  Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
   events BargainQuoteEvent[]
 
+  @@unique([storeId, discountCode])
   @@index([storeId])
   @@index([storeId, status])
-  @@unique([storeId, discountCode])
   @@index([sessionId])
   @@index([discountCode])
   @@index([cartToken])

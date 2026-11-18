@@ -696,17 +696,18 @@ export function QuickChip({ label, onClick, disabled }: { label: string; onClick
         border: '1px solid #c7d2fe',
         color: '#4338ca',
         borderRadius: 999,
-        padding: '9px 16px',
+        padding: '10px 18px',
         fontSize: 13,
         fontWeight: 700,
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.5 : 1,
-        transition: 'all 0.15s ease',
+        transition: 'all 0.18s ease',
         outline: 'none',
-        minHeight: 42,
+        minHeight: 44,
+        boxShadow: '0 2px 8px rgba(79,70,229,0.12)',
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = '#4f46e5'; e.currentTarget.style.borderColor = '#4f46e5'; e.currentTarget.style.color = '#ffffff' }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.borderColor = '#c7d2fe'; e.currentTarget.style.color = '#4338ca' }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = '#4f46e5'; e.currentTarget.style.borderColor = '#4f46e5'; e.currentTarget.style.color = '#ffffff'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.borderColor = '#c7d2fe'; e.currentTarget.style.color = '#4338ca'; e.currentTarget.style.transform = 'none' }}
     >
       {label}
     </button>

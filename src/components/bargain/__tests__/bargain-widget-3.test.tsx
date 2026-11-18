@@ -124,4 +124,80 @@ describe('BargainWidget conversation-first layout', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Chat' }))
     expect(container.querySelector('[data-cg-recommendation-panel]')).toBeTruthy()
   })
+
+  it('opens checkout in a new tab, marks it server-side, and closes the panel', async () => {
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null)
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/bargain/start')) {
+        return {
+          ok: true, status: 200,
+          json: async () => ({
+            sessionId: 'session-1',
+            openingMessage: 'Welcome, what price feels fair?',
+            expiresAt: new Date(Date.now() + 600_000).toISOString(),
+          }),
+        }
+      }
+      if (url.includes('/api/bargain/offer')) {
+        return {
+          ok: true, status: 200,
+          json: async () => ({
+            reply: 'That is the last I can do.',
+            decision: 'reject',
+            sessionStatus: 'rejected',
+            discountCode: 'BARGAIN-TEST',
+            finalPrice: 700,
+            purchaseUrl: 'https://shop.example/discount/BARGAIN-TEST',
+          }),
+        }
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true }) }
+    }) as unknown as typeof fetch
+
+    render(<BargainWidget {...baseProps} />)
+    await waitFor(() => expect(screen.getByLabelText('Ask about this product or make an offer…')).toBeTruthy(), { timeout: 3000 })
+    const input = screen.getByLabelText('Ask about this product or make an offer…')
+    fireEvent.change(input, { target: { value: '600' } })
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 })
+
+    await waitFor(() => expect(screen.getByText('Checkout at your price')).toBeTruthy(), { timeout: 3000 })
+    fireEvent.click(screen.getByText('Checkout at your price'))
+
+    expect(openSpy).toHaveBeenCalledWith('https://shop.example/discount/BARGAIN-TEST', '_blank', 'noopener,noreferrer')
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/bargain/checkout-open'),
+      expect.objectContaining({ method: 'POST', keepalive: true }),
+    ))
+    await waitFor(() => expect(screen.queryByRole('log')).toBeNull())
+    openSpy.mockRestore()
+  })
+
+  it('renders a locked, no-restart state when the server reports checkout open', async () => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/api/bargain/start')) {
+        return {
+          ok: false, status: 409,
+          json: async () => ({
+            message: 'Finish your current order before starting a new bargain.',
+            locked: true,
+            lastBought: {
+              productTitle: 'Trail Runner',
+              priceLabel: '$79.00',
+              purchasedAt: '2026-11-10T10:00:00Z',
+              orderId: '1002',
+            },
+          }),
+        }
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true }) }
+    }) as unknown as typeof fetch
+
+    render(<BargainWidget {...baseProps} />)
+
+    await waitFor(() => expect(screen.getByText('Your checkout is open')).toBeTruthy(), { timeout: 3000 })
+    expect(screen.getByText(/Last bought: Trail Runner for \$79\.00/)).toBeTruthy()
+    expect(screen.queryByText('Start new negotiation')).toBeNull()
+    expect(screen.queryByLabelText('Ask about this product or make an offer…')).toBeNull()
+  })
 })

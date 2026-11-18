@@ -475,9 +475,9 @@ export function ruleBasedDecision(
   }
 
   const final: Record<Persona, string> = {
-    strict_negotiator: `This is my position: ${currencySymbol}${counter.toFixed(2)}. I've justified it clearly. The decision is yours.`,
-    playful_friend: `Okay, here's where I can land — ${currencySymbol}${counter.toFixed(2)}. If my boss asks, this never happened. Deal?`,
-    friendly_shopkeeper: `Friend, I've stretched as far as I can for now. My best is ${currencySymbol}${counter.toFixed(2)}. I really hope you'll take it — let's make this work!`,
+    strict_negotiator: `This is the last price I can do: ${currencySymbol}${counter.toFixed(2)}. If you'd rather not, that's entirely your call.`,
+    playful_friend: `Okay, this is the last price I can do — ${currencySymbol}${counter.toFixed(2)}. Take it or leave it, friend; I'll still like you either way!`,
+    friendly_shopkeeper: `Friend, this is the last I can do: ${currencySymbol}${counter.toFixed(2)}. If it works, great; if not, no pressure at all — the choice is yours.`,
   }
   return {
     reply: final[persona] ?? final.friendly_shopkeeper,

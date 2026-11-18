@@ -145,6 +145,16 @@ export const bargainAcceptSchema = z.object({
 
 export type BargainAcceptInput = z.infer<typeof bargainAcceptSchema>
 
+export const bargainCheckoutOpenSchema = z.object({
+  sessionId: z.string().min(1, 'sessionId is required').max(100),
+  customerFingerprint: z.string().min(8, 'customerFingerprint is required').max(128).optional(),
+  customerEmail: z.string().email().optional().or(z.literal('')),
+  cartToken: z.string().max(200).optional(),
+  sessionToken: z.string().max(500).optional(),
+})
+
+export type BargainCheckoutOpenInput = z.infer<typeof bargainCheckoutOpenSchema>
+
 export const bargainRecommendEventSchema = z.object({
   sessionId: z.string().min(1, 'sessionId is required').max(100),
   action: z.enum(['viewed', 'clicked', 'added', 'dismissed', 'rejected']),
