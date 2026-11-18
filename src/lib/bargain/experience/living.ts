@@ -20,7 +20,18 @@ import { expressionForEvent, expressionForShopperMessage, expressionForTurn, typ
 import { gestureFor, type GestureName } from './character'
 import { positionForContext, type AvatarPosition } from './positions'
 
-export interface ShopkeeperAnimation extends LivingEventContext {
+export interface FireAvatarContext extends LivingEventContext {
+  /** True when verified product cards are on screen. */
+  hasRecommendations?: boolean
+  /** True once the shopper opened checkout. */
+  checkoutStarted?: boolean
+  /** True while the conversation is still in its opening beat. */
+  opening?: boolean
+  /** The server's conversational state for this turn, when it reported one. */
+  conversationState?: string | null
+}
+
+export interface ShopkeeperAnimation extends FireAvatarContext {
   /** Body / animation state (18 states). */
   state: AvatarState
   /** Face (13 expressions). */
@@ -34,9 +45,11 @@ export interface ShopkeeperAnimation extends LivingEventContext {
 const LEGACY_EVENT: Record<LivingEvent, AvatarEvent> = {
   idle: 'CUSTOMER_DISENGAGED',
   widget_opened: 'CHAT_OPENED',
+  greeting: 'CHAT_OPENED',
   customer_typing: 'CUSTOMER_MESSAGE_RECEIVED',
   customer_message: 'CUSTOMER_MESSAGE_RECEIVED',
   ai_thinking: 'AI_THINKING_STARTED',
+  ai_typing: 'AI_THINKING_STARTED',
   ai_reply: 'AI_RESPONSE_RECEIVED',
   counter_offer: 'COUNTEROFFER_PRESENTED',
   recommendations_shown: 'AI_RESPONSE_RECEIVED',
@@ -46,6 +59,7 @@ const LEGACY_EVENT: Record<LivingEvent, AvatarEvent> = {
   checkout_started: 'AI_RESPONSE_RECEIVED',
   session_ended: 'CUSTOMER_DISENGAGED',
   widget_closed: 'CUSTOMER_DISENGAGED',
+  error: 'API_ERROR',
 }
 
 function expressionForLivingEvent(
@@ -74,7 +88,7 @@ function expressionForLivingEvent(
 export function resolveShopkeeperAnimation(
   personality: ShopkeeperPersonality,
   event: LivingEvent,
-  ctx: LivingEventContext = {},
+  ctx: FireAvatarContext = {},
 ): ShopkeeperAnimation {
   const state = avatarStateForEvent(personality, event, ctx)
   const expression = expressionForLivingEvent(personality, event, ctx)

@@ -52,9 +52,11 @@ export function isAvatarState(value: unknown): value is AvatarState {
 export const LIVING_EVENTS = [
   'idle',
   'widget_opened',
+  'greeting',
   'customer_typing',
   'customer_message',
   'ai_thinking',
+  'ai_typing',
   'ai_reply',
   'counter_offer',
   'recommendations_shown',
@@ -64,6 +66,7 @@ export const LIVING_EVENTS = [
   'checkout_started',
   'session_ended',
   'widget_closed',
+  'error',
 ] as const
 
 export type LivingEvent = (typeof LIVING_EVENTS)[number]
@@ -116,12 +119,16 @@ export function avatarStateForEvent(
   switch (event) {
     case 'widget_opened':
       return 'entering'
+    case 'greeting':
+      return 'greeting'
     case 'customer_typing':
-      return 'typing'
+      return 'listening'
     case 'customer_message':
       return shopperMessageState(personality, ctx)
     case 'ai_thinking':
       return 'thinking'
+    case 'ai_typing':
+      return 'typing'
     case 'ai_reply':
       return replyState(ctx)
     case 'counter_offer':
@@ -139,6 +146,8 @@ export function avatarStateForEvent(
     case 'session_ended':
     case 'widget_closed':
       return 'goodbye'
+    case 'error':
+      return 'confused'
     case 'idle':
     default:
       return 'idle'

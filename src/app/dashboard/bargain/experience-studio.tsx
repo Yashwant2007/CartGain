@@ -13,6 +13,10 @@ import {
   expressionForShopperMessage,
   expressionForTurn,
 } from '@/lib/bargain/experience/expressions'
+import { AVATAR_STATES, type AvatarState } from '@/lib/bargain/experience/avatar-state'
+import { gestureFor } from '@/lib/bargain/experience/character'
+import { strategyForPersonality } from '@/lib/bargain/experience/strategy'
+import type { AvatarPosition } from '@/lib/bargain/experience/positions'
 
 type PublishHistoryRow = {
   id: string
@@ -31,6 +35,7 @@ export function BargainExperienceStudio() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [previewScenario, setPreviewScenario] = useState<'welcome' | 'lowball' | 'walkout' | 'deal'>('welcome')
+  const [previewState, setPreviewState] = useState<AvatarState | null>(null)
 
   useEffect(() => {
     if (!storeId) return
@@ -140,6 +145,26 @@ export function BargainExperienceStudio() {
       : previewScenario === 'deal'
         ? expressionForTurn(exp.personality, { decision: 'accept', ended: 'accepted' })
         : expressionForEvent(exp.personality, 'CHAT_OPENED')
+  // The reaction gallery replays EXACTLY the state the shopper would see.
+  const previewAvatarState: AvatarState = previewState ?? (
+    previewScenario === 'lowball'
+      ? 'surprised'
+      : previewScenario === 'walkout'
+        ? 'disappointed'
+        : previewScenario === 'deal'
+          ? 'celebrating'
+          : 'greeting'
+  )
+  const previewGesture = gestureFor(exp.personality, previewAvatarState)
+  const previewPosition: AvatarPosition = !previewState
+    ? 'conversation'
+    : previewAvatarState === 'recommending' || previewAvatarState === 'pointing'
+      ? 'recommendation'
+      : previewAvatarState === 'guiding_to_checkout'
+        ? 'checkout'
+        : previewAvatarState === 'celebrating'
+          ? 'celebration'
+          : 'conversation'
   const previewLine = previewScenario === 'lowball'
     ? 'That is a bold start — let me see what I can do without crossing the floor.'
     : previewScenario === 'walkout'
@@ -169,11 +194,21 @@ export function BargainExperienceStudio() {
             <h3 className="text-white font-medium mb-3">Shopkeeper Personality</h3>
             <div className="grid gap-3">
               {PERSONALITY_META.map(p => (
-                <button key={p.id} onClick={() => { setExp({ ...exp, personality: p.id }); setPreviewScenario('welcome') }} className={`p-4 rounded-xl border text-left flex items-start gap-3 transition ${exp.personality === p.id ? 'border-cyan-500/60 bg-cyan-950/20' : 'border-blue-800/40 bg-slate-950/40'}`}>
-                  <ShopkeeperAvatar personality={p.id} expression={exp.personality === p.id ? 'listening' : 'idle'} size="md" motionEnabled={exp.motionEnabled} />
+                <button key={p.id} onClick={() => { setExp({ ...exp, personality: p.id }); setPreviewScenario('welcome'); setPreviewState(null) }} className={`p-4 rounded-xl border text-left flex items-start gap-3 transition ${exp.personality === p.id ? 'border-cyan-500/60 bg-cyan-950/20' : 'border-blue-800/40 bg-slate-950/40'}`}>
+                  <ShopkeeperAvatar
+                    personality={p.id}
+                    expression={exp.personality === p.id ? 'listening' : 'idle'}
+                    state={exp.personality === p.id ? 'greeting' : 'idle'}
+                    gesture={gestureFor(p.id, exp.personality === p.id ? 'greeting' : 'idle')}
+                    characterStyle={exp.characterStyle}
+                    size="md"
+                    motionEnabled={exp.motionEnabled}
+                    essentialMotionOnly={exp.essentialMotionOnly}
+                  />
                   <div>
-                    <div className="text-white font-medium">{p.name}</div>
+                    <div className="text-white font-medium">{p.name} <span className="text-cyan-300/80 text-xs font-semibold">· {p.title}</span></div>
                     <div className="text-sm text-blue-300/70 mt-1">{p.description}</div>
+                    <div className="text-xs text-blue-400/60 mt-2">Strategy: {strategyForPersonality(p.id).label}</div>
                     <div className="text-xs text-blue-400/60 mt-2 italic">&ldquo;{p.exampleDialogue[0]}&rdquo;</div>
                   </div>
                 </button>
@@ -202,6 +237,20 @@ export function BargainExperienceStudio() {
             <label className="flex items-center justify-between p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
               <span className="text-blue-100 text-sm">Motion enabled</span>
               <input type="checkbox" checked={exp.motionEnabled} onChange={e => setExp({ ...exp, motionEnabled: e.target.checked })} className="accent-cyan-500" />
+            </label>
+            <label className="flex items-center justify-between p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+              <span className="text-blue-100 text-sm">
+                Essential motion only
+                <span className="block text-[11px] text-blue-300/60">Keeps state changes, drops idle loops, blinking and confetti.</span>
+              </span>
+              <input type="checkbox" checked={exp.essentialMotionOnly} onChange={e => setExp({ ...exp, essentialMotionOnly: e.target.checked })} className="accent-cyan-500" />
+            </label>
+            <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+              <span className="block text-blue-100 text-sm mb-2">Character style</span>
+              <select value={exp.characterStyle} onChange={e => setExp({ ...exp, characterStyle: e.target.value as typeof exp.characterStyle })} className="w-full rounded-md bg-slate-900 border border-blue-800/50 px-2 py-1.5 text-sm text-blue-100">
+                <option value="signature">Signature (full character with gestures)</option>
+                <option value="minimal">Minimal (flat, lightest rendering)</option>
+              </select>
             </label>
             <label className="flex items-center justify-between p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
               <span className="text-blue-100 text-sm">Compact invitation</span>
@@ -255,7 +304,12 @@ export function BargainExperienceStudio() {
               <ShopkeeperStage
                 personality={exp.personality}
                 expression={previewExpression}
-                name={previewPersona.name}
+                state={previewAvatarState}
+                gesture={previewGesture}
+                position={previewPosition}
+                characterStyle={exp.characterStyle}
+                essentialMotionOnly={exp.essentialMotionOnly}
+                name={`${previewPersona.name} · ${previewPersona.title}`}
                 status="Preview"
                 line={previewLine}
                 motionEnabled={exp.motionEnabled}
@@ -278,9 +332,9 @@ export function BargainExperienceStudio() {
             ] as const).map(([id, label]) => (
               <button
                 key={id}
-                onClick={() => setPreviewScenario(id)}
+                onClick={() => { setPreviewScenario(id); setPreviewState(null) }}
                 className={`rounded-full border px-3 py-1.5 text-xs transition ${
-                  previewScenario === id
+                  previewScenario === id && !previewState
                     ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100'
                     : 'border-blue-800/50 text-blue-300/80 hover:bg-blue-900/40'
                 }`}
@@ -288,6 +342,30 @@ export function BargainExperienceStudio() {
                 {label}
               </button>
             ))}
+          </div>
+          <div>
+            <div className="text-xs text-blue-300/70 mb-2">Reactions (every animation state the shopper can see)</div>
+            <div className="flex flex-wrap gap-1.5">
+              {AVATAR_STATES.map((state) => (
+                <button
+                  key={state}
+                  onClick={() => { setPreviewState(state); setPreviewScenario('welcome') }}
+                  aria-pressed={previewState === state}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
+                    previewState === state
+                      ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100'
+                      : 'border-blue-800/50 text-blue-300/70 hover:bg-blue-900/40'
+                  }`}
+                >
+                  {state.replace(/_/g, ' ')}
+                </button>
+              ))}
+            </div>
+            {previewState && (
+              <button onClick={() => setPreviewState(null)} className="mt-2 text-[11px] text-blue-300/60 underline">
+                Back to the scenario preview
+              </button>
+            )}
           </div>
           <div className="flex items-center justify-between text-xs text-blue-300/60">
             <span>Draft v{exp.draftVersion} • Published v{exp.publishedVersion}</span>

@@ -10,12 +10,11 @@ import { GoalStrip } from '@/components/bargain/BargainPrimitives'
 import { isConversationState, priorityReaction } from '@/lib/bargain/conversation-state'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import {
-  expressionForEvent,
-  expressionForShopperMessage,
-  expressionForTurn,
-  type AvatarEvent,
-  type ExpressionState,
-} from '@/lib/bargain/experience/expressions'
+  resolveShopkeeperAnimation,
+  type FireAvatarContext,
+  type ShopkeeperAnimation,
+} from '@/lib/bargain/experience/living'
+import type { LivingEvent } from '@/lib/bargain/experience/avatar-state'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import type { BargainDemoGoal, BargainRecommendation, RecommendationHistory } from '@/lib/bargain/api-types'
 import BargainRecommendationPanel from '@/components/bargain/BargainRecommendationPanel'
@@ -129,7 +128,12 @@ export default function StorefrontBargainWidget({
   const [persona, setPersona] = useState<'friendly' | 'strict' | 'playful'>(() =>
     personaProp && ENGINE_TO_LOCAL[personaProp] ? ENGINE_TO_LOCAL[personaProp] : 'friendly',
   )
-  const [expression, setExpression] = useState<ExpressionState>('listening')
+  const [character, setCharacter] = useState<ShopkeeperAnimation>({
+    state: 'listening',
+    expression: 'listening',
+    gesture: 'rest',
+    position: 'conversation',
+  })
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [discountCode, setDiscountCode] = useState<string | null>(null)
   const [codeSaved, setCodeSaved] = useState(false)
@@ -202,7 +206,13 @@ export default function StorefrontBargainWidget({
   }, [announceHeight])
 
   const avatarPersonality = AVATAR_PERSONALITY[persona] ?? 'friendly_shopkeeper'
-  const reactAvatar = (event: AvatarEvent) => setExpression(expressionForEvent(avatarPersonality, event))
+  const reactAvatar = (event: LivingEvent, ctx: FireAvatarContext = {}) => {
+    setCharacter((prev) => {
+      const resolved = resolveShopkeeperAnimation(avatarPersonality, event, { ...prev, ...ctx })
+      const override = ctx.conversationState ? priorityReaction(ctx.conversationState as any) : null
+      return override ? { ...resolved, expression: override } : resolved
+    })
+  }
   const latestAiLine = [...messages].reverse().find((m) => m.role === 'ai')?.content
   const stageLine = showThinking
     ? 'Let me check what I can do…'
@@ -210,7 +220,7 @@ export default function StorefrontBargainWidget({
 
   const openBargain = () => {
     setStep('intro')
-    reactAvatar('CHAT_OPENED')
+    reactAvatar('widget_opened', { opening: true })
     setMessages([])
     setAttempts(0)
     setInput('')
@@ -304,7 +314,7 @@ export default function StorefrontBargainWidget({
     const isWalkout = detectWalkout(userText)
     busyRef.current = true
     const userMsgId = createConversationId('f')
-    setExpression(expressionForShopperMessage(avatarPersonality, userText, originalPrice))
+    reactAvatar('customer_message', { customerMessage: userText, originalPrice })
     setMessages((prev) => [
       ...prev,
       { role: 'customer', content: userText, price: offer ?? undefined, id: userMsgId, delivery: 'sending' },
@@ -328,7 +338,7 @@ export default function StorefrontBargainWidget({
       thinkingTimerRef.current = window.setTimeout(() => {
         thinkingShownAtRef.current = Date.now()
         setShowThinking(true)
-        reactAvatar('AI_THINKING_STARTED')
+        reactAvatar('ai_thinking')
         resolve()
       }, THINKING_DELAY_MS)
     })
@@ -412,18 +422,15 @@ export default function StorefrontBargainWidget({
       } else {
         setStep('chat')
       }
-      setExpression(expressionForTurn(avatarPersonality, {
+      reactAvatar(data.decision === 'counter' ? 'counter_offer' : 'ai_reply', {
         customerMessage: userText,
         aiReply: data.reply,
         counterOffer: priceTag ?? data.counterOffer ?? null,
         originalPrice,
         decision: data.decision,
         ended,
-      }))
-      const stateFace = isConversationState(data.conversationState)
-        ? priorityReaction(data.conversationState)
-        : null
-      if (stateFace) setExpression(stateFace)
+        conversationState: isConversationState(data.conversationState) ? data.conversationState : null,
+      })
     } catch (err: any) {
       console.warn('[StorefrontBargain] API failed, using local fallback:', err.message)
       const nextAttempt = attempts + 1
@@ -442,13 +449,13 @@ export default function StorefrontBargainWidget({
         result = { reply: PersonaRetention[persona](p, (n) => money(currency, n)), decision: 'counter', counterOffer: p }
       } else if (isWalkout) {
         pushAi(PersonaFarewell[persona])
-        setExpression(expressionForTurn(avatarPersonality, {
+        reactAvatar('session_ended', {
           customerMessage: userText,
           aiReply: PersonaFarewell[persona],
           originalPrice,
           decision: 'reject',
           ended: 'abandoned',
-        }))
+        })
         setStep('rejected')
         setLoading(false)
         return
@@ -510,7 +517,7 @@ export default function StorefrontBargainWidget({
       const hold = minThinkingMs(result.reply) - seenFor
       if (hold > 0) await wait(hold)
       pushAi(result.reply, result.counterOffer)
-      setExpression(expressionForTurn(avatarPersonality, {
+      reactAvatar(result.decision === 'counter' ? 'counter_offer' : 'ai_reply', {
         customerMessage: userText,
         aiReply: result.reply,
         counterOffer: result.counterOffer ?? null,
@@ -521,7 +528,7 @@ export default function StorefrontBargainWidget({
           : result.decision === 'accept'
             ? 'accepted'
             : null,
-      }))
+      })
       setAttempts(nextAttempt)
     } finally {
       window.clearTimeout(ack)
@@ -641,7 +648,10 @@ export default function StorefrontBargainWidget({
 
       <ShopkeeperStage
         personality={avatarPersonality}
-        expression={expression}
+        expression={character.expression}
+        state={character.state}
+        gesture={character.gesture}
+        position={character.position}
         name={`${PERSONA_NAME[persona]} · Shopkeeper`}
         status={t('online')}
         line={stageLine}
@@ -680,7 +690,7 @@ export default function StorefrontBargainWidget({
           <button
             type="button"
             className={buttonCls + ' w-full'}
-            onClick={() => { reactAvatar('CHAT_OPENED'); setStep('chat') }}
+            onClick={() => { reactAvatar('greeting'); setStep('chat') }}
             aria-label="Start price negotiation"
           >
             {t('negotiate')}

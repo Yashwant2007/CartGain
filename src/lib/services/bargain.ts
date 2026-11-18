@@ -40,6 +40,7 @@ import { analyzeSocialSignals, socialSignalsToPromptBlock, type SocialSignals } 
 import { applyLearningCounterBias } from '@/lib/bargain/learning/strategies'
 import type { LearningGuidance } from '@/lib/bargain/learning/types'
 import { SHOPKEEPER_PERSONALITY_GUIDANCE } from '@/lib/bargain/experience/personality'
+import { strategyIntentInstruction, strategyPromptBlock } from '@/lib/bargain/experience/strategy'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 
 // Negotiation model. Defaults to the fast, low-cost `gpt-4o-mini`, which the
@@ -2379,6 +2380,12 @@ export function buildSystemPrompt(
 
   if (ctx.shopkeeperPersonality) {
     contextParts.push(SHOPKEEPER_PERSONALITY_GUIDANCE[ctx.shopkeeperPersonality])
+    // The living shopkeeper's distinct negotiating STRATEGY. This changes HOW
+    // the agent reasons about the turn (what it leads with, when it looks for
+    // an alternative, how it concedes) — never WHAT the shopper may be
+    // charged. The floor, the concession cap and every other business rule
+    // stay enforced by the backend regardless of personality.
+    contextParts.push(strategyPromptBlock(ctx.shopkeeperPersonality))
   }
 
   // Verified product intelligence — the ONLY product facts the model may cite
@@ -2405,6 +2412,17 @@ export function buildSystemPrompt(
   // Deterministic shopper-intent classification for the current message
   if (ctx.intent) {
     contextParts.push('\n' + shopperIntentToPromptBlock(ctx.intent))
+    // Personality-aware strategy for THIS turn's intent. A shopper who only
+    // wants product information must never be answered with a discount, no
+    // matter which shopkeeper they are talking to.
+    const strategyInstruction = ctx.shopkeeperPersonality
+      ? strategyIntentInstruction(
+          ctx.shopkeeperPersonality,
+          ctx.intent.intent,
+          ctx.intent.category,
+        )
+      : null
+    if (strategyInstruction) contextParts.push(strategyInstruction)
   }
 
   // Deterministic conversation state (Phase 9) — one clear instruction for

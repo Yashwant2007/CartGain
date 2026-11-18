@@ -36,6 +36,7 @@ const STAGE_CSS = `
   overflow: hidden;
   flex-shrink: 0;
   border-bottom: 1px solid #eef2f7;
+  pointer-events: none;
   background:
     radial-gradient(circle at 16% 36%, rgba(99,102,241,0.22), transparent 38%),
     radial-gradient(circle at 78% 8%, rgba(251,191,36,0.18), transparent 32%),
@@ -172,6 +173,20 @@ const STAGE_CSS = `
   border-color: #bbf7d0;
   background: #f7fef9;
 }
+/* Contextual placement — the position manager decides where the character
+   stands, never ad-hoc absolute coordinates. */
+.cg-stage.cg-living--recommendation .cg-stage-avatar,
+.cg-stage.cg-living--checkout .cg-stage-avatar { order: 2; }
+.cg-stage.cg-living--celebration {
+  background:
+    radial-gradient(circle at 50% 20%, rgba(34,197,94,0.16), transparent 42%),
+    linear-gradient(135deg, #f4fdf7 0%, #ffffff 70%);
+}
+.cg-stage.cg-living--celebration .cg-stage-copy { text-align: center; }
+.cg-stage.cg-living--explanation .cg-stage-spot {
+  background: radial-gradient(circle, rgba(14,165,233,0.2), transparent 68%);
+}
+.cg-stage[data-essential-motion="true"] .cg-stage-halo { opacity: 0; animation: none; }
 @keyframes cgStageHalo {
   0%, 100% { transform: scale(0.97); opacity: 0.55; }
   50% { transform: scale(1.04); opacity: 1; }
@@ -195,13 +210,27 @@ const STAGE_CSS = `
 export default function ShopkeeperStage({
   personality,
   expression,
+  state,
+  gesture = 'rest',
+  position = 'conversation',
+  characterStyle = 'signature',
+  essentialMotionOnly = false,
   name,
   status,
   line,
   motionEnabled = true,
 }: Props) {
+  const descriptor = POSITION_DESCRIPTORS[position] ?? POSITION_DESCRIPTORS.conversation
   return (
-    <div className="cg-stage" data-expression={expression}>
+    <div
+      className={`cg-stage ${descriptor.className}`}
+      data-expression={expression}
+      data-avatar-state={state ?? ''}
+      data-avatar-position={position}
+      data-gesture={gesture}
+      data-character-style={characterStyle}
+      data-essential-motion={essentialMotionOnly ? 'true' : 'false'}
+    >
       <style dangerouslySetInnerHTML={{ __html: STAGE_CSS }} />
       <span className="cg-stage-spot" aria-hidden="true" />
       <div className="cg-stage-avatar">
@@ -209,8 +238,12 @@ export default function ShopkeeperStage({
         <ShopkeeperAvatar
           personality={personality}
           expression={expression}
+          state={state}
+          gesture={gesture}
+          characterStyle={characterStyle}
           size="xl"
           motionEnabled={motionEnabled}
+          essentialMotionOnly={essentialMotionOnly}
         />
       </div>
       <div className="cg-stage-copy">

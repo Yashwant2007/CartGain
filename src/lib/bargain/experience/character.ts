@@ -172,7 +172,7 @@ export const CHARACTER_PROFILES: Record<ShopkeeperPersonality, CharacterProfile>
       confused: 'shrug',
       happy: 'thumbs_up',
       disappointed: 'shrug',
-      negotiating: 'crossed_arms',
+      negotiating: 'wave',
       recommending: 'point',
       celebrating: 'dance',
       guiding_to_checkout: 'guide',

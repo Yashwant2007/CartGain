@@ -7,15 +7,15 @@ import {
 } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import { buildQuickOffers, parseDraftOffer } from '@/lib/bargain/offers'
-import type { ExpressionState } from '@/components/bargain/ShopkeeperAvatar'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
 import {
-  expressionForEvent,
-  expressionForShopperMessage,
-  expressionForTurn,
-  type AvatarEvent,
-} from '@/lib/bargain/experience/expressions'
+  resolveShopkeeperAnimation,
+  type FireAvatarContext,
+  type ShopkeeperAnimation,
+} from '@/lib/bargain/experience/living'
+import type { LivingEvent } from '@/lib/bargain/experience/avatar-state'
+import { gestureFor } from '@/lib/bargain/experience/character'
 import { resolveShopkeeperPersonality } from '@/lib/bargain/experience/personality'
 import { priorityReaction } from '@/lib/bargain/conversation-state'
 import { trackExperienceEvent } from '@/lib/bargain/experience/analytics'
@@ -176,11 +176,47 @@ export default function BargainWidget({
   defaultOpen,
 }: Props) {
   const [open, setOpen] = useState<boolean>(defaultOpen === true ? true : (isEmbed && !invitationFirst))
-  const [expression, setExpression] = useState<ExpressionState>('idle')
+  // The living shopkeeper: ONE state object holds the body state, the face, the
+  // body language and the position. It is only ever written by `fireAvatar`,
+  // which resolves a real conversation event, so the character can never
+  // disagree with what actually happened in the conversation.
+  const [character, setCharacter] = useState<ShopkeeperAnimation>({
+    state: 'idle',
+    expression: 'idle',
+    gesture: 'rest',
+    position: 'conversation',
+  })
   const chatOpenTracked = useRef(false)
   const personality = resolveShopkeeperPersonality(experience?.personality, persona)
   const avatarEnabled = experience?.avatarEnabled !== false
-  const fireAvatar = (event: AvatarEvent) => setExpression(expressionForEvent(personality, event))
+  const characterStyle = experience?.characterStyle ?? 'signature'
+  const essentialMotionOnly = experience?.essentialMotionOnly === true
+  const fireAvatar = useCallback((event: LivingEvent, ctx: FireAvatarContext = {}) => {
+    setCharacter((prev) => {
+      const resolved = resolveShopkeeperAnimation(personality, event, {
+        ...prev,
+        ...ctx,
+      })
+      // A conversation state that carries an unambiguous meaning wins over the
+      // generic face (a completed purchase is always a celebration).
+      const override = ctx.conversationState ? priorityReaction(ctx.conversationState as any) : null
+      return override ? { ...resolved, expression: override } : resolved
+    })
+  }, [personality])
+  // The entrance plays first, then the character greets. One timer, cleared on
+  // every new greeting so a fast open/close can never stack animations.
+  const greetTimerRef = useRef<number | null>(null)
+  const greetShopkeeper = () => {
+    if (typeof window === 'undefined') return
+    if (greetTimerRef.current) window.clearTimeout(greetTimerRef.current)
+    greetTimerRef.current = window.setTimeout(() => {
+      greetTimerRef.current = null
+      fireAvatar('greeting')
+    }, 620)
+  }
+  useEffect(() => () => {
+    if (greetTimerRef.current) window.clearTimeout(greetTimerRef.current)
+  }, [])
   const [minimised, setMinimised] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [sessionToken, setSessionToken] = useState<string | null>(null)
@@ -412,6 +448,8 @@ export default function BargainWidget({
       } catch {}
     }
     setCheckoutLocked(true)
+    // The character walks the shopper to the checkout action.
+    fireAvatar('checkout_started', { checkoutStarted: true })
     closePanel()
   }
 
@@ -618,7 +656,7 @@ export default function BargainWidget({
       setLastBought(data.lastBought ?? null)
       if (data.returning) setReturning(true)
       if (data.goal) setGoal(data.goal)
-      if (data.existingSession) fireAvatar('SESSION_RESTORED')
+      if (data.existingSession) fireAvatar('greeting', { opening: true })
       if (data.existingSession && data.session?.messages?.length) {
         const restored: BargainMessage[] = data.session.messages.map((m: BargainMessage) => ({
           id: m.id,
@@ -702,7 +740,7 @@ export default function BargainWidget({
     const controller = new AbortController()
     requestAbortRef.current = controller
     const requestTimer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-    setExpression(expressionForShopperMessage(personality, msg, livePrice))
+    fireAvatar('customer_message', { customerMessage: msg, originalPrice: livePrice })
     setMessages(prev => prev.some((m) => m.id === localId)
       ? prev
       : [
@@ -723,7 +761,7 @@ export default function BargainWidget({
       thinkingTimerRef.current = window.setTimeout(() => {
         thinkingShownAtRef.current = Date.now()
         setShowThinking(true)
-        fireAvatar('AI_THINKING_STARTED')
+        fireAvatar('ai_thinking')
         resolve()
       }, THINKING_DELAY_MS)
     })
@@ -771,13 +809,13 @@ export default function BargainWidget({
             offeredPrice: null, createdAt: new Date().toISOString(),
           }])
           if (data.status === 'rejected') setDecision('reject')
-          setExpression(expressionForTurn(personality, {
+          fireAvatar('session_ended', {
             customerMessage: msg,
             aiReply: data.message,
             decision: data.status === 'rejected' ? 'reject' : 'chat',
             ended: data.status ?? 'abandoned',
             originalPrice: livePrice,
-          }))
+          })
           lastFailedRef.current = null
           return
         }
@@ -820,18 +858,17 @@ export default function BargainWidget({
       // Accept bar stays visible off lastCounter and closing happens in
       // acceptDeal().
       if (data.decision === 'reject') setDecision('reject')
-      setExpression(expressionForTurn(personality, {
+      const nextRecommendations = Array.isArray(data.recommendations) && data.recommendations.length > 0 ? data.recommendations : null
+      fireAvatar(data.decision === 'counter' ? 'counter_offer' : 'ai_reply', {
         customerMessage: msg,
         aiReply: data.reply,
         counterOffer: data.counterOffer ?? null,
         originalPrice: livePrice,
         decision: data.decision,
-      }))
-      // Unambiguous states (completed / hesitation / human handoff) override the
-      // heuristic face so the shopkeeper never looks like it is still selling
-      // after the conversation has clearly moved on.
-      const stateFace = data.conversationState ? priorityReaction(data.conversationState) : null
-      if (stateFace) setExpression(stateFace)
+        ended: data.status ?? null,
+        hasRecommendations: Boolean(nextRecommendations),
+        conversationState: data.conversationState ?? null,
+      })
       if (data.discountCode) setDiscountCode(data.discountCode)
       if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
       if (data.floorReached === true) setFloorReached(true)
@@ -839,13 +876,13 @@ export default function BargainWidget({
       if (typeof data.attemptsUsed === 'number') setAttemptsUsed(data.attemptsUsed)
       if (data.goal) setGoal(data.goal)
       if (data.finalPrice != null) setFinalPrice(data.finalPrice)
-      setRecommendations(Array.isArray(data.recommendations) && data.recommendations.length > 0 ? data.recommendations : null)
+      setRecommendations(nextRecommendations)
       if (typeof data.recommendationReason === 'string') setRecommendationReason(data.recommendationReason)
       if (data.recommendationHistory) setRecommendationHistory(data.recommendationHistory)
       lastFailedRef.current = null
     } catch (err: any) {
       if (seq !== requestSeqRef.current) return
-      fireAvatar('API_ERROR')
+      fireAvatar('error')
       lastFailedRef.current = { kind: 'offer', payload: msg, turnId }
       setError(errorCopy(err))
     } finally {
@@ -889,6 +926,10 @@ export default function BargainWidget({
   function handleRecommendationEvent(action: RecommendationEventAction, card: BargainRecommendation) {
     void fireRecoEvent(action, card)
     if (action === 'added') void addRecoToCart(card)
+    // The character points at the card the shopper actually engaged with.
+    if (action === 'clicked' || action === 'added') {
+      fireAvatar('recommendation_selected', { hasRecommendations: true })
+    }
   }
 
   async function addRecoToCart(card: BargainRecommendation) {
@@ -978,7 +1019,7 @@ export default function BargainWidget({
           // Machine-readable backend rejection (unavailable / campaign expired /
           // coupon stacking / price moved). Show the server's own copy in a
           // calm state card instead of an error box.
-          fireAvatar('OFFER_REJECTED')
+          fireAvatar('deal_rejected', { decision: 'reject' })
           setRejection({ code: data.code, reason: data.reason ?? data.code, message: data.message ?? t('tryAgain') })
           setMessages(prev => [
             ...prev,
@@ -999,7 +1040,7 @@ export default function BargainWidget({
         }
         throw new Error(data.message ?? 'Could not accept')
       }
-      fireAvatar('OFFER_ACCEPTED')
+      fireAvatar('deal_accepted', { decision: 'accept', ended: 'accepted' })
       setFinalPrice(data.finalPrice)
       setDiscountCode(data.discountCode)
       setPurchaseUrl(data.purchaseUrl ?? null)
@@ -1103,7 +1144,7 @@ export default function BargainWidget({
     }
     setOpen(true)
     setMinimised(false)
-    fireAvatar('CHAT_OPENED')
+    fireAvatar('widget_opened', { opening: true })
     if (!sessionId) {
       void startSession()
     }
@@ -1135,11 +1176,11 @@ export default function BargainWidget({
     }
     setOpen(false)
     setMinimised(false)
-    setExpression('idle')
+    fireAvatar('widget_closed')
     // Keyboard users: hand focus back to the launcher when the panel closes so
     // the next tab-stop lands somewhere predictable in the theme.
     window.setTimeout(() => launcherRef.current?.focus(), 0)
-  }, [isDrawer])
+  }, [fireAvatar, isDrawer])
 
   // Floating panel: close on Escape. Never fires in embedded/drawer mode (the
   // theme page owns key handling there). Order matters — closePanel above.
@@ -1475,7 +1516,12 @@ export default function BargainWidget({
           {avatarEnabled && !unavailable && !limit && (
             <ShopkeeperStage
               personality={personality}
-              expression={expression}
+              expression={character.expression}
+              state={character.state}
+              gesture={character.gesture}
+              position={character.position}
+              characterStyle={characterStyle}
+              essentialMotionOnly={essentialMotionOnly}
               name={shopkeeperName}
               status={t('shopkeeperOnline')}
               line={stageLine}
@@ -1958,6 +2004,12 @@ export default function BargainWidget({
                     onChange={e => {
                       setInput(e.target.value)
                       setError(null)
+                      // The character leans in and listens while the shopper types.
+                      setCharacter((prev) => (
+                        prev.state === 'listening' || prev.state === 'typing'
+                          ? prev
+                          : { ...prev, state: 'listening', gesture: gestureFor(personality, 'listening') }
+                      ))
                     }}
                     onKeyDown={e => {
                       if (e.key === 'Enter' && !sessionEnded && !e.shiftKey) {
