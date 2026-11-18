@@ -206,16 +206,23 @@ export default function BargainWidget({
   // The entrance plays first, then the character greets. One timer, cleared on
   // every new greeting so a fast open/close can never stack animations.
   const greetTimerRef = useRef<number | null>(null)
-  const greetShopkeeper = () => {
+  const checkoutTimerRef = useRef<number | null>(null)
+  const greetShopkeeper = useCallback(() => {
     if (typeof window === 'undefined') return
     if (greetTimerRef.current) window.clearTimeout(greetTimerRef.current)
     greetTimerRef.current = window.setTimeout(() => {
       greetTimerRef.current = null
       fireAvatar('greeting')
     }, 620)
-  }
+  }, [fireAvatar])
+  useEffect(() => {
+    if (!open || !avatarEnabled) return
+    fireAvatar('widget_opened', { opening: true })
+    greetShopkeeper()
+  }, [avatarEnabled, fireAvatar, greetShopkeeper, open])
   useEffect(() => () => {
     if (greetTimerRef.current) window.clearTimeout(greetTimerRef.current)
+    if (checkoutTimerRef.current) window.clearTimeout(checkoutTimerRef.current)
   }, [])
   const [minimised, setMinimised] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
@@ -448,9 +455,15 @@ export default function BargainWidget({
       } catch {}
     }
     setCheckoutLocked(true)
-    // The character walks the shopper to the checkout action.
+    // The character walks the shopper to the checkout action, then the panel
+    // steps aside. The checkout itself already opened in a new tab, so the
+    // short beat costs nothing and makes the handoff legible.
     fireAvatar('checkout_started', { checkoutStarted: true })
-    closePanel()
+    if (checkoutTimerRef.current) window.clearTimeout(checkoutTimerRef.current)
+    checkoutTimerRef.current = window.setTimeout(() => {
+      checkoutTimerRef.current = null
+      closePanel(true)
+    }, 420)
   }
 
   // A deal that ended without an explicit accept still leaves the shopper with
@@ -1144,11 +1157,21 @@ export default function BargainWidget({
     }
     setOpen(true)
     setMinimised(false)
-    fireAvatar('widget_opened', { opening: true })
     if (!sessionId) {
       void startSession()
     }
   }
+
+  // The character enters and greets as soon as the conversation panel is
+  // visible — whether it was opened by the shopper or by the embed handshake.
+  useEffect(() => {
+    if (!open) return
+    fireAvatar('widget_opened', { opening: true })
+    greetShopkeeper()
+    // fireAvatar/greetShopkeeper are rebuilt on every render; the panel opening
+    // is the only trigger that matters here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   // Embedded mode opens as a full chat window by default (the launcher card is
   // what made the storefront look small/cramped). Auto-start the session so the
@@ -1164,7 +1187,7 @@ export default function BargainWidget({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEmbed, isDrawer, productPending, open, minimised, checkoutLocked, sessionId, loading])
 
-  const closePanel = useCallback(() => {
+  const closePanel = useCallback((preserveAvatar = false) => {
     if (isDrawer && typeof window !== 'undefined') {
       // The theme controller owns visibility in a drawer — closing keeps the
       // same iframe alive (session preserved) and lets the parent restore the
@@ -1172,11 +1195,12 @@ export default function BargainWidget({
       try {
         window.parent?.postMessage({ type: 'cg_close' } as CgEmbedMessage, '*')
       } catch {}
+      if (!preserveAvatar) fireAvatar('widget_closed')
       return
     }
     setOpen(false)
     setMinimised(false)
-    fireAvatar('widget_closed')
+    if (!preserveAvatar) fireAvatar('widget_closed')
     // Keyboard users: hand focus back to the launcher when the panel closes so
     // the next tab-stop lands somewhere predictable in the theme.
     window.setTimeout(() => launcherRef.current?.focus(), 0)
@@ -1426,7 +1450,7 @@ export default function BargainWidget({
                 </button>
               )}
               <button
-                onClick={closePanel}
+                onClick={() => closePanel()}
                 aria-label={t('close')}
                 className="cg-icon-btn"
                 style={{ width: 40, height: 40, borderRadius: 11 }}
@@ -2105,7 +2129,7 @@ export default function BargainWidget({
             <button type="button" onClick={() => setMinimised(false)} aria-label={t('makeOffer')} className="cg-icon-btn" style={{ width: 44, height: 44 }}>
               <MessageCircle size={18} />
             </button>
-            <button type="button" onClick={closePanel} aria-label={t('close')} className="cg-icon-btn" style={{ width: 44, height: 44 }}>
+            <button type="button" onClick={() => closePanel()} aria-label={t('close')} className="cg-icon-btn" style={{ width: 44, height: 44 }}>
               <X size={17} />
             </button>
           </div>
