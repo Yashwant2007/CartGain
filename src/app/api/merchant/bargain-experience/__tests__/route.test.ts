@@ -194,3 +194,37 @@ it('restores defaults in both snapshots', async () => {
   expect(update.experienceDraftVersion).toBe(6)
   expect(update.experiencePublishedVersion).toBe(9)
 })
+
+it('persists the living shopkeeper character style and essential-motion switch', async () => {
+  const res = await PUT(request('PUT', {
+    action: 'publish',
+    personality: 'playful_shopkeeper',
+    characterStyle: 'minimal',
+    essentialMotionOnly: true,
+  }))
+  expect(res.status).toBe(200)
+  const update = prismaMock.bargainConfig.upsert.mock.calls.at(-1)[0].update
+  expect(update.experiencePublished.characterStyle).toBe('minimal')
+  expect(update.experiencePublished.essentialMotionOnly).toBe(true)
+  expect(update.characterStyle).toBe('minimal')
+  expect(update.essentialMotionOnly).toBe(true)
+})
+
+it('rejects an unknown character style and falls back to the safe default', async () => {
+  const res = await PUT(request('PUT', {
+    action: 'publish',
+    characterStyle: 'hologram',
+    essentialMotionOnly: 'yes',
+  }))
+  expect(res.status).toBe(200)
+  const update = prismaMock.bargainConfig.upsert.mock.calls.at(-1)[0].update
+  expect(update.experiencePublished.characterStyle).toBe('signature')
+  expect(update.experiencePublished.essentialMotionOnly).toBe(false)
+})
+
+it('scopes the character settings to the owning store', async () => {
+  prismaMock.store.findFirst.mockResolvedValue(null)
+  const res = await PUT(request('PUT', { action: 'publish', characterStyle: 'minimal' }))
+  expect(res.status).toBe(404)
+  expect(prismaMock.bargainConfig.upsert).not.toHaveBeenCalled()
+})

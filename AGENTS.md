@@ -88,9 +88,23 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
 
 ## Work log (most recent first)
 
+- `feat(bargain): wire the living shopkeeper into conversations` (committed
+  `afe3516a`, not deployed). Both storefront widgets and the Experience Studio
+  now drive one resolved `ShopkeeperAnimation` from real conversation events:
+  body state, facial expression, gesture, position, character style and
+  essential-motion-only mode. `ShopkeeperStage` renders the resolved state and
+  exposes `data-avatar-*` hooks; `resolveShopkeeperAnimation` is the single
+  source of truth with `priorityReaction` overrides for unambiguous states.
+  Merchants get a reaction gallery, a minimal/signature style selector, an
+  essential-motion toggle, and per-personality strategy labels. The AI prompt
+  gains a strategy block that changes negotiation style only, never pricing
+  rules. Added living-shopkeeper resolver and widget tests. Verified: tsc, lint,
+  Jest **195 suites / 1985 tests**, and full build green. Not deployed.
+
 - `feat(bargain): checkout close/lock, remembered purchases, and final real code`
-  (**uncommitted**). Opening checkout now closes the Bargain panel (`closePanel()`
-  / `cg_close` in embed mode) and records the moment server-side via new
+  (committed `b1510a8f`, not deployed). Opening checkout now closes the Bargain
+  panel (`closePanel()` / `cg_close` in embed mode) and records the moment
+  server-side via new
   `POST /api/bargain/checkout-open` (rate-limited, session-bound, one-time
   `checkoutOpenedAt`). `/api/bargain/start` then returns 409 `locked:true` until a
   verified Shopify `orders/create` webhook for the same buyer arrives; the widget
@@ -110,7 +124,7 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   for lock helpers, checkout-open ownership, start lock/no-leak, purchase memory,
   final-code offer, and widget checkout/locked UI. Verified: Prisma format/
   validate/generate, `tsc --noEmit`, Jest **194 suites / 1963 tests**, lint, and
-  full build green. Still uncommitted and not deployed, so live
+  full build green. Committed `b1510a8f` but not deployed, so live
   `/api/health.release` remains `b586f7e`; the migration and a real Shopify
   checkout/purchase still need production verification. Open question: the unlock
   currently accepts any verified order after `checkoutOpenedAt`, including the
