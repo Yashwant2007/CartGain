@@ -100,7 +100,21 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   essential-motion toggle, and per-personality strategy labels. The AI prompt
   gains a strategy block that changes negotiation style only, never pricing
   rules. Added living-shopkeeper resolver and widget tests. Verified: tsc, lint,
-  Jest **197 suites / 2006 tests**, and full build green. Not deployed.
+  Jest **197 suites / 2006 tests**, and full build green.
+
+  Follow-up (committed `4fb714e0`, **deployed release `4fb714e`**): the `/demo`
+  page and the dashboard Live Demo now drive the same body/gesture/position
+  vocabulary, the storefront invitation avatar gets the matching gesture, and
+  the greeting timer is now interruptible (a real conversation event always
+  wins, so the shopkeeper never greets over a reply it already sent). Duplicate
+  entrance effect removed. Verified: tsc, lint, Jest **197 suites / 2006
+  tests**, full build green. Live `/api/health` `status=ok`, release `4fb714e`,
+  DB/Redis/env/AI/email/WhatsApp/Shopify ok, `missing=[]`; migration
+  `20261119110000_add_living_shopkeeper_character` applied to production
+  (`BargainConfig.characterStyle` default `signature`,
+  `essentialMotionOnly` default `false`); `/`, `/bargain/embed`,
+  `/api/bargain/experience`, `/privacy`, `/dpa`, `/terms` 200 and the
+  unauthenticated merchant route 401.
 
 - `feat(bargain): checkout close/lock, remembered purchases, and final real code`
   (committed `b1510a8f`, not deployed). Opening checkout now closes the Bargain
