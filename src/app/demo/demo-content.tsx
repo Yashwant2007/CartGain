@@ -36,6 +36,9 @@ import {
   type ExpressionState,
 } from '@/lib/bargain/experience/expressions'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import { gestureFor } from '@/lib/bargain/experience/character'
+import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
+import type { AvatarPosition } from '@/lib/bargain/experience/positions'
 
 type ChatMsg = {
   id: string
@@ -148,6 +151,16 @@ export default function DemoContent() {
   const thinkingTimerRef = useRef<number | null>(null)
   const thinkingShownAtRef = useRef(0)
   const [ended, setEnded] = useState<null | 'accepted' | 'rejected' | 'abandoned' | 'skipped'>(null)
+  // The living shopkeeper: the demo drives the same body/gesture/position
+  // vocabulary as the storefront widgets, from real conversation events only.
+  const demoAvatarState: AvatarState = ended === 'accepted'
+    ? 'celebrating'
+    : ended
+      ? 'goodbye'
+      : thinking
+        ? 'thinking'
+        : 'listening'
+  const demoAvatarPosition: AvatarPosition = ended === 'accepted' ? 'celebration' : 'conversation'
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [alreadyUsed, setAlreadyUsed] = useState(false)
   // Storefront-parity feature state: verified recommendation cards + the real
@@ -820,6 +833,9 @@ export default function DemoContent() {
             <ShopkeeperStage
               personality={AVATAR_PERSONALITY[persona]}
               expression={avatarExpression}
+              state={demoAvatarState}
+              gesture={gestureFor(AVATAR_PERSONALITY[persona], demoAvatarState)}
+              position={demoAvatarPosition}
               name={PERSONAS.find(p => p.id === persona)?.name ?? 'Shopkeeper'}
               status={ended ? 'Closed' : 'Online'}
               line={stageLine}

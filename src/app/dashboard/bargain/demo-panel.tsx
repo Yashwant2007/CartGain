@@ -20,6 +20,9 @@ import {
   type ExpressionState,
 } from '@/lib/bargain/experience/expressions'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import { gestureFor } from '@/lib/bargain/experience/character'
+import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
+import type { AvatarPosition } from '@/lib/bargain/experience/positions'
 import {
   buildOpeningMessage,
   ruleBasedDecision,
@@ -79,6 +82,16 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
   const [thinking, setThinking] = useState(false)
   const [avatarExpression, setAvatarExpression] = useState<ExpressionState>('listening')
   const [ended, setEnded] = useState<null | 'accepted' | 'rejected' | 'abandoned'>(null)
+  // The living shopkeeper: the demo drives the same body/gesture/position
+  // vocabulary as the storefront widgets, from real conversation events only.
+  const demoAvatarState: AvatarState = ended === 'accepted'
+    ? 'celebrating'
+    : ended
+      ? 'goodbye'
+      : thinking
+        ? 'thinking'
+        : 'listening'
+  const demoAvatarPosition: AvatarPosition = ended === 'accepted' ? 'celebration' : 'conversation'
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -430,6 +443,9 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
         <ShopkeeperStage
           personality={personality}
           expression={avatarExpression}
+          state={demoAvatarState}
+          gesture={gestureFor(personality, demoAvatarState)}
+          position={demoAvatarPosition}
           name={personaMeta.name}
           status={started ? (ended ? 'Closed' : 'Online') : 'Ready'}
           line={stageLine}

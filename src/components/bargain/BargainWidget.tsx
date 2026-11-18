@@ -212,9 +212,15 @@ export default function BargainWidget({
     if (greetTimerRef.current) window.clearTimeout(greetTimerRef.current)
     greetTimerRef.current = window.setTimeout(() => {
       greetTimerRef.current = null
-      fireAvatar('greeting')
+      // The greeting only plays if the character is still entering. Any real
+      // conversation event interrupts it, so the shopkeeper never greets over a
+      // reply it has already sent.
+      setCharacter((prev) => {
+        if (prev.state !== 'entering') return prev
+        return resolveShopkeeperAnimation(personality, 'greeting', { ...prev })
+      })
     }, 620)
-  }, [fireAvatar])
+  }, [personality])
   useEffect(() => {
     if (!open || !avatarEnabled) return
     fireAvatar('widget_opened', { opening: true })
@@ -1161,17 +1167,6 @@ export default function BargainWidget({
       void startSession()
     }
   }
-
-  // The character enters and greets as soon as the conversation panel is
-  // visible — whether it was opened by the shopper or by the embed handshake.
-  useEffect(() => {
-    if (!open) return
-    fireAvatar('widget_opened', { opening: true })
-    greetShopkeeper()
-    // fireAvatar/greetShopkeeper are rebuilt on every render; the panel opening
-    // is the only trigger that matters here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
 
   // Embedded mode opens as a full chat window by default (the launcher card is
   // what made the storefront look small/cramped). Auto-start the session so the
