@@ -12,7 +12,7 @@ import {
   Languages,
 } from 'lucide-react'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
-import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
+import LivingShopkeeper3D from '@/components/bargain/LivingShopkeeper3D.lazy'
 import {
   expressionForEvent,
   expressionForShopperMessage,
@@ -20,6 +20,7 @@ import {
   type ExpressionState,
 } from '@/lib/bargain/experience/expressions'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import type { Character3DState } from '@/lib/bargain/character3d/types'
 import { gestureFor } from '@/lib/bargain/experience/character'
 import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
 import type { AvatarPosition } from '@/lib/bargain/experience/positions'
@@ -92,6 +93,11 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
         ? 'thinking'
         : 'listening'
   const demoAvatarPosition: AvatarPosition = ended === 'accepted' ? 'celebration' : 'conversation'
+  const demo3DState: Character3DState =
+    demoAvatarState === 'celebrating' ? 'celebrate'
+    : demoAvatarState === 'goodbye' ? 'exit'
+    : demoAvatarState === 'thinking' ? 'think'
+    : 'listen'
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -440,15 +446,11 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
 
       {/* Chat */}
       <div className="lg:col-span-2 bg-slate-900/60 border border-blue-800/30 rounded-xl overflow-hidden self-start">
-        <ShopkeeperStage
+        <LivingShopkeeper3D
           personality={personality}
-          expression={avatarExpression}
-          state={demoAvatarState}
-          gesture={gestureFor(personality, demoAvatarState)}
-          position={demoAvatarPosition}
-          name={personaMeta.name}
-          status={started ? (ended ? 'Closed' : 'Online') : 'Ready'}
-          line={stageLine}
+          state={demo3DState}
+          motionEnabled
+          quality="high"
         />
         <div className="px-4 py-2 border-b border-blue-800/30 flex items-center justify-between text-xs text-blue-300/70">
           <span>{LANGUAGES.find(l => l.id === language)?.label}</span>

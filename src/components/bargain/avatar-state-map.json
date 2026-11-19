@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "description": "Mock AI-to-avatar state mapping. Presentation hints only; never pricing authority.",
+  "product": {
+    "title": "Aurora Sneaker",
+    "mrp": 2499,
+    "floorPrice": 1999,
+    "currency": "INR"
+  },
+  "events": [
+    {
+      "trigger": "ON_FOCUS",
+      "persona": "collaborative",
+      "emotion": "thinking",
+      "gesture": "chin",
+      "thought": "Careful, they're thinking. Give them room."
+    },
+    {
+      "trigger": "ON_SUBMIT_LOWBALL",
+      "persona": "strict",
+      "emotion": "stern",
+      "gesture": "crossed_arms",
+      "thought": "That's under the floor. Hold the line, tap the floor badge."
+    },
+    {
+      "trigger": "ON_SUBMIT_FAIR_OFFER",
+      "persona": "collaborative",
+      "emotion": "considering",
+      "gesture": "open_palm",
+      "thought": "Close to the floor — lean in and meet them."
+    },
+    {
+      "trigger": "COUNTER_OFFER_PRESENT",
+      "persona": "playful",
+      "emotion": "counter",
+      "gesture": "point",
+      "thought": "Tap the new coupon card to draw the eye."
+    },
+    {
+      "trigger": "ON_DEAL_CLOSED",
+      "persona": "playful",
+      "emotion": "celebrating",
+      "gesture": "thumbs_up",
+      "thought": "Deal! Celebrate and hand off to checkout."
+    }
+  ]
+}

@@ -187,6 +187,7 @@ export default function BargainWidget({
     position: 'conversation',
   })
   const chatOpenTracked = useRef(false)
+  const composerRef = useRef<HTMLDivElement>(null)
   const personality = resolveShopkeeperPersonality(experience?.personality, persona)
   const avatarEnabled = experience?.avatarEnabled !== false
   const characterStyle = experience?.characterStyle ?? 'signature'
@@ -231,6 +232,9 @@ export default function BargainWidget({
     if (checkoutTimerRef.current) window.clearTimeout(checkoutTimerRef.current)
   }, [])
   const [minimised, setMinimised] = useState(false)
+  // Live gaze: while the shopper is composing, the shopkeeper looks down at the
+  // composer. Cheap, deterministic and never triggers per-pointer re-renders.
+  const [gaze, setGaze] = useState<{ x: number; y: number } | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [sessionToken, setSessionToken] = useState<string | null>(null)
   const [messages, setMessages] = useState<BargainMessage[]>([])
@@ -1573,6 +1577,8 @@ export default function BargainWidget({
               status={t('shopkeeperOnline')}
               line={stageLine}
               motionEnabled={experience?.motionEnabled !== false}
+              gaze={gaze}
+              enable3D
             />
           )}
 
@@ -2045,7 +2051,7 @@ export default function BargainWidget({
                 {/* Message / offer composer — one calm, roomy control. Free text
                     is a real chat message; a number anywhere in it is treated
                     as the negotiation offer. */}
-                <div className="cg-composer" style={{
+                <div ref={composerRef} className="cg-composer" style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
@@ -2068,6 +2074,8 @@ export default function BargainWidget({
                     aria-label={t('typeMessage')}
                     placeholder={t('typeMessage')}
                     value={input}
+                    onFocus={() => setGaze({ x: 0, y: 0.55 })}
+                    onBlur={() => setGaze(null)}
                     onChange={e => {
                       setInput(e.target.value)
                       setError(null)

@@ -81,8 +81,16 @@ export function buildFrameGeometry(input: FrameInput): FrameGeometry {
 
   // Travel is limited so the character never leaves the reserved gutter.
   const halfBody = characterWidth / 2
-  const walkFrom = clamp(stage.x + halfBody, stage.x, stage.x + stage.width)
-  const walkTo = clamp(stage.x + stage.width - halfBody, stage.x, stage.x + stage.width)
+  const stageRight = stage.x + stage.width
+  let walkFrom = clamp(stage.x + halfBody, stage.x, stageRight)
+  let walkTo = clamp(stageRight - halfBody, stage.x, stageRight)
+  // If the character is wider than the gutter, pin it to the centre so the
+  // range is always valid (walkFrom <= walkTo).
+  if (walkFrom > walkTo) {
+    const centre = stage.x + stage.width / 2
+    walkFrom = centre
+    walkTo = centre
+  }
 
   const gripInset = Math.min(characterWidth * 0.35, chat.width * 0.18)
   const gripTopLeft: Point = { x: chat.x + gripInset, y: topEdgeY }

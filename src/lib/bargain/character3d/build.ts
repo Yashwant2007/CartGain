@@ -49,7 +49,7 @@ interface Part {
   bone?: RigBoneName
 }
 
-const BONE_INDEX: Record<RigBoneName, number> = BONE_DEFS.reduce(
+export const BONE_INDEX: Record<RigBoneName, number> = BONE_DEFS.reduce(
   (acc, def, index) => {
     acc[def.name] = index
     return acc

@@ -666,6 +666,7 @@ export default function StorefrontBargainWidget({
         name={`${PERSONA_NAME[persona]} · Shopkeeper`}
         status={t('online')}
         line={stageLine}
+        enable3D
       />
 
       {step === 'intro' && (

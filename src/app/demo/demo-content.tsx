@@ -19,7 +19,7 @@ import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { buildQuickOffers } from '@/lib/bargain/offers'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import type { BargainRecommendation, RecommendationHistory } from '@/lib/bargain/api-types'
-import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
+import LivingShopkeeper3D from '@/components/bargain/LivingShopkeeper3D.lazy'
 import BargainRecommendationPanel from '@/components/bargain/BargainRecommendationPanel'
 import {
   createConversationId,
@@ -36,6 +36,7 @@ import {
   type ExpressionState,
 } from '@/lib/bargain/experience/expressions'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import type { Character3DState } from '@/lib/bargain/character3d/types'
 import { gestureFor } from '@/lib/bargain/experience/character'
 import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
 import type { AvatarPosition } from '@/lib/bargain/experience/positions'
@@ -161,6 +162,11 @@ export default function DemoContent() {
         ? 'thinking'
         : 'listening'
   const demoAvatarPosition: AvatarPosition = ended === 'accepted' ? 'celebration' : 'conversation'
+  const demo3DState: Character3DState =
+    demoAvatarState === 'celebrating' ? 'celebrate'
+    : demoAvatarState === 'goodbye' ? 'exit'
+    : demoAvatarState === 'thinking' ? 'think'
+    : 'listen'
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [alreadyUsed, setAlreadyUsed] = useState(false)
   // Storefront-parity feature state: verified recommendation cards + the real
@@ -830,15 +836,11 @@ export default function DemoContent() {
         {/* Chat panel */}
         {started && (
           <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl overflow-hidden">
-            <ShopkeeperStage
+            <LivingShopkeeper3D
               personality={AVATAR_PERSONALITY[persona]}
-              expression={avatarExpression}
-              state={demoAvatarState}
-              gesture={gestureFor(AVATAR_PERSONALITY[persona], demoAvatarState)}
-              position={demoAvatarPosition}
-              name={PERSONAS.find(p => p.id === persona)?.name ?? 'Shopkeeper'}
-              status={ended ? t('sessionEnded') : t('online')}
-              line={stageLine}
+              state={demo3DState}
+              motionEnabled
+              quality="high"
             />
             <div className="px-4 py-2 border-b border-blue-800/30 flex items-center justify-between text-xs text-blue-300/70">
               <span>{thinking ? t('negotiating') : t('attemptsLeftLabel', { n: attemptsLeft })}</span>

@@ -1,11 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import ShopkeeperAvatar from './ShopkeeperAvatar'
 import type { BargainExperienceConfig } from '@/lib/bargain/experience/types'
-import type { ExpressionState } from './ShopkeeperAvatar'
-import { gestureFor } from '@/lib/bargain/experience/character'
-import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
 import { shouldCountImpression, trackExperienceEvent } from '@/lib/bargain/experience/analytics'
 import { uiText, type UiKey } from '@/lib/bargain/i18n'
 
@@ -40,9 +36,7 @@ export default function StorefrontInvitation({
   trackingEnabled = false,
   preview = false,
 }: Props) {
-  const [expression, setExpression] = useState<ExpressionState>('idle')
-  const invitationState: AvatarState =
-    expression === 'curious' ? 'pointing' : expression === 'listening' ? 'listening' : 'idle'
+  const [expression, setExpression] = useState<'idle' | 'curious' | 'listening'>('idle')
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const impressionTracked = useRef(false)
   const design = DESIGN_STYLES[experience.designVariant] || DESIGN_STYLES['smart-assistant']
@@ -132,18 +126,6 @@ export default function StorefrontInvitation({
       onFocus={() => setExpression('listening')}
       onBlur={() => setExpression('idle')}
     >
-      {experience.avatarEnabled && (
-        <ShopkeeperAvatar
-          personality={experience.personality}
-          expression={expression}
-          state={invitationState}
-          gesture={gestureFor(experience.personality, invitationState)}
-          characterStyle={experience.characterStyle}
-          size={experience.avatarSize}
-          motionEnabled={experience.motionEnabled}
-          essentialMotionOnly={experience.essentialMotionOnly}
-        />
-      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.4 }}>{copy}</div>
         <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 6, color: accent, fontWeight: 700, fontSize: 13 }}>

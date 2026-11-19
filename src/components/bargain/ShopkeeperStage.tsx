@@ -1,6 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import ShopkeeperAvatar from './ShopkeeperAvatar'
+import LivingShopkeeper3D from './LivingShopkeeper3D.lazy'
+import { toCharacter3DState } from '@/lib/bargain/character3d/state-map'
 import type { ExpressionState } from '@/lib/bargain/experience/expressions'
 import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
 import type { GestureName } from '@/lib/bargain/experience/character'
@@ -24,6 +27,14 @@ interface Props {
   status: string
   line: string
   motionEnabled?: boolean
+  /** Normalised gaze target in [-1, 1]; eyes follow the shopper's cursor. */
+  gaze?: { x: number; y: number } | null
+  /**
+   * Render the character with the skeletal Three.js renderer instead of the
+   * 2D avatar. Falls back to 2D when WebGL is unavailable, motion is off, or
+   * the merchant selected the minimal character style.
+   */
+  enable3D?: boolean
 }
 
 const STAGE_CSS = `
@@ -219,8 +230,17 @@ export default function ShopkeeperStage({
   status,
   line,
   motionEnabled = true,
+  gaze = null,
+  enable3D = false,
 }: Props) {
   const descriptor = POSITION_DESCRIPTORS[position] ?? POSITION_DESCRIPTORS.conversation
+  const [webglAvailable, setWebglAvailable] = useState(true)
+  const render3D =
+    enable3D &&
+    webglAvailable &&
+    motionEnabled &&
+    !essentialMotionOnly &&
+    characterStyle !== 'minimal'
   return (
     <div
       className={`cg-stage ${descriptor.className}`}
@@ -230,21 +250,35 @@ export default function ShopkeeperStage({
       data-gesture={gesture}
       data-character-style={characterStyle}
       data-essential-motion={essentialMotionOnly ? 'true' : 'false'}
+      data-avatar-renderer={render3D ? '3d' : '2d'}
     >
       <style dangerouslySetInnerHTML={{ __html: STAGE_CSS }} />
       <span className="cg-stage-spot" aria-hidden="true" />
       <div className="cg-stage-avatar">
         <span className="cg-stage-halo" aria-hidden="true" />
-        <ShopkeeperAvatar
-          personality={personality}
-          expression={expression}
-          state={state}
-          gesture={gesture}
-          characterStyle={characterStyle}
-          size="xl"
-          motionEnabled={motionEnabled}
-          essentialMotionOnly={essentialMotionOnly}
-        />
+        {render3D ? (
+          <LivingShopkeeper3D
+            personality={personality}
+            state={toCharacter3DState(state)}
+            motionEnabled={motionEnabled}
+            essentialMotionOnly={essentialMotionOnly}
+            quality="low"
+            size={96}
+            onUnavailable={() => setWebglAvailable(false)}
+          />
+        ) : (
+          <ShopkeeperAvatar
+            personality={personality}
+            expression={expression}
+            state={state}
+            gesture={gesture}
+            characterStyle={characterStyle}
+            size="xl"
+            motionEnabled={motionEnabled}
+            essentialMotionOnly={essentialMotionOnly}
+            gaze={gaze}
+          />
+        )}
       </div>
       <div className="cg-stage-copy">
         <div className="cg-stage-name">

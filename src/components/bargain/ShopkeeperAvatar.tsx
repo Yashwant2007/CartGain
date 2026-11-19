@@ -19,6 +19,8 @@ interface Props {
   motionEnabled?: boolean
   /** Disable decorative (nonessential) motion: idle loops, blink, confetti. */
   essentialMotionOnly?: boolean
+  /** Normalised gaze target in [-1, 1]; eyes follow the shopper's cursor. */
+  gaze?: { x: number; y: number } | null
   className?: string
 }
 
@@ -44,6 +46,7 @@ const AVATAR_CSS = `
 .cg-avatar--celebrating { animation: cgAvCelebrate .9s ease-in-out 1; }
 .cg-avatar--disappointed, .cg-avatar--declining, .cg-avatar--error { animation: cgAvShake .52s ease-in-out; }
 .cg-av-blink { animation: cgAvBlink 4.6s infinite; transform-box: fill-box; transform-origin: center; }
+.cg-av-gaze { transition: transform 160ms ease-out; will-change: transform; }
 .cg-av-think-dot { animation: cgAvThink 1.2s ease-in-out infinite; }
 .cg-av-confetti { animation: cgAvConfetti 1.4s ease-out 1 forwards; transform-box: fill-box; transform-origin: center; }
 .cg-av-glow { animation: cgAvGlow 1.2s ease-in-out infinite; }
@@ -113,6 +116,7 @@ export function ShopkeeperAvatar({
   size = 'md',
   motionEnabled = true,
   essentialMotionOnly = false,
+  gaze = null,
   className = '',
 }: Props) {
   const [reducedMotion, setReducedMotion] = useState(false)
@@ -141,6 +145,10 @@ export function ShopkeeperAvatar({
   const thinking = expression === 'thinking' || expression === 'curious'
   const lookUp = thinking
   const lookDown = sad
+  // Subtle live gaze: the pupils drift toward the shopper's cursor/composer.
+  const gazeStyle = gaze
+    ? { transform: `translate(${(Math.max(-1, Math.min(1, gaze.x)) * 0.9).toFixed(2)}px, ${(Math.max(-1, Math.min(1, gaze.y)) * 0.7).toFixed(2)}px)` }
+    : undefined
   const mouth =
     expression === 'surprised'
       ? { path: '', ellipse: { cy: 43, rx: 3.4, ry: 4.2 } }
@@ -353,14 +361,18 @@ export function ShopkeeperAvatar({
               <>
                 <path d="M21.5 32.5q3.5-3.5 7 0" fill="none" stroke="#1f2937" strokeWidth="2.1" strokeLinecap="round" />
                 <ellipse cx="39" cy="33" rx="3.1" ry={narrowEyes ? 1.2 : 3.4} fill="#fff" />
-                <circle cx={lookUp ? 39.6 : 39} cy={lookUp ? 31.7 : lookDown ? 34.4 : 33} r="1.5" fill="#1f2937" />
+                <g className="cg-av-gaze" style={gazeStyle}>
+                  <circle cx={lookUp ? 39.6 : 39} cy={lookUp ? 31.7 : lookDown ? 34.4 : 33} r="1.5" fill="#1f2937" />
+                </g>
               </>
             ) : (
               <>
                 <ellipse cx="25" cy={wideEyes ? 32.5 : 33} rx={wideEyes ? 4 : 3.1} ry={wideEyes ? 4.2 : narrowEyes ? 1.2 : 3.5} fill="#fff" />
                 <ellipse cx="39" cy={wideEyes ? 32.5 : 33} rx={wideEyes ? 4 : 3.1} ry={wideEyes ? 4.2 : narrowEyes ? 1.2 : 3.5} fill="#fff" />
-                <circle cx={lookUp ? 25.8 : 25} cy={lookUp ? 31.3 : lookDown ? 34.6 : 33.3} r={wideEyes ? 1.9 : 1.5} fill="#1f2937" />
-                <circle cx={lookUp ? 39.8 : 39} cy={lookUp ? 31.3 : lookDown ? 34.6 : 33.3} r={wideEyes ? 1.9 : 1.5} fill="#1f2937" />
+                <g className="cg-av-gaze" style={gazeStyle}>
+                  <circle cx={lookUp ? 25.8 : 25} cy={lookUp ? 31.3 : lookDown ? 34.6 : 33.3} r={wideEyes ? 1.9 : 1.5} fill="#1f2937" />
+                  <circle cx={lookUp ? 39.8 : 39} cy={lookUp ? 31.3 : lookDown ? 34.6 : 33.3} r={wideEyes ? 1.9 : 1.5} fill="#1f2937" />
+                </g>
               </>
             )}
           </g>
