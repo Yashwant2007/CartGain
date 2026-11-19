@@ -430,16 +430,46 @@ describe('rememberConfirmedOrder', () => {
         storeId: 'store1',
         checkoutPurchaseAt: null,
         checkoutOpenedAt: { not: null, lte: purchasedAt },
-        OR: expect.arrayContaining([
-          { customerEmail: 'buyer@example.com' },
-          { cartToken: 'cart-1' },
-          { cartToken: 'checkout-1' },
-        ]),
+      AND: [
+        {
+          OR: expect.arrayContaining([
+            { customerEmail: 'buyer@example.com' },
+            { cartToken: 'cart-1' },
+            { cartToken: 'checkout-1' },
+          ]),
+        },
+        {
+          OR: expect.arrayContaining([
+            { shopifyProductId: '55' },
+            { shopifyProductId: 'gid://shopify/Product/55' },
+            { variantId: '99' },
+          ]),
+        },
+      ],
+
       }),
       data: {
         checkoutPurchaseAt: purchasedAt,
         checkoutPurchaseOrderId: 'order-77',
       },
     }))
+  })
+
+  it('does not unlock a checkout session for an unrelated later order', async () => {
+    mockPrisma.bargainPurchaseMemory.createMany.mockResolvedValue({ count: 1 })
+    mockPrisma.bargainSession.updateMany.mockResolvedValue({ count: 0 })
+    const purchasedAt = new Date('2026-11-18T10:05:00Z')
+
+    await rememberConfirmedOrder({
+      storeId: 'store1',
+      shopifyOrderId: 'order-78',
+      email: 'buyer@example.com',
+      purchasedAt,
+      lineItems: [{ product_id: 'gid://shopify/Product/999', variant_id: 1000 }],
+    })
+
+    const where = mockPrisma.bargainSession.updateMany.mock.calls[0][0].where
+    expect(where.AND[1].OR).not.toContainEqual({ shopifyProductId: '55' })
+    expect(where.AND[1].OR).toContainEqual({ shopifyProductId: '999' })
   })
 })

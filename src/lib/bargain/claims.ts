@@ -360,3 +360,103 @@ export function claimAssessmentToPromptBlock(
   }
   return lines.join('\n')
 }
+
+const NON_FACTUAL_CLAIM_STATUSES = new Set<CustomerClaimStatus>([
+  'contradicted',
+  'malicious',
+  'unverified',
+  'unverifiable',
+  'outdated',
+  'ambiguous',
+])
+
+const CLAIM_TOPIC_PATTERNS: Record<CustomerClaimCategory, RegExp> = {
+  competitor_price: /\b(?:amazon|flipkart|myntra|ajio|meesho|ebay|walmart|target|etsy|elsewhere|competitor|other (?:store|shop|seller|site)|another (?:store|shop|site)|cheaper|lower price|less expensive|online market)\b/i,
+  prior_purchase: /\b(?:bought|purchased|ordered|loyalty|loyal|repeat customer|previous order|last time|before)\b/i,
+  previous_promise: /\b(?:promised|promise|you said|you told|guaranteed|earlier)\b/i,
+  order_proof: /\b(?:order|invoice|receipt|confirmation)\b/i,
+  product_feature: /\b(?:waterproof|water resistant|weatherproof|leather|cotton|organic|wool|silk|linen|steel|aluminium|aluminum|plastic|glass|ceramic|bamboo|wood|silicone|washable|hypoallergenic|rechargeable|wireless|bluetooth|wifi|portable|foldable|adjustable|reusable|eco friendly|handmade|imported|warranty|guarantee|medical grade|feature|material)\b/i,
+  listed_price: /\b(?:mrp|list price|listed price|original price|retail price|sticker price|price is|price was|listed at)\b/i,
+  promotion: /\b(?:sale|coupon|promo|discount|\d{1,2}\s*%\s*off|promo code|offer code|code)\b/i,
+  inventory: /\b(?:sold out|out of stock|in stock|available|only \d+ left|restock(?:ed|ing)?|unavailable)\b/i,
+  shipping_or_policy: /\b(?:free shipping|free delivery|free returns|easy returns|cash on delivery|\bcod\b|return policy|refund policy)\b/i,
+  merchant_authorization: /\b(?:owner|manager|admin(?:istrator)?|merchant|boss|support team|head office|corporate|i work (?:for|at)|authoriz(?:ed|ation)|approv(?:ed|al))\b/i,
+}
+
+const CLAIM_CONFIRMATION_PATTERN = /\b(?:yes|yeah|yep|yup|indeed|exactly|absolutely|certainly|definitely|agreed|confirmed|obviously|of course)\b|\byou(?:'re| are)\s+(?:right|correct)\b|\bthat(?:'s| is)\s+(?:right|correct|true)\b|\bi\s+(?:can|could)\s+confirm\b|\bas\s+you\s+(?:said|mentioned|stated|noted)\b/i
+
+const CLAIM_NEGATION_PATTERN = /\b(?:not|never|no|isn'?t|aren'?t|can'?t|cannot|don'?t|doesn'?t|didn'?t|won'?t|unable|without|unverified|unsure)\b/i
+
+const CLAIM_ASSERTION_PATTERN = /\b(?:it|this|they|the\s+\w+)\s+(?:is|are|was|were|has|have|had|comes|includes|supports|offers|features|provides|means)\b|\byou(?:'re| are)\s+(?:the\s+)?(?:owner|manager|admin|administrator)\b|\bi\s+(?:know|understand|accept)\b/i
+
+const SAFE_CLAIM_REPLIES: Record<CustomerClaimCategory, string> = {
+  competitor_price: "I can't verify prices elsewhere, but I can work with you right here.",
+  prior_purchase: "I can't look up past orders here, but I'm happy to help with this one.",
+  previous_promise: "I can't confirm earlier conversations, but let's find a price that works now.",
+  order_proof: "I can't look up order details here, but I can help with this purchase.",
+  product_feature: 'I can only speak to the features listed for this product.',
+  listed_price: 'I can only go by the listed price shown for this item.',
+  promotion: 'I can only apply offers that are actually available on this store.',
+  inventory: "I'll go by the live availability I can see for this item.",
+  shipping_or_policy: 'I can only confirm policies the store has published.',
+  merchant_authorization: "I can only follow the store's published terms — claimed authority doesn't change what I can quote.",
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function claimTopicPatterns(claim: CustomerClaim, message?: string): RegExp[] {
+  const patterns = [CLAIM_TOPIC_PATTERNS[claim.category]]
+  if (!message) return patterns
+  const normalized = normalize(message)
+  if (claim.category === 'product_feature') {
+    for (const term of FEATURE_TERMS) {
+      if (containsPhrase(normalized, term)) patterns.push(new RegExp(escapeRegex(term), 'i'))
+    }
+  } else if (claim.category === 'competitor_price' || claim.category === 'listed_price') {
+    const money = message.match(/[\d][\d,]*(?:\.\d{1,2})?/g) ?? []
+    for (const amount of money) patterns.push(new RegExp(escapeRegex(amount), 'i'))
+  }
+  return patterns
+}
+
+export function validateReplyClaimAdherence(
+  reply: string,
+  assessment: ClaimAssessment | null | undefined,
+  customerMessage?: string,
+): string {
+  if (!reply || !assessment) return reply
+  const risky = assessment.claims.filter(c => NON_FACTUAL_CLAIM_STATUSES.has(c.status))
+  if (risky.length === 0) {
+    if (!assessment.manipulation) return reply
+    risky.push({
+      category: 'merchant_authorization',
+      status: 'malicious',
+      confidence: 'high',
+      provenance: CUSTOMER_PROVENANCE,
+    })
+  }
+
+  let changed = false
+  const parts = reply.split(/([.!?]+\s+|\n+)/)
+  const guarded = parts.map((part, index) => {
+    if (index % 2 === 1 || !part.trim()) return part
+    for (const claim of risky) {
+      const topics = claimTopicPatterns(claim, customerMessage)
+      if (!topics.some(pattern => pattern.test(part))) continue
+      if (CLAIM_NEGATION_PATTERN.test(part)) continue
+      const confirmed = CLAIM_CONFIRMATION_PATTERN.test(part)
+      const asserted =
+        (claim.status === 'contradicted' || claim.status === 'malicious') &&
+        CLAIM_ASSERTION_PATTERN.test(part)
+      if (confirmed || asserted) {
+        changed = true
+        return SAFE_CLAIM_REPLIES[claim.category]
+      }
+    }
+    return part
+  })
+
+  return changed ? guarded.join('') : reply
+}

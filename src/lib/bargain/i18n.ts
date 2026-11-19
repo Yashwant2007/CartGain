@@ -15,6 +15,18 @@ export function currencySymbolFor(currency: string | undefined | null): string {
   return sym ?? `${currency} `
 }
 
+export function formatMoney(amount: number, currency?: string | undefined | null): string {
+  const safeAmount = Number.isFinite(amount) ? amount : 0
+  const code = (currency || 'INR').toUpperCase()
+  const digits = code === 'JPY' ? 0 : 2
+  const locale = code === 'INR' ? 'en-IN' : 'en-US'
+  const formatted = safeAmount.toLocaleString(locale, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })
+  return `${currencySymbolFor(code)}${formatted}`
+}
+
 /**
  * The languages we actually localize chrome/terminal microcopy into.
  * Hinglish = Latin-script Hindi. Missing from this table (kn/ml/or) falls
@@ -128,9 +140,87 @@ export type UiKey =
   | 'checkout_locked_body'
   | 'last_bought'
   | 'continue_checkout'
+  | 'inviteSmartCopy'
+  | 'inviteSmartCta'
+  | 'invitePlayfulCopy'
+  | 'invitePlayfulCta'
+  | 'inviteUnlockCopy'
+  | 'inviteUnlockCta'
+  | 'inviteHumanCopy'
+  | 'inviteHumanCta'
+  | 'recoMatches'
+  | 'recoOverBudget'
+  | 'recoUnavailable'
+  | 'recoView'
+  | 'recoAdd'
+  | 'recoNotForMe'
+  | 'recoDismiss'
+  | 'recoAriaLabel'
+  | 'retentionSavedTitle'
+  | 'checkoutAtPrice'
+  | 'limitReached'
+  | 'itemUnavailable'
+  | 'dealAccepted'
+  | 'offerSessionExpired'
+  | 'checkingOffer'
+  | 'openingFallback'
+  | 'typeAMessage'
+  | 'copiedCheck'
+  | 'planSessionLimitTitle'
+  | 'planDealLimitTitle'
+  | 'planSessionLimitBody'
+  | 'planDealLimitBody'
+  | 'offerDetected'
+  | 'pressEnterToSend'
+  | 'nameYourPriceHint'
+  | 'yourCartOrder'
+  | 'stageMakeOffer'
+  | 'listed'
+  | 'negotiateCartTotal'
+  | 'startNegotiation'
+  | 'attemptsLeftOf'
+  | 'conversationLabel'
+  | 'delivered'
+  | 'sending'
+  | 'sendingDots'
+  | 'offerTag'
+  | 'counterTag'
+  | 'assistantThinking'
+  | 'freeShort'
+  | 'offerPlaceholder'
+  | 'yourOfferOrMessage'
+  | 'dealAcceptedBanner'
+  | 'newOrderTotal'
+  | 'finalPriceLabel'
+  | 'youSavedPercent'
+  | 'useCodeAtCheckout'
+  | 'priceLockedHint'
+  | 'copiedToClipboard'
+  | 'copyDiscountCode'
+  | 'copiedCheckMark'
+  | 'codeReady'
+  | 'creatingCode'
+  | 'createDiscountCode'
+  | 'goToCheckout'
+  | 'bargainAgain'
+  | 'negotiationEndedTitle'
+  | 'noDealThisTime'
+  | 'continueToCheckout'
+  | 'tryAgainShort'
+  | 'priceNegotiation'
+  | 'checkingYourOffer'
+  | 'dealLocked'
+  | 'noHardFeelings'
+  | 'tellMeYourPrice'
+  | 'generating'
+  | 'sendMessage'
+  | 'skipFullPrice'
+  | 'skipNegotiation'
+  | 'offerPlaceholderDemo'
+  | 'negotiating'
+  | 'attemptsLeftLabel'
 
-const I18N: Record<UiLang, Record<UiKey, string>> = {
-  en: {
+const EN: Record<UiKey, string> = {
     farewell_friendly: "I understand, friend. The door's always open if you change your mind. Take care!",
     farewell_strict: 'Understood. This negotiation is closed. You may start a new session anytime.',
     farewell_playful: 'Aw, really? Well, if you change your mind, you know where I am! No hard feelings',
@@ -234,7 +324,91 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     last_bought: 'Last bought: {product} for {price} on {date}.',
     continue_checkout: 'Continue checkout',
     dealAgreedAt: 'Deal agreed at {price}',
-  },
+    inviteSmartCopy: "Got a price in mind? 💬 Let's talk.",
+    inviteSmartCta: 'Make an offer',
+    invitePlayfulCopy: 'Think you can beat this price? 😏',
+    invitePlayfulCta: 'Challenge the price',
+    inviteUnlockCopy: 'Your personal deal awaits ✨',
+    inviteUnlockCta: 'Unlock your deal',
+    inviteHumanCopy: 'Bhai, price ki baat karein? 😄',
+    inviteHumanCta: "Let's negotiate",
+    recoMatches: '{n} better matches found',
+    recoOverBudget: 'Over budget',
+    recoUnavailable: 'Unavailable',
+    recoView: 'View',
+    recoAdd: 'Add',
+    recoNotForMe: 'Not for me',
+    recoDismiss: 'Dismiss {product}',
+    recoAriaLabel: 'Suggested alternatives',
+    retentionSavedTitle: 'We saved your best price — here is a one-time code:',
+    checkoutAtPrice: 'Checkout at your price',
+    limitReached: 'Limit reached',
+    itemUnavailable: 'This item is unavailable',
+    dealAccepted: 'Deal accepted',
+    offerSessionExpired: 'Offer session expired',
+    checkingOffer: 'Checking your offer',
+    openingFallback: 'Welcome! What price were you thinking?',
+    typeAMessage: 'Type a message',
+    copiedCheck: '✓ Copied',
+    planSessionLimitTitle: 'This month’s bargain sessions are used up',
+    planDealLimitTitle: 'This month’s slate of deals has been filled',
+    planSessionLimitBody: 'New bargain sessions reopen when the plan resets each month. The limit depends on the store’s plan.',
+    planDealLimitBody: 'Bargaining is active but the plan’s monthly deal limit is full for now. It resets with the next billing period.',
+    offerDetected: 'Offer detected',
+    pressEnterToSend: 'Press Enter to send',
+    nameYourPriceHint: 'Name your price or ask a question',
+    yourCartOrder: 'your cart order',
+    stageMakeOffer: 'Make me an offer…',
+    listed: 'Listed:',
+    negotiateCartTotal: 'Negotiate the whole cart total',
+    startNegotiation: 'Start price negotiation',
+    attemptsLeftOf: 'Attempts left: {n}/{m}',
+    conversationLabel: 'Negotiation conversation',
+    delivered: 'Delivered',
+    sending: 'Sending',
+    sendingDots: 'Sending…',
+    offerTag: 'Offered',
+    counterTag: 'Counter',
+    assistantThinking: 'Assistant is thinking',
+    freeShort: 'Free',
+    offerPlaceholder: 'e.g. "{symbol}400" or "I will think about it"',
+    yourOfferOrMessage: 'Your offer or message',
+    dealAcceptedBanner: 'Deal Accepted!',
+    newOrderTotal: 'New order total:',
+    finalPriceLabel: 'Final price:',
+    youSavedPercent: 'You saved {x} ({n}%)',
+    useCodeAtCheckout: 'Use this single-use code at checkout, valid 24h:',
+    priceLockedHint: 'Your price is locked. Confirm below to create a one-time checkout code.',
+    copiedToClipboard: 'Copied to clipboard',
+    copyDiscountCode: 'Copy discount code',
+    copiedCheckMark: 'Copied ✓',
+    codeReady: 'Code is ready — copy it and apply at checkout.',
+    creatingCode: 'Creating code…',
+    createDiscountCode: 'Create My Discount Code',
+    goToCheckout: 'Go to Checkout',
+    bargainAgain: 'Bargain again',
+    negotiationEndedTitle: 'Negotiation Ended',
+    noDealThisTime: 'Attempts exhausted. No deal this time.',
+    continueToCheckout: 'Continue to Checkout',
+    tryAgainShort: 'Try again',
+    priceNegotiation: 'Price negotiation',
+    checkingYourOffer: 'Checking your offer…',
+    dealLocked: 'Deal locked. Enjoy your price.',
+    noHardFeelings: 'No hard feelings — the door is always open.',
+    tellMeYourPrice: 'Tell me what you have in mind and we will find a fair price.',
+    generating: 'Generating…',
+    sendMessage: 'Send message',
+    skipFullPrice: 'Skip — buy at full price ({price})',
+    skipNegotiation: 'Skip negotiation and buy at full price',
+    offerPlaceholderDemo: 'Make an offer (e.g. "{symbol}{amount}" or "I will think about it")',
+    negotiating: 'negotiating…',
+    attemptsLeftLabel: 'Attempts left: {n}',
+  }
+
+type Translations = Partial<Record<UiKey, string>>
+
+const I18N: Record<UiLang, Translations> & { en: Record<UiKey, string> } = {
+  en: EN,
   hinglish: {
     farewell_friendly: 'Theek hai dost, door hamesha khula hai. Agar mann badle toh bata dena. Dhyaan rakhna!',
     farewell_strict: 'Samajh gaya. Yeh baat-cheet yahin khatam hoti hai. Aap kabhi bhi naya session shuru kar sakte ho.',
@@ -339,6 +513,33 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     last_bought: 'Aakhri kharida: {product}, {price}, {date}.',
     continue_checkout: 'Checkout jaari rakhein',
     dealAgreedAt: 'Deal {price} par pakka',
+    inviteSmartCopy: 'Kya aapke paas koi price hai? 💬 Baat karte hain.',
+    inviteSmartCta: 'Offer karein',
+    invitePlayfulCopy: 'Kya aap is price ko har sakte hain? 😏',
+    invitePlayfulCta: 'Price ko challenge karein',
+    inviteUnlockCopy: 'Aapka personal deal intezaar kar raha hai ✨',
+    inviteUnlockCta: 'Apna deal unlock karein',
+    inviteHumanCopy: 'Bhai, price ki baat karein? 😄',
+    inviteHumanCta: 'Bargain karein',
+    recoMatches: '{n} behtar options mile',
+    recoOverBudget: 'Budget se upar',
+    recoUnavailable: 'Available nahi',
+    recoView: 'Dekhein',
+    recoAdd: 'Add karein',
+    recoNotForMe: 'Mere liye nahi',
+    recoDismiss: '{product} hataayein',
+    recoAriaLabel: 'Suggest kiye gaye vikalp',
+    checkingOffer: 'Aapka offer dekh raha hoon',
+    conversationLabel: 'Bargain ki baatcheet',
+    delivered: 'Pahunch gaya',
+    sending: 'Bhej raha hoon',
+    offerTag: 'Aapne offer diya',
+    counterTag: 'Counter price',
+    yourOfferOrMessage: 'Aapka offer ya message',
+    dealAcceptedBanner: 'Deal pakka gaya!',
+    goToCheckout: 'Checkout par jayein',
+    continueToCheckout: 'Checkout jaari rakhein',
+    tryAgainShort: 'Dobara koshish karein',
   },
   hi: {
     farewell_friendly: 'समझ गया दोस्त, दरवाज़ा हमेशा खुला है। अगर मन बदले तो बता देना। ध्यान रखना!',
@@ -444,6 +645,33 @@ const I18N: Record<UiLang, Record<UiKey, string>> = {
     last_bought: 'अंतिम खरीद: {product}, {price}, {date}।',
     continue_checkout: 'चेकआउट जारी रखें',
     dealAgreedAt: '{price} पर सौदा तय',
+    inviteSmartCopy: 'क्या आपके पास कोई कीमत है? 💬 बात करते हैं।',
+    inviteSmartCta: 'ऑफ़र करें',
+    invitePlayfulCopy: 'क्या आप इस कीमत को हरा सकते हैं? 😏',
+    invitePlayfulCta: 'कीमत को चुनौती दें',
+    inviteUnlockCopy: 'आपका निजी सौदा इंतज़ार कर रहा है ✨',
+    inviteUnlockCta: 'अपना सौदा खोलें',
+    inviteHumanCopy: 'भाई, कीमत की बात करें? 😄',
+    inviteHumanCta: 'सौदेबाज़ी करें',
+    recoMatches: '{n} बेहतर विकल्प मिले',
+    recoOverBudget: 'बजट से ऊपर',
+    recoUnavailable: 'उपलब्ध नहीं',
+    recoView: 'देखें',
+    recoAdd: 'जोड़ें',
+    recoNotForMe: 'मेरे लिए नहीं',
+    recoDismiss: '{product} हटाएँ',
+    recoAriaLabel: 'सुझाए गए विकल्प',
+    checkingOffer: 'आपका ऑफ़र देख रहा हूँ',
+    conversationLabel: 'सौदेबाज़ी की बातचीत',
+    delivered: 'पहुँच गया',
+    sending: 'भेज रहा हूँ',
+    offerTag: 'आपने ऑफ़र दिया',
+    counterTag: 'जवाबी कीमत',
+    yourOfferOrMessage: 'आपका ऑफ़र या संदेश',
+    dealAcceptedBanner: 'सौदा तय हो गया!',
+    goToCheckout: 'चेकआउट पर जाएँ',
+    continueToCheckout: 'चेकआउट जारी रखें',
+    tryAgainShort: 'फिर से कोशिश करें',
   },
   ta: {
     farewell_friendly: 'புரிந்தது நண்பரே, கதவு எப்போதும் திறந்தே உள்ளது. மனம் மாறினால் சொல்லுங்கள். பார்த்துக்கொள்ளுங்கள்!',
@@ -1082,7 +1310,7 @@ export function uiText(
   key: UiKey,
   vars?: Record<string, string | number>,
 ): string {
-  const table = (lang && (I18N as Record<string, Record<UiKey, string>>)[lang]) || I18N.en
+  const table = (lang && (I18N as Record<string, Translations>)[lang]) || I18N.en
   let s = table[key] ?? I18N.en[key] ?? key
   if (vars) {
     for (const [k, v] of Object.entries(vars)) {

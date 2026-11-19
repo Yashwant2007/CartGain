@@ -109,9 +109,26 @@
     } catch(e){}
   }, true);
 
-  // Listen for bargain events
+  function expectedOrigins(){
+    var out=[];
+    function push(u){
+      var m=(u||'').match(/^(https?:\/\/[^\/]+)/);
+      if(m&&out.indexOf(m[1])<0)out.push(m[1]);
+    }
+    push(API_BASE);
+    var roots=document.querySelectorAll('[data-cg-bargain-root]');
+    for(var i=0;i<roots.length;i++)push(roots[i].getAttribute('data-cg-src')||'');
+    return out;
+  }
+  function trusted(e){
+    if(!e||!e.data||typeof e.data!=='object'||!e.source||typeof e.origin!=='string')return false;
+    if(expectedOrigins().indexOf(e.origin)<0)return false;
+    var fs=document.querySelectorAll('[data-cg-bargain-root] iframe,iframe[data-cg-drawer-frame]');
+    for(var i=0;i<fs.length;i++)if(fs[i].contentWindow===e.source)return true;
+    return false;
+  }
   window.addEventListener('message', function(e){
-    if(!e.data || typeof e.data !== 'object') return;
+    if(!trusted(e)) return;
     if(e.data.type === 'cg_checkout_started') track('checkout_started', e.data);
     if(e.data.type === 'cg_payment_failed') track('payment_failed', e.data);
   });

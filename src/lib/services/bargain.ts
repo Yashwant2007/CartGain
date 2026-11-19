@@ -31,6 +31,7 @@ import { shippingPromptBlock, type ShippingConfig } from '@/lib/bargain/shipping
 import { paymentPromptBlock } from '@/lib/bargain/payment'
 import { shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
 import { deriveConversationState, conversationStateGuidance } from '@/lib/bargain/conversation-state'
+import { validateReplyClaimAdherence } from '@/lib/bargain/claims'
 import type { ClaimAssessment } from '@/lib/bargain/claims'
 import {
   negotiationStyleGuidance,
@@ -2641,7 +2642,7 @@ export async function negotiateStep(
 
   // ── ABUSE DETECTION ──
   if (sessionId) {
-    const abuse = checkAbuse(customerMessage, sessionId, { strictness: ctx.abuseStrictness })
+    const abuse = await checkAbuse(customerMessage, sessionId, { strictness: ctx.abuseStrictness })
     if (abuse.isAbusive && abuse.response) {
       return {
         reply: abuse.response,
@@ -2952,6 +2953,10 @@ export async function negotiateStep(
       reply = (LEAK_SAFE_REPLY[ctx.persona] ?? LEAK_SAFE_REPLY.friendly_shopkeeper)
     }
 
+    const beforeClaimGuard = reply
+    reply = validateReplyClaimAdherence(reply, ctx.claims, customerMessage)
+    const claimAdherenceGuarded = reply !== beforeClaimGuard
+
     // A 'chat' decision is the shopkeeper conversing (product questions, small
     // talk) — no price belongs on it. Attaching the fallback counter here is
     // what painted "counter: ₹800" under replies and polluted the Accept bar.
@@ -2981,6 +2986,7 @@ export async function negotiateStep(
         },
         leakGuarded: leaked || undefined,
         leakReason: leaked ? (floorLeaked ? 'floor_reveal' : percentLeaked ? 'percent_floor_reveal' : metaLeaked ? 'meta_floor_talk' : 'system_prompt_reveal') : undefined,
+        claimAdherenceGuarded: claimAdherenceGuarded || undefined,
       },
     }
   } catch (err: any) {

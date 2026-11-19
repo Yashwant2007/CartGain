@@ -5,19 +5,21 @@ import { buildOpeningMessage, computeMinPrice, buildCustomerContext, SUPPORTED_L
 import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
 import { enginePersonaFor } from '@/lib/bargain/experience/personality'
 import { fromDb } from '@/lib/bargain/experience/config'
-import { currencySymbolFor, CURRENCY_SYMBOLS } from '@/lib/bargain/i18n'
+import { currencySymbolFor, CURRENCY_SYMBOLS, formatMoney } from '@/lib/bargain/i18n'
 import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { getBargainGate, recordBargainSessionOp, BARGAIN_SESSIONS_EXHAUSTED } from '@/lib/bargain/gate'
 import { generateClaimToken } from '@/lib/bargain/purchase'
-import { signSessionToken } from '@/lib/bargain/session-bind'
+import { sessionIdFromToken, signSessionToken } from '@/lib/bargain/session-bind'
 import {
   bargainSessionIdentityClauses,
+  hasStrongProofForSession,
   isCheckoutLocked,
   latestPurchase,
   purchaseDisplayName,
   purchaseMemoryIdentityClauses,
+  strongSessionIdentityClauses,
   type PurchaseMemory,
 } from '@/lib/bargain/checkout-lock'
 import { logDataAccess } from '@/lib/data-protection'
@@ -54,11 +56,10 @@ function publicSession(s: any) {
 
 function publicLastBought(purchase: PurchaseMemory | null, currency: string) {
   if (!purchase) return null
-  const symbol = currencySymbolFor(purchase.currency || currency)
   return {
     productTitle: purchaseDisplayName(purchase),
     price: purchase.price ?? null,
-    priceLabel: purchase.price != null ? `${symbol}${purchase.price.toFixed(2)}` : null,
+    priceLabel: purchase.price != null ? formatMoney(purchase.price, purchase.currency || currency) : null,
     currency: purchase.currency || currency,
     purchasedAt: purchase.purchasedAt.toISOString(),
     orderId: purchase.shopifyOrderId,
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
+    const presentedSessionToken = typeof (body as any)?.sessionToken === 'string' ? (body as any).sessionToken : null
     const data = validateOrThrow(bargainStartSchema, body)
 
     // Verify the store exists and is active
@@ -118,7 +120,7 @@ export async function POST(request: NextRequest) {
       const ratio = data.originalPrice / actualPrice
       if (ratio < 0.5 || ratio > 2) {
         return NextResponse.json({
-          message: `Price mismatch — the actual price is ${store.currency === 'INR' ? '₹' : '$'}${actualPrice.toFixed(2)}. Please refresh and try again.`,
+          message: `Price mismatch — the actual price is ${formatMoney(actualPrice, store.currency)}. Please refresh and try again.`,
         }, { status: 400 })
       }
       // Trust the backend, not the URL: negotiate from the real listed price.
@@ -199,22 +201,27 @@ export async function POST(request: NextRequest) {
     // once, right after the config load — strategy/mode stay server-side.
     const goalCtx = await buildGoalContextForNegotiation(config, store.timezone, now)
 
-    // Block duplicate active sessions for the same product+buyer (prevents attempt
-    // abuse via incognito / new tabs / fresh browsers). The identifier is the
-    // customer fingerprint (stable per-device+cart, see the storefront widget),
-    // the Shopify cart token (stable across browsers for the same shared cart
-    // link — closes the fresh-incognito-on-the-same-discount-link reset), or the
-    // customer email, whichever the caller presents. A returning buyer therefore
-    // always re-joins their existing session instead of minting fresh attempts.
-    // Fully anonymous browsers without any identifier still get the per-store+
-    // product singleton guard below.
+    // Email/phone are lookup signals only: they may surface an internal lock,
+    // but rejoin and any disclosure of session/purchase data require a strong
+    // proof — device fingerprint, Shopify cart token, or a signed session token.
     const buyerId = data.customerFingerprint || (customerEmail ? `email:${customerEmail}` : null)
-    const identityClauses = bargainSessionIdentityClauses({
+    const identity = {
       customerFingerprint: data.customerFingerprint,
       cartToken: data.cartToken,
       customerEmail,
       customerPhone: data.customerPhone,
-    })
+    }
+    const tokenSessionId = sessionIdFromToken(presentedSessionToken)
+    const callerProof = {
+      customerFingerprint: data.customerFingerprint,
+      cartToken: data.cartToken,
+      tokenSessionId,
+    }
+    const identityClauses = bargainSessionIdentityClauses(identity)
+    const rejoinClauses = [
+      ...strongSessionIdentityClauses(identity),
+      ...(tokenSessionId ? [{ id: tokenSessionId }] : []),
+    ]
     const purchaseIdentityClauses = purchaseMemoryIdentityClauses({
       customerEmail,
       cartToken: data.cartToken,
@@ -232,6 +239,9 @@ export async function POST(request: NextRequest) {
         },
         orderBy: { checkoutOpenedAt: 'desc' },
         select: {
+          id: true,
+          customerFingerprint: true,
+          cartToken: true,
           checkoutOpenedAt: true,
           checkoutPurchaseAt: true,
         },
@@ -260,10 +270,11 @@ export async function POST(request: NextRequest) {
     const lastBoughtPurchase = latestPurchase(purchaseMemories as PurchaseMemory[])
     const lastBought = publicLastBought(lastBoughtPurchase, store.currency)
     if (lockSession && isCheckoutLocked(lockSession, purchaseMemories)) {
+      const disclosedLastBought = hasStrongProofForSession(lockSession, callerProof) ? lastBought : null
       return NextResponse.json({
         message: 'Finish your current order before starting a new bargain.',
         locked: true,
-        lastBought,
+        lastBought: disclosedLastBought,
         goal: publicGoalView(goalCtx),
       }, { status: 409 })
     }
@@ -272,17 +283,19 @@ export async function POST(request: NextRequest) {
     const hasPublishedExperience = Boolean(config?.experiencePublished)
     const shopkeeperPersonality = experience.personality
 
-    const existing = await prisma.bargainSession.findFirst({
-      where: {
-        storeId: data.storeId,
-        shopifyProductId: data.shopifyProductId,
-        status: 'active',
-        expiredAt: { gt: new Date() },
-        ...(identityClauses.length > 0 ? { OR: identityClauses } : {}),
-      },
-      orderBy: { startedAt: 'desc' },
-      include: { messages: { orderBy: { createdAt: 'asc' }, take: 1 } },
-    })
+    const existing = rejoinClauses.length > 0
+      ? await prisma.bargainSession.findFirst({
+          where: {
+            storeId: data.storeId,
+            shopifyProductId: data.shopifyProductId,
+            status: 'active',
+            expiredAt: { gt: new Date() },
+            OR: rejoinClauses,
+          },
+          orderBy: { startedAt: 'desc' },
+          include: { messages: { orderBy: { createdAt: 'asc' }, take: 1 } },
+        })
+      : null
     if (existing) {
       const existingFloor = await computeMinPrice({
         storeId: data.storeId,
@@ -478,7 +491,7 @@ export async function POST(request: NextRequest) {
       openingMessage: openingReply,
       expiresAt: expiredAt.toISOString(),
       returning,
-      lastBought,
+      lastBought: data.cartToken ? lastBought : null,
       goal: publicGoalView(goalCtx),
     }, { status: 201 })
   } catch (error) {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ExternalLink, ShoppingCart, Sparkles, X } from 'lucide-react'
-import { currencySymbolFor } from '@/lib/bargain/i18n'
+import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import { normalizeProductId, type RecommendationHistory } from '@/lib/bargain/recommendations'
 import type { BargainRecommendation } from '@/lib/bargain/api-types'
 import { ProductThumb } from '@/components/bargain/BargainPrimitives'
@@ -15,6 +15,7 @@ type Props = {
   history?: RecommendationHistory | null
   onEvent?: (action: RecommendationEventAction, card: BargainRecommendation) => void
   ariaLabel?: string
+  language?: string
 }
 
 function cardKey(card: BargainRecommendation): string {
@@ -26,13 +27,16 @@ function RecommendationRow({
   onEvent,
   onHide,
   onView,
+  language = 'auto',
 }: {
   card: BargainRecommendation
   onEvent?: (action: RecommendationEventAction, card: BargainRecommendation) => void
   onHide: (action: 'dismissed' | 'rejected', card: BargainRecommendation) => void
   onView: (card: BargainRecommendation) => void
+  language?: string
 }) {
   const symbol = currencySymbolFor(card.currency)
+  const t = (key: UiKey, vars?: Record<string, string | number>) => uiText(language, key, vars)
   return (
     <div style={{
       display: 'flex', gap: 8, padding: 8, minWidth: 0,
@@ -57,12 +61,12 @@ function RecommendationRow({
           )}
           {card.budgetFit === 'over' && (
             <span style={{ fontSize: 10, color: '#b45309', background: '#fef3c7', borderRadius: 999, padding: '1px 7px' }}>
-              Over budget
+              {t('recoOverBudget')}
             </span>
           )}
           {!card.available && (
             <span style={{ fontSize: 10, color: '#be123c', background: '#fff1f2', borderRadius: 999, padding: '1px 7px' }}>
-              Unavailable
+              {t('recoUnavailable')}
             </span>
           )}
         </div>
@@ -94,7 +98,7 @@ function RecommendationRow({
               textDecoration: 'none', minHeight: 40,
             }}
           >
-            View <ExternalLink size={11} />
+            {t('recoView')} <ExternalLink size={11} />
           </a>
           <button
             type="button"
@@ -107,7 +111,7 @@ function RecommendationRow({
               cursor: card.available ? 'pointer' : 'default', opacity: card.available ? 1 : 0.5, minHeight: 40,
             }}
           >
-            <ShoppingCart size={11} /> Add
+            <ShoppingCart size={11} /> {t('recoAdd')}
           </button>
           <button
             type="button"
@@ -117,11 +121,11 @@ function RecommendationRow({
               borderRadius: 8, padding: '8px 12px', fontSize: 11.5, fontWeight: 600, minHeight: 40,
             }}
           >
-            Not for me
+            {t('recoNotForMe')}
           </button>
           <button
             type="button"
-            aria-label={`Dismiss ${card.title}`}
+            aria-label={t('recoDismiss', { product: card.title })}
             onClick={() => onHide('dismissed', card)}
             style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -142,8 +146,11 @@ export default function BargainRecommendationPanel({
   reason,
   history,
   onEvent,
-  ariaLabel = 'Suggested alternatives',
+  ariaLabel,
+  language = 'auto',
 }: Props) {
+  const t = (key: UiKey, vars?: Record<string, string | number>) => uiText(language, key, vars)
+  const label = ariaLabel ?? t('recoAriaLabel')
   const [expanded, setExpanded] = useState(false)
   const [hidden, setHidden] = useState<Set<string>>(() => new Set())
   const viewedRef = useRef<Set<string>>(new Set())
@@ -205,7 +212,7 @@ export default function BargainRecommendationPanel({
   return (
     <div
       role="group"
-      aria-label={ariaLabel}
+      aria-label={label}
       style={{
         flexShrink: 0, width: '100%', minWidth: 0, overflow: 'hidden',
         background: '#ffffff', borderTop: '1px solid #eef2f7',
@@ -215,7 +222,7 @@ export default function BargainRecommendationPanel({
       <button
         type="button"
         aria-expanded={expanded}
-        aria-label={`${visible.length} better matches found`}
+        aria-label={t('recoMatches', { n: visible.length })}
         onClick={() => {
           if (!expanded) markViewed()
           setExpanded((value) => !value)
@@ -235,7 +242,7 @@ export default function BargainRecommendationPanel({
           flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           fontSize: 12, fontWeight: 700,
         }}>
-          {visible.length} better matches found
+          {t('recoMatches', { n: visible.length })}
         </span>
       </button>
       {expanded && (
@@ -251,6 +258,7 @@ export default function BargainRecommendationPanel({
               onEvent={onEvent}
               onHide={hide}
               onView={markClicked}
+              language={language}
             />
           ))}
           {reason && (

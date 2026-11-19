@@ -15,6 +15,7 @@ import { track } from '@/lib/analytics/track'
 import { recordLearningAcceptance } from '@/lib/bargain/learning/outcomes'
 import { createQuote, acceptQuote, findQuoteBySessionId } from '@/lib/bargain/quote'
 import { detectPaymentIntent } from '@/lib/bargain/payment'
+import { formatMoney } from '@/lib/bargain/i18n'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
           }),
         currency: bargainSession.store.currency,
         expiresAt: bargainSession.expiredAt.toISOString(),
-        message: `Deal already locked at ${bargainSession.store.currency} ${(bargainSession.finalPrice ?? bargainSession.originalPrice).toFixed(2)}! Use code: ${bargainSession.discountCode}`,
+        message: `Deal already locked at ${formatMoney(bargainSession.finalPrice ?? bargainSession.originalPrice, bargainSession.store.currency)}! Use code: ${bargainSession.discountCode}`,
       })
     }
 
@@ -389,7 +390,7 @@ export async function POST(request: NextRequest) {
         data: {
           sessionId: bargainSession.id,
           role: 'system',
-          content: `Customer accepted final price of ${bargainSession.store.currency} ${executable.finalPrice.toFixed(2)}. Discount code issued: ${code} (${discountPercent}% off)`,
+          content: `Customer accepted final price of ${formatMoney(executable.finalPrice, bargainSession.store.currency)}. Discount code issued: ${code} (${discountPercent}% off)`,
           metadata: {
             event: 'accept',
             finalPrice: executable.finalPrice,
@@ -466,8 +467,8 @@ export async function POST(request: NextRequest) {
       expiresAt: bargainSession.expiredAt.toISOString(),
       message:
         shopifyCode.status === 'created'
-          ? `You got it for ${bargainSession.store.currency} ${executable.finalPrice.toFixed(2)}! Use code: ${shopifyCode.code}`
-          : `Deal locked at ${bargainSession.store.currency} ${executable.finalPrice.toFixed(2)}! Your code: ${shopifyCode.code} — apply at checkout.`,
+          ? `You got it for ${formatMoney(executable.finalPrice, bargainSession.store.currency)}! Use code: ${shopifyCode.code}`
+          : `Deal locked at ${formatMoney(executable.finalPrice, bargainSession.store.currency)}! Your code: ${shopifyCode.code} — apply at checkout.`,
     })
   } catch (error) {
     const validationResponse = handleValidationError(error)

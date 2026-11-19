@@ -58,8 +58,15 @@ describe('analyzeIntent', () => {
   it('flags a price complaint so a named price is not read as an offer', () => {
     const a = analyzeIntent('714 is a little too much for this')
     expect(a.priceComplaint).toBe(true)
+    expect(a.offersPriceSignal).toBe(false)
     expect(a.objection).toBe('PRICE')
     expect(a.intent).toBe('PRICE_ONLY')
+  })
+
+  it('still records a real bid that follows a complaint', () => {
+    const a = analyzeIntent("500 is too much, I'll give 450")
+    expect(a.priceComplaint).toBe(true)
+    expect(a.offersPriceSignal).toBe(true)
   })
 
   it('does not flag a genuine budget or a bid as a complaint', () => {

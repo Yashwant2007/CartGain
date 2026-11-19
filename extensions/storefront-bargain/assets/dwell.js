@@ -14,9 +14,20 @@ var dwell=null,started=false,engaged=false;
 function key(shop){return STORE+shop+'|'+(window.location.pathname||'');}
 function sGet(k){try{return window.sessionStorage.getItem(k);}catch(e){return null;}}
 function sSet(k){try{window.sessionStorage.setItem(k,'1');}catch(e){}}
-function origin(root){
-  var m=(root.getAttribute('data-cg-src')||'').match(/^(https?:\/\/[^\/]+)/);
+function origin(el){
+  var u=(el&&(el.getAttribute('data-cg-src')||el.getAttribute('src'))||'');
+  var m=u.match(/^(https?:\/\/[^\/]+)/);
   return m?m[1]:'https://cart-gain.com';
+}
+function trusted(e){
+  if(!e||!e.source||typeof e.origin!=='string')return false;
+  var fs=document.querySelectorAll('[data-cg-bargain-root] iframe,iframe[data-cg-drawer-frame]');
+  for(var i=0;i<fs.length;i++){
+    if(fs[i].contentWindow!==e.source)continue;
+    var r=fs[i].closest?fs[i].closest('[data-cg-bargain-root]'):null;
+    return e.origin===origin(r||fs[i]);
+  }
+  return false;
 }
 function shopOf(root){
   var s=root.getAttribute('data-cg-shop');if(s)return s;
@@ -45,7 +56,7 @@ function ensureBubble(root){
   close.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();stop();});
   /* Engage the real widget by activating its own opener (the controller binds
      [data-cg-bargain-open]); we never call into the controller directly. */
-  act.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();stop();var o=root.querySelector('[data-cg-bargain-open]');if(o)o.click();});
+  act.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();stop();var o=root.querySelector('[data-cg-bargain-open]');if(o)o.click();else if(typeof CustomEvent==='function')root.dispatchEvent(new CustomEvent('cg_open_drawer_request',{bubbles:true}));});
   return b;
 }
 function show(reminder){
@@ -126,7 +137,7 @@ document.addEventListener('click',function(e){
   }
 },true);
 window.addEventListener('message',function(e){
-  if(!e.data||typeof e.data!=='object')return;
+  if(!e.data||typeof e.data!=='object'||!trusted(e))return;
   if(e.data.type==='cg_empty')abort();
   else if(e.data.type==='cg_close')stop();
 });

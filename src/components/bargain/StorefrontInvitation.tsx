@@ -7,10 +7,12 @@ import type { ExpressionState } from './ShopkeeperAvatar'
 import { gestureFor } from '@/lib/bargain/experience/character'
 import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
 import { shouldCountImpression, trackExperienceEvent } from '@/lib/bargain/experience/analytics'
+import { uiText, type UiKey } from '@/lib/bargain/i18n'
 
 interface Props {
   experience: BargainExperienceConfig
   onOpen: () => void
+  language?: string
   storeName?: string
   storeId?: string
   productId?: string | null
@@ -30,6 +32,7 @@ const DESIGN_STYLES: Record<string, { bg: string; border: string; shadow: string
 export default function StorefrontInvitation({
   experience,
   onOpen,
+  language = 'auto',
   storeId,
   productId,
   variantId,
@@ -44,8 +47,9 @@ export default function StorefrontInvitation({
   const impressionTracked = useRef(false)
   const design = DESIGN_STYLES[experience.designVariant] || DESIGN_STYLES['smart-assistant']
   const accent = experience.accentColor || design.accent
-  const copy = experience.customGreeting || getDefaultCopy(experience.designVariant)
-  const cta = experience.ctaLabel || getDefaultCta(experience.designVariant)
+  const t = (key: UiKey) => uiText(language, key)
+  const copy = experience.customGreeting || t(defaultCopyKey(experience.designVariant))
+  const cta = experience.ctaLabel || t(defaultCtaKey(experience.designVariant))
   const animate = experience.motionEnabled
 
   useEffect(() => {
@@ -151,20 +155,20 @@ export default function StorefrontInvitation({
   )
 }
 
-function getDefaultCopy(design: string) {
+function defaultCopyKey(design: string): UiKey {
   switch (design) {
-    case 'playful-bargain-club': return 'Think you can beat this price? 😏'
-    case 'unlock-your-deal': return 'Your personal deal awaits ✨'
-    case 'human-shopkeeper': return 'Bhai, price ki baat karein? 😄'
-    default: return "Got a price in mind? 💬 Let's talk."
+    case 'playful-bargain-club': return 'invitePlayfulCopy'
+    case 'unlock-your-deal': return 'inviteUnlockCopy'
+    case 'human-shopkeeper': return 'inviteHumanCopy'
+    default: return 'inviteSmartCopy'
   }
 }
 
-function getDefaultCta(design: string) {
+function defaultCtaKey(design: string): UiKey {
   switch (design) {
-    case 'playful-bargain-club': return 'Challenge the price'
-    case 'unlock-your-deal': return 'Unlock your deal'
-    case 'human-shopkeeper': return "Let's negotiate"
-    default: return 'Make an offer'
+    case 'playful-bargain-club': return 'invitePlayfulCta'
+    case 'unlock-your-deal': return 'inviteUnlockCta'
+    case 'human-shopkeeper': return 'inviteHumanCta'
+    default: return 'inviteSmartCta'
   }
 }

@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { bargainRecommendEventSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
 import { recommendationEventMetadata, type RecommendationFeedbackAction } from '@/lib/bargain/recommendations'
+import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { track } from '@/lib/analytics/track'
 
 export const dynamic = 'force-dynamic'
@@ -22,6 +23,14 @@ const EVENT_NAMES: Record<RecommendationFeedbackAction, string> = {
 
 export async function POST(request: NextRequest) {
   try {
+    const rate = await checkSimpleRateLimit(`bargain_recommend_event_${clientIp(request.headers)}`)
+    if (!rate.allowed) {
+      return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
+        status: 429,
+        headers: { 'Retry-After': String(rate.retryAfter) },
+      })
+    }
+
     const body = await request.json()
     const data = validateOrThrow(bargainRecommendEventSchema, body)
 

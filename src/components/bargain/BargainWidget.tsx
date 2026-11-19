@@ -1,12 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import {
   X, Minimize2, Send, MessageCircle, CheckCircle2, Clock, Tag, Zap,
   ShieldCheck, ArrowRight, Loader2, AlertCircle, RotateCcw,
 } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
-import { buildQuickOffers, parseDraftOffer } from '@/lib/bargain/offers'
+import { buildQuickOffers, buildSuggestedPrompts, parseDraftOffer } from '@/lib/bargain/offers'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
 import {
@@ -353,7 +353,10 @@ export default function BargainWidget({
   useEffect(() => () => requestAbortRef.current?.abort(), [])
 
   const currencySymbol = currencySymbolFor(currency)
-  const t = (key: UiKey, vars?: Record<string, string | number>) => uiText(language, key, vars)
+  const t = useCallback(
+    (key: UiKey, vars?: Record<string, string | number>) => uiText(language, key, vars),
+    [language],
+  )
 
   const thinking = loading && decision !== 'accept'
   const thinkingVisible = thinking && showThinking
@@ -417,6 +420,10 @@ export default function BargainWidget({
     [messages],
   )
   const roundsUsed = attemptsUsed ?? roundsFallback
+  const suggestedPrompts = useMemo(
+    () => buildSuggestedPrompts({ lastCounter, sessionEnded, attemptsUsed: roundsUsed }),
+    [lastCounter, sessionEnded, roundsUsed],
+  )
 
   // Lowest price each side has actually named. The AI side is read straight off
   // the server's counter offers; the customer side off the amounts the shopper
@@ -481,13 +488,13 @@ export default function BargainWidget({
       background: '#fffbeb', border: '1px dashed #fcd34d', textAlign: 'center',
     }}>
       <div style={{ fontSize: 12, color: '#92400e', fontWeight: 700, marginBottom: 6 }}>
-        We saved your best price — here is a one-time code:
+        {t('retentionSavedTitle')}
       </div>
       <code style={{ fontWeight: 800, color: '#b45309', letterSpacing: 0.6 }}>{discountCode}</code>
       {purchaseUrl && (
         <div style={{ marginTop: 10 }}>
           <a href={purchaseUrl} target="_top" rel="noopener noreferrer" onClick={(e) => { e.preventDefault(); void openCheckout(purchaseUrl) }} className="cg-btn cg-btn-primary" style={{ display: 'inline-flex' }}>
-            Checkout at your price
+            {t('checkoutAtPrice')}
           </a>
         </div>
       )}
@@ -533,14 +540,14 @@ export default function BargainWidget({
   // Screen-reader status announcements for state transitions.
   useEffect(() => {
     let s = ''
-    if (limit) s = 'Limit reached'
-    else if (unavailable) s = 'This item is unavailable'
-    else if (sessionEnded && decision === 'accept') s = 'Deal accepted'
-    else if (sessionEnded && endedReason === 'expired') s = 'Offer session expired'
-    else if (sessionEnded) s = 'Negotiation ended'
-    else if (thinking) s = 'Checking your offer'
+    if (limit) s = t('limitReached')
+    else if (unavailable) s = t('itemUnavailable')
+    else if (sessionEnded && decision === 'accept') s = t('dealAccepted')
+    else if (sessionEnded && endedReason === 'expired') s = t('offerSessionExpired')
+    else if (sessionEnded) s = t('negotiationEnded')
+    else if (thinking) s = t('checkingOffer')
     setAnnouncer(s)
-  }, [limit, unavailable, sessionEnded, decision, endedReason, thinking])
+  }, [limit, unavailable, sessionEnded, decision, endedReason, thinking, t])
 
   // Transient rate-limit / busy notice auto-clears.
   useEffect(() => {
@@ -698,7 +705,7 @@ export default function BargainWidget({
         const aiMsg: BargainMessage = {
           id: 'opening',
           role: 'ai',
-          content: data.openingMessage ?? 'Welcome! What price were you thinking?',
+          content: data.openingMessage ?? t('openingFallback'),
           createdAt: new Date().toISOString(),
         }
         setMessages([aiMsg])
@@ -747,7 +754,7 @@ export default function BargainWidget({
   async function sendMessage(text?: string, retryTurnId?: string) {
     if (!sessionId || busyRef.current) return
     const msg = (text ?? input).trim()
-    if (!msg) { setError('Type a message'); return }
+    if (!msg) { setError(t('typeAMessage')); return }
     const seq = ++requestSeqRef.current
     const turnId = retryTurnId ?? createConversationId('turn')
     const localId = retryTurnId ?? createConversationId('c')
@@ -1137,6 +1144,25 @@ export default function BargainWidget({
     inputRef.current?.focus()
   }
 
+  function trapDialogFocus(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'Tab') return
+    const focusable = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>(
+        'a[href],button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((node) => node.offsetParent !== null || node === document.activeElement)
+    if (focusable.length === 0) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   useEffect(() => {
     if (!invitationFirst || !experience || !open || minimised || chatOpenTracked.current) return
     chatOpenTracked.current = true
@@ -1281,6 +1307,7 @@ export default function BargainWidget({
             <StorefrontInvitation
               experience={experience}
               onOpen={openPanel}
+              language={language}
               storeId={storeId}
               productId={shopifyProductId}
               variantId={productCtx.variantId}
@@ -1329,7 +1356,7 @@ export default function BargainWidget({
             <ProductThumb image={productCtx.image} title={productCtx.title} size={40} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 800, fontSize: 14, color: '#0f172a', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minWidth: 0 }}>
-                {productCtx.title ? productCtx.title : 'This item'}
+                {productCtx.title ? productCtx.title : t('thisItem')}
               </div>
               <div style={{ fontSize: 12.5, color: '#334155', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
                 <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 16 }}>{currencySymbol}{livePrice.toFixed(2)}</span>
@@ -1372,6 +1399,7 @@ export default function BargainWidget({
           role="dialog"
           aria-modal={!isEmbed}
           aria-label={t('makeOfferSub')}
+          onKeyDown={trapDialogFocus}
           className={isEmbed ? undefined : 'cg-panel-fixed'}
           style={{
             background: '#ffffff',
@@ -1712,14 +1740,14 @@ export default function BargainWidget({
                             border: 'none',
                           }}
                         >
-                          {copied ? '✓ Copied' : t('copy')}
+                          {copied ? t('copiedCheck') : t('copy')}
                         </button>
                       </div>
                     )}
                     {purchaseUrl && (
                       <div style={{ marginTop: 12 }}>
           <a href={purchaseUrl} target="_top" rel="noopener noreferrer" onClick={(e) => { e.preventDefault(); void openCheckout(purchaseUrl) }} className="cg-btn cg-btn-primary" style={{ display: 'inline-flex' }}>
-                          Checkout at your price
+                          {t('checkoutAtPrice')}
                         </a>
                       </div>
                     )}
@@ -1821,7 +1849,7 @@ export default function BargainWidget({
                   <StateCard
                     icon={<AlertCircle size={18} />}
                     tone="rose"
-                    title="This item is unavailable"
+                    title={t('itemUnavailable')}
                     body={rejection.message}
                   >
                     <div className="cg-card-cta">
@@ -1866,13 +1894,13 @@ export default function BargainWidget({
                   }}>
                     <div style={{ fontWeight: 800, color: '#4338ca', marginBottom: 5, fontSize: 14 }}>
                       {limit.code === 'bargain_sessions_exhausted'
-                        ? 'This month’s bargain sessions are used up'
-                        : 'This month’s slate of deals has been filled'}
+                        ? t('planSessionLimitTitle')
+                        : t('planDealLimitTitle')}
                     </div>
                     <div style={{ color: '#475569', marginBottom: 12 }}>
                       {limit.code === 'bargain_sessions_exhausted'
-                        ? 'New bargain sessions reopen when the plan resets each month. The limit depends on the store’s plan.'
-                        : 'Bargaining is active but the plan’s monthly deal limit is full for now. It resets with the next billing period.'}
+                        ? t('planSessionLimitBody')
+                        : t('planDealLimitBody')}
                     </div>
                     <a
                       href={limit.upgradeUrl ?? 'https://cart-gain.com/pricing'}
@@ -1950,15 +1978,35 @@ export default function BargainWidget({
               history={recommendationHistory}
               onEvent={handleRecommendationEvent}
               ariaLabel={t('alternativesTitle')}
+              language={language}
             />
           )}
 
           {/* ── Offer composer ── */}
           {!limit && !unavailable && startedComposer(sessionEnded, decision) && (
             <>
-              {!sessionEnded && quickOffers.length > 0 && (
+              {!sessionEnded && suggestedPrompts.length > 0 && (
                 <div style={{
                   padding: '8px 14px 0',
+                  background: '#ffffff',
+                  display: 'flex',
+                  gap: 6,
+                  flexWrap: 'wrap',
+                }}>
+                  {suggestedPrompts.map((key) => (
+                    <QuickChip
+                      key={key}
+                      label={t(key)}
+                      disabled={thinking || !!busyRef.current}
+                      onClick={() => fillChat(t(key))}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {!sessionEnded && quickOffers.length > 0 && (
+                <div style={{
+                  padding: suggestedPrompts.length > 0 ? '6px 14px 0' : '8px 14px 0',
                   background: '#ffffff',
                   display: 'flex',
                   gap: 6,
@@ -2076,7 +2124,7 @@ export default function BargainWidget({
                   lineHeight: 1.3,
                   color: '#94a3b8',
                 }}>
-                  <span>{input.trim() ? (draftAmount != null ? 'Offer detected' : 'Press Enter to send') : 'Name your price or ask a question'}</span>
+                  <span>{input.trim() ? (draftAmount != null ? t('offerDetected') : t('pressEnterToSend')) : t('nameYourPriceHint')}</span>
                   <span aria-hidden>{input.length}/500</span>
                 </div>
               </div>
@@ -2119,7 +2167,7 @@ export default function BargainWidget({
             <ProductThumb image={productCtx.image} title={productCtx.title} size={32} />
             <div className="cg-mini-copy">
               <div>{t('bargainTitle')}</div>
-              <div>{productCtx.title ? productCtx.title : 'This item'}</div>
+              <div>{productCtx.title ? productCtx.title : t('thisItem')}</div>
             </div>
             <button type="button" onClick={() => setMinimised(false)} aria-label={t('makeOffer')} className="cg-icon-btn" style={{ width: 44, height: 44 }}>
               <MessageCircle size={18} />

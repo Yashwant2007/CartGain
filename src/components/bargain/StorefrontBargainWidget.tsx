@@ -73,6 +73,11 @@ function money(currency: string, n: number): string {
   return `${currencySymbolFor(currency)}${n.toFixed(2)}`
 }
 
+function sampleCode(productId: number | null, cart: boolean): string {
+  const seed = cart ? 'CART' : String(productId ?? 'DEAL')
+  return `CG-${seed.slice(-5).toUpperCase() || 'DEAL'}`
+}
+
 type ChatLine = {
   role: string
   content: string
@@ -89,6 +94,7 @@ type Props = {
   line: Line
   checkoutUrl: string
   language?: string
+  demo?: boolean
   persona?: string
   maxAttempts?: number
   minProfitPercent?: number
@@ -109,6 +115,7 @@ export default function StorefrontBargainWidget({
   line,
   checkoutUrl,
   language = 'auto',
+  demo = true,
   persona: personaProp,
   maxAttempts = 3,
   minProfitPercent = 25,
@@ -120,6 +127,7 @@ export default function StorefrontBargainWidget({
   const isCart = line.kind === 'cart'
   const productId = !isCart ? line.id : null
   const variantId = !isCart ? (line.variantId || null) : null
+  const t = (key: UiKey, vars?: Record<string, string | number>) => uiText(language, key, vars)
 
   const [step, setStep] = useState<'intro' | 'chat' | 'deal' | 'rejected'>('intro')
   const [messages, setMessages] = useState<ChatLine[]>([])
@@ -179,7 +187,7 @@ export default function StorefrontBargainWidget({
 
   const originalPrice = line.kind === 'cart' ? line.total : line.price
   const minPrice = Math.round(originalPrice * (1 - minProfitPercent / 100) * 100) / 100
-  const title = isCart ? 'your cart order' : line.title
+  const title = isCart ? t('yourCartOrder') : line.title
 
   const announceHeight = useCallback(() => {
     const el = rootRef.current
@@ -215,8 +223,8 @@ export default function StorefrontBargainWidget({
   }
   const latestAiLine = [...messages].reverse().find((m) => m.role === 'ai')?.content
   const stageLine = showThinking
-    ? 'Let me check what I can do…'
-    : error || latestAiLine?.replace(/\s+/g, ' ').trim() || 'Make me an offer…'
+    ? t('checking')
+    : error || latestAiLine?.replace(/\s+/g, ' ').trim() || t('stageMakeOffer')
 
   const openBargain = () => {
     setStep('intro')
@@ -291,8 +299,6 @@ export default function StorefrontBargainWidget({
   //   4. the reply arrives, and is never yanked in faster than a typed pace
   // The minimum is length-scaled so a one-word reply still feels considered,
   // while a long one is never padded.
-  const t = (key: UiKey, vars?: Record<string, string | number>) => uiText(language, key, vars)
-
   const markDelivered = useCallback((id: string) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, delivery: 'delivered' } : m)))
   }, [])
@@ -543,7 +549,12 @@ export default function StorefrontBargainWidget({
   }
 
   const saveDeal = async () => {
-    if (!finalPrice || !shop) return
+    if (!finalPrice || (!demo && !shop)) return
+    if (demo) {
+      setDiscountCode(sampleCode(productId != null ? Number(productId) : null, isCart))
+      setCodeSaved(true)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -594,7 +605,7 @@ export default function StorefrontBargainWidget({
       className="w-full bg-white text-gray-900 rounded-xl shadow-lg border border-gray-200"
       data-cg-bargain-widget
       role="region"
-      aria-label="Price negotiation"
+      aria-label={t('priceNegotiation')}
     >
       {/* Scoped chat motion — namespaced so no Shopify theme CSS is touched.
           A single delivered tick, a calm three-dot thinking pulse, and a soft
@@ -676,8 +687,8 @@ export default function StorefrontBargainWidget({
             )}
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-gray-900 text-sm truncate" title={line.kind === 'item' ? line.title : ''}>{title}</p>
-              <p className="text-gray-500 text-xs mt-0.5">Listed: {money(currency, originalPrice)}</p>
-              {isCart && <p className="text-gray-500 text-xs mt-0.5">Negotiate the whole cart total</p>}
+              <p className="text-gray-500 text-xs mt-0.5">{t('listed')} {money(currency, originalPrice)}</p>
+              {isCart && <p className="text-gray-500 text-xs mt-0.5">{t('negotiateCartTotal')}</p>}
             </div>
           </div>
 
@@ -691,7 +702,7 @@ export default function StorefrontBargainWidget({
             type="button"
             className={buttonCls + ' w-full'}
             onClick={() => { reactAvatar('greeting'); setStep('chat') }}
-            aria-label="Start price negotiation"
+            aria-label={t('startNegotiation')}
           >
             {t('negotiate')}
           </button>
@@ -701,7 +712,7 @@ export default function StorefrontBargainWidget({
       {step === 'chat' && (
         <div className="p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-500">Attempts left: {maxAttempts - attempts}/{maxAttempts}</p>
+            <p className="text-xs text-gray-500">{t('attemptsLeftOf', { n: maxAttempts - attempts, m: maxAttempts })}</p>
             <p className="text-xs text-indigo-500 font-medium">{PERSONA_DISPLAY[persona]}</p>
           </div>
 
@@ -710,7 +721,7 @@ export default function StorefrontBargainWidget({
             className="space-y-2 max-h-56 overflow-y-auto"
             role="log"
             aria-live="polite"
-            aria-label="Negotiation conversation"
+            aria-label={t('conversationLabel')}
             onScroll={handleConversationScroll}
           >
             {messages.map((msg) => {
@@ -729,16 +740,16 @@ export default function StorefrontBargainWidget({
                     <span
                       className={`cgf-tick ${msg.delivery === 'delivered' ? 'cgf-tick-in' : ''}`}
                       role="img"
-                      aria-label={msg.delivery === 'delivered' ? 'Delivered' : 'Sending'}
+                      aria-label={msg.delivery === 'delivered' ? t('delivered') : t('sending')}
                     >
                       {msg.delivery === 'delivered'
-                        ? <><CheckCheck size={13} strokeWidth={2.5} /><span>Delivered</span></>
+                        ? <><CheckCheck size={13} strokeWidth={2.5} /><span>{t('delivered')}</span></>
                         : <Clock3 size={10} />}
                     </span>
                   )}
                   {msg.price != null && (
                     <span className={`block mt-1 ${isCustomer ? 'text-indigo-200' : 'text-indigo-600'}`}>
-                      {isCustomer ? 'Offered' : 'Counter'}: {money(currency, msg.price)}
+                      {isCustomer ? t('offerTag') : t('counterTag')}: {money(currency, msg.price)}
                     </span>
                   )}
                 </div>
@@ -748,9 +759,9 @@ export default function StorefrontBargainWidget({
               <div
                 className="cgf-msg rounded-lg px-3 py-2.5 bg-gray-100 mr-8 inline-flex items-center gap-1.5"
                 role="status"
-                aria-label="Assistant is thinking"
+                aria-label={t('assistantThinking')}
               >
-                <span className="sr-only">Assistant is thinking</span>
+                <span className="sr-only">{t('assistantThinking')}</span>
                 <span className="cgf-dot" />
                 <span className="cgf-dot" style={{ animationDelay: '0.15s' }} />
                 <span className="cgf-dot" style={{ animationDelay: '0.3s' }} />
@@ -761,8 +772,8 @@ export default function StorefrontBargainWidget({
           {shippingInfo && (
             <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-xs text-gray-600">
               <div className="flex items-center justify-between">
-                <span>Shipping: {shippingInfo.freeShipping ? 'Free' : money(currency, shippingInfo.shippingCost)}</span>
-                <span>Total: <strong className="text-gray-900">{money(currency, shippingInfo.total)}</strong></span>
+                <span>{t('shippingCost')}: {shippingInfo.freeShipping ? t('freeShort') : money(currency, shippingInfo.shippingCost)}</span>
+                <span>{t('orderTotal')}: <strong className="text-gray-900">{money(currency, shippingInfo.total)}</strong></span>
               </div>
               {shippingInfo.upsell && <p className="mt-1 text-indigo-600 font-medium">{shippingInfo.upsell}</p>}
             </div>
@@ -788,6 +799,7 @@ export default function StorefrontBargainWidget({
             reason={recommendationReason}
             history={recommendationHistory}
             ariaLabel={t('alternativesTitle')}
+            language={language}
           />
 
           <div className="flex gap-2">
@@ -795,18 +807,18 @@ export default function StorefrontBargainWidget({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder='e.g. "₹400" or "I will think about it"'
+              placeholder={t('offerPlaceholder', { symbol: currencySymbolFor(currency) })}
               className="flex-1 bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-indigo-500"
-              aria-label="Your offer or message"
+              aria-label={t('yourOfferOrMessage')}
             />
             <button
               type="button"
               className={buttonCls}
               onClick={handleSend}
               disabled={!input.trim() || loading}
-              aria-label={loading ? 'Sending…' : 'Send offer'}
+              aria-label={loading ? t('sendingDots') : t('sendOffer')}
             >
-              Send
+              {t('send')}
             </button>
           </div>
         </div>
@@ -814,20 +826,23 @@ export default function StorefrontBargainWidget({
 
       {step === 'deal' && finalPrice != null && (
         <div className="p-4 space-y-3 text-center">
-          <p className="text-emerald-600 font-semibold text-sm">Deal Accepted!</p>
+          <p className="text-emerald-600 font-semibold text-sm">{t('dealAcceptedBanner')}</p>
           <div>
             <p className="text-gray-900 font-bold text-lg">
-              {isCart ? 'New order total:' : 'Final price:'} {money(currency, finalPrice)}
+              {isCart ? t('newOrderTotal') : t('finalPriceLabel')} {money(currency, finalPrice)}
             </p>
             <p className="text-gray-500 text-xs mt-1">
-              You saved {money(currency, Math.max(0, originalPrice - finalPrice))} ({Math.round((1 - finalPrice / originalPrice) * 100)}%)
+              {t('youSavedPercent', {
+                x: money(currency, Math.max(0, originalPrice - finalPrice)),
+                n: Math.round((1 - finalPrice / originalPrice) * 100),
+              })}
             </p>
           </div>
 
           <div className="bg-gray-100 rounded-lg p-3 space-y-2">
             {codeSaved && discountCode ? (
               <>
-                <p className="text-xs text-gray-500">Use this single-use code at checkout, valid 24h:</p>
+                <p className="text-xs text-gray-500">{t('useCodeAtCheckout')}</p>
                 <div className="flex items-center justify-center gap-2">
                   <code className="text-indigo-600 font-mono font-bold text-sm tracking-wider bg-indigo-100 rounded-lg px-3 py-1">
                     {discountCode}
@@ -836,39 +851,39 @@ export default function StorefrontBargainWidget({
                     type="button"
                     className={`${ghostCls} text-xs`}
                     onClick={copyCode}
-                    aria-label={copied ? 'Copied to clipboard' : 'Copy discount code'}
+                    aria-label={copied ? t('copiedToClipboard') : t('copyDiscountCode')}
                   >
-                    {copied ? 'Copied ✓' : 'Copy'}
+                    {copied ? t('copiedCheckMark') : t('copy')}
                   </button>
                 </div>
               </>
             ) : (
-              <p className="text-xs text-gray-500">Your price is locked. Confirm below to create a one-time checkout code.</p>
+              <p className="text-xs text-gray-500">{t('priceLockedHint')}</p>
             )}
           </div>
 
           {error && <p className="text-xs text-red-500 bg-red-50 rounded-lg p-2">{error}</p>}
 
           {codeSaved ? (
-            <p className="text-xs text-emerald-600">Code is ready — copy it and apply at checkout.</p>
+            <p className="text-xs text-emerald-600">{t('codeReady')}</p>
           ) : (
             <button type="button" className={buttonCls + ' w-full'} onClick={saveDeal} disabled={loading}>
-              {loading ? 'Creating code…' : 'Create My Discount Code'}
+              {loading ? t('creatingCode') : t('createDiscountCode')}
             </button>
           )}
 
           <div className="flex justify-center gap-2 pt-1">
             {codeSaved && discountCode ? (
               <a href={checkoutUrl} className={buttonCls + ' no-underline'}>
-                Go to Checkout
+                {t('goToCheckout')}
               </a>
             ) : (
               <button type="button" className={buttonCls} disabled>
-                Go to Checkout
+                {t('goToCheckout')}
               </button>
             )}
             <button type="button" className={ghostCls} onClick={openBargain}>
-              Bargain again
+              {t('bargainAgain')}
             </button>
           </div>
         </div>
@@ -876,14 +891,14 @@ export default function StorefrontBargainWidget({
 
       {step === 'rejected' && (
         <div className="p-4 space-y-3 text-center">
-          <p className="text-red-500 font-semibold text-sm">Negotiation Ended</p>
-          <p className="text-xs text-gray-500">Attempts exhausted. No deal this time.</p>
+          <p className="text-red-500 font-semibold text-sm">{t('negotiationEndedTitle')}</p>
+          <p className="text-xs text-gray-500">{t('noDealThisTime')}</p>
           <div className="flex justify-center gap-2">
             <a href={checkoutUrl} className={buttonCls + ' no-underline'}>
-              Continue to Checkout
+              {t('continueToCheckout')}
             </a>
             <button type="button" className={ghostCls} onClick={openBargain}>
-              Try again
+              {t('tryAgainShort')}
             </button>
           </div>
         </div>

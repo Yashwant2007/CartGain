@@ -815,6 +815,9 @@ async function processOrderCreate(data: any, store: any, domain: string) {
       purchasedAt: orderCreatedAt,
       currency: data.currency || null,
       lineItems: Array.isArray(data.line_items) ? data.line_items : [],
+      appliedCodes: Array.isArray(data.discount_codes)
+        ? data.discount_codes.map((entry: any) => entry?.code).filter(Boolean)
+        : [],
     })
   } catch (err) {
     console.error('[BARGAIN_PURCHASE_MEMORY]', err)

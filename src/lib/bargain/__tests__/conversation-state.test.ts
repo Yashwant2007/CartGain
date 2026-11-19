@@ -15,7 +15,7 @@ describe('conversation state machine (Phase 9)', () => {
   it('covers every spec state', () => {
     const required = [
       'GREETING', 'PRODUCT_DISCOVERY', 'INTENT_DETECTION', 'OBJECTION_HANDLING',
-      'NEGOTIATION', 'COUNTER_OFFER', 'ALTERNATIVE_RECOMMENDATION', 'DEAL_ACCEPTED',
+      'NEGOTIATION', 'COUNTER_OFFER', 'PURCHASE_READY', 'ALTERNATIVE_RECOMMENDATION', 'DEAL_ACCEPTED',
       'SECURE_CHECKOUT', 'PURCHASE_VERIFICATION', 'COMPLETED', 'CUSTOMER_HESITATION',
       'REJECTED', 'EXPIRED', 'CANCELLED', 'HUMAN_SUPPORT_REQUIRED',
     ]
@@ -49,6 +49,13 @@ describe('conversation state machine (Phase 9)', () => {
     expect(deriveConversationState({ attemptsUsed: 1, intent: 'PRODUCT_QUESTION', objection: 'QUALITY' })).toBe('OBJECTION_HANDLING')
   })
 
+  it('does not claim a deal just because the shopper says they are ready to buy', () => {
+    const state = deriveConversationState({ attemptsUsed: 1, intent: 'PURCHASE_READY' })
+    expect(state).toBe('PURCHASE_READY')
+    expect(conversationStateGuidance(state)).not.toContain('deal is agreed')
+    expect(conversationStateReaction(state)).toBe('curious')
+  })
+
   it('routes discovery/recommendation intents', () => {
     expect(deriveConversationState({ attemptsUsed: 1, intent: 'PRODUCT_DISCOVERY' })).toBe('PRODUCT_DISCOVERY')
     expect(deriveConversationState({ attemptsUsed: 1, intent: 'RECOMMENDATION_REQUEST', recommendationsEnabled: true })).toBe('ALTERNATIVE_RECOMMENDATION')
@@ -63,6 +70,7 @@ describe('conversation state machine (Phase 9)', () => {
     expect(canTransitionConversation('COMPLETED', 'NEGOTIATION')).toBe(false)
     expect(canTransitionConversation('REJECTED', 'NEGOTIATION')).toBe(false)
     expect(canTransitionConversation('EXPIRED', 'NEGOTIATION')).toBe(false)
+    expect(canTransitionConversation('PURCHASE_READY', 'DEAL_ACCEPTED')).toBe(true)
     expect(canTransitionConversation('DEAL_ACCEPTED', 'SECURE_CHECKOUT')).toBe(true)
     expect(canTransitionConversation('GREETING', 'NEGOTIATION')).toBe(true)
   })

@@ -1,3 +1,5 @@
+import { redisDel, redisGet, redisSet } from '@/lib/redis'
+
 // ────────────────────────────────────────────────────────────
 // ABUSE DETECTION LAYER — PROTECTS THE BARGAIN SYSTEM
 // ────────────────────────────────────────────────────────────
@@ -463,27 +465,88 @@ function detectUnicodeAttacks(text: string): boolean {
 // ────────────────────────────────────────────────────────────
 
 const CONVERSATION_STATES = new Map<string, ConversationState>()
+const REDIS_TRACKED_SESSIONS = new Set<string>()
 
-function getConversationState(sessionId: string): ConversationState {
-  if (!CONVERSATION_STATES.has(sessionId)) {
-    CONVERSATION_STATES.set(sessionId, {
-      messageCount: 0,
-      messageTimestamps: [],
-      recentMessages: [],
-      identicalCount: 0,
-      lastMessage: '',
-      abuseStrikes: 0,
-    })
-  }
-  return CONVERSATION_STATES.get(sessionId)!
+export const ABUSE_STATE_TTL_MS = 5 * 60 * 1000
+const ABUSE_STATE_KEY_PREFIX = 'bargain:abuse:state:v1:'
+
+function abuseStateKey(sessionId: string): string {
+  return `${ABUSE_STATE_KEY_PREFIX}${sessionId}`
 }
 
-export function checkAbuse(
+function emptyConversationState(): ConversationState {
+  return {
+    messageCount: 0,
+    messageTimestamps: [],
+    recentMessages: [],
+    identicalCount: 0,
+    lastMessage: '',
+    abuseStrikes: 0,
+  }
+}
+
+function isConversationState(value: unknown): value is ConversationState {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Partial<ConversationState>
+  return (
+    typeof v.messageCount === 'number' &&
+    Array.isArray(v.messageTimestamps) &&
+    Array.isArray(v.recentMessages) &&
+    typeof v.identicalCount === 'number' &&
+    typeof v.lastMessage === 'string' &&
+    typeof v.abuseStrikes === 'number'
+  )
+}
+
+function getConversationState(sessionId: string): ConversationState {
+  let state = CONVERSATION_STATES.get(sessionId)
+  if (!state) {
+    state = emptyConversationState()
+    CONVERSATION_STATES.set(sessionId, state)
+  }
+  return state
+}
+
+async function loadAbuseState(sessionId: string): Promise<ConversationState> {
+  const raw = await redisGet(abuseStateKey(sessionId))
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw)
+      if (isConversationState(parsed)) {
+        CONVERSATION_STATES.set(sessionId, parsed)
+        REDIS_TRACKED_SESSIONS.add(sessionId)
+        return parsed
+      }
+    } catch {}
+  }
+  return getConversationState(sessionId)
+}
+
+async function persistAbuseState(sessionId: string, state: ConversationState): Promise<void> {
+  CONVERSATION_STATES.set(sessionId, state)
+  REDIS_TRACKED_SESSIONS.add(sessionId)
+  await redisSet(abuseStateKey(sessionId), JSON.stringify(state), ABUSE_STATE_TTL_MS)
+  if (CONVERSATION_STATES.size > 10000) {
+    const oldest = CONVERSATION_STATES.keys().next().value
+    if (oldest) CONVERSATION_STATES.delete(oldest)
+  }
+}
+
+async function commit(
+  sessionId: string,
+  state: ConversationState,
+  result: AbuseCheckResult,
+): Promise<AbuseCheckResult> {
+  await persistAbuseState(sessionId, state)
+  return result
+}
+
+export async function checkAbuse(
   message: string,
   sessionId: string,
   policy: AbusePolicy = {},
-): AbuseCheckResult {
-  const state = getConversationState(sessionId)
+): Promise<AbuseCheckResult> {
+  const state = await loadAbuseState(sessionId)
   const sanitized = sanitizeInput(message)
   const strictness: AbuseStrictness = policy.strictness ?? 'standard'
 
@@ -522,14 +585,14 @@ export function checkAbuse(
       state.abuseStrikes++
       const repeat = state.abuseStrikes > 1
       const escalate = strictness === 'strict' || repeat
-      return {
+      return commit(sessionId, state, {
         isAbusive: true,
         severity: repeat ? 'high' : 'medium',
         category: 'profanity',
         reason: repeat ? 'Repeated profanity detected' : 'Profanity detected',
         response: escalate ? BOUNDARY_RESPONSES.profanity : null,
         consumeAttempt: !escalate,
-      }
+      })
     }
   }
 
@@ -537,14 +600,14 @@ export function checkAbuse(
   for (const pattern of TOXICITY_PATTERNS) {
     if (pattern.test(sanitized)) {
       state.abuseStrikes++
-      return {
+      return commit(sessionId, state, {
         isAbusive: true,
         severity: 'high',
         category: 'toxicity',
         reason: 'Toxic/threatening content detected',
         response: 'I want to help you get a great deal, but I can\'t continue if the conversation becomes disrespectful. The offer stands if you\'d like to proceed respectfully.',
         consumeAttempt: false, // Don't waste an attempt on abuse
-      }
+      })
     }
   }
 
@@ -552,14 +615,14 @@ export function checkAbuse(
   for (const pattern of HARASSMENT_PATTERNS) {
     if (pattern.test(sanitized)) {
       state.abuseStrikes++
-      return {
+      return commit(sessionId, state, {
         isAbusive: true,
         severity: 'high',
         category: 'harassment',
         reason: 'Harassment detected',
         response: 'This conversation is no longer productive. The negotiation is closed. You\'re welcome to start a new session if you\'d like to continue respectfully.',
         consumeAttempt: false,
-      }
+      })
     }
   }
 
@@ -569,14 +632,14 @@ export function checkAbuse(
       state.abuseStrikes++
       const repeat = state.abuseStrikes > 1
       const escalate = strictness === 'strict' || repeat
-      return {
+      return commit(sessionId, state, {
         isAbusive: true,
         severity: 'high',
         category: 'jailbreak',
         reason: repeat ? 'Repeated jailbreak attempt detected' : 'Jailbreak attempt detected',
         response: escalate ? BOUNDARY_RESPONSES.jailbreak : null,
         consumeAttempt: !escalate,
-      }
+      })
     }
   }
 
@@ -586,14 +649,14 @@ export function checkAbuse(
       state.abuseStrikes++
       const repeat = state.abuseStrikes > 1
       const escalate = strictness === 'strict' || repeat
-      return {
+      return commit(sessionId, state, {
         isAbusive: true,
         severity: 'high',
         category: 'prompt_injection',
         reason: repeat ? 'Repeated prompt injection attempt detected' : 'Prompt injection attempt detected',
         response: escalate ? BOUNDARY_RESPONSES.prompt_injection : null,
         consumeAttempt: !escalate,
-      }
+      })
     }
   }
 
@@ -603,14 +666,14 @@ export function checkAbuse(
       state.abuseStrikes++
       const repeat = state.abuseStrikes > 1
       const escalate = strictness === 'strict' || repeat
-      return {
+      return commit(sessionId, state, {
         isAbusive: true,
         severity: repeat ? 'high' : 'medium',
         category: 'data_exfiltration',
         reason: repeat ? 'Repeated data exfiltration attempt detected' : 'Data exfiltration attempt detected',
         response: escalate ? BOUNDARY_RESPONSES.data_exfiltration : null,
         consumeAttempt: !escalate,
-      }
+      })
     }
   }
 
@@ -658,27 +721,26 @@ export function checkAbuse(
   if (state.recentMessages.length > 10) state.recentMessages.shift()
   state.lastMessage = sanitized
 
-  // ── Clean up old sessions (prevent memory leak) ──
-  if (CONVERSATION_STATES.size > 10000) {
-    const oldest = CONVERSATION_STATES.keys().next().value
-    if (oldest) CONVERSATION_STATES.delete(oldest)
-  }
-
-  return {
+  return commit(sessionId, state, {
     isAbusive: false,
     severity: 'none',
     category: 'clean',
     reason: '',
     response: null,
     consumeAttempt: true,
-  }
+  })
 }
 
 // ── Cleanup function for testing ──
-export function clearAbuseState(sessionId?: string): void {
+export async function clearAbuseState(sessionId?: string): Promise<void> {
   if (sessionId) {
     CONVERSATION_STATES.delete(sessionId)
+    REDIS_TRACKED_SESSIONS.delete(sessionId)
+    await redisDel(abuseStateKey(sessionId))
   } else {
     CONVERSATION_STATES.clear()
+    const sessions = Array.from(REDIS_TRACKED_SESSIONS)
+    REDIS_TRACKED_SESSIONS.clear()
+    await Promise.all(sessions.map(id => redisDel(abuseStateKey(id))))
   }
 }

@@ -187,6 +187,9 @@ describe('POST /api/bargain/start — hardening', () => {
   it('locks bargaining after checkout until a newer verified purchase arrives', async () => {
     enableBargaining()
     prismaMock.bargainSession.findFirst.mockResolvedValueOnce({
+      id: 'sess-1',
+      customerFingerprint: null,
+      cartToken: 'cart-1',
       checkoutOpenedAt: new Date('2026-11-18T10:00:00Z'),
       checkoutPurchaseAt: null,
     })

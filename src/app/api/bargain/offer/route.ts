@@ -5,7 +5,7 @@ import { negotiateStep, ruleBasedDecision, chatFallback, buildOpeningMessage, bu
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { detectWalkout, extractQuantity, extractPrice } from '@/lib/bargain/text'
 import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
-import { uiText, currencySymbolFor } from '@/lib/bargain/i18n'
+import { uiText, currencySymbolFor, formatMoney } from '@/lib/bargain/i18n'
 import { detectLanguage } from '@/lib/bargain/language'
 import { logDataAccess } from '@/lib/data-protection'
 import { clampOfferToSafety } from '@/lib/bargain/engine'
@@ -63,8 +63,8 @@ function finalQuoteFor(session: any, minPrice: number): number {
   return Math.round(Math.min(cap, Math.max(floor, offered)) * 100) / 100
 }
 
-function withFinalCode(reply: string, lang: string, retention: IssuedBargainCode, currencySymbol: string): string {
-  const price = `${currencySymbol}${retention.finalPrice.toFixed(2)}`
+function withFinalCode(reply: string, lang: string, retention: IssuedBargainCode, currency: string): string {
+  const price = formatMoney(retention.finalPrice, currency)
   return `${reply} ${uiText(lang, 'final_code_offer', { price, code: retention.code })}`
 }
 
@@ -670,7 +670,7 @@ export async function POST(request: NextRequest) {
       if (customerOffer != null && customerOffer >= minPrice) {
         const finalPrice = Math.round(Math.min(customerOffer, bargainSession.originalPrice) * 100) / 100
         const acceptReply =
-          `Done! ${currencySymbol}${finalPrice.toFixed(2)} works for me — that's my last round, so let's lock it in. Tap "Accept" and your discount code is generated.`
+          `Done! ${formatMoney(finalPrice, bargainSession.store.currency)} works for me — that's my last round, so let's lock it in. Tap "Accept" and your discount code is generated.`
         await prisma.$transaction([
           prisma.bargainMessage.create({
             data: {
@@ -707,7 +707,7 @@ export async function POST(request: NextRequest) {
       const finalQuote = finalQuoteFor(bargainSession, minPrice)
       const retention = await issueRetentionDiscount(bargainSession.id, finalQuote).catch(() => null)
       const rejectReply = retention
-        ? withFinalCode(uiText(lang, 'attempts_exhausted'), lang, retention, currencySymbol)
+        ? withFinalCode(uiText(lang, 'attempts_exhausted'), lang, retention, bargainSession.store.currency)
         : `${uiText(lang, 'attempts_exhausted')} ${uiText(lang, 'farewell_friendly')}`
       await prisma.$transaction([
         prisma.bargainMessage.create({
@@ -933,7 +933,7 @@ export async function POST(request: NextRequest) {
         const finalQuote = finalQuoteFor(bargainSession, minPrice)
         const retention = await issueRetentionDiscount(bargainSession.id, lastCounter ?? finalQuote).catch(() => null)
         const farewell = retention
-          ? withFinalCode(baseFarewell, lang, retention, currencySymbol)
+          ? withFinalCode(baseFarewell, lang, retention, bargainSession.store.currency)
           : baseFarewell
         await prisma.$transaction([
           prisma.bargainMessage.create({
@@ -1297,7 +1297,7 @@ export async function POST(request: NextRequest) {
       const finalQuote = finalQuoteFor(bargainSession, minPrice)
       terminalRetention = await issueRetentionDiscount(bargainSession.id, safeCounter ?? finalQuote).catch(() => null)
       customerReply = terminalRetention
-        ? withFinalCode(result.reply, lang, terminalRetention, currencySymbol)
+        ? withFinalCode(result.reply, lang, terminalRetention, bargainSession.store.currency)
         : `${result.reply} ${uiText(lang, 'farewell_friendly')}`
     }
 
@@ -1417,7 +1417,7 @@ export async function POST(request: NextRequest) {
       // AI just presented its best (= last) price so the customer gets a
       // "Final offer" frame. NEVER carries the floor amount itself; the client
       // cannot compute or alter it.
-      floorReached: result.tactic === 'final_offer',
+      floorReached: terminalRetention != null || result.tactic === 'final_offer',
       // Rounds spent, straight from the session row. A COUNT only — the UI
       // renders it as a round meter. It is the post-transaction value, so an
       // abuse turn that was rolled back below is reported correctly.

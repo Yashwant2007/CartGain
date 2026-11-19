@@ -192,6 +192,7 @@ export interface ConfirmedOrderMemory {
   purchasedAt: Date
   currency?: string | null
   lineItems?: any[] | null
+  appliedCodes?: string[] | null
 }
 
 function normalizeMemoryProductId(value: unknown): string {
@@ -233,12 +234,27 @@ export async function rememberConfirmedOrder(params: ConfirmedOrderMemory): Prom
   ]
   if (sessionOrs.length === 0) return
 
+  const productIds = Array.from(new Set(items.map((item: any) => normalizeMemoryProductId(item?.product_id ?? item?.product?.id)).filter(Boolean)))
+  const variantIds = Array.from(new Set(items.map((item: any) => item?.variant_id != null ? String(item.variant_id) : '').filter(Boolean)))
+  const codeValues = Array.from(new Set((params.appliedCodes ?? []).map((code) => String(code).trim()).filter(Boolean)))
+  const purchaseOrs: Record<string, string>[] = []
+  for (const id of productIds) {
+    purchaseOrs.push({ shopifyProductId: id })
+    purchaseOrs.push({ shopifyProductId: `gid://shopify/Product/${id}` })
+  }
+  for (const id of variantIds) {
+    purchaseOrs.push({ variantId: id })
+    if (id.startsWith('gid://shopify/ProductVariant/')) purchaseOrs.push({ variantId: id.replace('gid://shopify/ProductVariant/', '') })
+  }
+  for (const code of codeValues) purchaseOrs.push({ discountCode: code })
+  if (purchaseOrs.length === 0) return
+
   await prisma.bargainSession.updateMany({
     where: {
       storeId: params.storeId,
       checkoutOpenedAt: { not: null, lte: params.purchasedAt },
       checkoutPurchaseAt: null,
-      OR: sessionOrs,
+      AND: [{ OR: sessionOrs }, { OR: purchaseOrs }],
     },
     data: {
       checkoutPurchaseAt: params.purchasedAt,

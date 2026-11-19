@@ -1,10 +1,13 @@
 import {
   bargainSessionIdentityClauses,
   hasPurchaseSince,
+  hasStrongBuyerProof,
+  hasStrongProofForSession,
   isCheckoutLocked,
   latestPurchase,
   purchaseDisplayName,
   purchaseMemoryIdentityClauses,
+  strongSessionIdentityClauses,
 } from '@/lib/bargain/checkout-lock'
 
 describe('bargain checkout lock helpers', () => {
@@ -28,6 +31,39 @@ describe('bargain checkout lock helpers', () => {
       { customerPhone: '+911234567890' },
       { customerId: 'gid://shopify/Customer/1' },
     ])
+  })
+
+  it('separates strong rejoin clauses from weak lookup clauses', () => {
+    const identity = {
+      customerFingerprint: 'fp-12345678',
+      customerEmail: 'buyer@example.com',
+      cartToken: 'cart-1',
+      customerPhone: '+911234567890',
+    }
+    expect(strongSessionIdentityClauses(identity)).toEqual([
+      { customerFingerprint: 'fp-12345678' },
+      { cartToken: 'cart-1' },
+    ])
+    expect(bargainSessionIdentityClauses(identity)).toEqual([
+      { customerFingerprint: 'fp-12345678' },
+      { cartToken: 'cart-1' },
+      { customerEmail: 'buyer@example.com' },
+      { customerPhone: '+911234567890' },
+    ])
+  })
+
+  it('proves ownership only with a fingerprint, cart token, or signed token', () => {
+    expect(hasStrongBuyerProof({ customerEmail: 'buyer@example.com', customerPhone: '+911234567890' })).toBe(false)
+    expect(hasStrongBuyerProof({ customerFingerprint: 'fp-12345678' })).toBe(true)
+    expect(hasStrongBuyerProof({ cartToken: 'cart-1' })).toBe(true)
+    expect(hasStrongBuyerProof({ tokenSessionId: 'sess-1' })).toBe(true)
+
+    const session = { id: 'sess-1', customerFingerprint: 'fp-12345678', cartToken: 'cart-1' }
+    expect(hasStrongProofForSession(session, { customerEmail: 'buyer@example.com' })).toBe(false)
+    expect(hasStrongProofForSession(session, { customerFingerprint: 'fp-12345678' })).toBe(true)
+    expect(hasStrongProofForSession(session, { cartToken: 'cart-1' })).toBe(true)
+    expect(hasStrongProofForSession(session, { tokenSessionId: 'sess-1' })).toBe(true)
+    expect(hasStrongProofForSession(session, { tokenSessionId: 'sess-2' })).toBe(false)
   })
 
   it('locks after checkout opens and unlocks only on a newer verified purchase', () => {

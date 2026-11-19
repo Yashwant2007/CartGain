@@ -211,12 +211,12 @@ export default function DemoContent() {
 
   const latestAiLine = [...messages].reverse().find(m => m.role === 'ai')?.content
   const stageLine = thinking
-    ? 'Checking your offer…'
+    ? t('checkingYourOffer')
     : ended === 'accepted' || ended === 'skipped'
-      ? 'Deal locked. Enjoy your price.'
+      ? t('dealLocked')
       : ended
-        ? 'No hard feelings — the door is always open.'
-        : latestAiLine?.replace(/\s+/g, ' ').trim() || 'Tell me what you have in mind and we will find a fair price.'
+        ? t('noHardFeelings')
+        : latestAiLine?.replace(/\s+/g, ' ').trim() || t('tellMeYourPrice')
 
   // Offer-suggestion chips — identical rules to the live storefront widget
   // (server counter, then conservative percentages of the LISTED price; never
@@ -837,11 +837,11 @@ export default function DemoContent() {
               gesture={gestureFor(AVATAR_PERSONALITY[persona], demoAvatarState)}
               position={demoAvatarPosition}
               name={PERSONAS.find(p => p.id === persona)?.name ?? 'Shopkeeper'}
-              status={ended ? 'Closed' : 'Online'}
+              status={ended ? t('sessionEnded') : t('online')}
               line={stageLine}
             />
             <div className="px-4 py-2 border-b border-blue-800/30 flex items-center justify-between text-xs text-blue-300/70">
-              <span>{thinking ? 'negotiating…' : `Attempts left: ${attemptsLeft}`}</span>
+              <span>{thinking ? t('negotiating') : t('attemptsLeftLabel', { n: attemptsLeft })}</span>
               {ended && (
                 <span className={`px-2 py-0.5 rounded-full ${
                   ended === 'accepted' || ended === 'skipped'
@@ -860,7 +860,7 @@ export default function DemoContent() {
               onScroll={handleConversationScroll}
               role="log"
               aria-live="polite"
-              aria-label="Negotiation conversation"
+              aria-label={t('conversationLabel')}
             >
               {messages.map((m) => (
                 <div key={m.id} className={`flex ${m.role === 'customer' ? 'justify-end' : 'justify-start'}`}>
@@ -875,7 +875,7 @@ export default function DemoContent() {
                       {m.role === 'customer' && (
                         <span
                           className={`cgf-tick ${m.delivery === 'delivered' ? 'cgf-tick-in' : ''} inline-flex items-center ml-1.5 align-[-2px]`}
-                          aria-label={m.delivery === 'delivered' ? 'Delivered' : 'Sending'}
+                          aria-label={m.delivery === 'delivered' ? t('delivered') : t('sending')}
                         >
                           {m.delivery === 'delivered'
                             ? <CheckCheck className="w-3.5 h-3.5" />
@@ -912,9 +912,10 @@ export default function DemoContent() {
             <BargainRecommendationPanel
               recommendations={recommendations}
               reason={recommendationReason}
-              history={recommendationHistory}
-              ariaLabel={t('alternativesTitle')}
-            />
+            history={recommendationHistory}
+            ariaLabel={t('alternativesTitle')}
+            language={language}
+          />
 
             {/* Quick-offer chips — same rules as the live storefront widget */}
             {!ended && quickOffers.length > 0 && (
@@ -953,12 +954,12 @@ export default function DemoContent() {
                   </div>
                   {codeStatus === 'minting' ? (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-900/40 border border-emerald-600/40 text-xs text-emerald-200">
-                      <Loader2 className="w-4 h-4 animate-spin" /> Generating…
+                      <Loader2 className="w-4 h-4 animate-spin" /> {t('generating')}
                     </div>
                   ) : discountCode ? (
                     <button
                       onClick={copyCode}
-                      title="Copy code"
+                      title={t('copy')}
                       className="flex items-center gap-1.5 px-3 py-2 bg-emerald-900/40 border border-emerald-600/40 rounded-lg font-mono text-xs text-emerald-200 hover:bg-emerald-900/60 transition"
                     >
                       <BadgeCheck className="w-4 h-4 text-emerald-400" />
@@ -1000,7 +1001,7 @@ export default function DemoContent() {
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') send() }}
-                    placeholder={`Make an offer (e.g. "${currencySymbol}${Math.round(product.price * 0.7)}" or "I will think about it")`}
+                    placeholder={t('offerPlaceholderDemo', { symbol: currencySymbol, amount: Math.round(product.price * 0.7) })}
                     className="flex-1 bg-slate-950 border border-blue-800/40 rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-blue-300/40 focus:outline-none focus:border-blue-500"
                     maxLength={300}
                   />
@@ -1008,7 +1009,7 @@ export default function DemoContent() {
                     onClick={send}
                     disabled={!input.trim() || thinking}
                     className="px-4 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-40 rounded-lg transition active:scale-95"
-                    aria-label="Send message"
+                    aria-label={t('sendMessage')}
                   >
                     <Send className="w-4 h-4" />
                   </button>
@@ -1017,9 +1018,9 @@ export default function DemoContent() {
                   <button
                     onClick={skipFullPrice}
                     className="text-xs text-blue-300/60 hover:text-blue-200 underline underline-offset-2 transition"
-                    aria-label="Skip negotiation and buy at full price"
+                    aria-label={t('skipNegotiation')}
                   >
-                    Skip — buy at full price ({currencySymbol}{product.price})
+                    {t('skipFullPrice', { price: `${currencySymbol}${product.price}` })}
                   </button>
                 </div>
               </>

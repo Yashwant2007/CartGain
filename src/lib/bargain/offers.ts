@@ -13,6 +13,15 @@ import { extractPrice } from './text'
 
 export const QUICK_OFFER_DISCOUNTS = [11, 15] as const
 
+export const SUGGESTED_PROMPT_KEYS = [
+  'askProduct',
+  'whatIncludedPrompt',
+  'bestOfferPrompt',
+  'alternativesPrompt',
+] as const
+
+export type SuggestedPromptKey = (typeof SUGGESTED_PROMPT_KEYS)[number]
+
 /**
  * The amount the shopper is *offering* in a message, or null when the text is
  * not an offer.
@@ -45,4 +54,16 @@ export function buildQuickOffers(opts: {
     }
   }
   return out.slice(0, 3)
+}
+
+export function buildSuggestedPrompts(opts: {
+  lastCounter: number | null
+  sessionEnded: boolean
+  attemptsUsed: number
+}): SuggestedPromptKey[] {
+  if (opts.sessionEnded) return []
+  if (opts.attemptsUsed <= 0 || opts.lastCounter == null) {
+    return ['askProduct', 'whatIncludedPrompt', 'bestOfferPrompt']
+  }
+  return ['bestOfferPrompt', 'whatIncludedPrompt', 'alternativesPrompt']
 }

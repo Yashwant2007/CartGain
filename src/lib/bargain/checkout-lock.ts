@@ -30,6 +30,13 @@ export function bargainSessionIdentityClauses(identity: BargainBuyerIdentity): A
   ]
 }
 
+export function strongSessionIdentityClauses(identity: BargainBuyerIdentity): Array<Record<string, string>> {
+  return [
+    ...(identity.customerFingerprint ? [{ customerFingerprint: identity.customerFingerprint }] : []),
+    ...(identity.cartToken ? [{ cartToken: identity.cartToken }] : []),
+  ]
+}
+
 export function purchaseMemoryIdentityClauses(identity: BargainBuyerIdentity): Array<Record<string, string>> {
   return [
     ...(identity.customerEmail ? [{ customerEmail: identity.customerEmail }] : []),
@@ -37,6 +44,35 @@ export function purchaseMemoryIdentityClauses(identity: BargainBuyerIdentity): A
     ...(identity.customerPhone ? [{ customerPhone: identity.customerPhone }] : []),
     ...(identity.customerId ? [{ customerId: identity.customerId }] : []),
   ]
+}
+
+export interface SessionProofTarget {
+  id?: string | null
+  customerFingerprint?: string | null
+  cartToken?: string | null
+}
+
+export interface CallerStrongProof {
+  customerFingerprint?: string | null
+  cartToken?: string | null
+  tokenSessionId?: string | null
+  customerEmail?: string | null
+  customerPhone?: string | null
+}
+
+export function hasStrongBuyerProof(caller: CallerStrongProof): boolean {
+  return Boolean(caller.customerFingerprint || caller.cartToken || caller.tokenSessionId)
+}
+
+export function hasStrongProofForSession(
+  session: SessionProofTarget,
+  caller: CallerStrongProof,
+): boolean {
+  return (
+    (!!session.customerFingerprint && caller.customerFingerprint === session.customerFingerprint) ||
+    (!!session.cartToken && caller.cartToken === session.cartToken) ||
+    (!!caller.tokenSessionId && !!session.id && caller.tokenSessionId === session.id)
+  )
 }
 
 export function hasPurchaseSince(purchases: Array<{ purchasedAt: Date }>, since: Date): boolean {

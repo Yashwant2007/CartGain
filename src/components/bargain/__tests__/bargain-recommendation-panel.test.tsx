@@ -109,6 +109,16 @@ describe('BargainRecommendationPanel', () => {
     expect(events.filter((event) => event.action === 'rejected')).toEqual([{ action: 'rejected', id: cards[1].productId }])
   })
 
+  it('localizes the toggle, group label, and row actions', () => {
+    render(<BargainRecommendationPanel recommendations={[cards[0]]} language="hi" />)
+    expect(screen.getByRole('group', { name: 'सुझाए गए विकल्प' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '1 बेहतर विकल्प मिले' }))
+    expect(screen.getAllByRole('link', { name: /देखें/ })[0]).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'जोड़ें' })[0]).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'मेरे लिए नहीं' })[0]).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Alpha Runner हटाएँ' })).toBeTruthy()
+  })
+
   it('deduplicates product ids across gid and numeric forms', () => {
     const duplicate = { ...cards[0], productId: '11', title: 'Duplicate' }
     render(<BargainRecommendationPanel recommendations={[cards[0], duplicate]} />)

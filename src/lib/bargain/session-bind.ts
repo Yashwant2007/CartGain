@@ -1,10 +1,9 @@
 // ── SESSION OWNERSHIP BINDING ────────────────────────────────
 // The storefront is anonymous until the caller proves they hold the session's
-// buyer identities. A bargain session stores up to three identity handles the
-// widget sends (device fingerprint, email, Shopify cart token). Each subsequent
-// offer/accept must reproduce at least one of them, otherwise the request is a
-// hijack — anyone who obtains a sessionId could otherwise burn attempts, read
-// the transcript, or lock a deal + pull the discount code.
+// buyer identities. A bargain session stores a device fingerprint and Shopify
+// cart token; each subsequent offer/accept must reproduce one of them, or hold
+// a signed session token. Email/phone are buyer-binding lookup metadata only —
+// they are guessable/leakable and must never authorize transcript or code access.
 //
 // Fully-anonymous sessions (a browser where localStorage is blocked, or an
 // API-only caller) have no stored identity to match. Those are NOT left open:
@@ -22,9 +21,8 @@ export interface SessionBuyerIdentity {
 export interface CallerBuyerIdentity {
   customerFingerprint?: string | null
   customerEmail?: string | null
+  customerPhone?: string | null
   cartToken?: string | null
-  // Result of verifySessionToken(sessionId, presentedToken). Kept as a boolean
-  // so this module stays pure and free of secret/env handling.
   tokenOk?: boolean
 }
 
@@ -54,30 +52,30 @@ export function verifySessionToken(sessionId: string, token: string | null | und
   return data === `${SESSION_TOKEN_PREFIX}${sessionId}`
 }
 
+export function sessionIdFromToken(token: string | null | undefined): string | null {
+  if (!token) return null
+  const data = verifySecureToken(token, SESSION_TOKEN_MAX_AGE_MS)
+  return data?.startsWith(SESSION_TOKEN_PREFIX) ? data.slice(SESSION_TOKEN_PREFIX.length) : null
+}
+
 export function assertSessionOwnership(
   session: SessionBuyerIdentity,
   caller: CallerBuyerIdentity,
 ): SessionOwnershipResult {
   const storedFingerprint = session.customerFingerprint ?? null
-  const storedEmail = session.customerEmail ?? null
   const storedCart = session.cartToken ?? null
 
-  // Fully anonymous / legacy session: nothing stored to match, so the signed
-  // session token is the ONLY credential that proves the caller was the one who
-  // started it. A bare sessionId is rejected.
-  if (!storedFingerprint && !storedEmail && !storedCart) {
+  if (!storedFingerprint && !storedCart) {
     return caller.tokenOk
       ? { ok: true }
       : { ok: false, reason: 'This bargain session can only be continued from the browser that started it.' }
   }
 
-  const hasAnyStored = storedFingerprint != null || storedEmail != null || storedCart != null
   const matches =
     (storedFingerprint != null && caller.customerFingerprint === storedFingerprint) ||
-    (storedEmail != null && caller.customerEmail != null && caller.customerEmail === storedEmail) ||
     (storedCart != null && caller.cartToken === storedCart)
 
-  if ((hasAnyStored && matches) || caller.tokenOk) {
+  if (matches || caller.tokenOk) {
     return { ok: true }
   }
 

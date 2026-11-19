@@ -1,7 +1,9 @@
 /**
  * @jest-environment jsdom
  */
-import { render, screen } from '@testing-library/react'
+import { readFileSync } from 'fs'
+import { join } from 'path'
+import { fireEvent, render, screen } from '@testing-library/react'
 import BargainWidget from '@/components/bargain/BargainWidget'
 import {
   minThinkingMs,
@@ -50,6 +52,26 @@ describe('shared conversation rhythm', () => {
   })
 })
 
+describe('theme controller integration', () => {
+  const assets = join(process.cwd(), 'extensions', 'storefront-bargain', 'assets')
+
+  it('opens the drawer from the dwell CTA when only the inline card exists', () => {
+    const dwell = readFileSync(join(assets, 'dwell.js'), 'utf8')
+    const controller = readFileSync(join(assets, 'bargain.js'), 'utf8')
+    expect(dwell).toContain("new CustomEvent('cg_open_drawer_request',{bubbles:true})")
+    expect(controller).toContain('document.addEventListener("cg_open_drawer_request"')
+    expect(controller).toContain('[data-cg-bargain-root]')
+    expect(controller.length).toBeLessThan(10 * 1024)
+  })
+
+  it('restores document scroll styles exactly when the drawer closes', () => {
+    const controller = readFileSync(join(assets, 'bargain.js'), 'utf8')
+    expect(controller).toContain('l.html=document.documentElement.style.overflow')
+    expect(controller).toContain('document.documentElement.style.overflow=l.html')
+    expect(controller).toContain('window.scrollTo(0,l.y)')
+  })
+})
+
 describe('BargainWidget compact chrome', () => {
   it('gives both tabs a 40px touch target and marks the private note for hiding', () => {
     const { container } = render(<BargainWidget {...baseProps} />)
@@ -62,6 +84,14 @@ describe('BargainWidget compact chrome', () => {
       .join('\n')
     expect(container.querySelector('.cg-private-note')).toBeTruthy()
     expect(css).toContain('.cartgain-bargain .cg-private-note { display: none }')
+  })
+
+  it('prefills the composer from a suggested conversational prompt', () => {
+    render(<BargainWidget {...baseProps} />)
+    const chip = screen.getByRole('button', { name: 'Tell me about this product' })
+    fireEvent.click(chip)
+    const input = screen.getByRole('textbox', { name: /Ask about this product/i }) as HTMLTextAreaElement | HTMLInputElement
+    expect(input.value).toBe('Tell me about this product')
   })
 
   it('keeps the jump control in normal flow instead of overlapping the transcript', () => {

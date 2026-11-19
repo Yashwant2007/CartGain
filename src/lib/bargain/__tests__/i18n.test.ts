@@ -127,3 +127,38 @@ describe('localized widget chrome keys', () => {
     expect(uiText('hinglish', 'thisStoreRuns', { persona: 'Strict' })).toBe('Yeh store chala raha hai: Strict')
   })
 })
+
+describe('storefront expansion keys', () => {
+  const expansionKeys = [
+    'inviteSmartCopy', 'inviteSmartCta', 'invitePlayfulCopy', 'invitePlayfulCta',
+    'inviteUnlockCopy', 'inviteUnlockCta', 'inviteHumanCopy', 'inviteHumanCta',
+    'recoMatches', 'recoOverBudget', 'recoUnavailable', 'recoView', 'recoAdd',
+    'recoNotForMe', 'recoDismiss', 'recoAriaLabel', 'retentionSavedTitle',
+    'checkoutAtPrice', 'offerDetected', 'pressEnterToSend', 'nameYourPriceHint',
+    'conversationLabel', 'delivered', 'sending', 'sendingDots', 'offerTag',
+    'counterTag', 'yourOfferOrMessage', 'dealAcceptedBanner', 'youSavedPercent',
+    'creatingCode', 'createDiscountCode', 'goToCheckout', 'negotiationEndedTitle',
+    'noDealThisTime', 'continueToCheckout', 'tryAgainShort', 'priceNegotiation',
+    'checkingYourOffer', 'dealLocked', 'noHardFeelings', 'tellMeYourPrice',
+    'generating', 'sendMessage', 'skipFullPrice', 'skipNegotiation',
+    'negotiating', 'attemptsLeftLabel',
+  ] as const
+
+  it('defines every expansion key in English', () => {
+    for (const key of expansionKeys) {
+      expect(uiText('en', key, { n: 2, product: 'Item', price: '₹100', x: '₹50', m: 3 }).length).toBeGreaterThan(0)
+    }
+  })
+
+  it('falls back to English for expansion keys when a language has no translation', () => {
+    expect(uiText('ta', 'checkoutAtPrice')).toBe('Checkout at your price')
+    expect(uiText('bn', 'createDiscountCode')).toBe('Create My Discount Code')
+  })
+
+  it('localizes invitation and recommendation labels where translations exist', () => {
+    expect(uiText('hi', 'inviteSmartCta')).toBe('ऑफ़र करें')
+    expect(uiText('hinglish', 'inviteSmartCta')).toBe('Offer karein')
+    expect(uiText('hi', 'recoMatches', { n: 2 })).toBe('2 बेहतर विकल्प मिले')
+    expect(uiText('hinglish', 'recoMatches', { n: 2 })).toBe('2 behtar options mile')
+  })
+})

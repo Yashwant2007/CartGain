@@ -226,12 +226,12 @@
   z-index: 1005;
 }
 .cg-bargain-embed--bottom-right {
-  right: 18px;
-  bottom: 18px;
+  right: max(18px, env(safe-area-inset-right, 0px));
+  bottom: max(18px, env(safe-area-inset-bottom, 0px));
 }
 .cg-bargain-embed--bottom-left {
-  left: 18px;
-  bottom: 18px;
+  left: max(18px, env(safe-area-inset-left, 0px));
+  bottom: max(18px, env(safe-area-inset-bottom, 0px));
 }
 .cg-bargain-embed__badge {
   display: inline-flex;
@@ -288,6 +288,7 @@
   z-index: 1006;
   width: 250px;
   max-width: min(250px, 78vw);
+  max-width: min(250px, 78dvw);
   padding: 14px 14px 12px;
   background: #fff;
   color: #0f172a;
@@ -376,6 +377,9 @@
   .cg-bargain-drawer {
     width: 100%;
     max-width: 100vw;
+    max-width: 100dvw;
+    height: 100vh;
+    height: 100dvh;
   }
   .cg-bargain-drawer .cg-bargain-frame-wrap {
     padding:

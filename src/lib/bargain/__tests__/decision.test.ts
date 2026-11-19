@@ -10,6 +10,7 @@ import {
   type NegotiationContext,
 } from '@/lib/services/bargain'
 import { quotedFloor } from '@/lib/bargain/engine'
+import type { ClaimAssessment } from '@/lib/bargain/claims'
 import prisma from '@/lib/db'
 
 jest.mock('@/lib/db', () => ({
@@ -334,6 +335,41 @@ describe('negotiateStep (AI available — safety overrides)', () => {
     mockAIResponse(jest.fn().mockRejectedValue(new Error('network down')))
     const result = await negotiateStep(baseCtx(), [], 'I can pay 50', 50)
     expect(result.decision).toBe('counter')
+  })
+
+  it('guards claim-affirming replies without changing decision or counter', async () => {
+    const payload = {
+      reply: 'Yes, it is medical grade — I can do ₹85.',
+      decision: 'counter',
+      counterOffer: 85,
+      tactic: 'trial',
+      sentiment: 'neutral',
+    }
+    const mockReply = () => mockAIResponse(jest.fn().mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify(payload) } }],
+    }))
+    const claims: ClaimAssessment = {
+      claims: [{
+        category: 'product_feature',
+        status: 'contradicted',
+        confidence: 'high',
+        provenance: { source: 'product_catalog', scope: 'product', verified: true },
+      }],
+      manipulation: false,
+      hasUnverified: false,
+      hasContradiction: true,
+      promptBlock: '',
+    }
+
+    mockReply()
+    const baseline = await negotiateStep(baseCtx(), [], 'This is medical grade', 60)
+    mockReply()
+    const guarded = await negotiateStep(baseCtx({ claims }), [], 'This is medical grade', 60)
+
+    expect(guarded.reply).not.toContain('medical grade')
+    expect(guarded.decision).toBe(baseline.decision)
+    expect(guarded.counterOffer).toBe(baseline.counterOffer)
+    expect(guarded.metadata).toEqual(expect.objectContaining({ claimAdherenceGuarded: true }))
   })
 })
 

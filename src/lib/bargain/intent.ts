@@ -5,6 +5,8 @@
 // product-aware strategy instead of guessing. It deliberately runs BEFORE the
 // LLM: intent is a decision the merchant controls, not one we outsource.
 
+import { extractPrice } from './text'
+
 export type ShopperIntent =
   | 'UNKNOWN'
   | 'PRICE_ONLY'
@@ -237,7 +239,7 @@ export function analyzeIntent(message: string): IntentAnalysis {
     intent,
     objection,
     signals,
-    offersPriceSignal: isMoney,
+    offersPriceSignal: extractPrice(message) !== null,
     budget: budget?.amount ?? null,
     budgetType: budget?.type ?? null,
     priceComplaint,

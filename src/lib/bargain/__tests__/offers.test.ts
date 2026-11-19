@@ -1,4 +1,4 @@
-import { buildQuickOffers, parseDraftOffer } from '../offers'
+import { buildQuickOffers, buildSuggestedPrompts, parseDraftOffer } from '../offers'
 
 describe('buildQuickOffers (floor-safe offer suggestions)', () => {
   it('returns the server counter first when the negotiation is live', () => {
@@ -70,6 +70,28 @@ describe('buildQuickOffers (floor-safe offer suggestions)', () => {
       decision: 'idle',
     })
     expect(offers).toEqual([])
+  })
+})
+
+describe('buildSuggestedPrompts', () => {
+  it('opens with product and value questions before any counter exists', () => {
+    expect(buildSuggestedPrompts({ lastCounter: null, sessionEnded: false, attemptsUsed: 0 })).toEqual([
+      'askProduct',
+      'whatIncludedPrompt',
+      'bestOfferPrompt',
+    ])
+  })
+
+  it('switches to negotiation prompts once the shopkeeper has countered', () => {
+    expect(buildSuggestedPrompts({ lastCounter: 450, sessionEnded: false, attemptsUsed: 2 })).toEqual([
+      'bestOfferPrompt',
+      'whatIncludedPrompt',
+      'alternativesPrompt',
+    ])
+  })
+
+  it('hides prompts from a terminal session', () => {
+    expect(buildSuggestedPrompts({ lastCounter: 450, sessionEnded: true, attemptsUsed: 2 })).toEqual([])
   })
 })
 
