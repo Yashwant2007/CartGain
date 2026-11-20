@@ -104,6 +104,12 @@ function lowballRatio(message: string, originalPrice?: number | null): number | 
   return offer / originalPrice
 }
 
+export function avatarEndedFromSessionStatus(status?: string | null): string | null {
+  if (status === 'accepted' || status === 'purchased') return 'accepted'
+  if (status === 'rejected' || status === 'expired' || status === 'abandoned') return status
+  return null
+}
+
 /**
  * The BODY state for a conversation event.
  *
@@ -209,6 +215,7 @@ function replyState(ctx: LivingEventContext): AvatarState {
   const ended = (ctx.ended ?? '').toLowerCase()
   if (ended === 'accepted' || decision === 'accept') return 'celebrating'
   if (ended === 'rejected' || ended === 'abandoned' || decision === 'reject') return 'disappointed'
+  if (ctx.hasRecommendations) return 'recommending'
   if (decision === 'counter' || (ctx.counterOffer != null && Number.isFinite(ctx.counterOffer))) {
     return 'calculating'
   }
@@ -264,23 +271,24 @@ export function expressionForAvatarState(state: AvatarState): import('./expressi
     case 'thinking':
       return 'thinking'
     case 'calculating':
+      return 'focused'
     case 'negotiating':
       return 'negotiating'
     case 'surprised':
       return 'surprised'
     case 'confused':
-      return 'curious'
+      return 'uncertain'
     case 'happy':
       return 'happy'
     case 'disappointed':
-      return 'disappointed'
+      return 'concerned'
     case 'recommending':
     case 'pointing':
-      return 'curious'
+      return 'encouraging'
     case 'celebrating':
       return 'celebrating'
     case 'guiding_to_checkout':
-      return 'happy'
+      return 'impressed'
     case 'goodbye':
     case 'idle':
     default:

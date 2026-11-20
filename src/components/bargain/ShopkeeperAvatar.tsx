@@ -34,6 +34,7 @@ const SIZE_MAP = { sm: 38, md: 48, lg: 64, xl: 96 }
  */
 const LOOPING_EXPRESSIONS: ReadonlySet<ExpressionState> = new Set<ExpressionState>([
   'idle', 'listening', 'thinking', 'curious', 'negotiating', 'happy', 'amused',
+  'focused', 'concerned', 'uncertain', 'determined', 'encouraging',
 ])
 
 const AVATAR_CSS = `
@@ -45,6 +46,14 @@ const AVATAR_CSS = `
 .cg-avatar--amused { animation: cgAvBounce .8s ease-in-out infinite; }
 .cg-avatar--celebrating { animation: cgAvCelebrate .9s ease-in-out 1; }
 .cg-avatar--disappointed, .cg-avatar--declining, .cg-avatar--error { animation: cgAvShake .52s ease-in-out; }
+.cg-avatar--focused { animation: cgAvFocus 1.8s ease-in-out infinite; }
+.cg-avatar--concerned { animation: cgAvConcern 2.6s ease-in-out infinite; }
+.cg-avatar--uncertain { animation: cgAvSway 2.8s ease-in-out infinite; }
+.cg-avatar--determined { animation: cgAvLean 1.6s ease-in-out infinite; }
+.cg-avatar--encouraging { animation: cgAvBob 1.2s ease-in-out infinite; }
+.cg-avatar--impressed { animation: cgAvPop .5s cubic-bezier(.2,.9,.3,1.3) 1; }
+.cg-avatar--relieved { animation: cgAvSettle .8s ease-out 1; }
+.cg-avatar--warning { animation: cgAvShake .52s ease-in-out; }
 .cg-av-blink { animation: cgAvBlink 4.6s infinite; transform-box: fill-box; transform-origin: center; }
 .cg-av-gaze { transition: transform 160ms ease-out; will-change: transform; }
 .cg-av-think-dot { animation: cgAvThink 1.2s ease-in-out infinite; }
@@ -76,6 +85,9 @@ const AVATAR_CSS = `
 @keyframes cgAvCelebrate { 0%,100% { transform: translateY(0) scale(1); } 35% { transform: translateY(-4px) scale(1.07) rotate(-2deg); } 65% { transform: translateY(-1px) scale(1.03) rotate(2deg); } }
 @keyframes cgAvPop { 0% { transform: scale(.9); } 55% { transform: scale(1.09); } 100% { transform: scale(1); } }
 @keyframes cgAvShake { 0%,100% { transform: translateX(0) rotate(0deg); } 25% { transform: translateX(-1.5px) rotate(-1.5deg); } 50% { transform: translateX(1.5px) rotate(1.5deg); } 75% { transform: translateX(-1px) rotate(-1deg); } }
+@keyframes cgAvFocus { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-1px) scale(1.01); } }
+@keyframes cgAvConcern { 0%,100% { transform: rotate(-.8deg) translateY(0); } 50% { transform: rotate(.8deg) translateY(-1px); } }
+@keyframes cgAvSettle { 0% { transform: translateY(2px) scale(.98); } 100% { transform: translateY(0) scale(1); } }
 @keyframes cgAvBlink { 0%, 91%, 97%, 100% { transform: scaleY(1); } 94% { transform: scaleY(.08); } }
 @keyframes cgAvThink { 0%,100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-1px); } }
 @keyframes cgAvConfetti { 0% { opacity: 1; transform: translate(0,0) scale(1); } 100% { opacity: 0; transform: translate(var(--cg-x), var(--cg-y)) scale(.35); } }
@@ -104,6 +116,8 @@ function moodIndex(expression: ExpressionState): number {
   return [
     'idle', 'listening', 'thinking', 'curious', 'surprised', 'amused', 'skeptical',
     'negotiating', 'disappointed', 'happy', 'celebrating', 'declining', 'error',
+    'focused', 'concerned', 'uncertain', 'determined', 'encouraging', 'impressed',
+    'relieved', 'warning',
   ].indexOf(expression)
 }
 
@@ -137,13 +151,13 @@ export function ShopkeeperAvatar({
   // go when a merchant asks for essential-only motion.
   const decorative = animate && !essentialMotionOnly
   const showGestures = animate && supportsGestureLayer(characterStyle)
-  const happyEyes = expression === 'happy' || expression === 'celebrating'
+  const happyEyes = ['happy', 'celebrating', 'impressed', 'relieved'].includes(expression)
   const wink = expression === 'amused'
-  const wideEyes = expression === 'surprised'
-  const narrowEyes = expression === 'skeptical' || expression === 'declining'
-  const sad = expression === 'disappointed' || expression === 'error'
-  const thinking = expression === 'thinking' || expression === 'curious'
-  const lookUp = thinking
+  const wideEyes = expression === 'surprised' || expression === 'encouraging'
+  const narrowEyes = ['skeptical', 'declining', 'focused', 'determined', 'warning'].includes(expression)
+  const sad = expression === 'disappointed' || expression === 'error' || expression === 'concerned'
+  const thinking = expression === 'thinking' || expression === 'curious' || expression === 'uncertain' || expression === 'focused'
+  const lookUp = thinking || expression === 'encouraging'
   const lookDown = sad
   // Subtle live gaze: the pupils drift toward the shopper's cursor/composer.
   const gazeStyle = gaze
@@ -152,21 +166,31 @@ export function ShopkeeperAvatar({
   const mouth =
     expression === 'surprised'
       ? { path: '', ellipse: { cy: 43, rx: 3.4, ry: 4.2 } }
-      : expression === 'happy' || expression === 'celebrating'
+      : expression === 'happy' || expression === 'celebrating' || expression === 'impressed'
         ? { path: 'M25 39 Q32 49 39 39', fill: '#7f1d1d' }
-        : expression === 'amused'
-          ? { path: 'M26 40 Q33 46 39 39' }
-          : expression === 'disappointed' || expression === 'error'
-            ? { path: 'M27 44 Q32 38 37 44' }
-            : expression === 'declining' || expression === 'skeptical'
-              ? { path: 'M28 41 L36 41' }
-              : expression === 'thinking'
-                ? { path: 'M28 41 Q32 42.2 36 40.5' }
-                : expression === 'curious'
-                  ? { path: '', ellipse: { cy: 42, rx: 2.1, ry: 2.7 } }
-                  : expression === 'negotiating'
-                    ? { path: 'M27 40 Q32 46 37 40', fill: '#7f1d1d' }
-                    : { path: 'M27 40 Q32 44 37 40' }
+        : expression === 'relieved'
+          ? { path: 'M28 41 Q32 44.5 36 41' }
+          : expression === 'encouraging'
+            ? { path: 'M26 39 Q32 47 38 39' }
+            : expression === 'amused'
+              ? { path: 'M26 40 Q33 46 39 39' }
+              : expression === 'disappointed' || expression === 'error' || expression === 'concerned'
+                ? { path: 'M27 44 Q32 38 37 44' }
+                : expression === 'declining' || expression === 'skeptical' || expression === 'determined'
+                  ? { path: 'M28 41 L36 41' }
+                  : expression === 'warning'
+                    ? { path: 'M28 42 L36 40' }
+                    : expression === 'thinking'
+                      ? { path: 'M28 41 Q32 42.2 36 40.5' }
+                      : expression === 'focused'
+                        ? { path: 'M29 41 Q32 40.3 35 41' }
+                        : expression === 'uncertain'
+                          ? { path: 'M28 41 Q30 39.5 32 41 Q34 42.5 36 40.5' }
+                          : expression === 'curious'
+                            ? { path: '', ellipse: { cy: 42, rx: 2.1, ry: 2.7 } }
+                            : expression === 'negotiating'
+                              ? { path: 'M27 40 Q32 46 37 40', fill: '#7f1d1d' }
+                              : { path: 'M27 40 Q32 44 37 40' }
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
@@ -393,15 +417,25 @@ export function ShopkeeperAvatar({
                 <path d="M21 27q3.5 2.5 7 0" />
                 <path d="M36 27q3.5 2.5 7 0" />
               </>
-            ) : expression === 'negotiating' || expression === 'declining' ? (
+            ) : expression === 'negotiating' || expression === 'declining' || expression === 'determined' || expression === 'warning' ? (
               <>
                 <path d="M21 26.5q3.5-1 7 1.5" />
                 <path d="M36 28q3.5-2.5 7-1.5" />
               </>
-            ) : expression === 'thinking' ? (
+            ) : expression === 'thinking' || expression === 'focused' ? (
               <>
                 <path d="M21 26q3.5-2.5 7 0" />
                 <path d="M36 24.5q3.5-4 7-1.5" />
+              </>
+            ) : expression === 'uncertain' ? (
+              <>
+                <path d="M21 26q3.5-4 7-1" />
+                <path d="M36 25.5q3.5-1.5 7 0" />
+              </>
+            ) : expression === 'impressed' || expression === 'relieved' || expression === 'encouraging' ? (
+              <>
+                <path d="M21 25.5q3.5-3.5 7-.5" />
+                <path d="M36 25q3.5-3 7 .5" />
               </>
             ) : (
               <>
@@ -413,8 +447,8 @@ export function ShopkeeperAvatar({
 
           <path d="M32 33.5q-1.5 3.5 1 4" fill="none" stroke={character.skinShade} strokeWidth="1.5" strokeLinecap="round" />
 
-          <ellipse cx="21" cy="39" rx="3.5" ry="2" fill="#ef4444" opacity={expression === 'happy' || expression === 'celebrating' || expression === 'amused' ? 0.22 : 0} />
-          <ellipse cx="43" cy="39" rx="3.5" ry="2" fill="#ef4444" opacity={expression === 'happy' || expression === 'celebrating' || expression === 'amused' ? 0.22 : 0} />
+          <ellipse cx="21" cy="39" rx="3.5" ry="2" fill="#ef4444" opacity={['happy', 'celebrating', 'amused', 'impressed', 'relieved', 'encouraging'].includes(expression) ? 0.22 : 0} />
+          <ellipse cx="43" cy="39" rx="3.5" ry="2" fill="#ef4444" opacity={['happy', 'celebrating', 'amused', 'impressed', 'relieved', 'encouraging'].includes(expression) ? 0.22 : 0} />
 
           {'ellipse' in mouth && mouth.ellipse ? (
             <ellipse cx="32" {...mouth.ellipse} fill="#5b1a1a" />
@@ -448,7 +482,19 @@ export function ShopkeeperAvatar({
             <text x="49" y="18" fontSize="13" fontWeight="900" fill="#ef4444">!</text>
           )}
 
-          {(expression === 'disappointed' || expression === 'error') && (
+          {expression === 'uncertain' && (
+            <text x="49" y="18" fontSize="11" fontWeight="800" fill={palette.accent}>?</text>
+          )}
+
+          {expression === 'warning' && (
+            <text x="49" y="18" fontSize="13" fontWeight="900" fill="#f59e0b">!</text>
+          )}
+
+          {expression === 'impressed' && (
+            <text x="50" y="18" fontSize="12" fontWeight="900" fill={palette.accent}>✦</text>
+          )}
+
+          {(expression === 'disappointed' || expression === 'error' || expression === 'concerned') && (
             <path d="M49 21c2.6 0 4 2 4 4.2 0 2-1.7 3.8-4 5.8-2.3-2-4-3.8-4-5.8 0-2.2 1.4-4.2 4-4.2z" fill="#60a5fa" opacity="0.9" />
           )}
 

@@ -102,7 +102,7 @@ describe('processRecoveryJourneys', () => {
     expect(emailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'buyer@example.com',
-        subject: 'Still thinking about Sneaker?',
+        subject: 'Still thinking about Sneaker at Test Store?',
         html: expect.stringContaining('https://test-store.myshopify.com/products/sneaker'),
       }),
     )

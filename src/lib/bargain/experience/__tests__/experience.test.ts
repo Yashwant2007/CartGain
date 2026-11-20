@@ -15,6 +15,7 @@ describe('bargain experience config', () => {
       designVariant: 'not-a-design',
       avatarEnabled: 'yes',
       motionEnabled: false,
+      avatarVariant: 'evil_robot',
       localeMode: 'en-IN',
       customGreeting: '  Name your price  ',
       ctaLabel: null,
@@ -29,6 +30,7 @@ describe('bargain experience config', () => {
     expect(exp.designVariant).toBe('smart-assistant')
     expect(exp.avatarEnabled).toBe(true)
     expect(exp.motionEnabled).toBe(false)
+    expect(exp.avatarVariant).toBe('robot')
     expect(exp.customGreeting).toBe('Name your price')
     expect(exp.accentColor).toBeNull()
     expect(exp.avatarSize).toBe('md')
@@ -172,8 +174,8 @@ describe('shopkeeper personality mapping', () => {
 
 describe('avatar expression mapping', () => {
   it('maps the same event differently per personality', () => {
-    expect(expressionForEvent('friendly_shopkeeper', 'OFFER_REJECTED')).toBe('disappointed')
-    expect(expressionForEvent('strict_shopkeeper', 'OFFER_REJECTED')).toBe('declining')
+    expect(expressionForEvent('friendly_shopkeeper', 'OFFER_REJECTED')).toBe('concerned')
+    expect(expressionForEvent('strict_shopkeeper', 'OFFER_REJECTED')).toBe('warning')
     expect(expressionForEvent('playful_shopkeeper', 'OFFER_REJECTED')).toBe('amused')
   })
 

@@ -104,9 +104,9 @@ describe('living shopkeeper animation states', () => {
 
 describe('living shopkeeper characters', () => {
   it('gives every personality its own silhouette and title', () => {
-    expect(CHARACTER_PROFILES.strict_shopkeeper.title).toBe('The Deal Master')
-    expect(CHARACTER_PROFILES.friendly_shopkeeper.title).toBe('Your Shopping Buddy')
-    expect(CHARACTER_PROFILES.playful_shopkeeper.title).toBe('The Bargain Ninja')
+    expect(CHARACTER_PROFILES.strict_shopkeeper.title).toBe('The Strict Shopkeeper')
+    expect(CHARACTER_PROFILES.friendly_shopkeeper.title).toBe('The Friendly Shopkeeper')
+    expect(CHARACTER_PROFILES.playful_shopkeeper.title).toBe('The Playful Shopkeeper')
     const silhouettes = new Set(PERSONALITIES.map((p) => CHARACTER_PROFILES[p].silhouette))
     expect(silhouettes.size).toBe(3)
   })
@@ -160,6 +160,32 @@ describe('living shopkeeper resolver', () => {
     expect(resolved.expression).toBe('skeptical')
     expect(resolved.gesture).toBe('crossed_arms')
     expect(resolved.position).toBe('conversation')
+  })
+
+  it('honours an unambiguous conversation state across face, body and position', () => {
+    const resolved = resolveShopkeeperAnimation('strict_shopkeeper', 'ai_reply', {
+      customerMessage: 'Thanks!',
+      decision: 'chat',
+      conversationState: 'COMPLETED',
+    })
+    expect(resolved.state).toBe('celebrating')
+    expect(resolved.expression).toBe('celebrating')
+    expect(resolved.position).toBe('celebration')
+  })
+
+  it('keeps mid-negotiation states event-driven', () => {
+    const resolved = resolveShopkeeperAnimation('friendly_shopkeeper', 'counter_offer', {
+      customerMessage: 'Can you do 900?',
+      counterOffer: 950,
+      originalPrice: 1000,
+      conversationState: 'NEGOTIATION',
+    })
+    expect(resolved.state).toBe('negotiating')
+    expect(resolved.expression).toBe('negotiating')
+  })
+
+  it('uses the recommending body when verified cards arrive with a reply', () => {
+    expect(resolveShopkeeperAnimation('friendly_shopkeeper', 'ai_reply', { hasRecommendations: true }).state).toBe('recommending')
   })
 
   it('never leaks a price, floor or margin into the animation payload', () => {

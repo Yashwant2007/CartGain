@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import BargainWidget, { type BargainItem } from '@/components/bargain/StorefrontBargainWidget'
 import type { BargainDemoGoal } from '@/lib/bargain/api-types'
+import type { AvatarVariant } from '@/lib/bargain/experience/types'
 
 export default function BargainView() {
   return (
@@ -71,34 +72,45 @@ function PageContent() {
   const { data: session } = useSession()
   const [storeCfg, setStoreCfg] = useState<{
     persona: string; language: string; maxAttempts: number; minProfitPercent: number
+    avatarVariant?: AvatarVariant
     goal?: BargainDemoGoal
   }>({
     persona: 'friendly_shopkeeper',
     language: 'auto',
     maxAttempts: 3,
     minProfitPercent: 25,
+    avatarVariant: 'robot',
   })
 
   useEffect(() => {
-    const storeId = (session?.user as { storeId?: string } | undefined)?.storeId
-    if (!storeId) return
     let cancelled = false
+    fetch(`/api/bargain/experience?shop=${encodeURIComponent(shop)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (cancelled || !data?.experience?.avatarVariant) return
+        setStoreCfg(prev => ({ ...prev, avatarVariant: data.experience.avatarVariant as AvatarVariant }))
+      })
+      .catch(() => {})
+
+    const storeId = (session?.user as { storeId?: string } | undefined)?.storeId
+    if (!storeId) return () => { cancelled = true }
     fetch(`/api/bargain/config?storeId=${storeId}`)
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
         if (cancelled || !data?.config) return
         const c = data.config
-        setStoreCfg({
+        setStoreCfg(prev => ({
+          ...prev,
           persona: typeof c.aiPersona === 'string' ? c.aiPersona : 'friendly_shopkeeper',
           language: typeof c.language === 'string' ? c.language : 'auto',
           maxAttempts: typeof c.maxAttempts === 'number' ? c.maxAttempts : 3,
           minProfitPercent: typeof c.minProfitPercent === 'number' ? c.minProfitPercent : 25,
           goal: data.goal && typeof data.goal.targetValue === 'number' ? data.goal : undefined,
-        })
+        }))
       })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [session])
+  }, [session, shop])
 
   // One live storefront demo per account — enforcement happens server-side.
   // This client call is a safety net if the demo was consumed in another tab.
@@ -212,6 +224,7 @@ function PageContent() {
           line={line}
           checkoutUrl={checkoutUrl}
           persona={storeCfg.persona}
+          avatarVariant={storeCfg.avatarVariant}
           language={storeCfg.language}
           maxAttempts={storeCfg.maxAttempts}
           minProfitPercent={storeCfg.minProfitPercent}
@@ -229,6 +242,7 @@ function PageContent() {
         currency={currency}
         line={line}
         checkoutUrl={checkoutUrl}
+        avatarVariant={storeCfg.avatarVariant}
         goal={storeCfg.goal}
       />
     </Shell>

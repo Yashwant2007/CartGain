@@ -87,7 +87,9 @@ async function computeChannelStats(storeId: string, startDate: Date, endDate: Da
   }>>(
     `SELECT
       channel,
-      COUNT(*) as sent,
+      -- "Sent" only counts messages the provider accepted. Skipped, failed and
+      -- still-pending rows are tracked separately and never inflate this number.
+      COUNT(*) FILTER (WHERE status IN ('sent', 'delivered')) as sent,
       COUNT(*) FILTER (WHERE status = 'delivered') as delivered,
       COUNT(*) FILTER (WHERE "clickedAt" IS NOT NULL) as clicked,
       -- A cart can produce several messages on the same channel. Count each
@@ -199,6 +201,9 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
       where: {
         campaign: { storeId },
         createdAt: { gte: startDate, lt: endDate },
+        // A skipped/failed/pending row was never sent. Keep this count distinct
+        // from carts abandoned and carts recovered instead of adding them up.
+        status: { in: ['sent', 'delivered'] },
       },
     }),
     prisma.$queryRawUnsafe<Array<{

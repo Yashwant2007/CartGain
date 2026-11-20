@@ -18,6 +18,8 @@ function shorten(value: string, max: number): string {
 
 export type RecoveryOfferLineInput = {
   firstName?: string | null
+  /** Merchant store name, so the line reads as coming from that store. */
+  storeName?: string | null
   productSummary?: string | null
   productPrice?: number | null
   productQty?: number | null
@@ -34,6 +36,8 @@ export type RecoveryOfferLineInput = {
 export function buildRecoveryOfferLine(input: RecoveryOfferLineInput): string {
   const products = shorten(oneLine(input.productSummary), MAX_PRODUCT_CHARS) || 'cart'
   const firstName = shorten(oneLine(input.firstName), MAX_NAME_CHARS)
+  const storeName = shorten(oneLine(input.storeName), 24)
+  const storeBit = storeName ? ` at ${storeName}` : ''
   const discount = oneLine(input.discountLabel)
   const code = oneLine(input.code)
 
@@ -55,14 +59,15 @@ export function buildRecoveryOfferLine(input: RecoveryOfferLineInput): string {
   }
 
   const nameBit = firstName ? `${firstName}, ` : ''
-  const base = `${nameBit}your ${products}${priceBit} is waiting 🛒${offer}. Grab it now!`
+  const base = `${nameBit}your ${products}${priceBit}${storeBit} is waiting 🛒${offer}. It's still yours — claim it now!`
 
   // Append one link as text so the customer can tap it even if the button
   // doesn't render. Only one link per message — checkout on reminder 1,
-  // bargain on reminder 2+.
+  // bargain on reminder 2+. The label is the CTA; the URL is the store's own
+  // tracked link, never a client-supplied one.
   let linkLine = ''
   if (input.linkType && input.linkUrl) {
-    const label = input.linkType === 'bargain' ? '💬 Bargain now:' : '🛒 Checkout:'
+    const label = input.linkType === 'bargain' ? '💬 Name your price:' : '🛒 Complete your order:'
     linkLine = `\n${label} ${input.linkUrl}`
   }
 

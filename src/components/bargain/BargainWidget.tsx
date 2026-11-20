@@ -14,10 +14,8 @@ import {
   type FireAvatarContext,
   type ShopkeeperAnimation,
 } from '@/lib/bargain/experience/living'
-import type { LivingEvent } from '@/lib/bargain/experience/avatar-state'
-import { gestureFor } from '@/lib/bargain/experience/character'
+import { avatarEndedFromSessionStatus, type LivingEvent } from '@/lib/bargain/experience/avatar-state'
 import { resolveShopkeeperPersonality } from '@/lib/bargain/experience/personality'
-import { priorityReaction } from '@/lib/bargain/conversation-state'
 import { trackExperienceEvent } from '@/lib/bargain/experience/analytics'
 import { PERSONALITY_META, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
 import type {
@@ -190,19 +188,11 @@ export default function BargainWidget({
   const customerTypingRef = useRef(false)
   const personality = resolveShopkeeperPersonality(experience?.personality, persona)
   const avatarEnabled = experience?.avatarEnabled !== false
+  const avatarVariant = experience?.avatarVariant ?? 'robot'
   const characterStyle = experience?.characterStyle ?? 'signature'
   const essentialMotionOnly = experience?.essentialMotionOnly === true
   const fireAvatar = useCallback((event: LivingEvent, ctx: FireAvatarContext = {}) => {
-    setCharacter((prev) => {
-      const resolved = resolveShopkeeperAnimation(personality, event, {
-        ...prev,
-        ...ctx,
-      })
-      // A conversation state that carries an unambiguous meaning wins over the
-      // generic face (a completed purchase is always a celebration).
-      const override = ctx.conversationState ? priorityReaction(ctx.conversationState as any) : null
-      return override ? { ...resolved, expression: override } : resolved
-    })
+    setCharacter((prev) => resolveShopkeeperAnimation(personality, event, { ...prev, ...ctx }))
   }, [personality])
   // The entrance plays first, then the character greets. One timer, cleared on
   // every new greeting so a fast open/close can never stack animations.
@@ -691,6 +681,12 @@ export default function BargainWidget({
           // the last price we offered — surface it as a ready-to-use deal.
           if (data.session.discountCode) setDiscountCode(data.session.discountCode)
           if (data.session.purchaseUrl) setPurchaseUrl(data.session.purchaseUrl)
+          const restoredEnded = avatarEndedFromSessionStatus(data.session.status)
+          if (restoredEnded === 'accepted') {
+            fireAvatar('deal_accepted', { ended: 'accepted', originalPrice: livePrice })
+          } else if (restoredEnded) {
+            fireAvatar('session_ended', { ended: restoredEnded, originalPrice: livePrice })
+          }
         }
       } else {
         const aiMsg: BargainMessage = {
@@ -794,6 +790,7 @@ export default function BargainWidget({
         terminal?: boolean
         status?: 'accepted' | 'rejected' | 'expired' | 'abandoned'
       }
+      const endedForAvatar = avatarEndedFromSessionStatus(data.sessionStatus ?? data.status)
       if (data.sessionStatus && data.sessionStatus !== 'active') {
         setSessionEnded(true)
         if (data.sessionStatus === 'expired') setEndedReason('expired')
@@ -858,6 +855,7 @@ export default function BargainWidget({
       const hold = minThinkingMs(data.reply) - seenFor
       if (hold > 0) await wait(hold)
       if (seq !== requestSeqRef.current) return
+      fireAvatar('ai_typing', { hasRecommendations: Boolean(data.recommendations?.length) })
       const aiId = `${turnId}-a`
       setMessages(prev => prev.some((m) => m.id === aiId)
         ? prev
@@ -882,7 +880,7 @@ export default function BargainWidget({
         counterOffer: data.counterOffer ?? null,
         originalPrice: livePrice,
         decision: data.decision,
-        ended: data.status ?? null,
+        ended: endedForAvatar,
         hasRecommendations: Boolean(nextRecommendations),
         conversationState: data.conversationState ?? null,
       })
@@ -894,6 +892,15 @@ export default function BargainWidget({
       if (data.goal) setGoal(data.goal)
       if (data.finalPrice != null) setFinalPrice(data.finalPrice)
       setRecommendations(nextRecommendations)
+      if (nextRecommendations) {
+        fireAvatar('recommendations_shown', {
+          customerMessage: msg,
+          aiReply: data.reply,
+          hasRecommendations: true,
+          ended: endedForAvatar,
+          conversationState: data.conversationState ?? null,
+        })
+      }
       if (typeof data.recommendationReason === 'string') setRecommendationReason(data.recommendationReason)
       if (data.recommendationHistory) setRecommendationHistory(data.recommendationHistory)
       lastFailedRef.current = null
@@ -1538,6 +1545,7 @@ export default function BargainWidget({
               eventContext={character}
               gesture={character.gesture}
               position={character.position}
+              avatarVariant={avatarVariant}
               characterStyle={characterStyle}
               essentialMotionOnly={essentialMotionOnly}
               name={shopkeeperName}
@@ -1554,6 +1562,7 @@ export default function BargainWidget({
           {/* ── Conversation ── */}
           <div
             ref={scrollRef}
+            className="cg-chat-log"
             role="log"
             aria-live="polite"
             aria-relevant="additions"
@@ -2007,16 +2016,16 @@ export default function BargainWidget({
                     autoComplete="off"
                     maxLength={500}
                     aria-label={t('typeMessage')}
+                    aria-describedby="cg-bargain-input-help"
                     placeholder={t('typeMessage')}
                     value={input}
-                    onFocus={() => setGaze({ x: 0, y: 0.55 })}
-                    onClick={() => setCharacter((prev) => ({ ...prev, state: 'thinking', gesture: gestureFor(personality, 'thinking') }))}
+                    onFocus={() => {
+                      setGaze({ x: 0, y: 0.55 })
+                      fireAvatar('customer_typing')
+                    }}
                     onBlur={() => {
                       setGaze(null)
                       customerTypingRef.current = false
-                      setCharacter((prev) => prev.state === 'thinking'
-                        ? { ...prev, state: 'listening', gesture: gestureFor(personality, 'listening') }
-                        : prev)
                     }}
                     onChange={e => {
                       setInput(e.target.value)
@@ -2025,12 +2034,6 @@ export default function BargainWidget({
                         fireAvatar('customer_typing')
                       }
                       setError(null)
-                      // The character leans in and listens while the shopper types.
-                      setCharacter((prev) => (
-                        prev.state === 'listening' || prev.state === 'typing'
-                          ? prev
-                          : { ...prev, state: 'listening', gesture: gestureFor(personality, 'listening') }
-                      ))
                     }}
                     onKeyDown={e => {
                       if (e.key === 'Enter' && !sessionEnded && !e.shiftKey) {
@@ -2068,16 +2071,20 @@ export default function BargainWidget({
                     </span>
                   </button>
                 </div>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 8,
-                  padding: '0 3px',
-                  fontSize: 11.5,
-                  lineHeight: 1.3,
-                  color: '#94a3b8',
-                }}>
+                <div
+                  id="cg-bargain-input-help"
+                  className="cg-composer-helper"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    padding: '0 3px',
+                    fontSize: 11.5,
+                    lineHeight: 1.3,
+                    color: '#94a3b8',
+                  }}>
+
                   <span>{input.trim() ? (draftAmount != null ? t('offerDetected') : t('pressEnterToSend')) : t('nameYourPriceHint')}</span>
                   <span aria-hidden>{input.length}/500</span>
                 </div>
@@ -2155,6 +2162,9 @@ export default function BargainWidget({
            Shopify theme CSS is touched. Deliberate z-index scale: FAB 9998,
            panel 9999, embed-in-frame 99999. Never bumped blindly above theme. ── */
         .cartgain-bargain * { box-sizing: border-box }
+        .cartgain-bargain { --cg-surface: #f8fafc; --cg-ink: #0f172a; --cg-muted: #64748b; --cg-line: #e2e8f0 }
+        .cartgain-bargain .cg-chat-log { background: linear-gradient(180deg, #f8fafc 0%, #ffffff 18%, #ffffff 100%); }
+        .cartgain-bargain .cg-composer-helper { color: var(--cg-muted); letter-spacing: 0.01em }
         .cartgain-bargain ::-webkit-scrollbar { width: 6px }
         .cartgain-bargain ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 3px }
         .cartgain-bargain button:focus-visible,
@@ -2162,9 +2172,8 @@ export default function BargainWidget({
         .cartgain-bargain input:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px }
         .cartgain-bargain .cg-composer:focus-within {
           border-color: #818cf8;
-          box-shadow: 0 0 0 4px rgba(99,102,241,0.22), 0 8px 20px rgba(99,102,241,0.14);
+          box-shadow: 0 0 0 3px rgba(99,102,241,0.16), 0 6px 16px rgba(99,102,241,0.1);
           background: #ffffff;
-          transform: translateY(-1px);
         }
         .cartgain-bargain .cg-composer .cg-btn-send--inline {
           background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);

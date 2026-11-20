@@ -26,6 +26,11 @@ export type AvatarSize = (typeof AVATAR_SIZES)[number]
 export const CHARACTER_STYLES = ['signature', 'minimal'] as const
 export type CharacterStyle = (typeof CHARACTER_STYLES)[number]
 
+export const AVATAR_VARIANTS = ['robot', 'morgan', 'riley', 'alex', 'signature', 'minimal'] as const
+export type AvatarVariant = (typeof AVATAR_VARIANTS)[number]
+
+export const MERCHANT_AVATAR_VARIANTS = ['robot', 'morgan', 'riley', 'alex'] as const
+
 export const INVITATION_POSITIONS = ['bottom-right', 'bottom-left', 'inline'] as const
 export type InvitationPosition = (typeof INVITATION_POSITIONS)[number]
 
@@ -35,6 +40,8 @@ export interface BargainExperienceConfig {
   designVariant: InvitationDesign
   avatarEnabled: boolean
   motionEnabled: boolean
+  /** Selected merchant-facing avatar: robot or one of the three v2 characters. */
+  avatarVariant: AvatarVariant
   /** Visual rendering style of the character (see CHARACTER_STYLES). */
   characterStyle: CharacterStyle
   /** When true only state-changing (essential) motion runs — no idle loops. */
@@ -56,6 +63,7 @@ export const DEFAULT_BARGAIN_EXPERIENCE: BargainExperienceConfig = {
   designVariant: 'smart-assistant',
   avatarEnabled: true,
   motionEnabled: true,
+  avatarVariant: 'robot',
   characterStyle: 'signature',
   essentialMotionOnly: false,
   localeMode: 'store-default',
@@ -81,9 +89,9 @@ export interface PersonalityMeta {
 export const PERSONALITY_META: PersonalityMeta[] = [
   {
     id: 'friendly_shopkeeper',
-    name: 'Friendly Shopkeeper',
-    title: 'Your Shopping Buddy',
-    description: 'Welcoming, warm, patient, and trustworthy. Explains value and offers alternatives.',
+    name: 'Morgan',
+    title: 'The Friendly Shopkeeper',
+    description: 'Warm, patient, and genuinely helpful. Explains value, offers alternatives, and keeps the mood easy.',
     exampleDialogue: [
       "Hey there! 😊 Found something you like? Let's see if we can find a deal that works for you.",
       "That's a little lower than I can manage, but let me see what I can do!",
@@ -91,21 +99,21 @@ export const PERSONALITY_META: PersonalityMeta[] = [
   },
   {
     id: 'strict_shopkeeper',
-    name: 'Strict Shopkeeper',
-    title: 'The Deal Master',
-    description: 'Confident, composed, firm, and commercially disciplined. Clear counters without hostility.',
+    name: 'Alex',
+    title: 'The Strict Shopkeeper',
+    description: 'Composed, precise, and commercially disciplined. Firm counters with a respectful, professional tone.',
     exampleDialogue: [
-      "Welcome! Ready to negotiate? Make me a reasonable offer and let's see what we can do.",
-      "That's below what I can consider. I can offer you a better price within my available limits.",
+      "Welcome. Make me a reasonable offer and I will see what is possible.",
+      "That is below what I can consider. I can offer a better price within my available limits.",
     ],
   },
   {
     id: 'playful_shopkeeper',
-    name: 'Playful Shopkeeper',
-    title: 'The Bargain Ninja',
-    description: 'Witty, expressive, and fun with restrained humor. Celebrates deals without spamming jokes.',
+    name: 'Riley',
+    title: 'The Playful Shopkeeper',
+    description: 'Witty, energetic, and expressive with one tasteful emoji at a time. Teases lightly and celebrates deals.',
     exampleDialogue: [
-      "👀 You've got a price in mind? Let's see if your bargaining skills are as good as you think!",
+      "👀 Got a price in mind? Let's see if your bargaining skills are as good as you think!",
       "Whoa 😂 That's a bold opening! Let's meet somewhere more realistic.",
     ],
   },

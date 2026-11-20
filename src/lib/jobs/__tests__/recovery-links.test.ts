@@ -178,7 +178,7 @@ describe('recovery message wiring', () => {
     expect(body[0]).toBe('Priya')
     expect(body[2]).toMatch(/^Priya, your /)
     expect(body[2]).toContain('is waiting 🛒')
-    expect(body[2]).toContain('Grab it now!')
+    expect(body[2]).toContain("It's still yours — claim it now!")
   })
 
   it('falls back to the consented identity name and backfills the cart', async () => {
@@ -221,12 +221,12 @@ describe('recovery message wiring', () => {
     const body: string[] = lastWhatsAppParams().body
     expect(body[2]).toContain('SAVE15')
     expect(body[2]).toContain('15% off')
-    expect(body[2]).toContain('Grab it now!')
+    expect(body[2]).toContain("It's still yours — claim it now!")
     expect(body[2]).toContain('https://cart-gain.com/r/lCheck123')
     expect(body[2]).not.toContain('to=bargain')
-    // Button should say "Buy Now" for the checkout link
+    // Button should use the classy CTA for the checkout link
     expect(lastWhatsAppParams().buttons).toEqual([
-      { type: 'url', text: 'Buy Now', url: 'lCheck123' },
+      { type: 'url', text: 'Claim Your Item', url: 'lCheck123' },
     ])
   })
 
@@ -235,11 +235,11 @@ describe('recovery message wiring', () => {
 
     const body: string[] = lastWhatsAppParams().body
     expect(body[2]).not.toContain('code')
-    expect(body[2]).toContain('Grab it now!')
+    expect(body[2]).toContain("It's still yours — claim it now!")
     expect(body[2]).toContain('https://cart-gain.com/r/lCheck123')
     expect(body[2]).not.toContain('to=bargain')
     expect(lastWhatsAppParams().buttons).toEqual([
-      { type: 'url', text: 'Buy Now', url: 'lCheck123' },
+      { type: 'url', text: 'Claim Your Item', url: 'lCheck123' },
     ])
   })
 
@@ -298,7 +298,7 @@ describe('recovery message wiring', () => {
     await processAbandonedCarts(25)
 
     expect(lastWhatsAppParams().buttons).toEqual([
-      { type: 'url', text: 'Buy Now', url: 'lCheck123' },
+      { type: 'url', text: 'Claim Your Item', url: 'lCheck123' },
     ])
   })
 

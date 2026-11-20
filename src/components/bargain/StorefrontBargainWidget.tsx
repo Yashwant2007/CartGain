@@ -7,7 +7,6 @@ import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { reciprocalCounter, isAbsurdOffer, absurdOfferReply, type NegotiationContext } from '@/lib/bargain/engine'
 import { GoalStrip } from '@/components/bargain/BargainPrimitives'
-import { isConversationState, priorityReaction } from '@/lib/bargain/conversation-state'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import {
   resolveShopkeeperAnimation,
@@ -15,7 +14,7 @@ import {
   type ShopkeeperAnimation,
 } from '@/lib/bargain/experience/living'
 import type { LivingEvent } from '@/lib/bargain/experience/avatar-state'
-import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import type { AvatarVariant, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import type { BargainDemoGoal } from '@/lib/bargain/api-types'
 import {
   createConversationId,
@@ -95,6 +94,7 @@ type Props = {
   language?: string
   demo?: boolean
   persona?: string
+  avatarVariant?: AvatarVariant
   maxAttempts?: number
   minProfitPercent?: number
   /** Active daily-goal preview (from /api/bargain/config or a demo turn). */
@@ -116,6 +116,7 @@ export default function StorefrontBargainWidget({
   language = 'auto',
   demo = true,
   persona: personaProp,
+  avatarVariant = 'robot',
   maxAttempts = 3,
   minProfitPercent = 25,
   goal: goalProp,
@@ -213,11 +214,7 @@ export default function StorefrontBargainWidget({
 
   const avatarPersonality = AVATAR_PERSONALITY[persona] ?? 'friendly_shopkeeper'
   const reactAvatar = (event: LivingEvent, ctx: FireAvatarContext = {}) => {
-    setCharacter((prev) => {
-      const resolved = resolveShopkeeperAnimation(avatarPersonality, event, { ...prev, ...ctx })
-      const override = ctx.conversationState ? priorityReaction(ctx.conversationState as any) : null
-      return override ? { ...resolved, expression: override } : resolved
-    })
+    setCharacter((prev) => resolveShopkeeperAnimation(avatarPersonality, event, { ...prev, ...ctx }))
   }
   const latestAiLine = [...messages].reverse().find((m) => m.role === 'ai')?.content
   const stageLine = showThinking
@@ -403,6 +400,7 @@ export default function StorefrontBargainWidget({
       const seenFor = Date.now() - thinkingShownAtRef.current
       const hold = minThinkingMs(data.reply ?? '') - seenFor
       if (hold > 0) await wait(hold)
+      reactAvatar('ai_typing')
       pushAi(data.reply, priceTag)
       setAttempts(isAbsurdTurn ? attempts : nextAttempt)
 
@@ -428,10 +426,11 @@ export default function StorefrontBargainWidget({
         originalPrice,
         decision: data.decision,
         ended,
-        conversationState: isConversationState(data.conversationState) ? data.conversationState : null,
+        conversationState: typeof data.conversationState === 'string' ? data.conversationState : null,
       })
     } catch (err: any) {
       console.warn('[StorefrontBargain] API failed, using local fallback:', err.message)
+      reactAvatar('error')
       const nextAttempt = attempts + 1
       const exhausted = nextAttempt >= maxAttempts
       const lastAiPrice = [...messages].reverse().find((m) => m.role === 'ai' && m.price != null)?.price ?? null
@@ -515,6 +514,7 @@ export default function StorefrontBargainWidget({
       const seenFor = Date.now() - thinkingShownAtRef.current
       const hold = minThinkingMs(result.reply) - seenFor
       if (hold > 0) await wait(hold)
+      reactAvatar('ai_typing')
       pushAi(result.reply, result.counterOffer)
       reactAvatar(exhausted && result.decision !== 'accept' ? 'deal_rejected' : result.decision === 'accept' ? 'deal_accepted' : result.decision === 'counter' ? 'counter_offer' : 'ai_reply', {
         customerMessage: userText,
@@ -605,6 +605,13 @@ export default function StorefrontBargainWidget({
           bubble entrance keep the negotiation feeling quick and professional. */}
       <style dangerouslySetInnerHTML={{ __html: `
         .cgf-msg { animation: cgfMsgIn 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) }
+        .cgf-chat-log { background: linear-gradient(180deg, #f8fafc 0%, #ffffff 18%, #ffffff 100%); border-radius: 12px; padding: 12px; scrollbar-width: thin; scrollbar-color: #c7d2fe transparent }
+        .cgf-chat-log::-webkit-scrollbar { width: 7px }
+        .cgf-chat-log::-webkit-scrollbar-thumb { background: #c7d2fe; border-radius: 999px }
+        .cgf-bubble { max-width: 86%; box-shadow: 0 2px 8px rgba(15,23,42,0.04) }
+        .cgf-typing { box-shadow: 0 2px 8px rgba(15,23,42,0.04) }
+        .cgf-composer { transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease }
+        .cgf-composer:focus-within { border-color: #818cf8; background: #fff; box-shadow: 0 0 0 3px rgba(99,102,241,0.12) }
         @keyframes cgfMsgIn { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: translateY(0) } }
 
         .cgf-tick {
@@ -633,7 +640,7 @@ export default function StorefrontBargainWidget({
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .cgf-msg, .cgf-tick, .cgf-tick-in, .cgf-dot { animation: none !important; transition: none !important }
+          .cgf-msg, .cgf-tick, .cgf-tick-in, .cgf-dot, .cgf-composer { animation: none !important; transition: none !important }
           .cgf-tick { opacity: 1 }
         }
       ` }} />
@@ -659,6 +666,7 @@ export default function StorefrontBargainWidget({
         eventContext={character}
         gesture={character.gesture}
         position={character.position}
+        avatarVariant={avatarVariant}
         name={`${PERSONA_NAME[persona]} · Shopkeeper`}
         status={t('online')}
         line={stageLine}
@@ -729,7 +737,7 @@ export default function StorefrontBargainWidget({
               return (
                 <div
                   key={msg.id}
-                  className={`cgf-msg rounded-xl px-4 py-3 text-sm leading-6 ${
+                  className={`cgf-msg cgf-bubble rounded-xl px-4 py-3 text-sm leading-6 ${
                     isCustomer
                       ? 'bg-indigo-600 text-white text-right ml-8'
                       : 'bg-gray-100 text-gray-700 mr-8'
@@ -757,7 +765,7 @@ export default function StorefrontBargainWidget({
             })}
             {showThinking && (
               <div
-                className="cgf-msg rounded-lg px-3 py-2.5 bg-gray-100 mr-8 inline-flex items-center gap-1.5"
+                className="cgf-msg cgf-typing rounded-lg px-3 py-2.5 bg-gray-100 mr-8 inline-flex items-center gap-1.5"
                 role="status"
                 aria-label={t('assistantThinking')}
               >
@@ -794,7 +802,7 @@ export default function StorefrontBargainWidget({
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="cgf-composer flex gap-2">
             <input
               ref={composerInputRef}
               value={input}

@@ -562,7 +562,7 @@ function buildTemplate(
     header: wantsImageHeader ? { type: 'image', imageUrl: headerImage } : undefined,
     body: [
       nonEmpty(customerName, 'there'),
-      nonEmpty(bodyContent, 'Your cart is waiting — grab it now! 🛒'),
+      nonEmpty(bodyContent, 'Your items are still waiting 🛒 yours whenever you are.'),
       nonEmpty(offerLine, fallbackOfferLine),
     ],
     // No footer component: the approved template's footer is static text.
@@ -570,7 +570,7 @@ function buildTemplate(
   if (context?.buttonUrlSuffix) {
     params.buttons = [{
       type: 'url',
-      text: context.buttonText || 'Buy Now',
+      text: context.buttonText || 'Claim Your Item',
       url: context.buttonUrlSuffix,
     }]
   }

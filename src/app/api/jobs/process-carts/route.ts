@@ -8,6 +8,7 @@ import prisma from '@/lib/db'
 import { requireJobAuth } from '@/lib/job-auth'
 import { claimSweepSlot } from '@/lib/jobs/sweep-slot'
 import { processBargainDealFollowups } from '@/lib/jobs/processBargainDealFollowups'
+import { processRecoveryJourneys } from '@/lib/jobs/processRecoveryJourneys'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -153,12 +154,24 @@ export async function GET(request: NextRequest) {
         console.error('Bargain deal follow-up error:', err)
       }
 
+      // Opt-in product-browse reminders were scheduled but never drained: the
+      // legacy /api/jobs/process-journeys route is disabled by default and has
+      // no cron. Piggyback on this sweep so the consent-backed follow-up really
+      // runs. Best-effort — a failure must never break the cart sweep.
+      let journeys: Awaited<ReturnType<typeof processRecoveryJourneys>> | null = null
+      try {
+        journeys = await processRecoveryJourneys(25)
+      } catch (err) {
+        console.error('Recovery journey error:', err)
+      }
+
       return NextResponse.json({
         message: 'Carts processed',
         status: 'processed',
         syncedCheckouts,
         result,
         dealFollowups,
+        journeys,
       })
     }
 

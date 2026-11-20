@@ -224,12 +224,16 @@ describe('extractPrice', () => {
     expect(extractPrice('amazon has it for 400')).toBeNull()
     expect(extractPrice('flipkart is selling it at 300, cheaper')).toBeNull()
     expect(extractPrice('hi sir how are you the other store is giving it for 500')).toBeNull()
+    expect(extractPrice('the other brand is giving it for ₹500, can you do ₹450?')).toBe(450)
+    expect(extractPrice('another company is offering it for $300; I can pay $260')).toBe(260)
+    expect(extractPrice('RivalX is charging 999 but 800 is what I can pay')).toBe(800)
   })
 
   it('still reads a real offer that is stated before a competitor price', () => {
     // The customer's own bid is kept; first valid match still wins (unchanged).
     expect(extractPrice('I will give you 550, amazon has it for 400')).toBe(550)
     expect(extractPrice('my offer is 450, the other store wants 500')).toBe(450)
+    expect(extractPrice('I can do ₹450, other brand is ₹500')).toBe(450)
   })
 
   it('picks the shopper’s bid over a referenced/list price in the same message', () => {
@@ -298,6 +302,8 @@ describe('classifyNonOfferNumber', () => {
     expect(classifyNonOfferNumber('I got 10% off')).toBe('percent')
     expect(classifyNonOfferNumber('₹999 is too much')).toBe('complaint')
     expect(classifyNonOfferNumber('the other store is 900')).toBe('comparison')
+    expect(classifyNonOfferNumber('the other brand is giving it for ₹500')).toBe('comparison')
+    expect(classifyNonOfferNumber('RivalX charges 999')).toBe('comparison')
     expect(classifyNonOfferNumber('the price is 1000')).toBe('reference')
   })
 

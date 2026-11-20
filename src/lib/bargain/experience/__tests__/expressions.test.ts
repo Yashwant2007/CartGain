@@ -62,4 +62,18 @@ describe('persona-aware shopkeeper reactions', () => {
     expect(expressionForTurn('friendly_shopkeeper', { aiReply: "I can't go that low." })).toBe('skeptical')
     expect(expressionForTurn('strict_shopkeeper', { aiReply: 'I cannot go lower than that.' })).toBe('declining')
   })
+
+  it('adds distinct reactions for hesitation, mismatch, and calculation', () => {
+    expect(expressionForShopperMessage('friendly_shopkeeper', 'I am not sure yet.', 1000)).toBe('encouraging')
+    expect(expressionForShopperMessage('strict_shopkeeper', 'I am not sure yet.', 1000)).toBe('determined')
+    expect(expressionForShopperMessage('playful_shopkeeper', 'I am not sure yet.', 1000)).toBe('uncertain')
+
+    expect(expressionForShopperMessage('friendly_shopkeeper', 'This is the wrong size.', 1000)).toBe('concerned')
+    expect(expressionForShopperMessage('strict_shopkeeper', 'This is the wrong size.', 1000)).toBe('warning')
+    expect(expressionForShopperMessage('playful_shopkeeper', 'This is the wrong size.', 1000)).toBe('uncertain')
+
+    expect(expressionForTurn('strict_shopkeeper', { aiReply: 'Let me check what I can do.' })).toBe('focused')
+    expect(expressionForTurn('friendly_shopkeeper', { aiReply: 'Perfect, great choice!' })).toBe('encouraging')
+    expect(expressionForTurn('strict_shopkeeper', { aiReply: 'Perfect, great choice!' })).toBe('impressed')
+  })
 })

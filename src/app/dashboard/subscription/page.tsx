@@ -48,6 +48,12 @@ type StoreData = {
   cartsRecovered?: number
 }
 
+type RecoveryMetrics = {
+  cartsAbandoned: number
+  messagesSent: number
+  cartsRecovered: number
+}
+
 type InvoiceData = {
   id: string
   amount: number
@@ -71,6 +77,11 @@ export default function SubscriptionPage() {
   const [processing, setProcessing] = useState<string | null>(null)
   const [purchaseSuccess, setPurchaseSuccess] = useState<string | null>(null)
   const [monthlyRecoveredRevenue, setMonthlyRecoveredRevenue] = useState(0)
+  const [recoveryMetrics, setRecoveryMetrics] = useState<RecoveryMetrics>({
+    cartsAbandoned: 0,
+    messagesSent: 0,
+    cartsRecovered: 0,
+  })
   const [cancelling, setCancelling] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
@@ -119,6 +130,11 @@ export default function SubscriptionPage() {
         const current = overviewData?.current?.overview
         if (current) {
           setMonthlyRecoveredRevenue(current.netRevenue ?? current.revenueRecovered ?? 0)
+          setRecoveryMetrics({
+            cartsAbandoned: current.cartsAbandoned ?? 0,
+            messagesSent: current.messagesSent ?? 0,
+            cartsRecovered: current.cartsRecovered ?? 0,
+          })
         }
       }
     } catch (err) {
@@ -166,7 +182,7 @@ export default function SubscriptionPage() {
   const currentPlan = normalizedKey ? PLANS[normalizedKey] : null
 
   const cartsUsed = subscription?.cartsUsedInPeriod ?? 0
-  const recoveredCarts = store?.cartsRecovered ?? 0
+  const recoveredCarts = recoveryMetrics.cartsRecovered || store?.cartsRecovered || 0
   const freeCartsRemaining = Math.max(0, FREE_CARTS_THRESHOLD - cartsUsed)
   const revShareCarts = Math.max(0, recoveredCarts - FREE_CARTS_THRESHOLD)
   const avgCartValue = monthlyRecoveredRevenue > 0 && recoveredCarts > 0 ? Math.round(monthlyRecoveredRevenue / recoveredCarts) : 1000
@@ -355,7 +371,7 @@ export default function SubscriptionPage() {
                 <p className="text-sm text-blue-300/80 font-medium">Free Recovery Trial</p>
               </div>
               <p className="text-sm text-blue-300/60">
-                {Math.min(cartsUsed, FREE_CARTS_THRESHOLD)} / {FREE_CARTS_THRESHOLD} carts
+                {Math.min(cartsUsed, FREE_CARTS_THRESHOLD)} / {FREE_CARTS_THRESHOLD} carts messaged
               </p>
             </div>
             <div className="w-full bg-slate-600/50 rounded-full h-3 mb-1">
@@ -366,8 +382,35 @@ export default function SubscriptionPage() {
             </div>
             <p className="text-xs text-blue-300/60 mt-2">
               {freeCartsRemaining > 0
-                ? `${freeCartsRemaining} more carts recovered at 0% revenue share`
-                : `50 free carts used. Revenue share is now active on recovered revenue.`}
+                ? `${freeCartsRemaining} more carts you can message at 0% revenue share`
+                : `Free messaging allowance used. Revenue share is now active on recovered revenue.`}
+            </p>
+          </div>
+        )}
+
+        {/* Recovery numbers on the free plan — each counted separately, never combined */}
+        {!isPaidUser && (
+          <div className="bg-slate-700/30 border border-blue-700/30 rounded-lg p-5 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-blue-200">Recovery at a glance</h3>
+              <span className="text-xs text-blue-300/60">Last 30 days · counted separately</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-slate-800/50 rounded-lg p-4">
+                <p className="text-xs text-blue-300/70">Carts Abandoned</p>
+                <p className="text-2xl font-bold text-white mt-1">{recoveryMetrics.cartsAbandoned.toLocaleString('en-IN')}</p>
+              </div>
+              <div className="bg-slate-800/50 rounded-lg p-4">
+                <p className="text-xs text-blue-300/70">Cart Messages Sent</p>
+                <p className="text-2xl font-bold text-cyan-300 mt-1">{recoveryMetrics.messagesSent.toLocaleString('en-IN')}</p>
+              </div>
+              <div className="bg-slate-800/50 rounded-lg p-4">
+                <p className="text-xs text-blue-300/70">Carts Recovered</p>
+                <p className="text-2xl font-bold text-emerald-400 mt-1">{recoveryMetrics.cartsRecovered.toLocaleString('en-IN')}</p>
+              </div>
+            </div>
+            <p className="text-xs text-blue-300/60 mt-3">
+              Abandoned carts, messages sent and recovered carts are three independent counts — a shopper can get several messages before recovering, so these numbers are not added together.
             </p>
           </div>
         )}
@@ -438,11 +481,19 @@ export default function SubscriptionPage() {
           </div>
         )}
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {/* Stats — each recovery metric is a separate count, never merged */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-slate-700/30 rounded-lg p-4">
-            <p className="text-xs text-blue-300/60">Carts Recovered (All Time)</p>
-            <p className="text-xl font-bold text-white mt-1">{cartsUsed.toLocaleString('en-IN')}</p>
+            <p className="text-xs text-blue-300/60">Carts Abandoned</p>
+            <p className="text-xl font-bold text-white mt-1">{recoveryMetrics.cartsAbandoned.toLocaleString('en-IN')}</p>
+          </div>
+          <div className="bg-slate-700/30 rounded-lg p-4">
+            <p className="text-xs text-blue-300/60">Cart Messages Sent</p>
+            <p className="text-xl font-bold text-cyan-300 mt-1">{recoveryMetrics.messagesSent.toLocaleString('en-IN')}</p>
+          </div>
+          <div className="bg-slate-700/30 rounded-lg p-4">
+            <p className="text-xs text-blue-300/60">Carts Recovered</p>
+            <p className="text-xl font-bold text-emerald-400 mt-1">{recoveryMetrics.cartsRecovered.toLocaleString('en-IN')}</p>
           </div>
           <div className="bg-slate-700/30 rounded-lg p-4">
             <p className="text-xs text-blue-300/60">Revenue Recovered</p>

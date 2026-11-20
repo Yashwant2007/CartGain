@@ -2,20 +2,31 @@ import type { ShopkeeperPersonality } from './types'
 import { analyzeIntent } from '../intent'
 import { extractPrice } from '../text'
 
-export type ExpressionState =
-  | 'idle'
-  | 'listening'
-  | 'thinking'
-  | 'curious'
-  | 'surprised'
-  | 'amused'
-  | 'skeptical'
-  | 'negotiating'
-  | 'disappointed'
-  | 'happy'
-  | 'celebrating'
-  | 'declining'
-  | 'error'
+export const EXPRESSION_STATES = [
+  'idle',
+  'listening',
+  'thinking',
+  'curious',
+  'surprised',
+  'amused',
+  'skeptical',
+  'negotiating',
+  'disappointed',
+  'happy',
+  'celebrating',
+  'declining',
+  'error',
+  'focused',
+  'concerned',
+  'uncertain',
+  'determined',
+  'encouraging',
+  'impressed',
+  'relieved',
+  'warning',
+] as const
+
+export type ExpressionState = (typeof EXPRESSION_STATES)[number]
 
 export type AvatarEvent =
   | 'CHAT_OPENED'
@@ -34,10 +45,10 @@ const EXPRESSION_MAP: Record<ShopkeeperPersonality, Record<AvatarEvent, Expressi
     CHAT_OPENED: 'listening',
     CUSTOMER_MESSAGE_RECEIVED: 'listening',
     AI_THINKING_STARTED: 'thinking',
-    AI_RESPONSE_RECEIVED: 'happy',
+    AI_RESPONSE_RECEIVED: 'encouraging',
     COUNTEROFFER_PRESENTED: 'negotiating',
     OFFER_ACCEPTED: 'celebrating',
-    OFFER_REJECTED: 'disappointed',
+    OFFER_REJECTED: 'concerned',
     CUSTOMER_DISENGAGED: 'idle',
     API_ERROR: 'error',
     SESSION_RESTORED: 'listening',
@@ -45,11 +56,11 @@ const EXPRESSION_MAP: Record<ShopkeeperPersonality, Record<AvatarEvent, Expressi
   strict_shopkeeper: {
     CHAT_OPENED: 'listening',
     CUSTOMER_MESSAGE_RECEIVED: 'listening',
-    AI_THINKING_STARTED: 'thinking',
-    AI_RESPONSE_RECEIVED: 'negotiating',
-    COUNTEROFFER_PRESENTED: 'negotiating',
+    AI_THINKING_STARTED: 'focused',
+    AI_RESPONSE_RECEIVED: 'determined',
+    COUNTEROFFER_PRESENTED: 'determined',
     OFFER_ACCEPTED: 'celebrating',
-    OFFER_REJECTED: 'declining',
+    OFFER_REJECTED: 'warning',
     CUSTOMER_DISENGAGED: 'idle',
     API_ERROR: 'error',
     SESSION_RESTORED: 'listening',
@@ -58,7 +69,7 @@ const EXPRESSION_MAP: Record<ShopkeeperPersonality, Record<AvatarEvent, Expressi
     CHAT_OPENED: 'curious',
     CUSTOMER_MESSAGE_RECEIVED: 'listening',
     AI_THINKING_STARTED: 'thinking',
-    AI_RESPONSE_RECEIVED: 'amused',
+    AI_RESPONSE_RECEIVED: 'impressed',
     COUNTEROFFER_PRESENTED: 'surprised',
     OFFER_ACCEPTED: 'celebrating',
     OFFER_REJECTED: 'amused',
@@ -123,6 +134,18 @@ export function expressionForShopperMessage(
 
   if (intent.intent === 'PURCHASE_READY') return 'happy'
 
+  if (intent.intent === 'PRODUCT_MISMATCH') {
+    if (personality === 'strict_shopkeeper') return 'warning'
+    if (personality === 'playful_shopkeeper') return 'uncertain'
+    return 'concerned'
+  }
+
+  if (intent.intent === 'PURCHASE_HESITATION') {
+    if (personality === 'strict_shopkeeper') return 'determined'
+    if (personality === 'playful_shopkeeper') return 'uncertain'
+    return 'encouraging'
+  }
+
   if (ratio != null && ratio <= 0.6) {
     if (personality === 'strict_shopkeeper') return 'skeptical'
     if (personality === 'playful_shopkeeper') return 'surprised'
@@ -137,6 +160,7 @@ export function expressionForShopperMessage(
 
   if (intent.intent === 'PRODUCT_QUESTION' || intent.intent === 'VALUE_UNCLEAR') {
     if (personality === 'playful_shopkeeper') return 'curious'
+    if (personality === 'strict_shopkeeper') return 'focused'
     return 'listening'
   }
 
@@ -181,6 +205,10 @@ export function expressionForTurn(
     return 'negotiating'
   }
 
+  if (aiReply && /let me check|checking|one moment|give me a second|calculat/i.test(aiReply)) {
+    return 'focused'
+  }
+
   if (aiReply && DECLINE_REPLY_RE.test(aiReply)) {
     if (personality === 'strict_shopkeeper') return 'declining'
     return 'skeptical'
@@ -188,7 +216,8 @@ export function expressionForTurn(
 
   if (aiReply && WARM_REPLY_RE.test(aiReply)) {
     if (personality === 'playful_shopkeeper') return 'amused'
-    return 'happy'
+    if (personality === 'strict_shopkeeper') return 'impressed'
+    return 'encouraging'
   }
 
   if (customerMessage) {
@@ -199,8 +228,5 @@ export function expressionForTurn(
 }
 
 export function isExpressionState(value: unknown): value is ExpressionState {
-  return typeof value === 'string' && [
-    'idle', 'listening', 'thinking', 'curious', 'surprised', 'amused', 'skeptical',
-    'negotiating', 'disappointed', 'happy', 'celebrating', 'declining', 'error',
-  ].includes(value)
+  return typeof value === 'string' && (EXPRESSION_STATES as readonly string[]).includes(value)
 }

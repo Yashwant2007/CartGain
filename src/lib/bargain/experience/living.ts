@@ -19,6 +19,8 @@ import {
 import { expressionForEvent, expressionForShopperMessage, expressionForTurn, type AvatarEvent, type ExpressionState } from './expressions'
 import { gestureFor, type GestureName } from './character'
 import { positionForContext, type AvatarPosition } from './positions'
+import { isConversationState, priorityReaction } from '../conversation-state'
+import type { ConversationState } from '../conversation-state'
 
 export interface FireAvatarContext extends LivingEventContext {
   /** True when verified product cards are on screen. */
@@ -85,6 +87,36 @@ function expressionForLivingEvent(
   return expressionForEvent(personality, LEGACY_EVENT[event] ?? 'CUSTOMER_DISENGAGED')
 }
 
+const PRIORITY_BODY: Partial<Record<ConversationState, AvatarState>> = {
+  COMPLETED: 'celebrating',
+  REJECTED: 'disappointed',
+  EXPIRED: 'disappointed',
+  CANCELLED: 'goodbye',
+  CUSTOMER_HESITATION: 'confused',
+  HUMAN_SUPPORT_REQUIRED: 'confused',
+}
+
+const PRIORITY_POSITION: Partial<Record<ConversationState, AvatarPosition>> = {
+  COMPLETED: 'celebration',
+  REJECTED: 'conversation',
+  EXPIRED: 'conversation',
+  CANCELLED: 'conversation',
+  CUSTOMER_HESITATION: 'conversation',
+  HUMAN_SUPPORT_REQUIRED: 'conversation',
+}
+
+export function priorityAnimationForConversationState(
+  personality: ShopkeeperPersonality,
+  state: string | null | undefined,
+): Pick<ShopkeeperAnimation, 'state' | 'expression' | 'gesture' | 'position'> | null {
+  if (!isConversationState(state)) return null
+  const expression = priorityReaction(state)
+  const body = PRIORITY_BODY[state]
+  const position = PRIORITY_POSITION[state]
+  if (!expression || !body || !position) return null
+  return { state: body, expression, gesture: gestureFor(personality, body), position }
+}
+
 /**
  * Resolve a conversation event into the complete character animation.
  *
@@ -107,7 +139,16 @@ export function resolveShopkeeperAnimation(
     checkoutStarted: ctx.checkoutStarted,
     opening: ctx.opening,
   })
-  return { ...ctx, event, eventSequence: ++livingEventSequence, state, expression, gesture, position }
+  const override = priorityAnimationForConversationState(personality, ctx.conversationState)
+  return {
+    ...ctx,
+    event,
+    eventSequence: ++livingEventSequence,
+    state: override?.state ?? state,
+    expression: override?.expression ?? expression,
+    gesture: override?.gesture ?? gesture,
+    position: override?.position ?? position,
+  }
 }
 
 /**

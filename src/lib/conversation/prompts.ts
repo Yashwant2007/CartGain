@@ -13,7 +13,7 @@
 import { ConversationFacts } from './facts'
 import { BrandVoice, maxEmojis, maxWords, voicePromptBlock } from './voice'
 
-export const CONVERSATION_PROMPT_VERSION = 'recovery-v4'
+export const CONVERSATION_PROMPT_VERSION = 'recovery-v5'
 
 export type ConversationStage = 'reminder_1' | 'reminder_2' | 'reminder_3'
 
@@ -80,16 +80,17 @@ ${STAGE_OBJECTIVE[stage]}
 STYLE (how it should read)
 - Make it feel like a real shopkeeper speaking to ONE customer by name. Open warmly with the customer's first name ("Priya," "Arjun,") when it is in the FACTS — otherwise a simple friendly opener without a fake name.
 - Name the actual item(s) the customer chose ("the linen shirt you picked") instead of "your items". Use concrete detail ONLY from the item name/description above.
-- Be punchy and salesy — shoppers skim. Short sentences, one idea per line, no fluff. Use one light joke or playful aside if it lands naturally.
-- One warm, specific reason to come back (it is saved, the offer is theirs personally, checkout takes a minute) — not a list.
-- Sound like a person who works at the store, not a marketing robot: contractions, short sentences, no exclamation-mark stacking.
-- If an authorised offer exists in the FACTS, weave it in as a personal gift to THIS customer: "I set aside [X]% off just for you, [Name] — use code [CODE]." Make the code feel reserved for them, not a mass promo.
-- Use emoji where it adds warmth (max ${maxEmojis(voice, facts.channel)}), but never more than one or two in a short WhatsApp message.
-- End with one clear next step (finish checkout, or make an offer if the FACTS include that link).
+- Be confident, warm and classy — shoppers skim, so keep sentences short and the tone assured rather than desperate. No hype, no "Hurry", no "Grab it now", no stacked exclamation marks.
+- Make the customer feel the item is already theirs: "your [item] is still waiting", "it's yours whenever you're ready", "right where you left it". Never invent scarcity.
+- Sound like the shopkeeper at ${facts.storeName}, not a marketing robot: contractions, short sentences, one idea per line.
+- Name the store naturally when it helps ("the shirt you picked at ${facts.storeName}") so the message clearly comes from them.
+- If an authorised offer exists in the FACTS, weave it in as something reserved for THIS customer: "There's [X]% off waiting for you, [Name] — use code [CODE]." Never imply you personally set it aside.
+- Use emoji sparingly (max ${maxEmojis(voice, facts.channel)}), at most one or two in a short WhatsApp message, and only where it adds meaning.
+- End with ONE polished CTA: "Claim Your Item", "Complete Your Order", or "Make an Offer" when a bargain link is supplied. Avoid generic "Buy Now".
 - Make the headline and CTA specific to THIS stage and THESE items. Never use a generic "Your cart is waiting" on every message.
 - Vary your opening and sentence rhythm. Do not reuse the previous message's opener, structure or joke.
 - If the item detail is present, use ONE concrete detail from it (colour, material, flavour, size) — never invent one.
-- NEVER repeat "saved" or "still saved" — say "waiting," "just chilling," "right where you left it," etc. Variety matters.
+- Avoid repeating "saved" or "still saved" from an earlier message. Prefer "waiting", "still yours", or "right where you left it". Variety matters.
 
 FACTS (the ONLY things you are allowed to state)
 ${factsBlock(facts)}

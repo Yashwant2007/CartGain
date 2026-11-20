@@ -128,7 +128,8 @@ export default function AnalyticsPage() {
   }, [storeId, days])
 
   const change = useMemo(() => {
-    if (!current || !previous) return { revenue: '+0%', rate: '+0%', carts: '+0%', clickRate: '+0%' }
+    const flat = { revenue: '+0%', rate: '+0%', carts: '+0%', clickRate: '+0%', abandoned: '+0%', sent: '+0%' }
+    if (!current || !previous) return flat
 
     const calc = (curr: number, prev: number) => {
       if (prev === 0) return curr > 0 ? '+100%' : '+0%'
@@ -141,6 +142,8 @@ export default function AnalyticsPage() {
       rate: calc(current.overview.recoveryRate, previous.overview.recoveryRate),
       carts: calc(current.overview.cartsRecovered, previous.overview.cartsRecovered),
       clickRate: calc(current.overview.messagesClicked, previous.overview.messagesClicked),
+      abandoned: calc(current.overview.cartsAbandoned, previous.overview.cartsAbandoned),
+      sent: calc(current.overview.messagesSent, previous.overview.messagesSent),
     }
   }, [current, previous])
 
@@ -178,7 +181,16 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+        <MetricCard
+          title="Carts Abandoned"
+          value={(current?.overview.cartsAbandoned ?? 0).toLocaleString('en-IN')}
+          change={change.abandoned}
+          trend={change.abandoned.startsWith('+') ? 'up' : 'down'}
+          icon={<ShoppingCart className="w-6 h-6" />}
+          color="blue"
+          loading={isLoading}
+        />
         <MetricCard
           title="Revenue Recovered"
           value={`₹${(current?.overview.revenueRecovered ?? 0).toLocaleString('en-IN')}`}
@@ -221,8 +233,8 @@ export default function AnalyticsPage() {
         <MetricCard
           title="Messages Sent"
           value={(current?.overview.messagesSent ?? 0).toLocaleString('en-IN')}
-          change="+0%"
-          trend="up"
+          change={change.sent}
+          trend={change.sent.startsWith('+') ? 'up' : 'down'}
           icon={<MessageSquare className="w-6 h-6" />}
           color="primary"
           loading={isLoading}
@@ -429,24 +441,32 @@ export default function AnalyticsPage() {
                 label="Carts Abandoned"
                 value={current.overview.cartsAbandoned}
                 percentage={100}
+                caption="all abandoned carts"
                 color="bg-blue-600"
               />
               <FunnelStep
-                label="Messages Sent"
+                label="Cart Messages Sent"
                 value={current.overview.messagesSent}
                 percentage={current.overview.cartsAbandoned > 0 ? (current.overview.messagesSent / current.overview.cartsAbandoned) * 100 : 0}
+                caption={current.overview.cartsAbandoned > 0
+                  ? `${(current.overview.messagesSent / current.overview.cartsAbandoned).toFixed(2)} messages per abandoned cart`
+                  : 'no abandoned carts in this period'}
                 color="bg-blue-500"
               />
               <FunnelStep
                 label="Messages Clicked"
                 value={current.overview.messagesClicked}
-                percentage={current.overview.cartsAbandoned > 0 ? (current.overview.messagesClicked / current.overview.cartsAbandoned) * 100 : 0}
+                percentage={current.overview.messagesSent > 0 ? (current.overview.messagesClicked / current.overview.messagesSent) * 100 : 0}
+                caption={current.overview.messagesSent > 0
+                  ? `${((current.overview.messagesClicked / current.overview.messagesSent) * 100).toFixed(1)}% of messages sent`
+                  : 'no messages sent in this period'}
                 color="bg-cyan-500"
               />
               <FunnelStep
                 label="Carts Recovered"
                 value={current.overview.cartsRecovered}
                 percentage={current.overview.recoveryRate}
+                caption={`${current.overview.recoveryRate ?? 0}% of abandoned carts, counted from recovered carts`}
                 color="bg-emerald-500"
               />
             </div>
@@ -547,10 +567,11 @@ function ChannelBadge({ channel }: { channel: string }) {
   )
 }
 
-function FunnelStep({ label, value, percentage, color }: {
+function FunnelStep({ label, value, percentage, caption, color }: {
   label: string
   value: number
   percentage: number
+  caption: string
   color: string
 }) {
   return (
@@ -565,7 +586,7 @@ function FunnelStep({ label, value, percentage, color }: {
           style={{ width: `${Math.min(percentage, 100)}%` }}
         />
       </div>
-      <p className="text-xs text-blue-300/50 mt-0.5 text-right">{percentage.toFixed(1)}% of abandoned</p>
+      <p className="text-xs text-blue-300/50 mt-0.5 text-right">{caption}</p>
     </div>
   )
 }

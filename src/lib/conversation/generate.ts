@@ -297,6 +297,11 @@ export function buildFallbackMessage(
   const offer = facts.discount ? ` Use ${facts.discount.code} for ${offerValue}.` : ''
   const stage = opts?.stage || 'reminder_1'
   const channel = facts.channel
+  // Fallback copy still reads the merchant's own store data — a shopper must
+  // never receive generic "some online store" wording.
+  const storeLabel = (facts.storeName || '').replace(/\s+/g, ' ').trim().slice(0, 30)
+  const atStore = storeLabel ? ` at ${storeLabel}` : ''
+  const place = atStore || ' at your store'
 
   const nameBit = firstName ? `${firstName}, ` : ''
 
@@ -304,40 +309,40 @@ export function buildFallbackMessage(
     ? {
         // {{1}} = name, {{2}} = body (no name repetition), {{3}} = offer line
         reminder_1: [
-          `your ${firstItemName}${detailBit} is just chilling in your cart 🛒 still thinking it over? 🤔 grab it now!`,
-          `your ${firstItemName}${detailBit} is looking a bit lonely in your cart 😄 come claim it while it's still yours!`,
-          `still thinking about your ${firstItemName}${detailBit}? it's not going to bargain with itself! 😉`,
+          `your ${firstItemName}${detailBit}${atStore} is waiting 🛒 still yours — claim it now!`,
+          `the ${firstItemName}${detailBit} you picked${atStore} is right where you left it 🛒 make it yours!`,
+          `still deciding on your ${firstItemName}${detailBit}${atStore}? it's waiting for you 🛒`,
         ],
         reminder_2: [
-          `still on the fence about your ${firstItemName}${detailBit}? it's right where you left it 🛒 take another look!`,
-          `no pressure — your ${firstItemName}${detailBit} is just waiting 🛒 whenever you're ready!`,
-          `your ${firstItemName}${detailBit} hasn't gone anywhere 😊 ready when you are!`,
+          `your ${firstItemName}${detailBit}${atStore} is still waiting 🛒 yours whenever you're ready!`,
+          `no rush — your ${firstItemName}${detailBit}${place} is still here 🛒 take another look!`,
+          `your ${firstItemName}${detailBit}${place} is right where you left it 😊 ready when you are!`,
         ],
         reminder_3: [
-          `last note about your ${firstItemName}${detailBit} — it's still in your cart 🛒 if now isn't the time, no worries!`,
-          `we'll stop nudging after this one 🛒 your ${firstItemName}${detailBit} is here if you want it!`,
-          `final reminder about your ${firstItemName}${detailBit} — still here if you change your mind! 👋`,
+          `last note${place} about your ${firstItemName}${detailBit} — it's still here 🛒 if now isn't the time, no worries!`,
+          `we'll stop nudging after this one 🛒 your ${firstItemName}${detailBit} is yours if you want it!`,
+          `final reminder${atStore} about your ${firstItemName}${detailBit} — still here if you change your mind! 👋`,
         ],
       }
     : {
         reminder_1: [
           `${greeting}
-your ${firstItemName}${detailBit} is just waiting — ${total}.${offer}
+your ${firstItemName}${detailBit}${place} is waiting — ${total}.${offer}
 
-Grab it now before it runs away! 🛒`,
+It's still yours — claim it now 🛒`,
           `${greeting}
-your ${firstItemName}${detailBit} is sitting in your cart like it's on a date with itself 😄
-${total}.${offer} Come claim it!
+your ${firstItemName}${detailBit}${place} is waiting for you — ${total}.${offer}
+Come claim it whenever you're ready.
 
-No rush — checkout takes a minute. ✨`,
+Checkout takes a minute. ✨`,
           `${greeting}
-we held your ${firstItemName}${detailBit} for you — ${total}.${offer}
+we held your ${firstItemName}${detailBit}${place} for you — ${total}.${offer}
 
-Come back whenever you like. Your cart's right here.`,
+Come back whenever you like — it's right here.`,
         ],
         reminder_2: [
           `${greeting}
-still thinking about your ${firstItemName}${detailBit}? it's not going to buy itself! 😄
+still deciding on your ${firstItemName}${detailBit}${place}? It's right where you left it.
 ${total}.${offer}
 
 Take another look — we're here when you're ready. 💬`,
@@ -352,7 +357,7 @@ Take another look, or make us an offer if the price is the sticking point. 🤝`
         ],
         reminder_3: [
           `${greeting}
-this is the last note from us about this cart. Your ${firstItemName}${detailBit} is still saved — ${total}.${offer}
+this is the last note${place} about your ${firstItemName}${detailBit}. It's still here — ${total}.${offer}
 
 If now isn't the time, no hard feelings. 💛`,
           `${greeting}
@@ -395,9 +400,9 @@ If you'd rather not hear from us again, the unsubscribe link is below. Take care
     reminder_3: `${nameBit}a last note about your ${firstItemName}`,
   }
   const ctaVariants: Record<ConversationStage, string[]> = {
-    reminder_1: ['Complete checkout', 'Grab it now', 'Back to cart'],
-    reminder_2: ['Take another look', 'Return to cart', 'See your cart'],
-    reminder_3: ['Complete your order', 'Finish checkout', 'One last look'],
+    reminder_1: ['Claim Your Item', 'Complete Your Order', 'Back to Your Cart'],
+    reminder_2: ['Take Another Look', 'Return to Your Cart', 'See Your Picks'],
+    reminder_3: ['Complete Your Order', 'Finish Checkout', 'One Last Look'],
   }
   const cta = ctaVariants[stage][pickIndex(`${seed}:cta`, ctaVariants[stage].length)]
 

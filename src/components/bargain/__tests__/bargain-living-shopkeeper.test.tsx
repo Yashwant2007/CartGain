@@ -18,6 +18,7 @@ const experience = {
   designVariant: 'smart-assistant' as const,
   avatarEnabled: true,
   motionEnabled: true,
+  avatarVariant: 'robot' as const,
   characterStyle: 'signature' as const,
   essentialMotionOnly: false,
   localeMode: 'store-default',
@@ -178,6 +179,29 @@ describe('BargainWidget living shopkeeper', () => {
 
     await waitFor(() => {
       expect(stage(container)?.getAttribute('data-avatar-position')).toBe('recommendation')
+      expect(stage(container)?.getAttribute('data-avatar-state')).toBe('recommending')
+    }, { timeout: 3000 })
+  })
+
+  it('aligns face, body and position with an unambiguous server conversation state', async () => {
+    stubFetch({
+      offer: {
+        reply: 'All done — thank you!',
+        decision: 'chat',
+        conversationState: 'COMPLETED',
+      },
+    })
+    const { container } = render(<BargainWidget {...baseProps} experience={experience} />)
+    await waitFor(() => expect(screen.getByLabelText('Ask about this product or make an offer…')).toBeTruthy(), { timeout: 3000 })
+
+    const input = screen.getByLabelText('Ask about this product or make an offer…')
+    fireEvent.change(input, { target: { value: 'Thank you' } })
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 })
+
+    await waitFor(() => {
+      expect(stage(container)?.getAttribute('data-avatar-state')).toBe('celebrating')
+      expect(stage(container)?.getAttribute('data-expression')).toBe('celebrating')
+      expect(stage(container)?.getAttribute('data-avatar-position')).toBe('celebration')
     }, { timeout: 3000 })
   })
 

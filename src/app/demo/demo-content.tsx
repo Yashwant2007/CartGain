@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useSession, signOut } from 'next-auth/react'
@@ -30,16 +30,13 @@ import {
   wait,
 } from '@/components/bargain/conversation-utils'
 import {
-  expressionForEvent,
-  expressionForShopperMessage,
-  expressionForTurn,
-  type ExpressionState,
-} from '@/lib/bargain/experience/expressions'
+  resolveShopkeeperAnimation,
+  type FireAvatarContext,
+  type ShopkeeperAnimation,
+} from '@/lib/bargain/experience/living'
+import type { LivingEvent } from '@/lib/bargain/experience/avatar-state'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
-import type { Character3DState } from '@/lib/bargain/character3d/types'
-import { gestureFor } from '@/lib/bargain/experience/character'
-import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
-import type { AvatarPosition } from '@/lib/bargain/experience/positions'
+import { toCharacter3DState } from '@/lib/bargain/character3d/state-map'
 
 type ChatMsg = {
   id: string
@@ -84,9 +81,9 @@ const PRODUCTS: DemoProduct[] = [
 const PLACEHOLDER_IMG = 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=400&h=400&fit=crop'
 
 const PERSONAS: { id: Persona; name: string; blurb: string }[] = [
-  { id: 'friendly_shopkeeper', name: 'Alex — Friendly Shopkeeper', blurb: 'Warm, neighbourly, finds a way.' },
-  { id: 'strict_negotiator', name: 'Morgan — Strict Negotiator', blurb: 'Precise, data-driven, no emoji.' },
-  { id: 'playful_friend', name: 'Riley — Playful Friend', blurb: 'Cheeky, fun, makes you smile.' },
+  { id: 'friendly_shopkeeper', name: 'Morgan — Friendly Shopkeeper', blurb: 'Warm, neighbourly, finds a way.' },
+  { id: 'strict_negotiator', name: 'Alex — Strict Shopkeeper', blurb: 'Precise, data-driven, no emoji.' },
+  { id: 'playful_friend', name: 'Riley — Playful Shopkeeper', blurb: 'Cheeky, fun, makes you smile.' },
 ]
 
 const AVATAR_PERSONALITY: Record<Persona, ShopkeeperPersonality> = {
@@ -142,31 +139,21 @@ export default function DemoContent() {
   const [persona, setPersona] = useState<Persona>('friendly_shopkeeper')
   const [language, setLanguage] = useState<string>('auto')
   const t = (key: UiKey, vars?: Record<string, string | number>) => uiText(language, key, vars)
+  const avatarPersonality = AVATAR_PERSONALITY[persona]
+  const [character, setCharacter] = useState<ShopkeeperAnimation>(() => resolveShopkeeperAnimation('friendly_shopkeeper', 'idle'))
+  const fireAvatar = useCallback((event: LivingEvent, ctx: FireAvatarContext = {}) => {
+    setCharacter((prev) => resolveShopkeeperAnimation(avatarPersonality, event, { ...prev, ...ctx }))
+  }, [avatarPersonality])
   const [started, setStarted] = useState(false)
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
   const [attemptsUsed, setAttemptsUsed] = useState(0)
   const [thinking, setThinking] = useState(false)
-  const [avatarExpression, setAvatarExpression] = useState<ExpressionState>('listening')
   const [showThinking, setShowThinking] = useState(false)
   const thinkingTimerRef = useRef<number | null>(null)
   const thinkingShownAtRef = useRef(0)
   const [ended, setEnded] = useState<null | 'accepted' | 'rejected' | 'abandoned' | 'skipped'>(null)
-  // The living shopkeeper: the demo drives the same body/gesture/position
-  // vocabulary as the storefront widgets, from real conversation events only.
-  const demoAvatarState: AvatarState = ended === 'accepted'
-    ? 'celebrating'
-    : ended
-      ? 'goodbye'
-      : thinking
-        ? 'thinking'
-        : 'listening'
-  const demoAvatarPosition: AvatarPosition = ended === 'accepted' ? 'celebration' : 'conversation'
-  const demo3DState: Character3DState =
-    demoAvatarState === 'celebrating' ? 'celebrate'
-    : demoAvatarState === 'goodbye' ? 'exit'
-    : demoAvatarState === 'thinking' ? 'think'
-    : 'listen'
+  const demo3DState = toCharacter3DState(character.state, avatarPersonality)
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [alreadyUsed, setAlreadyUsed] = useState(false)
   // Storefront-parity feature state: verified recommendation cards + the real
@@ -290,7 +277,7 @@ export default function DemoContent() {
     sessionIdRef.current += 1
     dealAcceptedRef.current = false
     setMessages([{ id: createConversationId('d'), role: 'ai', content: buildOpeningMessage(ctx) }])
-    setAvatarExpression(expressionForEvent(AVATAR_PERSONALITY[persona], 'CHAT_OPENED'))
+    fireAvatar('widget_opened', { opening: true })
     setAttemptsUsed(0)
     setEnded(null)
     setFinalPrice(null)
@@ -314,7 +301,7 @@ export default function DemoContent() {
     setEnded(null)
     setFinalPrice(null)
     setThinking(false)
-    setAvatarExpression('listening')
+    fireAvatar('idle')
     setRecommendations([])
     setRecommendationReason(null)
     setRecommendationHistory(null)
@@ -368,7 +355,7 @@ export default function DemoContent() {
     }
     const offer = extractPrice(userText)
     const isWalkout = detectWalkout(userText)
-    setAvatarExpression(expressionForShopperMessage(AVATAR_PERSONALITY[persona], userText, product.price))
+    fireAvatar('customer_message', { customerMessage: userText, originalPrice: product.price })
 
     const isOfferTurn = offer != null && !isAbsurdOffer(offer, { minPrice, originalPrice: product.price })
     const nextAttempt = isOfferTurn ? attemptsUsed + 1 : attemptsUsed
@@ -392,6 +379,8 @@ export default function DemoContent() {
     let decision: NegotiationResult['decision'] = 'counter'
     let newEnded: null | 'accepted' | 'rejected' | 'abandoned' | 'skipped' = null
     let newFinal: number | null = null
+    let conversationState: string | null = null
+    let hasRecommendations = false
 
     // Walkout with zero attempts left always abandons locally
     if (isWalkout && attemptsLeft <= 0) {
@@ -438,7 +427,9 @@ export default function DemoContent() {
           if (data.decision === 'accept') decision = 'accept'
           else if (data.decision === 'reject') decision = 'reject'
           else decision = 'counter'
-          if (Array.isArray(data.recommendations) && data.recommendations.length > 0) {
+          conversationState = typeof data.conversationState === 'string' ? data.conversationState : null
+          hasRecommendations = Array.isArray(data.recommendations) && data.recommendations.length > 0
+          if (hasRecommendations) {
             setRecommendations(data.recommendations)
           } else {
             setRecommendations([])
@@ -512,7 +503,7 @@ export default function DemoContent() {
       thinkingTimerRef.current = window.setTimeout(() => {
         thinkingShownAtRef.current = Date.now()
         setShowThinking(true)
-        setAvatarExpression('thinking')
+        fireAvatar('ai_thinking')
         resolve()
       }, THINKING_DELAY_MS)
     })
@@ -538,18 +529,28 @@ export default function DemoContent() {
       const seenFor = Date.now() - thinkingShownAtRef.current
       const hold = minThinkingMs(reply) - seenFor
       if (hold > 0) await wait(hold)
+      fireAvatar('ai_typing', { hasRecommendations })
       setMessages(prev => [...prev, { id: createConversationId('a'), role: 'ai', content: reply, offeredPrice: counterOffer }])
       setThinking(false)
       setShowThinking(false)
       if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
-      setAvatarExpression(expressionForTurn(AVATAR_PERSONALITY[persona], {
+      const event: LivingEvent = newEnded === 'accepted'
+        ? 'deal_accepted'
+        : newEnded === 'rejected' || newEnded === 'abandoned'
+          ? 'deal_rejected'
+          : decision === 'counter'
+            ? 'counter_offer'
+            : 'ai_reply'
+      fireAvatar(event, {
         customerMessage: userText,
         aiReply: reply,
         counterOffer,
         originalPrice: product.price,
         decision,
         ended: newEnded,
-      }))
+        hasRecommendations,
+        conversationState,
+      })
       if (newEnded) setEnded(newEnded)
       if (newFinal != null) setFinalPrice(newFinal)
     }, 0)
@@ -562,7 +563,10 @@ export default function DemoContent() {
     setMessages(prev => [...prev, { id: createConversationId('c'), role: 'customer', content: "Actually, I'll just buy it at the full price.", delivery: 'sending' }])
     setInput('')
     noteConversationSent()
-    setAvatarExpression('listening')
+    fireAvatar('customer_message', {
+      customerMessage: "Actually, I'll just buy it at the full price.",
+      originalPrice: product.price,
+    })
     setThinking(true)
     setShowThinking(false)
     thinkingShownAtRef.current = 0
@@ -571,7 +575,7 @@ export default function DemoContent() {
       thinkingTimerRef.current = window.setTimeout(() => {
         thinkingShownAtRef.current = Date.now()
         setShowThinking(true)
-        setAvatarExpression('thinking')
+        fireAvatar('ai_thinking')
         resolve()
       }, THINKING_DELAY_MS)
     })
@@ -582,15 +586,18 @@ export default function DemoContent() {
       const seenFor = Date.now() - thinkingShownAtRef.current
       const hold = minThinkingMs(reply) - seenFor
       if (hold > 0) await wait(hold)
+      fireAvatar('ai_typing')
       setMessages(prev => [...prev, { id: createConversationId('a'), role: 'ai', content: reply }])
       setThinking(false)
       setShowThinking(false)
       if (thinkingTimerRef.current) window.clearTimeout(thinkingTimerRef.current)
-      setAvatarExpression(expressionForTurn(AVATAR_PERSONALITY[persona], {
+      fireAvatar('deal_accepted', {
         customerMessage: "Actually, I'll just buy it at the full price.",
-        decision: 'skipped',
+        aiReply: reply,
+        originalPrice: product.price,
+        decision: 'accept',
         ended: 'skipped',
-      }))
+      })
       setEnded('skipped')
     }, 0)
   }
@@ -837,8 +844,11 @@ export default function DemoContent() {
         {started && (
           <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl overflow-hidden">
             <LivingShopkeeper3D
-              personality={AVATAR_PERSONALITY[persona]}
+              personality={avatarPersonality}
               state={demo3DState}
+              event={character.event}
+              eventSequence={character.eventSequence}
+              eventContext={character}
               motionEnabled
               quality="high"
             />

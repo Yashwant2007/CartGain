@@ -267,23 +267,23 @@ export default function BargainPage() {
                   </p>
                   <div className="space-y-4">
                     <div className="flex items-start gap-4 bg-slate-800/40 border border-cyan-500/20 rounded-xl p-5">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white font-bold flex-shrink-0">A</div>
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white font-bold flex-shrink-0">M</div>
                       <div>
-                        <p className="font-semibold text-white">Alex — The Friendly Shopkeeper</p>
+                        <p className="font-semibold text-white">Morgan — The Friendly Shopkeeper</p>
                         <p className="text-sm text-blue-200 mt-1">Warm and folksy, treats customers like family. Concedes with stories and personal touches. Ideal for beauty & lifestyle stores.</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-4 bg-slate-800/40 border border-blue-500/20 rounded-xl p-5">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white font-bold flex-shrink-0">M</div>
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white font-bold flex-shrink-0">A</div>
                       <div>
-                        <p className="font-semibold text-white">Morgan — The Strict Negotiator</p>
+                        <p className="font-semibold text-white">Alex — The Strict Shopkeeper</p>
                         <p className="text-sm text-blue-200 mt-1">Measured and precise, uses silence and value-framing. Never makes the first move. Perfect for electronics or B2B catalogues.</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-4 bg-slate-800/40 border border-purple-500/20 rounded-xl p-5">
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold flex-shrink-0">R</div>
                       <div>
-                        <p className="font-semibold text-white">Riley — The Playful Friend</p>
+                        <p className="font-semibold text-white">Riley — The Playful Shopkeeper</p>
                         <p className="text-sm text-blue-200 mt-1">Witty and dramatic, makes haggling fun while staying razor-sharp. Great for streetwear, toys & Gen-Z brands.</p>
                       </div>
                     </div>

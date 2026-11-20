@@ -1,0 +1,107 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
+import type { ExpressionState } from '@/lib/bargain/experience/expressions'
+import {
+  isV2AvatarVariant,
+  V2_AVATARS,
+  V2_CELL_POSITIONS,
+  v2CellForExpression,
+  v2MotionForState,
+  type V2AvatarVariant,
+} from '@/lib/bargain/experience/v2-shopkeepers'
+
+interface Props {
+  variant: V2AvatarVariant | string
+  expression: ExpressionState
+  state?: AvatarState
+  motionEnabled?: boolean
+  essentialMotionOnly?: boolean
+}
+
+const V2_CSS = `
+.cg-v2 { position: relative; width: 168px; height: 194px; flex-shrink: 0; pointer-events: none; }
+.cg-v2-glow { position: absolute; inset: 6px 4px 26px; border-radius: 50%; background: radial-gradient(ellipse at center, color-mix(in srgb, var(--cg-v2-accent) 22%, transparent), transparent 68%); opacity: .75; }
+.cg-v2-shadow { position: absolute; left: 50%; bottom: 1px; width: 70px; height: 9px; transform: translateX(-50%); border-radius: 50%; background: rgba(15,118,110,.16); filter: blur(5px); }
+.cg-v2-art { position: absolute; left: 0; top: 13px; width: 168px; height: 168px; background-repeat: no-repeat; background-size: 200% 200%; border-radius: 50%; clip-path: ellipse(50% 50% at 50% 50%); transform-origin: 50% 84%; will-change: transform; filter: drop-shadow(0 5px 9px rgba(15,23,42,.08)); }
+.cg-v2--soft .cg-v2-art { transition: transform 420ms cubic-bezier(.2,.8,.2,1), background-position 180ms ease-out; }
+.cg-v2--bouncy .cg-v2-art { transition: transform 300ms cubic-bezier(.2,1.4,.35,1), background-position 160ms ease-out; }
+.cg-v2--precise .cg-v2-art { transition: transform 260ms cubic-bezier(.4,0,.2,1), background-position 140ms linear; }
+.cg-v2--motion-listen .cg-v2-art { animation: cgV2Breathe 3.4s ease-in-out infinite; }
+.cg-v2--motion-think .cg-v2-art { animation: cgV2Tilt 2.4s ease-in-out infinite; }
+.cg-v2--motion-present .cg-v2-art { animation: cgV2Lean 1.6s ease-in-out infinite; }
+.cg-v2--motion-guide .cg-v2-art { animation: cgV2Guide 1.4s ease-in-out infinite; }
+.cg-v2--motion-enter .cg-v2-art { animation: cgV2Enter .5s cubic-bezier(.2,.9,.3,1.2) 1; }
+.cg-v2--motion-celebrate .cg-v2-art { animation: cgV2Celebrate .8s cubic-bezier(.2,1.3,.3,1) 1; }
+.cg-v2--motion-recede .cg-v2-art { animation: cgV2Recede .45s ease-out 1; }
+.cg-v2--essential .cg-v2-art { animation: none; }
+.cg-v2--essential.cg-v2--motion-enter .cg-v2-art { animation: cgV2Enter .5s cubic-bezier(.2,.9,.3,1.2) 1; }
+.cg-v2--essential.cg-v2--motion-celebrate .cg-v2-art { animation: cgV2Celebrate .8s cubic-bezier(.2,1.3,.3,1) 1; }
+.cg-v2--essential.cg-v2--motion-recede .cg-v2-art { animation: cgV2Recede .45s ease-out 1; }
+.cg-v2[data-expression="disappointed"] .cg-v2-art,
+.cg-v2[data-expression="error"] .cg-v2-art { filter: saturate(.86) drop-shadow(0 4px 8px rgba(15,23,42,.06)); }
+@keyframes cgV2Breathe { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-1px) scale(1.012); } }
+@keyframes cgV2Tilt { 0%,100% { transform: rotate(-1deg) translateY(0); } 50% { transform: rotate(2.4deg) translateY(-1px); } }
+@keyframes cgV2Lean { 0%,100% { transform: translateX(0) scale(1); } 50% { transform: translateX(3px) scale(1.025); } }
+@keyframes cgV2Guide { 0%,100% { transform: translateX(0) rotate(0deg); } 50% { transform: translateX(5px) rotate(-1deg); } }
+@keyframes cgV2Enter { 0% { transform: translateX(22px) scale(.92); opacity: .25; } 70% { transform: translateX(-3px) scale(1.03); opacity: 1; } 100% { transform: translateX(0) scale(1); opacity: 1; } }
+@keyframes cgV2Celebrate { 0%,100% { transform: translateY(0) scale(1) rotate(0deg); } 40% { transform: translateY(-6px) scale(1.06) rotate(-2deg); } 70% { transform: translateY(-2px) scale(1.03) rotate(2deg); } }
+@keyframes cgV2Recede { 0% { transform: translateX(0) scale(1); opacity: 1; } 100% { transform: translateX(-4px) scale(.96); opacity: .72; } }
+@media (max-width: 480px) { .cg-v2 { width: 134px; height: 158px; } .cg-v2-art { width: 134px; height: 134px; top: 10px; } .cg-v2-shadow { width: 58px; } }
+@media (prefers-reduced-motion: reduce) { .cg-v2, .cg-v2 * { animation: none !important; transition: none !important; } }
+`
+
+export default function V2ShopkeeperAvatar({
+  variant,
+  expression,
+  state,
+  motionEnabled = true,
+  essentialMotionOnly = false,
+}: Props) {
+  const [reducedMotion, setReducedMotion] = useState(false)
+  const resolved = isV2AvatarVariant(variant) ? variant : 'morgan'
+  const meta = V2_AVATARS[resolved]
+  const cell = v2CellForExpression(expression)
+  const motion = v2MotionForState(state)
+  const animate = motionEnabled && !reducedMotion
+  const rootClass = [
+    'cg-v2',
+    `cg-v2--${meta.motion}`,
+    `cg-v2--motion-${motion}`,
+    animate ? '' : 'cg-v2--essential',
+    animate && essentialMotionOnly ? 'cg-v2--essential' : '',
+    ['enter', 'celebrate', 'recede'].includes(motion) && animate ? 'cg-v2--finite' : '',
+  ].filter(Boolean).join(' ')
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setReducedMotion(query.matches)
+    const onChange = (event: MediaQueryListEvent) => setReducedMotion(event.matches)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+
+  return (
+    <div
+      className={rootClass}
+      role="img"
+      aria-label={`${meta.name}, ${meta.role}, ${expression} expression`}
+      data-v2-variant={resolved}
+      data-v2-cell={cell}
+      data-v2-state={state ?? ''}
+      data-v2-motion={motion}
+      style={{ '--cg-v2-accent': meta.accent } as React.CSSProperties}
+    >
+      <style dangerouslySetInnerHTML={{ __html: V2_CSS }} />
+      <span className="cg-v2-glow" aria-hidden="true" />
+      <span
+        className="cg-v2-art"
+        aria-hidden="true"
+        style={{ backgroundImage: `url(${meta.expressionSheet})`, backgroundPosition: V2_CELL_POSITIONS[cell] }}
+      />
+      <span className="cg-v2-shadow" aria-hidden="true" />
+    </div>
+  )
+}

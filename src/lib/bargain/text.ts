@@ -140,6 +140,12 @@ const BUDGET_AFTER =
 const STRONG_BID_BEFORE =
   /\b(?:i(?:'ll|\s+will|\s+can|\s+'?d|\s+would)\s+(?:give|pay|offer|do|take|spend|buy)(?:\s+you)?|i\s+(?:give|pay|offer)|(?:can|could|will|would)\s+you\s+(?:do|take|accept|give|make|sell|offer|come\s+down)|give\s+it\s+to\s+me\s+for|(?:my\s+)?final(?:\s+offer)?(?:\s+is|\s+at|:|=)?|my\s+offer(?:\s+is|\s+at|:|=)?|(?:^|[\s,])offer\s*[₹$€£]?\s*$|bid\s*[₹$€£]?\s*$)\s*[₹$€£]?\s*$/i
 
+// A first-person bid that follows the number ("450 is what I can pay"). This
+// is deliberately narrower than BID_CUE so "500, can you do 450?" cannot make
+// the competitor/reference number look like the shopper's own offer.
+const OWN_BID_AFTER =
+  /^[\s,.!—–-]*(?:is|was)?\s*(?:what\s+)?(?:i(?:'ll|\s+will|\s+can|\s+'?d|\s+would|\s+am\s+willing\s+to)\s+(?:give|pay|offer|do|take|buy|spend)|(?:that'?s\s+)?(?:my\s+|the\s+)?final(?:\s+offer)?\b|(?:that'?s\s+)?my\s+offer\b)/i
+
 export type NonOfferNumberContext =
   | 'quantity'
   | 'identifier'
@@ -161,8 +167,9 @@ function nonOfferContext(before: string, after: string, anchored: boolean): NonO
   if (CONTACT_BEFORE.test(before)) return 'contact'
   if (BUDGET_BEFORE.test(before) || BUDGET_AFTER.test(after)) return 'budget'
   if (/\b(?:in|from)\s+(?:my\s+)?(?:other|another)\s+cart\b/i.test(after)) return 'comparison'
-  if (COMPARISON_CUE.test(before.slice(-45)) || COMPARISON_CUE.test(after.slice(0, 45))) {
-    if (!STRONG_BID_BEFORE.test(before.slice(-30))) return 'comparison'
+  if (COMPARISON_CUE.test(before.slice(-80)) || COMPARISON_CUE.test(after.slice(0, 60))) {
+    const ownBidNear = STRONG_BID_BEFORE.test(before.slice(-30)) || OWN_BID_AFTER.test(after.slice(0, 45))
+    if (!ownBidNear) return 'comparison'
   }
   if (COMPLAINT_AFTER_RE.test(after) || COMPLAINT_BEFORE_RE.test(before)) return 'complaint'
   if (REFERENCE_PRICE_BEFORE.test(before) || REFERENCE_PRICE_AFTER.test(after)) return 'reference'
@@ -185,14 +192,7 @@ export function classifyNonOfferNumber(message: string): NonOfferNumberContext {
 // 500", "Amazon has it for 400") is citing context, not bidding. When such a
 // number has no explicit bid near it, it is not an offer.
 const COMPARISON_CUE =
-  /\b(?:other\s+(?:store|shop|seller|site|guy)|another\s+(?:store|shop|seller|site|guy)|competitor|elsewhere|somewhere\s+else|amazon|flipkart|meesho|myntra|ajio|online|market|cheaper|sasta|kam\s+daam|badhiya\s+daam)\b/i
-
-// Explicit bid language. Tightened so a plain statement that merely contains a
-// verb ("why should I buy this product for ₹1000") is NOT read as a bid: bare
-// give/pay/offer need first person; buy/take/spend need a modal; and a
-// competitor "for X" only counts when the shopper is naming their own number.
-const BID_CUE =
-  /\b(?:i(?:'?ll|\s+will|\s+can|\s+'?d|\s+wanna|\s+want\s+to|\s+am\s+willing\s+to|\s+would)\s+(?:give|pay|offer|do|take|buy|spend)|i\s+(?:give|pay|offer)|my\s+(?:offer|final)|final\s+offer|best\s+i\s+can|(?:can|could|will|would)\s+you\s+(?:do|take|accept|give|make|sell|offer|come\s+down)|make\s+it|give\s+it\s+to\s+me\s+for|for\s+me\s+at)\b/i
+  /\b(?:other|another)\s+(?:brand|company|store|shop|seller|site|guy|marketplace|reseller)|competitor|elsewhere|somewhere\s+else|someone\s+else|amazon|flipkart|meesho|myntra|ajio|online|marketplace|reseller|market|cheaper|sasta|kam\s+daam|badhiya\s+daam|charges?|quoted?|(?:giving|has|have|selling|offering|available|charging|quoted?)\s+it\s+(?:for|at)|available\s+for\b/i
 
 // The SELLER'S / reference price, not the shopper's bid: "the price is 1000",
 // "it costs 1000", "listed at 1000", "1000 is the price". A message that only
@@ -264,7 +264,6 @@ export function extractPrice(text: string): number | null {
   for (const c of candidates) {
     const before = text.slice(0, c.index)
     const after = text.slice(c.index + c.len)
-    const around = text.slice(Math.max(0, c.index - 45), c.index + c.len + 45)
 
     if (!c.anchored) {
       // Age idioms: "I am 25", "I'm 30", "age 40" — a small number is an age.
@@ -294,13 +293,15 @@ export function extractPrice(text: string): number | null {
     const context = nonOfferContext(before, after, c.anchored)
     if (context && context !== 'complaint' && context !== 'reference') continue
 
-    const bidNear = STRONG_BID_BEFORE.test(before.slice(-30)) || BID_CUE.test(after.slice(0, 18))
+    const ownBidBefore = STRONG_BID_BEFORE.test(before.slice(-30))
+    const ownBidAfter = OWN_BID_AFTER.test(after.slice(0, 45))
+    const bidNear = ownBidBefore || ownBidAfter
     const complaint = !bidNear && (context === 'complaint' || COMPLAINT_AFTER_RE.test(after) || COMPLAINT_BEFORE_RE.test(before))
 
     scored.push({
       val: c.val,
       reference: context === 'reference' || REFERENCE_PRICE_BEFORE.test(before) || REFERENCE_PRICE_AFTER.test(after) || complaint,
-      bid: STRONG_BID_BEFORE.test(before.slice(-30)) || BID_CUE.test(around),
+      bid: bidNear,
     })
   }
 

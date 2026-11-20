@@ -2,12 +2,14 @@ import prisma from '@/lib/db'
 import { legacyPersonaFor, resolveShopkeeperPersonality } from './personality'
 import {
   AVATAR_SIZES,
+  AVATAR_VARIANTS,
   CHARACTER_STYLES,
   DEFAULT_BARGAIN_EXPERIENCE,
   INVITATION_DESIGNS,
   INVITATION_POSITIONS,
   SHOPKEEPER_PERSONALITIES,
   type AvatarSize,
+  type AvatarVariant,
   type BargainExperienceConfig,
   type CharacterStyle,
   type InvitationDesign,
@@ -42,12 +44,14 @@ function asVersion(value: unknown, fallback: number): number {
 
 export function sanitizeExperience(input: any, fallback?: Partial<BargainExperienceConfig>): BargainExperienceConfig {
   const base = { ...DEFAULT_BARGAIN_EXPERIENCE, ...fallback }
+  const legacyVariant = input?.avatarVariant === undefined && input?.characterStyle === 'minimal' ? 'minimal' : base.avatarVariant
   return {
     schemaVersion: asVersion(input?.schemaVersion, asVersion(base.schemaVersion, 1)),
     personality: asEnum<ShopkeeperPersonality>(input?.personality, SHOPKEEPER_PERSONALITIES, base.personality),
     designVariant: asEnum<InvitationDesign>(input?.designVariant, INVITATION_DESIGNS, base.designVariant),
     avatarEnabled: asBoolean(input?.avatarEnabled, base.avatarEnabled),
     motionEnabled: asBoolean(input?.motionEnabled, base.motionEnabled),
+    avatarVariant: asEnum<AvatarVariant>(input?.avatarVariant, AVATAR_VARIANTS, legacyVariant),
     characterStyle: asEnum<CharacterStyle>(input?.characterStyle, CHARACTER_STYLES, base.characterStyle),
     essentialMotionOnly: asBoolean(input?.essentialMotionOnly, base.essentialMotionOnly),
     localeMode: asText(input?.localeMode, 40) ?? base.localeMode,

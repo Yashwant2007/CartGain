@@ -4,12 +4,9 @@
 import { render, screen } from '@testing-library/react'
 import { ShopkeeperAvatar } from '@/components/bargain/ShopkeeperAvatar'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
-import type { ExpressionState } from '@/lib/bargain/experience/expressions'
+import { EXPRESSION_STATES, type ExpressionState } from '@/lib/bargain/experience/expressions'
 
-const EXPRESSIONS: ExpressionState[] = [
-  'idle', 'listening', 'thinking', 'curious', 'surprised', 'amused', 'skeptical',
-  'negotiating', 'disappointed', 'happy', 'celebrating', 'declining', 'error',
-]
+const EXPRESSIONS: ExpressionState[] = [...EXPRESSION_STATES]
 
 describe('ShopkeeperAvatar reactions', () => {
   it.each(EXPRESSIONS)('renders a distinct %s reaction', (expression) => {
@@ -38,6 +35,18 @@ describe('ShopkeeperAvatar reactions', () => {
       <ShopkeeperAvatar personality="playful_shopkeeper" expression="celebrating" />,
     )
     expect(container.querySelector('.cg-avatar--celebrating')).toBeTruthy()
+  })
+
+  it('gives the expanded emotion set distinct animation classes', () => {
+    const { container } = render(
+      <ShopkeeperAvatar personality="strict_shopkeeper" expression="warning" />,
+    )
+    const css = container.querySelector('style')?.textContent ?? ''
+    expect(container.querySelector('.cg-avatar--warning')).toBeTruthy()
+    expect(css).toContain('.cg-avatar--focused { animation: cgAvFocus 1.8s ease-in-out infinite; }')
+    expect(css).toContain('.cg-avatar--encouraging { animation: cgAvBob 1.2s ease-in-out infinite; }')
+    expect(css).toContain('.cg-avatar--impressed { animation: cgAvPop .5s cubic-bezier(.2,.9,.3,1.3) 1; }')
+    expect(css).toContain('.cg-avatar--relieved { animation: cgAvSettle .8s ease-out 1; }')
   })
 
   it('keeps the reaction face but stops motion when motion is disabled', () => {

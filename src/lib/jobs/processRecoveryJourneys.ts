@@ -136,11 +136,11 @@ export async function processRecoveryJourneys(limit = 50) {
       const destination = cartUrl || productUrl || fallbackCartUrl
       const firstName = (identity?.name || 'there').split(' ')[0]
       const subject = productTitle
-        ? `Still thinking about ${productTitle}?`
-        : `Your cart is still saved at ${store.name}`
+        ? `Still thinking about ${productTitle} at ${store.name}?`
+        : `Your picks at ${store.name} are waiting`
       const bodyText = productTitle
-        ? `Still thinking about ${productTitle}? Pick up where you left off: ${destination}`
-        : `Your cart is still saved at ${store.name}. Finish when you are ready: ${destination}`
+        ? `The ${productTitle} you chose at ${store.name} is still waiting. Pick up where you left off: ${destination}`
+        : `Your picks at ${store.name} are still waiting. Finish whenever you are ready: ${destination}`
 
       let didSend = false
       const whatsappGate = await canSendToIdentity(identity, 'whatsapp')
@@ -160,9 +160,9 @@ export async function processRecoveryJourneys(limit = 50) {
               body: [
                 firstName,
                 productTitle
-                  ? `Still thinking about ${productTitle}? Your cart is saved.`
-                  : 'Your cart is still saved — finish your order when you are ready.',
-                `Continue: ${destination}`,
+                  ? `Your ${productTitle} at ${store.name} is still waiting 🛒`
+                  : `Your picks at ${store.name} are still waiting 🛒`,
+                `Claim Your Item: ${destination}`,
               ],
             },
           })
@@ -192,7 +192,7 @@ export async function processRecoveryJourneys(limit = 50) {
           const result = await sendEmail({
             to: email,
             subject,
-            html: `<p>Hi ${escapeHtml(firstName)}, ${escapeHtml(bodyText)}</p><p><a href="${escapeHtml(destination)}">Pick up where you left off</a></p><p><a href="${escapeHtml(optOutUrl)}">Unsubscribe</a></p>`,
+            html: `<p>Hi ${escapeHtml(firstName)}, ${escapeHtml(bodyText)}</p><p><a href="${escapeHtml(destination)}">Claim Your Item</a></p><p><a href="${escapeHtml(optOutUrl)}">Unsubscribe</a></p>`,
           } as any)
           if (result.success || result.messageId) {
             didSend = true

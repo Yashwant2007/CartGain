@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import LivingShopkeeper3D from './LivingShopkeeper3D.lazy'
+import V2ShopkeeperAvatar from './V2ShopkeeperAvatar'
+import ShopkeeperAvatar from './ShopkeeperAvatar'
 import { toCharacter3DState } from '@/lib/bargain/character3d/state-map'
 import type { ExpressionState } from '@/lib/bargain/experience/expressions'
 import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
 import type { GestureName } from '@/lib/bargain/experience/character'
 import { POSITION_DESCRIPTORS, type AvatarPosition } from '@/lib/bargain/experience/positions'
-import type { CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import type { AvatarVariant, CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import type { LivingEvent, LivingEventContext } from '@/lib/bargain/experience/avatar-state'
 
 interface Props {
@@ -23,6 +25,8 @@ interface Props {
   gesture?: GestureName
   /** Where the character is standing (explicit position manager). */
   position?: AvatarPosition
+  /** Merchant-selected avatar. Omitted means legacy robot when 3D is enabled. */
+  avatarVariant?: AvatarVariant
   /** Visual rendering style of the character. */
   characterStyle?: CharacterStyle
   /** Disable decorative (nonessential) motion. */
@@ -135,7 +139,10 @@ const STAGE_CSS = `
   flex: 1;
   min-width: 0;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 5px;
   min-height: 0;
 }
 .cg-stage-name {
@@ -167,6 +174,20 @@ const STAGE_CSS = `
   background: #34d399;
   box-shadow: 0 0 0 3px rgba(52,211,153,0.16);
 }
+.cg-stage-line {
+  width: 100%;
+  max-width: 32ch;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  animation: cgStageSpeak .3s ease-out 1;
+}
+.cg-stage[data-character-style="minimal"] .cg-stage-line { color: #64748b; font-size: 11.5px; }
 .cg-stage-unavailable {
   width: 100%;
   padding: 14px 16px;
@@ -207,7 +228,7 @@ const STAGE_CSS = `
   .cg-stage-avatar::after { width: 56px; height: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cg-stage-halo { animation: none !important; }
+  .cg-stage-halo, .cg-stage-line { animation: none !important; }
 }
 `
 
@@ -220,12 +241,14 @@ export default function ShopkeeperStage({
   eventContext,
   gesture = 'rest',
   position = 'conversation',
+  avatarVariant,
   characterStyle = 'signature',
   essentialMotionOnly = false,
   name,
   status,
   line,
   motionEnabled = true,
+  gaze = null,
   enable3D = false,
   showUnavailable = false,
   onUnavailable,
@@ -255,7 +278,11 @@ export default function ShopkeeperStage({
       window.removeEventListener('scroll', measure, true)
     }
   }, [targetRef])
-  const render3D = enable3D && webglAvailable
+  const selectedVariant = avatarVariant ?? (enable3D ? 'robot' : 'none')
+  const useV2 = selectedVariant === 'morgan' || selectedVariant === 'riley' || selectedVariant === 'alex'
+  const useInline = selectedVariant === 'signature' || selectedVariant === 'minimal'
+  const render3D = selectedVariant === 'robot' && enable3D && webglAvailable
+  const renderer = useV2 ? 'v2-sprite' : useInline ? 'inline' : render3D ? '3d' : webglAvailable ? 'disabled' : 'unavailable'
   return (
     <div
       className={`cg-stage ${descriptor.className}`}
@@ -263,16 +290,36 @@ export default function ShopkeeperStage({
       data-avatar-personality={personality}
       data-avatar-state={state ?? ''}
       data-avatar-position={position}
+      data-avatar-variant={selectedVariant}
       data-gesture={gesture}
       data-character-style={characterStyle}
       data-essential-motion={essentialMotionOnly ? 'true' : 'false'}
-      data-avatar-renderer={render3D ? '3d' : webglAvailable ? 'disabled' : 'unavailable'}
+      data-avatar-renderer={renderer}
     >
       <style dangerouslySetInnerHTML={{ __html: STAGE_CSS }} />
       <span className="cg-stage-spot" aria-hidden="true" />
       <div className="cg-stage-avatar">
         <span className="cg-stage-halo" aria-hidden="true" />
-        {render3D ? (
+        {useV2 ? (
+          <V2ShopkeeperAvatar
+            variant={selectedVariant as 'morgan' | 'riley' | 'alex'}
+            expression={expression}
+            state={state}
+            motionEnabled={motionEnabled}
+            essentialMotionOnly={essentialMotionOnly}
+          />
+        ) : useInline ? (
+          <ShopkeeperAvatar
+            personality={personality}
+            expression={expression}
+            state={state}
+            gesture={gesture}
+            characterStyle={useInline ? characterStyle : 'signature'}
+            motionEnabled={motionEnabled}
+            essentialMotionOnly={essentialMotionOnly}
+            gaze={gaze}
+          />
+        ) : render3D ? (
           <LivingShopkeeper3D
             personality={personality}
             state={toCharacter3DState(state, personality)}
@@ -301,7 +348,7 @@ export default function ShopkeeperStage({
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: 1 }}>{name}</span>
           <span className="cg-stage-status">{status}</span>
         </div>
-        <span className="cg-sr-only">{line}</span>
+        <span className="cg-stage-line">{line}</span>
       </div>
     </div>
   )

@@ -14,8 +14,8 @@ describe('buildRecoveryOfferLine', () => {
     expect(line).toContain('10% off')
     expect(line).toContain('code GAINABC123')
     expect(line).toContain('is waiting 🛒')
-    expect(line).toContain('Grab it now!')
-    expect(line.indexOf('Grab it now!')).toBeGreaterThan(line.indexOf('Snowboard'))
+    expect(line).toContain('claim it now!')
+    expect(line.indexOf('claim it now!')).toBeGreaterThan(line.indexOf('Snowboard'))
   })
 
   it('keeps a live link when there is no discount', () => {
@@ -25,8 +25,8 @@ describe('buildRecoveryOfferLine', () => {
     })
 
     expect(line).toContain('is waiting 🛒')
-    expect(line).toContain('Grab it now!')
-    expect(line).not.toContain(' — ')
+    expect(line).toContain('claim it now!')
+    expect(line).not.toContain('Use ')
     expect(line).not.toContain('code ')
   })
 
@@ -51,14 +51,14 @@ describe('buildRecoveryOfferLine', () => {
       code: 'GAINABC123',
     })
 
-    expect(line).toContain('Grab it now!')
+    expect(line).toContain('claim it now!')
     expect(line.length).toBeLessThan(700)
   })
 
   it('still produces a non-empty line when every descriptive field is missing', () => {
     const line = buildRecoveryOfferLine({})
     expect(line).toContain('is waiting 🛒')
-    expect(line).toContain('Grab it now!')
+    expect(line).toContain('claim it now!')
   })
 
   it('includes product price and qty when provided', () => {
@@ -82,5 +82,31 @@ describe('buildRecoveryOfferLine', () => {
     })
 
     expect(line).toContain('your cart is waiting 🛒')
+  })
+
+  it('names the merchant store from real store data', () => {
+    const line = buildRecoveryOfferLine({
+      firstName: 'Priya',
+      storeName: '  CartGaintest  ',
+      productSummary: 'Snowboard',
+    })
+
+    expect(line).toContain('your Snowboard at CartGaintest is waiting 🛒')
+  })
+
+  it('uses classy CTA labels on the checkout and bargain links', () => {
+    const checkout = buildRecoveryOfferLine({
+      productSummary: 'Snowboard',
+      linkType: 'checkout',
+      linkUrl: 'https://cart-gain.com/r/abc',
+    })
+    const bargain = buildRecoveryOfferLine({
+      productSummary: 'Snowboard',
+      linkType: 'bargain',
+      linkUrl: 'https://cart-gain.com/r/def',
+    })
+
+    expect(checkout).toContain('🛒 Complete your order: https://cart-gain.com/r/abc')
+    expect(bargain).toContain('💬 Name your price: https://cart-gain.com/r/def')
   })
 })

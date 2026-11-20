@@ -19,7 +19,7 @@ import {
   expressionForTurn,
   type ExpressionState,
 } from '@/lib/bargain/experience/expressions'
-import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import type { AvatarVariant, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import { gestureFor } from '@/lib/bargain/experience/character'
 import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
 import type { AvatarPosition } from '@/lib/bargain/experience/positions'
@@ -42,9 +42,9 @@ type ChatMsg = {
 }
 
 const PERSONAS: { id: ShopkeeperPersonality; engine: Persona; name: string; blurb: string }[] = [
-  { id: 'friendly_shopkeeper', engine: 'friendly_shopkeeper', name: 'Friendly Shopkeeper', blurb: 'Warm, neighbourly, finds a way.' },
-  { id: 'strict_shopkeeper', engine: 'strict_negotiator', name: 'Strict Shopkeeper', blurb: 'Precise, data-driven, protects margin.' },
-  { id: 'playful_shopkeeper', engine: 'playful_friend', name: 'Playful Shopkeeper', blurb: 'Cheeky, fun, keeps it engaging.' },
+  { id: 'friendly_shopkeeper', engine: 'friendly_shopkeeper', name: 'Morgan · Friendly', blurb: 'Warm, neighbourly, finds a way.' },
+  { id: 'strict_shopkeeper', engine: 'strict_negotiator', name: 'Alex · Strict', blurb: 'Precise, data-driven, protects margin.' },
+  { id: 'playful_shopkeeper', engine: 'playful_friend', name: 'Riley · Playful', blurb: 'Cheeky, fun, keeps it engaging.' },
 ]
 
 const LANGUAGES: { id: string; label: string }[] = [
@@ -73,6 +73,7 @@ type DemoPanelProps = {
 export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minProfitPercent }: DemoPanelProps) {
   const [price, setPrice] = useState<number>(1000)
   const [personality, setPersonality] = useState<ShopkeeperPersonality>(defaultPersona)
+  const [avatarVariant, setAvatarVariant] = useState<AvatarVariant>('robot')
   const persona = PERSONAS.find(p => p.id === personality)?.engine ?? 'friendly_shopkeeper'
   const [language, setLanguage] = useState<string>(defaultLanguage || 'auto')
   const [started, setStarted] = useState(false)
@@ -400,6 +401,32 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
 
         <div>
           <label className="flex items-center gap-1.5 text-sm text-blue-200 mb-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-blue-300/70" /> Avatar
+          </label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {([
+              ['robot', 'Animated robot'],
+              ['morgan', 'Morgan'],
+              ['riley', 'Riley'],
+              ['alex', 'Alex'],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setAvatarVariant(id)}
+                className={`px-2.5 py-2 rounded-lg text-xs font-medium transition ${
+                  avatarVariant === id
+                    ? 'bg-cyan-600 text-white border border-cyan-500'
+                    : 'bg-slate-950/40 border border-blue-800/40 text-blue-200 hover:bg-blue-900/40'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="flex items-center gap-1.5 text-sm text-blue-200 mb-1.5">
             <Languages className="w-3.5 h-3.5 text-blue-300/70" /> Language
           </label>
           <div className="grid grid-cols-2 gap-1.5">
@@ -446,6 +473,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
           state={demoAvatarState}
           gesture={gestureFor(personality, demoAvatarState)}
           position={demoAvatarPosition}
+          avatarVariant={avatarVariant}
           name={`${personaMeta.name} · Salesperson`}
           status="Preview"
           line={thinking ? 'Thinking through the offer…' : started ? 'Listening and ready to negotiate.' : 'Choose a personality and start a session.'}

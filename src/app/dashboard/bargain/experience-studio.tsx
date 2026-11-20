@@ -6,13 +6,14 @@ import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 import { Sparkles, Save, Eye, RotateCcw, CheckCircle2, History } from 'lucide-react'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
-import { PERSONALITY_META, DESIGN_VARIANT_META, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
+import { PERSONALITY_META, DESIGN_VARIANT_META, type AvatarVariant, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
+import { V2_AVATARS } from '@/lib/bargain/experience/v2-shopkeepers'
 import {
   expressionForEvent,
   expressionForShopperMessage,
   expressionForTurn,
 } from '@/lib/bargain/experience/expressions'
-import { AVATAR_STATES, type AvatarState } from '@/lib/bargain/experience/avatar-state'
+import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
 import { gestureFor } from '@/lib/bargain/experience/character'
 import { strategyForPersonality } from '@/lib/bargain/experience/strategy'
 import type { AvatarPosition } from '@/lib/bargain/experience/positions'
@@ -34,7 +35,6 @@ export function BargainExperienceStudio() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [previewScenario, setPreviewScenario] = useState<'welcome' | 'lowball' | 'walkout' | 'deal'>('welcome')
-  const [previewState, setPreviewState] = useState<AvatarState | null>(null)
 
   useEffect(() => {
     if (!storeId) return
@@ -144,26 +144,15 @@ export function BargainExperienceStudio() {
       : previewScenario === 'deal'
         ? expressionForTurn(exp.personality, { decision: 'accept', ended: 'accepted' })
         : expressionForEvent(exp.personality, 'CHAT_OPENED')
-  // The reaction gallery replays EXACTLY the state the shopper would see.
-  const previewAvatarState: AvatarState = previewState ?? (
-    previewScenario === 'lowball'
-      ? 'surprised'
-      : previewScenario === 'walkout'
-        ? 'disappointed'
-        : previewScenario === 'deal'
-          ? 'celebrating'
-          : 'greeting'
-  )
+  const previewAvatarState: AvatarState = previewScenario === 'lowball'
+    ? 'surprised'
+    : previewScenario === 'walkout'
+      ? 'disappointed'
+      : previewScenario === 'deal'
+        ? 'celebrating'
+        : 'greeting'
   const previewGesture = gestureFor(exp.personality, previewAvatarState)
-  const previewPosition: AvatarPosition = !previewState
-    ? 'conversation'
-    : previewAvatarState === 'recommending' || previewAvatarState === 'pointing'
-      ? 'recommendation'
-      : previewAvatarState === 'guiding_to_checkout'
-        ? 'checkout'
-        : previewAvatarState === 'celebrating'
-          ? 'celebration'
-          : 'conversation'
+  const previewPosition: AvatarPosition = 'conversation'
   const previewLine = previewScenario === 'lowball'
     ? 'That is a bold start — let me see what I can do without crossing the floor.'
     : previewScenario === 'walkout'
@@ -193,13 +182,14 @@ export function BargainExperienceStudio() {
             <h3 className="text-white font-medium mb-3">Shopkeeper Personality</h3>
             <div className="grid gap-3">
               {PERSONALITY_META.map(p => (
-                <button key={p.id} onClick={() => { setExp({ ...exp, personality: p.id }); setPreviewScenario('welcome'); setPreviewState(null) }} className={`p-4 rounded-xl border text-left flex items-start gap-3 transition ${exp.personality === p.id ? 'border-cyan-500/60 bg-cyan-950/20' : 'border-blue-800/40 bg-slate-950/40'}`}>
+                <button key={p.id} onClick={() => { setExp({ ...exp, personality: p.id }); setPreviewScenario('welcome') }}
+ className={`p-4 rounded-xl border text-left flex items-start gap-3 transition ${exp.personality === p.id ? 'border-cyan-500/60 bg-cyan-950/20' : 'border-blue-800/40 bg-slate-950/40'}`}>
                   <span aria-hidden="true" className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-lg font-semibold ${p.id === 'friendly_shopkeeper' ? 'border-amber-400/30 bg-amber-400/10 text-amber-200' : p.id === 'strict_shopkeeper' ? 'border-sky-400/30 bg-sky-400/10 text-sky-200' : 'border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-200'}`}>{p.id === 'friendly_shopkeeper' ? '☺' : p.id === 'strict_shopkeeper' ? '◆' : '✦'}</span>
                   <div>
                     <div className="text-white font-medium">{p.name} <span className="text-cyan-300/80 text-xs font-semibold">· {p.title}</span></div>
                     <div className="text-sm text-blue-300/70 mt-1">{p.description}</div>
                     <div className="text-xs text-blue-300/80 mt-2">{p.id === 'friendly_shopkeeper' ? 'Warm, open gestures · reassuring value guidance' : p.id === 'strict_shopkeeper' ? 'Composed posture · direct, respectful negotiation' : 'Expressive reactions · playful, controlled gestures'}</div>
-                    <div className="text-xs text-blue-400/60 mt-1">Shared robot · {strategyForPersonality(p.id).label}</div>
+                    <div className="text-xs text-blue-400/60 mt-1">{exp.avatarVariant === 'robot' ? 'Animated robot' : V2_AVATARS[exp.avatarVariant as keyof typeof V2_AVATARS]?.name ?? 'Animated robot'} · {strategyForPersonality(p.id).label}</div>
                     <div className="text-xs text-blue-400/60 mt-2 italic">&ldquo;{p.exampleDialogue[0]}&rdquo;</div>
                   </div>
                 </button>
@@ -236,12 +226,15 @@ export function BargainExperienceStudio() {
               </span>
               <input type="checkbox" checked={exp.essentialMotionOnly} onChange={e => setExp({ ...exp, essentialMotionOnly: e.target.checked })} className="accent-cyan-500" />
             </label>
-            <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
-              <span className="block text-blue-100 text-sm mb-2">Character style</span>
-              <select value={exp.characterStyle} onChange={e => setExp({ ...exp, characterStyle: e.target.value as typeof exp.characterStyle })} className="w-full rounded-md bg-slate-900 border border-blue-800/50 px-2 py-1.5 text-sm text-blue-100">
-                <option value="signature">Signature 3D (full reactions)</option>
-                <option value="minimal">Calm 3D (reduced ambient motion)</option>
+            <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40 sm:col-span-2">
+              <span className="block text-blue-100 text-sm mb-2">Storefront avatar</span>
+              <select value={exp.avatarVariant} onChange={e => setExp({ ...exp, avatarVariant: e.target.value as AvatarVariant })} className="w-full rounded-md bg-slate-900 border border-blue-800/50 px-2 py-1.5 text-sm text-blue-100">
+                <option value="robot">Animated robot (3D)</option>
+                <option value="morgan">Morgan — Friendly</option>
+                <option value="riley">Riley — Playful</option>
+                <option value="alex">Alex — Strict</option>
               </select>
+              <span className="block text-[11px] text-blue-300/60 mt-2">The same shopkeeper personality and negotiation rules apply to every avatar.</span>
             </label>
             <label className="flex items-center justify-between p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
               <span className="text-blue-100 text-sm">Compact invitation</span>
@@ -283,7 +276,7 @@ export function BargainExperienceStudio() {
             <div>
               <h3 className="text-white font-medium">Live Preview</h3>
               <p className="mt-1 text-xs text-blue-300/60">
-                Watch the shopkeeper read the shopper, then try a reaction to see this personality&apos;s face.
+                Watch the selected shopkeeper respond to real bargain scenarios before you publish.
               </p>
             </div>
             <span className="rounded-full border border-cyan-500/30 bg-cyan-950/30 px-2 py-1 text-[10px] font-medium text-cyan-200">
@@ -298,6 +291,7 @@ export function BargainExperienceStudio() {
                 state={previewAvatarState}
                 gesture={previewGesture}
                 position={previewPosition}
+                avatarVariant={exp.avatarVariant}
                 characterStyle={exp.characterStyle}
                 essentialMotionOnly={exp.essentialMotionOnly}
                 name={`${previewPersona.name} · ${previewPersona.title}`}
@@ -325,9 +319,9 @@ export function BargainExperienceStudio() {
             ] as const).map(([id, label]) => (
               <button
                 key={id}
-                onClick={() => { setPreviewScenario(id); setPreviewState(null) }}
+                onClick={() => setPreviewScenario(id)}
                 className={`rounded-full border px-3 py-1.5 text-xs transition ${
-                  previewScenario === id && !previewState
+                  previewScenario === id
                     ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100'
                     : 'border-blue-800/50 text-blue-300/80 hover:bg-blue-900/40'
                 }`}
@@ -335,30 +329,6 @@ export function BargainExperienceStudio() {
                 {label}
               </button>
             ))}
-          </div>
-          <div>
-            <div className="text-xs text-blue-300/70 mb-2">Reactions (every animation state the shopper can see)</div>
-            <div className="flex flex-wrap gap-1.5">
-              {AVATAR_STATES.map((state) => (
-                <button
-                  key={state}
-                  onClick={() => { setPreviewState(state); setPreviewScenario('welcome') }}
-                  aria-pressed={previewState === state}
-                  className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
-                    previewState === state
-                      ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100'
-                      : 'border-blue-800/50 text-blue-300/70 hover:bg-blue-900/40'
-                  }`}
-                >
-                  {state.replace(/_/g, ' ')}
-                </button>
-              ))}
-            </div>
-            {previewState && (
-              <button onClick={() => setPreviewState(null)} className="mt-2 text-[11px] text-blue-300/60 underline">
-                Back to the scenario preview
-              </button>
-            )}
           </div>
           <div className="flex items-center justify-between text-xs text-blue-300/60">
             <span>Draft v{exp.draftVersion} • Published v{exp.publishedVersion}</span>

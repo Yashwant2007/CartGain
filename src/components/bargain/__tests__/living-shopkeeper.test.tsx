@@ -273,4 +273,25 @@ describe('living shopkeeper stage', () => {
     expect(container.querySelector('.cg-avatar, .cg-sa')).toBeNull()
     expect(container.querySelector('.cg-stage')?.getAttribute('data-avatar-renderer')).toBe('disabled')
   })
+
+  it('renders a merchant-selected v2 shopkeeper sprite', () => {
+    const { container } = render(
+      <ShopkeeperStage
+        personality="friendly_shopkeeper"
+        expression="negotiating"
+        state="negotiating"
+        avatarVariant="morgan"
+        name="Morgan"
+        status="Online"
+        line=""
+      />,
+    )
+    expect(container.querySelector('.cg-stage')?.getAttribute('data-avatar-renderer')).toBe('v2-sprite')
+    expect(container.querySelector('.cg-stage')?.getAttribute('data-avatar-variant')).toBe('morgan')
+    expect(container.querySelector('.cg-v2')?.getAttribute('data-v2-cell')).toBe('countering')
+    expect(container.querySelector('.cg-v2-art')?.getAttribute('style')).toContain('morgan-expressions.png')
+    const css = Array.from(container.querySelectorAll('style')).map((node) => node.textContent ?? '').join('\n')
+    expect(css).toMatch(/\.cg-v2 \{[^}]*height: 194px;/)
+    expect(css).toMatch(/\.cg-v2-art \{[^}]*border-radius: 50%; clip-path: ellipse\(50% 50% at 50% 50%\)/)
+  })
 })

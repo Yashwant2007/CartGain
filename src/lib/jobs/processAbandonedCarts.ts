@@ -1152,9 +1152,10 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         const linkRes = linkType === 'checkout' ? checkoutLink : bargainLink
         const linkUrl = linkRes.url
         const buttonSuffix = linkRes.code || undefined
-        const buttonText = linkType === 'bargain' ? 'Make an Offer' : 'Buy Now'
+        const buttonText = linkType === 'bargain' ? 'Name Your Price' : 'Claim Your Item'
         const offerLine = buildRecoveryOfferLine({
           firstName,
+          storeName: store.name,
           productSummary,
           productPrice: firstItem?.price || null,
           productQty: firstItem?.quantity || null,
