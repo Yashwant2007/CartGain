@@ -176,7 +176,7 @@ export function assessCustomerClaims(
     push(claims, 'merchant_authorization', 'malicious', 'high')
   }
 
-  const competitor = /\b(?:amazon|flipkart|myntra|ajio|meesho|ebay|walmart|target|etsy|another (?:store|shop|site|website)|other (?:store|shop|site|website|seller)|competitor|elsewhere|somewhere else|local (?:shop|store|market)|online market)\b/i
+  const competitor = /\b(?:amazon|flipkart|myntra|ajio|meesho|ebay|walmart|target|etsy|another (?:brand|company|maker|store|shop|site|website|seller)|other (?:brand|company|maker|store|shop|site|website|seller)|competitor|elsewhere|somewhere else|local (?:shop|store|market)|online market)\b/i
   const otherPrice = /\b(?:cheaper|less|lower|saw|found|get|got|buy|available|sells?|selling|listed)\b/i
   if (competitor.test(text) && (otherPrice.test(text) || new RegExp(MONEY, 'i').test(text))) {
     const stale = /\b(?:last (?:week|month|year)|earlier (?:this|last) (?:week|month|year)|previously|a while ago|used to)\b/i.test(text)
@@ -371,7 +371,7 @@ const NON_FACTUAL_CLAIM_STATUSES = new Set<CustomerClaimStatus>([
 ])
 
 const CLAIM_TOPIC_PATTERNS: Record<CustomerClaimCategory, RegExp> = {
-  competitor_price: /\b(?:amazon|flipkart|myntra|ajio|meesho|ebay|walmart|target|etsy|elsewhere|competitor|other (?:store|shop|seller|site)|another (?:store|shop|site)|cheaper|lower price|less expensive|online market)\b/i,
+  competitor_price: /\b(?:amazon|flipkart|myntra|ajio|meesho|ebay|walmart|target|etsy|elsewhere|competitor|other (?:brand|company|maker|store|shop|seller|site)|another (?:brand|company|maker|store|shop|site)|cheaper|lower price|less expensive|online market)\b/i,
   prior_purchase: /\b(?:bought|purchased|ordered|loyalty|loyal|repeat customer|previous order|last time|before)\b/i,
   previous_promise: /\b(?:promised|promise|you said|you told|guaranteed|earlier)\b/i,
   order_proof: /\b(?:order|invoice|receipt|confirmation)\b/i,

@@ -106,7 +106,7 @@ const RE = {
   bestPriceAsk: /\b(how\s+(?:much\s+)?low\s+can\s+you\s+go|how\s+much\s+can\s+you\s+(?:go|come\s+down)|how\s+low\s+(?:will|would)\s+you\s+go|how\s+far\s+(?:can|will|would)\s+you\s+(?:go|come\s+down)|lowest\s+(?:price|you\s+can|you\s+will|you\s+would)|best\s+price|best\s+you\s+can\s+do|what(?:'s|\s+is|\s+s)?\s+(?:the\s+)?(?:lowest|minimum|best)\s+(?:price|you\s+can\s+do|you\s+will\s+do)|your\s+best\s+(?:price|offer)|final\s+price|last\s+price|can\s+you\s+go\s+lower)\b/i,
   price: /\b(best\s+price|lower|discount|price|cheap|cheaper|off|deal|budget|only\s+(have|spend|can\s+spend|got|burn)|can\s+you\s+do|what('| is|s)*\s*(the\s+)?(lowest|minimum|best))/i,
   budget: /\b(budget|only\s+(have|spend|can\s+spend|got)\s+)|tight\s+budget|don'?t\s+have\s+much|all\s+i\s+can\s+afford|max\s+[₹$€£]?\s*\d+/i,
-  comparison: /\b(elsewhere|other\s+(store|shop|site)|amazon|flipkart|myntra|meesho|walmart|competing|rival|compare(ing)?\s+price|got\s+it\s+for|saw\s+it\s+for|cheaper\s+somewhere)/i,
+  comparison: /\b(elsewhere|other\s+(brand|company|maker|store|shop|site|seller)|another\s+(brand|company|maker|store|shop|site|seller)|amazon|flipkart|myntra|meesho|walmart|competing|rival|compare(ing)?\s+price|got\s+it\s+for|saw\s+it\s+for|cheaper\s+somewhere)/i,
   productQuestion: /\b(material|made\s+of|ingredient|composition|sizes?|colour|color|warrant(y|ies)|guarantee|feature(s)?|specs?\b|specification|compatible|certif|measurement|dimensions?|weight|battery|usb|cotton|leather|capacity|speed|does\s+it\s+have|do\s+you\s+have|how\s+many|comes\s+with|included)/i,
   value: /\b(worth|value|good\s+product|is\s+this\s+(good|worth)|how\s+is\s+the\s+(quality|build)|better\s+than|what('s| is| do)\s+(i\s+)?get)/i,
   // Objection language: the shopper is criticising the price, not bidding on it.
@@ -396,6 +396,11 @@ export function shopperIntentToPromptBlock(analysis: IntentAnalysis): string {
   if (analysis.priceComplaint) {
     lines.push(
       `- The shopper is COMPLAINING about the price — they are NOT making an offer. Any figure in this message is the price they are objecting to. NEVER read it as their bid, NEVER echo it back as "you offered X", and NEVER accept it. Acknowledge the concern briefly, justify the value from verified facts, and propose a genuine counter (still above the listed-price gap you normally open with).`,
+    )
+  }
+  if (analysis.intent === 'COMPARISON' || analysis.objection === 'COMPARISON' || analysis.nonOfferNumberContext === 'comparison') {
+    lines.push(
+      `- COMPARISON HANDLING: this shopper is citing another brand/store, NOT making a bid. Do NOT say "nice try", "not serious", "can't go that low", or belittle their research. Acknowledge once, PITCH the verified value of THIS product in one line (approved selling point, verified description, vendor/type or tag), then close with a low-pressure question such as "Shall I lock it in for you?" Never invent a competitor price, stock, review or deadline.`,
     )
   }
   if (analysis.nonOfferNumberContext) {

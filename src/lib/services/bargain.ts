@@ -32,6 +32,7 @@ import { paymentPromptBlock } from '@/lib/bargain/payment'
 import { analyzeIntent, shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
 import { deriveConversationState, conversationStateGuidance } from '@/lib/bargain/conversation-state'
 import { validateReplyClaimAdherence } from '@/lib/bargain/claims'
+import { strengthenComparisonPitch } from '@/lib/bargain/sales-pitch'
 import type { ClaimAssessment } from '@/lib/bargain/claims'
 import {
   negotiationStyleGuidance,
@@ -479,10 +480,14 @@ back and it's locked in."
 You've just given them ammo to convince their "manager."
 
 WHEN THEY TRY TO PIT YOU AGAINST COMPETITORS AGGRESSIVELY:
-Never trash the competitor. It makes you look weak.
-"That's a solid option. But here's what makes us different:
-[specific value]. And I can do [[CUR]]X for you today."
-Let the product quality speak — you're confident, not desperate.
+Never trash the competitor. It makes you look weak. Never say
+"nice try", "not serious", or "I can't go that low" — a quoted
+rival price is their research, not a bid. Acknowledge once, then
+SELL: "That's a solid option. Here's what makes this one worth
+it: [specific verified value]. I can do [[CUR]]X — shall I lock
+it in for you?" Every comparison turn must end with a genuine
+value pitch AND a low-pressure close. Let the product quality
+speak — you're confident, not desperate.
 
 WHEN THEY THREATEN BAD REVIEWS / SOCIAL MEDIA:
 Stay calm. Never cave to threats.
@@ -1403,6 +1408,15 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
       friendly_shopkeeper: `All settled, friend! You got it at ${ad} and your code is ready to go. Anything else I can help with?`,
     }
     return postDeal[ctx.persona]
+  }
+
+  const isComparison =
+    ctx.intent?.intent === 'COMPARISON' ||
+    ctx.intent?.objection === 'COMPARISON' ||
+    ctx.intent?.nonOfferNumberContext === 'comparison' ||
+    /\b(?:other|another)\s+(?:brand|company|maker|store|shop|site|seller)|competitor|elsewhere/i.test(low)
+  if (isComparison) {
+    return strengthenComparisonPitch(`I can't confirm prices elsewhere, but I can work with you here at ${price}.`, ctx)
   }
 
   if (isProductQuestion) {
@@ -3044,6 +3058,14 @@ export async function negotiateStep(
     const beforeClaimGuard = reply
     reply = validateReplyClaimAdherence(reply, ctx.claims, customerMessage)
     const claimAdherenceGuarded = reply !== beforeClaimGuard
+
+    const comparisonTurn =
+      ctx.intent?.intent === 'COMPARISON' ||
+      ctx.intent?.objection === 'COMPARISON' ||
+      ctx.intent?.nonOfferNumberContext === 'comparison'
+    if (comparisonTurn && !ctx.dealAccepted) {
+      reply = strengthenComparisonPitch(reply, ctx)
+    }
 
     // A 'chat' decision is the shopkeeper conversing (product questions, small
     // talk) — no price belongs on it. Attaching the fallback counter here is

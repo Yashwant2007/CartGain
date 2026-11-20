@@ -28,6 +28,14 @@ describe('analyzeIntent', () => {
     expect(a.intent).toBe('COMPARISON')
   })
 
+  it('classifies "other brand was giving for 400" as comparison, not an offer', () => {
+    const a = analyzeIntent('umm the other brand was giving for 400')
+    expect(a.intent).toBe('COMPARISON')
+    expect(a.objection).toBe('COMPARISON')
+    expect(a.offersPriceSignal).toBe(false)
+    expect(a.nonOfferNumberContext).toBe('comparison')
+  })
+
   it('classifies product questions about materials/features', () => {
     const a = analyzeIntent('what material is it made of?')
     expect(a.intent).toBe('PRODUCT_QUESTION')
