@@ -119,6 +119,7 @@ export async function GET(request: NextRequest) {
         shopifyTokenState: availability.tokenState,
         shopDomain: subscription?.shopDomain ?? shopifyStore?.domain ?? null,
         legacyBilling: !!subscription && subscription.provider !== 'shopify' &&
+          subscription.provider !== 'manual' &&
           (subscription.status === 'active' || subscription.status === 'pending'),
       },
       meta: {
