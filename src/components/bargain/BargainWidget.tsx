@@ -2021,7 +2021,6 @@ export default function BargainWidget({
                     value={input}
                     onFocus={() => {
                       setGaze({ x: 0, y: 0.55 })
-                      fireAvatar('customer_typing')
                     }}
                     onBlur={() => {
                       setGaze(null)
