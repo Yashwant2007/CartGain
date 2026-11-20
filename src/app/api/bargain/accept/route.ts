@@ -16,10 +16,39 @@ import { recordLearningAcceptance } from '@/lib/bargain/learning/outcomes'
 import { createQuote, acceptQuote, findQuoteBySessionId } from '@/lib/bargain/quote'
 import { detectPaymentIntent } from '@/lib/bargain/payment'
 import { formatMoney } from '@/lib/bargain/i18n'
+import {
+  bargainPlatformFor,
+  buildWooCommerceCheckoutUrl,
+  createOrReuseWooCommerceCoupon,
+  getWooCommerceProductFacts,
+} from '@/lib/woocommerce/bargain-adapter'
 
 export const dynamic = 'force-dynamic'
 
 const ACCEPTABLE_DECISIONS = new Set(['accept', 'counter'])
+
+function purchaseUrlForDeal(opts: {
+  platform: string
+  store: any
+  code: string
+  productId?: string | null
+  variantId?: string | null
+  quantity?: number | null
+}): string {
+  if (opts.platform === 'woocommerce') {
+    return buildWooCommerceCheckoutUrl({
+      domain: opts.store.domain,
+      code: opts.code,
+      productId: opts.productId,
+    })
+  }
+  return buildBargainCheckoutUrl({
+    domain: opts.store.domain,
+    code: opts.code,
+    variantId: opts.variantId,
+    quantity: opts.quantity,
+  })
+}
 
 // POST /api/bargain/accept — customer accepts the final price; generate Shopify discount code
 export async function POST(request: NextRequest) {
@@ -42,6 +71,8 @@ export async function POST(request: NextRequest) {
     if (!bargainSession) {
       return NextResponse.json({ message: 'Bargain session not found' }, { status: 404 })
     }
+    const platform = bargainPlatformFor(bargainSession.store, body?.platform)
+    const productId = bargainSession.shopifyProductId
 
     // Owner binding — the caller must reproduce at least one of the session's
     // buyer identities, otherwise discount-code replay would be trivially
@@ -71,9 +102,11 @@ export async function POST(request: NextRequest) {
         shopifyStatus: 'created',
         purchaseUrl:
           bargainSession.purchaseUrl ??
-          buildBargainCheckoutUrl({
-            domain: bargainSession.store.domain,
+          purchaseUrlForDeal({
+            platform,
+            store: bargainSession.store,
             code: bargainSession.discountCode,
+            productId,
             variantId: bargainSession.variantId,
             quantity: bargainSession.bulkQuantity,
           }),
@@ -149,31 +182,44 @@ export async function POST(request: NextRequest) {
     // moved up; a stale agreement that now clears nothing is rejected instead of
     // charged at a loss. If Shopify is unreachable we fall back to the snapshot
     // originalPrice (same as start/offer).
-    const currentDetail = await fetchShopifyProductDetail(bargainSession.store, bargainSession.shopifyProductId)
-    const matchedVariant = currentDetail?.variants?.find(v =>
-      bargainSession.variantId
-        ? v.id === bargainSession.variantId.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
-        : true,
-    )
-    const currentPrice =
-      (matchedVariant?.price != null ? Number(matchedVariant.price) : null) ??
-      (await fetchShopifyProductPrice(bargainSession.store, bargainSession.shopifyProductId, bargainSession.variantId ?? null)) ??
-      bargainSession.originalPrice
+    let currentPrice = bargainSession.originalPrice
+    let variantAvailable: boolean | null = null
+    let productAvailable: boolean | null = null
+    if (platform === 'woocommerce') {
+      const facts = await getWooCommerceProductFacts({
+        store: bargainSession.store,
+        productId,
+        variantId: bargainSession.variantId,
+        fallbackPrice: bargainSession.originalPrice,
+      })
+      currentPrice = facts?.price ?? bargainSession.originalPrice
+      variantAvailable = facts?.available ?? null
+      productAvailable = facts ? facts.status == null || ['active', 'publish', 'published'].includes(facts.status.toLowerCase()) : null
+    } else {
+      const currentDetail = await fetchShopifyProductDetail(bargainSession.store, bargainSession.shopifyProductId)
+      const matchedVariant = currentDetail?.variants?.find(v =>
+        bargainSession.variantId
+          ? v.id === bargainSession.variantId.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
+          : true,
+      )
+      currentPrice =
+        (matchedVariant?.price != null ? Number(matchedVariant.price) : null) ??
+        (await fetchShopifyProductPrice(bargainSession.store, bargainSession.shopifyProductId, bargainSession.variantId ?? null)) ??
+        bargainSession.originalPrice
+      const effectiveVariantId = bargainSession.variantId?.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
+      variantAvailable = !currentDetail || !effectiveVariantId
+        ? null
+        : currentDetail.variants?.find(v => v.id === effectiveVariantId)?.available ?? null
+      productAvailable = !currentDetail ? null : currentDetail.status === 'active' || currentDetail.status == null
+    }
     const { minPrice } = await computeMinPrice({
       storeId: bargainSession.storeId,
       shopifyProductId: bargainSession.shopifyProductId,
       originalPrice: currentPrice,
       bulkQuantity: offerBulkQuantity ?? undefined,
+      platform,
+      platformProductId: productId,
     })
-
-    // Availability checks come from the live catalog record (never assumed):
-    // null means "unknown/unverifiable" and does NOT block — only an explicit
-    // false does. A non-'active' status (draft/archived) blocks the accept.
-    const effectiveVariantId = bargainSession.variantId?.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
-    const variantAvailable = !currentDetail || !effectiveVariantId
-      ? null
-      : currentDetail.variants?.find(v => v.id === effectiveVariantId)?.available ?? null
-    const productAvailable = !currentDetail ? null : currentDetail.status === 'active' || currentDetail.status == null
 
     // ── MERCHANT POLICY GATES (deterministic, independent of the AI) ──
     // §25 Campaign lifecycle: an offer must not be accepted once the campaign
@@ -308,9 +354,11 @@ export async function POST(request: NextRequest) {
           shopifyStatus: 'created',
           purchaseUrl:
             refreshed.purchaseUrl ??
-            buildBargainCheckoutUrl({
-              domain: bargainSession.store.domain,
+            purchaseUrlForDeal({
+              platform,
+              store: bargainSession.store,
               code: refreshed.discountCode,
+              productId,
               variantId: refreshed.variantId,
               quantity: refreshed.bulkQuantity,
             }),
@@ -345,23 +393,45 @@ export async function POST(request: NextRequest) {
     // failure the claim is rolled back to 'active' so the customer can retry —
     // an 'accepted' session must never carry a code Shopify does not know.
     let shopifyCode: { code: string; status: 'created' | 'pending' | 'failed'; error?: string }
-    try {
-      shopifyCode = await generateBargainDiscountCode({
-        store: bargainSession.store,
-        shopifyProductId: bargainSession.shopifyProductId,
-        variantId: bargainSession.variantId ?? null,
-        originalPrice: currentPrice,
-        finalPrice: executable.finalPrice,
-        discountPercent,
-        code,
-        customerEmail,
-        cartToken,
-        bulkQuantity: executable.bulkQuantity,
-        floorPrice: minPrice,
-        shopifyCustomerId,
-      })    } catch (err: any) {
-      console.error('[BARGAIN_ACCEPT_SHOPIFY]', err?.message ?? err)
-      shopifyCode = { code, status: 'failed', error: err?.message ?? 'unknown' }
+    if (platform === 'woocommerce') {
+      try {
+        const coupon = await createOrReuseWooCommerceCoupon({
+          store: bargainSession.store,
+          code,
+          value: discountPercent,
+          type: 'percentage',
+          minimumSubtotal: executable.minSubtotalMinor != null ? executable.minSubtotalMinor / 100 : null,
+          productIds: [productId],
+          expiresAt: bargainSession.expiredAt,
+          description: `CartGain bargain ${code}`,
+        })
+        shopifyCode = coupon
+          ? { code: coupon.code, status: 'created' }
+          : { code, status: 'failed', error: 'WooCommerce coupon creation failed' }
+      } catch (err: any) {
+        console.error('[BARGAIN_ACCEPT_WOOCOMMERCE]', err?.message ?? err)
+        shopifyCode = { code, status: 'failed', error: err?.message ?? 'unknown' }
+      }
+    } else {
+      try {
+        shopifyCode = await generateBargainDiscountCode({
+          store: bargainSession.store,
+          shopifyProductId: bargainSession.shopifyProductId,
+          variantId: bargainSession.variantId ?? null,
+          originalPrice: currentPrice,
+          finalPrice: executable.finalPrice,
+          discountPercent,
+          code,
+          customerEmail,
+          cartToken,
+          bulkQuantity: executable.bulkQuantity,
+          floorPrice: minPrice,
+          shopifyCustomerId,
+        })
+      } catch (err: any) {
+        console.error('[BARGAIN_ACCEPT_SHOPIFY]', err?.message ?? err)
+        shopifyCode = { code, status: 'failed', error: err?.message ?? 'unknown' }
+      }
     }
 
     if (shopifyCode.status !== 'created') {
@@ -378,9 +448,11 @@ export async function POST(request: NextRequest) {
 
     // Commit the acceptance atomically: meters + system message + session update
     // guarded by the 'accepting' CAS so a racing request cannot double-meter.
-    const purchaseUrl = buildBargainCheckoutUrl({
-      domain: bargainSession.store.domain,
+    const purchaseUrl = purchaseUrlForDeal({
+      platform,
+      store: bargainSession.store,
       code,
+      productId,
       variantId: bargainSession.variantId,
       quantity: executable.bulkQuantity,
     })
@@ -428,7 +500,7 @@ export async function POST(request: NextRequest) {
     // authoritative artifact; the quote adds a signed, revocable, audited record
     // of the same deal. A failure here must NEVER fail the accept response.
     let quoteToken: string | null = null
-    try {
+    if (platform !== 'woocommerce') try {
       const quote = await createQuote({
         storeId: bargainSession.storeId,
         sessionId: bargainSession.id,
@@ -462,6 +534,7 @@ export async function POST(request: NextRequest) {
       discountCode: shopifyCode.code,
       quoteToken,
       shopifyStatus: shopifyCode.status,
+      platform,
       purchaseUrl,
       currency: bargainSession.store.currency,
       expiresAt: bargainSession.expiredAt.toISOString(),

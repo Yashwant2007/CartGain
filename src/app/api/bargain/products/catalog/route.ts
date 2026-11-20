@@ -3,6 +3,14 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import { fetchShopifyProducts } from '@/lib/shopify'
+import {
+  hasActiveWooCommerceConnection,
+  listPlatformProducts,
+  platformProductId,
+  platformProductPrice,
+  platformProductVariantId,
+  productField,
+} from '@/lib/woocommerce/bargain-adapter'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,6 +35,93 @@ export async function GET(request: NextRequest) {
     if (!store) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404 })
     }
+    if (store.platform === 'woocommerce') {
+      if (!(await hasActiveWooCommerceConnection(store))) {
+        return NextResponse.json({ message: 'Store not connected' }, { status: 404 })
+      }
+      const q = request.nextUrl.searchParams.get('q')?.trim().toLowerCase() ?? ''
+      const rows = await listPlatformProducts(store.id)
+      const overrides = await prisma.bargainProduct.findMany({
+        where: { storeId: store.id },
+        orderBy: { updatedAt: 'desc' },
+      })
+      const overrideMap = new Map<string, any>()
+      for (const override of overrides) {
+        const id = platformProductId(override) ?? override.shopifyProductId
+        if (id) overrideMap.set(String(id), override)
+      }
+      const filtered = q
+        ? rows.filter((row) => {
+            const id = platformProductId(row) ?? ''
+            const title = String(productField(row, ['title', 'name']) ?? '')
+            return id.toLowerCase().includes(q) || title.toLowerCase().includes(q)
+          })
+        : rows
+      const merged = filtered.map((row) => {
+        const id = platformProductId(row) ?? ''
+        const override = overrideMap.get(id)
+        const price = platformProductPrice(row) ?? 0
+        const variantId = platformProductVariantId(row)
+        const image = productField(row, ['imageUrl', 'image', 'images'])
+        const imageSrc =
+          typeof image === 'string'
+            ? image
+            : Array.isArray(image)
+              ? (typeof image[0] === 'string' ? image[0] : (image[0] as any)?.src ?? null)
+              : (image as any)?.src ?? (image as any)?.url ?? null
+        return {
+          product: {
+            id,
+            title: String(productField(row, ['title', 'name']) ?? id),
+            handle: String(productField(row, ['handle', 'slug']) ?? id),
+            status: String(productField(row, ['status', 'state']) ?? 'active'),
+            body_html: productField(row, ['description', 'bodyHtml']) ?? null,
+            image: imageSrc ? { src: imageSrc } : null,
+            images: imageSrc ? [{ src: imageSrc }] : [],
+            variants: [{
+              id: variantId ?? id,
+              title: 'Default',
+              price: String(price),
+              available: true,
+            }],
+          },
+          bargains: override
+            ? {
+                overrideId: override.id,
+                enabled: override.isBargainable,
+                minPrice: override.minPrice,
+                maxDiscountPercent: override.maxDiscountPercent,
+              }
+            : { overrideId: null, enabled: true, minPrice: null, maxDiscountPercent: null },
+        }
+      })
+      const seen = new Set(merged.map((entry) => entry.product.id))
+      const orphanOverrides = overrides.filter((override) => {
+        const id = platformProductId(override) ?? override.shopifyProductId
+        return !seen.has(String(id))
+      })
+      return NextResponse.json({
+        products: merged,
+        nextCursor: null,
+        prevCursor: null,
+        orphanOverrides,
+        overrides,
+        savedOverrides: overrides.map((o) => ({
+          id: o.id,
+          shopifyProductId: platformProductId(o) ?? o.shopifyProductId,
+          platformProductId: platformProductId(o) ?? o.shopifyProductId,
+          productTitle: o.productTitle,
+          minPrice: o.minPrice,
+          minProfitPercent: o.minProfitPercent,
+          maxDiscountPercent: o.maxDiscountPercent,
+          isBargainable: o.isBargainable,
+          updatedAt: o.updatedAt,
+        })),
+        error: null,
+        platform: 'woocommerce',
+      })
+    }
+
     if (store.platform !== 'shopify') {
       return NextResponse.json({
         message: `Products is available for Shopify stores. This store is on ${store.platform}.`,

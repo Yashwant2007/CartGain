@@ -44,6 +44,7 @@ import type { LearningGuidance } from '@/lib/bargain/learning/types'
 import { SHOPKEEPER_PERSONALITY_GUIDANCE } from '@/lib/bargain/experience/personality'
 import { strategyIntentInstruction, strategyPromptBlock } from '@/lib/bargain/experience/strategy'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import { findBargainProductOverride, isWooCommerce } from '@/lib/woocommerce/bargain-adapter'
 
 // Negotiation model. Defaults to the fast, low-cost `gpt-4o-mini`, which the
 // schema's BargainConfig.aiModel also defaults to — `gpt-4o` added multi-second
@@ -1620,16 +1621,20 @@ export async function computeMinPrice(opts: {
   shopifyProductId: string
   originalPrice: number
   bulkQuantity?: number
+  platform?: string | null
+  platformProductId?: string | null
 }): Promise<{ minPrice: number; isBargainable: boolean; reason?: string }> {
   const { storeId, shopifyProductId, originalPrice, bulkQuantity } = opts
+  const platform = isWooCommerce(opts.platform) ? 'woocommerce' : 'shopify'
+  const productId = platform === 'woocommerce'
+    ? (opts.platformProductId ?? shopifyProductId)
+    : shopifyProductId
   const isBulk = bulkQuantity != null && bulkQuantity >= 2
   const factor = isBulk ? bulkFloorFactor(bulkQuantity) : 1
 
   const [config, product] = await Promise.all([
     prisma.bargainConfig.findUnique({ where: { storeId } }),
-    prisma.bargainProduct.findUnique({
-      where: { storeId_shopifyProductId: { storeId, shopifyProductId } },
-    }),
+    findBargainProductOverride(storeId, productId, platform),
   ])
 
   if (config && !config.enabled) {

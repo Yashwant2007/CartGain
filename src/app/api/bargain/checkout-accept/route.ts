@@ -14,6 +14,13 @@ import { redisIncr, redisExpire } from '@/lib/redis'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { normalizeShopDomain, shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
 import { loadQuoteByToken, revalidateQuote, markQuoteCheckoutPending } from '@/lib/bargain/quote'
+import {
+  bargainPlatformFor,
+  buildWooCommerceCheckoutUrl,
+  createOrReuseWooCommerceCoupon,
+  getWooCommerceProductFacts,
+  resolveActiveWooCommerceStore,
+} from '@/lib/woocommerce/bargain-adapter'
 
 export const dynamic = 'force-dynamic'
 
@@ -86,9 +93,14 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, discountPercent, code, orderLevel, bulkQuantity, shopifyCustomerId, customerEmail, quoteToken } = body
+    const platform = bargainPlatformFor(null, body?.platform)
+    const domainValue = shopDomain ?? body?.domain ?? body?.storeDomain
+    const productId = body?.productId ?? body?.platformProductId ?? shopifyProductId
 
     if (
-      typeof shopDomain !== 'string' || !shopDomain ||
+      (platform !== 'woocommerce' && (typeof shopDomain !== 'string' || !shopDomain)) ||
+      (platform === 'woocommerce' && typeof domainValue !== 'string' && typeof body?.storeId !== 'string') ||
+      (platform === 'woocommerce' && !productId) ||
       (code != null && (typeof code !== 'string' || code.length > 100)) ||
       !originalPrice || !finalPrice
     ) {
@@ -109,27 +121,35 @@ export async function POST(request: NextRequest) {
     // (signup can park an unconnected row on any domain), so the lookup requires
     // a real OAuth connection and matches both the permanent domain and the bare
     // legacy handle.
-    const cleanDomain = normalizeShopDomain(shopDomain)
-    const domainCandidates = shopDomainCandidates(cleanDomain)
-    const matches = await Promise.all(
-      domainCandidates.map((domain) =>
-        prisma.store.findFirst({
-          where: {
-            domain: { equals: domain, mode: 'insensitive' },
-            platform: 'shopify',
-            apiKey: { not: null },
-          },
-          orderBy: { createdAt: 'asc' },
-        }),
-      ),
-    )
-    const store = matches.find((s) => s !== null) ?? null
+    const cleanDomain = normalizeShopDomain(typeof domainValue === 'string' ? domainValue : '')
+    let store: any = null
+    if (platform === 'woocommerce') {
+      store = await resolveActiveWooCommerceStore({
+        storeId: body?.storeId,
+        domain: domainValue,
+      })
+    } else {
+      const domainCandidates = shopDomainCandidates(cleanDomain)
+      const matches = await Promise.all(
+        domainCandidates.map((domain) =>
+          prisma.store.findFirst({
+            where: {
+              domain: { equals: domain, mode: 'insensitive' },
+              platform: 'shopify',
+              apiKey: { not: null },
+            },
+            orderBy: { createdAt: 'asc' },
+          }),
+        ),
+      )
+      store = matches.find((s) => s !== null) ?? null
+    }
 
     if (!store) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404, headers })
     }
 
-    const withinBudget = await underCodeBudget(cleanDomain)
+    const withinBudget = await underCodeBudget(cleanDomain || store.id)
     if (!withinBudget) {
       return NextResponse.json(
         { message: 'Too many codes generated for this store recently. Try again later.' },
@@ -153,7 +173,15 @@ export async function POST(request: NextRequest) {
       select: { discountCode: true },
     })
     if (existing?.discountCode) {
-      return NextResponse.json({ success: true, code: existing.discountCode, status: 'created' }, { headers })
+      return NextResponse.json({
+        success: true,
+        code: existing.discountCode,
+        status: 'created',
+        platform,
+        ...(platform === 'woocommerce'
+          ? { purchaseUrl: buildWooCommerceCheckoutUrl({ domain: store.domain, code: existing.discountCode }) }
+          : {}),
+      }, { headers })
     }
 
     // ── FINANCIAL SAFETY ──
@@ -161,8 +189,17 @@ export async function POST(request: NextRequest) {
     // UI Extension cannot carry a bargain session), so the merchant floor must be
     // enforced HERE, mathematically, from the AUTHORITATIVE current Shopify price.
     // 1) Re-fetch the price; reject when the client price drifted noticeably.
-    const currentPrice =
-      (await fetchShopifyProductPrice(store, shopifyProductId, variantId || null)) ?? null
+    const wooFacts = platform === 'woocommerce'
+      ? await getWooCommerceProductFacts({
+          store,
+          productId: String(productId),
+          variantId,
+          fallbackPrice: Number(originalPrice),
+        })
+      : null
+    const currentPrice = platform === 'woocommerce'
+      ? wooFacts?.price ?? null
+      : (await fetchShopifyProductPrice(store, shopifyProductId, variantId || null)) ?? null
     if (currentPrice == null) {
       return NextResponse.json({ message: 'Could not verify current product price' }, { status: 503, headers })
     }
@@ -174,16 +211,18 @@ export async function POST(request: NextRequest) {
     // 2) Floor derived server-side from the merchant's own config/product overrides.
     const { minPrice } = await computeMinPrice({
       storeId: store.id,
-      shopifyProductId,
+      shopifyProductId: String(productId ?? shopifyProductId ?? ''),
       originalPrice: currentPrice,
       bulkQuantity: safeBulk ?? undefined,
+      platform,
+      platformProductId: platform === 'woocommerce' ? String(productId) : null,
     })
 
     // ── MODULE 3 — revalidate a supplied quote ──
     // Optional and additive: when the caller hands us the signed quote token, we
     // re-check it against the CURRENT price/floor before minting. No token means
     // the legacy path is unchanged. A stale/expired/revoked quote is refused.
-    if (typeof quoteToken === 'string' && quoteToken) {
+    if (platform !== 'woocommerce' && typeof quoteToken === 'string' && quoteToken) {
       const quote = await loadQuoteByToken(quoteToken)
       if (quote) {
         if (quote.storeId !== store.id) {
@@ -208,12 +247,21 @@ export async function POST(request: NextRequest) {
 
     // 2b) Live availability + machine reason codes. Only an explicit false from
     // Shopify blocks (null = unverifiable = don't block).
-    const currentDetail = await fetchShopifyProductDetail(store, shopifyProductId)
-    const effectiveVariantId = variantId?.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
-    const variantAvailable = !currentDetail || !effectiveVariantId
-      ? null
-      : currentDetail.variants?.find(v => v.id === effectiveVariantId)?.available ?? null
-    const productAvailable = !currentDetail ? null : currentDetail.status === 'active' || currentDetail.status == null
+    let variantAvailable: boolean | null = null
+    let productAvailable: boolean | null = null
+    if (platform === 'woocommerce') {
+      variantAvailable = wooFacts?.available ?? null
+      productAvailable = wooFacts
+        ? wooFacts.status == null || ['active', 'publish', 'published'].includes(wooFacts.status.toLowerCase())
+        : null
+    } else {
+      const currentDetail = await fetchShopifyProductDetail(store, shopifyProductId)
+      const effectiveVariantId = variantId?.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
+      variantAvailable = !currentDetail || !effectiveVariantId
+        ? null
+        : currentDetail.variants?.find(v => v.id === effectiveVariantId)?.available ?? null
+      productAvailable = !currentDetail ? null : currentDetail.status === 'active' || currentDetail.status == null
+    }
     // §25 Campaign lifecycle: a checkout-stage code must not be minted once the
     // campaign window closed. Fails closed (blocks) only when the window is
     // configured AND outside it — no window means always active.
@@ -297,19 +345,38 @@ export async function POST(request: NextRequest) {
       }, { status: 402, headers })
     }
 
-    // Generate the discount code in Shopify
-    const result = await generateBargainDiscountCode({
-      store,
-      shopifyProductId: orderLevel ? null : shopifyProductId,
-      variantId: orderLevel ? null : variantId || null,
-      originalPrice: currentPrice,
-      finalPrice: finalPriceSafe,
-      discountPercent: calculatedPercent,
-      code: issuedCode,
-      bulkQuantity: safeBulk,
-      floorPrice: minPrice,
-      shopifyCustomerId: normalizedCustomerId,
-    })
+    let result: { code: string; status: 'created' | 'pending' | 'failed'; error?: string }
+    let purchaseUrl: string | null = null
+    if (platform === 'woocommerce') {
+      const coupon = await createOrReuseWooCommerceCoupon({
+        store,
+        code: issuedCode,
+        value: calculatedPercent,
+        type: 'percentage',
+        minimumSubtotal: orderLevel ? null : currentPrice,
+        productIds: orderLevel ? [] : [String(productId)],
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        description: `CartGain bargain ${issuedCode}`,
+      })
+      if (!coupon) {
+        return NextResponse.json({ message: 'Failed to create WooCommerce coupon' }, { status: 500, headers })
+      }
+      result = { code: coupon.code, status: 'created' }
+      purchaseUrl = coupon.purchaseUrl
+    } else {
+      result = await generateBargainDiscountCode({
+        store,
+        shopifyProductId: orderLevel ? null : shopifyProductId,
+        variantId: orderLevel ? null : variantId || null,
+        originalPrice: currentPrice,
+        finalPrice: finalPriceSafe,
+        discountPercent: calculatedPercent,
+        code: issuedCode,
+        bulkQuantity: safeBulk,
+        floorPrice: minPrice,
+        shopifyCustomerId: normalizedCustomerId,
+      })
+    }
 
     if (result.status !== 'created') {
       return NextResponse.json({
@@ -317,6 +384,10 @@ export async function POST(request: NextRequest) {
           ? 'This store is not connected to Shopify yet. Please try again shortly.'
           : result.error || 'Failed to create discount code',
       }, { status: result.status === 'pending' ? 503 : 500, headers })
+    }
+
+    if (platform === 'woocommerce' && !purchaseUrl) {
+      purchaseUrl = buildWooCommerceCheckoutUrl({ domain: store.domain, code: result.code })
     }
 
     // ── RECORD THE DEAL ──
@@ -332,7 +403,7 @@ export async function POST(request: NextRequest) {
         data: {
           id: sessionId,
           storeId: store.id,
-          shopifyProductId: orderLevel ? '' : (shopifyProductId ?? ''),
+          shopifyProductId: orderLevel ? '' : String(productId ?? shopifyProductId ?? ''),
           variantId: orderLevel ? null : (variantId || null),
           originalPrice: currentPrice,
           currentOffer: finalPriceSafe,
@@ -340,6 +411,7 @@ export async function POST(request: NextRequest) {
           bargainFloor: minPrice,
           bulkQuantity: safeBulk,
           discountCode: result.code,
+          purchaseUrl,
           customerEmail: safeCustomerEmail,
           status: 'accepted',
           expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
@@ -366,6 +438,8 @@ export async function POST(request: NextRequest) {
       success: true,
       code: result.code,
       status: result.status,
+      platform,
+      ...(purchaseUrl ? { purchaseUrl } : {}),
     }, { headers })
   } catch (error) {
     console.error('[BARGAIN_CHECKOUT_ACCEPT]', error)

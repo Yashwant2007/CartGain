@@ -4,6 +4,7 @@
 // (per-product + per-store), attach truthful active promotions, cache briefly.
 import prisma from '@/lib/db'
 import { fetchShopifyProductDetail } from '@/lib/shopify'
+import { buildWooCommerceProductContext, isWooCommerce } from '@/lib/woocommerce/bargain-adapter'
 import {
   normalizeProduct,
   getCachedProductContext,
@@ -100,10 +101,25 @@ export interface ProductContextOptions {
   baseUrl?: string | null
   fallbackTitle?: string | null
   useCache?: boolean
+  platform?: string | null
+  platformProductId?: string | null
+  productId?: string | null
 }
 
 export async function buildProductContext(opts: ProductContextOptions): Promise<ProductContext> {
   const now = new Date()
+
+  if (isWooCommerce(opts.platform)) {
+    return buildWooCommerceProductContext({
+      store: opts.store,
+      storeId: opts.storeId,
+      productId: opts.platformProductId ?? opts.productId ?? opts.shopifyProductId,
+      variantId: opts.variantId,
+      currency: opts.currency,
+      baseUrl: opts.baseUrl,
+      fallbackTitle: opts.fallbackTitle,
+    })
+  }
 
   if (CACHE_ENABLED && opts.useCache !== false) {
     const cached = await getCachedProductContext(opts.storeId, opts.shopifyProductId)

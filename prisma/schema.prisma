@@ -140,6 +140,10 @@ model Store {
   // field instead of breaking discovery on every run.
   abandonedCheckoutUrlAccess    String    @default("UNKNOWN")
   abandonedCheckoutUrlCheckedAt DateTime?
+  externalStoreId               String?
+  platformStatus                String? // connected | revoked | error
+  platformConnectedAt           DateTime?
+  platformLastSyncAt            DateTime?
   createdAt                     DateTime  @default(now())
   updatedAt                     DateTime  @updatedAt
 
@@ -174,6 +178,12 @@ model Store {
   bargainExperienceEvents    BargainExperienceEvent[]
   bargainExperiencePublishes BargainExperiencePublish[]
   bargainQuotes              BargainQuote[]
+  platformConnections        PlatformConnection[]
+  connectionIntents          ConnectionIntent[]
+  platformEvents             PlatformEvent[]
+  platformProducts           PlatformProduct[]
+  platformOrders             PlatformOrder[]
+  webhookDeliveries          WebhookDelivery[]
 
   @@unique([userId, domain])
   @@index([userId])
@@ -231,6 +241,11 @@ model Cart {
   // checkout token remains in cartId for building resume links.
   recoveryUrlEncrypted String?
   recoveryUrlCheckedAt DateTime?
+  platform             String? // shopify | woocommerce | ...
+  platformCartId       String?
+  platformOrderId      String?
+  externalCustomerId   String?
+  platformStatus       String? // observed | abandoned | converted | cancelled
   abandonedAt          DateTime  @default(now())
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
@@ -242,6 +257,8 @@ model Cart {
 
   @@unique([storeId, cartId])
   @@index([storeId])
+  @@index([storeId, platform, platformCartId])
+  @@index([storeId, platformOrderId])
   @@index([storeId, isRecovered, abandonedAt])
   @@index([storeId, convertedAt, abandonedAt])
 }
@@ -314,19 +331,23 @@ model Message {
 }
 
 model RecoveredCart {
-  id             String   @id @default(cuid())
-  storeId        String
-  cartId         String   @unique
-  recoveredValue Float
-  recoveredAt    DateTime @default(now())
-  channel        String
-  discountUsed   Boolean  @default(false)
-  discountAmount Float    @default(0)
-  netRevenue     Float
-  shopifyOrderId String?
+  id                 String   @id @default(cuid())
+  storeId            String
+  cartId             String   @unique
+  recoveredValue     Float
+  recoveredAt        DateTime @default(now())
+  channel            String
+  discountUsed       Boolean  @default(false)
+  discountAmount     Float    @default(0)
+  netRevenue         Float
+  shopifyOrderId     String?
+  platform           String?
+  platformOrderId    String?
+  externalCustomerId String?
+  platformStatus     String?
   // Refund netting — recognized revenue is `netRevenue` after cumulative refunds.
-  refundStatus   String   @default("none") // none | partially_refunded | fully_refunded
-  totalRefunded  Float    @default(0) // cumulative gross refunded across webhooks
+  refundStatus       String   @default("none") // none | partially_refunded | fully_refunded
+  totalRefunded      Float    @default(0) // cumulative gross refunded across webhooks
 
   store             Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
   cart              Cart               @relation(fields: [cartId], references: [id], onDelete: Cascade, map: "fk_cart")
@@ -342,6 +363,7 @@ model RecoveredCart {
   // netted the other store's recovered revenue.
   @@unique([storeId, shopifyOrderId])
   @@index([storeId])
+  @@index([storeId, platform, platformOrderId])
 }
 
 model Analytics {
@@ -545,6 +567,10 @@ model BargainProduct {
   minProfitPercent      Float? // overrides global
   maxDiscountPercent    Int? // e.g. 30 means never discount more than 30% off
   isBargainable         Boolean  @default(true)
+  platform              String?
+  platformProductId     String?
+  platformVariantId     String?
+  platformStatus        String? // active | archived | missing
   approvedSellingPoints String[] @default([]) // per-product merchant-vetted selling points
   disallowedClaims      String[] @default([]) // per-product claims never passed to the AI
   createdAt             DateTime @default(now())
@@ -553,6 +579,7 @@ model BargainProduct {
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([storeId, shopifyProductId])
+  @@unique([storeId, platform, platformProductId])
   @@index([storeId])
 }
 
@@ -575,6 +602,11 @@ model BargainSession {
   discountCodeCartToken     String? // cartToken the code was bound to (prevents sharing)
   claimToken                String?   @unique // opaque token for the post-bargain purchase-window link
   purchaseUrl               String? // checkout link that applies the issued code (purchase window)
+  platform                  String?
+  platformProductId         String?
+  platformVariantId         String?
+  platformOrderId           String?
+  externalCustomerId        String?
   checkoutOpenedAt          DateTime? // shopper opened checkout; chat closes until a real order arrives
   checkoutPurchaseAt        DateTime? // any confirmed order from this buyer after checkout opened
   checkoutPurchaseOrderId   String? // Shopify order id that unlocked this checkout lock
@@ -628,6 +660,8 @@ model BargainSession {
   @@index([customerEmail])
   @@index([customerFingerprint])
   @@index([checkoutOpenedAt])
+  @@index([storeId, platform, platformProductId])
+  @@index([storeId, platformOrderId])
   @@index([status])
   @@index([expiredAt])
 }
@@ -636,24 +670,30 @@ model BargainSession {
 // and to reopen bargain chat after an order. Written from orders/create; no
 // inferred or demo data is ever stored here.
 model BargainPurchaseMemory {
-  id               String   @id @default(cuid())
-  storeId          String
-  shopifyOrderId   String
-  customerEmail    String?
-  customerPhone    String?
-  cartToken        String?
-  customerId       String?
-  shopifyProductId String?
-  variantId        String?
-  productTitle     String?
-  price            Float?
-  currency         String?
-  purchasedAt      DateTime
-  createdAt        DateTime @default(now())
+  id                 String   @id @default(cuid())
+  storeId            String
+  shopifyOrderId     String
+  customerEmail      String?
+  customerPhone      String?
+  cartToken          String?
+  customerId         String?
+  shopifyProductId   String?
+  variantId          String?
+  productTitle       String?
+  price              Float?
+  currency           String?
+  platform           String?
+  platformProductId  String?
+  platformOrderId    String?
+  externalCustomerId String?
+  platformStatus     String?
+  purchasedAt        DateTime
+  createdAt          DateTime @default(now())
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([storeId, shopifyOrderId, shopifyProductId], map: "BargainPurchaseMemory_order_key")
+  @@unique([storeId, platform, platformOrderId, platformProductId], map: "BargainPurchaseMemory_platform_order_key")
   @@index([storeId, customerEmail, purchasedAt], map: "BargainPurchaseMemory_email_date_idx")
   @@index([storeId, cartToken, purchasedAt], map: "BargainPurchaseMemory_cart_date_idx")
   @@index([storeId, customerId, purchasedAt], map: "BargainPurchaseMemory_customer_date_idx")
@@ -1489,6 +1529,9 @@ model CustomerIdentity {
   id                    String    @id @default(cuid())
   storeId               String
   shopifyCustomerId     String?
+  platform              String?
+  externalCustomerId    String?
+  platformStatus        String? // identified | customer | guest
   name                  String?
   email                 String?
   phone                 String?
@@ -1522,6 +1565,7 @@ model CustomerIdentity {
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([storeId, shopifyCustomerId])
+  @@unique([storeId, platform, externalCustomerId])
   @@index([storeId, email])
   @@index([storeId, phone])
   @@index([storeId, consentWhatsApp, suppressed])
@@ -1579,4 +1623,191 @@ model RecoveryReminder {
   @@index([storeId, status, scheduledFor])
   @@index([journeyId])
   @@index([providerId])
+}
+
+// ── Generic platform connector (additive to Shopify) ────────────────────────
+// Secrets are always AES-256-GCM encrypted at rest. History is never deleted
+// when a connection is revoked; only the active credential/connection state
+// changes so analytics and order truth remain intact.
+model PlatformConnection {
+  id                String    @id @default(cuid())
+  storeId           String
+  platform          String // woocommerce | magento | bigcommerce | custom
+  status            String    @default("active") // active | revoked | error
+  externalStoreId   String?
+  storeUrl          String?
+  webhookUrl        String?
+  webhookSecret     String? // encrypted at rest
+  connectedAt       DateTime  @default(now())
+  revokedAt         DateTime?
+  lastHealthCheckAt DateTime?
+  lastHealthStatus  String? // ok | degraded | unreachable
+  lastHealthDetail  String?
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  store             Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  credentials       PlatformCredential[]
+  events            PlatformEvent[]
+  products          PlatformProduct[]
+  orders            PlatformOrder[]
+  webhookDeliveries WebhookDelivery[]
+
+  @@unique([storeId, platform])
+  @@index([platform, status])
+}
+
+model PlatformCredential {
+  id              String    @id @default(cuid())
+  connectionId    String
+  platform        String
+  kind            String    @default("consumer_key_secret")
+  keyEncrypted    String
+  secretEncrypted String
+  keyFingerprint  String?
+  status          String    @default("active") // active | revoked | expired
+  lastUsedAt      DateTime?
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  connection PlatformConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId, status])
+  @@index([platform, status])
+}
+
+model ConnectionIntent {
+  id         String    @id @default(cuid())
+  codeHash   String    @unique
+  storeId    String
+  platform   String
+  status     String    @default("pending") // pending | consumed | expired | revoked
+  installId  String?
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, platform, status])
+  @@index([expiresAt])
+}
+
+model PlatformEvent {
+  id           String    @id @default(cuid())
+  storeId      String
+  platform     String
+  connectionId String?
+  eventId      String
+  eventType    String
+  status       String    @default("received") // received | processed | skipped | failed
+  errorCode    String?
+  detail       Json?
+  occurredAt   DateTime?
+  receivedAt   DateTime  @default(now())
+  processedAt  DateTime?
+
+  store      Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  connection PlatformConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@unique([storeId, platform, eventId])
+  @@index([storeId, eventType, receivedAt])
+  @@index([status, receivedAt])
+}
+
+model PlatformProduct {
+  id                String   @id @default(cuid())
+  storeId           String
+  connectionId      String?
+  platform          String
+  platformProductId String
+  variantKey        String   @default("")
+  platformVariantId String?
+  parentProductId   String?
+  kind              String   @default("product") // product | variation
+  name              String?
+  description       String?  @db.Text
+  imageUrl          String?
+  regularPrice      Float?
+  salePrice         Float?
+  sku               String?
+  categories        Json?
+  inventoryQuantity Int?
+  stockStatus       String?
+  attributes        Json?
+  variations        Json?
+  status            String?
+  raw               Json?
+  syncedAt          DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  store      Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  connection PlatformConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@unique([storeId, platform, platformProductId, variantKey])
+  @@index([storeId, platform, sku])
+  @@index([storeId, platform, status])
+  @@index([connectionId])
+}
+
+model PlatformOrder {
+  id                 String    @id @default(cuid())
+  storeId            String
+  connectionId       String?
+  platform           String
+  platformOrderId    String
+  cartId             String?
+  externalCustomerId String?
+  status             String?
+  currency           String?
+  total              Float     @default(0)
+  refundedTotal      Float     @default(0)
+  customerEmail      String?
+  customerPhone      String?
+  customerName       String?
+  items              Json      @default("[]")
+  couponCodes        Json      @default("[]")
+  placedAt           DateTime?
+  paidAt             DateTime?
+  cancelledAt        DateTime?
+  refundedAt         DateTime?
+  raw                Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  store      Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  connection PlatformConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@unique([storeId, platform, platformOrderId])
+  @@index([storeId, platform, status])
+  @@index([storeId, cartId])
+  @@index([storeId, externalCustomerId])
+  @@index([connectionId])
+}
+
+model WebhookDelivery {
+  id             String    @id @default(cuid())
+  storeId        String?
+  platform       String
+  connectionId   String?
+  eventId        String?
+  topic          String?
+  status         String    @default("verified") // verified | rejected | processed | skipped | failed | duplicate
+  httpStatus     Int?
+  signatureValid Boolean   @default(false)
+  errorCode      String?
+  detail         Json?
+  receivedAt     DateTime  @default(now())
+  processedAt    DateTime?
+
+  store      Store?              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  connection PlatformConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@unique([storeId, platform, eventId])
+  @@index([platform, receivedAt])
+  @@index([status, receivedAt])
 }

@@ -43,6 +43,7 @@ import { resolveSessionLearning, recordLearningEvent, loadLearningConfig } from 
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import { bargainRequestMetrics } from '@/lib/bargain/request-metrics'
 import type { BargainDecision, BargainOfferSuccess } from '@/lib/bargain/api-types'
+import { bargainPlatformFor, findBargainProductOverride } from '@/lib/woocommerce/bargain-adapter'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,6 +62,15 @@ function finalQuoteFor(session: any, minPrice: number): number {
   const offered = lastAi?.offeredPrice ?? session.currentOffer
   if (offered == null) return Math.round(cap * 100) / 100
   return Math.round(Math.min(cap, Math.max(floor, offered)) * 100) / 100
+}
+
+async function issueRetentionForPlatform(
+  platform: string,
+  sessionId: string,
+  price: number,
+): Promise<IssuedBargainCode | null> {
+  if (platform === 'woocommerce') return null
+  return issueRetentionDiscount(sessionId, price).catch(() => null)
 }
 
 function withFinalCode(reply: string, lang: string, retention: IssuedBargainCode, currency: string): string {
@@ -112,7 +122,9 @@ async function resolveBundleItems(opts: {
   cartToken: string | null
   anchor: { productId: string; title: string; price: number }
   message: string
+  platform?: string | null
 }): Promise<BundleItem[] | null> {
+  if (bargainPlatformFor(opts.store, opts.platform) === 'woocommerce') return null
   const candidates: { productId: string; variantId?: string | null; title: string; price: number; quantity: number }[] = []
   const seen = new Set<string>()
   const push = (c: { productId?: string | null; variantId?: string | null; title?: string; price?: number; quantity?: number }) => {
@@ -257,6 +269,7 @@ export async function POST(request: NextRequest) {
     if (!bargainSession) {
       return NextResponse.json({ message: 'Bargain session not found' }, { status: 404 })
     }
+    const platform = bargainPlatformFor(bargainSession.store, body?.platform)
 
     if (data.turnId) {
       const matchedTurn = duplicateTurnMatch(bargainSession.messages, data.turnId)
@@ -381,15 +394,15 @@ export async function POST(request: NextRequest) {
       shopifyProductId: bargainSession.shopifyProductId,
       originalPrice: bargainSession.originalPrice,
       bulkQuantity: bulkQuantity ?? undefined,
+      platform,
+      platformProductId: bargainSession.shopifyProductId,
     })
     // Fetch product title separately (not part of computeMinPrice)
-    const productTitle = await (async () => {
-      const p = await prisma.bargainProduct.findUnique({
-        where: { storeId_shopifyProductId: { storeId: bargainSession.storeId, shopifyProductId: bargainSession.shopifyProductId } },
-        select: { productTitle: true },
-      })
-      return p?.productTitle ?? undefined
-    })()
+    const productTitle = (await findBargainProductOverride(
+      bargainSession.storeId,
+      bargainSession.shopifyProductId,
+      platform,
+    ))?.productTitle ?? undefined
 
     // Product intelligence — verified catalog facts the AI is allowed to cite.
     // Deliberately layered AFTER control-flow (walkout/attempts) so the hot path
@@ -405,8 +418,13 @@ export async function POST(request: NextRequest) {
       currency: bargainSession.store.currency,
       baseUrl: `https://${bargainSession.store.domain}`,
       fallbackTitle: productTitle ?? null,
+      platform,
+      platformProductId: bargainSession.shopifyProductId,
     })
     endProduct()
+    const catalogFetcher = platform === 'woocommerce'
+      ? (async () => ({ products: [] })) as any
+      : fetchShopifyProducts
 
     // Deterministic shopper-intent classification of the current message. Cheap,
     // predictable, and merchant-controlled — the LLM is told about it, it never
@@ -489,6 +507,7 @@ export async function POST(request: NextRequest) {
             cartToken: bargainSession.cartToken ?? null,
             anchor: { productId: bargainSession.shopifyProductId, title: productTitle ?? 'Item', price: bargainSession.originalPrice },
             message: data.message,
+            platform,
           })
           if (items) {
             const desiredPct = config.bundleDiscountPercent ?? 10
@@ -565,7 +584,7 @@ export async function POST(request: NextRequest) {
               budget: intentAnalysis.budget,
               need: intentAnalysis.need ?? null,
             },
-            fetchShopifyProducts,
+            catalogFetcher,
             bargainSession.originalPrice,
             {
               history: recoHistory,
@@ -705,7 +724,7 @@ export async function POST(request: NextRequest) {
       }
 
       const finalQuote = finalQuoteFor(bargainSession, minPrice)
-      const retention = await issueRetentionDiscount(bargainSession.id, finalQuote).catch(() => null)
+      const retention = await issueRetentionForPlatform(platform, bargainSession.id, finalQuote)
       const rejectReply = retention
         ? withFinalCode(uiText(lang, 'attempts_exhausted'), lang, retention, bargainSession.store.currency)
         : `${uiText(lang, 'attempts_exhausted')} ${uiText(lang, 'farewell_friendly')}`
@@ -931,7 +950,7 @@ export async function POST(request: NextRequest) {
         } as Record<string, string>
         const baseFarewell = farewellReplies[ctx.persona] ?? farewellReplies.friendly_shopkeeper
         const finalQuote = finalQuoteFor(bargainSession, minPrice)
-        const retention = await issueRetentionDiscount(bargainSession.id, lastCounter ?? finalQuote).catch(() => null)
+        const retention = await issueRetentionForPlatform(platform, bargainSession.id, lastCounter ?? finalQuote)
         const farewell = retention
           ? withFinalCode(baseFarewell, lang, retention, bargainSession.store.currency)
           : baseFarewell
@@ -1240,7 +1259,7 @@ export async function POST(request: NextRequest) {
             budget,
             need: intentAnalysis.need ?? null,
           },
-          fetchShopifyProducts,
+          catalogFetcher,
           bargainSession.originalPrice,
           {
             history: recoHistory,
@@ -1295,7 +1314,7 @@ export async function POST(request: NextRequest) {
     let terminalRetention: IssuedBargainCode | null = null
     if (sessionStatus === 'rejected') {
       const finalQuote = finalQuoteFor(bargainSession, minPrice)
-      terminalRetention = await issueRetentionDiscount(bargainSession.id, safeCounter ?? finalQuote).catch(() => null)
+      terminalRetention = await issueRetentionForPlatform(platform, bargainSession.id, safeCounter ?? finalQuote)
       customerReply = terminalRetention
         ? withFinalCode(result.reply, lang, terminalRetention, bargainSession.store.currency)
         : `${result.reply} ${uiText(lang, 'farewell_friendly')}`

@@ -6,6 +6,8 @@
 import crypto from 'crypto'
 import { createShopifyDiscountCode } from '@/lib/shopify/discount'
 import { ConversationDiscount } from '@/lib/conversation/facts'
+import { isWooCommerce } from '@/lib/woocommerce/bargain-adapter'
+import { resolveWooCommerceRecoveryCoupon } from '@/lib/woocommerce/recovery-offer'
 
 export type RecoveryOffer = ConversationDiscount & {
   source: 'campaign' | 'minted'
@@ -78,11 +80,14 @@ export async function resolveRecoveryOffer(opts: {
   campaign?: RecoveryCampaignConfig
   cartValue?: number | null
   cartTotal?: number | null
+  platform?: string | null
+  cartPlatform?: string | null
 }): Promise<RecoveryOffer | null> {
   const config = opts.campaignConfig || opts.campaign
   if (!config) return null
   const { store, cartId } = opts
   const cartValue = opts.cartValue ?? opts.cartTotal ?? null
+  const platform = isWooCommerce(opts.platform ?? opts.cartPlatform ?? (store as any).platform) ? 'woocommerce' : 'shopify'
 
   if (!config.discountEnabled) {
     return null
@@ -103,6 +108,24 @@ export async function resolveRecoveryOffer(opts: {
   if (!norm) return null
 
   const code = buildRecoveryCode(cartId)
+  if (platform === 'woocommerce') {
+    const coupon = await resolveWooCommerceRecoveryCoupon({
+      store,
+      code,
+      value: norm.value,
+      type: norm.type,
+      cartTotal: cartValue,
+      cartId,
+    })
+    if (!coupon) return null
+    return {
+      code: coupon.code,
+      value: norm.value,
+      type: norm.type,
+      source: coupon.source,
+    }
+  }
+
   const ok = await createShopifyCode({
     store,
     code,

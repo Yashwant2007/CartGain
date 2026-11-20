@@ -1,0 +1,125 @@
+.cgw-wrap {
+    max-width: 980px;
+}
+
+.cgw-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cgw-version {
+    font-size: 12px;
+    font-weight: 400;
+    color: #64748b;
+    background: #f1f5f9;
+    border-radius: 999px;
+    padding: 3px 9px;
+}
+
+.cgw-subtitle {
+    color: #64748b;
+    margin-top: 0;
+}
+
+.cgw-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    border-bottom: 1px solid #cbd5e1;
+    margin: 18px 0 0;
+}
+
+.cgw-tab {
+    padding: 10px 14px;
+    text-decoration: none;
+    color: #334155;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+}
+
+.cgw-tab:hover {
+    color: #0f172a;
+    background: #f8fafc;
+}
+
+.cgw-tab.is-active {
+    background: #fff;
+    border-color: #cbd5e1;
+    color: #0f172a;
+    font-weight: 600;
+}
+
+.cgw-card {
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    padding: 22px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.cgw-card h2 {
+    margin-top: 0;
+}
+
+.cgw-connected {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.cgw-disconnect-form,
+.cgw-inline-form {
+    margin: 14px 0 22px;
+}
+
+.cgw-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.cgw-pill-ok {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.cgw-pill-off {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.cgw-note {
+    margin-top: 24px;
+    padding: 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+}
+
+.cgw-note h3 {
+    margin-top: 0;
+}
+
+.cgw-diagnostics th {
+    width: 240px;
+}
+
+@media (max-width: 600px) {
+    .cgw-card {
+        padding: 14px;
+    }
+
+    .cgw-tab {
+        padding: 8px 10px;
+    }
+
+    .cgw-diagnostics th {
+        width: auto;
+    }
+}

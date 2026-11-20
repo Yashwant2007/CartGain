@@ -24,6 +24,14 @@ import {
 } from '@/lib/bargain/checkout-lock'
 import { logDataAccess } from '@/lib/data-protection'
 import { track } from '@/lib/analytics/track'
+import {
+  bargainPlatformFor,
+  findBargainProductOverride,
+  getWooCommerceProductFacts,
+  hasActiveWooCommerceConnection,
+  isWooCommerce,
+  resolveActiveWooCommerceStore,
+} from '@/lib/woocommerce/bargain-adapter'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,14 +85,52 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const body = await request.json()
-    const presentedSessionToken = typeof (body as any)?.sessionToken === 'string' ? (body as any).sessionToken : null
-    const data = validateOrThrow(bargainStartSchema, body)
+    let body: any = await request.json()
+    const presentedSessionToken = typeof body?.sessionToken === 'string' ? body.sessionToken : null
+    let platform = bargainPlatformFor(null, body?.platform)
+    let wooStore: any = null
+
+    if (platform === 'woocommerce') {
+      const productId =
+        body?.productId ?? body?.platformProductId ?? body?.shopifyProductId ?? null
+      if (!productId || typeof productId !== 'string') {
+        return NextResponse.json({ message: 'productId is required' }, { status: 400 })
+      }
+      wooStore = await resolveActiveWooCommerceStore({
+        storeId: body?.storeId,
+        domain: body?.domain ?? body?.shopDomain ?? body?.storeDomain,
+      })
+      if (!wooStore) {
+        return NextResponse.json({ message: 'Store not available' }, { status: 404 })
+      }
+      body = {
+        ...body,
+        storeId: wooStore.id,
+        shopifyProductId: productId,
+        variantId: body?.variantId ?? body?.platformVariantId ?? null,
+      }
+    }
+
+    let data = validateOrThrow(bargainStartSchema, body)
 
     // Verify the store exists and is active
-    let store = await prisma.store.findUnique({ where: { id: data.storeId } })
+    let store = wooStore ?? await prisma.store.findUnique({ where: { id: data.storeId } })
     if (!store || !store.isActive) {
       return NextResponse.json({ message: 'Store not available' }, { status: 404 })
+    }
+
+    if (platform === 'shopify' && isWooCommerce(store.platform)) {
+      if (!(await hasActiveWooCommerceConnection(store))) {
+        return NextResponse.json({ message: 'Store not available' }, { status: 404 })
+      }
+      platform = 'woocommerce'
+      body = {
+        ...body,
+        storeId: store.id,
+        shopifyProductId: body?.productId ?? body?.platformProductId ?? body.shopifyProductId,
+        variantId: body?.variantId ?? body?.platformVariantId ?? body.variantId ?? null,
+      }
+      data = validateOrThrow(bargainStartSchema, body)
     }
 
     // The Shopify shop's real currency (from the Liquid embed / theme currency)
@@ -115,7 +161,14 @@ export async function POST(request: NextRequest) {
     // to the URL price — displayed price verification is best-effort, but the floor
     // is ALWAYS derived server-side from the merchant's config, never from the URL.
     let originalPrice = data.originalPrice
-    const actualPrice = await fetchShopifyProductPrice(store, data.shopifyProductId, data.variantId)
+    const actualPrice = platform === 'woocommerce'
+      ? (await getWooCommerceProductFacts({
+          store,
+          productId: data.shopifyProductId,
+          variantId: data.variantId,
+          fallbackPrice: data.originalPrice,
+        }))?.price ?? null
+      : await fetchShopifyProductPrice(store, data.shopifyProductId, data.variantId)
     if (actualPrice != null) {
       const ratio = data.originalPrice / actualPrice
       if (ratio < 0.5 || ratio > 2) {
@@ -166,6 +219,8 @@ export async function POST(request: NextRequest) {
       storeId: data.storeId,
       shopifyProductId: data.shopifyProductId,
       originalPrice,
+      platform,
+      platformProductId: data.shopifyProductId,
     })
 
     if (!isBargainable) {
@@ -301,6 +356,8 @@ export async function POST(request: NextRequest) {
         storeId: data.storeId,
         shopifyProductId: existing.shopifyProductId,
         originalPrice: existing.originalPrice,
+        platform,
+        platformProductId: existing.shopifyProductId,
       })
       return NextResponse.json({
         sessionId: existing.id,
@@ -387,10 +444,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Optional product title from override
-    const product = await prisma.bargainProduct.findUnique({
-      where: { storeId_shopifyProductId: { storeId: data.storeId, shopifyProductId: data.shopifyProductId } },
-      select: { productTitle: true },
-    })
+    const product = await findBargainProductOverride(store.id, data.shopifyProductId, platform)
     if (product?.productTitle) ctx.productTitle = product.productTitle
 
     // Attach the daily-goal context so the OPENING message is also strategy-aware

@@ -1,0 +1,67 @@
+.cartgain-bargain {
+    width: 100%;
+    max-width: 100%;
+    margin: 18px 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+}
+
+.cartgain-bargain__frame {
+    display: block;
+    width: 100%;
+    height: 520px;
+    min-height: 320px;
+    border: 0;
+}
+
+.cartgain-consent {
+    margin: 18px 0;
+    padding: 14px 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.cartgain-consent legend {
+    font-weight: 600;
+    padding: 0 6px;
+}
+
+.cartgain-consent__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+    line-height: 1.4;
+}
+
+.cartgain-consent__row input[type="tel"] {
+    max-width: 220px;
+}
+
+.cartgain-consent__help {
+    margin: 10px 0 0;
+    font-size: 0.9em;
+    color: #64748b;
+}
+
+@media (max-width: 600px) {
+    .cartgain-bargain__frame {
+        height: 460px;
+    }
+
+    .cartgain-consent {
+        padding: 12px;
+    }
+
+    .cartgain-consent__row {
+        align-items: flex-start;
+    }
+
+    .cartgain-consent__row input[type="tel"] {
+        max-width: 100%;
+    }
+}
