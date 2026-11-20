@@ -8,6 +8,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "typecheck": "tsc --noEmit",
+    "avatar:validate": "node scripts/validate-cartgain-robot-avatar.mjs",
     "build": "prisma generate && next build",
     "vercel-build": "prisma migrate deploy && prisma generate && next build",
     "start": "next start",

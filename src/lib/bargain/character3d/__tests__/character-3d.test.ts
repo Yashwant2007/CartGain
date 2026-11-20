@@ -48,9 +48,22 @@ describe('character3d pipeline', () => {
   })
 
   it('maps conversation events onto allowed skeletal plans', () => {
-    expect(planForEvent('strict_shopkeeper', 'widget_opened')).toEqual(['enter'])
-    expect(planForEvent('playful_shopkeeper', 'deal_accepted')).toEqual(['jump', 'celebrate'])
+    expect(planForEvent('strict_shopkeeper', 'widget_opened')).toEqual(['walk', 'enter'])
+    expect(planForEvent('playful_shopkeeper', 'deal_accepted')).toEqual(['celebrate'])
     expect(planForEvent('friendly_shopkeeper', 'greeting')).toEqual(['wave'])
+    expect(planForEvent('strict_shopkeeper', 'greeting')).toEqual(['greet'])
+    expect(planForEvent('playful_shopkeeper', 'customer_message', {
+      customerMessage: 'What features does this product have?',
+      frameReady: true,
+    })).toEqual(['smile', 'point'])
+    expect(planForEvent('friendly_shopkeeper', 'customer_message', {
+      customerMessage: 'What features does this product have?',
+      frameReady: true,
+    })).toEqual(['explain', 'point'])
+    expect(planForEvent('strict_shopkeeper', 'customer_message', {
+      customerMessage: 'What features does this product have?',
+      frameReady: true,
+    })).toEqual(['point'])
 
     // Frame states require a measured frame and the playful character.
     expect(sanitizePlan('playful_shopkeeper', ['climb', 'point'], { frameReady: false })).toEqual(['point'])
@@ -58,10 +71,34 @@ describe('character3d pipeline', () => {
     expect(sanitizePlan('playful_shopkeeper', ['hang'], { frameReady: true })).toEqual(['hang'])
   })
 
+  it('plans every required real storefront event into supported clips', () => {
+    const events = [
+      'widget_opened', 'greeting', 'customer_typing', 'customer_message',
+      'ai_thinking', 'ai_reply', 'counter_offer', 'deal_accepted',
+      'deal_rejected', 'checkout_started', 'widget_closed',
+    ] as const
+    for (const personality of PERSONALITIES) {
+      for (const event of events) {
+        const plan = sanitizePlan(personality, planForEvent(personality, event, {
+          frameReady: true,
+          customerMessage: event === 'customer_message' ? 'Can you tell me more about this product?' : undefined,
+          originalPrice: 100,
+          decision: event === 'ai_reply' ? 'counter' : undefined,
+          counterOffer: event === 'ai_reply' ? 90 : undefined,
+          ended: event === 'deal_accepted' ? 'accepted' : event === 'deal_rejected' ? 'rejected' : undefined,
+        }), { frameReady: true })
+        expect(plan.length).toBeGreaterThan(0)
+        expect(new Set(plan).size).toBe(plan.length)
+        for (const state of plan) expect(CHARACTER_3D_STATES).toContain(state)
+      }
+    }
+  })
+
   it('bridges every conversation avatar state to a valid 3D state', () => {
     for (const state of AVATAR_STATES) {
       expect(isCharacter3DState(toCharacter3DState(state))).toBe(true)
     }
     expect(toCharacter3DState(undefined)).toBe('idle')
+    expect(toCharacter3DState('celebrating', 'playful_shopkeeper')).toBe('celebrate')
   })
 })

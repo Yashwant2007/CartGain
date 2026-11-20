@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 import { Sparkles, Save, Eye, RotateCcw, CheckCircle2, History } from 'lucide-react'
-import ShopkeeperAvatar from '@/components/bargain/ShopkeeperAvatar'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
 import { PERSONALITY_META, DESIGN_VARIANT_META, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
@@ -195,20 +194,12 @@ export function BargainExperienceStudio() {
             <div className="grid gap-3">
               {PERSONALITY_META.map(p => (
                 <button key={p.id} onClick={() => { setExp({ ...exp, personality: p.id }); setPreviewScenario('welcome'); setPreviewState(null) }} className={`p-4 rounded-xl border text-left flex items-start gap-3 transition ${exp.personality === p.id ? 'border-cyan-500/60 bg-cyan-950/20' : 'border-blue-800/40 bg-slate-950/40'}`}>
-                  <ShopkeeperAvatar
-                    personality={p.id}
-                    expression={exp.personality === p.id ? 'listening' : 'idle'}
-                    state={exp.personality === p.id ? 'greeting' : 'idle'}
-                    gesture={gestureFor(p.id, exp.personality === p.id ? 'greeting' : 'idle')}
-                    characterStyle={exp.characterStyle}
-                    size="md"
-                    motionEnabled={exp.motionEnabled}
-                    essentialMotionOnly={exp.essentialMotionOnly}
-                  />
+                  <span aria-hidden="true" className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-lg font-semibold ${p.id === 'friendly_shopkeeper' ? 'border-amber-400/30 bg-amber-400/10 text-amber-200' : p.id === 'strict_shopkeeper' ? 'border-sky-400/30 bg-sky-400/10 text-sky-200' : 'border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-200'}`}>{p.id === 'friendly_shopkeeper' ? '☺' : p.id === 'strict_shopkeeper' ? '◆' : '✦'}</span>
                   <div>
                     <div className="text-white font-medium">{p.name} <span className="text-cyan-300/80 text-xs font-semibold">· {p.title}</span></div>
                     <div className="text-sm text-blue-300/70 mt-1">{p.description}</div>
-                    <div className="text-xs text-blue-400/60 mt-2">Strategy: {strategyForPersonality(p.id).label}</div>
+                    <div className="text-xs text-blue-300/80 mt-2">{p.id === 'friendly_shopkeeper' ? 'Warm, open gestures · reassuring value guidance' : p.id === 'strict_shopkeeper' ? 'Composed posture · direct, respectful negotiation' : 'Expressive reactions · playful, controlled gestures'}</div>
+                    <div className="text-xs text-blue-400/60 mt-1">Shared robot · {strategyForPersonality(p.id).label}</div>
                     <div className="text-xs text-blue-400/60 mt-2 italic">&ldquo;{p.exampleDialogue[0]}&rdquo;</div>
                   </div>
                 </button>
@@ -248,8 +239,8 @@ export function BargainExperienceStudio() {
             <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
               <span className="block text-blue-100 text-sm mb-2">Character style</span>
               <select value={exp.characterStyle} onChange={e => setExp({ ...exp, characterStyle: e.target.value as typeof exp.characterStyle })} className="w-full rounded-md bg-slate-900 border border-blue-800/50 px-2 py-1.5 text-sm text-blue-100">
-                <option value="signature">Signature (full character with gestures)</option>
-                <option value="minimal">Minimal (flat, lightest rendering)</option>
+                <option value="signature">Signature 3D (full reactions)</option>
+                <option value="minimal">Calm 3D (reduced ambient motion)</option>
               </select>
             </label>
             <label className="flex items-center justify-between p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
@@ -313,6 +304,8 @@ export function BargainExperienceStudio() {
                 status="Preview"
                 line={previewLine}
                 motionEnabled={exp.motionEnabled}
+                enable3D
+                showUnavailable
               />
             ) : (
               <div className="border-b border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-500">

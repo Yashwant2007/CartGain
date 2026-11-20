@@ -48,7 +48,7 @@ describe('ShopkeeperAvatar reactions', () => {
     expect(container.querySelector('.cg-avatar--declining')).toBeNull()
   })
 
-  it('renders the hero stage with the shopkeeper, name and current line', () => {
+  it('keeps the hero stage and conversation line while the 3D asset is unavailable', () => {
     const { container, getByText } = render(
       <ShopkeeperStage
         personality="playful_shopkeeper"
@@ -58,9 +58,9 @@ describe('ShopkeeperAvatar reactions', () => {
         line="Let me check what I can do…"
       />,
     )
-    const avatar = container.querySelector('.cg-avatar') as HTMLElement | null
-    expect(avatar?.style.width).toBe('96px')
-    expect(avatar?.getAttribute('data-expression')).toBe('thinking')
+    const stage = container.querySelector('.cg-stage') as HTMLElement | null
+    expect(['disabled', 'unavailable']).toContain(stage?.getAttribute('data-avatar-renderer'))
+    expect(container.querySelector('.cg-avatar')).toBeNull()
     expect(getByText('Playful Shopkeeper')).toBeTruthy()
     expect(getByText('Let me check what I can do…')).toBeTruthy()
   })
@@ -93,5 +93,7 @@ describe('ShopkeeperAvatar reactions', () => {
     expect(stageCss).toContain('[data-expression="celebrating"] .cg-stage-halo')
     expect(stageCss).not.toContain('[data-expression="error"] .cg-stage-halo')
     expect(stageCss).not.toContain('cgStageHalo 2.8s')
+    expect(stageCss).toContain('height: 204px;')
+    expect(stageCss).toContain('height: 170px; min-height: 170px;')
   })
 })

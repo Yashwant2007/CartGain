@@ -876,3 +876,50 @@ describe('Edge Cases - AI System Prompt Security', () => {
     expect(systemMsg?.content).toMatch(/hidden (?:system )?minimum|floor/i)
   })
 })
+
+describe('negotiateStep (best-price asks)', () => {
+  it('answers how low can you go with one honest floor-safe number', async () => {
+    mockAIResponse(jest.fn(() => { throw new Error('AI must not be called for a best-price ask') }))
+
+    const result = await negotiateStep(
+      baseCtx(),
+      [{ role: 'customer', content: 'HII HOW ARE YOU HOW MUCH LOW CAN YOU GO' }],
+      'HOW LOW CAN YOU GO',
+    )
+    expect(result.decision).toBe('counter')
+    expect(result.tactic).toBe('best_price_answer')
+    expect(result.counterOffer).toBeGreaterThanOrEqual(80)
+    expect(result.counterOffer).toBeLessThanOrEqual(100)
+    expect(result.reply).toContain((result.counterOffer ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }))
+    expect(result.reply).not.toMatch(/loyal|returning|what price|hoping for/i)
+  })
+
+  it('holds an already-quoted counter instead of bidding against itself', async () => {
+    mockAIResponse(jest.fn(() => { throw new Error('AI must not be called for a repeated best-price ask') }))
+
+    const result = await negotiateStep(
+      baseCtx(),
+      [{ role: 'ai', content: 'I can do ₹91 right now', offeredPrice: 91 }],
+      'HOW LOW CAN YOU GO',
+    )
+    expect(result.counterOffer).toBe(91)
+    expect(result.reply).toContain('91')
+  })
+
+  it('scrubs invented loyalty claims and aligns the spoken price with the real offer', async () => {
+    mockAIResponse(jest.fn().mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({
+        reply: 'Friend, I hear you — for a loyal customer like you I can bring it down to ₹70.',
+        decision: 'counter',
+        counterOffer: 70,
+        tactic: 'loyalty_reward',
+        sentiment: 'warm',
+      }) } }],
+    }))
+
+    const result = await negotiateStep(baseCtx(), [], 'can you do better', 60)
+    expect(result.reply).not.toMatch(/loyal|returning|repeat customer/i)
+    expect(result.reply).not.toContain('₹70')
+    expect(result.reply).toContain(`₹${(result.counterOffer ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`)
+  })
+})

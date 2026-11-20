@@ -24,9 +24,11 @@ export type Character3DClip =
   | 'walk'
   | 'run'
   | 'listen'
+  | 'talk'
   | 'think'
   | 'look_at_customer'
   | 'point'
+  | 'smile'
   | 'wave'
   | 'sit'
   | 'climb'
@@ -39,6 +41,7 @@ export type Character3DClip =
   | 'explain'
   | 'guide'
   | 'exit'
+  | 'goodbye'
 
 interface PosePoint {
   bone: RigBoneName
@@ -275,6 +278,24 @@ export function buildClipLibrary(height: number): Record<Character3DClip, Animat
     clips.listen = b.build('listen', duration)
   }
 
+  // Measured salesperson speech gestures; the asset adapter may replace this
+  // clip with the studio-authored `talk` clip without changing event planning.
+  {
+    const b = new ClipBuilder()
+    const duration = 1.8
+    face(b, 0, { head: [0, 0, 0] }, h)
+    face(b, 0.45, { head: [0, 0.04, -0.025] }, h)
+    face(b, 0.9, { head: [0, -0.035, 0.025] }, h)
+    face(b, 1.35, { head: [0, 0.04, -0.025] }, h)
+    face(b, duration, { head: [0, 0, 0] }, h)
+    arms(b, 0, { upperL: [0, 0, 0], upperR: [0, 0, 0] })
+    arms(b, 0.45, { upperL: [0, 0, -0.12], upperR: [0, 0, 0.16], foreR: [-0.12, 0, 0] })
+    arms(b, 0.9, { upperL: [0, 0, 0.14], upperR: [0, 0, -0.12], foreL: [-0.1, 0, 0] })
+    arms(b, 1.35, { upperL: [0, 0, -0.12], upperR: [0, 0, 0.16], foreR: [-0.12, 0, 0] })
+    arms(b, duration, { upperL: [0, 0, 0], upperR: [0, 0, 0] })
+    clips.talk = b.build('talk', duration)
+  }
+
   // ── think ── hand to chin
   {
     const b = new ClipBuilder()
@@ -310,6 +331,20 @@ export function buildClipLibrary(height: number): Record<Character3DClip, Animat
     face(b, 0, { head: [0, -0.03, 0.1] }, h)
     face(b, duration, { head: [0, -0.03, 0.1] }, h)
     clips.point = b.build('point', duration)
+  }
+
+  // Studio GLBs may supply a dedicated smile clip; the fallback is a warm
+  // acknowledgement pose with the same stable clip name.
+  {
+    const b = new ClipBuilder()
+    const duration = 1.35
+    face(b, 0, { head: [0, 0, 0] }, h)
+    face(b, 0.45, { head: [0, 0.08, -0.06] }, h)
+    face(b, duration, { head: [0, 0.04, -0.04] }, h)
+    arms(b, 0, { upperL: [0, 0, 0], upperR: [0, 0, 0] })
+    arms(b, 0.45, { upperL: [0, 0, 0.48], upperR: [0, 0, -0.48] })
+    arms(b, duration, { upperL: [0, 0, 0.28], upperR: [0, 0, -0.28] })
+    clips.smile = b.build('smile', duration)
   }
 
   // ── wave ── genuine wave
@@ -463,6 +498,7 @@ export function buildClipLibrary(height: number): Record<Character3DClip, Animat
     face(b, 0, { head: [0, -0.05, 0.1] }, h)
     face(b, duration, { head: [0, -0.05, 0.1] }, h)
     clips.exit = b.build('exit', duration)
+    clips.goodbye = new AnimationClip('goodbye', duration, clips.exit.tracks.map((track) => track.clone()))
   }
 
   for (const key of Object.keys(clips)) {

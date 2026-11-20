@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState, type RefObject, type UIEvent } from 'react'
 
 export const TICK_MS = 100
-export const THINKING_DELAY_MS = 60
+export const THINKING_DELAY_MS = 20
 export const REQUEST_TIMEOUT_MS = 25_000
 export function minThinkingMs(reply: string): number {
-  return Math.min(220, Math.max(90, reply.length * 2))
+  return Math.min(90, Math.max(35, reply.length * 0.7))
 }
 export function wait(ms: number): Promise<void> {
   return new Promise<void>((resolve) => window.setTimeout(resolve, ms))

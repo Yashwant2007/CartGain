@@ -87,12 +87,13 @@ export function ProductContextCard({ image, title, currencySymbol, price, mode }
 // ── Message bubble ────────────────────────────────────────────────────────
 // Offers within a message are visually emphasized (YOU OFFERED / COUNTER
 // OFFER / FINAL OFFER) so the negotiation scans at a glance.
-export function MessageBubble({ m, t, currencySymbol, personaChip, isFinal }: {
+export function MessageBubble({ m, t, currencySymbol, personaChip, isFinal, showSender = true }: {
   m: BargainMessage
   t: UiText
   currencySymbol: string
   personaChip?: { label: string; emoji: string }
   isFinal: boolean
+  showSender?: boolean
 }) {
   const isCustomer = m.role === 'customer'
   const label = isCustomer
@@ -107,13 +108,13 @@ export function MessageBubble({ m, t, currencySymbol, personaChip, isFinal }: {
     <div
       style={{
         alignSelf: isCustomer ? 'flex-end' : 'flex-start',
-        maxWidth: isCustomer ? '86%' : '84%',
+        maxWidth: isCustomer ? '90%' : '88%',
         animation: 'cgMsgIn 0.18s ease-out',
       }}
     >
-      {!isCustomer && (
+      {!isCustomer && showSender && (
         <div style={{
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: 700,
           color: '#334155',
           marginBottom: 3,
@@ -148,10 +149,10 @@ export function MessageBubble({ m, t, currencySymbol, personaChip, isFinal }: {
               ? '#f8fafc'
               : '#ffffff',
           color: isCustomer ? '#ffffff' : m.role === 'system' ? '#334155' : '#334155',
-          padding: '11px 14px',
+          padding: '13px 16px',
           borderRadius: isCustomer ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-          fontSize: 14.5,
-          lineHeight: 1.55,
+          fontSize: 15.5,
+          lineHeight: 1.62,
           border: m.role !== 'customer' ? '1px solid #e3e8f0' : 'none',
           boxShadow: m.role !== 'customer' ? '0 1px 4px rgba(15,23,42,0.07)' : '0 2px 10px rgba(79,70,229,0.22)',
           wordBreak: 'break-word',
@@ -166,7 +167,7 @@ export function MessageBubble({ m, t, currencySymbol, personaChip, isFinal }: {
             style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 7, verticalAlign: -1 }}
           >
             {m.delivery === 'delivered'
-              ? <><CheckCheck size={13} strokeWidth={2.5} /><span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.01em', color: 'rgba(255,255,255,0.82)' }}>Delivered</span></>
+              ? <CheckCheck size={13} strokeWidth={2.5} />
               : <Clock3 size={10} />}
           </span>
         )}
@@ -197,13 +198,14 @@ export function MessageBubble({ m, t, currencySymbol, personaChip, isFinal }: {
 }
 
 // ── Typing indicator ──────────────────────────────────────────────────────
-export function TypingIndicator({ personaChip, t }: {
+export function TypingIndicator({ personaChip, t, showSender = true }: {
   personaChip?: { label: string; emoji: string }
   t: UiText
+  showSender?: boolean
 }) {
   return (
     <div style={{ alignSelf: 'flex-start', animation: 'cgMsgIn 0.18s ease-out' }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 3, paddingLeft: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+      {showSender && <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 3, paddingLeft: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{
           width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
           background: 'linear-gradient(135deg,#818cf8,#4f46e5)', color: '#ffffff',
@@ -212,7 +214,7 @@ export function TypingIndicator({ personaChip, t }: {
           <span style={{ fontSize: 10, lineHeight: 1 }}>{personaChip ? personaChip.label.charAt(0) : t('assistant').charAt(0)}</span>
         </span>
         {personaChip ? personaChip.label : t('assistant')}
-      </div>
+      </div>}
       <div style={{
         background: '#ffffff',
         border: '1px solid #e9e4f9',

@@ -75,6 +75,13 @@ describe('living shopkeeper animation states', () => {
     expect(stateForEvent('friendly_shopkeeper', 'customer_message', { customerMessage: 'I will take it, let us do it.', originalPrice: 1000 })).toBe('happy')
   })
 
+  it('does not strike a bargaining pose for non-offer numbers', () => {
+    expect(stateForEvent('friendly_shopkeeper', 'customer_message', { customerMessage: 'I need 2 items', originalPrice: 1000 })).toBe('listening')
+    expect(stateForEvent('strict_shopkeeper', 'customer_message', { customerMessage: 'my order #1234', originalPrice: 1000 })).toBe('listening')
+    expect(stateForEvent('playful_shopkeeper', 'customer_message', { customerMessage: 'model 2024', originalPrice: 1000 })).toBe('listening')
+    expect(stateForEvent('friendly_shopkeeper', 'customer_message', { customerMessage: '999 is too much', originalPrice: 1000 })).toBe('thinking')
+  })
+
   it('switches to salesperson mode for product questions instead of bargaining', () => {
     for (const personality of PERSONALITIES) {
       expect(stateForEvent(personality, 'customer_message', { customerMessage: 'What material is this made of?', originalPrice: 1000 })).toBe('recommending')

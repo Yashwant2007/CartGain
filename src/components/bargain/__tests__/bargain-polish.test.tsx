@@ -43,11 +43,11 @@ beforeAll(() => {
 describe('shared conversation rhythm', () => {
   it('pins the timing values used by every widget', () => {
     expect(TICK_MS).toBe(100)
-    expect(THINKING_DELAY_MS).toBe(60)
+    expect(THINKING_DELAY_MS).toBe(20)
     expect(REQUEST_TIMEOUT_MS).toBe(25_000)
-    expect(minThinkingMs('hi')).toBe(90)
-    expect(minThinkingMs('a'.repeat(200))).toBe(220)
-    expect(minThinkingMs('hello')).toBe(90)
+    expect(minThinkingMs('hi')).toBe(35)
+    expect(minThinkingMs('a'.repeat(200))).toBe(90)
+    expect(minThinkingMs('hello')).toBe(35)
     expect(typeof wait).toBe('function')
   })
 })
@@ -86,12 +86,11 @@ describe('BargainWidget compact chrome', () => {
     expect(css).toContain('.cartgain-bargain .cg-private-note { display: none }')
   })
 
-  it('prefills the composer from a suggested conversational prompt', () => {
+  it('keeps the conversation and composer visible without a suggestion panel', () => {
     render(<BargainWidget {...baseProps} />)
-    const chip = screen.getByRole('button', { name: 'Tell me about this product' })
-    fireEvent.click(chip)
-    const input = screen.getByRole('textbox', { name: /Ask about this product/i }) as HTMLTextAreaElement | HTMLInputElement
-    expect(input.value).toBe('Tell me about this product')
+    expect(screen.getByRole('textbox', { name: /Ask about this product/i })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Tell me about this product' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /what is included/i })).toBeNull()
   })
 
   it('keeps the jump control in normal flow instead of overlapping the transcript', () => {

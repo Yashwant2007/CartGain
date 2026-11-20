@@ -49,6 +49,13 @@ describe('conversation state machine (Phase 9)', () => {
     expect(deriveConversationState({ attemptsUsed: 1, intent: 'PRODUCT_QUESTION', objection: 'QUALITY' })).toBe('OBJECTION_HANDLING')
   })
 
+  it('does not route non-offer price numbers to COUNTER_OFFER', () => {
+    expect(deriveConversationState({ attemptsUsed: 1, intent: 'PRICE_ONLY', objection: 'PRICE', offersPriceSignal: false })).toBe('OBJECTION_HANDLING')
+    expect(deriveConversationState({ attemptsUsed: 1, intent: 'BUDGET_CONSTRAINT', objection: 'BUDGET', offersPriceSignal: false })).toBe('OBJECTION_HANDLING')
+    expect(deriveConversationState({ attemptsUsed: 1, intent: 'PRICE_ONLY', offersPriceSignal: false })).toBe('NEGOTIATION')
+    expect(conversationStateGuidance('NEGOTIATION')).toContain('has not named a real bid')
+  })
+
   it('does not claim a deal just because the shopper says they are ready to buy', () => {
     const state = deriveConversationState({ attemptsUsed: 1, intent: 'PURCHASE_READY' })
     expect(state).toBe('PURCHASE_READY')

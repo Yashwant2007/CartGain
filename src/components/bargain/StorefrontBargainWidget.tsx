@@ -16,8 +16,7 @@ import {
 } from '@/lib/bargain/experience/living'
 import type { LivingEvent } from '@/lib/bargain/experience/avatar-state'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
-import type { BargainDemoGoal, BargainRecommendation, RecommendationHistory } from '@/lib/bargain/api-types'
-import BargainRecommendationPanel from '@/components/bargain/BargainRecommendationPanel'
+import type { BargainDemoGoal } from '@/lib/bargain/api-types'
 import {
   createConversationId,
   minThinkingMs,
@@ -123,6 +122,8 @@ export default function StorefrontBargainWidget({
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const composerInputRef = useRef<HTMLInputElement>(null)
+  const customerTypingRef = useRef(false)
 
   const isCart = line.kind === 'cart'
   const productId = !isCart ? line.id : null
@@ -157,9 +158,6 @@ export default function StorefrontBargainWidget({
     freeShipping: boolean
     upsell: string | null
   } | null>(null)
-  const [recommendations, setRecommendations] = useState<BargainRecommendation[] | null>(null)
-  const [recommendationReason, setRecommendationReason] = useState<string | null>(null)
-  const [recommendationHistory, setRecommendationHistory] = useState<RecommendationHistory | null>(null)
   useEffect(() => {
     if (goalProp) setGoalState(goalProp)
   }, [goalProp])
@@ -236,9 +234,6 @@ export default function StorefrontBargainWidget({
     setDiscountCode(null)
     setCodeSaved(false)
     setError(null)
-    setRecommendations(null)
-    setRecommendationReason(null)
-    setRecommendationHistory(null)
   }
 
   // Local fallback pacing (only used if the API is unreachable) — the same
@@ -309,6 +304,7 @@ export default function StorefrontBargainWidget({
 
   const handleSend = async () => {
     if (!input.trim() || loading || busyRef.current) return
+    customerTypingRef.current = false
     const userText = input.trim()
     requestAbortRef.current?.abort()
     const controller = new AbortController()
@@ -390,9 +386,6 @@ export default function StorefrontBargainWidget({
       }
       if (data.goal) setGoalState(data.goal)
       if (data.shipping && typeof data.shipping.total === 'number') setShippingInfo(data.shipping)
-      setRecommendations(Array.isArray(data.recommendations) && data.recommendations.length > 0 ? data.recommendations : null)
-      if (typeof data.recommendationReason === 'string') setRecommendationReason(data.recommendationReason)
-      if (data.recommendationHistory) setRecommendationHistory(data.recommendationHistory)
 
       const nextAttempt = attempts + 1
       // A joke offer far below the floor gets a persona reply but must not burn
@@ -428,7 +421,7 @@ export default function StorefrontBargainWidget({
       } else {
         setStep('chat')
       }
-      reactAvatar(data.decision === 'counter' ? 'counter_offer' : 'ai_reply', {
+      reactAvatar(ended === 'accepted' ? 'deal_accepted' : ended === 'rejected' ? 'deal_rejected' : data.decision === 'counter' ? 'counter_offer' : 'ai_reply', {
         customerMessage: userText,
         aiReply: data.reply,
         counterOffer: priceTag ?? data.counterOffer ?? null,
@@ -523,7 +516,7 @@ export default function StorefrontBargainWidget({
       const hold = minThinkingMs(result.reply) - seenFor
       if (hold > 0) await wait(hold)
       pushAi(result.reply, result.counterOffer)
-      reactAvatar(result.decision === 'counter' ? 'counter_offer' : 'ai_reply', {
+      reactAvatar(exhausted && result.decision !== 'accept' ? 'deal_rejected' : result.decision === 'accept' ? 'deal_accepted' : result.decision === 'counter' ? 'counter_offer' : 'ai_reply', {
         customerMessage: userText,
         aiReply: result.reply,
         counterOffer: result.counterOffer ?? null,
@@ -661,12 +654,17 @@ export default function StorefrontBargainWidget({
         personality={avatarPersonality}
         expression={character.expression}
         state={character.state}
+        event={character.event}
+        eventSequence={character.eventSequence}
+        eventContext={character}
         gesture={character.gesture}
         position={character.position}
         name={`${PERSONA_NAME[persona]} · Shopkeeper`}
         status={t('online')}
         line={stageLine}
         enable3D
+        targetRef={scrollRef}
+        forbiddenRefs={[composerInputRef]}
       />
 
       {step === 'intro' && (
@@ -719,18 +717,19 @@ export default function StorefrontBargainWidget({
 
           <div
             ref={scrollRef}
-            className="space-y-2 max-h-56 overflow-y-auto"
+            className="cgf-chat-log space-y-3 overflow-y-auto pr-1"
             role="log"
             aria-live="polite"
             aria-label={t('conversationLabel')}
             onScroll={handleConversationScroll}
+            style={{ height: 'min(52dvh, 480px)', minHeight: 'min(280px, 42dvh)' }}
           >
             {messages.map((msg) => {
               const isCustomer = msg.role === 'customer'
               return (
                 <div
                   key={msg.id}
-                  className={`cgf-msg rounded-lg px-3 py-2 text-xs leading-relaxed ${
+                  className={`cgf-msg rounded-xl px-4 py-3 text-sm leading-6 ${
                     isCustomer
                       ? 'bg-indigo-600 text-white text-right ml-8'
                       : 'bg-gray-100 text-gray-700 mr-8'
@@ -795,18 +794,18 @@ export default function StorefrontBargainWidget({
             </div>
           )}
 
-          <BargainRecommendationPanel
-            recommendations={recommendations}
-            reason={recommendationReason}
-            history={recommendationHistory}
-            ariaLabel={t('alternativesTitle')}
-            language={language}
-          />
-
           <div className="flex gap-2">
             <input
+              ref={composerInputRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value)
+                if (e.target.value.trim() && !customerTypingRef.current) {
+                  customerTypingRef.current = true
+                  reactAvatar('customer_typing')
+                }
+              }}
+              onBlur={() => { customerTypingRef.current = false }}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               placeholder={t('offerPlaceholder', { symbol: currencySymbolFor(currency) })}
               className="flex-1 bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-indigo-500"
@@ -875,7 +874,7 @@ export default function StorefrontBargainWidget({
 
           <div className="flex justify-center gap-2 pt-1">
             {codeSaved && discountCode ? (
-              <a href={checkoutUrl} className={buttonCls + ' no-underline'}>
+              <a href={checkoutUrl} onClick={() => reactAvatar('checkout_started', { checkoutStarted: true })} className={buttonCls + ' no-underline'}>
                 {t('goToCheckout')}
               </a>
             ) : (
@@ -895,7 +894,7 @@ export default function StorefrontBargainWidget({
           <p className="text-red-500 font-semibold text-sm">{t('negotiationEndedTitle')}</p>
           <p className="text-xs text-gray-500">{t('noDealThisTime')}</p>
           <div className="flex justify-center gap-2">
-            <a href={checkoutUrl} className={buttonCls + ' no-underline'}>
+            <a href={checkoutUrl} onClick={() => reactAvatar('checkout_started', { checkoutStarted: true })} className={buttonCls + ' no-underline'}>
               {t('continueToCheckout')}
             </a>
             <button type="button" className={ghostCls} onClick={openBargain}>

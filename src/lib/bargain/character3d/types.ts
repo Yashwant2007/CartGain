@@ -3,9 +3,9 @@ import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 /**
  * The 3D shopkeeper system.
  *
- * This is a REAL character pipeline: a bone hierarchy, a skinned mesh, an
- * AnimationMixer playing authored skeletal clips, and an IK solver that plants
- * the hands on real DOM-measured grip targets. Nothing here is a 2D drawing.
+ * The storefront builds a native Three.js articulated mesh hierarchy and
+ * retargets the shared AnimationMixer clip library through this state contract.
+ * The development robot is grouped geometry, not a skinned GLB.
  */
 
 export const CHARACTER_3D_STATES = [
@@ -15,9 +15,11 @@ export const CHARACTER_3D_STATES = [
   'walk',
   'run',
   'listen',
+  'talk',
   'think',
   'look_at_customer',
   'point',
+  'smile',
   'wave',
   'sit',
   'climb',
@@ -30,6 +32,7 @@ export const CHARACTER_3D_STATES = [
   'explain',
   'guide',
   'exit',
+  'goodbye',
 ] as const
 
 export type Character3DState = (typeof CHARACTER_3D_STATES)[number]
@@ -38,10 +41,10 @@ export function isCharacter3DState(value: unknown): value is Character3DState {
   return typeof value === 'string' && (CHARACTER_3D_STATES as readonly string[]).includes(value)
 }
 
-/** The names of the authored skeletal clips. One clip per state. */
+/** The names of the authored articulated animation clips. */
 export type Character3DClip = Character3DState
 
-/** Bone names of the character rig. Every clip addresses these. */
+/** Joint-pivot names for compatible authored character rigs. */
 export const RIG_BONES = [
   'root',
   'hips',

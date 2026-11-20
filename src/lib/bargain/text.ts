@@ -116,6 +116,71 @@ export function extractQuantity(text: string): number | null {
 const NON_PRICE_UNIT_AFTER =
   /^\s*(?:kids?|children|child|yrs?|years?|months?|weeks?|days?|hours?|hrs?|minutes?|mins?|seconds?|secs?|people|persons?|members?|guys?|girls?|boys?|reviews?|stars?|times?|percent|%|\d\s*(?:am|pm)\b)/i
 
+const QUANTITY_UNIT_AFTER =
+  /^\s*(?:pieces?|units?|items?|qty\.?|pcs\.?|nos\.?|numbers?|copies?|boxes?|packs?|sets?|dozen)\b/i
+
+const QUANTITY_BEFORE =
+  /\b(?:qty|quantity|pieces?|units?|items?|pcs\.?|nos\.?|copies?|boxes?|packs?|sets?)\s*(?:of|is|are|:|=)?\s*[₹$€£]?\s*$/i
+
+const IDENTIFIER_BEFORE =
+  /\b(?:order|invoice|ticket|tracking|product|model|sku|variant|style|id|no\.?|number|reference|ref)\s*(?:no\.?|number|id|#)?\s*[₹$€£]?\s*$/i
+
+const IDENTIFIER_AFTER =
+  /^\s*(?:order|invoice|ticket|tracking|product|model|sku|variant|style|id)\b/i
+
+const CONTACT_BEFORE =
+  /\b(?:call|phone|mobile|whatsapp|contact|reach\s+me|text\s+me)\s+(?:me\s+)?(?:at|on|to)?\s*(?:number\s*)?$/i
+
+const BUDGET_BEFORE =
+  /\b(?:budget|only\s+(?:have|spend|can\s+spend|got)|can\s+(?:spend|afford)|afford|max(?:imum)?|up\s+to|at\s+most|under|below|within)\s*(?:of|is|was|at|:|=)?\s*[₹$€£]?\s*$/i
+
+const BUDGET_AFTER =
+  /^\s*(?:is|was)?\s*(?:my\s+)?(?:budget|max(?:imum)?|limit|cap|upper\s+limit)\b/i
+
+const STRONG_BID_BEFORE =
+  /\b(?:i(?:'ll|\s+will|\s+can|\s+'?d|\s+would)\s+(?:give|pay|offer|do|take|spend|buy)(?:\s+you)?|i\s+(?:give|pay|offer)|(?:can|could|will|would)\s+you\s+(?:do|take|accept|give|make|sell|offer|come\s+down)|give\s+it\s+to\s+me\s+for|(?:my\s+)?final(?:\s+offer)?(?:\s+is|\s+at|:|=)?|my\s+offer(?:\s+is|\s+at|:|=)?|(?:^|[\s,])offer\s*[₹$€£]?\s*$|bid\s*[₹$€£]?\s*$)\s*[₹$€£]?\s*$/i
+
+export type NonOfferNumberContext =
+  | 'quantity'
+  | 'identifier'
+  | 'budget'
+  | 'contact'
+  | 'percent'
+  | 'comparison'
+  | 'complaint'
+  | 'reference'
+  | 'duration'
+  | null
+
+function nonOfferContext(before: string, after: string, anchored: boolean): NonOfferNumberContext {
+  if (/%|percent/i.test(after.slice(0, 6))) return 'percent'
+  if (!anchored && NON_PRICE_UNIT_AFTER.test(after)) return 'duration'
+  if (!anchored && QUANTITY_UNIT_AFTER.test(after)) return 'quantity'
+  if (!anchored && QUANTITY_BEFORE.test(before)) return 'quantity'
+  if (IDENTIFIER_BEFORE.test(before) || IDENTIFIER_AFTER.test(after)) return 'identifier'
+  if (CONTACT_BEFORE.test(before)) return 'contact'
+  if (BUDGET_BEFORE.test(before) || BUDGET_AFTER.test(after)) return 'budget'
+  if (/\b(?:in|from)\s+(?:my\s+)?(?:other|another)\s+cart\b/i.test(after)) return 'comparison'
+  if (COMPARISON_CUE.test(before.slice(-45)) || COMPARISON_CUE.test(after.slice(0, 45))) {
+    if (!STRONG_BID_BEFORE.test(before.slice(-30))) return 'comparison'
+  }
+  if (COMPLAINT_AFTER_RE.test(after) || COMPLAINT_BEFORE_RE.test(before)) return 'complaint'
+  if (REFERENCE_PRICE_BEFORE.test(before) || REFERENCE_PRICE_AFTER.test(after)) return 'reference'
+  return null
+}
+
+export function classifyNonOfferNumber(message: string): NonOfferNumberContext {
+  const numberRe = /\d{1,3}(?:,\d{3})+|\d+(?:\.\d{1,2})?/g
+  let match: RegExpExecArray | null
+  while ((match = numberRe.exec(message)) !== null) {
+    const before = message.slice(0, match.index)
+    const after = message.slice(match.index + match[0].length)
+    const context = nonOfferContext(before, after, false)
+    if (context) return context
+  }
+  return null
+}
+
 // A customer naming a competitor's price ("the other store is giving it for
 // 500", "Amazon has it for 400") is citing context, not bidding. When such a
 // number has no explicit bid near it, it is not an offer.
@@ -127,7 +192,7 @@ const COMPARISON_CUE =
 // give/pay/offer need first person; buy/take/spend need a modal; and a
 // competitor "for X" only counts when the shopper is naming their own number.
 const BID_CUE =
-  /\b(?:i(?:'?ll|\s+will|\s+can|\s+'?d|\s+wanna|\s+want\s+to|\s+am\s+willing\s+to|\s+would)\s+(?:give|pay|offer|do|take|buy|spend)|i\s+(?:give|pay|offer)|my\s+(?:offer|budget|price|max|maximum|final|limit)|final\s+offer|best\s+i\s+can|(?:can|could|will|would)\s+you\s+(?:do|take|accept|give|make|sell|offer|come\s+down)|make\s+it|give\s+it\s+to\s+me\s+for|for\s+me\s+at)\b/i
+  /\b(?:i(?:'?ll|\s+will|\s+can|\s+'?d|\s+wanna|\s+want\s+to|\s+am\s+willing\s+to|\s+would)\s+(?:give|pay|offer|do|take|buy|spend)|i\s+(?:give|pay|offer)|my\s+(?:offer|final)|final\s+offer|best\s+i\s+can|(?:can|could|will|would)\s+you\s+(?:do|take|accept|give|make|sell|offer|come\s+down)|make\s+it|give\s+it\s+to\s+me\s+for|for\s+me\s+at)\b/i
 
 // The SELLER'S / reference price, not the shopper's bid: "the price is 1000",
 // "it costs 1000", "listed at 1000", "1000 is the price". A message that only
@@ -202,7 +267,6 @@ export function extractPrice(text: string): number | null {
     const around = text.slice(Math.max(0, c.index - 45), c.index + c.len + 45)
 
     if (!c.anchored) {
-      if (NON_PRICE_UNIT_AFTER.test(after)) continue
       // Age idioms: "I am 25", "I'm 30", "age 40" — a small number is an age.
       if (c.val <= 120 && /(?:\bi(?:\s+am|'?m)|\bage\b|\baged\b|\bturning\b)\s*$/i.test(before)) continue
       // Emphasis / echo: "1000 k 1000", "1000 1000" — the shopper is repeating
@@ -227,23 +291,16 @@ export function extractPrice(text: string): number | null {
       if (nextEcho || prevEcho) continue
     }
 
-    // Competitor comparison without a real bid nearby is context, not an offer.
-    if (COMPARISON_CUE.test(around) && !BID_CUE.test(around)) continue
+    const context = nonOfferContext(before, after, c.anchored)
+    if (context && context !== 'complaint' && context !== 'reference') continue
 
-    // Competitor comparison without a real bid nearby is context, not an offer.
-    if (COMPARISON_CUE.test(around) && !BID_CUE.test(around)) continue
-
-    // A commented-on price is an OBJECTION, not a bid — but only when no bid
-    // phrase is attached to THIS number. A bid cue elsewhere in the sentence
-    // belongs to another figure, so "500 is too much, I'll give 450" leaves 500
-    // as a complaint (dropped) and 450 as the real offer.
-    const bidNear = BID_CUE.test(before.slice(-30)) || BID_CUE.test(after.slice(0, 18))
-    const complaint = !bidNear && (COMPLAINT_AFTER_RE.test(after) || COMPLAINT_BEFORE_RE.test(before))
+    const bidNear = STRONG_BID_BEFORE.test(before.slice(-30)) || BID_CUE.test(after.slice(0, 18))
+    const complaint = !bidNear && (context === 'complaint' || COMPLAINT_AFTER_RE.test(after) || COMPLAINT_BEFORE_RE.test(before))
 
     scored.push({
       val: c.val,
-      reference: REFERENCE_PRICE_BEFORE.test(before) || REFERENCE_PRICE_AFTER.test(after) || complaint,
-      bid: BID_CUE.test(around),
+      reference: context === 'reference' || REFERENCE_PRICE_BEFORE.test(before) || REFERENCE_PRICE_AFTER.test(after) || complaint,
+      bid: STRONG_BID_BEFORE.test(before.slice(-30)) || BID_CUE.test(around),
     })
   }
 

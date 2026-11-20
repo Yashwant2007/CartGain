@@ -6,7 +6,7 @@ import {
   ShieldCheck, ArrowRight, Loader2, AlertCircle, RotateCcw,
 } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
-import { buildQuickOffers, buildSuggestedPrompts, parseDraftOffer } from '@/lib/bargain/offers'
+import { parseDraftOffer } from '@/lib/bargain/offers'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
 import {
@@ -41,7 +41,6 @@ import {
   PriceRail,
   ProductContextCard,
   ProductThumb,
-  QuickChip,
   RoundMeter,
   StateCard,
   TypingIndicator,
@@ -188,6 +187,7 @@ export default function BargainWidget({
   })
   const chatOpenTracked = useRef(false)
   const composerRef = useRef<HTMLDivElement>(null)
+  const customerTypingRef = useRef(false)
   const personality = resolveShopkeeperPersonality(experience?.personality, persona)
   const avatarEnabled = experience?.avatarEnabled !== false
   const characterStyle = experience?.characterStyle ?? 'signature'
@@ -286,7 +286,7 @@ export default function BargainWidget({
   // collapses the window to ~180px. A fixed height is announced via cg_resize
   // and the parent grows the iframe to match; width-based breakpoints are safe
   // (width is set by the parent column, not by us).
-  const [panelHeight, setPanelHeight] = useState(isEmbed ? 600 : 0)
+  const [panelHeight, setPanelHeight] = useState(isEmbed ? 760 : 0)
 
   // Drawer mode: the widget fills 100% of its host and the THEME controller —
   // not this component — decides visibility (open/close keep the same iframe
@@ -332,7 +332,7 @@ export default function BargainWidget({
 
   useEffect(() => {
     if (!isEmbed) return
-    const compute = () => setPanelHeight(window.innerWidth <= 480 ? 520 : 600)
+    const compute = () => setPanelHeight(window.innerWidth <= 480 ? 680 : 760)
     compute()
     window.addEventListener('resize', compute)
     return () => window.removeEventListener('resize', compute)
@@ -377,12 +377,11 @@ export default function BargainWidget({
 
   const personaChip = persona ? PERSONA_CHIP[persona] : undefined
   const shopkeeperName = PERSONALITY_META.find((p) => p.id === personality)?.name ?? t('shopkeeperOnline')
-  const latestAiLine = [...messages].reverse().find((m) => m.role === 'ai')?.content
   const stageLine = thinkingVisible
     ? t('checking')
     : error
       ? t('checkOfferError')
-      : latestAiLine?.replace(/\s+/g, ' ').trim() || t('makeOfferSub')
+      : t('makeOfferSub')
   const savings = decision === 'accept' && finalPrice != null ? livePrice - finalPrice : null
   const lastBoughtDate = (() => {
     if (!lastBought) return ''
@@ -406,14 +405,6 @@ export default function BargainWidget({
     return null
   }, [messages])
 
-  // Quick offer chips generated ONLY from legitimate negotiation state: the
-  // server's live counter (if any) plus conservative percentages of the LISTED
-  // price (11%/15% off). These always sit comfortably above any merchant floor
-  // and never carry a floor-derived value; they only prefill the offer box.
-  const quickOffers = useMemo(
-    () => buildQuickOffers({ lastCounter, listedPrice: livePrice, sessionEnded, decision }),
-    [lastCounter, livePrice, sessionEnded, decision],
-  )
 
   // Rounds spent. Prefers the server's own `attemptsUsed` (authoritative, and
   // correct when a turn was rolled back as abuse); falls back to counting the
@@ -424,10 +415,6 @@ export default function BargainWidget({
     [messages],
   )
   const roundsUsed = attemptsUsed ?? roundsFallback
-  const suggestedPrompts = useMemo(
-    () => buildSuggestedPrompts({ lastCounter, sessionEnded, attemptsUsed: roundsUsed }),
-    [lastCounter, sessionEnded, roundsUsed],
-  )
 
   // Lowest price each side has actually named. The AI side is read straight off
   // the server's counter offers; the customer side off the amounts the shopper
@@ -929,8 +916,6 @@ export default function BargainWidget({
     }
   }
 
-  // Shopper interacted with a recommendation card — record it server-side. This
-  // is write-only analytics; the server never returns card data from it.
   async function fireRecoEvent(action: RecommendationEventAction, card: BargainRecommendation) {
     if (!sessionId) return
     try {
@@ -946,17 +931,13 @@ export default function BargainWidget({
         }),
       })
     } catch {
-      // analytics are best-effort — never interrupt the shopper flow
+      return
     }
   }
 
-  // Add a recommended product to the storefront cart (only works when the
-  // widget runs on the Shopify storefront origin). Falls back to the product
-  // page so the flow never dead-ends.
   function handleRecommendationEvent(action: RecommendationEventAction, card: BargainRecommendation) {
     void fireRecoEvent(action, card)
     if (action === 'added') void addRecoToCart(card)
-    // The character points at the card the shopper actually engaged with.
     if (action === 'clicked' || action === 'added') {
       fireAvatar('recommendation_selected', { hasRecommendations: true })
     }
@@ -983,7 +964,7 @@ export default function BargainWidget({
         return
       }
     } catch {
-      // fall through to the product page
+      return
     }
     if (card.productUrl) window.location.assign(card.productUrl)
   }
@@ -1129,23 +1110,6 @@ export default function BargainWidget({
     if (last.kind === 'start') await startSession()
     else if (last.kind === 'offer' && last.payload) await sendMessage(last.payload, last.turnId)
     else if (last.kind === 'accept') await acceptDeal()
-  }
-
-  function fillOffer(v: number) {
-    if (sessionEnded || thinking || busyRef.current) return
-    setInput(String(v))
-    setError(null)
-    inputRef.current?.focus()
-  }
-
-  // "Tell me about this product" — fills the composer with a real question
-  // (chat, not an attempt-costing offer) for the customer to send. Keeps the
-  // AI's product-question intent even when the backend AI is down.
-  function fillChat(text: string) {
-    if (sessionEnded || thinking || busyRef.current) return
-    setInput(text)
-    setError(null)
-    inputRef.current?.focus()
   }
 
   function trapDialogFocus(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -1569,6 +1533,9 @@ export default function BargainWidget({
               personality={personality}
               expression={character.expression}
               state={character.state}
+              event={character.event}
+              eventSequence={character.eventSequence}
+              eventContext={character}
               gesture={character.gesture}
               position={character.position}
               characterStyle={characterStyle}
@@ -1578,6 +1545,8 @@ export default function BargainWidget({
               line={stageLine}
               motionEnabled={experience?.motionEnabled !== false}
               gaze={gaze}
+              targetRef={scrollRef}
+              forbiddenRefs={[composerRef]}
               enable3D
             />
           )}
@@ -1594,11 +1563,11 @@ export default function BargainWidget({
               flex: 1,
               overflowY: 'auto',
               overscrollBehavior: 'contain',
-              padding: '16px 16px 12px',
+              padding: '18px 20px 14px',
               display: 'flex',
               flexDirection: 'column',
-              gap: 14,
-              background: 'linear-gradient(180deg, #f8faff, #ffffff)',
+              gap: 18,
+              background: '#ffffff',
               minHeight: 0,
             }}
           >
@@ -1640,9 +1609,10 @@ export default function BargainWidget({
                 m={m}
                 t={t}
                 currencySymbol={currencySymbol}
-                personaChip={personaChip}
-                isFinal={floorReached && idx === messages.length - 1 && m.offeredPrice != null}
-              />
+                 personaChip={personaChip}
+                 isFinal={floorReached && idx === messages.length - 1 && m.offeredPrice != null}
+                 showSender={!avatarEnabled}
+               />
             ))}
 
                 {/* Shipping transparency (Module 4) — honest total + free-shipping value-add */}
@@ -1666,7 +1636,7 @@ export default function BargainWidget({
                 )}
 
                 {/* AI thinking indicator */}
-                {thinkingVisible && <TypingIndicator personaChip={personaChip} t={t} />}
+                {thinkingVisible && <TypingIndicator personaChip={personaChip} t={t} showSender={!avatarEnabled} />}
 
                 {/* ── Accepted deal card — conversion hero ── */}
                 {!checkoutLocked && decision === 'accept' && finalPrice != null && (
@@ -1991,41 +1961,6 @@ export default function BargainWidget({
           {/* ── Offer composer ── */}
           {!limit && !unavailable && startedComposer(sessionEnded, decision) && (
             <>
-              {!sessionEnded && suggestedPrompts.length > 0 && (
-                <div style={{
-                  padding: '8px 14px 0',
-                  background: '#ffffff',
-                  display: 'flex',
-                  gap: 6,
-                  flexWrap: 'wrap',
-                }}>
-                  {suggestedPrompts.map((key) => (
-                    <QuickChip
-                      key={key}
-                      label={t(key)}
-                      disabled={thinking || !!busyRef.current}
-                      onClick={() => fillChat(t(key))}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {!sessionEnded && quickOffers.length > 0 && (
-                <div style={{
-                  padding: suggestedPrompts.length > 0 ? '6px 14px 0' : '8px 14px 0',
-                  background: '#ffffff',
-                  display: 'flex',
-                  gap: 6,
-                  borderTop: !sessionEnded && decision !== 'accept' && lastCounter != null ? 'none' : '1px solid #eef2f7',
-                  flexWrap: 'wrap',
-                }}>
-
-                  {quickOffers.map((v) => (
-                    <QuickChip key={v} label={`${currencySymbol}${v.toLocaleString('en-IN')}`} disabled={thinking || !!busyRef.current} onClick={() => fillOffer(v)} />
-                  ))}
-                </div>
-              )}
-
               {/* Rate-limit / busy notice */}
               {notice && (
                 <div style={{
@@ -2075,9 +2010,20 @@ export default function BargainWidget({
                     placeholder={t('typeMessage')}
                     value={input}
                     onFocus={() => setGaze({ x: 0, y: 0.55 })}
-                    onBlur={() => setGaze(null)}
+                    onClick={() => setCharacter((prev) => ({ ...prev, state: 'thinking', gesture: gestureFor(personality, 'thinking') }))}
+                    onBlur={() => {
+                      setGaze(null)
+                      customerTypingRef.current = false
+                      setCharacter((prev) => prev.state === 'thinking'
+                        ? { ...prev, state: 'listening', gesture: gestureFor(personality, 'listening') }
+                        : prev)
+                    }}
                     onChange={e => {
                       setInput(e.target.value)
+                      if (e.target.value.trim() && !customerTypingRef.current) {
+                        customerTypingRef.current = true
+                        fireAvatar('customer_typing')
+                      }
                       setError(null)
                       // The character leans in and listens while the shopper types.
                       setCharacter((prev) => (
@@ -2244,10 +2190,10 @@ export default function BargainWidget({
         .cartgain-bargain .cg-panel-fixed {
           position: fixed; z-index: 9999;
           right: 16px; bottom: 16px;
-          width: clamp(380px, 38vw, 460px);
+          width: clamp(420px, 42vw, 540px);
           max-width: calc(100vw - 32px);
-          height: min(720px, calc(100vh - 32px));
-          max-height: calc(100vh - 32px);
+          height: min(820px, calc(100dvh - 32px));
+          max-height: calc(100dvh - 32px);
           min-height: 0;
           border-radius: 24px;
           border: 1px solid rgba(226,232,240,0.95);
@@ -2348,7 +2294,7 @@ export default function BargainWidget({
             left: 0; right: 0; bottom: 0; top: auto;
             width: 100%; max-width: none; max-height: none;
             border-radius: 24px 24px 0 0; border-bottom: none;
-            height: 88svh; height: 88lvh; height: 88dvh;
+            height: 96svh; height: 96lvh; height: 96dvh;
             max-height: 100lvh;
           }
           .cartgain-bargain .cg-panel-mini { left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: auto }
@@ -2357,7 +2303,7 @@ export default function BargainWidget({
           /* dvh already shrinks with the keyboard on modern mobile; the panel
              keeps its constant height (never collapses below the chat while
              typing) and the composer stays reachable above the keyboard. */
-          .cartgain-bargain .cg-panel-fixed { height: 88dvh; max-height: 100dvh }
+          .cartgain-bargain .cg-panel-fixed { height: 96dvh; max-height: 100dvh }
         }
         @supports (padding: max(0px)) {
           .cartgain-bargain .cg-panel-fixed, .cartgain-bargain .cg-panel-mini { padding-bottom: env(safe-area-inset-bottom) }

@@ -158,16 +158,13 @@ export function deriveConversationState(input: ConversationStateInput): Conversa
 
   if (input.attemptsUsed <= 0) return 'GREETING'
 
-  // A non-price objection answered before any bid is objection handling.
-  if (input.objection && !input.offersPriceSignal && input.intent !== 'PRICE_ONLY' && input.intent !== 'BUDGET_CONSTRAINT') {
-    return 'OBJECTION_HANDLING'
-  }
+  if (input.objection && !input.offersPriceSignal) return 'OBJECTION_HANDLING'
 
   if (input.intent === 'PRODUCT_QUESTION') return 'INTENT_DETECTION'
 
-  if (input.intent === 'PRICE_ONLY' || input.intent === 'BUDGET_CONSTRAINT' || input.offersPriceSignal) {
-    return 'COUNTER_OFFER'
-  }
+  if (input.offersPriceSignal) return 'COUNTER_OFFER'
+
+  if (input.intent === 'PRICE_ONLY' || input.intent === 'BUDGET_CONSTRAINT') return 'NEGOTIATION'
 
   return 'NEGOTIATION'
 }
@@ -184,7 +181,7 @@ export function conversationStateGuidance(state: ConversationState): string {
     case 'OBJECTION_HANDLING':
       return 'The shopper has a concern that is NOT primarily price. Address it honestly (value, fit, trust, shipping, quality) BEFORE any concession. Only counter if they then ask for price.'
     case 'NEGOTIATION':
-      return 'You are mid-negotiation. Move deliberately; reward real movement with a small step, hold firm against testing. Never reveal or cross the floor.'
+      return 'You are mid-negotiation. If the shopper has not named a real bid, answer the concern or question first and do not invent a number. Reward real movement with a small step, hold firm against testing. Never reveal or cross the floor.'
     case 'COUNTER_OFFER':
       return 'The shopper named a number. Respond with a concrete counter and a one-line reason. Never accept below the floor; never repeat a rejected number.'
     case 'PURCHASE_READY':

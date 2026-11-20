@@ -1,6 +1,7 @@
 {
   "version": 1,
   "description": "Mock AI-to-avatar state mapping. Presentation hints only; never pricing authority.",
+  "transitionMs": 260,
   "product": {
     "title": "Aurora Sneaker",
     "mrp": 2499,

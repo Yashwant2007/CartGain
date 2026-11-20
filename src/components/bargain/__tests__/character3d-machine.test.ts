@@ -14,13 +14,13 @@ const ctx = { frameReady: true } as const
 
 describe('character3d state machine', () => {
   it('opens with enter, then settles', () => {
-    expect(planForEvent('strict_shopkeeper', 'widget_opened', {})).toEqual(['enter'])
+    expect(planForEvent('strict_shopkeeper', 'widget_opened', {})).toEqual(['walk', 'enter'])
   })
 
   it('greets by personality', () => {
     expect(planForEvent('strict_shopkeeper', 'greeting', {})).toEqual(['greet'])
     expect(planForEvent('friendly_shopkeeper', 'greeting', {})).toEqual(['wave'])
-    expect(planForEvent('playful_shopkeeper', 'greeting', {})).toEqual(['peek', 'wave'])
+    expect(planForEvent('playful_shopkeeper', 'greeting', {})).toEqual(['smile', 'wave'])
   })
 
   it('reacts to a lowball offer with surprise/disappointment', () => {
@@ -29,25 +29,32 @@ describe('character3d state machine', () => {
     expect(planForEvent('strict_shopkeeper', 'customer_message', low)).toEqual(['disappointed'])
   })
 
+  it('does not treat quantities, identifiers, or complaints as offers', () => {
+    expect(planForEvent('playful_shopkeeper', 'customer_message', { customerMessage: '2 items', originalPrice: 1000 })).toEqual(['look_at_customer'])
+    expect(planForEvent('strict_shopkeeper', 'customer_message', { customerMessage: 'order #1234', originalPrice: 1000 })).toEqual(['look_at_customer'])
+    expect(planForEvent('friendly_shopkeeper', 'customer_message', { customerMessage: '999 is too much', originalPrice: 1000 })).toEqual(['look_at_customer'])
+  })
+
   it('goes into salesperson mode on a product question', () => {
     expect(planForEvent('friendly_shopkeeper', 'customer_message', { customerMessage: 'what material is this?' })).toEqual([
       'explain',
       'point',
     ])
     expect(planForEvent('playful_shopkeeper', 'customer_message', { customerMessage: 'what material is this?' })).toEqual([
-      'jump',
+      'smile',
       'point',
     ])
   })
 
   it('celebrates on accept, guides on checkout', () => {
     expect(planForEvent('strict_shopkeeper', 'deal_accepted', {})).toEqual(['celebrate'])
-    expect(planForEvent('playful_shopkeeper', 'deal_accepted', {})).toEqual(['jump', 'celebrate'])
+    expect(planForEvent('playful_shopkeeper', 'deal_accepted', {})).toEqual(['celebrate'])
     expect(planForEvent('strict_shopkeeper', 'checkout_started', {})).toEqual(['guide'])
   })
 
   it('exits on session end', () => {
-    expect(planForEvent('friendly_shopkeeper', 'session_ended', {})).toEqual(['exit'])
+    expect(planForEvent('friendly_shopkeeper', 'session_ended', {})).toEqual(['goodbye'])
+    expect(planForEvent('friendly_shopkeeper', 'ai_reply', {})).toEqual(['talk'])
   })
 
   it('sanitizes plans requiring a frame when none is ready', () => {
@@ -86,7 +93,7 @@ describe('character3d state machine', () => {
       'playful_shopkeeper',
     ]
     for (const p of personalities) {
-      expect(planForEvent(p, 'widget_opened', {})[0]).toBe('enter')
+      expect(planForEvent(p, 'widget_opened', {})[0]).toBe('walk')
       expect(Array.isArray(AMBIENT_CYCLES[p])).toBe(true)
     }
   })

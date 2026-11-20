@@ -44,10 +44,10 @@ export function planForEvent(
 
   switch (event) {
     case 'widget_opened':
-      return ['enter']
+      return ['walk', 'enter']
 
     case 'greeting':
-      if (playful) return ['peek', 'wave']
+      if (playful) return ['smile', 'wave']
       if (friendly) return ['wave']
       return ['greet']
 
@@ -78,7 +78,9 @@ export function planForEvent(
       return ['point']
 
     case 'deal_accepted':
-      if (playful) return ['jump', 'celebrate']
+      // The imported robot has an authored celebrate clip but no jump clip.
+      // Keep the reaction tied to an animation that genuinely exists.
+      if (playful) return ['celebrate']
       return ['celebrate']
 
     case 'deal_rejected':
@@ -89,7 +91,7 @@ export function planForEvent(
 
     case 'session_ended':
     case 'widget_closed':
-      return ['exit']
+      return ['goodbye']
 
     case 'error':
       return ['surprised']
@@ -127,9 +129,13 @@ function planForCustomerMessage(
     intent.intent === 'PRODUCT_DISCOVERY' ||
     intent.intent === 'VALUE_UNCLEAR'
   ) {
-    // A feature question puts the character into salesperson mode.
-    return playful ? ['jump', 'point'] : ['explain', 'point']
+    // Share useful information with a persona-appropriate gesture.
+    if (playful) return ['smile', 'point']
+    if (friendly) return ['explain', 'point']
+    return ['point']
   }
+
+  if (intent.offersPriceSignal) return ['think']
 
   if (
     intent.intent === 'PRICE_ONLY' ||
@@ -137,7 +143,7 @@ function planForCustomerMessage(
     intent.intent === 'COMPARISON' ||
     intent.priceComplaint
   ) {
-    return ['think']
+    return ['look_at_customer']
   }
 
   if (intent.intent === 'PURCHASE_HESITATION') {
@@ -159,7 +165,7 @@ function planForReply(ctx: Character3DContext): Character3DState[] {
   if (decision === 'counter' || (ctx.counterOffer != null && Number.isFinite(ctx.counterOffer))) {
     return ['point']
   }
-  return ['look_at_customer']
+  return ['talk']
 }
 
 /**

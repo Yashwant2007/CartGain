@@ -1,7 +1,6 @@
 'use client'
 
-import { useState } from 'react'
-import ShopkeeperAvatar from './ShopkeeperAvatar'
+import { useEffect, useState } from 'react'
 import LivingShopkeeper3D from './LivingShopkeeper3D.lazy'
 import { toCharacter3DState } from '@/lib/bargain/character3d/state-map'
 import type { ExpressionState } from '@/lib/bargain/experience/expressions'
@@ -9,12 +8,17 @@ import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
 import type { GestureName } from '@/lib/bargain/experience/character'
 import { POSITION_DESCRIPTORS, type AvatarPosition } from '@/lib/bargain/experience/positions'
 import type { CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import type { LivingEvent, LivingEventContext } from '@/lib/bargain/experience/avatar-state'
 
 interface Props {
   personality: ShopkeeperPersonality
   expression: ExpressionState
   /** Living Shopkeeper body state. */
   state?: AvatarState
+  /** Real event and context for the shared 3D planner. */
+  event?: LivingEvent
+  eventSequence?: number
+  eventContext?: LivingEventContext
   /** Body language for the current state. */
   gesture?: GestureName
   /** Where the character is standing (explicit position manager). */
@@ -30,11 +34,16 @@ interface Props {
   /** Normalised gaze target in [-1, 1]; eyes follow the shopper's cursor. */
   gaze?: { x: number; y: number } | null
   /**
-   * Render the character with the skeletal Three.js renderer instead of the
-   * 2D avatar. Falls back to 2D when WebGL is unavailable, motion is off, or
-   * the merchant selected the minimal character style.
+   * Render the shared articulated Three.js robot when enabled.
    */
   enable3D?: boolean
+  /** Active bargain card observed in viewport coordinates for spatial animation. */
+  targetRef?: React.RefObject<HTMLElement | null> | null
+  /** Interactive controls that the character must remain clear of. */
+  forbiddenRefs?: (React.RefObject<HTMLElement | null> | null)[]
+  /** Show an asset diagnostic in merchant previews, never to shoppers. */
+  showUnavailable?: boolean
+  onUnavailable?: () => void
 }
 
 const STAGE_CSS = `
@@ -43,15 +52,17 @@ const STAGE_CSS = `
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 2px 12px;
   overflow: hidden;
   flex-shrink: 0;
+  width: 100%;
+  height: 204px;
+  min-height: 204px;
   border-bottom: 1px solid #eef2f7;
   pointer-events: none;
   background:
-    radial-gradient(circle at 16% 36%, rgba(99,102,241,0.22), transparent 38%),
-    radial-gradient(circle at 78% 8%, rgba(251,191,36,0.18), transparent 32%),
-    linear-gradient(135deg, #f8faff 0%, #ffffff 68%);
+    radial-gradient(circle at 18% 50%, rgba(20,184,166,0.12), transparent 34%),
+    linear-gradient(90deg, #f7fbfc 0%, #ffffff 70%);
 }
 .cg-stage::before {
   content: "";
@@ -80,19 +91,25 @@ const STAGE_CSS = `
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  width: 168px;
+  height: 194px;
 }
 .cg-stage-avatar::after {
   content: "";
   position: absolute;
   left: 50%;
   bottom: -7px;
-  width: 66px;
-  height: 12px;
+  width: 58px;
+  height: 8px;
   transform: translateX(-50%);
   border-radius: 50%;
-  background: rgba(79,70,229,0.2);
-  filter: blur(3px);
+  background: rgba(15,118,110,0.18);
+  filter: blur(4px);
 }
+.cg-stage[data-avatar-renderer="disabled"] .cg-stage-avatar::after,
+.cg-stage[data-avatar-renderer="unavailable"] .cg-stage-avatar::after,
+.cg-stage[data-avatar-renderer="disabled"] .cg-stage-halo,
+.cg-stage[data-avatar-renderer="unavailable"] .cg-stage-halo { display: none; }
 .cg-stage-halo {
   position: absolute;
   inset: -8px;
@@ -117,13 +134,16 @@ const STAGE_CSS = `
   z-index: 1;
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  min-height: 0;
 }
 .cg-stage-name {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 5px;
-  font-size: 13px;
+  margin: 0;
+  font-size: 14px;
   font-weight: 800;
   color: #0f172a;
   white-space: nowrap;
@@ -147,42 +167,15 @@ const STAGE_CSS = `
   background: #34d399;
   box-shadow: 0 0 0 3px rgba(52,211,153,0.16);
 }
-.cg-stage-bubble {
-  position: relative;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  padding: 9px 11px;
-  border: 1px solid #e0e7ff;
-  border-radius: 4px 14px 14px 14px;
-  background: #ffffff;
-  color: #334155;
-  font-size: 12px;
-  line-height: 1.42;
-  box-shadow: 0 4px 14px rgba(15,23,42,0.06);
-  animation: cgStageSpeak 0.28s ease-out;
-}
-.cg-stage-bubble::before {
-  content: "";
-  position: absolute;
-  left: -6px;
-  top: 10px;
-  width: 10px;
-  height: 10px;
-  transform: rotate(45deg);
-  border-left: 1px solid #e0e7ff;
-  border-bottom: 1px solid #e0e7ff;
-  background: #ffffff;
-}
-.cg-stage[data-expression="celebrating"] .cg-stage-bubble {
-  border-color: #bbf7d0;
-  color: #166534;
-  background: #f7fef9;
-}
-.cg-stage[data-expression="celebrating"] .cg-stage-bubble::before {
-  border-color: #bbf7d0;
-  background: #f7fef9;
+.cg-stage-unavailable {
+  width: 100%;
+  padding: 14px 16px;
+  color: #8a4b12;
+  background: #fff8e8;
+  border: 1px solid #f2d398;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 /* Contextual placement — the position manager decides where the character
    stands, never ad-hoc absolute coordinates. */
@@ -207,14 +200,14 @@ const STAGE_CSS = `
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @media (max-width: 480px) {
-  .cg-stage { gap: 8px; padding: 9px 10px; }
+  .cg-stage { gap: 6px; padding: 2px 8px; height: 170px; min-height: 170px; }
   .cg-stage-spot, .cg-stage::before { display: none; }
-  .cg-stage-name { font-size: 12px; margin-bottom: 4px; }
-  .cg-stage-bubble { font-size: 11px; padding: 7px 9px; }
-  .cg-stage-avatar::after { width: 52px; height: 10px; }
+  .cg-stage-name { font-size: 13px; }
+  .cg-stage-avatar { width: 134px; height: 158px; }
+  .cg-stage-avatar::after { width: 56px; height: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cg-stage-halo, .cg-stage-bubble { animation: none !important; }
+  .cg-stage-halo { animation: none !important; }
 }
 `
 
@@ -222,6 +215,9 @@ export default function ShopkeeperStage({
   personality,
   expression,
   state,
+  event,
+  eventSequence,
+  eventContext,
   gesture = 'rest',
   position = 'conversation',
   characterStyle = 'signature',
@@ -230,27 +226,47 @@ export default function ShopkeeperStage({
   status,
   line,
   motionEnabled = true,
-  gaze = null,
   enable3D = false,
+  showUnavailable = false,
+  onUnavailable,
+  targetRef = null,
+  forbiddenRefs = [],
 }: Props) {
   const descriptor = POSITION_DESCRIPTORS[position] ?? POSITION_DESCRIPTORS.conversation
   const [webglAvailable, setWebglAvailable] = useState(true)
-  const render3D =
-    enable3D &&
-    webglAvailable &&
-    motionEnabled &&
-    !essentialMotionOnly &&
-    characterStyle !== 'minimal'
+  const [spatialTarget, setSpatialTarget] = useState<DOMRectReadOnly | null>(null)
+  useEffect(() => {
+    const target = targetRef?.current
+    if (!target) { setSpatialTarget(null); return }
+    let frame = 0
+    const measure = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => setSpatialTarget(target.getBoundingClientRect()))
+    }
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    observer?.observe(target)
+    window.addEventListener('resize', measure, { passive: true })
+    window.addEventListener('scroll', measure, { passive: true, capture: true })
+    measure()
+    return () => {
+      cancelAnimationFrame(frame)
+      observer?.disconnect()
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
+  }, [targetRef])
+  const render3D = enable3D && webglAvailable
   return (
     <div
       className={`cg-stage ${descriptor.className}`}
       data-expression={expression}
+      data-avatar-personality={personality}
       data-avatar-state={state ?? ''}
       data-avatar-position={position}
       data-gesture={gesture}
       data-character-style={characterStyle}
       data-essential-motion={essentialMotionOnly ? 'true' : 'false'}
-      data-avatar-renderer={render3D ? '3d' : '2d'}
+      data-avatar-renderer={render3D ? '3d' : webglAvailable ? 'disabled' : 'unavailable'}
     >
       <style dangerouslySetInnerHTML={{ __html: STAGE_CSS }} />
       <span className="cg-stage-spot" aria-hidden="true" />
@@ -259,33 +275,33 @@ export default function ShopkeeperStage({
         {render3D ? (
           <LivingShopkeeper3D
             personality={personality}
-            state={toCharacter3DState(state)}
+            state={toCharacter3DState(state, personality)}
+            event={event}
+            eventSequence={eventSequence}
+            eventContext={eventContext}
             motionEnabled={motionEnabled}
             essentialMotionOnly={essentialMotionOnly}
-            quality="low"
-            size={96}
-            onUnavailable={() => setWebglAvailable(false)}
+            quality="high"
+            size={192}
+            spatialTarget={spatialTarget ?? undefined}
+            forbiddenRefs={forbiddenRefs}
+            onUnavailable={() => {
+              setWebglAvailable(false)
+              onUnavailable?.()
+            }}
           />
-        ) : (
-          <ShopkeeperAvatar
-            personality={personality}
-            expression={expression}
-            state={state}
-            gesture={gesture}
-            characterStyle={characterStyle}
-            size="xl"
-            motionEnabled={motionEnabled}
-            essentialMotionOnly={essentialMotionOnly}
-            gaze={gaze}
-          />
-        )}
+        ) : showUnavailable && !webglAvailable ? (
+          <div className="cg-stage-unavailable" role="status">
+            The interactive 3D robot could not load in this browser. The bargain chat remains available.
+          </div>
+        ) : null}
       </div>
       <div className="cg-stage-copy">
         <div className="cg-stage-name">
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flex: 1 }}>{name}</span>
           <span className="cg-stage-status">{status}</span>
         </div>
-        <div className="cg-stage-bubble" key={line}>{line}</div>
+        <span className="cg-sr-only">{line}</span>
       </div>
     </div>
   )

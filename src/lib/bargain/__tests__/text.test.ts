@@ -1,4 +1,5 @@
 import {
+  classifyNonOfferNumber,
   detectWalkout,
   extractQuantity,
   extractPrice,
@@ -161,7 +162,7 @@ describe('extractPrice', () => {
   it('extracts USD and EUR prices', () => {
     expect(extractPrice('I offer $25')).toBe(25)
     expect(extractPrice('about USD 30')).toBe(30)
-    expect(extractPrice('€15 is my budget')).toBe(15)
+    expect(extractPrice('€15 is my budget')).toBeNull()
     expect(extractPrice('20 dollars')).toBe(20)
   })
 
@@ -170,8 +171,8 @@ describe('extractPrice', () => {
     expect(extractPrice('my final is 499')).toBe(499)
   })
 
-  it('prefers the first valid match and ignores noise numbers', () => {
-    expect(extractPrice('I have ₹500 budget, offer ₹400')).toBe(500)
+  it('prefers a real bid over a budget figure in the same message', () => {
+    expect(extractPrice('I have ₹500 budget, offer ₹400')).toBe(400)
   })
 
   it('returns null when no numeric offer is mentioned', () => {
@@ -268,5 +269,40 @@ describe('extractPrice', () => {
 
   it('still reads a real offer whose cue attaches to the number', () => {
     expect(extractPrice("I'll pay 500, not too much more")).toBe(500)
+  })
+
+  it('does not treat quantities, identifiers, budgets, or contact details as offers', () => {
+    expect(extractPrice('I need 2 items')).toBeNull()
+    expect(extractPrice('product 12345')).toBeNull()
+    expect(extractPrice('model 2024')).toBeNull()
+    expect(extractPrice('my order #1234')).toBeNull()
+    expect(extractPrice('call me at 5')).toBeNull()
+    expect(extractPrice('I got 10% off last time')).toBeNull()
+    expect(extractPrice('my budget is 700')).toBeNull()
+    expect(extractPrice('I have 700 in my other cart')).toBeNull()
+  })
+
+  it('still reads a real bid in a message that also contains a non-offer number', () => {
+    expect(extractPrice('I need 2 items, I can pay 700')).toBe(700)
+    expect(extractPrice('my order #1234, offer ₹650')).toBe(650)
+    expect(extractPrice('model 2024, final 800')).toBe(800)
+  })
+})
+
+describe('classifyNonOfferNumber', () => {
+  it('labels non-offer number contexts', () => {
+    expect(classifyNonOfferNumber('I need 2 items')).toBe('quantity')
+    expect(classifyNonOfferNumber('my order #1234')).toBe('identifier')
+    expect(classifyNonOfferNumber('my budget is 700')).toBe('budget')
+    expect(classifyNonOfferNumber('call me at 5')).toBe('contact')
+    expect(classifyNonOfferNumber('I got 10% off')).toBe('percent')
+    expect(classifyNonOfferNumber('₹999 is too much')).toBe('complaint')
+    expect(classifyNonOfferNumber('the other store is 900')).toBe('comparison')
+    expect(classifyNonOfferNumber('the price is 1000')).toBe('reference')
+  })
+
+  it('returns null when the number is a genuine offer', () => {
+    expect(classifyNonOfferNumber('I offer 700')).toBeNull()
+    expect(classifyNonOfferNumber('₹700')).toBeNull()
   })
 })

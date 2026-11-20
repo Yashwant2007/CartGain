@@ -114,6 +114,7 @@ export function expressionForShopperMessage(
   const intent = analyzeIntent(text)
   const ratio = lowballRatio(text, originalPrice)
 
+
   if (intent.intent === 'WALKOUT') {
     if (personality === 'strict_shopkeeper') return 'declining'
     if (personality === 'playful_shopkeeper') return 'skeptical'

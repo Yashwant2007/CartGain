@@ -31,6 +31,13 @@ describe('persona-aware shopkeeper reactions', () => {
     expect(expressionForShopperMessage('playful_shopkeeper', 'What material is this made of?', 1000)).toBe('curious')
   })
 
+  it('does not show a lowball reaction to non-offer numbers', () => {
+    expect(expressionForShopperMessage('friendly_shopkeeper', 'I need 2 items', 1000)).toBe('listening')
+    expect(expressionForShopperMessage('strict_shopkeeper', 'my order #1234', 1000)).toBe('listening')
+    expect(expressionForShopperMessage('playful_shopkeeper', 'model 2024', 1000)).toBe('amused')
+    expect(expressionForShopperMessage('strict_shopkeeper', '999 is too much', 1000)).toBe('skeptical')
+  })
+
   it('recognises a buying signal', () => {
     for (const personality of PERSONALITIES) {
       expect(expressionForShopperMessage(personality, 'I will take it, let us do it.', 1000)).toBe('happy')

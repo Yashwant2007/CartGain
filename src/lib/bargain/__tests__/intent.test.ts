@@ -5,6 +5,15 @@ describe('analyzeIntent', () => {
     const a = analyzeIntent('what is the best price you can do')
     expect(a.intent).toBe('PRICE_ONLY')
     expect(a.objection).toBe('PRICE')
+    expect(a.asksBestPrice).toBe(true)
+  })
+
+  it('classifies "how low can you go" as a direct best-price ask', () => {
+    const a = analyzeIntent('HII HOW ARE YOU HOW MUCH LOW CAN YOU GO')
+    expect(a.intent).toBe('PRICE_ONLY')
+    expect(a.objection).toBe('PRICE')
+    expect(a.asksBestPrice).toBe(true)
+    expect(a.offersPriceSignal).toBe(false)
   })
 
   it('classifies budget constraints', () => {
@@ -73,6 +82,25 @@ describe('analyzeIntent', () => {
     expect(analyzeIntent('my budget is 500').priceComplaint).toBe(false)
     expect(analyzeIntent("i'll pay 450").priceComplaint).toBe(false)
   })
+
+  it('records a non-offer number context for ambiguous numbers', () => {
+    expect(analyzeIntent('I need 2 items').nonOfferNumberContext).toBe('quantity')
+    expect(analyzeIntent('my order #1234').nonOfferNumberContext).toBe('identifier')
+    expect(analyzeIntent('my budget is 700').nonOfferNumberContext).toBe('budget')
+    expect(analyzeIntent('call me at 5').nonOfferNumberContext).toBe('contact')
+  })
+
+  it('does not treat arbitrary numbers as offers', () => {
+    expect(analyzeIntent('I need 2 items').offersPriceSignal).toBe(false)
+    expect(analyzeIntent('product 12345').offersPriceSignal).toBe(false)
+    expect(analyzeIntent('model 2024').offersPriceSignal).toBe(false)
+    expect(analyzeIntent('my order #1234').offersPriceSignal).toBe(false)
+    expect(analyzeIntent('call me at 5').offersPriceSignal).toBe(false)
+    expect(analyzeIntent('I got 10% off last time').offersPriceSignal).toBe(false)
+    expect(analyzeIntent('my budget is 700').offersPriceSignal).toBe(false)
+    expect(analyzeIntent('I have 700 in my other cart').offersPriceSignal).toBe(false)
+    expect(analyzeIntent('I offer 700').offersPriceSignal).toBe(true)
+  })
 })
 
 describe('shopperIntentToPromptBlock', () => {
@@ -88,9 +116,22 @@ describe('shopperIntentToPromptBlock', () => {
     expect(block).toContain('not in PRODUCT CONTEXT')
   })
 
+  it('tells the model to answer a best-price ask directly', () => {
+    const block = shopperIntentToPromptBlock(analyzeIntent('how low can you go'))
+    expect(block).toContain('HOW LOW YOU CAN GO')
+    expect(block).toContain('Answer directly')
+    expect(block).toContain('do NOT ask them to name a price')
+  })
+
   it('tells the model a price complaint is not an offer', () => {
     const block = shopperIntentToPromptBlock(analyzeIntent('900 is too expensive'))
     expect(block).toContain('COMPLAINING about the price')
+  })
+
+  it('tells the model that ambiguous numbers are context, not bids', () => {
+    const block = shopperIntentToPromptBlock(analyzeIntent('I need 2 items'))
+    expect(block).toContain('NOT an offer')
+    expect(block).toContain('Do not quote this number back as their offer')
   })
 })
 

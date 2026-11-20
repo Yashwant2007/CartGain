@@ -5,7 +5,7 @@
 // product-aware strategy instead of guessing. It deliberately runs BEFORE the
 // LLM: intent is a decision the merchant controls, not one we outsource.
 
-import { extractPrice } from './text'
+import { classifyNonOfferNumber, extractPrice, type NonOfferNumberContext } from './text'
 
 export type ShopperIntent =
   | 'UNKNOWN'
@@ -92,6 +92,8 @@ export interface IntentAnalysis {
   budgetType: BudgetType
   /** True when the shopper is objecting to the price (not proposing to pay it). */
   priceComplaint: boolean
+  nonOfferNumberContext: NonOfferNumberContext
+  asksBestPrice: boolean
   /** Rough product topic the shopper is after (e.g. "for oily skin"), if detectable. */
   need: string | null
   /** Published nine-category objection taxonomy (Phase 1 intent→action routing). */
@@ -101,6 +103,7 @@ export interface IntentAnalysis {
 }
 
 const RE = {
+  bestPriceAsk: /\b(how\s+(?:much\s+)?low\s+can\s+you\s+go|how\s+much\s+can\s+you\s+(?:go|come\s+down)|how\s+low\s+(?:will|would)\s+you\s+go|how\s+far\s+(?:can|will|would)\s+you\s+(?:go|come\s+down)|lowest\s+(?:price|you\s+can|you\s+will|you\s+would)|best\s+price|best\s+you\s+can\s+do|what(?:'s|\s+is|\s+s)?\s+(?:the\s+)?(?:lowest|minimum|best)\s+(?:price|you\s+can\s+do|you\s+will\s+do)|your\s+best\s+(?:price|offer)|final\s+price|last\s+price|can\s+you\s+go\s+lower)\b/i,
   price: /\b(best\s+price|lower|discount|price|cheap|cheaper|off|deal|budget|only\s+(have|spend|can\s+spend|got|burn)|can\s+you\s+do|what('| is|s)*\s*(the\s+)?(lowest|minimum|best))/i,
   budget: /\b(budget|only\s+(have|spend|can\s+spend|got)\s+)|tight\s+budget|don'?t\s+have\s+much|all\s+i\s+can\s+afford|max\s+[₹$€£]?\s*\d+/i,
   comparison: /\b(elsewhere|other\s+(store|shop|site)|amazon|flipkart|myntra|meesho|walmart|competing|rival|compare(ing)?\s+price|got\s+it\s+for|saw\s+it\s+for|cheaper\s+somewhere)/i,
@@ -185,6 +188,7 @@ export function analyzeIntent(message: string): IntentAnalysis {
 
   const isMoney = hits('money', 'money_amount')
   const isWalkout = hits('walkout', 'walkout')
+  const asksBestPrice = hits('bestPriceAsk', 'best_price_ask')
   const priceIntent = hits('price', 'price_signal')
   const budgetIntent = hits('budget', 'budget_signal')
   const comparisonIntent = hits('comparison', 'comparison_signal')
@@ -204,6 +208,7 @@ export function analyzeIntent(message: string): IntentAnalysis {
 
   const budget = extractBudget(message)
   const need = extractNeed(message)
+  const nonOfferNumberContext = classifyNonOfferNumber(message)
 
   let intent: ShopperIntent = 'UNKNOWN'
   if (isWalkout) intent = 'WALKOUT'
@@ -215,7 +220,7 @@ export function analyzeIntent(message: string): IntentAnalysis {
   else if (recRequest) intent = 'RECOMMENDATION_REQUEST'
   else if (discovery) intent = 'PRODUCT_DISCOVERY'
   else if (budgetIntent || budget) intent = 'BUDGET_CONSTRAINT'
-  else if (priceIntent || isMoney || priceComplaint) intent = 'PRICE_ONLY'
+  else if (asksBestPrice || priceIntent || isMoney || priceComplaint) intent = 'PRICE_ONLY'
   else if (valueIntent) intent = 'VALUE_UNCLEAR'
   else if (message.trim().length > 0) intent = 'GENERIC_CHAT'
 
@@ -230,7 +235,7 @@ export function analyzeIntent(message: string): IntentAnalysis {
   else if (comparisonIntent) objection = 'COMPARISON'
   else if (hesitation) objection = 'PURCHASE_HESITATION'
   else if (budgetIntent || budget) objection = 'BUDGET'
-  else if (priceIntent || isMoney || priceComplaint) objection = 'PRICE'
+  else if (asksBestPrice || priceIntent || isMoney || priceComplaint) objection = 'PRICE'
   else if (productQ) objection = 'PRODUCT_INFORMATION'
   else if (payment) objection = 'PAYMENT_FRICTION'
   else if (valueIntent) objection = 'VALUE'
@@ -243,6 +248,8 @@ export function analyzeIntent(message: string): IntentAnalysis {
     budget: budget?.amount ?? null,
     budgetType: budget?.type ?? null,
     priceComplaint,
+    nonOfferNumberContext,
+    asksBestPrice,
     need,
     category: objectionCategory(objection),
   }
@@ -381,9 +388,30 @@ export function shopperIntentToPromptBlock(analysis: IntentAnalysis): string {
   if (analysis.intent === 'PURCHASE_HESITATION') {
     lines.push(`- The shopper is hesitating, not rejecting. Do NOT lead with a discount — reduce friction, answer the real concern, and give them room.`)
   }
+  if (analysis.asksBestPrice) {
+    lines.push(
+      `- The shopper is asking HOW LOW YOU CAN GO. Answer directly with the current honest price you can honor; do NOT ask them to name a price, do NOT repeat their question, and never describe them as loyal/returning unless CUSTOMER HISTORY confirms it. Never claim a number is your floor or absolute minimum.`,
+    )
+  }
   if (analysis.priceComplaint) {
     lines.push(
       `- The shopper is COMPLAINING about the price — they are NOT making an offer. Any figure in this message is the price they are objecting to. NEVER read it as their bid, NEVER echo it back as "you offered X", and NEVER accept it. Acknowledge the concern briefly, justify the value from verified facts, and propose a genuine counter (still above the listed-price gap you normally open with).`,
+    )
+  }
+  if (analysis.nonOfferNumberContext) {
+    const labels: Record<Exclude<NonOfferNumberContext, null>, string> = {
+      quantity: 'a quantity',
+      identifier: 'an order/product/model/contact reference',
+      budget: 'a budget ceiling',
+      contact: 'a phone/contact detail',
+      percent: 'a percentage',
+      comparison: 'somebody else’s price',
+      complaint: 'a price they are objecting to',
+      reference: 'a listed/reference price',
+      duration: 'a time or age',
+    }
+    lines.push(
+      `- A number in this message is ${labels[analysis.nonOfferNumberContext]}, NOT an offer. Only a number the shopper clearly presents as what they will pay counts as a bid. Do not quote this number back as their offer, do not counter against it, and do not spend a negotiation move on it; answer the actual question or concern first.`,
     )
   }
   if (analysis.intent === 'PRODUCT_QUESTION') {

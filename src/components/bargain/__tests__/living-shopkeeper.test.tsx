@@ -3,11 +3,13 @@
  */
 import { describe, expect, it, beforeEach } from '@jest/globals'
 import { render } from '@testing-library/react'
+import { AnimationClip, Box3, BoxGeometry, Group, Mesh, MeshStandardMaterial, Object3D, QuaternionKeyframeTrack, Vector3 } from 'three'
 import { ShopkeeperAvatar } from '@/components/bargain/ShopkeeperAvatar'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import { AVATAR_STATES } from '@/lib/bargain/experience/avatar-state'
 import { gestureFor } from '@/lib/bargain/experience/character'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import { applyRobotPersonality, buildProceduralRobot, customClips, fitRobotToStage, prepareAssetClips } from '@/components/bargain/LivingShopkeeper3D'
 
 const PERSONALITIES: ShopkeeperPersonality[] = [
   'friendly_shopkeeper',
@@ -37,6 +39,102 @@ beforeEach(() => {
 })
 
 describe('living shopkeeper avatar', () => {
+  it('keeps a complete procedural robot available as an explicitly marked development fallback', () => {
+    const robot = buildProceduralRobot('friendly_shopkeeper')
+    const names = new Set<string>()
+    let meshCount = 0
+    robot.traverse((node) => {
+      names.add(node.name)
+      if ((node as { isMesh?: boolean }).isMesh) meshCount++
+    })
+    expect(robot.name).toBe('CartGainRobotRig')
+    expect(meshCount).toBeGreaterThan(35)
+    for (const part of ['Head', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm', 'LeftHand', 'RightHand', 'LeftUpLeg', 'RightUpLeg', 'LeftLeg', 'RightLeg', 'AntennaTip', 'LeftHandIndex1', 'RightHandThumb1']) {
+      expect(names.has(part)).toBe(true)
+    }
+    const clips = customClips(robot, 'playful_shopkeeper')
+    expect(clips.has('greet')).toBe(true)
+    expect(clips.has('walk')).toBe(true)
+    expect(clips.has('think')).toBe(true)
+    expect(clips.has('climb')).toBe(true)
+    expect(clips.has('hang')).toBe(true)
+    expect((clips.get('greet')?.tracks.length ?? 0)).toBeGreaterThan(0)
+  })
+
+  it('gives each personality a distinct visual signature and idle posture', () => {
+    const friendly = buildProceduralRobot('friendly_shopkeeper')
+    const strict = buildProceduralRobot('strict_shopkeeper')
+    const playful = buildProceduralRobot('playful_shopkeeper')
+    const namesFor = (robot: ReturnType<typeof buildProceduralRobot>) => {
+      const names: string[] = []
+      robot.traverse((node) => names.push(node.name))
+      return names
+    }
+    expect(namesFor(friendly)).toContain('PartnerCollar')
+    expect(namesFor(friendly)).toContain('LeftCheekLight')
+    expect(namesFor(strict)).toContain('ProfessionalPlacket')
+    expect(namesFor(strict)).toContain('LeftPrecisionBrow')
+    expect(namesFor(playful)).toContain('LeftAudioFin')
+    expect(namesFor(playful)).toContain('SideAntennaTip')
+    const idleValues = (robot: ReturnType<typeof buildProceduralRobot>, persona: ShopkeeperPersonality) =>
+      customClips(robot, persona).get('idle')?.tracks.map((track) => Array.from(track.values))
+    expect(idleValues(friendly, 'friendly_shopkeeper')).not.toEqual(idleValues(strict, 'strict_shopkeeper'))
+    expect(idleValues(playful, 'playful_shopkeeper')).not.toEqual(idleValues(strict, 'strict_shopkeeper'))
+  })
+
+  it('adapts documented GLB clip names to the planner without changing its states', () => {
+    const root = new Group()
+    const head = new Object3D()
+    head.name = 'Head'
+    root.add(head)
+    const talk = new AnimationClip('talk', 1, [
+      new QuaternionKeyframeTrack('Head.quaternion', [0, 1], [0, 0, 0, 1, 0, 0.1, 0, 0.995]),
+    ])
+    const goodbye = new AnimationClip('goodbye', 0.8, [
+      new QuaternionKeyframeTrack('Head.quaternion', [0, 0.8], [0, 0, 0, 1, 0.1, 0, 0, 0.995]),
+    ])
+    const clips = prepareAssetClips(root, [talk, goodbye])
+    expect(clips.get('talk')?.name).toBe('talk')
+    expect(clips.get('goodbye')?.name).toBe('goodbye')
+    expect(clips.get('talk')?.tracks).toHaveLength(1)
+  })
+
+  it('maps the supplied robot clip names to real conversation states', () => {
+    const root = new Group()
+    for (const name of ['Hips', 'Head', 'UpperArm_R', 'LowerArm_R', 'Hand_R']) {
+      const node = new Object3D()
+      node.name = name
+      root.add(node)
+    }
+    const track = (clip: string) => new AnimationClip(clip, 1, [
+      new QuaternionKeyframeTrack('Hips.quaternion', [0, 1], [0, 0, 0, 1, 0, 0.1, 0, 0.995]),
+    ])
+    const clips = prepareAssetClips(root, [
+      'Idle_Breathing', 'Enter', 'Shift_Position', 'Look_At_Customer', 'Talk', 'Listen', 'Think',
+      'Point', 'Open_Hand', 'Wave', 'Surprised', 'Disappointed', 'Smile', 'Celebrate', 'Goodbye', 'Hang', 'Climb',
+    ].map(track))
+    for (const state of ['idle', 'enter', 'walk', 'look_at_customer', 'talk', 'listen', 'think', 'point', 'explain', 'wave', 'surprised', 'disappointed', 'smile', 'celebrate', 'goodbye', 'hang', 'climb'] as const) {
+      expect(clips.has(state)).toBe(true)
+    }
+    expect(clips.get('walk')?.name).toBe('walk')
+    expect(clips.get('explain')?.name).toBe('explain')
+  })
+
+  it('fits the rig to the stage and applies personality accents without creating separate models', () => {
+    const root = new Group()
+    const sourceMaterial = new MeshStandardMaterial({ color: 0xffffff })
+    sourceMaterial.name = 'CG_Accents'
+    root.add(new Mesh(new BoxGeometry(1, 1, 1), sourceMaterial))
+    fitRobotToStage(root)
+    const bounds = new Box3().setFromObject(root)
+    expect(bounds.getSize(new Vector3()).y).toBeCloseTo(1.78, 2)
+    expect(bounds.min.y).toBeCloseTo(0, 5)
+    applyRobotPersonality(root, 'friendly_shopkeeper')
+    const mesh = root.children[0] as Mesh
+    expect((mesh.material as MeshStandardMaterial).color.getHex()).toBe(0x13a99a)
+    expect(sourceMaterial.color.getHex()).toBe(0xffffff)
+  })
+
   it('renders every animation state with its own data attributes', () => {
     for (const state of AVATAR_STATES) {
       const { container, unmount } = render(
@@ -161,9 +259,7 @@ describe('living shopkeeper stage', () => {
     expect(css).toMatch(/\.cg-stage \{[^}]*pointer-events: none;/)
   })
 
-  it('renders the stage without a character when the avatar is disabled by the merchant', () => {
-    // The avatar toggle lives in the merchant config, not in the stage: the
-    // widget simply does not mount the stage. This pins the stage contract.
+  it('does not substitute a flat character when the 3D stage is not enabled', () => {
     const { container } = render(
       <ShopkeeperStage
         personality="friendly_shopkeeper"
@@ -174,6 +270,7 @@ describe('living shopkeeper stage', () => {
         line=""
       />,
     )
-    expect(container.querySelector('.cg-avatar')).toBeTruthy()
+    expect(container.querySelector('.cg-avatar, .cg-sa')).toBeNull()
+    expect(container.querySelector('.cg-stage')?.getAttribute('data-avatar-renderer')).toBe('disabled')
   })
 })

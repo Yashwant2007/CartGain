@@ -32,6 +32,10 @@ export interface FireAvatarContext extends LivingEventContext {
 }
 
 export interface ShopkeeperAnimation extends FireAvatarContext {
+  /** The real UI/server event that produced this pose. */
+  event?: LivingEvent
+  /** Monotonic token so consecutive identical events still animate once each. */
+  eventSequence?: number
   /** Body / animation state (18 states). */
   state: AvatarState
   /** Face (13 expressions). */
@@ -41,6 +45,8 @@ export interface ShopkeeperAnimation extends FireAvatarContext {
   /** Where the character stands. */
   position: AvatarPosition
 }
+
+let livingEventSequence = 0
 
 const LEGACY_EVENT: Record<LivingEvent, AvatarEvent> = {
   idle: 'CUSTOMER_DISENGAGED',
@@ -101,7 +107,7 @@ export function resolveShopkeeperAnimation(
     checkoutStarted: ctx.checkoutStarted,
     opening: ctx.opening,
   })
-  return { ...ctx, state, expression, gesture, position }
+  return { ...ctx, event, eventSequence: ++livingEventSequence, state, expression, gesture, position }
 }
 
 /**
@@ -111,6 +117,8 @@ export function resolveShopkeeperAnimation(
  */
 export function animationForState(personality: ShopkeeperPersonality, state: AvatarState): ShopkeeperAnimation {
   return {
+    event: 'idle',
+    eventSequence: ++livingEventSequence,
     state,
     expression: expressionForAvatarState(state),
     gesture: gestureFor(personality, state),

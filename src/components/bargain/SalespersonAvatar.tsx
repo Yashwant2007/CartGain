@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   SALESPERSON_PERSONA_CONFIG,
   type AvatarEmotion,
@@ -22,6 +22,9 @@ interface Props {
   /** Draws a subtle mouth-movement loop while the shopkeeper "speaks". */
   speaking?: boolean
   className?: string
+  /** Bargain card whose viewport rectangle should be exposed to a spatial rig. */
+  targetRef?: React.RefObject<HTMLElement | null> | null
+  onSpatialTargetChange?: (rect: DOMRectReadOnly | null) => void
 }
 
 /**
@@ -126,7 +129,10 @@ export default function SalespersonAvatar({
   gaze = null,
   speaking = false,
   className,
+  targetRef = null,
+  onSpatialTargetChange,
 }: Props) {
+  const [targetBounds, setTargetBounds] = useState<DOMRectReadOnly | null>(null)
   const config = SALESPERSON_PERSONA_CONFIG[persona] ?? SALESPERSON_PERSONA_CONFIG.collaborative
   const expression = EXPRESSIONS[emotion] ?? EXPRESSIONS.idle
   const hands = GESTURE_TRANSFORM[gesture] ?? GESTURE_TRANSFORM.none
@@ -141,6 +147,35 @@ export default function SalespersonAvatar({
   const animate = motionEnabled && !essentialMotionOnly
   const stageClass = `cg-sa__stage cg-sa--${config.idleMotion}${emotion === 'lowball' ? ' cg-sa__lowball' : ''}`
 
+  useEffect(() => {
+    const target = targetRef?.current
+    if (!target) {
+      setTargetBounds(null)
+      onSpatialTargetChange?.(null)
+      return
+    }
+    let frame = 0
+    const measure = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const rect = target.getBoundingClientRect()
+        setTargetBounds(rect)
+        onSpatialTargetChange?.(rect)
+      })
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(target)
+    window.addEventListener('resize', measure, { passive: true })
+    window.addEventListener('scroll', measure, { passive: true, capture: true })
+    measure()
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
+  }, [targetRef, onSpatialTargetChange])
+
   return (
     <span
       className={`cg-sa ${className ?? ''}`.trim()}
@@ -148,6 +183,10 @@ export default function SalespersonAvatar({
       data-persona={persona}
       data-emotion={emotion}
       data-gesture={gesture}
+      data-target-left={targetBounds?.left}
+      data-target-top={targetBounds?.top}
+      data-target-width={targetBounds?.width}
+      data-target-height={targetBounds?.height}
       role="img"
       aria-label={`${config.label}, ${emotion}`}
     >

@@ -185,14 +185,17 @@ function shopperMessageState(
     return 'recommending'
   }
 
+  if (intent.offersPriceSignal) return 'negotiating'
+
   if (
-    intent.intent === 'PRICE_ONLY' ||
+    intent.priceComplaint ||
     intent.intent === 'BUDGET_CONSTRAINT' ||
-    intent.intent === 'COMPARISON' ||
-    intent.priceComplaint
+    intent.intent === 'COMPARISON'
   ) {
-    return 'negotiating'
+    return 'thinking'
   }
+
+  if (intent.intent === 'PRICE_ONLY') return 'listening'
 
   if (intent.intent === 'PURCHASE_HESITATION') {
     return personality === 'strict_shopkeeper' ? 'disappointed' : 'confused'

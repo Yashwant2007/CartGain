@@ -31,6 +31,35 @@ describe('BargainPrimitives (critical storefront UI flows)', () => {
     expect(screen.getByText('₹450')).toBeTruthy()
   })
 
+  it('keeps delivery status accessible without adding a standalone Delivered line', () => {
+    const { container } = render(
+      <MessageBubble
+        m={{ id: 'c-delivered', role: 'customer', content: 'Hi', delivery: 'delivered', createdAt: 't' }}
+        t={t}
+        currencySymbol="₹"
+        personaChip={undefined}
+        isFinal={false}
+      />,
+    )
+    expect(container.querySelector('[aria-label="Delivered"]')).toBeTruthy()
+    expect(container.textContent).not.toContain('Delivered')
+  })
+
+  it('hides the repeated persona header when the stage already identifies the shopkeeper', () => {
+    const { container } = render(
+      <MessageBubble
+        m={{ id: 'a-quiet', role: 'ai', content: 'I can do ₹782.02', createdAt: 't' }}
+        t={t}
+        currencySymbol="₹"
+        personaChip={{ label: 'Friendly', emoji: '😊' }}
+        isFinal={false}
+        showSender={false}
+      />,
+    )
+    expect(container.textContent).not.toContain('Friendly')
+    expect(container.textContent).not.toContain('F')
+  })
+
   it('labels a final AI counter as a FINAL OFFER (floor reached)', () => {
     const key = 'finalOffer'
     render(
