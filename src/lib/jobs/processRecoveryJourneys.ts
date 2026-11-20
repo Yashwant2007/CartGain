@@ -2,6 +2,8 @@ import prisma from '@/lib/db'
 import { canSendToIdentity } from '@/lib/recovery/journeys/service'
 import { sendEmail } from '@/lib/services/email'
 import { sendWhatsAppMessage } from '@/lib/services/whatsapp'
+import { isWhatsAppConfigured, resolveWhatsAppUtilityTemplateName } from '@/lib/whatsapp/config'
+import { decideWhatsAppMessage } from '@/lib/whatsapp/decision'
 import { buildOptOutUrl } from '@/lib/opt-out'
 import { isWithinQuietHours } from '@/lib/conversation/variety'
 import { loadStoreVoiceSettings } from '@/lib/conversation/store'
@@ -146,39 +148,65 @@ export async function processRecoveryJourneys(limit = 50) {
       const whatsappGate = await canSendToIdentity(identity, 'whatsapp')
       if (phone && whatsappGate.ok) {
         try {
-          const result = await sendWhatsAppMessage({
-            to: phone,
-            templateName: process.env.WHATSAPP_TEMPLATE_REMINDER || 'cart_reminders',
-            templateParams: {
-              header: {
-                type: 'image',
-                imageUrl:
-                  productImage ||
-                  process.env.WHATSAPP_TEMPLATE_HEADER_IMAGE_URL ||
-                  'https://cart-gain.com/logo.png',
-              },
-              body: [
-                firstName,
-                productTitle
-                  ? `Your ${productTitle} at ${store.name} is still waiting 🛒`
-                  : `Your picks at ${store.name} are still waiting 🛒`,
-                `Claim Your Item: ${destination}`,
-              ],
-            },
+          const decision = decideWhatsAppMessage({
+            phone,
+            identity,
+            cartConverted: false,
+            storeActive: store.isActive !== false,
+            whatsappConfigured: isWhatsAppConfigured(),
+            onOptOutList: false,
+            step: 0,
+            maxRounds: 1,
+            cartActivityAt: journey.createdAt,
+            utilityTemplateName: resolveWhatsAppUtilityTemplateName(),
           })
-          if (result.success || result.messageId) {
-            didSend = true
-            await prisma.recoveryReminder.create({
-              data: {
-                journeyId: journey.id,
-                storeId: store.id,
-                channel: 'whatsapp',
-                status: 'sent',
-                scheduledFor: now,
-                sentAt: new Date(),
-                providerId: result.messageId || null,
-              },
-            })
+
+          if (decision.action.kind === 'skip') {
+            console.warn(`journey whatsapp skipped: ${decision.reason}`)
+          } else {
+            const result =
+              decision.action.kind === 'send_free_form'
+                ? await sendWhatsAppMessage({
+                    to: phone,
+                    content: `${bodyText}\n\nClaim Your Item: ${destination}`,
+                  })
+                : await sendWhatsAppMessage({
+                    to: phone,
+                    templateName:
+                      decision.action.kind === 'send_utility_template'
+                        ? decision.action.templateName
+                        : process.env.WHATSAPP_TEMPLATE_REMINDER || 'cart_reminders',
+                    templateParams: {
+                      header: {
+                        type: 'image',
+                        imageUrl:
+                          productImage ||
+                          process.env.WHATSAPP_TEMPLATE_HEADER_IMAGE_URL ||
+                          'https://cart-gain.com/logo.png',
+                      },
+                      body: [
+                        firstName,
+                        productTitle
+                          ? `Your ${productTitle} at ${store.name} is still waiting 🛒`
+                          : `Your picks at ${store.name} are still waiting 🛒`,
+                        `Claim Your Item: ${destination}`,
+                      ],
+                    },
+                  })
+            if (result.success || result.messageId) {
+              didSend = true
+              await prisma.recoveryReminder.create({
+                data: {
+                  journeyId: journey.id,
+                  storeId: store.id,
+                  channel: 'whatsapp',
+                  status: 'sent',
+                  scheduledFor: now,
+                  sentAt: new Date(),
+                  providerId: result.messageId || null,
+                },
+              })
+            }
           }
         } catch (e) {
           console.warn('journey whatsapp send failed')

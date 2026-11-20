@@ -9,6 +9,7 @@ import { sendWhatsAppMessage } from '@/lib/services/whatsapp'
 import { loadStoreVoiceSettings } from '@/lib/conversation/store'
 import { buildOptOutUrl } from '@/lib/opt-out'
 import { isWithinQuietHours } from '@/lib/conversation/variety'
+import { resolveWhatsAppUtilityTemplateName } from '@/lib/whatsapp/config'
 
 jest.mock('@/lib/db', () => ({
   __esModule: true,
@@ -29,6 +30,11 @@ jest.mock('@/lib/services/whatsapp', () => ({ sendWhatsAppMessage: jest.fn() }))
 jest.mock('@/lib/conversation/store', () => ({ loadStoreVoiceSettings: jest.fn() }))
 jest.mock('@/lib/opt-out', () => ({ buildOptOutUrl: jest.fn(() => 'https://cart-gain.com/opt-out?token=t') }))
 jest.mock('@/lib/conversation/variety', () => ({ isWithinQuietHours: jest.fn(() => false) }))
+jest.mock('@/lib/whatsapp/config', () => ({
+  isWhatsAppConfigured: jest.fn(() => true),
+  resolveWhatsAppPhoneNumberId: jest.fn(() => '1234567890'),
+  resolveWhatsAppUtilityTemplateName: jest.fn(() => undefined),
+}))
 
 const prismaMock = prisma as any
 const gateMock = canSendToIdentity as jest.Mock
@@ -37,6 +43,7 @@ const whatsappMock = sendWhatsAppMessage as jest.Mock
 const voiceMock = loadStoreVoiceSettings as jest.Mock
 const optOutMock = buildOptOutUrl as jest.Mock
 const quietMock = isWithinQuietHours as jest.Mock
+const utilityTemplateMock = resolveWhatsAppUtilityTemplateName as jest.Mock
 
 function journey(over: Record<string, any> = {}) {
   return {
@@ -46,6 +53,7 @@ function journey(over: Record<string, any> = {}) {
     customerIdentityId: 'identity-1',
     status: 'SCHEDULED',
     scheduledFor: new Date('2026-10-28T09:00:00Z'),
+    createdAt: new Date(),
     priority: 0,
     metadata: {},
     store: {
@@ -82,6 +90,7 @@ beforeEach(() => {
   voiceMock.mockResolvedValue(null)
   optOutMock.mockReturnValue('https://cart-gain.com/opt-out?token=t')
   quietMock.mockReturnValue(false)
+  utilityTemplateMock.mockReturnValue(undefined)
 })
 
 describe('processRecoveryJourneys', () => {
@@ -166,6 +175,30 @@ describe('processRecoveryJourneys', () => {
           header: expect.objectContaining({ imageUrl: 'https://cdn.shopify.com/sneaker.jpg' }),
         }),
       }),
+    )
+    expect(emailMock).not.toHaveBeenCalled()
+  })
+
+  it('uses the utility template when no inbound message exists', async () => {
+    utilityTemplateMock.mockReturnValue('cart_activity_utility')
+    prismaMock.customerIdentity.findUnique.mockResolvedValue({
+      id: 'identity-1',
+      email: 'buyer@example.com',
+      phone: '+919999999999',
+      name: 'Priya',
+      consentEmail: true,
+      consentWhatsApp: true,
+      consentSms: false,
+      suppressed: false,
+      optedOutAt: null,
+      lastInboundAt: null,
+    })
+    whatsappMock.mockResolvedValue({ success: true, messageId: 'wamid.2' })
+
+    await processRecoveryJourneys()
+
+    expect(whatsappMock).toHaveBeenCalledWith(
+      expect.objectContaining({ templateName: 'cart_activity_utility' }),
     )
     expect(emailMock).not.toHaveBeenCalled()
   })

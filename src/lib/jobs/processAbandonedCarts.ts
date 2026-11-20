@@ -36,7 +36,7 @@ import {
   ensureRecipientForCart,
   markRecipientContacted,
 } from '@/lib/recovery/recipients'
-import { isWhatsAppConfigured } from '@/lib/whatsapp/config'
+import { isWhatsAppConfigured, resolveWhatsAppUtilityTemplateName } from '@/lib/whatsapp/config'
 import { decideWhatsAppMessage } from '@/lib/whatsapp/decision'
 import {
   buildRecoverySequence,
@@ -1185,6 +1185,8 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           previousFailure,
           step: next.step.round,
           maxRounds: effMaxRounds,
+          cartActivityAt: cart.abandonedAt || cart.updatedAt || cart.createdAt || null,
+          utilityTemplateName: resolveWhatsAppUtilityTemplateName(),
         })
 
         if (decision.action.kind === 'skip') {
@@ -1202,8 +1204,14 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
         }
 
         let whatsappResult: Awaited<ReturnType<typeof sendWhatsAppMessage>>
-        if (decision.action.kind === 'send_template') {
-          const template = templateMap[Math.min(step, 2)]
+        if (decision.action.kind === 'send_template' || decision.action.kind === 'send_utility_template') {
+          const usingUtilityTemplate = decision.action.kind === 'send_utility_template'
+          const template = usingUtilityTemplate ? templateMap[0] : templateMap[Math.min(step, 2)]
+          if (usingUtilityTemplate) {
+            console.log(
+              `[recovery] cart=${cart.id} whatsapp utility-template=${decision.action.templateName} (no inbound required)`,
+            )
+          }
           const headerImage = compactWhatsAppHeaderImage(
             firstImage ||
               process.env.WHATSAPP_TEMPLATE_HEADER_IMAGE_URL ||
@@ -1218,7 +1226,9 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           )
           whatsappResult = await sendWhatsAppMessage({
             to: sanitizePhoneNumber(whatsappPhone!),
-            templateName: decision.action.templateName || template.name,
+            templateName: usingUtilityTemplate
+              ? decision.action.templateName
+              : decision.action.templateName || template.name,
             templateParams: params,
           })
         } else {

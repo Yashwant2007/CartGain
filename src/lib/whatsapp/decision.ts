@@ -28,6 +28,7 @@ import { resolveWhatsAppPhoneNumberId, isWhatsAppConfigured } from '@/lib/whatsa
  */
 export type WhatsAppMessageAction =
   | { kind: 'send_template'; templateName: string }
+  | { kind: 'send_utility_template'; templateName: string }
   | { kind: 'send_free_form'; content: string }
   | { kind: 'skip'; reason: string }
 
@@ -78,6 +79,10 @@ export type WhatsAppDecisionInput = {
   step?: number
   /** Maximum recovery rounds for this campaign. */
   maxRounds?: number
+  /** When the shopper last added to / abandoned the cart. */
+  cartActivityAt?: Date | string | null
+  /** Approved utility template name from env; enables no-inbound delivery. */
+  utilityTemplateName?: string | null
 }
 
 /**
@@ -89,12 +94,14 @@ export type WhatsAppDecisionInput = {
  *   2. Missing / invalid phone → skip.
  *   3. Opted out / suppressed / on opt-out list → skip, block future sends.
  *   4. No explicit WhatsApp consent → no business-initiated template.
- *   5. Consent + no prior inbound message → attempt approved template (business-initiated).
- *   6. Consent + open 24h service window → free-form is allowed; template also allowed.
- *   7. Consent + closed window → template only (no free-form).
- *   8. Previous 131049 (engagement limited) → skip WhatsApp, fallback to email.
- *   9. Previous permanent failure → skip WhatsApp, fallback to email.
- *   10. Previous config failure → skip WhatsApp, fallback to email (credential issue).
+ *   5. Consent + no prior inbound message + recent cart + approved utility template →
+ *      utility template (works without an inbound message and avoids 131049).
+ *   6. Consent + no prior inbound message → attempt approved marketing template.
+ *   7. Consent + open 24h service window → free-form is allowed; template also allowed.
+ *   8. Consent + closed window → template only (no free-form).
+ *   9. Previous 131049 (engagement limited) → skip WhatsApp, fallback to email.
+ *   10. Previous permanent failure → skip WhatsApp, fallback to email.
+ *   11. Previous config failure → skip WhatsApp, fallback to email (credential issue).
  */
 export function decideWhatsAppMessage(
   input: WhatsAppDecisionInput,
@@ -109,7 +116,12 @@ export function decideWhatsAppMessage(
     previousFailure = null,
     step = 0,
     maxRounds = 3,
+    cartActivityAt = null,
+    utilityTemplateName = null,
   } = input
+
+  const activityTime = cartActivityAt ? new Date(cartActivityAt).getTime() : 0
+  const recentCartActivity = activityTime > 0 && Date.now() - activityTime < 24 * 60 * 60 * 1000
 
   const eligibility = evaluateWhatsAppEligibility({
     phone,
@@ -137,6 +149,17 @@ export function decideWhatsAppMessage(
     // 131049 / 130472: per-user marketing limit. Do not retry immediately.
     // Fall back to email for this round.
     if (isEngagementLimitedWhatsAppFailure({ errorCode, error, errorDetails, errorSubcode })) {
+      // A marketing-template throttle is exactly the case the utility template
+      // is for. Retry through that approved path instead of giving up on WhatsApp.
+      if (utilityTemplateName && recentCartActivity) {
+        return {
+          action: { kind: 'send_utility_template', templateName: utilityTemplateName },
+          reason: 'Retrying with utility template after marketing limit',
+          whatsAppBlocked: false,
+          fallbackToEmail: false,
+          metaErrorCode: errorCode,
+        }
+      }
       return {
         action: { kind: 'skip', reason: 'whatsapp_engagement_limited' },
         reason: `Meta marketing limit (${errorCode ?? 'unknown'}): ${error ?? errorDetails ?? ''}`,
@@ -226,10 +249,24 @@ export function decideWhatsAppMessage(
     }
   }
 
-  // ── Business-initiated template delivery ────────────────────────────────
+  // ── No-inbound delivery: utility template first ────────────────────────
+  // Meta throttles marketing templates with 131049 for users who have not
+  // messaged the business. An approved utility template tied to a recent cart
+  // event is not subject to that marketing limit. Only use this path when a
+  // real utility template is configured; never relabel marketing templates.
+  if (utilityTemplateName && recentCartActivity) {
+    return {
+      action: { kind: 'send_utility_template', templateName: utilityTemplateName },
+      reason: 'Utility template delivery for recent cart activity (no prior inbound message required)',
+      whatsAppBlocked: false,
+      fallbackToEmail: false,
+    }
+  }
+
+  // ── Business-initiated marketing template delivery ─────────────────────
   // Outside the window, Meta requires an approved template. The caller must
   // supply the template name and params. We do NOT require a prior inbound
-  // message — explicit opt-in is sufficient.
+  // message — explicit opt-in is sufficient — but Meta may still throttle it.
   return {
     action: { kind: 'send_template', templateName: '' },
     reason: 'Business-initiated template delivery (no prior inbound message required)',
@@ -244,7 +281,11 @@ export function decideWhatsAppMessage(
  */
 export function canSendWhatsApp(input: WhatsAppDecisionInput): boolean {
   const decision = decideWhatsAppMessage(input)
-  return decision.action.kind === 'send_template' || decision.action.kind === 'send_free_form'
+  return (
+    decision.action.kind === 'send_template' ||
+    decision.action.kind === 'send_utility_template' ||
+    decision.action.kind === 'send_free_form'
+  )
 }
 
 /**

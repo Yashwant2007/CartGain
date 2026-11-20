@@ -85,6 +85,79 @@ describe('decideWhatsAppMessage', () => {
       expect(decision.action.kind).toBe('send_template')
       expect(decision.action.kind).not.toBe('send_free_form')
     })
+
+    it('uses an approved utility template for recent cart activity with no inbound message', () => {
+      const decision = decideWhatsAppMessage({
+        ...baseInput,
+        identity: { ...consentedIdentity, lastInboundAt: null },
+        step: 0,
+        maxRounds: 3,
+        cartActivityAt: new Date(Date.now() - 60 * 60 * 1000),
+        utilityTemplateName: 'cart_activity_utility',
+      })
+
+      expect(decision.action).toMatchObject({
+        kind: 'send_utility_template',
+        templateName: 'cart_activity_utility',
+      })
+      expect(decision.reason).toContain('Utility template')
+      expect(canSendWhatsApp({
+        ...baseInput,
+        identity: { ...consentedIdentity, lastInboundAt: null },
+        cartActivityAt: new Date(Date.now() - 60 * 60 * 1000),
+        utilityTemplateName: 'cart_activity_utility',
+      })).toBe(true)
+    })
+
+    it('retries with the utility template after a 131049 marketing limit', () => {
+      const decision = decideWhatsAppMessage({
+        ...baseInput,
+        identity: { ...consentedIdentity, lastInboundAt: null },
+        step: 0,
+        maxRounds: 3,
+        cartActivityAt: new Date(Date.now() - 60 * 60 * 1000),
+        utilityTemplateName: 'cart_activity_utility',
+        previousFailure: {
+          errorCode: 131049,
+          error: 'This message was not delivered to maintain healthy ecosystem engagement',
+        },
+      })
+
+      expect(decision.action).toMatchObject({
+        kind: 'send_utility_template',
+        templateName: 'cart_activity_utility',
+      })
+      expect(decision.fallbackToEmail).toBe(false)
+    })
+
+    it('falls back to marketing template when cart activity is stale', () => {
+      const decision = decideWhatsAppMessage({
+        ...baseInput,
+        identity: { ...consentedIdentity, lastInboundAt: null },
+        step: 0,
+        maxRounds: 3,
+        cartActivityAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
+        utilityTemplateName: 'cart_activity_utility',
+      })
+
+      expect(decision.action.kind).toBe('send_template')
+    })
+
+    it('keeps free-form when the 24h window is open even if utility is configured', () => {
+      const decision = decideWhatsAppMessage({
+        ...baseInput,
+        identity: {
+          ...consentedIdentity,
+          lastInboundAt: new Date(Date.now() - 60 * 60 * 1000),
+        },
+        step: 0,
+        maxRounds: 3,
+        cartActivityAt: new Date(Date.now() - 60 * 60 * 1000),
+        utilityTemplateName: 'cart_activity_utility',
+      })
+
+      expect(decision.action.kind).toBe('send_free_form')
+    })
   })
 
   describe('TEST 3: Meta accepts template → message ID tracked', () => {

@@ -32,6 +32,16 @@ export function resolveWhatsAppAccessToken(): string | undefined {
   return firstNonEmpty(['WHATSAPP_BUSINESS_TOKEN', 'META_WHATSAPP_TOKEN', 'WHATSAPP_ACCESS_TOKEN'])
 }
 
+/**
+ * Approved utility-category template used for opted-in shoppers who have no
+ * open 24-hour service window. Utility templates are not throttled by Meta's
+ * per-user marketing-template limit (131049) when they match a recent order /
+ * cart event. Leave unset to keep sending the configured marketing templates.
+ */
+export function resolveWhatsAppUtilityTemplateName(): string | undefined {
+  return firstNonEmpty(['WHATSAPP_TEMPLATE_UTILITY', 'WHATSAPP_TEMPLATE_CART_UTILITY'])
+}
+
 export function isWhatsAppConfigured(): boolean {
   return Boolean(resolveWhatsAppPhoneNumberId() && resolveWhatsAppAccessToken())
 }
