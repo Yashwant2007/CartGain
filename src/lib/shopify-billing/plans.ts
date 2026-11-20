@@ -9,26 +9,39 @@ export interface ShopifyBillingPrice {
   yearly: number
 }
 
+type BillingPriceTable = Record<string, ShopifyBillingPrice | null>
+
+function positiveEnv(name: string | undefined): number | null {
+  if (!name) return null
+  const raw = process.env[name]?.trim()
+  if (!raw) return null
+  const value = Number(raw)
+  return Number.isFinite(value) && value > 0 ? value : null
+}
+
+const USD_PRICE_ENV: Record<string, { monthly: string; yearly: string }> = {
+  [PLANS.GROWTH.id]: {
+    monthly: 'SHOPIFY_BILLING_USD_GROWTH_MONTHLY',
+    yearly: 'SHOPIFY_BILLING_USD_GROWTH_YEARLY',
+  },
+  [PLANS.PRO.id]: {
+    monthly: 'SHOPIFY_BILLING_USD_PRO_MONTHLY',
+    yearly: 'SHOPIFY_BILLING_USD_PRO_YEARLY',
+  },
+}
+
 /**
  * Shopify Billing charges the merchant in the shop's own currency — the amount
- * is NOT converted. So every supported shop currency needs an explicit price
- * here; a missing entry makes billing unavailable (we never guess) rather than
- * charging ₹1,499 as $1,499.
- *
- * INR is derived from the canonical PLANS table so the two can never drift.
- *
- * [REQUIRES CONFIRMATION] The USD amounts below are placeholders. Confirm them
- * before charging international merchants — changing them is a one-line edit.
+ * is NOT converted. INR is derived from the canonical PLANS table so it can
+ * never drift. USD must be explicitly configured with the prices approved in
+ * the Partner Dashboard; we never guess a price for an international merchant.
  */
-export const SHOPIFY_BILLING_PRICES: Record<BillingCurrency, Record<string, ShopifyBillingPrice>> = {
+export const SHOPIFY_BILLING_PRICES: Record<BillingCurrency, BillingPriceTable> = {
   INR: {
     [PLANS.GROWTH.id]: { monthly: PLANS.GROWTH.price, yearly: PLANS.GROWTH.yearlyPrice },
     [PLANS.PRO.id]: { monthly: PLANS.PRO.price, yearly: PLANS.PRO.yearlyPrice },
   },
-  USD: {
-    [PLANS.GROWTH.id]: { monthly: 19, yearly: 190 },
-    [PLANS.PRO.id]: { monthly: 49, yearly: 490 },
-  },
+  USD: {},
 }
 
 export function normalizeCurrency(currency: string | null | undefined): BillingCurrency | null {
@@ -55,6 +68,11 @@ export function resolveBillingPrice(
   if (!cur) return null
 
   const resolvedPlanId = resolvePlanId(planId)
+  if (cur === 'USD') {
+    const amount = positiveEnv(USD_PRICE_ENV[resolvedPlanId]?.[period])
+    return amount ? { amount, currency: cur } : null
+  }
+
   const price = SHOPIFY_BILLING_PRICES[cur][resolvedPlanId]
   if (!price) return null
 
@@ -72,20 +90,20 @@ export function billablePlanIds(): string[] {
 /**
  * Usage-charge ceiling (revenue share) per plan per currency. Shopify requires
  * the merchant to pre-approve a capped usage amount, so this MUST be expressed
- * in the shop's currency — not the INR plan value.
- *
- * [REQUIRES CONFIRMATION] USD caps are derived placeholders; confirm before
- * enabling international revenue-share billing.
+ * in the shop's currency — not the INR plan value. USD caps are configured with
+ * the same Partner Dashboard pricing decision as USD plan prices.
  */
-export const SHOPIFY_USAGE_CAPS: Record<BillingCurrency, Record<string, number>> = {
+const USD_USAGE_CAP_ENV: Record<string, string> = {
+  [PLANS.GROWTH.id]: 'SHOPIFY_BILLING_USD_GROWTH_USAGE_CAP',
+  [PLANS.PRO.id]: 'SHOPIFY_BILLING_USD_PRO_USAGE_CAP',
+}
+
+export const SHOPIFY_USAGE_CAPS: Record<BillingCurrency, Record<string, number | null>> = {
   INR: {
     [PLANS.GROWTH.id]: PLANS.GROWTH.revShareCap,
     [PLANS.PRO.id]: PLANS.PRO.revShareCap,
   },
-  USD: {
-    [PLANS.GROWTH.id]: 60,
-    [PLANS.PRO.id]: 120,
-  },
+  USD: {},
 }
 
 export function resolveUsageCap(
@@ -94,8 +112,11 @@ export function resolveUsageCap(
 ): number | null {
   const cur = normalizeCurrency(currency)
   if (!cur) return null
-  const cap = SHOPIFY_USAGE_CAPS[cur][resolvePlanId(planId)]
-  if (!Number.isFinite(cap) || cap <= 0) return null
+  const resolvedPlanId = resolvePlanId(planId)
+  const cap = cur === 'USD'
+    ? positiveEnv(USD_USAGE_CAP_ENV[resolvedPlanId])
+    : SHOPIFY_USAGE_CAPS[cur][resolvedPlanId]
+  if (cap == null || !Number.isFinite(cap) || cap <= 0) return null
   return cap
 }
 
@@ -108,11 +129,25 @@ export interface ShopifyOveragePrices {
 /**
  * Per-unit overage prices in the shop's billing currency. RevenueShareEvent
  * amounts are already denominated in the store currency, so these must be too;
- * reusing the INR plan values for a USD shop would overcharge by ~80x.
- *
- * [REQUIRES CONFIRMATION] USD amounts are placeholders.
+ * reusing the INR plan values for a USD shop would overcharge by ~80x. USD is
+ * fail-closed until the Partner Dashboard prices are configured explicitly.
  */
-export const SHOPIFY_OVERAGE_PRICES: Record<BillingCurrency, Record<string, ShopifyOveragePrices>> = {
+type ShopifyOverageEnvNames = Record<keyof ShopifyOveragePrices, string>
+
+const USD_OVERAGE_ENV: Record<string, ShopifyOverageEnvNames> = {
+  [PLANS.GROWTH.id]: {
+    message: 'SHOPIFY_BILLING_USD_GROWTH_OVERAGE_MESSAGE',
+    deal: 'SHOPIFY_BILLING_USD_GROWTH_OVERAGE_DEAL',
+    cart: 'SHOPIFY_BILLING_USD_GROWTH_OVERAGE_CART',
+  },
+  [PLANS.PRO.id]: {
+    message: 'SHOPIFY_BILLING_USD_PRO_OVERAGE_MESSAGE',
+    deal: 'SHOPIFY_BILLING_USD_PRO_OVERAGE_DEAL',
+    cart: 'SHOPIFY_BILLING_USD_PRO_OVERAGE_CART',
+  },
+}
+
+export const SHOPIFY_OVERAGE_PRICES: Record<BillingCurrency, Record<string, ShopifyOveragePrices | null>> = {
   INR: {
     [PLANS.GROWTH.id]: {
       message: 1,
@@ -125,10 +160,7 @@ export const SHOPIFY_OVERAGE_PRICES: Record<BillingCurrency, Record<string, Shop
       cart: PLANS.PRO.bargainOverageCartPrice,
     },
   },
-  USD: {
-    [PLANS.GROWTH.id]: { message: 0.02, deal: 0.3, cart: 0.04 },
-    [PLANS.PRO.id]: { message: 0.02, deal: 0.18, cart: 0.04 },
-  },
+  USD: {},
 }
 
 export function resolveOveragePrices(
@@ -137,16 +169,28 @@ export function resolveOveragePrices(
 ): ShopifyOveragePrices | null {
   const cur = normalizeCurrency(currency)
   if (!cur) return null
-  return SHOPIFY_OVERAGE_PRICES[cur][resolvePlanId(planId)] ?? null
+  const resolvedPlanId = resolvePlanId(planId)
+  if (cur === 'USD') {
+    const env = USD_OVERAGE_ENV[resolvedPlanId]
+    if (!env) return null
+    const message = positiveEnv(env.message)
+    const deal = positiveEnv(env.deal)
+    const cart = positiveEnv(env.cart)
+    if (message == null || deal == null || cart == null) return null
+    return { message, deal, cart }
+  }
+  return SHOPIFY_OVERAGE_PRICES[cur][resolvedPlanId] ?? null
 }
 
 /** Minimum invoice amount per currency (INR plans use a ₹100 noise floor). */
-export const SHOPIFY_INVOICE_FLOORS: Record<BillingCurrency, number> = {
+export const SHOPIFY_INVOICE_FLOORS: Record<BillingCurrency, number | null> = {
   INR: 100,
-  USD: 1.2,
+  USD: null,
 }
 
 export function resolveInvoiceFloor(currency: string | null | undefined): number {
   const cur = normalizeCurrency(currency)
-  return cur ? SHOPIFY_INVOICE_FLOORS[cur] : 0
+  if (!cur) return 0
+  if (cur === 'USD') return positiveEnv('SHOPIFY_BILLING_USD_INVOICE_FLOOR') ?? 0
+  return SHOPIFY_INVOICE_FLOORS[cur] ?? 0
 }

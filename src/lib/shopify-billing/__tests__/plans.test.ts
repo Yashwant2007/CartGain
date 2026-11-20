@@ -3,6 +3,8 @@ import {
   isSupportedBillingCurrency,
   resolveBillingPrice,
   resolveUsageCap,
+  resolveOveragePrices,
+  resolveInvoiceFloor,
   SHOPIFY_BILLING_PRICES,
   SHOPIFY_USAGE_CAPS,
 } from '../plans'
@@ -64,12 +66,21 @@ describe('resolveBillingPrice', () => {
     expect(yearly).toEqual({ amount: PLANS.PRO.yearlyPrice, currency: 'INR' })
   })
 
-  it('resolves USD placeholders for shopify shops', () => {
-    const monthly = resolveBillingPrice('growth', 'monthly', 'USD')
-    expect(monthly).toEqual({ amount: 19, currency: 'USD' })
+  it('fails closed for USD until the Partner Dashboard prices are configured', () => {
+    expect(resolveBillingPrice('growth', 'monthly', 'USD')).toBeNull()
+    expect(resolveBillingPrice('pro', 'yearly', 'USD')).toBeNull()
+  })
 
-    const yearly = resolveBillingPrice('pro', 'yearly', 'USD')
-    expect(yearly).toEqual({ amount: 490, currency: 'USD' })
+  it('resolves USD prices only from explicit configuration', () => {
+    process.env.SHOPIFY_BILLING_USD_GROWTH_MONTHLY = '25'
+    process.env.SHOPIFY_BILLING_USD_PRO_YEARLY = '590'
+    try {
+      expect(resolveBillingPrice('growth', 'monthly', 'USD')).toEqual({ amount: 25, currency: 'USD' })
+      expect(resolveBillingPrice('pro', 'yearly', 'USD')).toEqual({ amount: 590, currency: 'USD' })
+    } finally {
+      delete process.env.SHOPIFY_BILLING_USD_GROWTH_MONTHLY
+      delete process.env.SHOPIFY_BILLING_USD_PRO_YEARLY
+    }
   })
 
   it('returns null for unknown plan ids', () => {
@@ -89,8 +100,46 @@ describe('usage caps', () => {
     expect(resolveUsageCap('pro', 'INR')).toBe(PLANS.PRO.revShareCap)
   })
 
-  it('returns placeholder USD caps', () => {
-    expect(resolveUsageCap('growth', 'USD')).toBe(60)
-    expect(resolveUsageCap('pro', 'USD')).toBe(120)
+  it('fails closed for USD caps until configured', () => {
+    expect(resolveUsageCap('growth', 'USD')).toBeNull()
+    expect(resolveUsageCap('pro', 'USD')).toBeNull()
+  })
+
+  it('resolves USD caps only from explicit configuration', () => {
+    process.env.SHOPIFY_BILLING_USD_GROWTH_USAGE_CAP = '75'
+    try {
+      expect(resolveUsageCap('growth', 'USD')).toBe(75)
+    } finally {
+      delete process.env.SHOPIFY_BILLING_USD_GROWTH_USAGE_CAP
+    }
+  })
+})
+
+describe('USD overage and invoice configuration', () => {
+  afterEach(() => {
+    for (const key of [
+      'SHOPIFY_BILLING_USD_GROWTH_OVERAGE_MESSAGE',
+      'SHOPIFY_BILLING_USD_GROWTH_OVERAGE_DEAL',
+      'SHOPIFY_BILLING_USD_GROWTH_OVERAGE_CART',
+      'SHOPIFY_BILLING_USD_INVOICE_FLOOR',
+    ]) {
+      delete process.env[key]
+    }
+  })
+
+  it('fails closed for USD overages until every amount is configured', () => {
+    expect(resolveOveragePrices('growth', 'USD')).toBeNull()
+    process.env.SHOPIFY_BILLING_USD_GROWTH_OVERAGE_MESSAGE = '0.02'
+    process.env.SHOPIFY_BILLING_USD_GROWTH_OVERAGE_DEAL = '0.3'
+    expect(resolveOveragePrices('growth', 'USD')).toBeNull()
+  })
+
+  it('uses configured USD overages and invoice floor', () => {
+    process.env.SHOPIFY_BILLING_USD_GROWTH_OVERAGE_MESSAGE = '0.02'
+    process.env.SHOPIFY_BILLING_USD_GROWTH_OVERAGE_DEAL = '0.3'
+    process.env.SHOPIFY_BILLING_USD_GROWTH_OVERAGE_CART = '0.04'
+    process.env.SHOPIFY_BILLING_USD_INVOICE_FLOOR = '1.25'
+    expect(resolveOveragePrices('growth', 'USD')).toEqual({ message: 0.02, deal: 0.3, cart: 0.04 })
+    expect(resolveInvoiceFloor('USD')).toBe(1.25)
   })
 })

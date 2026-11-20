@@ -25,6 +25,11 @@ describe('mapShopifyStatus', () => {
     expect(mapShopifyStatus('FROZEN')).toBe('paused')
   })
 
+  it('keeps CANCELLING active until Shopify confirms a terminal status', () => {
+    expect(mapShopifyStatus('CANCELLING')).toBe('active')
+    expect(mapShopifyStatus('CANCEL_REQUESTED')).toBe('active')
+  })
+
   it('maps CANCELLED/DECLINED/EXPIRED → cancelled', () => {
     expect(mapShopifyStatus('CANCELLED')).toBe('cancelled')
     expect(mapShopifyStatus('DECLINED')).toBe('cancelled')

@@ -36,6 +36,12 @@ export function mapShopifyStatus(rawStatus: string | null | undefined): Normaliz
       return 'pending'
     case 'FROZEN':
       return 'paused'
+    // A cancellation request does not end paid access until Shopify sends the
+    // terminal CANCELLED/EXPIRED status. Keeping it active prevents a plan
+    // downgrade before a replacement subscription is approved.
+    case 'CANCELLING':
+    case 'CANCEL_REQUESTED':
+      return 'active'
     case 'CANCELLED':
     case 'DECLINED':
     case 'EXPIRED':

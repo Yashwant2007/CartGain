@@ -8,6 +8,7 @@ import { createShopifySubscription, cancelShopifySubscription } from '@/lib/shop
 import { ShopifyReconnectRequiredError } from '@/lib/shopify-billing/client'
 import { resolveBillingPrice, resolveUsageCap } from '@/lib/shopify-billing/plans'
 import prisma from '@/lib/db'
+import { captureError } from '@/lib/observability/logger'
 
 jest.mock('next-auth', () => ({ getServerSession: jest.fn() }))
 jest.mock('@/lib/auth', () => ({ authOptions: {} }))
@@ -54,6 +55,7 @@ const storeMock = resolveShopifyStoreForUser as jest.Mock
 const availabilityMock = shopifyBillingAvailability as jest.Mock
 const createShopifyMock = createShopifySubscription as jest.Mock
 const cancelShopifyMock = cancelShopifySubscription as jest.Mock
+const captureErrorMock = captureError as jest.Mock
 const prismaMock = prisma as any
 
 const STORE = {
@@ -137,6 +139,27 @@ describe('POST /api/payments/create-subscription', () => {
     expect(res.status).toBe(409)
     await expect(res.json()).resolves.toMatchObject({ code: 'SHOPIFY_RECONNECT_REQUIRED' })
     expect(prismaMock.subscription.upsert).not.toHaveBeenCalled()
+  })
+
+  it('returns the real Shopify billing failure with a stable code for support', async () => {
+    storeMock.mockResolvedValue({ ...STORE, isActive: true })
+    availabilityMock.mockReturnValue({ available: true, currency: 'INR', tokenState: 'ok' })
+    ;(resolveBillingPrice as jest.Mock).mockReturnValue({ amount: 1499, currency: 'INR' })
+    ;(resolveUsageCap as jest.Mock).mockReturnValue(null)
+    createShopifyMock.mockRejectedValue(new Error('GraphQL userErrors: replacement not allowed'))
+
+    const res = await POST(makeRequest())
+
+    expect(res.status).toBe(500)
+    await expect(res.json()).resolves.toMatchObject({
+      code: 'SHOPIFY_BILLING_CREATE_FAILED',
+      error: 'GraphQL userErrors: replacement not allowed',
+    })
+    expect(captureErrorMock).toHaveBeenCalledWith(expect.objectContaining({
+      component: 'billing',
+      operation: 'create_subscription',
+      persist: true,
+    }))
   })
 
   it('lets Shopify replace an existing Shopify plan during subscription creation', async () => {

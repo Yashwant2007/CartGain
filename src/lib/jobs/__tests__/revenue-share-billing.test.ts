@@ -140,13 +140,26 @@ describe('processRevenueShareBilling', () => {
     })
   })
 
-  it('applies the USD usage cap instead of the INR plan cap', async () => {
+  it('applies a configured USD usage cap instead of the INR plan cap', async () => {
+    process.env.SHOPIFY_BILLING_USD_GROWTH_USAGE_CAP = '60'
+    process.env.SHOPIFY_BILLING_USD_GROWTH_OVERAGE_MESSAGE = '0.02'
+    process.env.SHOPIFY_BILLING_USD_GROWTH_OVERAGE_DEAL = '0.3'
+    process.env.SHOPIFY_BILLING_USD_GROWTH_OVERAGE_CART = '0.04'
+    process.env.SHOPIFY_BILLING_USD_INVOICE_FLOOR = '1.2'
     storeMock.mockResolvedValue({ id: 'store-1', domain: 'shop.myshopify.com', currency: 'USD' })
     prismaMock.revenueShareEvent.findMany.mockResolvedValue([{ revShareAmount: 5000 }])
 
-    await processRevenueShareBilling()
+    try {
+      await processRevenueShareBilling()
 
-    expect(usageMock).toHaveBeenCalledWith(expect.objectContaining({ amount: 60, currency: 'USD' }))
+      expect(usageMock).toHaveBeenCalledWith(expect.objectContaining({ amount: 60, currency: 'USD' }))
+    } finally {
+      delete process.env.SHOPIFY_BILLING_USD_GROWTH_USAGE_CAP
+      delete process.env.SHOPIFY_BILLING_USD_GROWTH_OVERAGE_MESSAGE
+      delete process.env.SHOPIFY_BILLING_USD_GROWTH_OVERAGE_DEAL
+      delete process.env.SHOPIFY_BILLING_USD_GROWTH_OVERAGE_CART
+      delete process.env.SHOPIFY_BILLING_USD_INVOICE_FLOOR
+    }
   })
 })
 

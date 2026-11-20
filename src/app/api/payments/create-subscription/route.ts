@@ -110,7 +110,10 @@ export async function POST(req: NextRequest) {
         persist: true,
         statusCode: 500,
       })
-      return NextResponse.json({ error: message }, { status: 500 })
+      return NextResponse.json(
+        { error: message, code: 'SHOPIFY_BILLING_CREATE_FAILED' },
+        { status: 500 },
+      )
     }
 }
 
