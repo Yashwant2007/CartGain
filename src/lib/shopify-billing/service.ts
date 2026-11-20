@@ -36,12 +36,32 @@ export function shopifyTokenState(
   return store.shopifyRefreshToken ? 'refreshable' : 'expired'
 }
 
-export async function resolveShopifyStoreForUser(userId: string): Promise<ShopifyStore | null> {
+export async function resolveShopifyStoreForUser(userId: string, storeId?: string): Promise<ShopifyStore | null> {
   const stores = await prisma.store.findMany({
-    where: { userId, platform: 'shopify', apiKey: { not: null } },
+    where: {
+      userId,
+      platform: 'shopify',
+      apiKey: { not: null },
+      ...(storeId ? { id: storeId } : {}),
+    },
     orderBy: { createdAt: 'asc' },
   })
-  const store = stores.find((candidate) => candidate.isActive) ?? stores[0]
+  // An embedded session is shop-scoped. Never silently substitute another
+  // active shop belonging to the same CartGain account.
+  const store = storeId ? stores[0] : stores.find((candidate) => candidate.isActive) ?? stores[0]
+  return (store as ShopifyStore) || null
+}
+
+/** Resolve the exact shop associated with a saved Shopify subscription. */
+export async function resolveShopifyStoreForDomain(userId: string, domain: string): Promise<ShopifyStore | null> {
+  const store = await prisma.store.findFirst({
+    where: {
+      userId,
+      platform: 'shopify',
+      apiKey: { not: null },
+      domain: { equals: domain, mode: 'insensitive' },
+    },
+  })
   return (store as ShopifyStore) || null
 }
 
@@ -54,6 +74,14 @@ export interface ShopifyBillingAvailability {
     | 'reconnect_required'
     | 'unsupported_currency'
   tokenState: ShopifyTokenState | null
+}
+
+/** A webhook for an old subscription must never mutate a newer local row. */
+export function subscriptionWebhookMatchesLocal(
+  localSubscriptionId: string | null | undefined,
+  webhookSubscriptionId: string,
+): boolean {
+  return !localSubscriptionId || localSubscriptionId === webhookSubscriptionId
 }
 
 /** Whether this merchant can be billed through Shopify Billing right now. */
@@ -168,7 +196,13 @@ export async function reconcileShopifySubscription(
 
 /** Convenience wrapper used by the webhook + status routes. */
 export async function reconcileShopifySubscriptionForUser(userId: string): Promise<void> {
-  const store = await resolveShopifyStoreForUser(userId)
+  const local = await prisma.subscription.findFirst({
+    where: { userId, provider: 'shopify' },
+    orderBy: { createdAt: 'desc' },
+  })
+  const store = local?.shopDomain
+    ? await resolveShopifyStoreForDomain(userId, local.shopDomain)
+    : await resolveShopifyStoreForUser(userId)
   if (!store) return
   try {
     await reconcileShopifySubscription(store)

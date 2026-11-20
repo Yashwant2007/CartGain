@@ -155,6 +155,7 @@ const CREATE_SUBSCRIPTION_MUTATION = /* GraphQL */ `
     $test: Boolean
     $trialDays: Int
     $lineItems: [AppSubscriptionLineItemInput!]!
+    $replacementBehavior: AppSubscriptionReplacementBehavior
   ) {
     appSubscriptionCreate(
       name: $name
@@ -162,6 +163,7 @@ const CREATE_SUBSCRIPTION_MUTATION = /* GraphQL */ `
       test: $test
       trialDays: $trialDays
       lineItems: $lineItems
+      replacementBehavior: $replacementBehavior
     ) {
       confirmationUrl
       appSubscription { id status }
@@ -220,6 +222,10 @@ export async function createShopifySubscription(
       test: shopifyBillingTestMode(),
       trialDays: trialDays && trialDays > 0 ? trialDays : null,
       lineItems,
+      // Let Shopify apply its documented replacement rules atomically with
+      // merchant approval. Cancelling first can strand the merchant without
+      // an active plan if creation or approval fails.
+      replacementBehavior: 'STANDARD',
     },
   )
 
@@ -276,17 +282,38 @@ export async function cancelShopifySubscription(
     { id: shopifySubscriptionId },
   )
 
-  if (errors.length || !data) return false
+  if (errors.length || !data) {
+    // Keep the merchant-facing response generic, but preserve Shopify's
+    // sanitized operation errors in server logs for support diagnosis.
+    console.error('[SHOPIFY_BILLING] appSubscriptionCancel failed', {
+      shop: store.domain,
+      subscriptionId: shopifySubscriptionId,
+      errors: errors.slice(0, 5),
+    })
+    return false
+  }
 
   const { userErrors, appSubscription } = data.appSubscriptionCancel
   if (userErrors?.length) {
     // Already cancelled / not cancellable → the merchant won't be charged again.
     const alreadyGone = userErrors.some((e) => /not.*(active|cancel)|does not exist/i.test(e.message || ''))
     if (alreadyGone) return true
+    console.error('[SHOPIFY_BILLING] appSubscriptionCancel returned userErrors', {
+      shop: store.domain,
+      subscriptionId: shopifySubscriptionId,
+      userErrors: userErrors.slice(0, 5).map(({ field, message }) => ({ field, message })),
+    })
     return false
   }
 
   const status = String(appSubscription?.status || '').toUpperCase()
+  if (status !== 'CANCELLED' && status !== 'EXPIRED') {
+    console.error('[SHOPIFY_BILLING] appSubscriptionCancel returned unexpected status', {
+      shop: store.domain,
+      subscriptionId: shopifySubscriptionId,
+      status: status || 'missing',
+    })
+  }
   return status === 'CANCELLED' || status === 'EXPIRED'
 }
 

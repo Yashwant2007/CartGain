@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { cancelRazorpaySubscription } from '@/lib/payment'
-import { resolveShopifyStoreForUser, downgradeSubscriptionToFree } from '@/lib/shopify-billing/service'
+import { resolveShopifyStoreForDomain, resolveShopifyStoreForUser, downgradeSubscriptionToFree } from '@/lib/shopify-billing/service'
 import { cancelShopifySubscription } from '@/lib/shopify-billing/subscriptions'
 import { getAuthContext, unauthorizedResponse } from '@/lib/embedded-auth'
 
@@ -36,7 +36,9 @@ export async function POST(request: NextRequest) {
     // charging — the worst possible outcome for the merchant.
     let gatewayCancelled: boolean
     if (subscription.provider === 'shopify' && subscription.shopifySubscriptionId) {
-      const store = await resolveShopifyStoreForUser(userId)
+      const store = subscription.shopDomain
+        ? await resolveShopifyStoreForDomain(userId, subscription.shopDomain)
+        : await resolveShopifyStoreForUser(userId)
       if (!store) {
         return NextResponse.json(
           { error: 'Could not reach your connected Shopify store. Please reconnect it and try again.' },

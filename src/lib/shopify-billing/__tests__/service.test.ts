@@ -1,14 +1,16 @@
 import {
   resolveShopifyStoreForUser,
+  resolveShopifyStoreForDomain,
   shopifyBillingAvailability,
   shopifyTokenState,
+  subscriptionWebhookMatchesLocal,
   type ShopifyStore,
 } from '../service'
 import prisma from '@/lib/db'
 
 jest.mock('@/lib/db', () => ({
   __esModule: true,
-  default: { store: { findMany: jest.fn() } },
+  default: { store: { findMany: jest.fn(), findFirst: jest.fn() }, subscription: { findFirst: jest.fn() } },
 }))
 
 const prismaMock = prisma as any
@@ -46,6 +48,28 @@ describe('resolveShopifyStoreForUser', () => {
     prismaMock.store.findMany.mockResolvedValue([stale])
 
     await expect(resolveShopifyStoreForUser('user-1')).resolves.toMatchObject({ id: 'stale' })
+  })
+
+  it('uses the explicitly selected store instead of substituting another active store', async () => {
+    const selected = makeStore({ id: 'selected', isActive: false })
+    const otherActive = makeStore({ id: 'other-active', isActive: true })
+    prismaMock.store.findMany.mockResolvedValue([selected])
+
+    await expect(resolveShopifyStoreForUser('user-1', 'selected')).resolves.toMatchObject({ id: 'selected' })
+    expect(prismaMock.store.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 'selected', userId: 'user-1' }),
+    }))
+    expect(otherActive.id).toBe('other-active')
+  })
+
+  it('resolves the saved subscription shop by its domain', async () => {
+    const saved = makeStore({ id: 'saved-shop', domain: 'saved.myshopify.com' })
+    prismaMock.store.findFirst.mockResolvedValue(saved)
+
+    await expect(resolveShopifyStoreForDomain('user-1', 'saved.myshopify.com')).resolves.toMatchObject({ id: 'saved-shop' })
+    expect(prismaMock.store.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ userId: 'user-1', domain: { equals: 'saved.myshopify.com', mode: 'insensitive' } }),
+    }))
   })
 })
 
@@ -125,5 +149,16 @@ describe('shopifyBillingAvailability', () => {
       available: false,
       reason: 'unsupported_currency',
     })
+  })
+})
+
+describe('subscriptionWebhookMatchesLocal', () => {
+  it('accepts the matching id and an unassigned same-shop placeholder', () => {
+    expect(subscriptionWebhookMatchesLocal('gid://shopify/AppSubscription/1', 'gid://shopify/AppSubscription/1')).toBe(true)
+    expect(subscriptionWebhookMatchesLocal(null, 'gid://shopify/AppSubscription/1')).toBe(true)
+  })
+
+  it('rejects a delayed webhook for a replaced subscription id', () => {
+    expect(subscriptionWebhookMatchesLocal('gid://shopify/AppSubscription/new', 'gid://shopify/AppSubscription/old')).toBe(false)
   })
 })

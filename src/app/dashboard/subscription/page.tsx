@@ -5,6 +5,7 @@ import { Check, Shield, Percent, Zap, FileText, Download, ToggleLeft, Mail, Mess
 import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/payment'
 import { resolveBillingPrice, resolveUsageCap, resolveOveragePrices } from '@/lib/shopify-billing/plans'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
+import { subscriptionStatusApiPath } from '@/lib/shopify-billing/return-url'
 
 type SubscriptionData = {
   id: string
@@ -98,8 +99,9 @@ export default function SubscriptionPage() {
     const controller = new AbortController()
     abortFetchData.current = () => controller.abort()
     try {
+      const subscriptionUrl = subscriptionStatusApiPath(window.location.search)
       const [subRes, overviewRes] = await Promise.all([
-        shopifySessionFetch('/api/subscription', { signal: controller.signal }),
+        shopifySessionFetch(subscriptionUrl, { signal: controller.signal }),
         shopifySessionFetch('/api/analytics/overview', { signal: controller.signal }),
       ])
 

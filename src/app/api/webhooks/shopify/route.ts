@@ -23,7 +23,11 @@ import { attributeBargainGoal, netBargainGoalRefund } from '@/lib/bargain/goals'
 import { recordLearningRefund } from '@/lib/bargain/learning/outcomes'
 import { attributeBargainPurchase, rememberConfirmedOrder, netBargainPurchaseRefund } from '@/lib/bargain/purchase'
 import { findQuoteByDiscountCode, redeemQuote } from '@/lib/bargain/quote'
-import { reconcileShopifySubscription, downgradeSubscriptionToFree } from '@/lib/shopify-billing/service'
+import {
+  reconcileShopifySubscription,
+  downgradeSubscriptionToFree,
+  subscriptionWebhookMatchesLocal,
+} from '@/lib/shopify-billing/service'
 import { mapShopifyStatus } from '@/lib/shopify-billing/subscriptions'
 import { FREE_CARTS_THRESHOLD, PLANS, ATTRIBUTION_WINDOW_HOURS, resolvePlanId, getPlan } from '@/lib/payment'
 import { sendAlertOnError } from '@/lib/alerter'
@@ -377,12 +381,16 @@ async function handleAppSubscriptionUpdate(data: any, store: any, shopDomain: st
 
   let local = await prisma.subscription.findFirst({ where: { shopifySubscriptionId: gid } })
   if (!local) {
-    // Fall back to this shop owner's most recent Shopify-provider subscription
-    // (covers a race where the webhook beats the local pending write).
-    local = await prisma.subscription.findFirst({
-      where: { userId: store.userId, provider: 'shopify' },
+    // Only associate an early event to a same-shop placeholder that has no
+    // Shopify id yet. Never apply an unmatched old/cancelled subscription event
+    // to the user's newer subscription row.
+    const candidate = await prisma.subscription.findFirst({
+      where: { userId: store.userId, provider: 'shopify', shopDomain: store.domain },
       orderBy: { createdAt: 'desc' },
     })
+    if (candidate && subscriptionWebhookMatchesLocal(candidate.shopifySubscriptionId, gid)) {
+      local = candidate
+    }
   }
   if (!local) {
     console.log(`app_subscriptions/update: no local subscription for ${gid} / shop ${shopDomain} — skipping`)

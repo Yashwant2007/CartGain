@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { PLANS } from '@/lib/payment'
 import {
   resolveShopifyStoreForUser,
+  resolveShopifyStoreForDomain,
   shopifyBillingAvailability,
   reconcileShopifySubscriptionForUser,
 } from '@/lib/shopify-billing/service'
@@ -30,7 +31,9 @@ export async function GET(request: NextRequest) {
       where: { userId: session.user.id },
     })
 
-    const shopifyStore = await resolveShopifyStoreForUser(session.user.id)
+    const shopifyStore = subscription?.shopDomain
+      ? await resolveShopifyStoreForDomain(session.user.id, subscription.shopDomain)
+      : await resolveShopifyStoreForUser(session.user.id)
     const availability = shopifyBillingAvailability(shopifyStore)
 
     const store = await prisma.store.findFirst({

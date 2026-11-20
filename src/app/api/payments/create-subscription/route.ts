@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { resolvePlanId, getPlan, cancelRazorpaySubscription } from '@/lib/payment'
 import { getAppBaseUrl } from '@/lib/app-base-url'
 import {
@@ -9,11 +7,12 @@ import {
   shopifyBillingAvailability,
 } from '@/lib/shopify-billing/service'
 import { resolveBillingPrice, resolveUsageCap } from '@/lib/shopify-billing/plans'
-import { createShopifySubscription, cancelShopifySubscription } from '@/lib/shopify-billing/subscriptions'
+import { createShopifySubscription } from '@/lib/shopify-billing/subscriptions'
 import { ShopifyReconnectRequiredError } from '@/lib/shopify-billing/client'
 import { track } from '@/lib/analytics/track'
 import { captureError } from '@/lib/observability/logger'
 import prisma from '@/lib/db'
+import { getAuthContext, unauthorizedResponse } from '@/lib/embedded-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,9 +26,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 })
     }
 
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id || !session.user.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = await getAuthContext(req)
+    if (!auth?.user?.id) {
+      return unauthorizedResponse()
     }
 
     const { plan, period } = await req.json()
@@ -45,25 +44,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
     }
 
-    const existingSub = await prisma.subscription.findFirst({
-      where: { userId: session.user.id },
-      orderBy: { createdAt: 'desc' },
-    })
-
     // ── Shopify Billing only ────────────────────────────────────────────
     // Shopify App Store policy requires every app charge to use Shopify App
     // Pricing or the Billing API. The server — never the client — decides
     // whether Shopify Billing is available; there is no off-platform fallback.
-    const shopifyStore = await resolveShopifyStoreForUser(session.user.id)
+    const embeddedStoreId = auth.type === 'shopify_session' ? auth.store?.id : auth.store?.platform === 'shopify' ? auth.store.id : undefined
+    const shopifyStore = await resolveShopifyStoreForUser(auth.user.id, embeddedStoreId)
     const availability = shopifyBillingAvailability(shopifyStore)
 
     if (!availability.available || !shopifyStore) {
       return shopifyUnavailableResponse(availability.reason, shopifyStore?.domain)
     }
 
+    const existingSub = await prisma.subscription.findFirst({
+      where: { userId: auth.user.id },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    // The current schema stores one subscription per CartGain user. If that
+    // row belongs to a different Shopify shop, do not replace it using the
+    // token for another shop or overwrite its local billing association.
+    if (
+      existingSub?.provider === 'shopify' &&
+      existingSub.shopDomain &&
+      existingSub.shopDomain.toLowerCase() !== shopifyStore.domain.toLowerCase() &&
+      (existingSub.status === 'active' || existingSub.status === 'pending')
+    ) {
+      return NextResponse.json(
+        { error: 'This CartGain account has an active Shopify subscription for another connected store. Manage billing from that store.' },
+        { status: 409 },
+      )
+    }
+
     return await startShopifySubscription({
       req,
-      userId: session.user.id,
+      userId: auth.user.id,
       store: shopifyStore,
       planId: resolvedPlanId,
       planName: planConfig.name,
@@ -153,22 +168,10 @@ async function startShopifySubscription(params: StartShopifyParams): Promise<Nex
     )
   }
 
-  // Shopify allows one active subscription per app per shop. Cancel any live
-  // Shopify subscription FIRST so switching plans can't leave two charges —
-  // and so a failed create can never leave the merchant double-billed.
-  if (
-    existingSub?.provider === 'shopify' &&
-    existingSub.shopifySubscriptionId &&
-    (existingSub.status === 'pending' || existingSub.status === 'active')
-  ) {
-    const cancelled = await cancelShopifySubscription(store, existingSub.shopifySubscriptionId)
-    if (!cancelled) {
-      return NextResponse.json(
-        { error: "We couldn't update your existing subscription at Shopify. Please contact support." },
-        { status: 502 },
-      )
-    }
-  }
+  // Existing Shopify subscriptions are replaced by Shopify as part of
+  // appSubscriptionCreate (replacementBehavior: STANDARD). Do not cancel
+  // first: a cancel/create two-step can strand a merchant without a plan, and
+  // Shopify owns the authoritative active-subscription state.
 
   // Migration path: a merchant on the Razorpay / direct track who now bills via
   // Shopify must have the old gateway subscription cancelled too — otherwise
