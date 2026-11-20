@@ -77,8 +77,7 @@ Official 2026-04 input shape was confirmed against Shopify docs:
 
 Known issues: no unique constraint on issued codes; no DB-enforced state;
 quotes lack declared FKs; `accept` has no expiry enforcement; schema/migration
-drift exists for daily-goal tables and several config columns;
-`/api/jobs/health-check` cron has no route.
+drift exists for daily-goal tables and several config columns.
 
 ## 5. AI performance and security
 

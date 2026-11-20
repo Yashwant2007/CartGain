@@ -47,8 +47,9 @@ does exactly that:
   subscribed before the migration. It is never used to start or collect an app charge.
 
 Billing prices are currency-specific (`src/lib/shopify-billing/plans.ts`). INR values
-are canonical; USD values are placeholders marked `[REQUIRES CONFIRMATION]` and must be
-confirmed before charging international merchants.
+are canonical. USD billing is fail-closed until the Partner Dashboard-approved prices
+and usage caps are configured via `SHOPIFY_BILLING_USD_*` environment variables; no
+USD amount is guessed in code.
 
 **Custom distribution**: Shopify does not allow the Billing API for custom apps. A
 custom-distribution install can stay on the free tier or use a manually invoiced
@@ -151,13 +152,14 @@ usage, and our revenue share is capped so the bill stays predictable.
 ### Pricing (Shopify Billing)
 - **Free** — ₹0/mo. 50 recovered carts, 30 bargain sessions, 5 accepted deals.
 - **Growth** — ₹1,499/mo (₹14,990/yr). 750 recovered carts, 300 sessions, 30 deals.
-  3.5% revenue share, capped at ₹5,000/mo. USD placeholder: $19/mo.
+  3.5% revenue share, capped at ₹5,000/mo. USD pricing is enabled only when configured.
 - **Pro** — ₹3,999/mo (₹39,990/yr). 3,000 recovered carts, 1,500 sessions, 150 deals.
-  3% revenue share, capped at ₹10,000/mo. USD placeholder: $49/mo.
+  3% revenue share, capped at ₹10,000/mo. USD pricing is enabled only when configured.
 - **Enterprise** — custom contract, unlimited usage.
 
 Overage is billed through capped Shopify usage records (messages, extra accepted deals,
-extra recovered carts). Confirm the USD placeholders before charging international shops.
+extra recovered carts). USD amounts and caps come from explicit `SHOPIFY_BILLING_USD_*`
+configuration; no amount is guessed in code.
 
 ### Category
 Cart recovery · Marketing · Sales

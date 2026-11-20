@@ -1,5 +1,12 @@
 # ADR-009 — Payment path & webhook consolidation (resolved)
 
+## Current state
+The Razorpay webhook surface described below was removed with the GraphQL-only
+Shopify Billing migration. Paid plans now use Shopify Billing; Razorpay is only
+cancelled at the old gateway when a pre-migration subscriber switches to
+Shopify Billing. Shopify `app_subscriptions/update` webhooks and
+`reconcileShopifySubscription()` are authoritative for plan state.
+
 ## Context
 Two Razorpay webhook handlers existed:
 - `src/app/api/payments/webhook/route.ts` — legacy handler, the one the

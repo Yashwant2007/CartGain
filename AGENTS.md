@@ -503,8 +503,10 @@ Platform: Windows (win32), shell is bash (Git Bash). Working dir:
   single source of truth for paid access: an active paid plan past
   `currentPeriodEnd` is expired and falls back to free in the dashboard,
   campaigns, bargain gate, and abandoned-cart job, with a 7-day renewal
-  warning. Razorpay `subscription.charged` renewals reset the usage meters and
-  extend the period (deduped by `x-razorpay-event-id` / charge period).
+  warning. Legacy Razorpay `subscription.charged` renewals once reset the usage
+  meters and extended the period (deduped by `x-razorpay-event-id` / charge
+  period); that webhook path was later removed, and Shopify Billing webhooks /
+  reconciliation are now authoritative.
   Follow-up cleanup: catalog listing and `/api/shopify/health` now go through
   `fetchShopifyWithAuth`; the health route reports `reauthRequired` on a
   rejected token; `syncAbandonedCheckouts` only deactivates a store for a

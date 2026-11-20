@@ -93,10 +93,11 @@ it is not invoiced through Razorpay.
 | Pro | ₹3,999 | ₹39,990 | 3,000 carts, 1,500 sessions, 150 deals | 3%, capped ₹10,000/mo |
 | Enterprise | custom | custom | unlimited | contract |
 
-USD prices (Growth $19/mo, Pro $49/mo) and USD usage caps are placeholders marked
-`[REQUIRES CONFIRMATION]` in `src/lib/shopify-billing/plans.ts`. Confirm them before
-charging international merchants. Unsupported shop currencies make Shopify Billing
-unavailable rather than silently charging an INR amount as USD.
+USD prices and usage caps are fail-closed in `src/lib/shopify-billing/plans.ts`:
+they are read from explicit `SHOPIFY_BILLING_USD_*` configuration matching the
+Partner Dashboard-approved pricing. Unconfigured USD shops and unsupported
+currencies make Shopify Billing unavailable rather than silently charging an
+INR amount as USD.
 
 ## 4. Screenshots and video
 
