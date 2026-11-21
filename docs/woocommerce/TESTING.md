@@ -5,7 +5,7 @@ Automated verification after integration:
 - `npx prisma validate` — pass.
 - `npx tsc --noEmit --pretty false` — pass.
 - `npm run lint -- --no-cache` — pass.
-- `npm test -- --silent --runInBand` — 220 suites, 2231 tests passed.
+- `npm test -- --silent --runInBand` — 220 suites, 2234 tests passed.
 - `npm run build` — pass (production build compiles all WooCommerce routes; only pre-existing `PRODUCTION_DB_HOSTS is not set` warnings).
 - `git diff --check` — pass (run again before commit).
 

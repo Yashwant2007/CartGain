@@ -209,6 +209,7 @@ export function normalizeProduct(
     promotions?: ProductPromotion[]
     now?: Date
     baseUrl?: string | null
+    productUrl?: string | null
     fetchFailed?: boolean
   },
 ): ProductContext {
@@ -273,9 +274,9 @@ export function normalizeProduct(
     available: knownAvailable,
     inventoryStatus,
     imageUrl: source.image?.src ?? null,
-    productUrl: opts.baseUrl
+    productUrl: opts.productUrl ?? (opts.baseUrl
       ? `${opts.baseUrl.replace(/\/$/, '')}/products/${source.handle ?? source.id}`
-      : null,
+      : null),
     activePromotions: opts.promotions ?? [],
     merchantApprovedSellingPoints: opts.overrides?.approvedSellingPoints ?? [],
     merchantDisallowedClaims: disallowedClaims,

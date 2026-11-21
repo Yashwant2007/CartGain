@@ -37,19 +37,24 @@ export default async function EmbedPage({
     }
   }
 
+  const platform = sp('platform') === 'woocommerce' ? 'woocommerce' : 'shopify'
   const shop = sp('shop')
-  const shopifyProductId = sp('product')
-  const variantId = sp('variant')
+  const shopifyProductId = platform === 'woocommerce'
+    ? sp('productId') ?? sp('platformProductId') ?? sp('product')
+    : sp('product')
+  const variantId = platform === 'woocommerce'
+    ? sp('variationId') ?? sp('variant')
+    : sp('variant')
   const price = parseFloat(sp('price') ?? '')
-  const currency = sp('currency') || 'INR'
+  let currency = sp('currency') || (platform === 'woocommerce' ? 'USD' : 'INR')
   const title = sp('title')
   const image = sp('image')
   const mode = sp('mode') === 'cart' ? 'cart' : 'item'
-  // Buyer identity: the theme passes its cart token so the session can be bound
-  // to the real Shopify customer (buyer-bound discount codes + purchase
+  // Buyer identity: the storefront passes its cart token so the session can be
+  // bound to the real customer (buyer-bound discount codes and purchase
   // attribution). The customer email is resolved server-side from that cart —
   // we deliberately keep PII out of the iframe URL.
-  const cartToken = sp('cart_token') || undefined
+  const cartToken = sp('cartToken') || sp('cart_token') || undefined
   // Drawer mode: the theme controller hosts the iframe in a fixed right-side
   // drawer / full-screen mobile sheet and owns open/close + variant sync.
   const view = sp('view') === 'drawer' ? 'drawer' : 'inline'
@@ -73,26 +78,42 @@ export default async function EmbedPage({
   // merchant's floor/profit margin is never serialised into this document.
   let maxAttempts: number | undefined
 
-  if (shop) {
+  let resolvedStoreId: string | null = null
+  if (platform === 'woocommerce') {
+    const wooStoreId = sp('storeId') ?? sp('store_id')
+    if (wooStoreId) {
+      try {
+        const store = await prisma.store.findUnique({
+          where: { id: wooStoreId },
+          select: { id: true, isActive: true, platform: true, currency: true },
+        })
+        if (store?.isActive && store.platform === 'woocommerce') {
+          resolvedStoreId = store.id
+          if (!sp('currency') && store.currency) currency = store.currency
+        }
+      } catch {}
+    }
+  } else if (shop) {
     // Strict, exact-only resolution (see resolve-by-domain.ts) — no substring
     // matching, which previously allowed a shop to resolve to another store.
-    const resolvedStoreId = await resolveActiveStoreIdByShopDomain(prisma, shop)
-    const store = resolvedStoreId ? { id: resolvedStoreId } : null
-    if (store) {
-      storeFound = true
-      storeId = store.id
-      // A disabled config pauses the widget without touching the theme. The
-      // embed stays transparent and tells the storefront controller to hide
-      // the launcher, so no dead UI or invitation is shown.
-      const config = await prisma.bargainConfig.findUnique({ where: { storeId: store.id } })
-      if (config?.enabled === false) bargainEnabled = false
-      experience = fromDb(config, 'published')
-      hasPublishedExperience = Boolean(config?.experiencePublished)
-      persona = experience.personality
-      language = config?.language ?? 'auto'
-      if (typeof config?.maxAttempts === 'number' && config.maxAttempts > 0) {
-        maxAttempts = config.maxAttempts
-      }
+    resolvedStoreId = await resolveActiveStoreIdByShopDomain(prisma, shop)
+  }
+
+  if (resolvedStoreId) {
+    const store = { id: resolvedStoreId }
+    storeFound = true
+    storeId = store.id
+    // A disabled config pauses the widget without touching the theme. The
+    // embed stays transparent and tells the storefront controller to hide
+    // the launcher, so no dead UI or invitation is shown.
+    const config = await prisma.bargainConfig.findUnique({ where: { storeId: store.id } })
+    if (config?.enabled === false) bargainEnabled = false
+    experience = fromDb(config, 'published')
+    hasPublishedExperience = Boolean(config?.experiencePublished)
+    persona = experience.personality
+    language = config?.language ?? 'auto'
+    if (typeof config?.maxAttempts === 'number' && config.maxAttempts > 0) {
+      maxAttempts = config.maxAttempts
     }
   }
 
@@ -118,6 +139,7 @@ export default async function EmbedPage({
       <EmbedErrorBoundary>
         <BargainWidget
           storeId={storeId as string}
+          platform={platform}
           shopifyProductId={shopifyProductId as string}
           variantId={variantId}
           originalPrice={price}

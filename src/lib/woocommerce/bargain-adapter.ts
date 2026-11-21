@@ -208,6 +208,24 @@ export function storeBaseUrl(store: any): string {
   return `https://${domain.replace(/^https?:\/\//, '').replace(/\/$/, '')}`
 }
 
+export function wooProductUrl(row: any, store: any, productId: string): string {
+  const base = storeBaseUrl(store)
+  const permalink = text(productField(row, ['permalink', 'link', 'url']))
+  if (permalink) {
+    try {
+      const candidate = new URL(permalink, base)
+      if (candidate.protocol === 'https:' && candidate.origin === new URL(base).origin) {
+        return candidate.toString()
+      }
+    } catch {}
+  }
+  const slug = text(productField(row, ['slug', 'handle']))
+  if (slug && !/^\d+$/.test(slug)) {
+    return `${base}/product/${encodeURIComponent(slug)}`
+  }
+  return `${base}/?product_id=${encodeURIComponent(productId)}`
+}
+
 function productSource(row: any, store: any, productId: string, variantId?: string | null): ShopifyProductSource {
   const attrs = nested(row)
   const status = text(productField(row, ['status', 'state', 'visibility'])) ?? 'active'
@@ -329,6 +347,7 @@ export async function buildWooCommerceProductContext(opts: {
       : [],
     now,
     baseUrl: opts.baseUrl ?? storeBaseUrl(opts.store),
+    productUrl: wooProductUrl(row, opts.store, opts.productId),
   })
   return { ...ctx, descriptionSource: 'MERCHANT_PROVIDED' }
 }

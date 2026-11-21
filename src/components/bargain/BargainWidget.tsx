@@ -95,6 +95,7 @@ type LastBoughtView = {
 
 type Props = {
   storeId: string
+  platform?: 'shopify' | 'woocommerce'
   shopifyProductId: string
   variantId?: string | null
   originalPrice: number
@@ -150,6 +151,7 @@ const PERSONA_CHIP: Record<string, { label: string; emoji: string }> = {
 
 export default function BargainWidget({
   storeId,
+  platform = 'shopify',
   shopifyProductId,
   variantId,
   originalPrice,
@@ -620,6 +622,7 @@ export default function BargainWidget({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storeId,
+          platform,
           shopifyProductId,
           variantId: productCtx.variantId,
           originalPrice: livePrice,
@@ -782,7 +785,7 @@ export default function BargainWidget({
       const res = await fetch(`${apiBase}/api/bargain/offer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, message: msg, turnId, ...buyerIdentity() }),
+        body: JSON.stringify({ sessionId, platform, message: msg, turnId, ...buyerIdentity() }),
         signal: controller.signal,
       })
       const data = (await res.json()) as BargainOfferSuccess & {
@@ -983,7 +986,7 @@ export default function BargainWidget({
         await fetch(`${apiBase}/api/bargain/offer`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, message: 'opt-out', ...buyerIdentity() }),
+          body: JSON.stringify({ sessionId, platform, message: 'opt-out', ...buyerIdentity() }),
         })
       }
       setSessionEnded(true)
@@ -1017,7 +1020,7 @@ export default function BargainWidget({
       const res = await fetch(`${apiBase}/api/bargain/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, ...buyerIdentity() }),
+        body: JSON.stringify({ sessionId, platform, ...buyerIdentity() }),
       })
       const data = (await res.json()) as BargainAcceptSuccess & {
         message?: string

@@ -102,6 +102,20 @@ beforeEach(() => {
 })
 
 describe('BargainWidget conversation-first layout', () => {
+  it('sends the WooCommerce platform when starting a session', async () => {
+    render(<BargainWidget {...baseProps} platform="woocommerce" shopifyProductId="42" variantId="42" />)
+
+    await waitFor(() => {
+      const call = (global.fetch as jest.Mock).mock.calls.find(([input]) => String(input).includes('/api/bargain/start'))
+      expect(call).toBeDefined()
+      expect(JSON.parse(call[1].body)).toEqual(expect.objectContaining({
+        platform: 'woocommerce',
+        storeId: 'test-store',
+        shopifyProductId: '42',
+      }))
+    })
+  })
+
   it('keeps the chat log on the Deal tab and renders recommendations outside it', async () => {
     const { container } = render(<BargainWidget {...baseProps} />)
 

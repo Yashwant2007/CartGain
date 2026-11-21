@@ -24,6 +24,7 @@ import {
   isWooCommerce,
   platformProductId,
   platformProductPrice,
+  wooProductUrl,
 } from '../bargain-adapter'
 
 const mockPrisma = prisma as any
@@ -73,6 +74,13 @@ describe('WooCommerce bargain adapter helpers', () => {
   it('builds a cart checkout URL with the coupon applied', () => {
     expect(buildWooCommerceCheckoutUrl({ domain: 'https://shop.example.com/', code: 'GAIN123' }))
       .toBe('https://shop.example.com/cart/?coupon_code=GAIN123')
+  })
+
+  it('builds WooCommerce product URLs with the shop permalink shape', () => {
+    expect(wooProductUrl({ slug: 'trail-boots' }, store, '42'))
+      .toBe('https://shop.example.com/product/trail-boots')
+    expect(wooProductUrl({ permalink: 'https://evil.test/product/trail-boots', slug: 'trail-boots' }, store, '42'))
+      .toBe('https://shop.example.com/product/trail-boots')
   })
 
   it('uses decrypted connection credentials', async () => {

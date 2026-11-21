@@ -5,6 +5,7 @@ import { ArrowRight, CheckCircle2, ShieldCheck, Tag } from 'lucide-react'
 import prisma from '@/lib/db'
 import { fetchShopifyProductDetail } from '@/lib/shopify'
 import { buildBargainCheckoutUrl } from '@/lib/bargain/purchase'
+import { findPlatformProduct, productField, wooProductUrl } from '@/lib/woocommerce/bargain-adapter'
 import CopyCodeButton from './CopyCodeButton'
 
 export const dynamic = 'force-dynamic'
@@ -36,12 +37,25 @@ export default async function BargainClaimPage({ params }: { params: { token: st
   if (!session || !session.store) notFound()
 
   const currency = session.store.currency || 'INR'
-  const detail = await fetchShopifyProductDetail(session.store, session.shopifyProductId).catch(() => null)
+  const isWooCommerce = session.store.platform === 'woocommerce'
+  const detail = isWooCommerce
+    ? null
+    : await fetchShopifyProductDetail(session.store, session.shopifyProductId).catch(() => null)
+  const wooRow = isWooCommerce
+    ? await findPlatformProduct(session.storeId, session.shopifyProductId)
+    : null
+  const wooImage = wooRow ? productField(wooRow, ['imageUrl', 'image', 'featuredImage']) : null
 
-  const title = detail?.title || 'Your item'
+  const title = detail?.title || (wooRow ? String(productField(wooRow, ['title', 'name']) || 'Your item') : 'Your item')
   const description = detail?.body_plain?.trim() || null
-  const image = detail?.image?.src || null
-  const productUrl = detail?.handle ? `https://${session.store.domain}/products/${detail.handle}` : `https://${session.store.domain}`
+  const image = detail?.image?.src || (wooImage && typeof wooImage === 'object'
+    ? String((wooImage as { src?: unknown; url?: unknown }).src ?? (wooImage as { url?: unknown }).url ?? '')
+    : typeof wooImage === 'string' ? wooImage : '')
+  const productUrl = isWooCommerce
+    ? wooProductUrl(wooRow, session.store, session.shopifyProductId)
+    : detail?.handle
+      ? `https://${session.store.domain}/products/${detail.handle}`
+      : `https://${session.store.domain}`
 
   const price = session.finalPrice ?? session.originalPrice
   const hasDiscount = price < session.originalPrice
