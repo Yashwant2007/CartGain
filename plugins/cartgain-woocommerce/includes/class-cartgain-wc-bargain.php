@@ -84,7 +84,7 @@ final class CartGain_WC_Bargain
         $this->enqueue_assets();
 
         $html = '<div class="cartgain-bargain" data-cartgain-bargain="1" data-cartgain-product="' . esc_attr((string) (int) $product->get_id()) . '" data-cartgain-variation="' . esc_attr((string) $variation_id) . '">';
-        $html .= '<iframe class="cartgain-bargain__frame" title="' . esc_attr__('CartGain bargain', 'cartgain-woocommerce') . '" src="' . esc_url($iframe_url) . '" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="forms" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>';
+        $html .= '<iframe class="cartgain-bargain__frame" title="' . esc_attr__('CartGain bargain', 'cartgain-woocommerce') . '" src="' . esc_url($iframe_url) . '" loading="lazy" referrerpolicy="origin" allow="clipboard-write; clipboard-read" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>';
         $html .= '</div>';
         $this->rendered = true;
         return $html;
