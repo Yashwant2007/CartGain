@@ -260,13 +260,8 @@ export default function IntegrationsPage() {
     setWooError(null)
     setWooCode(null)
     try {
-      const installId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `cg-wp-${Date.now()}`
       const res = await shopifySessionFetch('/api/integrations/woocommerce/connect', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ installId }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Could not start WooCommerce connection')
