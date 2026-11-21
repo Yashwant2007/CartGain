@@ -59,13 +59,13 @@ function cartgain_wc_activate()
 {
     cartgain_wc_create_tables();
     CartGain_WC_Settings::seed_defaults();
-    CartGain_WC_Scheduler::schedule_recurring();
+    (new CartGain_WC_Scheduler())->schedule_recurring();
     flush_rewrite_rules();
 }
 
 function cartgain_wc_deactivate()
 {
-    CartGain_WC_Scheduler::unschedule_all();
+    (new CartGain_WC_Scheduler())->unschedule_all();
     flush_rewrite_rules();
 }
 
@@ -74,7 +74,7 @@ function cartgain_wc_uninstall()
     CartGain_WC_Settings::remove_all();
     CartGain_WC_Credentials::remove_all();
     CartGain_WC_Database::drop_tables();
-    CartGain_WC_Scheduler::unschedule_all();
+    (new CartGain_WC_Scheduler())->unschedule_all();
 }
 
 function cartgain_wc_missing_woocommerce_notice()
