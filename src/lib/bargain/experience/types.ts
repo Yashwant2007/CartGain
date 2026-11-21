@@ -26,10 +26,10 @@ export type AvatarSize = (typeof AVATAR_SIZES)[number]
 export const CHARACTER_STYLES = ['signature', 'minimal'] as const
 export type CharacterStyle = (typeof CHARACTER_STYLES)[number]
 
-export const AVATAR_VARIANTS = ['robot', 'morgan', 'riley', 'alex', 'signature', 'minimal'] as const
+export const AVATAR_VARIANTS = ['robot', 'morgan', 'riley', 'alex', 'meera', 'kabir', 'verma', 'signature', 'minimal'] as const
 export type AvatarVariant = (typeof AVATAR_VARIANTS)[number]
 
-export const MERCHANT_AVATAR_VARIANTS = ['robot', 'morgan', 'riley', 'alex'] as const
+export const MERCHANT_AVATAR_VARIANTS = ['robot', 'morgan', 'riley', 'alex', 'meera', 'kabir', 'verma'] as const
 
 export const INVITATION_POSITIONS = ['bottom-right', 'bottom-left', 'inline'] as const
 export type InvitationPosition = (typeof INVITATION_POSITIONS)[number]
@@ -40,7 +40,7 @@ export interface BargainExperienceConfig {
   designVariant: InvitationDesign
   avatarEnabled: boolean
   motionEnabled: boolean
-  /** Selected merchant-facing avatar: robot or one of the three v2 characters. */
+  /** Selected merchant-facing avatar: robot, v2 sprite, or VRM shopkeeper. */
   avatarVariant: AvatarVariant
   /** Visual rendering style of the character (see CHARACTER_STYLES). */
   characterStyle: CharacterStyle

@@ -11,6 +11,7 @@ import type { GestureName } from '@/lib/bargain/experience/character'
 import { POSITION_DESCRIPTORS, type AvatarPosition } from '@/lib/bargain/experience/positions'
 import type { AvatarVariant, CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import type { LivingEvent, LivingEventContext } from '@/lib/bargain/experience/avatar-state'
+import { isVrmAvatarVariant } from '@/lib/bargain/experience/vrm-shopkeepers'
 
 interface Props {
   personality: ShopkeeperPersonality
@@ -279,10 +280,11 @@ export default function ShopkeeperStage({
     }
   }, [targetRef])
   const selectedVariant = avatarVariant ?? (enable3D ? 'robot' : 'none')
-  const useV2 = selectedVariant === 'morgan' || selectedVariant === 'riley' || selectedVariant === 'alex'
+  const useVrm = isVrmAvatarVariant(selectedVariant)
+  const useV2 = selectedVariant === 'morgan' || selectedVariant === 'riley' || selectedVariant === 'alex' || useVrm
   const useInline = selectedVariant === 'signature' || selectedVariant === 'minimal'
   const render3D = selectedVariant === 'robot' && enable3D && webglAvailable
-  const renderer = useV2 ? 'v2-sprite' : useInline ? 'inline' : render3D ? '3d' : webglAvailable ? 'disabled' : 'unavailable'
+  const renderer = useVrm ? 'vrm' : useV2 ? 'v2-sprite' : useInline ? 'inline' : render3D ? '3d' : webglAvailable ? 'disabled' : 'unavailable'
   return (
     <div
       className={`cg-stage ${descriptor.className}`}
@@ -305,6 +307,7 @@ export default function ShopkeeperStage({
             variant={selectedVariant as 'morgan' | 'riley' | 'alex'}
             expression={expression}
             state={state}
+            eventSequence={eventSequence}
             motionEnabled={motionEnabled}
             essentialMotionOnly={essentialMotionOnly}
           />

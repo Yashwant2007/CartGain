@@ -11,11 +11,14 @@ import {
   v2MotionForState,
   type V2AvatarVariant,
 } from '@/lib/bargain/experience/v2-shopkeepers'
+import { isVrmAvatarVariant } from '@/lib/bargain/experience/vrm-shopkeepers'
+import VrmShopkeeperAvatar from './VrmShopkeeperAvatar'
 
 interface Props {
   variant: V2AvatarVariant | string
   expression: ExpressionState
   state?: AvatarState
+  eventSequence?: number
   motionEnabled?: boolean
   essentialMotionOnly?: boolean
 }
@@ -56,6 +59,7 @@ export default function V2ShopkeeperAvatar({
   variant,
   expression,
   state,
+  eventSequence,
   motionEnabled = true,
   essentialMotionOnly = false,
 }: Props) {
@@ -82,6 +86,19 @@ export default function V2ShopkeeperAvatar({
     query.addEventListener('change', onChange)
     return () => query.removeEventListener('change', onChange)
   }, [])
+
+  if (isVrmAvatarVariant(variant)) {
+    return (
+      <VrmShopkeeperAvatar
+        variant={variant}
+        expression={expression}
+        state={state}
+        eventSequence={eventSequence}
+        motionEnabled={motionEnabled}
+        essentialMotionOnly={essentialMotionOnly}
+      />
+    )
+  }
 
   return (
     <div

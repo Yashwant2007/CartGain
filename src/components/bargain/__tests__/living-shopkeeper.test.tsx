@@ -294,4 +294,23 @@ describe('living shopkeeper stage', () => {
     expect(css).toMatch(/\.cg-v2 \{[^}]*height: 194px;/)
     expect(css).toMatch(/\.cg-v2-art \{[^}]*border-radius: 50%; clip-path: ellipse\(50% 50% at 50% 50%\)/)
   })
+
+  it('renders a merchant-selected VRM shopkeeper without changing the existing sprite variants', () => {
+    const { container } = render(
+      <ShopkeeperStage
+        personality="friendly_shopkeeper"
+        expression="celebrating"
+        state="celebrating"
+        avatarVariant="meera"
+        name="Meera"
+        status="Online"
+        line=""
+      />,
+    )
+    expect(container.querySelector('.cg-stage')?.getAttribute('data-avatar-renderer')).toBe('vrm')
+    expect(container.querySelector('.cg-stage')?.getAttribute('data-avatar-variant')).toBe('meera')
+    expect(container.querySelector('.cg-vrm')?.getAttribute('data-vrm-variant')).toBe('meera')
+    expect(container.querySelector('.cg-vrm')?.getAttribute('data-vrm-expression')).toBe('celebrating')
+    expect(container.querySelector('.cg-v2')).toBeNull()
+  })
 })

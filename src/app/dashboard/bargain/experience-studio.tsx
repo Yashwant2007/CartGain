@@ -8,6 +8,7 @@ import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
 import { PERSONALITY_META, DESIGN_VARIANT_META, type AvatarVariant, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
 import { V2_AVATARS } from '@/lib/bargain/experience/v2-shopkeepers'
+import { VRM_AVATARS, isVrmAvatarVariant } from '@/lib/bargain/experience/vrm-shopkeepers'
 import {
   expressionForEvent,
   expressionForShopperMessage,
@@ -189,7 +190,7 @@ export function BargainExperienceStudio() {
                     <div className="text-white font-medium">{p.name} <span className="text-cyan-300/80 text-xs font-semibold">· {p.title}</span></div>
                     <div className="text-sm text-blue-300/70 mt-1">{p.description}</div>
                     <div className="text-xs text-blue-300/80 mt-2">{p.id === 'friendly_shopkeeper' ? 'Warm, open gestures · reassuring value guidance' : p.id === 'strict_shopkeeper' ? 'Composed posture · direct, respectful negotiation' : 'Expressive reactions · playful, controlled gestures'}</div>
-                    <div className="text-xs text-blue-400/60 mt-1">{exp.avatarVariant === 'robot' ? 'Animated robot' : V2_AVATARS[exp.avatarVariant as keyof typeof V2_AVATARS]?.name ?? 'Animated robot'} · {strategyForPersonality(p.id).label}</div>
+                    <div className="text-xs text-blue-400/60 mt-1">{exp.avatarVariant === 'robot' ? 'Animated robot' : isVrmAvatarVariant(exp.avatarVariant) ? VRM_AVATARS[exp.avatarVariant].name : V2_AVATARS[exp.avatarVariant as keyof typeof V2_AVATARS]?.name ?? 'Animated robot'} · {strategyForPersonality(p.id).label}</div>
                     <div className="text-xs text-blue-400/60 mt-2 italic">&ldquo;{p.exampleDialogue[0]}&rdquo;</div>
                   </div>
                 </button>
@@ -233,6 +234,9 @@ export function BargainExperienceStudio() {
                 <option value="morgan">Morgan — Friendly</option>
                 <option value="riley">Riley — Playful</option>
                 <option value="alex">Alex — Strict</option>
+                <option value="meera">Meera — VRM shopkeeper</option>
+                <option value="kabir">Kabir — VRM shopkeeper</option>
+                <option value="verma">Verma — VRM shopkeeper</option>
               </select>
               <span className="block text-[11px] text-blue-300/60 mt-2">The same shopkeeper personality and negotiation rules apply to every avatar.</span>
             </label>

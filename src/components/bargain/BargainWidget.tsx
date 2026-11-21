@@ -30,6 +30,7 @@ import type { GestureName } from '@/lib/bargain/experience/character'
 import type { ExpressionState } from '@/lib/bargain/experience/expressions'
 import type { CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import { isV2AvatarVariant } from '@/lib/bargain/experience/v2-shopkeepers'
+import { isVrmAvatarVariant } from '@/lib/bargain/experience/vrm-shopkeepers'
 import { trackExperienceEvent } from '@/lib/bargain/experience/analytics'
 import { PERSONALITY_META, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
 import type {
@@ -162,11 +163,15 @@ const HEADER_AVATAR_CSS = `
 .cg-header-avatar .cg-v2 { position: absolute; left: 50%; top: 50%; width: var(--cg-header-size) !important; height: var(--cg-header-size) !important; transform: translate(-50%, -50%) !important; }
 .cg-header-avatar .cg-v2-art { left: 0 !important; top: 0 !important; width: var(--cg-header-size) !important; height: var(--cg-header-size) !important; border-radius: 50% !important; }
 .cg-header-avatar .cg-v2-glow, .cg-header-avatar .cg-v2-shadow { display: none !important; }
+.cg-header-avatar .cg-vrm { position: absolute; inset: 0; width: var(--cg-header-size) !important; height: var(--cg-header-size) !important; }
+.cg-header-avatar .cg-vrm-glow { display: none !important; }
+.cg-header-avatar .cg-vrm-fallback { border-radius: 10px; font-size: calc(var(--cg-header-size) * .45); }
 .cg-header-avatar-inner { display: inline-flex; align-items: center; justify-content: center; transform-origin: center; }
-@media (max-width: 480px) { .cg-header-avatar .cg-v2, .cg-header-avatar .cg-v2-art { width: var(--cg-header-size) !important; height: var(--cg-header-size) !important; } }
+@media (max-width: 480px) { .cg-header-avatar .cg-v2, .cg-header-avatar .cg-v2-art, .cg-header-avatar .cg-vrm { width: var(--cg-header-size) !important; height: var(--cg-header-size) !important; } }
 `
 
 type HeaderAvatarProps = {
+  animation: ShopkeeperAnimation
   avatarVariant: string
   personality: ShopkeeperPersonality
   characterStyle: CharacterStyle
@@ -179,7 +184,9 @@ type HeaderAvatarProps = {
 }
 
 function ShopkeeperHeaderAvatar({
+  animation,
   avatarVariant,
+
   personality,
   characterStyle,
   expression,
@@ -189,6 +196,7 @@ function ShopkeeperHeaderAvatar({
   essentialMotionOnly,
   size = 40,
 }: HeaderAvatarProps) {
+  const v2 = isV2AvatarVariant(avatarVariant) || isVrmAvatarVariant(avatarVariant)
   return (
     <span
       className="cg-header-avatar"
@@ -198,11 +206,12 @@ function ShopkeeperHeaderAvatar({
       style={{ width: size, height: size, ['--cg-header-size' as string]: `${size}px` } as CSSProperties}
     >
       <style dangerouslySetInnerHTML={{ __html: HEADER_AVATAR_CSS }} />
-      {isV2AvatarVariant(avatarVariant) ? (
+      {v2 ? (
         <V2ShopkeeperAvatar
           variant={avatarVariant}
           expression={expression}
           state={state}
+          eventSequence={animation.eventSequence}
           motionEnabled={motionEnabled}
           essentialMotionOnly={essentialMotionOnly}
         />
@@ -458,6 +467,7 @@ export default function BargainWidget({
   const renderHeaderAvatar = (size: number) => avatarEnabled
     ? (
       <ShopkeeperHeaderAvatar
+        animation={character}
         avatarVariant={avatarVariant}
         personality={personality}
         characterStyle={characterStyle}

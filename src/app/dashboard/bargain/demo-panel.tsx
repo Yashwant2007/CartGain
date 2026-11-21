@@ -409,6 +409,9 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
               ['morgan', 'Morgan'],
               ['riley', 'Riley'],
               ['alex', 'Alex'],
+              ['meera', 'Meera'],
+              ['kabir', 'Kabir'],
+              ['verma', 'Verma'],
             ] as const).map(([id, label]) => (
               <button
                 key={id}
