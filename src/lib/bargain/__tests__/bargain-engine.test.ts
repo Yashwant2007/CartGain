@@ -5,7 +5,7 @@ import {
   buildOpeningMessage,
   type NegotiationContext,
 } from '../../services/bargain'
-import { tacticalCounter, tacticalProgress, quotedFloor, isAbsurdOffer, reciprocalCounter } from '../engine'
+import { tacticalCounter, tacticalProgress, quotedFloor, isAbsurdOffer, reciprocalCounter, quoteBand } from '../engine'
 
 const baseCtx = (over: Partial<NegotiationContext> = {}): NegotiationContext => ({
   storeName: 'Test Store',
@@ -116,6 +116,27 @@ describe('reciprocalCounter', () => {
     const established = 900
     const same = reciprocalCounter(baseCtx({ attemptsUsed: 2 }), 500, established)
     expect(same).toBeLessThanOrEqual(established)
+  })
+})
+
+describe('quoteBand', () => {
+  it('keeps a session-specific band inside the safe, monotonic range', () => {
+    const ctx = baseCtx({ attemptsUsed: 1, seriousness: 'serious', customerOfferTrend: 'rising' })
+    const band = quoteBand(ctx, 'session-a', 700, null)
+
+    expect(band.floorSafeMin).toBeGreaterThanOrEqual(ctx.minPrice)
+    expect(band.target).toBeGreaterThanOrEqual(band.floorSafeMin)
+    expect(band.hold).toBeGreaterThanOrEqual(band.target)
+    expect(band.hold).toBeLessThanOrEqual(ctx.originalPrice)
+    expect(quoteBand(ctx, 'session-b', 700, null)).not.toEqual(band)
+  })
+
+  it('never dips below the quoted floor when the pacing is exhausted', () => {
+    const ctx = baseCtx({ attemptsUsed: 3, seriousness: 'serious' })
+    const band = quoteBand(ctx, 'session-c', 700, null)
+
+    expect(band.target).toBeGreaterThanOrEqual(quotedFloor(ctx))
+    expect(band.hold).toBeGreaterThanOrEqual(band.target)
   })
 })
 

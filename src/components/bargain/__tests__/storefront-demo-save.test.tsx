@@ -64,7 +64,7 @@ function stubFetch() {
       return {
         ok: true,
         status: 200,
-        json: async () => ({ code: 'REAL-CODE' }),
+        json: async () => ({ code: 'REAL-CODE', purchaseUrl: 'https://demo.myshopify.com/cart/42:1?discount=REAL-CODE' }),
       }
     }
     return { ok: true, status: 200, json: async () => ({}) }
@@ -106,5 +106,7 @@ describe('StorefrontBargainWidget demo deal', () => {
     expect(acceptCall).toBeTruthy()
     const body = JSON.parse(String(acceptCall?.[1]?.body))
     expect(body).toMatchObject({ finalPrice: 700, discountPercent: 30 })
+    expect(screen.getByRole('link', { name: 'Go to Checkout' }).getAttribute('href'))
+      .toBe('https://demo.myshopify.com/cart/42:1?discount=REAL-CODE')
   })
 })

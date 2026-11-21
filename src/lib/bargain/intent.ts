@@ -5,7 +5,7 @@
 // product-aware strategy instead of guessing. It deliberately runs BEFORE the
 // LLM: intent is a decision the merchant controls, not one we outsource.
 
-import { classifyNonOfferNumber, extractPrice, type NonOfferNumberContext } from './text'
+import { classifyNonOfferNumber, extractPrice, normalizeCustomerText, type NonOfferNumberContext } from './text'
 
 export type ShopperIntent =
   | 'UNKNOWN'
@@ -141,7 +141,7 @@ const NUM_CLEAN = (s: string): number => Number(s.replace(/[^\d]/g, '')) || 0
 
 /** Deterministically parse the shopper's budget from their message. */
 export function extractBudget(message: string): { amount: number; type: NonNullable<BudgetType> } | null {
-  const text = ` ${message.trim()} `
+  const text = ` ${normalizeCustomerText(message)} `
   const firstNum = (re: RegExp): number | null => {
     re.lastIndex = 0
     const m = re.exec(text)
@@ -167,7 +167,7 @@ const COMPLEMENT_RE = /\b(go(?:es)?\s+with|pair(?:s|ed)?\s+with|match(?:es)?\s+w
 
 /** Deterministically pull a short product topic from the message, if any. */
 export function extractNeed(message: string): string | null {
-  const text = ` ${message.trim().toLowerCase()} `
+  const text = ` ${normalizeCustomerText(message).toLowerCase()} `
   const m = NEED_PATTERN.exec(text)
   if (!m) return null
   const words = m[1]
@@ -177,7 +177,8 @@ export function extractNeed(message: string): string | null {
   return words.length > 0 ? words.join(' ') : null
 }
 
-export function analyzeIntent(message: string): IntentAnalysis {
+export function analyzeIntent(input: string): IntentAnalysis {
+  const message = normalizeCustomerText(input)
   const text = ` ${message.trim().toLowerCase()} `
   const signals: string[] = []
   const hits = (key: keyof typeof RE, label: string): boolean => {

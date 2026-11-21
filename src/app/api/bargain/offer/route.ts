@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainOfferSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
-import { negotiateStep, ruleBasedDecision, chatFallback, buildOpeningMessage, buildCustomerContext, computeMinPrice, retentionOffer, quotedFloor, type NegotiationContext } from '@/lib/services/bargain'
+import { negotiateStep, ruleBasedDecision, chatFallback, buildOpeningMessage, buildCustomerContext, classifySeriousness, computeMinPrice, retentionOffer, quotedFloor, type NegotiationContext } from '@/lib/services/bargain'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
-import { detectWalkout, extractQuantity, extractPrice } from '@/lib/bargain/text'
+import { detectWalkout, extractPrice, extractQuantity, normalizeCustomerText } from '@/lib/bargain/text'
 import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
 import { uiText, currencySymbolFor, formatMoney } from '@/lib/bargain/i18n'
 import { detectLanguage } from '@/lib/bargain/language'
@@ -253,8 +253,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const data = validateOrThrow(bargainOfferSchema, body)
     const turnMetadata = data.turnId ? { turnId: data.turnId } : {}
-    const customerOffer = extractPrice(data.message)
-    const isWalkout = detectWalkout(data.message)
+    const interpretedMessage = normalizeCustomerText(data.message)
+    const customerOffer = extractPrice(interpretedMessage)
+    const isWalkout = detectWalkout(interpretedMessage)
 
     const endDbLoad = bargainRequestMetrics.startTimer('offer_db_load')
     const bargainSession = await prisma.bargainSession.findUnique({
@@ -289,7 +290,7 @@ export async function POST(request: NextRequest) {
 
     const recoHistory = readRecommendationHistory(bargainSession.messages)
     if (bargainSession.status !== 'active') {
-      const termLang = detectedLang(bargainSession.language, data.message)
+      const termLang = detectedLang(bargainSession.language, interpretedMessage)
       const terminalReplies: Record<string, string> = {
         accepted: uiText(termLang, 'terminal_accepted'),
         rejected: uiText(termLang, 'terminal_rejected'),
@@ -337,7 +338,7 @@ export async function POST(request: NextRequest) {
     // §24 Coupon-stacking detection — deterministic classifier on the customer's
     // own words. Never trusted to the AI. `couponsAllowed` defaults to false so
     // a missing/invalid config row fails CLOSED (no stacking).
-    const couponMentioned = detectCouponMention(data.message)
+    const couponMentioned = detectCouponMention(interpretedMessage)
     const couponsAllowed = config.couponStackingEnabled === true
 
     // Audit-log the read of the session's protected customer data (email/phone
@@ -360,11 +361,11 @@ export async function POST(request: NextRequest) {
     // every reply (AI + fixed strings) is spoken in the same language they use.
     // Deliberately NOT persisted back to the session when auto — persisting a
     // detected language would lock the session and break future mirroring.
-    const lang = detectedLang(bargainSession.language ?? config.language, data.message)
+    const lang = detectedLang(bargainSession.language ?? config.language, interpretedMessage)
 
     // Automated decision-making opt-out (DPDP Act 2023, GDPR Art. 22): end the
     // session without the AI consuming an attempt or responding.
-    if (data.message?.trim().toLowerCase() === 'opt-out') {
+    if (interpretedMessage.trim().toLowerCase() === 'opt-out') {
       await prisma.bargainSession.update({
         where: { id: bargainSession.id },
         data: { status: 'abandoned' },
@@ -381,7 +382,7 @@ export async function POST(request: NextRequest) {
     // Resolve bulk quantity: from this message, or carry over the last known one
     const lastBulk = [...bargainSession.messages].reverse()
       .find((m: any) => (m.metadata as any)?.bulkQuantity)
-    const bulkQuantity = extractQuantity(data.message) ?? (lastBulk?.metadata as any)?.bulkQuantity ?? null
+    const bulkQuantity = extractQuantity(interpretedMessage) ?? (lastBulk?.metadata as any)?.bulkQuantity ?? null
 
     // Has the customer already received a walkout retention offer?
     const hadRetention = bargainSession.messages.some(
@@ -429,8 +430,8 @@ export async function POST(request: NextRequest) {
     // Deterministic shopper-intent classification of the current message. Cheap,
     // predictable, and merchant-controlled — the LLM is told about it, it never
     // decides it.
-    const intentAnalysis = analyzeIntent(data.message)
-    const claimAssessment = assessCustomerClaims(data.message, {
+    const intentAnalysis = analyzeIntent(interpretedMessage)
+    const claimAssessment = assessCustomerClaims(interpretedMessage, {
       product: productCtx,
       originalPrice: bargainSession.originalPrice,
       compareAtPrice: productCtx?.compareAtPrice ?? null,
@@ -480,7 +481,7 @@ export async function POST(request: NextRequest) {
     // attempt claim (an informational redirect does not burn a negotiation
     // attempt) and keep the session open on THIS product. Falls back to cards
     // for budget-fit alternatives when reco is enabled.
-    const bundleRequested = detectMultiProductRequest(data.message)
+    const bundleRequested = detectMultiProductRequest(interpretedMessage)
     if (bundleRequested) {
       // ── §27 BUNDLE NEGOTIATION (Module 6) ──
       // When the merchant opted in, try to resolve the distinct products and
@@ -506,7 +507,7 @@ export async function POST(request: NextRequest) {
             store: bargainSession.store,
             cartToken: bargainSession.cartToken ?? null,
             anchor: { productId: bargainSession.shopifyProductId, title: productTitle ?? 'Item', price: bargainSession.originalPrice },
-            message: data.message,
+            message: interpretedMessage,
             platform,
           })
           if (items) {
@@ -889,9 +890,19 @@ export async function POST(request: NextRequest) {
       rtoIncentive: merchantConfig?.rtoIncentive,
     })
     const paymentIntent = detectPaymentIntent(
-      data.message,
+      interpretedMessage,
       bargainSession.messages.filter((m: any) => m.role === 'customer').map((m: any) => m.content as string),
     )
+
+    const history = bargainSession.messages
+      .filter((m: any) => m.role === 'customer' || m.role === 'ai')
+      .map((m: any) => ({
+        role: (m.role === 'customer' ? 'customer' : 'ai') as 'customer' | 'ai',
+        content: m.content,
+        offeredPrice: m.offeredPrice ?? undefined,
+      }))
+    const lastCounter = [...bargainSession.messages].reverse()
+      .find((m: any) => m.role === 'ai' && m.offeredPrice != null)?.offeredPrice ?? null
 
     const ctx: NegotiationContext = {
       storeName: bargainSession.store.name,
@@ -926,21 +937,11 @@ export async function POST(request: NextRequest) {
       ...(shippingConfig.enabled ? { shipping: shippingConfig } : {}),
       ...(paymentConfig.enabled ? { payment: { intent: paymentIntent, config: paymentConfig } } : {}),
     }
-
-    const history = bargainSession.messages
-      .filter((m: any) => m.role === 'customer' || m.role === 'ai')
-      .map((m: any) => ({
-        role: (m.role === 'customer' ? 'customer' : 'ai') as 'customer' | 'ai',
-        content: m.content,
-        offeredPrice: m.offeredPrice ?? undefined,
-      }))
+    ctx.seriousness = classifySeriousness(history, interpretedMessage, ctx, 0)
+    ctx.lastCounter = lastCounter
 
     // ── WALKOUT HANDLING ──
     if (isWalkout) {
-      // Last known AI counter (most recent ai message with offeredPrice)
-      const lastCounter = [...bargainSession.messages].reverse()
-        .find((m: any) => m.role === 'ai' && m.offeredPrice != null)?.offeredPrice ?? null
-
       if (walkoutOutcome({ hadRetention, attemptsRemaining }) === 'abandon') {
         // Second walkout OR no attempts left → close the session (abandoned)
         const farewellReplies: Record<string, string> = {
@@ -985,7 +986,7 @@ export async function POST(request: NextRequest) {
       }
 
       // First walkout → retention offer (one meaningful extra concession)
-      const retentionResult = await runNegotiationStep(ctx, history, data.message, customerOffer ?? undefined)
+      const retentionResult = await runNegotiationStep(ctx, history, interpretedMessage, customerOffer ?? undefined)
       // Deterministic final safety validator: whatever the negotiation produced,
       // the price actually offered is clamped into [minPrice, originalPrice].
       const retentionPrice = clampOfferToSafety({
@@ -1031,7 +1032,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── NORMAL NEGOTIATION (incl. bulk) ──
-    const result = await runNegotiationStep(ctx, history, data.message, customerOffer ?? undefined)
+    const result = await runNegotiationStep(ctx, history, interpretedMessage, customerOffer ?? undefined)
     const resultMeta = (result.metadata ?? {}) as Record<string, any>
     const aiSource =
       typeof resultMeta.aiSource === 'string' && resultMeta.aiSource
@@ -1216,7 +1217,7 @@ export async function POST(request: NextRequest) {
       const budget = intentAnalysis.budget ?? null
       const eligibility = decideRecommendation({
         intent: intentAnalysis,
-        message: data.message,
+        message: interpretedMessage,
         sessionStatus,
         engineDecision: result.decision,
         walkout: isWalkout,

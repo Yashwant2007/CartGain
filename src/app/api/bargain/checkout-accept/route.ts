@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import prisma from '@/lib/db'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
-import { generateBargainCode } from '@/lib/bargain/purchase'
+import { buildBargainCheckoutUrl, generateBargainCode } from '@/lib/bargain/purchase'
 import { computeMinPrice } from '@/lib/services/bargain'
 import { fetchShopifyProductPrice, fetchShopifyProductDetail } from '@/lib/shopify'
 import { buildExecutablePrice, clampOrderPercentForProduct } from '@/lib/financial-safety'
@@ -375,6 +375,12 @@ export async function POST(request: NextRequest) {
         bulkQuantity: safeBulk,
         floorPrice: minPrice,
         shopifyCustomerId: normalizedCustomerId,
+      })
+      purchaseUrl = buildBargainCheckoutUrl({
+        domain: store.domain,
+        code: result.code,
+        variantId: orderLevel ? null : (variantId || null),
+        quantity: safeBulk,
       })
     }
 

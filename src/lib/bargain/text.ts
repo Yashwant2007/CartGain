@@ -1,9 +1,73 @@
 // Pure text-parsing helpers for the bargain engine.
 // Extracted from the offer route so they can be unit-tested in isolation.
 
+const CUSTOMER_TYPO_MAP: Record<string, string> = {
+  prize: 'price',
+  prizes: 'prices',
+  pricee: 'price',
+  ofer: 'offer',
+  ofeer: 'offer',
+  offeer: 'offer',
+  offfer: 'offer',
+  offerr: 'offer',
+  ofers: 'offers',
+  ammount: 'amount',
+  amout: 'amount',
+  amt: 'amount',
+  mutch: 'much',
+  disount: 'discount',
+  dicount: 'discount',
+  discout: 'discount',
+  discountt: 'discount',
+  plz: 'please',
+  plzz: 'please',
+  pleasee: 'please',
+  sennd: 'send',
+  chep: 'cheap',
+  cheapr: 'cheaper',
+  expensiv: 'expensive',
+  qualty: 'quality',
+  warrnty: 'warranty',
+  delet: 'delete',
+  recieve: 'receive',
+  recieved: 'received',
+}
+
+export function normalizeCustomerText(input: string): string {
+  const normalized = input
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/([₹$€£])\s+(\d)/g, '$1$2')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((token) => {
+      const numberMatch = token.match(/^([₹$€£]?)(\d[\dolIsO]{1,6})([.,!?;:]?)$/)
+      if (numberMatch) {
+        const digits = numberMatch[2]
+          .replace(/o/g, '0')
+          .replace(/O/g, '0')
+          .replace(/[lI]/g, '1')
+          .replace(/s/g, '5')
+          .replace(/S/g, '5')
+        if (/^\d+$/.test(digits)) return `${numberMatch[1]}${digits}${numberMatch[3]}`
+      }
+      const bare = token.toLowerCase().replace(/[^a-z]/g, '')
+      const suffix = token.slice(bare.length)
+      return CUSTOMER_TYPO_MAP[bare] ? `${CUSTOMER_TYPO_MAP[bare]}${suffix}` : token
+    })
+    .join(' ')
+    .replace(/\bto\s+much\b/gi, 'too much')
+    .replace(/\bcan\s+u\b/gi, 'can you')
+    .replace(/\bu\s+r\b/gi, 'you are')
+    .replace(/\br\s+u\b/gi, 'are you')
+
+  return normalized
+}
+
 // ── Walkout detection: does the customer threaten to leave / close the deal? ──
 export function detectWalkout(text: string): boolean {
-  const t = text.toLowerCase()
+  const t = normalizeCustomerText(text).toLowerCase()
 
   // "leaving for work/school" etc. — NOT a walkout
   if (/(?:leaving|going|out|step\s+away)\s+(?:for|to)\s+(?:work|office|school|gym|dinner|lunch|break|class)/.test(t)) {
@@ -52,7 +116,7 @@ export function detectWalkout(text: string): boolean {
 
 // ── Bulk quantity extraction: how many units does the customer want? ──
 export function extractQuantity(text: string): number | null {
-  const t = text.trim()
+  const t = normalizeCustomerText(text)
 
   if (/(?:half\s+(?:a\s+)?dozen)/i.test(t)) return 6
   if (/(?:\bdozen\b)/i.test(t)) return 12
@@ -177,11 +241,12 @@ function nonOfferContext(before: string, after: string, anchored: boolean): NonO
 }
 
 export function classifyNonOfferNumber(message: string): NonOfferNumberContext {
+  const normalized = normalizeCustomerText(message)
   const numberRe = /\d{1,3}(?:,\d{3})+|\d+(?:\.\d{1,2})?/g
   let match: RegExpExecArray | null
-  while ((match = numberRe.exec(message)) !== null) {
-    const before = message.slice(0, match.index)
-    const after = message.slice(match.index + match[0].length)
+  while ((match = numberRe.exec(normalized)) !== null) {
+    const before = normalized.slice(0, match.index)
+    const after = normalized.slice(match.index + match[0].length)
     const context = nonOfferContext(before, after, false)
     if (context) return context
   }
@@ -215,7 +280,8 @@ const COMPLAINT_AFTER_RE =
 const COMPLAINT_BEFORE_RE = /\b(?:not\s+worth|too\s+much\s+for)\s*[₹$€£]?\s*$/i
 
 // ── Price extraction: pull the shopper's numeric offer out of free text ──
-export function extractPrice(text: string): number | null {
+export function extractPrice(input: string): number | null {
+  const text = normalizeCustomerText(input)
   // A leading minus before a number/currency means a negative/absurd "offer"
   // (e.g. "-$50"). Never parse those as positive — the customer offered nothing.
   if (/(?:^|[^A-Za-z0-9])-+\s*(?:₹|INR|Rs\.?|\$|USD|€|EUR)?\s*\d/i.test(text)) {

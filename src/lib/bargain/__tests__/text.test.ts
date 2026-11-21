@@ -3,7 +3,28 @@ import {
   detectWalkout,
   extractQuantity,
   extractPrice,
+  normalizeCustomerText,
 } from '../text'
+
+describe('normalizeCustomerText', () => {
+  it('fixes common typos and repeated letters', () => {
+    expect(normalizeCustomerText('what is the prize?')).toBe('what is the price?')
+    expect(normalizeCustomerText('best offfer plzz')).toBe('best offer please')
+    expect(normalizeCustomerText('the amout is too mutch')).toBe('the amount is too much')
+  })
+
+  it('reads mistyped numbers without weakening price parsing', () => {
+    expect(normalizeCustomerText('₹ 8oo')).toBe('₹800')
+    expect(normalizeCustomerText('1o00 rs')).toBe('1000 rs')
+    expect(extractPrice('I can pay ₹ 8oo')).toBe(800)
+    expect(extractPrice('my ofer is 1o00')).toBe(1000)
+  })
+
+  it('keeps genuine words and numbers untouched', () => {
+    expect(normalizeCustomerText('price is 800')).toBe('price is 800')
+    expect(normalizeCustomerText('I need 2 units')).toBe('I need 2 units')
+  })
+})
 
 // ── detectWalkout ──
 

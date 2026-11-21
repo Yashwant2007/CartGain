@@ -32,9 +32,8 @@ export function generateBargainCode(): string {
 }
 
 /**
- * A checkout link that APPLIES the discount and drops the buyer straight into
- * their purchase window. `/discount/<code>` applies the code, then `redirect`
- * lands them on the variant's cart (already discounted) → checkout.
+ * A checkout link that drops the buyer into a cart with the negotiated code
+ * already applied: `/cart/<variant>:<qty>?discount=<code>`.
  */
 export function buildBargainCheckoutUrl(opts: {
   domain: string
@@ -44,13 +43,11 @@ export function buildBargainCheckoutUrl(opts: {
 }): string {
   const domain = opts.domain.replace(/^https?:\/\//, '').replace(/\/$/, '')
   const qty = Math.max(1, Math.floor(Number(opts.quantity) || 1))
-  const discountPath = `/discount/${encodeURIComponent(opts.code)}`
   if (opts.variantId) {
     const numericVariant = String(opts.variantId).replace(/^gid:\/\/shopify\/ProductVariant\//, '')
-    const redirect = encodeURIComponent(`/cart/${numericVariant}:${qty}`)
-    return `https://${domain}${discountPath}?redirect=${redirect}`
+    return `https://${domain}/cart/${encodeURIComponent(numericVariant)}:${qty}?discount=${encodeURIComponent(opts.code)}`
   }
-  return `https://${domain}${discountPath}`
+  return `https://${domain}/discount/${encodeURIComponent(opts.code)}`
 }
 
 export function buildBargainClaimUrl(token: string): string {

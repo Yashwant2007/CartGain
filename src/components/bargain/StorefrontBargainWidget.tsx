@@ -146,6 +146,7 @@ export default function StorefrontBargainWidget({
   })
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [discountCode, setDiscountCode] = useState<string | null>(null)
+  const [purchaseUrl, setPurchaseUrl] = useState<string | null>(null)
   const [codeSaved, setCodeSaved] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -569,6 +570,7 @@ export default function StorefrontBargainWidget({
       if (!res.ok) throw new Error(data.message || 'Failed to create discount code')
       if (typeof data.code !== 'string' || !data.code) throw new Error('Shopify did not confirm a discount code')
       setDiscountCode(data.code)
+      setPurchaseUrl(typeof data.purchaseUrl === 'string' && data.purchaseUrl ? data.purchaseUrl : null)
       setCodeSaved(true)
     } catch (err: any) {
       setError(err.message || 'Failed to create discount code')
@@ -882,7 +884,7 @@ export default function StorefrontBargainWidget({
 
           <div className="flex justify-center gap-2 pt-1">
             {codeSaved && discountCode ? (
-              <a href={checkoutUrl} onClick={() => reactAvatar('checkout_started', { checkoutStarted: true })} className={buttonCls + ' no-underline'}>
+              <a href={purchaseUrl || checkoutUrl} onClick={() => reactAvatar('checkout_started', { checkoutStarted: true })} className={buttonCls + ' no-underline'}>
                 {t('goToCheckout')}
               </a>
             ) : (

@@ -1,6 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
 import {
   X, Minimize2, Send, MessageCircle, CheckCircle2, Clock, Tag, Zap,
   ShieldCheck, ArrowRight, Loader2, AlertCircle, RotateCcw,
@@ -8,14 +16,20 @@ import {
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import { parseDraftOffer } from '@/lib/bargain/offers'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
+import ShopkeeperAvatar from '@/components/bargain/ShopkeeperAvatar'
+import V2ShopkeeperAvatar from '@/components/bargain/V2ShopkeeperAvatar'
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
 import {
   resolveShopkeeperAnimation,
   type FireAvatarContext,
   type ShopkeeperAnimation,
 } from '@/lib/bargain/experience/living'
-import { avatarEndedFromSessionStatus, type LivingEvent } from '@/lib/bargain/experience/avatar-state'
+import { avatarEndedFromSessionStatus, type AvatarState, type LivingEvent } from '@/lib/bargain/experience/avatar-state'
 import { resolveShopkeeperPersonality } from '@/lib/bargain/experience/personality'
+import type { GestureName } from '@/lib/bargain/experience/character'
+import type { ExpressionState } from '@/lib/bargain/experience/expressions'
+import type { CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import { isV2AvatarVariant } from '@/lib/bargain/experience/v2-shopkeepers'
 import { trackExperienceEvent } from '@/lib/bargain/experience/analytics'
 import { PERSONALITY_META, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
 import type {
@@ -141,6 +155,73 @@ type Props = {
    * on a collapsed launcher.
    */
   defaultOpen?: boolean
+}
+
+const HEADER_AVATAR_CSS = `
+.cg-header-avatar { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; border: 1px solid #e0e7ff; border-radius: 12px; background: radial-gradient(circle at 50% 35%, #ffffff 0%, #eef2ff 70%, #e0e7ff 100%); }
+.cg-header-avatar .cg-v2 { position: absolute; left: 50%; top: 50%; width: var(--cg-header-size) !important; height: var(--cg-header-size) !important; transform: translate(-50%, -50%) !important; }
+.cg-header-avatar .cg-v2-art { left: 0 !important; top: 0 !important; width: var(--cg-header-size) !important; height: var(--cg-header-size) !important; border-radius: 50% !important; }
+.cg-header-avatar .cg-v2-glow, .cg-header-avatar .cg-v2-shadow { display: none !important; }
+.cg-header-avatar-inner { display: inline-flex; align-items: center; justify-content: center; transform-origin: center; }
+@media (max-width: 480px) { .cg-header-avatar .cg-v2, .cg-header-avatar .cg-v2-art { width: var(--cg-header-size) !important; height: var(--cg-header-size) !important; } }
+`
+
+type HeaderAvatarProps = {
+  avatarVariant: string
+  personality: ShopkeeperPersonality
+  characterStyle: CharacterStyle
+  expression: ExpressionState
+  state: AvatarState
+  gesture: GestureName
+  motionEnabled: boolean
+  essentialMotionOnly: boolean
+  size?: number
+}
+
+function ShopkeeperHeaderAvatar({
+  avatarVariant,
+  personality,
+  characterStyle,
+  expression,
+  state,
+  gesture,
+  motionEnabled,
+  essentialMotionOnly,
+  size = 40,
+}: HeaderAvatarProps) {
+  return (
+    <span
+      className="cg-header-avatar"
+      data-cg-header-avatar=""
+      data-avatar-variant={avatarVariant}
+      data-avatar-expression={expression}
+      style={{ width: size, height: size, ['--cg-header-size' as string]: `${size}px` } as CSSProperties}
+    >
+      <style dangerouslySetInnerHTML={{ __html: HEADER_AVATAR_CSS }} />
+      {isV2AvatarVariant(avatarVariant) ? (
+        <V2ShopkeeperAvatar
+          variant={avatarVariant}
+          expression={expression}
+          state={state}
+          motionEnabled={motionEnabled}
+          essentialMotionOnly={essentialMotionOnly}
+        />
+      ) : (
+        <span className="cg-header-avatar-inner" style={{ transform: `scale(${size / 40})` }}>
+          <ShopkeeperAvatar
+            personality={personality}
+            expression={expression}
+            state={state}
+            gesture={gesture}
+            characterStyle={characterStyle}
+            size="sm"
+            motionEnabled={motionEnabled}
+            essentialMotionOnly={essentialMotionOnly}
+          />
+        </span>
+      )}
+    </span>
+  )
 }
 
 const PERSONA_CHIP: Record<string, { label: string; emoji: string }> = {
@@ -374,6 +455,21 @@ export default function BargainWidget({
 
   const personaChip = persona ? PERSONA_CHIP[persona] : undefined
   const shopkeeperName = PERSONALITY_META.find((p) => p.id === personality)?.name ?? t('shopkeeperOnline')
+  const renderHeaderAvatar = (size: number) => avatarEnabled
+    ? (
+      <ShopkeeperHeaderAvatar
+        avatarVariant={avatarVariant}
+        personality={personality}
+        characterStyle={characterStyle}
+        expression={character.expression}
+        state={character.state}
+        gesture={character.gesture}
+        motionEnabled={experience?.motionEnabled !== false}
+        essentialMotionOnly={essentialMotionOnly}
+        size={size}
+      />
+    )
+    : <ProductThumb image={productCtx.image} title={productCtx.title} size={size} />
   const stageLine = thinkingVisible
     ? t('checking')
     : error
@@ -1443,7 +1539,7 @@ export default function BargainWidget({
             background: 'linear-gradient(180deg, #ffffff, #fafbff)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-              <ProductThumb image={productCtx.image} title={productCtx.title} size={40} />
+              {renderHeaderAvatar(40)}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                   <span style={{ fontWeight: 800, fontSize: 14.5, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -2158,7 +2254,7 @@ export default function BargainWidget({
       {open && minimised && (
         <div role="dialog" aria-label={t('makeOfferSub')} className={isEmbed ? 'cg-embed-mini' : 'cg-panel-mini'}>
           <div className="cg-mini-inner">
-            <ProductThumb image={productCtx.image} title={productCtx.title} size={32} />
+            {renderHeaderAvatar(32)}
             <div className="cg-mini-copy">
               <div>{t('bargainTitle')}</div>
               <div>{productCtx.title ? productCtx.title : t('thisItem')}</div>

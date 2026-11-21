@@ -17,6 +17,7 @@ import {
 import {
   strategyAdjustedCounter,
   reciprocalCounter,
+  quoteBand,
   isAbsurdOffer,
   absurdOfferReply,
   quotedFloor as engineQuotedFloor,
@@ -359,7 +360,7 @@ every customer behavior:
 
 WHEN THEY OPEN LOW (below 50% of listed price):
 They expect to negotiate. This is normal. Don't be offended.
-Counter high but reasonable (60-75% of listed price).
+Counter high but reasonable — nearer the listed price than your best.
 Signal that you're willing to dance: "I appreciate the offer, but
 let's see if we can find something that works for both of us."
 Make them work for it — the more effort they invest, the more
@@ -617,7 +618,7 @@ The negotiation has a LIFECYCLE. Your strategy must evolve:
 
 EARLY PHASE (first 1-2 attempts):
 Build rapport. Make them comfortable.
-Anchor HIGH. Your counter should be 70-85% of listed price.
+Anchor HIGH. Start near the listed end of your safe public range; never open near your best.
 Show interest in their offer but don't commit to anything.
 Ask questions: "What's your budget range?" "What matters most?"
 Use RECIPROCITY early: share a small benefit to create obligation.
@@ -955,8 +956,8 @@ sharp, and always in control. You read the person, not just the price. Every
 message is a deliberate move that still feels like a natural conversation.
 
 CORE PSYCHOLOGY (apply naturally, never robotically):
-- ANCHORING: the first number shapes everything. Counter near the listed price
-  (70-85%); never open near your best.
+- ANCHORING: the first number shapes everything. Counter near the listed end
+  of the safe public range; never open near your best.
 - SHRINKING CONCESSIONS: each concession is SMALLER than the last. The shrinking
   gap is how the customer feels your limit without you ever naming it.
 - RECIPROCITY: never concede without asking for movement back — "I dropped
@@ -1847,7 +1848,7 @@ function normalizeForCompare(s: string): string {
  * just messing around — repeated absurd lowballs, no real number after several
  * turns, idle browsing — must NOT be rewarded with discounts or a revealed floor.
  */
-function classifySeriousness(
+export function classifySeriousness(
   history: { role: 'customer' | 'ai'; content: string; offeredPrice?: number }[],
   customerMessage: string,
   ctx: NegotiationContext,
@@ -2008,9 +2009,9 @@ function buildBehaviorHint(
 ): string {
   const hints: Record<CustomerBehavior, string> = {
     lowball_opener:
-      `CUSTOMER STRATEGY: Lowball opener. They expect to negotiate. Counter HIGH ` +
-      `(60-75% of listed price). Don't panic-match their low anchor. Make them ` +
-      `work toward your price. Use anchoring psychology.`,
+      `CUSTOMER STRATEGY: Lowball opener. They expect to negotiate. Counter HIGH, ` +
+      `nearer the listed price than your best. Don't panic-match their low anchor. ` +
+      `Make them work toward your price. Use anchoring psychology.`,
 
     gradual_approach:
       `CUSTOMER STRATEGY: Making reasonable offers. They're playing fair. ` +
@@ -2972,21 +2973,19 @@ export async function negotiateStep(
     if (counterOffer <= ctx.minPrice) {
       counterOffer = quotedFloor(ctx)
     }
-    // RECIPROCAL PACING: pin to a tight, PROPORTIONAL band around the pacing
-    // counter so concessions are consistent, earned and shrinking. The band
-    // widens with the gap still left to the list, so it can never park near the
-    // sticker on a cheap item; the AI still chooses the exact wording, never the
-    // broad price. Applied on EVERY round (including the last) — the old
-    // final-round escape that forced the safe floor is what made the AI always
-    // reach the floor by the end, teaching customers to hold out.
+    // PROPORTIONAL, SESSION-SPECIFIC PACING BAND: the exact band depends on the
+    // shopper's behaviour and session identity, but both ends stay at/above the
+    // safe quoted floor. Concessions still shrink, stay monotonic and never
+    // expose the true floor; the AI only chooses the exact wording and number.
     {
-      const remaining = ctx.originalPrice - pacingCounter
-      const bandMax = Math.min(
-        ctx.originalPrice - Math.max(0.01, ctx.originalPrice * 0.005),
-        pacingCounter + Math.max(0.5, remaining * 0.35),
+      const band = quoteBand(
+        { ...ctx, seriousness: conversationAnalysis.seriousness } as NegotiationContext,
+        sessionId ?? 'anonymous',
+        validatedOffer,
+        conversationAnalysis.lastAIOffer,
       )
-      counterOffer = Math.max(pacingCounter, counterOffer)
-      counterOffer = Math.min(bandMax, counterOffer)
+      counterOffer = Math.max(band.target, counterOffer)
+      counterOffer = Math.min(band.hold, counterOffer)
     }
 
     // SAFETY: If AI claims "accept" but customer offer < floor, downgrade to counter

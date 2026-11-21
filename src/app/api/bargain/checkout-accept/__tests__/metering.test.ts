@@ -118,6 +118,15 @@ describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
     expect(mintMock.mock.calls[0][0].code).toBe(body.code)
   })
 
+  it('returns a purchase URL that applies the negotiated code to the variant cart', async () => {
+    const res = await POST(makeRequest({ variantId: 'gid://shopify/ProductVariant/777' }))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.purchaseUrl).toBe('https://test/cart/777:1?discount=BARGAIN_ABC')
+    expect(prismaMock.bargainSession.create.mock.calls[0][0].data.purchaseUrl).toBe(body.purchaseUrl)
+  })
+
   it('refuses a pending code and never records an accepted deal', async () => {
     mintMock.mockResolvedValueOnce({ code: 'BARGAIN_PENDING', status: 'pending', verified: false })
     const res = await POST(makeRequest())

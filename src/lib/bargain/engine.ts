@@ -284,6 +284,43 @@ export function reciprocalCounter(
   return Math.round(Math.min(list, Math.max(quoted, meet)) * 100) / 100
 }
 
+export interface QuoteBand {
+  floorSafeMin: number
+  target: number
+  hold: number
+}
+
+export function quoteBand(
+  ctx: NegotiationContext,
+  sessionId: string,
+  offer: number | null | undefined,
+  lastCounter: number | null | undefined,
+): QuoteBand {
+  const list = ctx.originalPrice
+  const safe = quotedFloor(ctx)
+  const pacing = reciprocalCounter(ctx, offer, lastCounter)
+  const base = Math.min(list, Math.max(safe, pacing))
+  const room = Math.max(0, base - safe)
+  const step = Math.min(room * 0.18, list * 0.015)
+  if (step <= 0) return { floorSafeMin: safe, target: base, hold: base }
+
+  const seed = stableHash([
+    sessionId,
+    ctx.persona,
+    ctx.seriousness ?? '',
+    ctx.customerOfferTrend ?? '',
+    (ctx as NegotiationContext & { negotiationStyle?: string }).negotiationStyle ?? '',
+    ctx.attemptsUsed,
+  ].join('|'))
+  const drift = (seed % 1000) / 1000
+  const round = (value: number) => Math.round(value * 100) / 100
+  return {
+    floorSafeMin: safe,
+    target: round(Math.max(safe, base - step * drift)),
+    hold: round(Math.min(list, base + step * (1 - drift))),
+  }
+}
+
 // ── Strategy-aware counter ──
 // Shifts a base counter within [minPrice, originalPrice] according to the
 // deterministically-chosen strategy. CONSERVATIVE keeps the price higher

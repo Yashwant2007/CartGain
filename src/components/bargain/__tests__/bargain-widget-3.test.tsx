@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import BargainWidget from '../BargainWidget'
+import { DEFAULT_BARGAIN_EXPERIENCE } from '@/lib/bargain/experience/types'
 
 const baseProps = {
   storeId: 'test-store',
@@ -102,6 +103,21 @@ beforeEach(() => {
 })
 
 describe('BargainWidget conversation-first layout', () => {
+  it('shows the configured shopkeeper avatar in the chat header', async () => {
+    const { container } = render(
+      <BargainWidget
+        {...baseProps}
+        experience={{ ...DEFAULT_BARGAIN_EXPERIENCE, avatarVariant: 'riley', personality: 'friendly_shopkeeper' }}
+      />,
+    )
+
+    await waitFor(() => expect(screen.getByText('Bargain with us')).toBeTruthy(), { timeout: 3000 })
+    const avatar = container.querySelector('[data-cg-header-avatar][data-avatar-variant="riley"]')
+    expect(avatar).toBeTruthy()
+    expect(avatar?.querySelector('.cg-v2-art')).toBeTruthy()
+    expect(container.querySelector('[data-cg-header-avatar] img')).toBeNull()
+  })
+
   it('sends the WooCommerce platform when starting a session', async () => {
     render(<BargainWidget {...baseProps} platform="woocommerce" shopifyProductId="42" variantId="42" />)
 

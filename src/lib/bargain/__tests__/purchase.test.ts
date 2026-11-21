@@ -66,24 +66,24 @@ beforeEach(() => {
 })
 
 describe('buildBargainCheckoutUrl', () => {
-  it('builds a discount link with a variant cart redirect', () => {
+  it('builds a cart permalink with the code already applied', () => {
     const url = buildBargainCheckoutUrl({
       domain: 'shop.myshopify.com',
       code: 'BARGAIN-AB12CD34',
       variantId: 'gid://shopify/ProductVariant/555',
       quantity: 1,
     })
-    expect(url).toBe('https://shop.myshopify.com/discount/BARGAIN-AB12CD34?redirect=%2Fcart%2F555%3A1')
+    expect(url).toBe('https://shop.myshopify.com/cart/555:1?discount=BARGAIN-AB12CD34')
   })
 
-  it('encodes the redirect and quantity', () => {
+  it('normalises the variant id and quantity', () => {
     const url = buildBargainCheckoutUrl({
       domain: 'shop.myshopify.com',
       code: 'BARGAIN-AB12CD34',
       variantId: '555',
       quantity: 3,
     })
-    expect(url).toBe('https://shop.myshopify.com/discount/BARGAIN-AB12CD34?redirect=%2Fcart%2F555%3A3')
+    expect(url).toBe('https://shop.myshopify.com/cart/555:3?discount=BARGAIN-AB12CD34')
   })
 
   it('falls back to the plain discount link when there is no variant', () => {
