@@ -40,6 +40,7 @@ function purchaseUrlForDeal(opts: {
       domain: opts.store.domain,
       code: opts.code,
       productId: opts.productId,
+      variantId: opts.variantId,
     })
   }
   return buildBargainCheckoutUrl({

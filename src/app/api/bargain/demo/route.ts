@@ -8,6 +8,7 @@ import {
   negotiateStep,
   ruleBasedDecision,
   chatFallback,
+  classifySeriousness,
   computeMinPrice,
   SUPPORTED_LANGUAGES,
   NEGOTIATION_MODES,
@@ -28,7 +29,7 @@ import { assessCustomerClaims } from '@/lib/bargain/claims'
 import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
 import { enginePersonaFor } from '@/lib/bargain/experience/personality'
 import { publishedPersonality } from '@/lib/bargain/experience/config'
-import { extractPrice } from '@/lib/bargain/text'
+import { extractPrice, normalizeCustomerText } from '@/lib/bargain/text'
 import { fetchShopifyProducts } from '@/lib/shopify'
 import {
   searchRecommendations,
@@ -175,6 +176,9 @@ export async function POST(request: NextRequest) {
     if (!message) {
       return NextResponse.json({ error: 'message required' }, { status: 400 })
     }
+    // Same typo-tolerant read as the live storefront: "prize", "offfer" and
+    // "8oo" are understood by the engine while the raw text is kept for audit.
+    const interpretedMessage = normalizeCustomerText(message)
 
     const originalPrice = typeof body.originalPrice === 'number' ? clamp(body.originalPrice, 1, 1_000_000) : 1000
     let minPrice = typeof body.minPrice === 'number' ? clamp(body.minPrice, 1, originalPrice) : originalPrice * 0.75
@@ -204,7 +208,7 @@ export async function POST(request: NextRequest) {
       : 'auto'
     // Auto = speak the customer's language. Detect from their latest message and
     // hand the engine an explicit language so the reply mirror is reliable.
-    const effectiveLanguage = language !== 'auto' ? language : (detectLanguage(message) ?? 'auto')
+    const effectiveLanguage = language !== 'auto' ? language : (detectLanguage(interpretedMessage) ?? 'auto')
 
     const storeName = typeof body.storeName === 'string' ? body.storeName.slice(0, 60) : 'Lumina Beauty'
     const productTitle = typeof body.productTitle === 'string' ? body.productTitle.slice(0, 120) : undefined
@@ -242,7 +246,7 @@ export async function POST(request: NextRequest) {
 
     // Deterministic read on the customer's message. Computed early because it
     // also gates the defensive offer re-derivation below.
-    const intentAnalysis = analyzeIntent(message)
+    const intentAnalysis = analyzeIntent(interpretedMessage)
 
     let offer: number | null = typeof body.offer === 'number' ? body.offer : null
     if (offer != null) {
@@ -254,7 +258,7 @@ export async function POST(request: NextRequest) {
     // bare complaint, and still finds a genuine bid in a mixed message
     // ("500 is too much, I'll give 450" → 450).
     if (intentAnalysis.priceComplaint) {
-      offer = extractPrice(message)
+      offer = extractPrice(interpretedMessage)
     }
 
     // Normalize + bound the replay history
@@ -330,6 +334,9 @@ export async function POST(request: NextRequest) {
       ...(isNegotiationStyle(merchant.config?.negotiationStyle) ? { negotiationStyle: merchant.config.negotiationStyle } : {}),
       abuseStrictness: isAbuseStrictness(merchant.config?.abuseStrictness) ? merchant.config!.abuseStrictness : 'standard',
     }
+    ctx.seriousness = classifySeriousness(history, interpretedMessage, ctx, 0)
+    ctx.lastCounter = [...history].reverse()
+      .find((m) => m.role === 'ai' && typeof m.offeredPrice === 'number')?.offeredPrice ?? null
 
     // Real catalog facts for item demos: when the merchant's store + a real
     // Shopify product id are available, quote verified facts (description,
@@ -440,12 +447,12 @@ export async function POST(request: NextRequest) {
     let turnSource: string | undefined
     let result: NegotiationResult
     try {
-      result = await negotiateStep(ctx2, history, message, offer ?? undefined, `demo_${session.user.id}`)
+      result = await negotiateStep(ctx2, history, interpretedMessage, offer ?? undefined, `demo_${session.user.id}`)
       turnSource = typeof (result as any)?.metadata?.aiSource === 'string' ? (result as any).metadata.aiSource : undefined
     } catch {
       result = offer != null
         ? ruleBasedDecision(offer, ctx2)
-        : { reply: chatFallback(message, ctx2, history.length), decision: 'chat', tactic: 'demo_fallback', sentiment: 'neutral' }
+        : { reply: chatFallback(interpretedMessage, ctx2, history.length), decision: 'chat', tactic: 'demo_fallback', sentiment: 'neutral' }
       turnSource = typeof (result as any)?.metadata?.aiSource === 'string' ? (result as any).metadata.aiSource : undefined
     } finally {
       bargainRequestMetrics.record(

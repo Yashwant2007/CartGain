@@ -419,11 +419,14 @@ export function buildWooCommerceCheckoutUrl(opts: {
   domain: string
   code: string
   productId?: string | null
+  variantId?: string | null
 }): string {
   const domain = text(opts.domain)?.replace(/^https?:\/\//, '').replace(/\/$/, '') ?? ''
   const url = new URL(`https://${domain}/cart/`)
   url.searchParams.set('coupon_code', opts.code)
-  if (opts.productId) url.searchParams.set('product_id', String(opts.productId))
+  const rawId = opts.variantId || opts.productId
+  const productId = rawId ? String(rawId).replace(/^woo-/, '').match(/\d+/)?.[0] : null
+  if (productId) url.searchParams.set('product_id', productId)
   return url.toString()
 }
 
@@ -451,7 +454,11 @@ export async function createOrReuseWooCommerceCoupon(opts: {
     return {
       code: result.code,
       status: result.status === 'existing' ? 'reused' : 'created',
-      purchaseUrl: buildWooCommerceCheckoutUrl({ domain: opts.store.domain, code: result.code }),
+      purchaseUrl: buildWooCommerceCheckoutUrl({
+        domain: opts.store.domain,
+        code: result.code,
+        productId: opts.productIds?.[0] ?? null,
+      }),
     }
   } catch {
     return null

@@ -3,7 +3,7 @@
  * Plugin Name: CartGain for WooCommerce
  * Plugin URI: https://cart-gain.com
  * Description: Cart tracking, product sync, order recovery events, and the CartGain bargain widget for WooCommerce.
- * Version: 1.0.5
+ * Version: 1.0.6
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: CartGain
@@ -19,7 +19,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('CGW_VERSION', '1.0.5');
+define('CGW_VERSION', '1.0.6');
 define('CGW_PLUGIN_FILE', __FILE__);
 define('CGW_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CGW_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -38,6 +38,7 @@ require_once CGW_PLUGIN_DIR . 'includes/class-cartgain-wc-tracking.php';
 require_once CGW_PLUGIN_DIR . 'includes/class-cartgain-wc-products.php';
 require_once CGW_PLUGIN_DIR . 'includes/class-cartgain-wc-orders.php';
 require_once CGW_PLUGIN_DIR . 'includes/class-cartgain-wc-bargain.php';
+require_once CGW_PLUGIN_DIR . 'includes/class-cartgain-wc-checkout-links.php';
 require_once CGW_PLUGIN_DIR . 'includes/class-cartgain-wc-rest.php';
 require_once CGW_PLUGIN_DIR . 'includes/class-cartgain-wc-cli.php';
 require_once CGW_PLUGIN_DIR . 'admin/class-cartgain-wc-admin.php';
@@ -100,6 +101,7 @@ final class CartGain_WC_Plugin
     public $products;
     public $orders;
     public $bargain;
+    public $checkout_links;
     public $rest;
     public $cli;
     public $admin;
@@ -136,6 +138,7 @@ final class CartGain_WC_Plugin
             $this->products = new CartGain_WC_Products($this->credentials, $this->queue, $this->scheduler);
             $this->orders = new CartGain_WC_Orders($this->credentials, $this->queue, $this->tracking);
             $this->bargain = new CartGain_WC_Bargain($this->credentials);
+            $this->checkout_links = new CartGain_WC_Checkout_Links();
             $this->cli = new CartGain_WC_CLI($this->credentials, $this->queue, $this->products);
         }
 

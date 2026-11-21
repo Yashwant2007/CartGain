@@ -71,9 +71,13 @@ describe('WooCommerce bargain adapter helpers', () => {
     expect(platformProductPrice(row)).toBe(18.5)
   })
 
-  it('builds a cart checkout URL with the coupon applied', () => {
+  it('builds a cart checkout URL with the coupon and negotiated product applied', () => {
     expect(buildWooCommerceCheckoutUrl({ domain: 'https://shop.example.com/', code: 'GAIN123' }))
       .toBe('https://shop.example.com/cart/?coupon_code=GAIN123')
+    expect(buildWooCommerceCheckoutUrl({ domain: 'https://shop.example.com/', code: 'GAIN123', productId: 'woo-42' }))
+      .toBe('https://shop.example.com/cart/?coupon_code=GAIN123&product_id=42')
+    expect(buildWooCommerceCheckoutUrl({ domain: 'https://shop.example.com/', code: 'GAIN123', productId: '42', variantId: '77' }))
+      .toBe('https://shop.example.com/cart/?coupon_code=GAIN123&product_id=77')
   })
 
   it('builds WooCommerce product URLs with the shop permalink shape', () => {

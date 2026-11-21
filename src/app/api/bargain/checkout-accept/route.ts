@@ -393,7 +393,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (platform === 'woocommerce' && !purchaseUrl) {
-      purchaseUrl = buildWooCommerceCheckoutUrl({ domain: store.domain, code: result.code })
+      purchaseUrl = buildWooCommerceCheckoutUrl({
+        domain: store.domain,
+        code: result.code,
+        productId: String(productId),
+        variantId: variantId ?? null,
+      })
     }
 
     // ── RECORD THE DEAL ──
