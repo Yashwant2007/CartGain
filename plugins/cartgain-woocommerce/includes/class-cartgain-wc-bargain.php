@@ -8,6 +8,7 @@ final class CartGain_WC_Bargain
 {
     private $credentials;
     private $localized = false;
+    private $rendered = false;
 
     public function __construct($credentials)
     {
@@ -15,12 +16,21 @@ final class CartGain_WC_Bargain
         add_shortcode('cartgain_bargain', array($this, 'render'));
         if (cartgain_wc_to_bool(cartgain_wc_setting('bargain_auto_product'))) {
             add_action('woocommerce_single_product_summary', array($this, 'auto_render'), 40);
+            add_action('wp_footer', array($this, 'footer_render'), 30);
         }
     }
 
     public function auto_render()
     {
         if (!function_exists('is_product') || !is_product()) {
+            return;
+        }
+        echo $this->render(array());
+    }
+
+    public function footer_render()
+    {
+        if ($this->rendered || !function_exists('is_product') || !is_product()) {
             return;
         }
         echo $this->render(array());
@@ -75,6 +85,7 @@ final class CartGain_WC_Bargain
         $html = '<div class="cartgain-bargain" data-cartgain-bargain="1" data-cartgain-product="' . esc_attr((string) (int) $product->get_id()) . '" data-cartgain-variation="' . esc_attr((string) $variation_id) . '">';
         $html .= '<iframe class="cartgain-bargain__frame" title="' . esc_attr__('CartGain bargain', 'cartgain-woocommerce') . '" src="' . esc_url($iframe_url) . '" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="forms" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>';
         $html .= '</div>';
+        $this->rendered = true;
         return $html;
     }
 
