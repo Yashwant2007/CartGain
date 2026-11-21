@@ -227,7 +227,7 @@ export function BargainExperienceStudio() {
                 data-avatar-option={option.id}
                 data-avatar-selected={selected ? 'true' : 'false'}
                 onClick={() => setExp({ ...exp, avatarVariant: option.id })}
-                className={`relative overflow-hidden rounded-xl border p-2 text-left transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-cyan-400/60 ${
+                className={`relative flex flex-col items-center overflow-hidden rounded-xl border p-2 text-center transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-cyan-400/60 ${
                   selected
                     ? 'border-cyan-400/70 bg-cyan-950/30 shadow-[0_0_0_1px_rgba(34,211,238,.22)]'
                     : 'border-blue-800/40 bg-slate-950/40 hover:-translate-y-0.5 hover:border-cyan-500/40 hover:bg-slate-900/70'
@@ -235,17 +235,17 @@ export function BargainExperienceStudio() {
               >
                 <span
                   aria-hidden="true"
-                  className="flex h-14 items-center justify-center rounded-lg border border-white/5 bg-slate-900/70"
+                  className="mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-slate-950/70 shadow-inner sm:h-[72px] sm:w-[72px]"
                   style={option.sheet ? { backgroundImage: `url(${option.sheet})`, backgroundPosition: option.position, backgroundSize: '200% 200%' } : undefined}
                 >
                   {option.sheet
                     ? null
                     : option.id === 'robot'
-                      ? <Bot className="h-6 w-6" style={{ color: option.accent }} />
-                      : <span className="text-lg font-semibold" style={{ color: option.accent }}>{option.initials}</span>}
+                      ? <Bot className="h-7 w-7" style={{ color: option.accent }} />
+                      : <span className="text-xl font-semibold" style={{ color: option.accent }}>{option.initials}</span>}
                 </span>
-                <span className="mt-2 block truncate text-xs font-medium text-white">{option.name}</span>
-                <span className="block truncate text-[10px] text-blue-300/60">{option.role}</span>
+                <span className="mt-2 block w-full truncate text-xs font-medium text-white">{option.name}</span>
+                <span className="block w-full truncate text-[10px] text-blue-300/60">{option.role}</span>
                 {selected && <CheckCircle2 aria-hidden="true" className="absolute right-2 top-2 h-3.5 w-3.5 text-cyan-300" />}
               </button>
             )
