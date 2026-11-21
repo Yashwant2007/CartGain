@@ -170,9 +170,9 @@ describe('retentionOffer', () => {
     const strict = retentionOffer(baseCtx({ persona: 'strict_negotiator' }), 950)
     const playful = retentionOffer(baseCtx({ persona: 'playful_friend' }), 950)
 
-    expect(friendly.reply.toLowerCase()).toContain('friend')
+    expect(friendly.reply.toLowerCase()).toMatch(/one honest step|no pressure/i)
     expect(strict.reply).toMatch(/stretch|your call/i)
-    expect(playful.reply.toLowerCase()).toContain('wait')
+    expect(playful.reply.toLowerCase()).toContain('hold on')
     // Strict negotiator: no emojis, no "friend"
     expect(strict.reply).not.toContain('friend')
   })

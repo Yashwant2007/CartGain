@@ -4,6 +4,7 @@ import {
   dealFollowupText,
   dealFollowupSubject,
   dealFollowupHtml,
+  expiryIsNear,
   DEFAULT_DEAL_FOLLOWUP_DELAYS_MINUTES,
 } from '../deal-followup'
 
@@ -36,6 +37,7 @@ describe('dueStage', () => {
 })
 
 describe('copy', () => {
+  const now = new Date('2026-01-01T00:00:00Z')
   const ctx = {
     name: 'Priya',
     productTitle: 'Serum',
@@ -43,32 +45,44 @@ describe('copy', () => {
     currencySymbol: '₹',
     price: 950,
     url: 'https://cart-gain.com/r/abc',
-    expiresAt: new Date('2026-01-02T00:00:00Z'),
+    expiresAt: new Date(now.getTime() + 2 * 60 * 60 * 1000),
   }
   it('greets by name and includes the price + link', () => {
-    const t = dealFollowupText(0, ctx)
+    const t = dealFollowupText(0, ctx, now)
     expect(t).toContain('Priya')
     expect(t).toContain('₹950')
     expect(t).toContain('https://cart-gain.com/r/abc')
   })
   it('falls back to a neutral greeting without a name', () => {
-    expect(dealFollowupText(0, { ...ctx, name: null })).toContain('Hey there!')
+    expect(dealFollowupText(0, { ...ctx, name: null }, now)).toContain('Hey there!')
   })
-  it('never invents scarcity — final stage mentions expiry only when known', () => {
-    expect(dealFollowupText(2, ctx)).toMatch(/expire/i)
-    expect(dealFollowupText(2, { ...ctx, expiresAt: null })).not.toMatch(/until/i)
+  it('mentions expiry only when a real expiry is near', () => {
+    expect(expiryIsNear(ctx, now)).toBe(true)
+    expect(dealFollowupText(2, ctx, now)).toMatch(/expire/i)
+    expect(dealFollowupText(2, { ...ctx, expiresAt: null }, now)).not.toMatch(/expire|last call|hurry/i)
+  })
+  it('never uses last-call copy when expiry is unknown or far away', () => {
+    for (const next of [
+      { ...ctx, expiresAt: null },
+      { ...ctx, expiresAt: new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000) },
+    ]) {
+      expect(dealFollowupText(2, next, now)).not.toMatch(/last call|about to expire|hurry|buy now/i)
+      expect(dealFollowupSubject(2, next, now)).not.toMatch(/last|expire/i)
+      expect(dealFollowupHtml(2, next, now)).not.toMatch(/last call|expire soon/i)
+    }
   })
   it('subjects are honest and stage-specific', () => {
-    expect(dealFollowupSubject(0, ctx)).toMatch(/waiting/i)
-    expect(dealFollowupSubject(2, ctx)).toMatch(/expire|last/i)
+    expect(dealFollowupSubject(0, ctx, now)).toMatch(/waiting/i)
+    expect(dealFollowupSubject(1, ctx, now)).toMatch(/thinking/i)
+    expect(dealFollowupSubject(2, ctx, now)).toMatch(/expire/i)
   })
   it('html escapes the store name and keeps the link', () => {
-    const html = dealFollowupHtml(0, { ...ctx, storeName: '<b>x</b>' })
+    const html = dealFollowupHtml(0, { ...ctx, storeName: '<b>x</b>' }, now)
     expect(html).toContain('&lt;b&gt;x&lt;/b&gt;')
     expect(html).toContain('https://cart-gain.com/r/abc')
   })
   it('html omits the CTA for an unsafe url', () => {
-    const html = dealFollowupHtml(0, { ...ctx, url: 'javascript:alert(1)' })
+    const html = dealFollowupHtml(0, { ...ctx, url: 'javascript:alert(1)' }, now)
     expect(html).not.toContain('javascript:')
   })
 })

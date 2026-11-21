@@ -149,6 +149,7 @@ export function deriveConversationState(input: ConversationStateInput): Conversa
 
   // Walkout is a hesitation/retention moment, never an immediate termination.
   if (input.walkoutTriggered || input.intent === 'WALKOUT') return 'CUSTOMER_HESITATION'
+  if (input.intent === 'PURCHASE_HESITATION') return 'CUSTOMER_HESITATION'
   if (input.intent === 'PURCHASE_READY') return 'PURCHASE_READY'
 
   if (input.intent === 'PRODUCT_DISCOVERY') return 'PRODUCT_DISCOVERY'
@@ -197,7 +198,7 @@ export function conversationStateGuidance(state: ConversationState): string {
     case 'COMPLETED':
       return 'The purchase is confirmed. Thank them warmly and briefly. Do not re-offer or reopen the deal.'
     case 'CUSTOMER_HESITATION':
-      return 'The shopper is hesitating or hinting they may leave. De-escalate, offer ONE genuine final step or a graceful exit. Never chase desperately or fabricate urgency.'
+      return 'The shopper is hesitating or hinting they may leave. NAME the hesitation in one line, confirm it, then ask ONE risk question or reduce a verified risk (fit, returns, delivery, value). Do NOT discount before the real concern is clear. Offer ONE genuine final step or a graceful exit. Never chase desperately or fabricate urgency.'
     case 'REJECTED':
       return 'The negotiation ended without a deal. Stay gracious; leave the door open without pushing. Do not invent a new offer.'
     case 'EXPIRED':

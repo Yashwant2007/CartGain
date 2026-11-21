@@ -67,8 +67,14 @@ function expiryLine(ctx: DealFollowupContext): string {
   }
 }
 
+export function expiryIsNear(ctx: DealFollowupContext, now: Date = new Date()): boolean {
+  if (!ctx.expiresAt) return false
+  const remaining = ctx.expiresAt.getTime() - now.getTime()
+  return remaining > 0 && remaining <= 24 * 60 * 60 * 1000
+}
+
 /** Short, honest reminder copy. No fake scarcity, no invented claims. */
-export function dealFollowupText(stage: number, ctx: DealFollowupContext): string {
+export function dealFollowupText(stage: number, ctx: DealFollowupContext, now: Date = new Date()): string {
   const deal = priceLine(ctx)
   const expiry = expiryLine(ctx)
   if (stage <= 0) {
@@ -77,14 +83,18 @@ export function dealFollowupText(stage: number, ctx: DealFollowupContext): strin
   if (stage === 1) {
     return `Still thinking it over? No pressure at all. ${deal ? `${deal.charAt(0).toUpperCase()}${deal.slice(1)} is` : 'Your negotiated offer is'} still available${expiry}.\n\n${ctx.url}`
   }
-  return `A quick heads-up: ${deal || 'your negotiated price'} is about to expire${expiry}. If you're still interested, you can finish your order here:\n\n${ctx.url}`
+  if (expiryIsNear(ctx, now)) {
+    return `A quick heads-up: ${deal || 'your negotiated price'} is about to expire${expiry}. If you're still interested, you can finish your order here:\n\n${ctx.url}`
+  }
+  return `${greeting(ctx)} ${deal ? `${deal.charAt(0).toUpperCase()}${deal.slice(1)} is` : 'Your negotiated price is'} still saved for you${expiry}. Finish checkout whenever you're ready:\n\n${ctx.url}`
 }
 
-export function dealFollowupSubject(stage: number, ctx: DealFollowupContext): string {
-  const store = ctx.storeName?.trim() || 'your store'
+export function dealFollowupSubject(stage: number, ctx: DealFollowupContext, now: Date = new Date()): string {
   if (stage <= 0) return `Your special deal is still waiting 🎉`
   if (stage === 1) return `Still thinking about it? Your offer is saved`
-  return `Last call: your negotiated price is about to expire`
+  return expiryIsNear(ctx, now)
+    ? `Your negotiated price expires soon`
+    : `Your negotiated price is still saved`
 }
 
 function escapeHtml(value: unknown): string {
@@ -106,12 +116,18 @@ function safeHttpUrl(value: unknown): string | null {
   }
 }
 
-export function dealFollowupHtml(stage: number, ctx: DealFollowupContext): string {
+export function dealFollowupHtml(stage: number, ctx: DealFollowupContext, now: Date = new Date()): string {
   const store = ctx.storeName?.trim() || 'Your store'
   const deal = priceLine(ctx)
   const url = safeHttpUrl(ctx.url)
   const cta = stage <= 0 ? 'Complete my order' : stage === 1 ? 'Return to my offer' : 'Finish my order'
-  const heading = stage <= 0 ? 'Your special deal is still waiting' : stage === 1 ? 'Still thinking about it?' : 'Last call on your special price'
+  const heading = stage <= 0
+    ? 'Your special deal is still waiting'
+    : stage === 1
+      ? 'Still thinking about it?'
+      : expiryIsNear(ctx, now)
+        ? 'Your negotiated price expires soon'
+        : 'Your offer is still saved'
   const body = deal ? `We saved ${deal} for you.` : 'We saved your negotiated price for you.'
   return `<!DOCTYPE html><html><body style="margin:0;background:#f6f7f9;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111">
   <div style="max-width:520px;margin:0 auto;padding:28px 20px">

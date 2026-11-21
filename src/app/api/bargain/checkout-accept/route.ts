@@ -14,6 +14,7 @@ import { redisIncr, redisExpire } from '@/lib/redis'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { normalizeShopDomain, shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
 import { loadQuoteByToken, revalidateQuote, markQuoteCheckoutPending } from '@/lib/bargain/quote'
+import { checkoutAcceptedMessage } from '@/lib/bargain/post-deal'
 import {
   bargainPlatformFor,
   buildWooCommerceCheckoutUrl,
@@ -450,6 +451,7 @@ export async function POST(request: NextRequest) {
       code: result.code,
       status: result.status,
       platform,
+      message: checkoutAcceptedMessage({ code: result.code }),
       ...(purchaseUrl ? { purchaseUrl } : {}),
     }, { headers })
   } catch (error) {

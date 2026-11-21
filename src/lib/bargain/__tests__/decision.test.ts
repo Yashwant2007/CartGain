@@ -141,9 +141,9 @@ describe('retentionOffer', () => {
   })
 
   it('adapts tone per persona', () => {
-    expect(retentionOffer(baseCtx({ persona: 'friendly_shopkeeper' }), 90).reply).toContain('friend')
+    expect(retentionOffer(baseCtx({ persona: 'friendly_shopkeeper' }), 90).reply).toContain('no pressure')
     expect(retentionOffer(baseCtx({ persona: 'strict_negotiator' }), 90).reply).toContain('stretch')
-    expect(retentionOffer(baseCtx({ persona: 'playful_friend' }), 90).reply).toContain('WAIT')
+    expect(retentionOffer(baseCtx({ persona: 'playful_friend' }), 90).reply).toContain('Hold on')
   })
 })
 
@@ -628,7 +628,7 @@ describe('Edge Cases - Persona Consistency', () => {
 
   it('friendly persona uses warm language in retention', () => {
     const result = retentionOffer(baseCtx({ persona: 'friendly_shopkeeper' }), 90)
-    expect(result.reply.toLowerCase()).toMatch(/friend|please|stay/)
+    expect(result.reply.toLowerCase()).toMatch(/one honest step|no pressure/)
   })
 
   it('strict persona uses professional language in retention', () => {
@@ -638,7 +638,7 @@ describe('Edge Cases - Persona Consistency', () => {
 
   it('playful persona uses fun language in retention', () => {
     const result = retentionOffer(baseCtx({ persona: 'playful_friend' }), 90)
-    expect(result.reply).toMatch(/WAIT|FINAL| Deal/)
+    expect(result.reply).toMatch(/Hold on|hard bargain|lock it/i)
   })
 
   it('opening message matches persona tone', () => {

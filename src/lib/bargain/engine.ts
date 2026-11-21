@@ -540,10 +540,10 @@ export function retentionOffer(ctx: NegotiationContext, lastCounter: number | nu
   if (persona === 'strict_negotiator') {
     reply = `One moment. For this order I can stretch to ${currencySymbol}${fmt(price)}. Your call.`
   } else if (persona === 'playful_friend') {
-    reply = `WAIT WAIT WAIT! Okay, you drive a hard bargain! For you, today — ${currencySymbol}${fmt(price)}. Deal?`
+    reply = `Hold on — you drive a hard bargain! I can do ${currencySymbol}${fmt(price)}. Shall I lock it for you?`
   } else {
-    reply = `Wait, friend — before you go! For you, I can do ${currencySymbol}${fmt(price)} today. Please stay — I really want this to work for you.`
+    reply = `Before you go — one honest step from me: ${currencySymbol}${fmt(price)}. If that works, I'll lock it; if not, no pressure.`
   }
 
-  return { reply, decision: 'counter', counterOffer: price, tactic: 'walkout_retention', sentiment: 'urgent' }
+  return { reply, decision: 'counter', counterOffer: price, tactic: 'walkout_retention', sentiment: 'sympathetic' }
 }

@@ -34,6 +34,8 @@ import { analyzeIntent, shopperIntentToPromptBlock, type IntentAnalysis } from '
 import { deriveConversationState, conversationStateGuidance } from '@/lib/bargain/conversation-state'
 import { validateReplyClaimAdherence } from '@/lib/bargain/claims'
 import { strengthenComparisonPitch } from '@/lib/bargain/sales-pitch'
+import { COMPACT_SALESPERSON_PLAYBOOK, SALESPERSON_PLAYBOOK } from '@/lib/bargain/sales-playbook'
+import { scrubPressureLanguage } from '@/lib/bargain/reply-safety'
 import type { ClaimAssessment } from '@/lib/bargain/claims'
 import {
   negotiationStyleGuidance,
@@ -2170,7 +2172,9 @@ export function buildSystemPrompt(
 
   // Replace [[CUR]] placeholder with actual currency symbol in mastery and persona
   const CUR = currencySymbol
-  const mastery = (compact ? COMPACT_MASTERY : NEGOTIATION_MASTERY).replace(/\[\[CUR\]\]/g, CUR)
+  const baseMastery = (compact ? COMPACT_MASTERY : NEGOTIATION_MASTERY).replace(/\[\[CUR\]\]/g, CUR)
+  const playbook = (compact ? COMPACT_SALESPERSON_PLAYBOOK : SALESPERSON_PLAYBOOK).replace(/\[\[CUR\]\]/g, CUR)
+  const mastery = `${baseMastery}\n${playbook}`
   const persona = personaPrompt.replace(/\[\[CUR\]\]/g, CUR)
 
   // Build behavioral strategy hint
@@ -2581,14 +2585,23 @@ RESPONSE FORMAT — STRICT JSON ONLY
 }
 
 Valid tactics: anchoring, reciprocity, loss_aversion, split_difference,
-bulk_incentive, loyalty_reward, quality_reframe, scarcity, urgency,
-meet_partway, final_offer, retention, humor_deflection,
-rapport_build, value_frame, commitment_escalation, my_manager,
-accept, chat, redirect, de_escalate
+bulk_incentive, loyalty_reward, quality_reframe, diagnosis, value_frame,
+risk_reversal, face_saving, verified_close, meet_partway, final_offer,
+retention, humor_deflection, rapport_build, commitment_escalation,
+my_manager, accept, chat, redirect, de_escalate
 
 Valid sentiments: firm, warm, playful, urgent, sympathetic, confident,
 neutral, dramatic, professional, friendly, final`
 }
+
+export const VALID_BARGAIN_TACTICS: ReadonlySet<string> = new Set([
+  'anchoring', 'reciprocity', 'loss_aversion', 'split_difference',
+  'bulk_incentive', 'loyalty_reward', 'quality_reframe', 'diagnosis',
+  'value_frame', 'risk_reversal', 'face_saving', 'verified_close',
+  'meet_partway', 'final_offer', 'retention', 'humor_deflection',
+  'rapport_build', 'commitment_escalation', 'my_manager', 'accept',
+  'chat', 'redirect', 'de_escalate', 'conversational', 'parse_fallback',
+])
 
 // ────────────────────────────────────────────────────────────
 // THE NEGOTIATION ENGINE — AI FIRST, SAFETY NET SECOND
@@ -2669,6 +2682,12 @@ const LEAK_SAFE_REPLY: Record<Persona, string> = {
   friendly_shopkeeper: "Ha, you drive a hard bargain! I only quote prices I can actually honor — so what number works for you?",
   strict_negotiator: "I don't discuss my own numbers. Give me a figure and I'll tell you where I land.",
   playful_friend: "Ooh, trying to peek behind the counter! The only number that matters is yours — hit me.",
+}
+
+const PRESSURE_SAFE_REPLY: Record<Persona, string> = {
+  friendly_shopkeeper: "No rush at all — here's the honest price I can honor. Want me to lock it?",
+  strict_negotiator: "Take your time. This is the price I can honor; tell me if you'll take it.",
+  playful_friend: "No rush — the number's real. Shall I lock it for you?",
 }
 
 function bestPriceReply(counter: number, ctx: NegotiationContext): string {
@@ -3088,6 +3107,11 @@ export async function negotiateStep(
       reply = strengthenComparisonPitch(reply, ctx)
     }
 
+    const pressureGuard = scrubPressureLanguage(reply, PRESSURE_SAFE_REPLY[ctx.persona] ?? PRESSURE_SAFE_REPLY.friendly_shopkeeper)
+    reply = pressureGuard.reply
+    const rawTactic = typeof parsed.tactic === 'string' ? parsed.tactic : 'conversational'
+    const safeTactic = VALID_BARGAIN_TACTICS.has(rawTactic) ? rawTactic : 'conversational'
+
     // A 'chat' decision is the shopkeeper conversing (product questions, small
     // talk) — no price belongs on it. Attaching the fallback counter here is
     // what painted "counter: ₹800" under replies and polluted the Accept bar.
@@ -3097,7 +3121,7 @@ export async function negotiateStep(
       reply,
       decision: finalDecision,
       counterOffer: finalDecision === 'chat' ? undefined : counterOffer,
-      tactic: typeof parsed.tactic === 'string' ? parsed.tactic : 'conversational',
+      tactic: safeTactic,
       sentiment: typeof parsed.sentiment === 'string' ? parsed.sentiment : 'neutral',
       metadata: {
         model,
@@ -3118,6 +3142,7 @@ export async function negotiateStep(
         leakGuarded: leaked || undefined,
         leakReason: leaked ? (floorLeaked ? 'floor_reveal' : percentLeaked ? 'percent_floor_reveal' : metaLeaked ? 'meta_floor_talk' : 'system_prompt_reveal') : undefined,
         claimAdherenceGuarded: claimAdherenceGuarded || undefined,
+        pressureGuarded: pressureGuard.guarded || undefined,
       },
     }
   } catch (err: any) {

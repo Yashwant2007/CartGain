@@ -237,6 +237,22 @@ describe('reply claim adherence', () => {
     expect(guarded).not.toContain('Amazon')
   })
 
+  test('rewrites a reply that repeats an unverified competitor price without confirming it', () => {
+    const message = 'Amazon has it for ₹799'
+    const claimAssessment = assessCustomerClaims(message, { product: product() })
+    const reply = 'Amazon is ₹799? I can match that.'
+    const guarded = validateReplyClaimAdherence(reply, claimAssessment, message)
+    expect(guarded).toMatch(/can't verify prices elsewhere/i)
+    expect(guarded).not.toContain('Amazon')
+  })
+
+  test('keeps an explicit cannot-verify competitor reply', () => {
+    const message = 'Amazon has it for ₹799'
+    const claimAssessment = assessCustomerClaims(message, { product: product() })
+    const reply = "I can't verify prices elsewhere, but I can work with you right here."
+    expect(validateReplyClaimAdherence(reply, claimAssessment, message)).toBe(reply)
+  })
+
   test('does not rewrite an explicit correction of a false claim', () => {
     const message = 'This is medical grade'
     const p = normalizeProduct(

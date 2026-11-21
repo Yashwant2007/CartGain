@@ -39,6 +39,12 @@ describe('conversation state machine (Phase 9)', () => {
     expect(deriveConversationState({ attemptsUsed: 1, intent: 'WALKOUT' })).toBe('CUSTOMER_HESITATION')
   })
 
+  it('routes purchase hesitation to a diagnosis-first hesitation state', () => {
+    expect(deriveConversationState({ attemptsUsed: 1, intent: 'PURCHASE_HESITATION' })).toBe('CUSTOMER_HESITATION')
+    expect(conversationStateGuidance('CUSTOMER_HESITATION')).toMatch(/NAME the hesitation/i)
+    expect(conversationStateGuidance('CUSTOMER_HESITATION')).toMatch(/Do NOT discount/i)
+  })
+
   it('opens in GREETING before any attempt', () => {
     expect(deriveConversationState({ attemptsUsed: 0 })).toBe('GREETING')
   })

@@ -16,6 +16,7 @@ import { recordLearningAcceptance } from '@/lib/bargain/learning/outcomes'
 import { createQuote, acceptQuote, findQuoteBySessionId } from '@/lib/bargain/quote'
 import { detectPaymentIntent } from '@/lib/bargain/payment'
 import { formatMoney } from '@/lib/bargain/i18n'
+import { dealAcceptedMessage } from '@/lib/bargain/post-deal'
 import {
   bargainPlatformFor,
   buildWooCommerceCheckoutUrl,
@@ -539,10 +540,11 @@ export async function POST(request: NextRequest) {
       purchaseUrl,
       currency: bargainSession.store.currency,
       expiresAt: bargainSession.expiredAt.toISOString(),
-      message:
-        shopifyCode.status === 'created'
-          ? `You got it for ${formatMoney(executable.finalPrice, bargainSession.store.currency)}! Use code: ${shopifyCode.code}`
-          : `Deal locked at ${formatMoney(executable.finalPrice, bargainSession.store.currency)}! Your code: ${shopifyCode.code} — apply at checkout.`,
+      message: dealAcceptedMessage({
+        price: formatMoney(executable.finalPrice, bargainSession.store.currency),
+        code: shopifyCode.code,
+        verified: shopifyCode.status === 'created',
+      }),
     })
   } catch (error) {
     const validationResponse = handleValidationError(error)
