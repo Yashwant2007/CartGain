@@ -9,7 +9,7 @@
 
 ## Install
 
-1. Build `cartgain-woocommerce.zip` from `plugins/cartgain-woocommerce/`.
+1. Use the committed `cartgain-woocommerce.zip` from the repository root, or rebuild it from `plugins/cartgain-woocommerce/` with the same plugin version or higher.
 2. In WordPress: Plugins → Add New → Upload Plugin → choose the ZIP → Install Now → Activate.
 3. Open WooCommerce → CartGain (or CartGain in the admin menu).
 4. In CartGain dashboard → Integrations, start a WooCommerce connection and copy the one-time connection code.
@@ -20,6 +20,7 @@
 
 - Enable cart tracking, checkout tracking, order tracking, and product sync.
 - Enable explicit email/WhatsApp consent fields and enter the shared WhatsApp display number only if consent is collected.
+- Saving one plugin settings tab preserves values saved on the other tabs.
 - Use Action Scheduler when available for reliable queue processing; WP-Cron is the fallback.
 
 ## Verification

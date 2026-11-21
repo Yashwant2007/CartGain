@@ -78,15 +78,16 @@ final class CartGain_WC_Settings
     public function sanitize($input)
     {
         $defaults = cartgain_wc_default_settings();
-        $output = array();
+        $output = cartgain_wc_get_settings();
         foreach ($defaults as $key => $default) {
-            if ($key === 'inactivity_minutes') {
-                $minutes = isset($input[$key]) ? (int) $input[$key] : (int) $default;
-                $output[$key] = max(15, min(10080, $minutes));
+            if (!array_key_exists($key, $input)) {
                 continue;
             }
-            $value = isset($input[$key]) ? $input[$key] : 'no';
-            $output[$key] = cartgain_wc_to_bool($value) ? 'yes' : 'no';
+            if ($key === 'inactivity_minutes') {
+                $output[$key] = max(15, min(10080, (int) $input[$key]));
+                continue;
+            }
+            $output[$key] = cartgain_wc_to_bool($input[$key]) ? 'yes' : 'no';
         }
         return $output;
     }

@@ -24,7 +24,7 @@ with ZipFile(out, 'w', ZIP_DEFLATED) as z:
 PY
 ```
 
-The ZIP root must contain a single `cartgain-woocommerce/` directory.
+The ZIP root must contain a single `cartgain-woocommerce/` directory. Bump the plugin version in `cartgain-woocommerce.php` whenever the ZIP changes so WordPress offers the update.
 
 ## Post-deploy checks
 
