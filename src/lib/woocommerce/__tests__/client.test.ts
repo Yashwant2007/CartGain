@@ -66,4 +66,26 @@ describe('WooCommerce client API namespace negotiation', () => {
     expect(urls).toContain('https://shop.example.com/wp-json/wc/v2/system_status')
     expect(data).toMatchObject({ site: { title: 'V2 Store' } })
   })
+
+  it('includes the failing path and WooCommerce error code in not_found', async () => {
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/wp-json')) return jsonResponse({ namespaces: ['wc/v3'] })
+      return jsonResponse({ code: 'rest_no_route' }, 404)
+    }) as unknown as typeof fetch
+
+    const client = new WooCommerceClient(
+      {
+        storeId: 'store-1',
+        storeUrl: 'https://shop.example.com',
+        credentials: { key: 'ck_test_key', secret: 'cs_test_secret' },
+        webhookSecret: null,
+      },
+      { fetchImpl, lookup: publicLookup },
+    )
+
+    await expect(client.systemStatus()).rejects.toMatchObject({
+      code: 'not_found:/wp-json/wc/v3/system_status:rest_no_route',
+    })
+  })
 })

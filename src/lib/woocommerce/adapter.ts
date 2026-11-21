@@ -47,7 +47,7 @@ export const wooCommerceAdapter: PlatformAdapter = {
       const data = await client.systemStatus()
       return { verified: true, profile: profileFromSystemStatus(data) }
     } catch (error) {
-      if (errorCode(error) !== 'not_found') {
+      if (!errorCode(error).startsWith('not_found')) {
         return { verified: false, errorCode: errorCode(error) }
       }
       try {

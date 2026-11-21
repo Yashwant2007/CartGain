@@ -174,7 +174,14 @@ export class WooCommerceClient {
         throw new WooCommerceClientError('WooCommerce credentials lack permission', 403, 'insufficient_permission')
       }
       if (response.status === 404) {
-        throw new WooCommerceClientError('WooCommerce resource not found', 404, 'not_found')
+        let upstreamCode = ''
+        try {
+          const body = (await response.json()) as { code?: unknown }
+          if (typeof body.code === 'string' && /^[A-Za-z0-9_]+$/.test(body.code)) upstreamCode = `:${body.code}`
+        } catch {
+          upstreamCode = ''
+        }
+        throw new WooCommerceClientError('WooCommerce resource not found', 404, `not_found:${path}${upstreamCode}`)
       }
       if (!response.ok) {
         throw new WooCommerceClientError(`WooCommerce ${label} failed`, lastStatus, 'request_failed')
