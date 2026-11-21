@@ -57,12 +57,25 @@ final class CartGain_WC_HTTP
         }
 
         $code = (int) wp_remote_retrieve_response_code($response);
-        if ($code < 200 || $code >= 300) {
-            return new WP_Error('cgw_http_status', sprintf(__('CartGain returned HTTP %d.', 'cartgain-woocommerce'), $code), array('status' => $code));
-        }
-
         $raw = wp_remote_retrieve_body($response);
         $decoded = json_decode($raw, true);
+        if ($code < 200 || $code >= 300) {
+            $detail = '';
+            if (is_array($decoded)) {
+                if (!empty($decoded['error'])) {
+                    $detail .= ' ' . sanitize_text_field((string) $decoded['error']);
+                }
+                if (!empty($decoded['message'])) {
+                    $detail .= ' ' . sanitize_text_field((string) $decoded['message']);
+                }
+            }
+            return new WP_Error(
+                'cgw_http_status',
+                sprintf(__('CartGain returned HTTP %d.', 'cartgain-woocommerce'), $code) . $detail,
+                array('status' => $code)
+            );
+        }
+
         return array(
             'code' => $code,
             'body' => is_array($decoded) ? $decoded : array(),

@@ -89,7 +89,16 @@ final class CartGain_WC_Admin
             $key = isset($_POST['cartgain_consumer_key']) ? (string) wp_unslash($_POST['cartgain_consumer_key']) : '';
             $secret = isset($_POST['cartgain_consumer_secret']) ? (string) wp_unslash($_POST['cartgain_consumer_secret']) : '';
             $result = $this->credentials->connect($code, $url, $key, $secret);
-            $this->redirect(is_wp_error($result) ? 'connect_failed' : 'connected', 'connection');
+            if (is_wp_error($result)) {
+                set_transient(
+                    'cartgain_wc_connect_error',
+                    $result->get_error_code() . ': ' . $result->get_error_message(),
+                    10 * MINUTE_IN_SECONDS
+                );
+                $this->redirect('connect_failed', 'connection');
+            }
+            delete_transient('cartgain_wc_connect_error');
+            $this->redirect('connected', 'connection');
         }
 
         if ($action === 'disconnect') {
@@ -140,7 +149,15 @@ final class CartGain_WC_Admin
         if (!isset($messages[$notice])) {
             return;
         }
-        echo '<div class="notice ' . esc_attr($messages[$notice][0]) . ' is-dismissible"><p>' . esc_html($messages[$notice][1]) . '</p></div>';
+        $message = $messages[$notice][1];
+        if ($notice === 'connect_failed') {
+            $detail = get_transient('cartgain_wc_connect_error');
+            if (is_string($detail) && $detail !== '') {
+                $message .= ' ' . $detail;
+                delete_transient('cartgain_wc_connect_error');
+            }
+        }
+        echo '<div class="notice ' . esc_attr($messages[$notice][0]) . ' is-dismissible"><p>' . esc_html($message) . '</p></div>';
     }
 
     public function render_page()
