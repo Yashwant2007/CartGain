@@ -3,11 +3,11 @@
 import { useEffect, useState } from 'react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
-import { Sparkles, Save, Eye, RotateCcw, CheckCircle2, History } from 'lucide-react'
+import { Sparkles, Save, Eye, RotateCcw, CheckCircle2, History, Bot } from 'lucide-react'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
 import { PERSONALITY_META, DESIGN_VARIANT_META, type AvatarVariant, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
-import { V2_AVATARS } from '@/lib/bargain/experience/v2-shopkeepers'
+import { V2_AVATARS, V2_CELL_POSITIONS } from '@/lib/bargain/experience/v2-shopkeepers'
 import { VRM_AVATARS, isVrmAvatarVariant } from '@/lib/bargain/experience/vrm-shopkeepers'
 import {
   expressionForEvent,
@@ -27,6 +27,36 @@ type PublishHistoryRow = {
   createdAt: string
   config: BargainExperienceConfig
 }
+
+type AvatarOption = {
+  id: AvatarVariant
+  name: string
+  role: string
+  accent: string
+  initials: string
+  sheet?: string
+  position?: string
+}
+
+const AVATAR_OPTIONS: AvatarOption[] = [
+  { id: 'robot', name: 'Robot', role: 'Animated 3D', accent: '#22d3ee', initials: '3D' },
+  ...(Object.keys(V2_AVATARS) as (keyof typeof V2_AVATARS)[]).map(id => ({
+    id,
+    name: V2_AVATARS[id].name,
+    role: V2_AVATARS[id].motion === 'soft' ? 'Friendly sprite' : V2_AVATARS[id].motion === 'bouncy' ? 'Playful sprite' : 'Strict sprite',
+    accent: V2_AVATARS[id].accent,
+    initials: V2_AVATARS[id].name.charAt(0),
+    sheet: V2_AVATARS[id].expressionSheet,
+    position: V2_CELL_POSITIONS.listening,
+  })),
+  ...(Object.keys(VRM_AVATARS) as (keyof typeof VRM_AVATARS)[]).map(id => ({
+    id,
+    name: VRM_AVATARS[id].name,
+    role: VRM_AVATARS[id].role,
+    accent: VRM_AVATARS[id].accent,
+    initials: VRM_AVATARS[id].initials,
+  })),
+]
 
 export function BargainExperienceStudio() {
   const { storeId } = useResolvedStoreId()
@@ -161,6 +191,7 @@ export function BargainExperienceStudio() {
       : previewScenario === 'deal'
         ? 'Deal — that price is yours. Let me get your code ready.'
         : previewPersona.exampleDialogue[0]
+  const selectedAvatar = AVATAR_OPTIONS.find(option => option.id === exp.avatarVariant) ?? AVATAR_OPTIONS[0]
 
   return (
     <div className="space-y-6">
@@ -176,6 +207,51 @@ export function BargainExperienceStudio() {
         </div>
       </div>
       {message && <div className="flex items-center gap-2 text-emerald-400 text-sm"><CheckCircle2 className="w-4 h-4" /> {message}</div>}
+
+      <div className="rounded-2xl border border-blue-800/30 bg-slate-900/60 p-5">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-white font-medium flex items-center gap-2"><Sparkles className="w-4 h-4 text-cyan-400" /> Storefront avatar</h3>
+            <p className="mt-1 text-xs text-blue-300/60">Pick the shopkeeper shoppers see. Personality and pricing rules stay the same; the preview updates instantly.</p>
+          </div>
+          <span className="shrink-0 rounded-full border border-cyan-500/30 bg-cyan-950/30 px-2.5 py-1 text-[11px] font-medium text-cyan-200">{selectedAvatar.name}</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+          {AVATAR_OPTIONS.map(option => {
+            const selected = option.id === exp.avatarVariant
+            return (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={selected}
+                data-avatar-option={option.id}
+                data-avatar-selected={selected ? 'true' : 'false'}
+                onClick={() => setExp({ ...exp, avatarVariant: option.id })}
+                className={`relative overflow-hidden rounded-xl border p-2 text-left transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-cyan-400/60 ${
+                  selected
+                    ? 'border-cyan-400/70 bg-cyan-950/30 shadow-[0_0_0_1px_rgba(34,211,238,.22)]'
+                    : 'border-blue-800/40 bg-slate-950/40 hover:-translate-y-0.5 hover:border-cyan-500/40 hover:bg-slate-900/70'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex h-14 items-center justify-center rounded-lg border border-white/5 bg-slate-900/70"
+                  style={option.sheet ? { backgroundImage: `url(${option.sheet})`, backgroundPosition: option.position, backgroundSize: '200% 200%' } : undefined}
+                >
+                  {option.sheet
+                    ? null
+                    : option.id === 'robot'
+                      ? <Bot className="h-6 w-6" style={{ color: option.accent }} />
+                      : <span className="text-lg font-semibold" style={{ color: option.accent }}>{option.initials}</span>}
+                </span>
+                <span className="mt-2 block truncate text-xs font-medium text-white">{option.name}</span>
+                <span className="block truncate text-[10px] text-blue-300/60">{option.role}</span>
+                {selected && <CheckCircle2 aria-hidden="true" className="absolute right-2 top-2 h-3.5 w-3.5 text-cyan-300" />}
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="rounded-2xl border border-blue-800/30 bg-slate-900/60 p-6 space-y-6">
@@ -226,19 +302,6 @@ export function BargainExperienceStudio() {
                 <span className="block text-[11px] text-blue-300/60">Keeps state changes, drops idle loops, blinking and confetti.</span>
               </span>
               <input type="checkbox" checked={exp.essentialMotionOnly} onChange={e => setExp({ ...exp, essentialMotionOnly: e.target.checked })} className="accent-cyan-500" />
-            </label>
-            <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40 sm:col-span-2">
-              <span className="block text-blue-100 text-sm mb-2">Storefront avatar</span>
-              <select value={exp.avatarVariant} onChange={e => setExp({ ...exp, avatarVariant: e.target.value as AvatarVariant })} className="w-full rounded-md bg-slate-900 border border-blue-800/50 px-2 py-1.5 text-sm text-blue-100">
-                <option value="robot">Animated robot (3D)</option>
-                <option value="morgan">Morgan — Friendly</option>
-                <option value="riley">Riley — Playful</option>
-                <option value="alex">Alex — Strict</option>
-                <option value="meera">Meera — VRM shopkeeper</option>
-                <option value="kabir">Kabir — VRM shopkeeper</option>
-                <option value="verma">Verma — VRM shopkeeper</option>
-              </select>
-              <span className="block text-[11px] text-blue-300/60 mt-2">The same shopkeeper personality and negotiation rules apply to every avatar.</span>
             </label>
             <label className="flex items-center justify-between p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
               <span className="text-blue-100 text-sm">Compact invitation</span>
