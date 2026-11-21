@@ -208,15 +208,15 @@ export function BargainExperienceStudio() {
       </div>
       {message && <div className="flex items-center gap-2 text-emerald-400 text-sm"><CheckCircle2 className="w-4 h-4" /> {message}</div>}
 
-      <div className="rounded-2xl border border-blue-800/30 bg-slate-900/60 p-5">
-        <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="rounded-2xl border border-blue-800/30 bg-slate-900/60 p-6">
+        <div className="mb-5 flex items-start justify-between gap-3">
           <div>
             <h3 className="text-white font-medium flex items-center gap-2"><Sparkles className="w-4 h-4 text-cyan-400" /> Storefront avatar</h3>
             <p className="mt-1 text-xs text-blue-300/60">Pick the shopkeeper shoppers see. Personality and pricing rules stay the same; the preview updates instantly.</p>
           </div>
           <span className="shrink-0 rounded-full border border-cyan-500/30 bg-cyan-950/30 px-2.5 py-1 text-[11px] font-medium text-cyan-200">{selectedAvatar.name}</span>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {AVATAR_OPTIONS.map(option => {
             const selected = option.id === exp.avatarVariant
             return (
@@ -227,7 +227,7 @@ export function BargainExperienceStudio() {
                 data-avatar-option={option.id}
                 data-avatar-selected={selected ? 'true' : 'false'}
                 onClick={() => setExp({ ...exp, avatarVariant: option.id })}
-                className={`relative overflow-hidden rounded-xl border p-2 text-left transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-cyan-400/60 ${
+                className={`relative overflow-hidden rounded-xl border p-3 text-left transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-cyan-400/60 ${
                   selected
                     ? 'border-cyan-400/70 bg-cyan-950/30 shadow-[0_0_0_1px_rgba(34,211,238,.22)]'
                     : 'border-blue-800/40 bg-slate-950/40 hover:-translate-y-0.5 hover:border-cyan-500/40 hover:bg-slate-900/70'
@@ -235,18 +235,18 @@ export function BargainExperienceStudio() {
               >
                 <span
                   aria-hidden="true"
-                  className="flex h-14 items-center justify-center rounded-lg border border-white/5 bg-slate-900/70"
+                  className="flex h-16 items-center justify-center rounded-lg border border-white/5 bg-slate-900/70 sm:h-20"
                   style={option.sheet ? { backgroundImage: `url(${option.sheet})`, backgroundPosition: option.position, backgroundSize: '200% 200%' } : undefined}
                 >
                   {option.sheet
                     ? null
                     : option.id === 'robot'
-                      ? <Bot className="h-6 w-6" style={{ color: option.accent }} />
-                      : <span className="text-lg font-semibold" style={{ color: option.accent }}>{option.initials}</span>}
+                      ? <Bot className="h-7 w-7" style={{ color: option.accent }} />
+                      : <span className="text-xl font-semibold" style={{ color: option.accent }}>{option.initials}</span>}
                 </span>
-                <span className="mt-2 block truncate text-xs font-medium text-white">{option.name}</span>
-                <span className="block truncate text-[10px] text-blue-300/60">{option.role}</span>
-                {selected && <CheckCircle2 aria-hidden="true" className="absolute right-2 top-2 h-3.5 w-3.5 text-cyan-300" />}
+                <span className="mt-2.5 block truncate text-sm font-medium text-white">{option.name}</span>
+                <span className="block truncate text-[11px] text-blue-300/60">{option.role}</span>
+                {selected && <CheckCircle2 aria-hidden="true" className="absolute right-3 top-3 h-4 w-4 text-cyan-300" />}
               </button>
             )
           })}
