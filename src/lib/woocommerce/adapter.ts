@@ -47,7 +47,22 @@ export const wooCommerceAdapter: PlatformAdapter = {
       const data = await client.systemStatus()
       return { verified: true, profile: profileFromSystemStatus(data) }
     } catch (error) {
-      return { verified: false, errorCode: errorCode(error) }
+      if (errorCode(error) !== 'not_found') {
+        return { verified: false, errorCode: errorCode(error) }
+      }
+      try {
+        const client = new WooCommerceClient(input)
+        const products = await client.listProducts({ perPage: 1 })
+        return {
+          verified: true,
+          profile: {
+            url: input.storeUrl,
+            raw: { verificationFallback: 'products', productCount: Array.isArray(products) ? products.length : 0 },
+          },
+        }
+      } catch (fallbackError) {
+        return { verified: false, errorCode: errorCode(fallbackError) }
+      }
     }
   },
 
