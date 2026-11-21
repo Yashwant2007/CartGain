@@ -24,7 +24,7 @@ const bargainWidgetCsp = [
   "connect-src 'self' https://api.cart-gain.com https://checkout.razorpay.com https://api.razorpay.com https://lumberjack.razorpay.com https://api.stripe.com https://admin.shopify.com",
   "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://*.razorpay.com https://js.stripe.com https://cdn.shopify.com https://admin.shopify.com",
   "child-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://*.razorpay.com",
-  "frame-ancestors 'self' https://*.myshopify.com https://admin.shopify.com https://checkout.shopify.com",
+  "frame-ancestors 'self' https:",
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
@@ -88,6 +88,17 @@ const nextConfig = {
         headers: [
           { key: 'Content-Security-Policy', value: bargainWidgetCsp },
           // Allow cross-origin embedding in Shopify themes/checkout
+          { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
+          { key: 'Cross-Origin-Opener-Policy', value: 'unsafe-none' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
+      // Storefront embed widget is installed on Shopify/WooCommerce/custom HTTPS stores
+      {
+        source: '/bargain/embed',
+        headers: [
+          { key: 'Content-Security-Policy', value: bargainWidgetCsp },
           { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
           { key: 'Cross-Origin-Opener-Policy', value: 'unsafe-none' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
