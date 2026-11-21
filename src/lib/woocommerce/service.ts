@@ -123,7 +123,8 @@ export async function connectWooCommerce(input: {
     credentials,
   })
   if (!verification.verified) {
-    throw new WooServiceError('credential_verification_failed', 400)
+    const detail = verification.errorCode ? `:${verification.errorCode}` : ''
+    throw new WooServiceError(`credential_verification_failed${detail}`, 400)
   }
 
   const existingStore = await prisma.store.findUnique({
