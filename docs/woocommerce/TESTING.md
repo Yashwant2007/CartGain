@@ -20,6 +20,7 @@ Covered behavior:
 - WooCommerce coupon generation and recovery offer selection.
 - Automatic bargain widget output on classic and block themes (classic `woocommerce_single_product_summary` plus a deduplicated `wp_footer` fallback).
 - Full catalog reconciliation: automatic on plugin connect, once daily, and on product create/update/delete hooks.
+- Inline invitation handoff to a storefront negotiation drawer with origin-checked messages, live variation sync, and session-preserving close/reopen.
 
 Not covered in this environment:
 

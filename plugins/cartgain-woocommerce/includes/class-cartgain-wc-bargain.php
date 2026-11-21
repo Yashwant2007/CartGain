@@ -77,6 +77,7 @@ final class CartGain_WC_Bargain
             'currency' => function_exists('get_woocommerce_currency') ? get_woocommerce_currency() : 'USD',
             'image' => $this->product_image($product),
             'cartToken' => $this->cart_token(),
+            'parentOrigin' => $this->parent_origin(),
         );
         $iframe_url = add_query_arg($args, CGW_API_BASE . '/bargain/embed');
 
@@ -87,6 +88,19 @@ final class CartGain_WC_Bargain
         $html .= '</div>';
         $this->rendered = true;
         return $html;
+    }
+
+    private function parent_origin()
+    {
+        $parts = wp_parse_url(home_url('/'));
+        if (!is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+            return '';
+        }
+        $origin = $parts['scheme'] . '://' . $parts['host'];
+        if (!empty($parts['port'])) {
+            $origin .= ':' . (int) $parts['port'];
+        }
+        return $origin;
     }
 
     private function product_image($product)

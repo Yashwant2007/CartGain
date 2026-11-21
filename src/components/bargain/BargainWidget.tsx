@@ -133,6 +133,8 @@ type Props = {
    * never unmounts — the controller keeps the same iframe alive.
    */
   view?: 'inline' | 'drawer'
+  /** Exact origin of the storefront parent, supplied by the WooCommerce plugin. */
+  parentOrigin?: string
   /**
    * Open the negotiation panel on mount. Used by recovery links
    * (`/cart/<id>?focus=bargain`) so "name your price" lands on the offer, not
@@ -173,6 +175,7 @@ export default function BargainWidget({
   maxAttempts,
   view = 'inline',
   defaultOpen,
+  parentOrigin,
 }: Props) {
   const [open, setOpen] = useState<boolean>(defaultOpen === true ? true : (isEmbed && !invitationFirst))
   // The living shopkeeper: ONE state object holds the body state, the face, the
@@ -302,6 +305,8 @@ export default function BargainWidget({
   useEffect(() => {
     if (!isDrawer || typeof window === 'undefined') return
     const onMessage = (e: MessageEvent) => {
+      if (parentOrigin && e.origin !== parentOrigin) return
+      if (e.source && e.source !== window.parent) return
       const d = (e.data ?? null) as CgParentMessage | null
       if (!d || d.type !== 'cg_product_update') return
       setProductCtx((c) => ({
@@ -314,7 +319,7 @@ export default function BargainWidget({
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [isDrawer])
+  }, [isDrawer, parentOrigin])
 
   useEffect(() => {
     if (!isDrawer || !productPending) return
@@ -1159,10 +1164,31 @@ export default function BargainWidget({
     // Inline experience: the iframe is only as tall as the invitation card.
     // Ask the theme controller to open the full side drawer instead of growing
     // the card into a cramped mini-chat.
-    if (isEmbed && view !== 'drawer') {
+    if (isEmbed && view !== 'drawer' && window.parent !== window) {
+      let opened = false
+      const onAck = (e: MessageEvent) => {
+        if (parentOrigin && e.origin !== parentOrigin) return
+        if (e.source && e.source !== window.parent) return
+        if ((e.data as CgParentMessage | null)?.type === 'cg_drawer_opened') opened = true
+      }
+      window.addEventListener('message', onAck)
       try {
-        window.parent?.postMessage({ type: 'cg_open_drawer' } as CgEmbedMessage, '*')
-      } catch {}
+        window.parent.postMessage({ type: 'cg_open_drawer' } as CgEmbedMessage, '*')
+      } catch {
+        window.removeEventListener('message', onAck)
+        setOpen(true)
+        if (!sessionId) void startSession()
+        return
+      }
+      if (parentOrigin) {
+        window.setTimeout(() => {
+          window.removeEventListener('message', onAck)
+          if (!opened) {
+            setOpen(true)
+            if (!sessionId) void startSession()
+          }
+        }, 600)
+      }
       return
     }
     setOpen(true)
@@ -1291,6 +1317,11 @@ export default function BargainWidget({
               variantId={productCtx.variantId}
               source={mode === 'cart' ? 'cart' : mode === 'item' ? 'item' : 'storefront'}
               trackingEnabled={invitationFirst}
+              showAvatar={avatarEnabled}
+              personality={experience.personality}
+              characterStyle={experience.characterStyle}
+              motionEnabled={experience.motionEnabled}
+              essentialMotionOnly={experience.essentialMotionOnly}
             />
           </div>
         ) : (

@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { BargainExperienceConfig } from '@/lib/bargain/experience/types'
+import ShopkeeperAvatar from '@/components/bargain/ShopkeeperAvatar'
+import type { BargainExperienceConfig, CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import { shouldCountImpression, trackExperienceEvent } from '@/lib/bargain/experience/analytics'
 import { uiText, type UiKey } from '@/lib/bargain/i18n'
 
@@ -16,6 +17,11 @@ interface Props {
   source?: 'item' | 'cart' | 'storefront'
   trackingEnabled?: boolean
   preview?: boolean
+  showAvatar?: boolean
+  personality?: ShopkeeperPersonality
+  characterStyle?: CharacterStyle
+  motionEnabled?: boolean
+  essentialMotionOnly?: boolean
 }
 
 const DESIGN_STYLES: Record<string, { bg: string; border: string; shadow: string; accent: string }> = {
@@ -35,6 +41,11 @@ export default function StorefrontInvitation({
   source = 'storefront',
   trackingEnabled = false,
   preview = false,
+  showAvatar = true,
+  personality = 'friendly_shopkeeper',
+  characterStyle = 'signature',
+  motionEnabled = true,
+  essentialMotionOnly = false,
 }: Props) {
   const [expression, setExpression] = useState<'idle' | 'curious' | 'listening'>('idle')
   const buttonRef = useRef<HTMLButtonElement | null>(null)
@@ -126,6 +137,16 @@ export default function StorefrontInvitation({
       onFocus={() => setExpression('listening')}
       onBlur={() => setExpression('idle')}
     >
+      {showAvatar && (
+        <ShopkeeperAvatar
+          personality={personality}
+          expression={expression}
+          size="lg"
+          characterStyle={characterStyle}
+          motionEnabled={motionEnabled}
+          essentialMotionOnly={essentialMotionOnly}
+        />
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.4 }}>{copy}</div>
         <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 6, color: accent, fontWeight: 700, fontSize: 13 }}>
