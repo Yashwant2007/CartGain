@@ -59,6 +59,7 @@ export class WooCommerceClient {
   private readonly webhookSecret: string | null
   private readonly options: Required<Pick<WooCommerceClientOptions, 'timeoutMs' | 'maxRetries' | 'retryDelayMs'>> &
     WooCommerceClientOptions
+  private wcPrefixPromise: Promise<string> | null = null
 
   constructor(config: PlatformConnectionConfig, options: WooCommerceClientOptions = {}) {
     this.baseUrl = config.storeUrl.replace(/\/+$/, '')
@@ -73,11 +74,42 @@ export class WooCommerceClient {
     }
   }
 
+  private async resolveWcPrefix(): Promise<string> {
+    if (!this.wcPrefixPromise) {
+      this.wcPrefixPromise = (async () => {
+        try {
+          const response = await (this.options.fetchImpl ?? fetch)(`${this.baseUrl}/wp-json`, {
+            headers: {
+              Accept: 'application/json',
+              'User-Agent': 'CartGain-WooCommerce-Connector/1.0',
+            },
+            signal: AbortSignal.timeout(this.options.timeoutMs),
+            redirect: 'manual',
+            cache: 'no-store',
+          })
+          if (!response.ok) return WC_PREFIX
+          const body = (await response.json()) as { namespaces?: unknown }
+          const namespaces = Array.isArray(body.namespaces) ? body.namespaces : []
+          if (namespaces.includes('wc/v3')) return WC_PREFIX
+          if (namespaces.includes('wc/v2')) return '/wp-json/wc/v2'
+          return WC_PREFIX
+        } catch {
+          return WC_PREFIX
+        }
+      })()
+    }
+    return this.wcPrefixPromise
+  }
+
   private async fetchJson<T>(request: RequestOptions): Promise<T> {
     const label = request.label || 'request'
     await assertPublicHttpsUrl(this.baseUrl, this.options.lookup)
 
-    const path = request.path.startsWith('/') ? request.path : `/${request.path}`
+    const wcPrefix = request.path.startsWith(WC_PREFIX) ? await this.resolveWcPrefix() : WC_PREFIX
+    const normalizedPath = request.path.startsWith(WC_PREFIX)
+      ? `${wcPrefix}${request.path.slice(WC_PREFIX.length)}`
+      : request.path
+    const path = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`
     const url = new URL(`${this.baseUrl}${path}`)
     for (const [key, value] of Object.entries(request.query ?? {})) {
       if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value))
