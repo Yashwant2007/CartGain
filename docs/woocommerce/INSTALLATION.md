@@ -14,7 +14,7 @@
 3. Open WooCommerce → CartGain (or CartGain in the admin menu).
 4. In CartGain dashboard → Integrations, start a WooCommerce connection and copy the one-time connection code.
 5. In the plugin connection form, paste the code, confirm the store URL, and enter the WooCommerce Consumer Key and Consumer Secret.
-6. Save/connect. The plugin exchanges the code, verifies credentials, stores encrypted identifiers, and shows connection status.
+6. Save/connect. The plugin exchanges the code, verifies credentials, stores encrypted identifiers, shows connection status, and schedules an automatic full product sync.
 
 ## Recommended settings
 
@@ -22,6 +22,7 @@
 - Enable explicit email/WhatsApp consent fields and enter the shared WhatsApp display number only if consent is collected.
 - Saving one plugin settings tab preserves values saved on the other tabs.
 - Use Action Scheduler when available for reliable queue processing; WP-Cron is the fallback.
+- Published, draft, and private products sync automatically on connect, on product changes, and once daily; drafts/private products stay hidden on the storefront but are available for merchant configuration.
 
 ## Verification
 

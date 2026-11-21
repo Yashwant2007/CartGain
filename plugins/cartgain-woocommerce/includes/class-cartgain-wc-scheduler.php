@@ -9,6 +9,7 @@ final class CartGain_WC_Scheduler
     private $hooks = array(
         'cartgain_wc_process_queue' => 60,
         'cartgain_wc_inactivity_check' => 300,
+        'cartgain_wc_full_sync' => 86400,
         'cartgain_wc_cleanup' => 86400,
     );
 

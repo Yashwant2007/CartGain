@@ -98,6 +98,10 @@ final class CartGain_WC_Admin
                 $this->redirect('connect_failed', 'connection');
             }
             delete_transient('cartgain_wc_connect_error');
+            $plugin = cartgain_wc();
+            if ($plugin && $plugin->products) {
+                $plugin->products->schedule_full_sync();
+            }
             $this->redirect('connected', 'connection');
         }
 

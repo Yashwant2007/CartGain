@@ -19,6 +19,7 @@ Covered behavior:
 - Bargain floor resolution and catalog merge for WooCommerce products.
 - WooCommerce coupon generation and recovery offer selection.
 - Automatic bargain widget output on classic and block themes (classic `woocommerce_single_product_summary` plus a deduplicated `wp_footer` fallback).
+- Full catalog reconciliation: automatic on plugin connect, once daily, and on product create/update/delete hooks.
 
 Not covered in this environment:
 

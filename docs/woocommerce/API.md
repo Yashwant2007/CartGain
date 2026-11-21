@@ -13,7 +13,7 @@ All endpoints are under `/api`. Merchant-session endpoints use the signed-in Car
 
 ## Unauthenticated exchange
 
-- `POST /integrations/woocommerce/exchange` — called once by the WordPress plugin with the short-lived connection code, install id, proof, store URL, and WooCommerce consumer key/secret. Verifies the credentials against WooCommerce before persisting them.
+- `POST /integrations/woocommerce/exchange` — called once by the WordPress plugin with the short-lived connection code, install id, proof, store URL, and WooCommerce consumer key/secret. Verifies the credentials against WooCommerce before persisting them. The plugin then schedules a full catalog sync and reconciles daily.
 
 ## Event ingestion
 
