@@ -85,7 +85,7 @@ describe('WooCommerce client API namespace negotiation', () => {
     )
 
     await expect(client.systemStatus()).rejects.toMatchObject({
-      code: 'not_found:/wp-json/wc/v3/system_status:rest_no_route',
+      code: expect.stringContaining('not_found:/wp-json/wc/v3/system_status:rest_no_route'),
     })
   })
 })

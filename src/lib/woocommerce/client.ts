@@ -175,13 +175,31 @@ export class WooCommerceClient {
       }
       if (response.status === 404) {
         let upstreamCode = ''
+        let upstreamBody = ''
         try {
-          const body = (await response.json()) as { code?: unknown }
-          if (typeof body.code === 'string' && /^[A-Za-z0-9_]+$/.test(body.code)) upstreamCode = `:${body.code}`
+          const raw = await response.text()
+          try {
+            const body = (await Promise.resolve(JSON.parse(raw))) as { code?: unknown; message?: unknown }
+            if (typeof body.code === 'string' && /^[A-Za-z0-9_]+$/.test(body.code)) upstreamCode = `:${body.code}`
+            if (typeof body.message === 'string') upstreamBody = body.message
+          } catch {
+            upstreamBody = raw
+          }
         } catch {
-          upstreamCode = ''
+          upstreamBody = ''
         }
-        throw new WooCommerceClientError('WooCommerce resource not found', 404, `not_found:${path}${upstreamCode}`)
+        const snippet = upstreamBody
+          .replace(/<[^>]*>/g, ' ')
+          .replace(/[^A-Za-z0-9_.\- ]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 120)
+          .replace(/ /g, '_')
+        throw new WooCommerceClientError(
+          'WooCommerce resource not found',
+          404,
+          `not_found:${path}${upstreamCode}${snippet ? `:body_${snippet}` : ''}`,
+        )
       }
       if (!response.ok) {
         throw new WooCommerceClientError(`WooCommerce ${label} failed`, lastStatus, 'request_failed')
