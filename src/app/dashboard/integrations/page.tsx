@@ -45,6 +45,10 @@ export default function IntegrationsPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [credentialModal, setCredentialModal] = useState<CredentialModal>(null)
+  const [wooModal, setWooModal] = useState(false)
+  const [wooConnecting, setWooConnecting] = useState(false)
+  const [wooCode, setWooCode] = useState<{ code: string; expiresAt: string } | null>(null)
+  const [wooError, setWooError] = useState<string | null>(null)
   const [shopifyModal, setShopifyModal] = useState(false)
   const [shopifyDomain, setShopifyDomain] = useState('')
   const [shopifyConnecting, setShopifyConnecting] = useState(false)
@@ -162,6 +166,15 @@ export default function IntegrationsPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [shopifyModal])
 
+  useEffect(() => {
+    if (!wooModal) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setWooModal(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [wooModal])
+
   const updatePlatform = async (platform: string, data: Record<string, string>) => {
     const res = await shopifySessionFetch('/api/stores/current', {
       method: 'PATCH',
@@ -218,12 +231,14 @@ export default function IntegrationsPage() {
 
   const handleDisconnect = async (integration: IntegrationItem) => {
     try {
-      if (integration.id === 'shopify') {
-        await updatePlatform('custom', { apiKey: '', apiSecret: '' })
+      if (integration.id === 'woocommerce') {
+        const res = await shopifySessionFetch('/api/integrations/woocommerce/disconnect', { method: 'POST' })
+        if (!res.ok) throw new Error('Failed to disconnect WooCommerce')
       } else {
         await updatePlatform('custom', { apiKey: '', apiSecret: '' })
       }
       setActionMsg({ type: 'success', text: `${integration.name} disconnected successfully` })
+      await loadStatus()
     } catch (error) {
       setActionMsg({ type: 'error', text: `Failed to disconnect ${integration.name}` })
     }
@@ -236,6 +251,49 @@ export default function IntegrationsPage() {
       setActionMsg({ type: 'success', text: `${platform.charAt(0).toUpperCase() + platform.slice(1)} connected successfully` })
     } catch (error) {
       setActionMsg({ type: 'error', text: `Failed to connect ${platform}` })
+    }
+  }
+
+  const startWooConnect = async () => {
+    setWooModal(true)
+    setWooConnecting(true)
+    setWooError(null)
+    setWooCode(null)
+    try {
+      const installId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `cg-wp-${Date.now()}`
+      const res = await shopifySessionFetch('/api/integrations/woocommerce/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ installId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not start WooCommerce connection')
+      setWooCode({ code: data.code, expiresAt: data.expiresAt })
+    } catch (error) {
+      setWooError(error instanceof Error ? error.message : 'Could not start WooCommerce connection')
+    } finally {
+      setWooConnecting(false)
+    }
+  }
+
+  const checkWooConnection = async () => {
+    setWooConnecting(true)
+    setWooError(null)
+    try {
+      const res = await shopifySessionFetch('/api/integrations/woocommerce/status')
+      const data = await res.json()
+      if (!res.ok || !data.connected) {
+        throw new Error(data.error || 'Not connected yet. Finish the steps in WordPress, then check again.')
+      }
+      setWooModal(false)
+      setActionMsg({ type: 'success', text: 'WooCommerce store connected successfully!' })
+      await loadStatus()
+    } catch (error) {
+      setWooError(error instanceof Error ? error.message : 'Could not check the connection')
+    } finally {
+      setWooConnecting(false)
     }
   }
 
@@ -259,7 +317,7 @@ export default function IntegrationsPage() {
       onDisconnect: () => handleDisconnect(integrations.find(i => i.id === 'shopify')!),
     },
     woocommerce: {
-      onConnect: () => setCredentialModal({ type: 'woocommerce', name: 'WooCommerce', icon: '📦' }),
+      onConnect: startWooConnect,
       onDisconnect: () => handleDisconnect(integrations.find(i => i.id === 'woocommerce')!),
     },
     magento: {
@@ -402,6 +460,71 @@ export default function IntegrationsPage() {
           onConnect={handleCredentialConnect}
           onClose={() => setCredentialModal(null)}
         />
+      )}
+
+      {wooModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="woocommerce-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setWooModal(false)}
+        >
+          <div className="bg-slate-800 border border-blue-700/50 rounded-xl p-6 w-full max-w-lg shadow-2xl shadow-cyan-500/10" onClick={e => e.stopPropagation()}>
+            <h3 id="woocommerce-modal-title" className="text-lg font-semibold text-white mb-2">Connect WooCommerce</h3>
+            <p className="text-sm text-blue-300/70 mb-4">
+              Generate a one-time code here, then finish the connection inside the CartGain plugin on your WordPress site.
+            </p>
+
+            <ol className="list-decimal list-inside space-y-2 text-sm text-blue-200/80 mb-5">
+              <li>Install and activate the CartGain WooCommerce plugin on your site.</li>
+              <li>In WooCommerce, go to Settings → Advanced → REST API and create a Read/Write key.</li>
+              <li>Open CartGain in WordPress, paste the code below with your store URL, Consumer Key and Consumer Secret, then click Connect.</li>
+              <li>Return here and check the connection.</li>
+            </ol>
+
+            {wooError && (
+              <div className="mb-4 p-3 bg-red-600/20 border border-red-500/40 rounded-lg text-sm text-red-300">{wooError}</div>
+            )}
+
+            <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-4 mb-5">
+              <p className="text-xs text-blue-300/60 mb-2">One-time connection code</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 p-2 bg-slate-900/70 rounded text-cyan-300 text-sm break-all">
+                  {wooCode?.code ?? (wooConnecting ? 'Generating...' : '')}
+                </code>
+                <button
+                  onClick={() => wooCode && handleCopy(wooCode.code)}
+                  disabled={!wooCode}
+                  className="px-3 py-2 text-sm rounded-lg border border-blue-700/40 text-blue-200 hover:bg-slate-700/50 disabled:opacity-50"
+                >
+                  Copy
+                </button>
+              </div>
+              {wooCode && (
+                <p className="text-xs text-blue-300/40 mt-2">
+                  Expires {new Date(wooCode.expiresAt).toLocaleString()}
+                </p>
+              )}
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setWooModal(false)}
+                className="flex-1 py-2.5 text-sm text-blue-300/60 hover:text-white border border-blue-700/40 rounded-lg transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={checkWooConnection}
+                disabled={wooConnecting || !wooCode}
+                className="flex-1 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all"
+              >
+                {wooConnecting && wooCode ? 'Checking...' : 'Check connection'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {shopifyModal && (
