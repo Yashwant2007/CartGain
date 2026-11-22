@@ -79,7 +79,6 @@ export default async function EmbedPage({
   let bargainEnabled = true
   let persona: string | undefined
   let experience: BargainExperienceConfig = fromDb(null, 'published')
-  let hasPublishedExperience = false
   let language: string | undefined
   // Round budget for the meter. This is a COUNT of offers, not a price — the
   // merchant's floor/profit margin is never serialised into this document.
@@ -116,7 +115,6 @@ export default async function EmbedPage({
     const config = await prisma.bargainConfig.findUnique({ where: { storeId: store.id } })
     if (config?.enabled === false) bargainEnabled = false
     experience = fromDb(config, 'published')
-    hasPublishedExperience = Boolean(config?.experiencePublished)
     persona = experience.personality
     language = config?.language ?? 'auto'
     if (typeof config?.maxAttempts === 'number' && config.maxAttempts > 0) {
@@ -156,7 +154,7 @@ export default async function EmbedPage({
           language={language}
           persona={persona}
           experience={experience}
-          invitationFirst={hasPublishedExperience}
+          invitationFirst={experience.invitationVisible !== false}
           maxAttempts={maxAttempts}
           mode={mode}
           cartToken={cartToken}

@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import BargainWidget from '../BargainWidget'
+import { DEFAULT_BARGAIN_EXPERIENCE } from '@/lib/bargain/experience/types'
 
 const baseProps = {
   storeId: 'test-store',
@@ -13,23 +14,8 @@ const baseProps = {
 } as const
 
 const experience = {
-  schemaVersion: 1,
+  ...DEFAULT_BARGAIN_EXPERIENCE,
   personality: 'strict_shopkeeper' as const,
-  designVariant: 'smart-assistant' as const,
-  avatarEnabled: true,
-  motionEnabled: true,
-  avatarVariant: 'robot' as const,
-  characterStyle: 'signature' as const,
-  essentialMotionOnly: false,
-  localeMode: 'store-default',
-  customGreeting: null,
-  ctaLabel: null,
-  accentColor: null,
-  avatarSize: 'md' as const,
-  compact: false,
-  position: 'bottom-right' as const,
-  draftVersion: 1,
-  publishedVersion: 1,
 }
 
 beforeAll(() => {

@@ -47,6 +47,8 @@ export interface LearningContextInput {
   recommendationsEnabled: boolean
   bulkQuantity?: number | null
   promoAvailable?: boolean
+  behavior?: string | null
+  trend?: string | null
   config?: Partial<LearningConfigView> | null
 }
 
@@ -56,6 +58,8 @@ export interface LearningFeatures {
   budgetBucket: string
   roundsBucket: string
   recommendationEligible: boolean
+  behaviorGroup: string | null
+  trendGroup: string | null
   contextKey: string
 }
 

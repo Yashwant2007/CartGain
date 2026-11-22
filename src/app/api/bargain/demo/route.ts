@@ -20,6 +20,7 @@ import {
 import { detectLanguage } from '@/lib/bargain/language'
 import { analyzeSocialSignals } from '@/lib/bargain/behavior'
 import { analyzeLiveTurn } from '@/lib/bargain/live-turn'
+import { adaptiveContextForTurn } from '@/lib/bargain/learning/behavior-context'
 import { buildSessionMemory } from '@/lib/bargain/session-memory'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
 import {
@@ -327,6 +328,11 @@ export async function POST(request: NextRequest) {
       customerOffer: offer,
       repeatedMessage: shopperSignals.reasking,
     })
+    const adaptive = adaptiveContextForTurn({
+      liveTurn,
+      intent: intentAnalysis,
+      signals: shopperSignals,
+    })
 
     const ctx: NegotiationContext = {
       storeName,
@@ -353,6 +359,7 @@ export async function POST(request: NextRequest) {
     ctx.lastCounter = [...history].reverse()
       .find((m) => m.role === 'ai' && typeof m.offeredPrice === 'number')?.offeredPrice ?? null
     ctx.liveTurn = liveTurn
+    ctx.adaptive = adaptive
     ctx.sessionMemory = buildSessionMemory({
       intent: intentAnalysis,
       signals: shopperSignals,
@@ -425,6 +432,8 @@ export async function POST(request: NextRequest) {
             recommendationsEnabled: merchant.config?.recommendationsEnabled === true,
             bulkQuantity,
             promoAvailable: Boolean(merchant.config?.campaignMessage),
+            behavior: adaptive.behavior,
+            trend: adaptive.trend,
           },
         })
       : null
@@ -525,6 +534,9 @@ export async function POST(request: NextRequest) {
           tactic: result.tactic ?? null,
           candidate: learningResolved.selection.strategy,
           exploration: learningResolved.selection.isExploration,
+          behavior: adaptive.behavior,
+          trend: adaptive.trend,
+          liveTurnMode: liveTurn.mode,
         },
         agentSource: demoAiSource,
         agentModel: demoAiModel,

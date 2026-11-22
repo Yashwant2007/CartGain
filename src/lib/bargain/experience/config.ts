@@ -6,14 +6,19 @@ import {
   CHARACTER_STYLES,
   DEFAULT_BARGAIN_EXPERIENCE,
   INVITATION_DESIGNS,
+  INVITATION_FONTS,
   INVITATION_POSITIONS,
+  INVITATION_TEXT_ALIGNS,
   SHOPKEEPER_PERSONALITIES,
   type AvatarSize,
   type AvatarVariant,
   type BargainExperienceConfig,
   type CharacterStyle,
   type InvitationDesign,
+  type InvitationFont,
+  type InvitationIndicators,
   type InvitationPosition,
+  type InvitationTextAlign,
   type ShopkeeperPersonality,
 } from './types'
 
@@ -42,6 +47,16 @@ function asVersion(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback
 }
 
+function asIndicators(value: unknown, fallback: InvitationIndicators): InvitationIndicators {
+  if (!value || typeof value !== 'object') return { ...fallback }
+  const input = value as Record<string, unknown>
+  return {
+    quickReply: asBoolean(input.quickReply, fallback.quickReply),
+    noPressure: asBoolean(input.noPressure, fallback.noPressure),
+    smartDeals: asBoolean(input.smartDeals, fallback.smartDeals),
+  }
+}
+
 export function sanitizeExperience(input: any, fallback?: Partial<BargainExperienceConfig>): BargainExperienceConfig {
   const base = { ...DEFAULT_BARGAIN_EXPERIENCE, ...fallback }
   const legacyVariant = input?.avatarVariant === undefined && input?.characterStyle === 'minimal' ? 'minimal' : base.avatarVariant
@@ -57,10 +72,23 @@ export function sanitizeExperience(input: any, fallback?: Partial<BargainExperie
     localeMode: asText(input?.localeMode, 40) ?? base.localeMode,
     customGreeting: input?.customGreeting === undefined ? base.customGreeting : asText(input.customGreeting, 280),
     ctaLabel: input?.ctaLabel === undefined ? base.ctaLabel : asText(input.ctaLabel, 40),
-    accentColor: input?.accentColor === undefined ? base.accentColor : asHex(input.accentColor),
     avatarSize: asEnum<AvatarSize>(input?.avatarSize, AVATAR_SIZES, base.avatarSize),
     compact: asBoolean(input?.compact, base.compact),
     position: asEnum<InvitationPosition>(input?.position, INVITATION_POSITIONS, base.position),
+    invitationVisible: asBoolean(input?.invitationVisible, base.invitationVisible),
+    invitationHeadline: input?.invitationHeadline === undefined ? base.invitationHeadline : asText(input.invitationHeadline, 120),
+    invitationSubtitle: input?.invitationSubtitle === undefined ? base.invitationSubtitle : asText(input.invitationSubtitle, 200),
+    invitationCtaVisible: asBoolean(input?.invitationCtaVisible, base.invitationCtaVisible),
+    invitationSparkleVisible: asBoolean(input?.invitationSparkleVisible, base.invitationSparkleVisible),
+    invitationTextAlign: asEnum<InvitationTextAlign>(input?.invitationTextAlign, INVITATION_TEXT_ALIGNS, base.invitationTextAlign),
+    invitationIndicators: asIndicators(input?.invitationIndicators, base.invitationIndicators),
+    accentColor: input?.accentColor === undefined ? base.accentColor : asHex(input.accentColor),
+    accentSecondaryColor: input?.accentSecondaryColor === undefined ? base.accentSecondaryColor : asHex(input.accentSecondaryColor),
+    backgroundColor: input?.backgroundColor === undefined ? base.backgroundColor : asHex(input.backgroundColor),
+    textColor: input?.textColor === undefined ? base.textColor : asHex(input.textColor),
+    buttonColor: input?.buttonColor === undefined ? base.buttonColor : asHex(input.buttonColor),
+    borderColor: input?.borderColor === undefined ? base.borderColor : asHex(input.borderColor),
+    fontFamily: asEnum<InvitationFont>(input?.fontFamily, INVITATION_FONTS, base.fontFamily),
     draftVersion: asVersion(input?.draftVersion, base.draftVersion),
     publishedVersion: asVersion(input?.publishedVersion, base.publishedVersion),
   }

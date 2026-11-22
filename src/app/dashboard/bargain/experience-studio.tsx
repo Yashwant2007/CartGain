@@ -69,12 +69,14 @@ const AVATAR_OPTIONS: AvatarOption[] = [
 export function BargainExperienceStudio() {
   const { storeId } = useResolvedStoreId()
   const [exp, setExp] = useState<BargainExperienceConfig | null>(null)
+  const [savedExp, setSavedExp] = useState<BargainExperienceConfig | null>(null)
   const [history, setHistory] = useState<PublishHistoryRow[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [previewScenario, setPreviewScenario] = useState<'welcome' | 'lowball' | 'walkout' | 'deal'>('welcome')
   const [previewReaction, setPreviewReaction] = useState<BargainReaction | null>(null)
+  const [previewViewport, setPreviewViewport] = useState<'desktop' | 'mobile'>('desktop')
 
   useEffect(() => {
     if (!storeId) return
@@ -85,6 +87,7 @@ export function BargainExperienceStudio() {
         if (res.ok) {
           const data = await res.json()
           setExp(data.experience)
+          setSavedExp(data.experience)
           setHistory(Array.isArray(data.history) ? data.history : [])
         }
       } finally {
@@ -106,13 +109,17 @@ export function BargainExperienceStudio() {
       })
       if (res.status === 409) {
         const data = await res.json().catch(() => ({}))
-        if (data.currentDraft) setExp(data.currentDraft)
+        if (data.currentDraft) {
+          setExp(data.currentDraft)
+          setSavedExp(data.currentDraft)
+        }
         setMessage(data.message ?? 'This draft changed in another tab. Reload and try again.')
         return
       }
       if (res.ok) {
         const data = await res.json()
         setExp(data.experience)
+        setSavedExp(data.experience)
         setMessage(action === 'publish' ? 'Published to storefront' : 'Draft saved')
         if (action === 'publish') await load()
       }
@@ -127,6 +134,7 @@ export function BargainExperienceStudio() {
     if (!res.ok) return
     const data = await res.json()
     setExp(data.experience)
+    setSavedExp(data.experience)
     setHistory(Array.isArray(data.history) ? data.history : [])
   }
 
@@ -147,6 +155,7 @@ export function BargainExperienceStudio() {
       }
       const data = await res.json()
       setExp(data.experience)
+      setSavedExp(data.experience)
       setMessage(`Rolled back to published v${version}`)
       await load()
     } finally {
@@ -166,6 +175,7 @@ export function BargainExperienceStudio() {
       if (res.ok) {
         const data = await res.json()
         setExp(data.experience)
+        setSavedExp(data.experience)
         setMessage('Restored defaults')
         await load()
       }
@@ -176,6 +186,7 @@ export function BargainExperienceStudio() {
 
   if (loading || !exp) return <div className="text-blue-300/70 text-sm">Loading experience studio...</div>
 
+  const dirty = savedExp ? JSON.stringify(exp) !== JSON.stringify(savedExp) : false
   const previewPersona = PERSONALITY_META.find(p => p.id === exp.personality) ?? PERSONALITY_META[0]
   const selectedReaction = previewReaction ? V2_REACTIONS.find(item => item.id === previewReaction) ?? null : null
   const previewExpression = selectedReaction
@@ -219,10 +230,11 @@ export function BargainExperienceStudio() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={reset} disabled={saving} className="px-3 py-2 rounded-lg border border-blue-800/40 text-blue-200 text-sm flex items-center gap-2"><RotateCcw className="w-4 h-4" /> Restore defaults</button>
-          <button onClick={() => save('draft')} disabled={saving} className="px-3 py-2 rounded-lg border border-blue-800/40 text-blue-200 text-sm flex items-center gap-2"><Save className="w-4 h-4" /> Save draft</button>
-          <button onClick={() => save('publish')} disabled={saving} className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm flex items-center gap-2"><Eye className="w-4 h-4" /> Publish</button>
+          <button onClick={() => save('draft')} disabled={saving || !dirty} title={dirty ? 'Save invitation and avatar edits' : 'No unsaved changes'} className="px-3 py-2 rounded-lg border border-blue-800/40 text-blue-200 text-sm flex items-center gap-2 disabled:opacity-50"><Save className="w-4 h-4" /> Save changes</button>
+          <button onClick={() => save('publish')} disabled={saving || dirty} title={dirty ? 'Save changes before publishing' : 'Publish saved changes to the storefront'} className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm flex items-center gap-2 disabled:opacity-50"><Eye className="w-4 h-4" /> Publish</button>
         </div>
       </div>
+      {dirty && <div className="text-xs text-amber-300">You have unsaved changes. Save them before publishing.</div>}
       {message && <div className="flex items-center gap-2 text-emerald-400 text-sm"><CheckCircle2 className="w-4 h-4" /> {message}</div>}
 
       <div className="rounded-2xl border border-blue-800/30 bg-slate-900/60 p-5">
@@ -408,6 +420,84 @@ export function BargainExperienceStudio() {
               </select>
             </label>
           </div>
+
+          <div className="border-t border-blue-800/30 pt-5">
+            <h3 className="text-white font-medium mb-3">Invitation Widget</h3>
+            <p className="text-xs text-blue-300/60 mb-3">Edit the exact heading, subtitle, CTA, value indicators and colors shoppers see before opening chat.</p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <label className="flex items-center justify-between p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <span className="text-blue-100 text-sm">Invitation visible</span>
+                <input type="checkbox" checked={exp.invitationVisible} onChange={e => setExp({ ...exp, invitationVisible: e.target.checked })} className="accent-cyan-500" />
+              </label>
+              <label className="flex items-center justify-between p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <span className="text-blue-100 text-sm">CTA visible</span>
+                <input type="checkbox" checked={exp.invitationCtaVisible} onChange={e => setExp({ ...exp, invitationCtaVisible: e.target.checked })} className="accent-cyan-500" />
+              </label>
+              <label className="flex items-center justify-between p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <span className="text-blue-100 text-sm">Sparkle accent</span>
+                <input type="checkbox" checked={exp.invitationSparkleVisible} onChange={e => setExp({ ...exp, invitationSparkleVisible: e.target.checked })} className="accent-cyan-500" />
+              </label>
+              <label className="flex items-center justify-between p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <span className="text-blue-100 text-sm">Quick Reply badge</span>
+                <input type="checkbox" checked={exp.invitationIndicators.quickReply} onChange={e => setExp({ ...exp, invitationIndicators: { ...exp.invitationIndicators, quickReply: e.target.checked } })} className="accent-cyan-500" />
+              </label>
+              <label className="flex items-center justify-between p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <span className="text-blue-100 text-sm">No Pressure badge</span>
+                <input type="checkbox" checked={exp.invitationIndicators.noPressure} onChange={e => setExp({ ...exp, invitationIndicators: { ...exp.invitationIndicators, noPressure: e.target.checked } })} className="accent-cyan-500" />
+              </label>
+              <label className="flex items-center justify-between p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <span className="text-blue-100 text-sm">Smart Deals badge</span>
+                <input type="checkbox" checked={exp.invitationIndicators.smartDeals} onChange={e => setExp({ ...exp, invitationIndicators: { ...exp.invitationIndicators, smartDeals: e.target.checked } })} className="accent-cyan-500" />
+              </label>
+              <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40 sm:col-span-2">
+                <span className="block text-blue-100 text-sm mb-2">Heading</span>
+                <input value={exp.invitationHeadline ?? ''} maxLength={120} placeholder="Got a price in mind?" onChange={e => setExp({ ...exp, invitationHeadline: e.target.value || null })} className="w-full rounded-md bg-slate-900 border border-blue-800/50 px-2 py-1.5 text-sm text-blue-100 placeholder:text-blue-400/40" />
+              </label>
+              <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40 sm:col-span-2">
+                <span className="block text-blue-100 text-sm mb-2">Subtitle</span>
+                <input value={exp.invitationSubtitle ?? ''} maxLength={200} placeholder="Let's chat and make a better deal! 🚀" onChange={e => setExp({ ...exp, invitationSubtitle: e.target.value || null })} className="w-full rounded-md bg-slate-900 border border-blue-800/50 px-2 py-1.5 text-sm text-blue-100 placeholder:text-blue-400/40" />
+              </label>
+              <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <span className="block text-blue-100 text-sm mb-2">Text alignment</span>
+                <select value={exp.invitationTextAlign} onChange={e => setExp({ ...exp, invitationTextAlign: e.target.value as typeof exp.invitationTextAlign })} className="w-full rounded-md bg-slate-900 border border-blue-800/50 px-2 py-1.5 text-sm text-blue-100">
+                  <option value="left">Left</option>
+                  <option value="center">Center</option>
+                </select>
+              </label>
+              <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <span className="block text-blue-100 text-sm mb-2">Font</span>
+                <select value={exp.fontFamily} onChange={e => setExp({ ...exp, fontFamily: e.target.value as typeof exp.fontFamily })} className="w-full rounded-md bg-slate-900 border border-blue-800/50 px-2 py-1.5 text-sm text-blue-100">
+                  <option value="system">System</option>
+                  <option value="rounded">Rounded</option>
+                  <option value="serif">Serif</option>
+                </select>
+              </label>
+              <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <span className="block text-blue-100 text-sm mb-2">Highlight</span>
+                <input type="color" value={exp.accentColor ?? '#7c3aed'} onChange={e => setExp({ ...exp, accentColor: e.target.value })} className="w-full h-9 rounded-md bg-slate-900 border border-blue-800/50 px-1" />
+              </label>
+              <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <span className="block text-blue-100 text-sm mb-2">Highlight soft</span>
+                <input type="color" value={exp.accentSecondaryColor ?? '#a78bfa'} onChange={e => setExp({ ...exp, accentSecondaryColor: e.target.value })} className="w-full h-9 rounded-md bg-slate-900 border border-blue-800/50 px-1" />
+              </label>
+              <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <span className="block text-blue-100 text-sm mb-2">Card background</span>
+                <input type="color" value={exp.backgroundColor ?? '#faf9ff'} onChange={e => setExp({ ...exp, backgroundColor: e.target.value })} className="w-full h-9 rounded-md bg-slate-900 border border-blue-800/50 px-1" />
+              </label>
+              <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <span className="block text-blue-100 text-sm mb-2">Text color</span>
+                <input type="color" value={exp.textColor ?? '#111827'} onChange={e => setExp({ ...exp, textColor: e.target.value })} className="w-full h-9 rounded-md bg-slate-900 border border-blue-800/50 px-1" />
+              </label>
+              <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <span className="block text-blue-100 text-sm mb-2">Button color</span>
+                <input type="color" value={exp.buttonColor ?? '#7c3aed'} onChange={e => setExp({ ...exp, buttonColor: e.target.value })} className="w-full h-9 rounded-md bg-slate-900 border border-blue-800/50 px-1" />
+              </label>
+              <label className="p-3 rounded-xl border border-blue-800/40 bg-slate-950/40">
+                <span className="block text-blue-100 text-sm mb-2">Border color</span>
+                <input type="color" value={exp.borderColor ?? '#ddd6fe'} onChange={e => setExp({ ...exp, borderColor: e.target.value })} className="w-full h-9 rounded-md bg-slate-900 border border-blue-800/50 px-1" />
+              </label>
+            </div>
+          </div>
         </div>
 
         <div className="rounded-2xl border border-blue-800/30 bg-slate-900/60 p-6 space-y-4">
@@ -418,9 +508,23 @@ export function BargainExperienceStudio() {
                 Watch the selected shopkeeper respond to real bargain scenarios before you publish.
               </p>
             </div>
-            <span className="rounded-full border border-cyan-500/30 bg-cyan-950/30 px-2 py-1 text-[10px] font-medium text-cyan-200">
-              {previewPersona.name}
-            </span>
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-full border border-blue-800/50 p-0.5">
+                {(['desktop', 'mobile'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setPreviewViewport(mode)}
+                    className={`rounded-full px-2.5 py-1 text-[10px] font-medium capitalize transition ${previewViewport === mode ? 'bg-cyan-500/25 text-cyan-100' : 'text-blue-300/70 hover:text-blue-100'}`}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+              <span className="rounded-full border border-cyan-500/30 bg-cyan-950/30 px-2 py-1 text-[10px] font-medium text-cyan-200">
+                {previewPersona.name}
+              </span>
+            </div>
           </div>
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             {exp.avatarEnabled ? (
@@ -446,8 +550,18 @@ export function BargainExperienceStudio() {
                 Avatar preview is off. Turn on &quot;Avatar enabled&quot; to show the shopkeeper.
               </div>
             )}
-            <div className="flex min-h-[150px] items-end justify-end bg-gradient-to-br from-slate-100 to-slate-200 p-6">
-              <StorefrontInvitation experience={exp} onOpen={() => {}} preview />
+            <div className={`flex min-h-[190px] items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 p-6 ${previewViewport === 'mobile' ? 'mx-auto max-w-[380px]' : ''}`}>
+              <StorefrontInvitation
+                experience={exp}
+                onOpen={() => {}}
+                preview
+                showAvatar={exp.avatarEnabled}
+                personality={exp.personality}
+                characterStyle={exp.characterStyle}
+                motionEnabled={exp.motionEnabled}
+                essentialMotionOnly={exp.essentialMotionOnly}
+                viewport={previewViewport}
+              />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">

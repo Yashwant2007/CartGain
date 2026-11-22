@@ -142,6 +142,11 @@ export type UiKey =
   | 'continue_checkout'
   | 'inviteSmartCopy'
   | 'inviteSmartCta'
+  | 'invitePremiumHeadline'
+  | 'invitePremiumSubtitle'
+  | 'inviteQuickReply'
+  | 'inviteNoPressure'
+  | 'inviteSmartDeals'
   | 'invitePlayfulCopy'
   | 'invitePlayfulCta'
   | 'inviteUnlockCopy'
@@ -326,6 +331,11 @@ const EN: Record<UiKey, string> = {
     dealAgreedAt: 'Deal agreed at {price}',
     inviteSmartCopy: "Got a price in mind? 💬 Let's talk.",
     inviteSmartCta: 'Make an offer',
+    invitePremiumHeadline: 'Got a price in mind?',
+    invitePremiumSubtitle: "Let's chat and make a better deal! 🚀",
+    inviteQuickReply: 'Quick Reply',
+    inviteNoPressure: 'No Pressure',
+    inviteSmartDeals: 'Smart Deals',
     invitePlayfulCopy: 'Think you can beat this price? 😏',
     invitePlayfulCta: 'Challenge the price',
     inviteUnlockCopy: 'Your personal deal awaits ✨',
@@ -515,6 +525,11 @@ const I18N: Record<UiLang, Translations> & { en: Record<UiKey, string> } = {
     dealAgreedAt: 'Deal {price} par pakka',
     inviteSmartCopy: 'Kya aapke paas koi price hai? 💬 Baat karte hain.',
     inviteSmartCta: 'Offer karein',
+    invitePremiumHeadline: 'Kya aapke paas koi price hai?',
+    invitePremiumSubtitle: 'Chalo baat karke behtar deal banayein! 🚀',
+    inviteQuickReply: 'Quick Reply',
+    inviteNoPressure: 'No Pressure',
+    inviteSmartDeals: 'Smart Deals',
     invitePlayfulCopy: 'Kya aap is price ko har sakte hain? 😏',
     invitePlayfulCta: 'Price ko challenge karein',
     inviteUnlockCopy: 'Aapka personal deal intezaar kar raha hai ✨',
@@ -647,6 +662,11 @@ const I18N: Record<UiLang, Translations> & { en: Record<UiKey, string> } = {
     dealAgreedAt: '{price} पर सौदा तय',
     inviteSmartCopy: 'क्या आपके पास कोई कीमत है? 💬 बात करते हैं।',
     inviteSmartCta: 'ऑफ़र करें',
+    invitePremiumHeadline: 'क्या आपके पास कोई कीमत है?',
+    invitePremiumSubtitle: 'बात करके बेहतर सौदा करते हैं! 🚀',
+    inviteQuickReply: 'त्वरित जवाब',
+    inviteNoPressure: 'बिना दबाव',
+    inviteSmartDeals: 'स्मार्ट सौदे',
     invitePlayfulCopy: 'क्या आप इस कीमत को हरा सकते हैं? 😏',
     invitePlayfulCta: 'कीमत को चुनौती दें',
     inviteUnlockCopy: 'आपका निजी सौदा इंतज़ार कर रहा है ✨',

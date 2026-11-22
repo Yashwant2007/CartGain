@@ -478,6 +478,8 @@ export async function resolveSessionLearning(params: {
           candidate: selection.strategy,
           reason: selection.reason,
           exploration: selection.isExploration,
+          behavior: params.context.behavior ?? null,
+          trend: params.context.trend ?? null,
         },
       })
       if (created) {
@@ -553,6 +555,8 @@ export async function previewDemoLearning(params: {
         candidate: selection.strategy,
         reason: selection.reason,
         exploration: selection.isExploration,
+        behavior: params.context.behavior ?? null,
+        trend: params.context.trend ?? null,
       },
     })
     if (created) {

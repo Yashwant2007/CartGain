@@ -210,6 +210,34 @@ it('persists the living shopkeeper character style and essential-motion switch',
   expect(update.essentialMotionOnly).toBe(true)
 })
 
+it('persists invitation copy, indicators and colors in the published snapshot', async () => {
+  const res = await PUT(request('PUT', {
+    action: 'publish',
+    invitationHeadline: '  Got a price in mind?  ',
+    invitationSubtitle: "Let's chat and make a better deal! 🚀",
+    invitationCtaVisible: false,
+    invitationSparkleVisible: false,
+    invitationTextAlign: 'center',
+    invitationIndicators: { quickReply: false, noPressure: true, smartDeals: false },
+    backgroundColor: '#faf9ff',
+    borderColor: '#ddd6fe',
+    fontFamily: 'rounded',
+  }))
+  expect(res.status).toBe(200)
+  const update = prismaMock.bargainConfig.upsert.mock.calls.at(-1)[0].update
+  expect(update.experiencePublished).toMatchObject({
+    invitationHeadline: 'Got a price in mind?',
+    invitationSubtitle: "Let's chat and make a better deal! 🚀",
+    invitationCtaVisible: false,
+    invitationSparkleVisible: false,
+    invitationTextAlign: 'center',
+    invitationIndicators: { quickReply: false, noPressure: true, smartDeals: false },
+    backgroundColor: '#faf9ff',
+    borderColor: '#ddd6fe',
+    fontFamily: 'rounded',
+  })
+})
+
 it('rejects an unknown character style and falls back to the safe default', async () => {
   const res = await PUT(request('PUT', {
     action: 'publish',

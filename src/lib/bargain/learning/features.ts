@@ -1,3 +1,4 @@
+import { normalizedBehavior, normalizedTrend } from './behavior-context'
 import type { LearningContextInput, LearningFeatures } from './types'
 
 export const GLOBAL_CONTEXT_KEY = '__global__'
@@ -65,7 +66,15 @@ export function buildLearningFeatures(
     input.recommendationsEnabled === true &&
     ((input.budget != null && input.budget < floorPrice) ||
       (input.bulkQuantity != null && input.bulkQuantity >= 2))
-  const contextKey = `${input.config?.version ?? 'v1'}|${intent}|${offer}`
+  const behaviorGroup = normalizedBehavior(input.behavior)
+  const trendGroup = normalizedTrend(input.trend)
+  const contextKey = [
+    input.config?.version ?? 'v1',
+    intent,
+    offer,
+    behaviorGroup ? `b:${behaviorGroup}` : '',
+    trendGroup ? `t:${trendGroup}` : '',
+  ].filter(Boolean).join('|')
 
   return {
     intentGroup: intent,
@@ -73,6 +82,8 @@ export function buildLearningFeatures(
     budgetBucket: budget,
     roundsBucket: roundsBucket(input.rounds),
     recommendationEligible,
+    behaviorGroup,
+    trendGroup,
     contextKey,
   }
 }

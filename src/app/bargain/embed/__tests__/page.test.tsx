@@ -58,7 +58,8 @@ it('renders the widget when bargaining is enabled', async () => {
   prismaMock.bargainConfig.findUnique.mockResolvedValue({ enabled: true, language: 'en' })
   const html = renderToStaticMarkup(await EmbedPage({ searchParams: SEARCH }))
   expect(html).not.toContain("type:'cg_empty'")
-  expect(html).toContain('Trail Boots')
+  expect(html).toContain('cg-premium-invite')
+  expect(html).toContain('Make an offer')
 })
 
 it('renders the widget for WooCommerce storefront params', async () => {
@@ -75,5 +76,6 @@ it('renders the widget for WooCommerce storefront params', async () => {
     select: { id: true, isActive: true, platform: true, currency: true },
   })
   expect(html).not.toContain("type:'cg_empty'")
-  expect(html).toContain('Woo Product')
+  expect(html).toContain('cg-premium-invite')
+  expect(html).toContain('Make an offer')
 })

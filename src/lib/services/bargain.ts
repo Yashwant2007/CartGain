@@ -33,6 +33,7 @@ import { paymentPromptBlock } from '@/lib/bargain/payment'
 import { analyzeIntent, shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
 import { deriveConversationState, conversationStateGuidance } from '@/lib/bargain/conversation-state'
 import { validateReplyClaimAdherence } from '@/lib/bargain/claims'
+import { rapidReplyForTurn } from '@/lib/bargain/rapid-reply'
 import { strengthenComparisonPitch } from '@/lib/bargain/sales-pitch'
 import { COMPACT_SALESPERSON_PLAYBOOK, SALESPERSON_PLAYBOOK } from '@/lib/bargain/sales-playbook'
 import { scrubPressureLanguage } from '@/lib/bargain/reply-safety'
@@ -44,6 +45,7 @@ import {
 import { analyzeSocialSignals, socialSignalsToPromptBlock, type SocialSignals } from '@/lib/bargain/behavior'
 import { liveTurnPromptBlock, type LiveTurnAnalysis } from '@/lib/bargain/live-turn'
 import { sessionMemoryPromptBlock, type SessionMemory } from '@/lib/bargain/session-memory'
+import { adaptivePromptBlock, type AdaptiveContext } from '@/lib/bargain/learning/behavior-context'
 import { applyLearningCounterBias } from '@/lib/bargain/learning/strategies'
 import type { LearningGuidance } from '@/lib/bargain/learning/types'
 import { SHOPKEEPER_PERSONALITY_GUIDANCE } from '@/lib/bargain/experience/personality'
@@ -214,6 +216,7 @@ export interface NegotiationContext {
   /** Bounded, deterministic memory of what this shopper has actually revealed
    *  in the session. It steers tone and next move; it never changes price. */
   sessionMemory?: SessionMemory
+  adaptive?: AdaptiveContext
   /** The AI's most recent standing counter. Lets the reciprocal pacing stay
    *  monotonic (a real shopkeeper does not RAISE a price mid-haggle) without ever
    *  consulting the hidden floor. */
@@ -2231,6 +2234,11 @@ export function buildSystemPrompt(
     contextParts.push('\n' + memoryBlock)
   }
 
+  const adaptiveBlock = adaptivePromptBlock(ctx.adaptive)
+  if (adaptiveBlock) {
+    contextParts.push('\n' + adaptiveBlock)
+  }
+
   // ── FLOOR PROTECTION ──
   // The literal numeric floor is NEVER placed in the system prompt. If it were,
   // a successful prompt injection could make the model echo an exact value the
@@ -2806,6 +2814,17 @@ export async function negotiateStep(
     // The system prompt instructs the AI how to handle these
   }
   // ── END ABUSE DETECTION ──
+
+  const rapidReply = ctx.liveTurn?.compact && ctx.liveTurn.noPrice && validatedOffer == null
+    && !ctx.dealAccepted && !ctx.walkoutTriggered && !ctx.bundleRequested && !ctx.claims?.manipulation
+    ? rapidReplyForTurn({
+        mode: ctx.liveTurn.mode,
+        language: ctx.language,
+        productTitle: ctx.productTitle,
+        emojiBudget: ctx.liveTurn.emojiBudget,
+      })
+    : null
+  if (rapidReply) return rapidReply
 
   // ── ABSURD OFFER: reply in persona, NEVER counter ──
   // An offer so far below the merchant's floor is not a bid to answer with a

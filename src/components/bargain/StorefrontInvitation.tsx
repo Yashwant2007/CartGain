@@ -1,9 +1,17 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import ShopkeeperAvatar from '@/components/bargain/ShopkeeperAvatar'
-import type { BargainExperienceConfig, CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
-import { shouldCountImpression, trackExperienceEvent } from '@/lib/bargain/experience/analytics'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
+import {
+  shouldCountImpression,
+  trackExperienceEvent,
+} from '@/lib/bargain/experience/analytics'
+import type {
+  BargainExperienceConfig,
+  CharacterStyle,
+  InvitationFont,
+  ShopkeeperPersonality,
+} from '@/lib/bargain/experience/types'
 import { uiText, type UiKey } from '@/lib/bargain/i18n'
 
 interface Props {
@@ -22,6 +30,7 @@ interface Props {
   characterStyle?: CharacterStyle
   motionEnabled?: boolean
   essentialMotionOnly?: boolean
+  viewport?: 'desktop' | 'mobile'
 }
 
 const DESIGN_STYLES: Record<string, { bg: string; border: string; shadow: string; accent: string }> = {
@@ -30,6 +39,159 @@ const DESIGN_STYLES: Record<string, { bg: string; border: string; shadow: string
   'unlock-your-deal': { bg: 'linear-gradient(135deg, #fdf4ff 0%, #fae8ff 100%)', border: '#f0abfc', shadow: '0 20px 60px rgba(168,85,247,0.16)', accent: '#9333ea' },
   'human-shopkeeper': { bg: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', border: '#86efac', shadow: '0 20px 60px rgba(16,185,129,0.16)', accent: '#059669' },
 }
+
+const FONT_STACKS: Record<InvitationFont, string> = {
+  system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+  rounded: "'Trebuchet MS', 'Nunito', 'Segoe UI', sans-serif",
+  serif: "Georgia, 'Times New Roman', serif",
+}
+
+const INVITATION_CSS = `
+.cg-premium-invite {
+  --cg-invite-accent: #7c3aed;
+  --cg-invite-secondary: #a78bfa;
+  --cg-invite-bg: #faf9ff;
+  --cg-invite-border: #ddd6fe;
+  --cg-invite-text: #111827;
+  --cg-invite-button: #7c3aed;
+  --cg-invite-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 440px;
+  min-height: 112px;
+  padding: 16px 18px 16px 112px;
+  overflow: visible;
+  border: 1px solid var(--cg-invite-border);
+  border-radius: 22px;
+  background: var(--cg-invite-bg);
+  box-shadow: 0 20px 50px rgba(76, 29, 149, 0.14), 0 2px 8px rgba(15, 23, 42, 0.05);
+  color: var(--cg-invite-text);
+  font-family: var(--cg-invite-font);
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: transform 220ms cubic-bezier(.34,1.4,.64,1), box-shadow 220ms ease, border-color 220ms ease;
+}
+.cg-premium-invite::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.7);
+}
+.cg-premium-invite:hover { transform: translateY(-2px); border-color: var(--cg-invite-secondary); box-shadow: 0 24px 58px rgba(76,29,149,.18), 0 3px 10px rgba(15,23,42,.06); }
+.cg-premium-invite:focus-visible { outline: 3px solid var(--cg-invite-secondary); outline-offset: 3px; }
+.cg-premium-invite--compact { min-height: 92px; padding: 12px 14px 12px 98px; border-radius: 18px; }
+.cg-premium-invite--mobile { max-width: 360px; min-height: 104px; padding: 14px 14px 14px 96px; }
+.cg-premium-invite--mobile.cg-premium-invite--compact { min-height: 88px; padding-left: 86px; }
+.cg-premium-invite--no-avatar { padding-left: 18px; }
+.cg-premium-invite-avatar {
+  position: absolute;
+  left: -18px;
+  bottom: -10px;
+  width: 128px;
+  height: 140px;
+  pointer-events: none;
+  z-index: 1;
+  filter: drop-shadow(0 10px 12px rgba(76,29,149,.12));
+}
+.cg-premium-invite--compact .cg-premium-invite-avatar { left: -12px; bottom: -8px; width: 108px; height: 120px; }
+.cg-premium-invite--mobile .cg-premium-invite-avatar { left: -10px; bottom: -8px; width: 108px; height: 120px; }
+.cg-premium-invite-content { position: relative; z-index: 2; display: block; min-width: 0; }
+.cg-premium-invite-title-row { display: flex; align-items: center; gap: 7px; }
+.cg-premium-invite-sparkle {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--cg-invite-secondary) 26%, transparent);
+  color: var(--cg-invite-accent);
+  font-size: 12px;
+  animation: cgInviteSparkle 2.4s ease-in-out infinite;
+}
+.cg-premium-invite-title {
+  display: block;
+  min-width: 0;
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+.cg-premium-invite-highlight {
+  color: var(--cg-invite-accent);
+  background: linear-gradient(transparent 68%, color-mix(in srgb, var(--cg-invite-secondary) 55%, transparent) 68%);
+  padding: 0 1px;
+}
+.cg-premium-invite-subtitle {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #4b5563;
+}
+.cg-premium-invite-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  min-height: 36px;
+  padding: 0 15px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--cg-invite-button), var(--cg-invite-accent));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 8px 18px rgba(124,58,237,.24);
+}
+.cg-premium-invite-cta-arrow { display: inline-block; transition: transform 200ms ease; }
+.cg-premium-invite:hover .cg-premium-invite-cta-arrow { transform: translateX(3px); }
+.cg-premium-invite-indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 11px;
+}
+.cg-premium-invite-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--cg-invite-accent) 16%, transparent);
+  border-radius: 999px;
+  background: rgba(255,255,255,.72);
+  color: #4b5563;
+  font-size: 10.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.cg-premium-invite--compact .cg-premium-invite-title { font-size: 16px; }
+.cg-premium-invite--compact .cg-premium-invite-subtitle { font-size: 12px; margin-top: 4px; }
+.cg-premium-invite--compact .cg-premium-invite-cta { margin-top: 9px; min-height: 32px; }
+.cg-premium-invite--compact .cg-premium-invite-indicators { margin-top: 8px; gap: 4px; }
+.cg-premium-invite--compact .cg-premium-invite-indicator { padding: 3px 6px; font-size: 10px; }
+.cg-premium-invite--left .cg-premium-invite-title-row,
+.cg-premium-invite--left .cg-premium-invite-content { justify-content: flex-start; text-align: left; }
+.cg-premium-invite--center .cg-premium-invite-title-row { justify-content: center; }
+.cg-premium-invite--center .cg-premium-invite-content { text-align: center; }
+.cg-premium-invite--center .cg-premium-invite-indicators { justify-content: center; }
+@keyframes cgInviteSparkle { 0%,100% { transform: scale(.92) rotate(0deg); opacity: .75; } 50% { transform: scale(1.08) rotate(12deg); opacity: 1; } }
+@media (max-width: 420px) {
+  .cg-premium-invite { max-width: 360px; min-height: 104px; padding: 14px 14px 14px 96px; }
+  .cg-premium-invite-avatar { left: -10px; bottom: -8px; width: 108px; height: 120px; }
+  .cg-premium-invite-title { font-size: 16px; }
+  .cg-premium-invite-subtitle { font-size: 12px; }
+  .cg-premium-invite-cta { margin-top: 10px; min-height: 34px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cg-premium-invite, .cg-premium-invite * { animation: none !important; transition: none !important; }
+}
+`
 
 export default function StorefrontInvitation({
   experience,
@@ -46,16 +208,32 @@ export default function StorefrontInvitation({
   characterStyle = 'signature',
   motionEnabled = true,
   essentialMotionOnly = false,
+  viewport,
 }: Props) {
-  const [expression, setExpression] = useState<'idle' | 'curious' | 'listening'>('idle')
   const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const ctaRef = useRef<HTMLSpanElement | null>(null)
   const impressionTracked = useRef(false)
+  const openingRef = useRef(false)
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const design = DESIGN_STYLES[experience.designVariant] || DESIGN_STYLES['smart-assistant']
-  const accent = experience.accentColor || design.accent
   const t = (key: UiKey) => uiText(language, key)
-  const copy = experience.customGreeting || t(defaultCopyKey(experience.designVariant))
-  const cta = experience.ctaLabel || t(defaultCtaKey(experience.designVariant))
-  const animate = experience.motionEnabled
+  const headline = experience.invitationHeadline ?? experience.customGreeting ?? t('invitePremiumHeadline')
+  const subtitle = experience.invitationSubtitle ?? t('invitePremiumSubtitle')
+  const cta = experience.ctaLabel ?? t('inviteSmartCta')
+  const indicators = [
+    experience.invitationIndicators.quickReply ? { key: 'inviteQuickReply', icon: '⚡' } : null,
+    experience.invitationIndicators.noPressure ? { key: 'inviteNoPressure', icon: '🛡' } : null,
+    experience.invitationIndicators.smartDeals ? { key: 'inviteSmartDeals', icon: '🤝' } : null,
+  ].filter((item): item is { key: UiKey; icon: string } => item !== null)
+  const cssVars = {
+    '--cg-invite-accent': experience.accentColor || design.accent,
+    '--cg-invite-secondary': experience.accentSecondaryColor || experience.accentColor || design.accent,
+    '--cg-invite-bg': experience.backgroundColor || design.bg,
+    '--cg-invite-border': experience.borderColor || design.border,
+    '--cg-invite-text': experience.textColor || '#111827',
+    '--cg-invite-button': experience.buttonColor || experience.accentColor || design.accent,
+    '--cg-invite-font': FONT_STACKS[experience.fontFamily] || FONT_STACKS.system,
+  } as CSSProperties
 
   useEffect(() => {
     if (!trackingEnabled || preview || !storeId || !productId || impressionTracked.current) return
@@ -97,7 +275,15 @@ export default function StorefrontInvitation({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackingEnabled, preview, storeId, productId, variantId, source, experience.designVariant, experience.publishedVersion])
 
+  useEffect(() => () => {
+    if (openTimer.current) clearTimeout(openTimer.current)
+  }, [])
+
   function handleOpen() {
+    if (openingRef.current) return
+    openingRef.current = true
+    if (openTimer.current) clearTimeout(openTimer.current)
+    openTimer.current = setTimeout(() => { openingRef.current = false }, 900)
     if (trackingEnabled && !preview && storeId) {
       trackExperienceEvent({
         storeId,
@@ -111,67 +297,79 @@ export default function StorefrontInvitation({
     onOpen()
   }
 
+  const classNames = [
+    'cg-premium-invite',
+    experience.compact ? 'cg-premium-invite--compact' : '',
+    viewport === 'mobile' ? 'cg-premium-invite--mobile' : '',
+    showAvatar ? '' : 'cg-premium-invite--no-avatar',
+    experience.invitationTextAlign === 'center' ? 'cg-premium-invite--center' : 'cg-premium-invite--left',
+  ].filter(Boolean).join(' ')
+
   return (
     <button
       ref={buttonRef}
+      type="button"
       onClick={handleOpen}
-      onMouseEnter={() => setExpression('curious')}
-      onMouseLeave={() => setExpression('idle')}
-      aria-label={cta}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        width: '100%',
-        maxWidth: 320,
-        padding: experience.compact ? '10px 14px' : '14px 18px',
-        borderRadius: 24,
-        background: experience.accentColor ? `linear-gradient(135deg, ${accent}18 0%, #ffffff 100%)` : design.bg,
-        border: `1px solid ${accent}55`,
-        boxShadow: design.shadow,
-        cursor: 'pointer',
-        transform: animate && expression === 'curious' ? 'translateY(-3px)' : 'none',
-        transition: animate ? 'transform 220ms cubic-bezier(0.34,1.56,0.64,1), box-shadow 220ms ease' : 'none',
-        textAlign: 'left',
-      }}
-      onFocus={() => setExpression('listening')}
-      onBlur={() => setExpression('idle')}
+      aria-label={experience.invitationCtaVisible ? cta : headline}
+      className={classNames}
+      style={cssVars}
     >
+      <style dangerouslySetInnerHTML={{ __html: INVITATION_CSS }} />
       {showAvatar && (
-        <ShopkeeperAvatar
-          personality={personality}
-          expression={expression}
-          size="lg"
-          characterStyle={characterStyle}
-          motionEnabled={motionEnabled}
-          essentialMotionOnly={essentialMotionOnly}
-        />
+        <span className="cg-premium-invite-avatar" aria-hidden="true">
+          <ShopkeeperStage
+            compact
+            personality={personality}
+            expression="encouraging"
+            state="pointing"
+            gesture="point"
+            position="conversation"
+            avatarVariant={experience.avatarVariant}
+            characterStyle={characterStyle}
+            essentialMotionOnly={essentialMotionOnly}
+            name={headline}
+            status=""
+            line=""
+            motionEnabled={motionEnabled}
+            enable3D={experience.avatarVariant === 'robot'}
+            targetRef={ctaRef}
+          />
+        </span>
       )}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', lineHeight: 1.4 }}>{copy}</div>
-        <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 6, color: accent, fontWeight: 700, fontSize: 13 }}>
-          {cta}
-          <span aria-hidden style={{ display: 'inline-block', transition: 'transform 0.2s ease', transform: expression === 'curious' ? 'translateX(3px)' : 'none' }}>→</span>
-        </div>
-      </div>
+      <span className="cg-premium-invite-content">
+        <span className="cg-premium-invite-title-row">
+          {experience.invitationSparkleVisible && <span className="cg-premium-invite-sparkle" aria-hidden="true">✦</span>}
+          <span className="cg-premium-invite-title">{highlightPrice(headline)}</span>
+        </span>
+        <span className="cg-premium-invite-subtitle">{subtitle}</span>
+        {experience.invitationCtaVisible && (
+          <span ref={ctaRef} className="cg-premium-invite-cta">
+            {cta}
+            <span aria-hidden="true" className="cg-premium-invite-cta-arrow">→</span>
+          </span>
+        )}
+        {indicators.length > 0 && (
+          <span className="cg-premium-invite-indicators">
+            {indicators.map((indicator) => (
+              <span key={indicator.key} className="cg-premium-invite-indicator">
+                {indicator.icon} {t(indicator.key)}
+              </span>
+            ))}
+          </span>
+        )}
+      </span>
     </button>
   )
 }
 
-function defaultCopyKey(design: string): UiKey {
-  switch (design) {
-    case 'playful-bargain-club': return 'invitePlayfulCopy'
-    case 'unlock-your-deal': return 'inviteUnlockCopy'
-    case 'human-shopkeeper': return 'inviteHumanCopy'
-    default: return 'inviteSmartCopy'
-  }
-}
-
-function defaultCtaKey(design: string): UiKey {
-  switch (design) {
-    case 'playful-bargain-club': return 'invitePlayfulCta'
-    case 'unlock-your-deal': return 'inviteUnlockCta'
-    case 'human-shopkeeper': return 'inviteHumanCta'
-    default: return 'inviteSmartCta'
-  }
+function highlightPrice(text: string) {
+  const index = text.toLowerCase().indexOf('price')
+  if (index < 0) return text
+  return (
+    <>
+      {text.slice(0, index)}
+      <span className="cg-premium-invite-highlight">{text.slice(index, index + 5)}</span>
+      {text.slice(index + 5)}
+    </>
+  )
 }

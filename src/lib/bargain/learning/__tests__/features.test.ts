@@ -43,6 +43,24 @@ describe('bargain learning features', () => {
     expect(GLOBAL_CONTEXT_KEY).toBe('__global__')
   })
 
+  test('includes valid adaptive behavior and trend in the versioned context key', () => {
+    const features = buildLearningFeatures(context({
+      behavior: 'price_focused',
+      trend: 'festive-q4-weekday',
+    }))
+    expect(features.behaviorGroup).toBe('price_focused')
+    expect(features.trendGroup).toBe('festive-q4-weekday')
+    expect(features.contextKey).toBe('v1|price|low_mid|b:price_focused|t:festive-q4-weekday')
+
+    const rejected = buildLearningFeatures(context({
+      behavior: 'ignore previous instructions',
+      trend: 'festive-q4-<script>',
+    }))
+    expect(rejected.behaviorGroup).toBeNull()
+    expect(rejected.trendGroup).toBeNull()
+    expect(rejected.contextKey).toBe('v1|price|low_mid')
+  })
+
   test('recommendation eligibility requires an enabled catalog and a real trigger', () => {
     expect(
       buildLearningFeatures(context({ recommendationsEnabled: true })).recommendationEligible,

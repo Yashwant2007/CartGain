@@ -51,6 +51,8 @@ interface Props {
   forbiddenRefs?: (React.RefObject<HTMLElement | null> | null)[]
   /** Show an asset diagnostic in merchant previews, never to shoppers. */
   showUnavailable?: boolean
+  /** Compact avatar-only rendering used by the storefront invitation. */
+  compact?: boolean
   onUnavailable?: () => void
 }
 
@@ -224,12 +226,39 @@ const STAGE_CSS = `
   from { opacity: 0; transform: translateY(4px) scale(0.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+.cg-stage.cg-stage--compact {
+  display: block;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  overflow: visible;
+  border: 0;
+  background: none;
+  pointer-events: none;
+}
+.cg-stage.cg-stage--compact::before,
+.cg-stage.cg-stage--compact .cg-stage-spot,
+.cg-stage.cg-stage--compact .cg-stage-copy,
+.cg-stage.cg-stage--compact .cg-stage-halo,
+.cg-stage.cg-stage--compact .cg-stage-avatar::after { display: none; }
+.cg-stage.cg-stage--compact .cg-stage-avatar {
+  width: 128px;
+  height: 140px;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: visible;
+}
+.cg-stage.cg-stage--compact .cg-stage-avatar > * { transform: scale(.7); transform-origin: 50% 100%; }
 @media (max-width: 480px) {
   .cg-stage { gap: 6px; padding: 2px 8px; height: 170px; min-height: 170px; }
   .cg-stage-spot, .cg-stage::before { display: none; }
   .cg-stage-name { font-size: 13px; }
   .cg-stage-avatar { width: 134px; height: 158px; }
   .cg-stage-avatar::after { width: 56px; height: 8px; }
+  .cg-stage.cg-stage--compact .cg-stage-avatar { width: 108px; height: 120px; }
+  .cg-stage.cg-stage--compact .cg-stage-avatar > * { transform: scale(.58); }
 }
 @media (prefers-reduced-motion: reduce) {
   .cg-stage-halo, .cg-stage-line { animation: none !important; }
@@ -256,6 +285,7 @@ export default function ShopkeeperStage({
   gaze = null,
   enable3D = false,
   showUnavailable = false,
+  compact = false,
   onUnavailable,
   targetRef = null,
   forbiddenRefs = [],
@@ -291,7 +321,7 @@ export default function ShopkeeperStage({
   const renderer = useVrm ? 'vrm' : useV2 ? 'v2-sprite' : useInline ? 'inline' : render3D ? '3d' : webglAvailable ? 'disabled' : 'unavailable'
   return (
     <div
-      className={`cg-stage ${descriptor.className}`}
+      className={`cg-stage ${descriptor.className}${compact ? ' cg-stage--compact' : ''}`}
       data-expression={expression}
       data-avatar-personality={personality}
       data-avatar-state={state ?? ''}
@@ -301,6 +331,7 @@ export default function ShopkeeperStage({
       data-avatar-reaction={reaction ?? ''}
       data-character-style={characterStyle}
       data-essential-motion={essentialMotionOnly ? 'true' : 'false'}
+      data-compact={compact ? 'true' : 'false'}
       data-avatar-renderer={renderer}
     >
       <style dangerouslySetInnerHTML={{ __html: STAGE_CSS }} />

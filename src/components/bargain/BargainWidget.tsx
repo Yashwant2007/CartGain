@@ -1406,7 +1406,7 @@ export default function BargainWidget({
       <div className="cg-sr-only" role="status" aria-live="polite">{announcer}</div>
 
       {!open && (
-        experience ? (
+        experience && experience.invitationVisible !== false ? (
           <div style={{
             minHeight: invitationFirst ? '100%' : undefined,
             display: 'flex',

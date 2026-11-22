@@ -132,6 +132,7 @@ describe('storefront expansion keys', () => {
   const expansionKeys = [
     'inviteSmartCopy', 'inviteSmartCta', 'invitePlayfulCopy', 'invitePlayfulCta',
     'inviteUnlockCopy', 'inviteUnlockCta', 'inviteHumanCopy', 'inviteHumanCta',
+    'invitePremiumHeadline', 'invitePremiumSubtitle', 'inviteQuickReply', 'inviteNoPressure', 'inviteSmartDeals',
     'recoMatches', 'recoOverBudget', 'recoUnavailable', 'recoView', 'recoAdd',
     'recoNotForMe', 'recoDismiss', 'recoAriaLabel', 'retentionSavedTitle',
     'checkoutAtPrice', 'offerDetected', 'pressEnterToSend', 'nameYourPriceHint',

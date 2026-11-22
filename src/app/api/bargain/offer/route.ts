@@ -6,6 +6,8 @@ import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { detectWalkout, extractPrice, extractQuantity, normalizeCustomerText } from '@/lib/bargain/text'
 import { analyzeSocialSignals } from '@/lib/bargain/behavior'
 import { analyzeLiveTurn } from '@/lib/bargain/live-turn'
+import { adaptiveContextForTurn } from '@/lib/bargain/learning/behavior-context'
+import { rapidReplyForTurn } from '@/lib/bargain/rapid-reply'
 import { buildSessionMemory } from '@/lib/bargain/session-memory'
 import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
 import { uiText, currencySymbolFor, formatMoney } from '@/lib/bargain/i18n'
@@ -820,6 +822,11 @@ export async function POST(request: NextRequest) {
       customerOffer,
       repeatedMessage: shopperSignals.reasking,
     })
+    const adaptive = adaptiveContextForTurn({
+      liveTurn,
+      intent: intentAnalysis,
+      signals: shopperSignals,
+    })
 
     // Module 8 — emergency "Pause AI agent" keeps negotiation alive on the
     // deterministic rule engine only. It never calls a provider, so it is safe
@@ -890,6 +897,8 @@ export async function POST(request: NextRequest) {
         recommendationsEnabled: recoEnabledForMessages(config),
         bulkQuantity,
         promoAvailable: Boolean(config.campaignMessage),
+        behavior: adaptive.behavior,
+        trend: adaptive.trend,
       },
     })
 
@@ -956,6 +965,7 @@ export async function POST(request: NextRequest) {
     ctx.seriousness = classifySeriousness(history, interpretedMessage, ctx, 0)
     ctx.lastCounter = lastCounter
     ctx.liveTurn = liveTurn
+    ctx.adaptive = adaptive
     ctx.sessionMemory = buildSessionMemory({
       intent: intentAnalysis,
       signals: shopperSignals,
@@ -1410,6 +1420,9 @@ export async function POST(request: NextRequest) {
           counterOffer: safeCounter,
           candidate: learningResolved.selection.strategy,
           exploration: learningResolved.selection.isExploration,
+          behavior: adaptive.behavior,
+          trend: adaptive.trend,
+          liveTurnMode: liveTurn.mode,
         },
         agentSource: aiSource,
         agentModel: aiModel,

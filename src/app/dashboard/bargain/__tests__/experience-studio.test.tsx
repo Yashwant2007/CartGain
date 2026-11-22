@@ -45,3 +45,16 @@ it('shows all eight chat reactions for the selected avatar and previews the clic
     expect(container.querySelector('.cg-v2-art')?.getAttribute('style')).toContain('alex-reactions-a.png')
   })
 })
+
+it('previews invitation edits and blocks publishing until they are saved', async () => {
+  const { container } = render(<BargainExperienceStudio />)
+  await waitFor(() => expect(screen.getByPlaceholderText('Got a price in mind?')).toBeTruthy())
+
+  fireEvent.change(screen.getByPlaceholderText('Got a price in mind?'), { target: { value: 'Name your price today' } })
+
+  expect(screen.getByText('Name your price today')).toBeTruthy()
+  expect(container.querySelector('.cg-premium-invite')).toBeTruthy()
+  const publish = screen.getByRole('button', { name: /Publish/ }) as HTMLButtonElement
+  expect(publish.hasAttribute('disabled')).toBe(true)
+  expect(screen.getByText(/You have unsaved changes/)).toBeTruthy()
+})

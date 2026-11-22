@@ -23,6 +23,14 @@ describe('bargain experience config', () => {
       avatarSize: 'huge',
       compact: true,
       position: 'top-right',
+      invitationHeadline: '  Name your price  ',
+      invitationSubtitle: '  Better deal, no pressure  ',
+      invitationCtaVisible: 'yes',
+      invitationTextAlign: 'top',
+      invitationIndicators: { quickReply: 'yes', noPressure: false, smartDeals: 1 },
+      backgroundColor: 'javascript:alert(1)',
+      borderColor: '#ddd6fe',
+      fontFamily: 'comic',
       draftVersion: -4,
       publishedVersion: 12,
     })
@@ -35,6 +43,14 @@ describe('bargain experience config', () => {
     expect(exp.accentColor).toBeNull()
     expect(exp.avatarSize).toBe('md')
     expect(exp.position).toBe('bottom-right')
+    expect(exp.invitationHeadline).toBe('Name your price')
+    expect(exp.invitationSubtitle).toBe('Better deal, no pressure')
+    expect(exp.invitationCtaVisible).toBe(true)
+    expect(exp.invitationTextAlign).toBe('left')
+    expect(exp.invitationIndicators).toEqual({ quickReply: true, noPressure: false, smartDeals: true })
+    expect(exp.backgroundColor).toBeNull()
+    expect(exp.borderColor).toBe('#ddd6fe')
+    expect(exp.fontFamily).toBe('system')
     expect(exp.draftVersion).toBe(1)
     expect(exp.publishedVersion).toBe(12)
   })

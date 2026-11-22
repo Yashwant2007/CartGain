@@ -34,6 +34,18 @@ export const MERCHANT_AVATAR_VARIANTS = ['robot', 'morgan', 'riley', 'alex', 'me
 export const INVITATION_POSITIONS = ['bottom-right', 'bottom-left', 'inline'] as const
 export type InvitationPosition = (typeof INVITATION_POSITIONS)[number]
 
+export const INVITATION_FONTS = ['system', 'rounded', 'serif'] as const
+export type InvitationFont = (typeof INVITATION_FONTS)[number]
+
+export const INVITATION_TEXT_ALIGNS = ['left', 'center'] as const
+export type InvitationTextAlign = (typeof INVITATION_TEXT_ALIGNS)[number]
+
+export interface InvitationIndicators {
+  quickReply: boolean
+  noPressure: boolean
+  smartDeals: boolean
+}
+
 export interface BargainExperienceConfig {
   schemaVersion: number
   personality: ShopkeeperPersonality
@@ -53,6 +65,19 @@ export interface BargainExperienceConfig {
   avatarSize: AvatarSize
   compact: boolean
   position: InvitationPosition
+  invitationVisible: boolean
+  invitationHeadline: string | null
+  invitationSubtitle: string | null
+  invitationCtaVisible: boolean
+  invitationSparkleVisible: boolean
+  invitationTextAlign: InvitationTextAlign
+  invitationIndicators: InvitationIndicators
+  accentSecondaryColor: string | null
+  backgroundColor: string | null
+  textColor: string | null
+  buttonColor: string | null
+  borderColor: string | null
+  fontFamily: InvitationFont
   draftVersion: number
   publishedVersion: number
 }
@@ -69,10 +94,23 @@ export const DEFAULT_BARGAIN_EXPERIENCE: BargainExperienceConfig = {
   localeMode: 'store-default',
   customGreeting: null,
   ctaLabel: null,
-  accentColor: null,
   avatarSize: 'md',
   compact: false,
   position: 'bottom-right',
+  invitationVisible: true,
+  invitationHeadline: null,
+  invitationSubtitle: null,
+  invitationCtaVisible: true,
+  invitationSparkleVisible: true,
+  invitationTextAlign: 'left',
+  invitationIndicators: { quickReply: true, noPressure: true, smartDeals: true },
+  accentColor: '#7c3aed',
+  accentSecondaryColor: '#a78bfa',
+  backgroundColor: '#faf9ff',
+  textColor: '#111827',
+  buttonColor: '#7c3aed',
+  borderColor: '#ddd6fe',
+  fontFamily: 'system',
   draftVersion: 1,
   publishedVersion: 1,
 }
@@ -128,7 +166,7 @@ export interface DesignVariantMeta {
 }
 
 export const DESIGN_VARIANT_META: DesignVariantMeta[] = [
-  { id: 'smart-assistant', name: 'Smart Deal Assistant', positioning: 'Premium, clean, professional for D2C brands', defaultCopy: "Got a price in mind? 💬 Let's talk.", defaultCta: 'Make an offer' },
+  { id: 'smart-assistant', name: 'Smart Deal Assistant', positioning: 'Premium, clean, professional for D2C brands', defaultCopy: "Got a price in mind? Let's chat and make a better deal! 🚀", defaultCta: 'Make an offer' },
   { id: 'playful-bargain-club', name: 'Playful Bargain Club', positioning: 'Energetic for younger/casual brands', defaultCopy: 'Think you can beat this price? 😏', defaultCta: 'Challenge the price' },
   { id: 'unlock-your-deal', name: 'Unlock Your Deal', positioning: 'Refined for beauty, gifting, premium products', defaultCopy: 'Your personal deal awaits ✨', defaultCta: 'Unlock your deal' },
   { id: 'human-shopkeeper', name: 'Human Shopkeeper', positioning: 'Conversational, friendly, localized experiences', defaultCopy: 'Bhai, price ki baat karein? 😄', defaultCta: "Let's negotiate" },

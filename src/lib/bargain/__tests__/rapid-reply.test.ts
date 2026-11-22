@@ -1,0 +1,41 @@
+import { rapidReplyForTurn } from '../rapid-reply'
+
+describe('rapid low-information replies', () => {
+  it('answers a greeting deterministically without opening a price', () => {
+    const result = rapidReplyForTurn({ mode: 'greeting', language: 'en', productTitle: 'Trail Shoes' })
+    expect(result?.decision).toBe('chat')
+    expect(result?.tactic).toBe('rapid_reply')
+    expect(result?.reply).toContain('Tell me what you are looking for')
+    expect(result?.reply).not.toMatch(/\d/)
+    expect(result?.metadata.aiSource).toBe('reflex')
+    expect(result?.metadata.rapidReply).toBe(true)
+  })
+
+  it('localizes and sanitizes the product name', () => {
+    const result = rapidReplyForTurn({
+      mode: 'small_talk',
+      language: 'hi',
+      productTitle: '  Trail\u0000Shoes  ',
+    })
+    expect(result?.reply).toContain('Trail Shoes')
+    expect(result?.reply).toContain('बजट')
+  })
+
+  it('drops emoji unless the live turn allowed one', () => {
+    expect(rapidReplyForTurn({ mode: 'emoji_only', language: 'en' })?.reply).not.toContain('🙂')
+    const playful = rapidReplyForTurn({ mode: 'emoji_only', language: 'en', emojiBudget: 1 })
+    expect(playful?.reply.startsWith('🙂')).toBe(true)
+  })
+
+  it('refuses to handle ordinary, price and question turns', () => {
+    expect(rapidReplyForTurn({ mode: 'ordinary' })).toBeNull()
+    expect(rapidReplyForTurn({ mode: 'price' })).toBeNull()
+    expect(rapidReplyForTurn({ mode: 'question' })).toBeNull()
+  })
+
+  it('keeps hostile replies professional and claim-free', () => {
+    const result = rapidReplyForTurn({ mode: 'insult', language: 'en', productTitle: 'Trail Shoes' })
+    expect(result?.reply).toContain('respectful')
+    expect(result?.reply).not.toMatch(/floor|minimum|discount|₹|\$/i)
+  })
+})
