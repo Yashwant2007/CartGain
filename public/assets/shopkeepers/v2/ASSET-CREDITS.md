@@ -8,6 +8,11 @@ Merchant-selected cartoon humanoid-robot shopkeepers supplied by the project own
 | Riley | `riley-character.png` | `riley-expressions.png` | Playful |
 | Alex | `alex-character.png` | `alex-expressions.png` | Strict |
 
+Each variant also has two owner-supplied 2×2 chat reaction sheets in
+`reactions/` (A: lowball, counter, rude, flattery; B: hesitation, walk-away,
+deal, extras). They are selected from the shopper's message and never affect
+negotiation or pricing.
+
 `CHARACTER-SPECS.md` is the owner-supplied generation brief and contains the
 shared style block, silhouette rules, expression grid, and servo-smooth
 humanoid-robot acting notes. Character cards were described by the owner but

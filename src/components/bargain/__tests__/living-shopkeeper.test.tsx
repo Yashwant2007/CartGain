@@ -295,6 +295,52 @@ describe('living shopkeeper stage', () => {
     expect(css).toMatch(/\.cg-v2-art \{[^}]*border-radius: 50%; clip-path: ellipse\(50% 50% at 50% 50%\)/)
   })
 
+  it('swaps a V2 shopkeeper to their own chat reaction sheet without losing the expression layer', () => {
+    const { container } = render(
+      <ShopkeeperStage
+        personality="strict_shopkeeper"
+        expression="warning"
+        state="confused"
+        gesture="crossed_arms"
+        position="conversation"
+        avatarVariant="alex"
+        reaction="rude"
+        name="Alex"
+        status="Online"
+        line=""
+      />,
+    )
+    const stage = container.querySelector('.cg-stage')
+    expect(stage?.getAttribute('data-avatar-reaction')).toBe('rude')
+    const avatar = container.querySelector('.cg-v2')
+    expect(avatar?.getAttribute('data-v2-reaction')).toBe('rude')
+    expect(avatar?.getAttribute('data-v2-sheet')).toBe('reaction')
+    expect(avatar?.getAttribute('data-v2-cell')).toBe('countering')
+    const art = container.querySelector('.cg-v2-art') as HTMLElement | null
+    expect(art?.className).toContain('cg-v2-art--reaction')
+    expect(art?.style.backgroundImage).toContain('alex-reactions-a.png')
+    expect(art?.style.backgroundPosition).toBe('0% 100%')
+    expect(avatar?.getAttribute('aria-label')).toContain('rude reaction')
+  })
+
+  it('keeps the expression sheet when no chat reaction is present', () => {
+    const { container } = render(
+      <ShopkeeperStage
+        personality="friendly_shopkeeper"
+        expression="negotiating"
+        state="negotiating"
+        avatarVariant="morgan"
+        name="Morgan"
+        status="Online"
+        line=""
+      />,
+    )
+    const avatar = container.querySelector('.cg-v2')
+    expect(avatar?.getAttribute('data-v2-reaction')).toBe('')
+    expect(avatar?.getAttribute('data-v2-sheet')).toBe('expression')
+    expect(container.querySelector('.cg-v2-art')?.getAttribute('style')).toContain('morgan-expressions.png')
+  })
+
   it('renders a merchant-selected VRM shopkeeper without changing the existing sprite variants', () => {
     const { container } = render(
       <ShopkeeperStage

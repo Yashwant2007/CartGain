@@ -7,7 +7,15 @@ import { Sparkles, Save, Eye, RotateCcw, CheckCircle2, History, Bot } from 'luci
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
 import { PERSONALITY_META, DESIGN_VARIANT_META, type AvatarVariant, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
-import { V2_AVATARS, V2_CELL_POSITIONS } from '@/lib/bargain/experience/v2-shopkeepers'
+import { V2_AVATARS, V2_CELL_POSITIONS, isV2AvatarVariant } from '@/lib/bargain/experience/v2-shopkeepers'
+import {
+  REACTION_EXPRESSION,
+  REACTION_STATE,
+  V2_REACTIONS,
+  v2ReactionCell,
+  v2ReactionSheet,
+  type BargainReaction,
+} from '@/lib/bargain/experience/reactions'
 import { VRM_AVATARS, isVrmAvatarVariant } from '@/lib/bargain/experience/vrm-shopkeepers'
 import {
   expressionForEvent,
@@ -66,6 +74,7 @@ export function BargainExperienceStudio() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [previewScenario, setPreviewScenario] = useState<'welcome' | 'lowball' | 'walkout' | 'deal'>('welcome')
+  const [previewReaction, setPreviewReaction] = useState<BargainReaction | null>(null)
 
   useEffect(() => {
     if (!storeId) return
@@ -168,30 +177,38 @@ export function BargainExperienceStudio() {
   if (loading || !exp) return <div className="text-blue-300/70 text-sm">Loading experience studio...</div>
 
   const previewPersona = PERSONALITY_META.find(p => p.id === exp.personality) ?? PERSONALITY_META[0]
-  const previewExpression = previewScenario === 'lowball'
-    ? expressionForShopperMessage(exp.personality, '₹50 is all I can do.', 1000)
-    : previewScenario === 'walkout'
-      ? expressionForShopperMessage(exp.personality, 'Forget it, I am leaving.', 1000)
-      : previewScenario === 'deal'
-        ? expressionForTurn(exp.personality, { decision: 'accept', ended: 'accepted' })
-        : expressionForEvent(exp.personality, 'CHAT_OPENED')
-  const previewAvatarState: AvatarState = previewScenario === 'lowball'
-    ? 'surprised'
-    : previewScenario === 'walkout'
-      ? 'disappointed'
-      : previewScenario === 'deal'
-        ? 'celebrating'
-        : 'greeting'
+  const selectedReaction = previewReaction ? V2_REACTIONS.find(item => item.id === previewReaction) ?? null : null
+  const previewExpression = selectedReaction
+    ? REACTION_EXPRESSION[selectedReaction.id]
+    : previewScenario === 'lowball'
+      ? expressionForShopperMessage(exp.personality, '₹50 is all I can do.', 1000)
+      : previewScenario === 'walkout'
+        ? expressionForShopperMessage(exp.personality, 'Forget it, I am leaving.', 1000)
+        : previewScenario === 'deal'
+          ? expressionForTurn(exp.personality, { decision: 'accept', ended: 'accepted' })
+          : expressionForEvent(exp.personality, 'CHAT_OPENED')
+  const previewAvatarState: AvatarState = selectedReaction
+    ? REACTION_STATE[selectedReaction.id]
+    : previewScenario === 'lowball'
+      ? 'surprised'
+      : previewScenario === 'walkout'
+        ? 'disappointed'
+        : previewScenario === 'deal'
+          ? 'celebrating'
+          : 'greeting'
   const previewGesture = gestureFor(exp.personality, previewAvatarState)
   const previewPosition: AvatarPosition = 'conversation'
-  const previewLine = previewScenario === 'lowball'
-    ? 'That is a bold start — let me see what I can do without crossing the floor.'
-    : previewScenario === 'walkout'
-      ? 'I understand. The door stays open if you change your mind.'
-      : previewScenario === 'deal'
-        ? 'Deal — that price is yours. Let me get your code ready.'
-        : previewPersona.exampleDialogue[0]
+  const previewLine = selectedReaction
+    ? selectedReaction.response
+    : previewScenario === 'lowball'
+      ? 'That is a bold start — let me see what I can do without crossing the floor.'
+      : previewScenario === 'walkout'
+        ? 'I understand. The door stays open if you change your mind.'
+        : previewScenario === 'deal'
+          ? 'Deal — that price is yours. Let me get your code ready.'
+          : previewPersona.exampleDialogue[0]
   const selectedAvatar = AVATAR_OPTIONS.find(option => option.id === exp.avatarVariant) ?? AVATAR_OPTIONS[0]
+  const reactionAvatar = isV2AvatarVariant(exp.avatarVariant) ? exp.avatarVariant : 'morgan'
 
   return (
     <div className="space-y-6">
@@ -253,13 +270,68 @@ export function BargainExperienceStudio() {
         </div>
       </div>
 
+      <div className="rounded-2xl border border-blue-800/30 bg-slate-900/60 p-5">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-white font-medium flex items-center gap-2"><Sparkles className="w-4 h-4 text-cyan-400" /> Chat reactions · {V2_AVATARS[reactionAvatar].name}</h3>
+            <p className="mt-1 text-xs text-blue-300/60">
+              Each pose is chosen from what the shopper actually types. Morgan, Riley and Alex keep their own reaction sheets; pricing and replies stay unchanged.
+            </p>
+          </div>
+          {selectedReaction && (
+            <button type="button" onClick={() => setPreviewReaction(null)} className="shrink-0 rounded-full border border-blue-800/50 px-3 py-1 text-[11px] text-blue-200 hover:bg-blue-900/40">
+              Clear preview
+            </button>
+          )}
+        </div>
+        {isV2AvatarVariant(exp.avatarVariant) ? (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+            {V2_REACTIONS.map(reaction => {
+              const cell = v2ReactionCell(reaction.id)
+              const active = previewReaction === reaction.id
+              return (
+                <button
+                  key={reaction.id}
+                  type="button"
+                  data-reaction-option={reaction.id}
+                  title={`Shopper: ${reaction.example}`}
+                  aria-pressed={active}
+                  onClick={() => { setPreviewReaction(reaction.id); setPreviewScenario('welcome') }}
+                  className={`flex flex-col items-center overflow-hidden rounded-xl border p-2 text-center transition focus:outline-none focus:ring-2 focus:ring-cyan-400/60 ${
+                    active
+                      ? 'border-cyan-400/70 bg-cyan-950/30 shadow-[0_0_0_1px_rgba(34,211,238,.22)]'
+                      : 'border-blue-800/40 bg-slate-950/40 hover:border-cyan-500/40 hover:bg-slate-900/70'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="mx-auto flex h-20 w-full items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/90"
+                    style={{
+                      backgroundImage: `url(${v2ReactionSheet(reactionAvatar, cell.sheet)})`,
+                      backgroundPosition: cell.position,
+                      backgroundSize: '200% 200%',
+                    }}
+                  />
+                  <span className="mt-2 text-xs font-medium text-white">{reaction.label}</span>
+                  <span className="mt-1 text-[10px] leading-tight text-blue-300/60">{reaction.trigger}</span>
+                </button>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-blue-300/60">
+            Reactions play automatically for Morgan, Riley and Alex. Select one of those avatars above to preview their eight reaction poses.
+          </p>
+        )}
+      </div>
+
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="rounded-2xl border border-blue-800/30 bg-slate-900/60 p-6 space-y-6">
           <div>
             <h3 className="text-white font-medium mb-3">Shopkeeper Personality</h3>
             <div className="grid gap-3">
               {PERSONALITY_META.map(p => (
-                <button key={p.id} onClick={() => { setExp({ ...exp, personality: p.id }); setPreviewScenario('welcome') }}
+                <button key={p.id} onClick={() => { setExp({ ...exp, personality: p.id }); setPreviewScenario('welcome'); setPreviewReaction(null) }}
  className={`p-4 rounded-xl border text-left flex items-start gap-3 transition ${exp.personality === p.id ? 'border-cyan-500/60 bg-cyan-950/20' : 'border-blue-800/40 bg-slate-950/40'}`}>
                   <span aria-hidden="true" className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-lg font-semibold ${p.id === 'friendly_shopkeeper' ? 'border-amber-400/30 bg-amber-400/10 text-amber-200' : p.id === 'strict_shopkeeper' ? 'border-sky-400/30 bg-sky-400/10 text-sky-200' : 'border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-200'}`}>{p.id === 'friendly_shopkeeper' ? '☺' : p.id === 'strict_shopkeeper' ? '◆' : '✦'}</span>
                   <div>
@@ -358,6 +430,7 @@ export function BargainExperienceStudio() {
                 state={previewAvatarState}
                 gesture={previewGesture}
                 position={previewPosition}
+                reaction={selectedReaction?.id ?? null}
                 avatarVariant={exp.avatarVariant}
                 characterStyle={exp.characterStyle}
                 essentialMotionOnly={exp.essentialMotionOnly}
@@ -386,7 +459,7 @@ export function BargainExperienceStudio() {
             ] as const).map(([id, label]) => (
               <button
                 key={id}
-                onClick={() => setPreviewScenario(id)}
+                onClick={() => { setPreviewScenario(id); setPreviewReaction(null) }}
                 className={`rounded-full border px-3 py-1.5 text-xs transition ${
                   previewScenario === id
                     ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-100'

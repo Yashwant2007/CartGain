@@ -21,6 +21,7 @@ import { gestureFor, type GestureName } from './character'
 import { positionForContext, type AvatarPosition } from './positions'
 import { isConversationState, priorityReaction } from '../conversation-state'
 import type { ConversationState } from '../conversation-state'
+import { reactionForAnimation, type BargainReaction } from './reactions'
 
 export interface FireAvatarContext extends LivingEventContext {
   /** True when verified product cards are on screen. */
@@ -46,6 +47,8 @@ export interface ShopkeeperAnimation extends FireAvatarContext {
   gesture: GestureName
   /** Where the character stands. */
   position: AvatarPosition
+  /** Sprite reaction chosen from the shopper's latest chat, for V2 avatars. */
+  reaction?: BargainReaction | null
 }
 
 let livingEventSequence = 0
@@ -148,6 +151,7 @@ export function resolveShopkeeperAnimation(
     expression: override?.expression ?? expression,
     gesture: override?.gesture ?? gesture,
     position: override?.position ?? position,
+    reaction: reactionForAnimation(event, ctx) ?? undefined,
   }
 }
 

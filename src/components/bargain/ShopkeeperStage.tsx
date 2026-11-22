@@ -12,6 +12,7 @@ import { POSITION_DESCRIPTORS, type AvatarPosition } from '@/lib/bargain/experie
 import type { AvatarVariant, CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import type { LivingEvent, LivingEventContext } from '@/lib/bargain/experience/avatar-state'
 import { isVrmAvatarVariant } from '@/lib/bargain/experience/vrm-shopkeepers'
+import type { BargainReaction } from '@/lib/bargain/experience/reactions'
 
 interface Props {
   personality: ShopkeeperPersonality
@@ -24,6 +25,8 @@ interface Props {
   eventContext?: LivingEventContext
   /** Body language for the current state. */
   gesture?: GestureName
+  /** Chat-driven sprite reaction for Morgan, Riley and Alex. */
+  reaction?: BargainReaction | null
   /** Where the character is standing (explicit position manager). */
   position?: AvatarPosition
   /** Merchant-selected avatar. Omitted means legacy robot when 3D is enabled. */
@@ -242,6 +245,7 @@ export default function ShopkeeperStage({
   eventContext,
   gesture = 'rest',
   position = 'conversation',
+  reaction = null,
   avatarVariant,
   characterStyle = 'signature',
   essentialMotionOnly = false,
@@ -294,6 +298,7 @@ export default function ShopkeeperStage({
       data-avatar-position={position}
       data-avatar-variant={selectedVariant}
       data-gesture={gesture}
+      data-avatar-reaction={reaction ?? ''}
       data-character-style={characterStyle}
       data-essential-motion={essentialMotionOnly ? 'true' : 'false'}
       data-avatar-renderer={renderer}
@@ -310,6 +315,7 @@ export default function ShopkeeperStage({
             eventSequence={eventSequence}
             motionEnabled={motionEnabled}
             essentialMotionOnly={essentialMotionOnly}
+            reaction={reaction}
           />
         ) : useInline ? (
           <ShopkeeperAvatar

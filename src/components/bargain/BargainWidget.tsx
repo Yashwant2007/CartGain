@@ -1685,6 +1685,7 @@ export default function BargainWidget({
               eventContext={character}
               gesture={character.gesture}
               position={character.position}
+              reaction={character.reaction}
               avatarVariant={avatarVariant}
               characterStyle={characterStyle}
               essentialMotionOnly={essentialMotionOnly}

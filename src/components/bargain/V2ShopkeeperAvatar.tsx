@@ -12,6 +12,7 @@ import {
   type V2AvatarVariant,
 } from '@/lib/bargain/experience/v2-shopkeepers'
 import { isVrmAvatarVariant } from '@/lib/bargain/experience/vrm-shopkeepers'
+import { v2ReactionCell, v2ReactionSheet, type BargainReaction } from '@/lib/bargain/experience/reactions'
 import VrmShopkeeperAvatar from './VrmShopkeeperAvatar'
 
 interface Props {
@@ -21,6 +22,7 @@ interface Props {
   eventSequence?: number
   motionEnabled?: boolean
   essentialMotionOnly?: boolean
+  reaction?: BargainReaction | null
 }
 
 const V2_CSS = `
@@ -28,6 +30,7 @@ const V2_CSS = `
 .cg-v2-glow { position: absolute; inset: 6px 4px 26px; border-radius: 50%; background: radial-gradient(ellipse at center, color-mix(in srgb, var(--cg-v2-accent) 22%, transparent), transparent 68%); opacity: .75; }
 .cg-v2-shadow { position: absolute; left: 50%; bottom: 1px; width: 70px; height: 9px; transform: translateX(-50%); border-radius: 50%; background: rgba(15,118,110,.16); filter: blur(5px); }
 .cg-v2-art { position: absolute; left: 0; top: 13px; width: 168px; height: 168px; background-repeat: no-repeat; background-size: 200% 200%; border-radius: 50%; clip-path: ellipse(50% 50% at 50% 50%); transform-origin: 50% 84%; will-change: transform; filter: drop-shadow(0 5px 9px rgba(15,23,42,.08)); }
+.cg-v2-art--reaction { clip-path: none; border-radius: 18px; mix-blend-mode: multiply; }
 .cg-v2--soft .cg-v2-art { transition: transform 420ms cubic-bezier(.2,.8,.2,1), background-position 180ms ease-out; }
 .cg-v2--bouncy .cg-v2-art { transition: transform 300ms cubic-bezier(.2,1.4,.35,1), background-position 160ms ease-out; }
 .cg-v2--precise .cg-v2-art { transition: transform 260ms cubic-bezier(.4,0,.2,1), background-position 140ms linear; }
@@ -62,11 +65,15 @@ export default function V2ShopkeeperAvatar({
   eventSequence,
   motionEnabled = true,
   essentialMotionOnly = false,
+  reaction = null,
 }: Props) {
   const [reducedMotion, setReducedMotion] = useState(false)
   const resolved = isV2AvatarVariant(variant) ? variant : 'morgan'
   const meta = V2_AVATARS[resolved]
   const cell = v2CellForExpression(expression)
+  const reactionCell = reaction ? v2ReactionCell(reaction) : null
+  const artImage = reactionCell ? v2ReactionSheet(resolved, reactionCell.sheet) : meta.expressionSheet
+  const artPosition = reactionCell?.position ?? V2_CELL_POSITIONS[cell]
   const motion = v2MotionForState(state)
   const animate = motionEnabled && !reducedMotion
   const rootClass = [
@@ -104,9 +111,11 @@ export default function V2ShopkeeperAvatar({
     <div
       className={rootClass}
       role="img"
-      aria-label={`${meta.name}, ${meta.role}, ${expression} expression`}
+      aria-label={`${meta.name}, ${meta.role}, ${reaction ? `${reaction.replace('_', ' ')} reaction` : `${expression} expression`}`}
       data-v2-variant={resolved}
       data-v2-cell={cell}
+      data-v2-reaction={reaction ?? ''}
+      data-v2-sheet={reactionCell ? 'reaction' : 'expression'}
       data-v2-state={state ?? ''}
       data-v2-motion={motion}
       style={{ '--cg-v2-accent': meta.accent } as React.CSSProperties}
@@ -114,9 +123,9 @@ export default function V2ShopkeeperAvatar({
       <style dangerouslySetInnerHTML={{ __html: V2_CSS }} />
       <span className="cg-v2-glow" aria-hidden="true" />
       <span
-        className="cg-v2-art"
+        className={`cg-v2-art${reactionCell ? ' cg-v2-art--reaction' : ''}`}
         aria-hidden="true"
-        style={{ backgroundImage: `url(${meta.expressionSheet})`, backgroundPosition: V2_CELL_POSITIONS[cell] }}
+        style={{ backgroundImage: `url(${artImage})`, backgroundPosition: artPosition }}
       />
       <span className="cg-v2-shadow" aria-hidden="true" />
     </div>

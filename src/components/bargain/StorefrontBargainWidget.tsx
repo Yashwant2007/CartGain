@@ -56,8 +56,8 @@ const PERSONA_DISPLAY: Record<string, string> = {
 }
 
 const PERSONA_NAME: Record<string, string> = {
-  friendly: 'Alex',
-  strict: 'Morgan',
+  friendly: 'Morgan',
+  strict: 'Alex',
   playful: 'Riley',
 }
 
@@ -668,6 +668,7 @@ export default function StorefrontBargainWidget({
         eventContext={character}
         gesture={character.gesture}
         position={character.position}
+        reaction={character.reaction}
         avatarVariant={avatarVariant}
         name={`${PERSONA_NAME[persona]} · Shopkeeper`}
         status={t('online')}
