@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client'
 import type { Plan } from '@/lib/payment'
 import { PLANS, resolvePlanId, getPlan } from '@/lib/payment'
 import { evaluateSubscriptionEntitlement } from '@/lib/subscription-entitlement'
+import { meterUpdate, resolveOrCreateFreeStoreSubscription, type BillingKind } from '@/lib/billing/store-subscription'
 
 // Usage window for the free allowance. Free/pending subscriptions are metered
 // per CALENDAR MONTH so the "resets each month" promise the widget makes is
@@ -22,6 +23,7 @@ export interface BargainGate {
   storeId: string
   userId: string
   subscriptionId: string
+  billingKind: BillingKind
   planId: string
   plan: Plan
   isPaid: boolean
@@ -42,25 +44,12 @@ export interface BargainGate {
  * have a home.
  */
 export async function getBargainGate(storeId: string): Promise<BargainGate> {
-  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { userId: true } })
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { userId: true, platform: true } })
   if (!store) {
     throw new Error('store_not_found')
   }
 
-  let subscription = await prisma.subscription.findFirst({ where: { userId: store.userId } })
-  if (!subscription) {
-    const now = new Date()
-    subscription = await prisma.subscription.create({
-      data: {
-        userId: store.userId,
-        customerId: `bargain_${store.userId}_${Date.now()}`,
-        plan: 'free',
-        status: 'active',
-        currentPeriodStart: now,
-        currentPeriodEnd: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
-      },
-    })
-  }
+  const subscription = await resolveOrCreateFreeStoreSubscription(store.userId, storeId, store)
 
   const entitlement = evaluateSubscriptionEntitlement(subscription)
   const planId = resolvePlanId(entitlement.effectivePlanId)
@@ -101,6 +90,7 @@ export async function getBargainGate(storeId: string): Promise<BargainGate> {
     storeId,
     userId: store.userId,
     subscriptionId: subscription.id,
+    billingKind: subscription.kind,
     planId,
     plan,
     isPaid,
@@ -130,49 +120,82 @@ export function decideDealMode(gate: BargainGate): BargainDealMode | 'blocked_fr
  * its meter stay atomic.
  */
 export function recordBargainDealOps(gate: BargainGate, sessionId: string, originalPrice: number, finalPrice: number, mode: BargainDealMode) {
-  const ops: Prisma.PrismaPromise<unknown>[] = [prisma.subscription.update({ where: { id: gate.subscriptionId }, data: { bargainDealsUsed: { increment: 1 } } })]
+  const isRazorpay = gate.billingKind === 'razorpay'
+  const updateMeter = (data: Record<string, unknown>): Prisma.PrismaPromise<unknown> =>
+    isRazorpay
+      ? prisma.razorpaySubscription.update({ where: { id: gate.subscriptionId }, data: data as any })
+      : prisma.subscription.update({ where: { id: gate.subscriptionId }, data: data as any })
+
+  const ops: Prisma.PrismaPromise<unknown>[] = [updateMeter({ bargainDealsUsed: { increment: 1 } })]
 
   if (mode === 'overage') {
-    ops.push(prisma.subscription.update({
-      where: { id: gate.subscriptionId },
-      data: { bargainOverageDeals: { increment: 1 } },
-    }))
+    ops.push(updateMeter({ bargainOverageDeals: { increment: 1 } }))
+    if (isRazorpay && gate.plan.bargainOverageDealPrice > 0) {
+      ops.push(prisma.razorpayUsageEvent.create({
+        data: {
+          userId: gate.userId,
+          storeId: gate.storeId,
+          subscriptionId: gate.subscriptionId,
+          kind: 'bargain_deal',
+          referenceId: sessionId,
+          netAmount: Math.round(finalPrice * 100) / 100,
+          chargeAmount: gate.plan.bargainOverageDealPrice,
+        },
+      }))
+    }
   }
 
   const revSharePercent = gate.plan.revSharePercent
   const revShareAmount = Math.round((finalPrice * revSharePercent) / 100 * 100) / 100
 
-  ops.push(prisma.subscription.update({
-    where: { id: gate.subscriptionId },
-    data: {
-      bargainAccruedValue: { increment: finalPrice },
-      bargainAccrued: { increment: revSharePercent > 0 ? revShareAmount : 0 },
-    },
+  ops.push(updateMeter({
+    bargainAccrued: { increment: revSharePercent > 0 ? revShareAmount : 0 },
+    ...(isRazorpay ? {} : { bargainAccruedValue: { increment: finalPrice } }),
   }))
 
   if (revSharePercent > 0) {
-    ops.push(prisma.bargainRevenueShareEvent.create({
-      data: {
-        subscriptionId: gate.subscriptionId,
-        sessionId,
-        storeId: gate.storeId,
-        shopifyProductId: null,
-        grossAmount: originalPrice,
-        discountAmount: Math.round((originalPrice - finalPrice) * 100) / 100,
-        netAmount: Math.round(finalPrice * 100) / 100,
-        revSharePercent,
-        revShareAmount,
-      },
-    }))
+    if (isRazorpay) {
+      ops.push(prisma.razorpayUsageEvent.create({
+        data: {
+          userId: gate.userId,
+          storeId: gate.storeId,
+          subscriptionId: gate.subscriptionId,
+          kind: 'revenue_share',
+          referenceId: sessionId,
+          netAmount: Math.round(finalPrice * 100) / 100,
+          chargeAmount: revShareAmount,
+          revSharePercent,
+        },
+      }))
+    } else {
+      ops.push(prisma.bargainRevenueShareEvent.create({
+        data: {
+          subscriptionId: gate.subscriptionId,
+          sessionId,
+          storeId: gate.storeId,
+          shopifyProductId: null,
+          grossAmount: originalPrice,
+          discountAmount: Math.round((originalPrice - finalPrice) * 100) / 100,
+          netAmount: Math.round(finalPrice * 100) / 100,
+          revSharePercent,
+          revShareAmount,
+        },
+      }))
+    }
   }
 
   return ops
 }
 
 /** Prisma operation that bumps the session meter (called on session creation). */
-export function recordBargainSessionOp(subscriptionId: string) {
-  return prisma.subscription.update({
-    where: { id: subscriptionId },
-    data: { bargainSessionsUsed: { increment: 1 } },
-  })
+export function recordBargainSessionOp(subscription: Pick<BargainGate, 'billingKind' | 'subscriptionId'>) {
+  return subscription.billingKind === 'razorpay'
+    ? prisma.razorpaySubscription.update({
+        where: { id: subscription.subscriptionId },
+        data: { bargainSessionsUsed: { increment: 1 } },
+      })
+    : prisma.subscription.update({
+        where: { id: subscription.subscriptionId },
+        data: { bargainSessionsUsed: { increment: 1 } },
+      })
 }

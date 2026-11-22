@@ -512,7 +512,7 @@ export async function POST(request: NextRequest) {
           }),
         ]
         : []),
-      recordBargainSessionOp(gate.subscriptionId),
+      recordBargainSessionOp(gate),
     ])
 
     // Audit-log the creation of a session holding protected customer data

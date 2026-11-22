@@ -25,6 +25,9 @@ import { releaseLock } from '@/lib/job-lock'
 import { redisSetNX, redisIncr, redisGet, redisExpire, getRedis } from '@/lib/redis'
 import { FREE_CARTS_THRESHOLD, PLANS, getPlan } from '@/lib/payment'
 import { evaluateSubscriptionEntitlement } from '@/lib/subscription-entitlement'
+import { meterUpdate, resolveStoreSubscription } from '@/lib/billing/store-subscription'
+import { recordRazorpayUsageEvent } from '@/lib/billing/razorpay/service'
+import { resolveRazorpayOveragePrices } from '@/lib/billing/razorpay/plans'
 import { track } from '@/lib/analytics/track'
 import {
   evaluateWhatsAppEligibility,
@@ -268,10 +271,7 @@ async function getCartsUsedForStore(userId: string, subscription: any): Promise<
     })
     const total = count.length
 
-    await prisma.subscription.update({
-      where: { id: subscription.id },
-      data: { cartsUsedInPeriod: total },
-    })
+    await meterUpdate(subscription, { cartsUsedInPeriod: total })
 
     const ttl = Math.max(60, Math.floor((subscription.currentPeriodEnd.getTime() - Date.now()) / 1000))
     await redisSetNX(key, String(total), Math.min(ttl, 300) * 1000)
@@ -292,16 +292,13 @@ async function getCartsUsedForStore(userId: string, subscription: any): Promise<
   return count.length
 }
 
-async function incrementCartsUsedCounter(userId: string, subscriptionId: string): Promise<void> {
+async function incrementCartsUsedCounter(userId: string, subscription: any): Promise<void> {
   const redis = getRedis()
   if (redis) {
-    const key = `carts_used:${userId}:${subscriptionId}`
+    const key = `carts_used:${userId}:${subscription.id}`
     await redisIncr(key)
   }
-  await prisma.subscription.update({
-    where: { id: subscriptionId },
-    data: { cartsUsedInPeriod: { increment: 1 } },
-  })
+  await meterUpdate(subscription, { cartsUsedInPeriod: { increment: 1 } })
 }
 
 function makeAbTestVariant(cartId: string): 'A' | 'B' {
@@ -324,9 +321,7 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
     const optedOutEmails = new Set(storeOptOuts.filter(o => o.email).map(o => o.email!.toLowerCase().trim()))
     const optedOutPhones = new Set(storeOptOuts.filter(o => o.phone).map(o => o.phone!.replace(/\D/g, '')))
 
-    const subscription = await prisma.subscription.findFirst({
-      where: { userId: campaign.userId },
-    })
+    const subscription = await resolveStoreSubscription(campaign.userId, store.id, store)
 
     const entitlement = evaluateSubscriptionEntitlement(subscription)
     const isPaidUser = entitlement.isPaid
@@ -1328,20 +1323,35 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     }).catch(() => {})
 
     if (subscription) {
-      await incrementCartsUsedCounter(campaign.userId, subscription.id)
+      const overagePrices = resolveRazorpayOveragePrices(subscription.plan)
+      await incrementCartsUsedCounter(campaign.userId, subscription)
       if (isOverageChannel(ch)) {
-        await prisma.subscription.update({
-          where: { id: subscription.id },
-          data: { overageMessages: { increment: 1 } },
-        })
+        await meterUpdate(subscription, { overageMessages: { increment: 1 } })
         subscription.overageMessages++
+        if (subscription.kind === 'razorpay' && overagePrices.message > 0) {
+          await recordRazorpayUsageEvent({
+            userId: campaign.userId,
+            storeId: store.id,
+            subscriptionId: subscription.id,
+            kind: 'recovery_overage_message',
+            referenceId: messageId ? `${messageId}:${ch}` : `${cart.id}:${ch}`,
+            chargeAmount: overagePrices.message,
+          })
+        }
       }
       if (isNewCartInPeriod) {
-        await prisma.subscription.update({
-          where: { id: subscription.id },
-          data: { cartOverage: { increment: 1 } },
-        })
+        await meterUpdate(subscription, { cartOverage: { increment: 1 } })
         subscription.cartOverage = (subscription.cartOverage ?? 0) + 1
+        if (subscription.kind === 'razorpay' && overagePrices.cart > 0) {
+          await recordRazorpayUsageEvent({
+            userId: campaign.userId,
+            storeId: store.id,
+            subscriptionId: subscription.id,
+            kind: 'recovery_overage_cart',
+            referenceId: cart.id,
+            chargeAmount: overagePrices.cart,
+          })
+        }
       }
     }
     const today = new Date(new Date().toDateString())

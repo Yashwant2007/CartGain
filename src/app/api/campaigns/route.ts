@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404 })
     }
 
-    const subscription = await getSubscription(session.user.id)
+    const subscription = await getSubscription(session.user.id, store.id)
     if (!subscription) {
       return NextResponse.json({ message: 'No subscription found. Please choose a plan first.' }, { status: 402 })
     }

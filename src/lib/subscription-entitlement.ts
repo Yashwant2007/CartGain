@@ -7,6 +7,7 @@ export interface SubscriptionEntitlementInput {
   plan?: string | null
   status?: string | null
   currentPeriodEnd?: Date | string | null
+  gracePeriodEnd?: Date | string | null
 }
 
 export interface SubscriptionEntitlement {
@@ -33,6 +34,11 @@ export function evaluateSubscriptionEntitlement(
   const rawPlanId = resolvePlanId(subscription?.plan || 'free')
   const isPaidPlan = (PAID_PLAN_IDS as readonly string[]).includes(rawPlanId)
   const statusActive = subscription?.status === 'active'
+  const gracePeriodEnd = toDate(subscription?.gracePeriodEnd)
+  const graceActive =
+    subscription?.status === 'past_due' &&
+    gracePeriodEnd !== null &&
+    gracePeriodEnd.getTime() > now.getTime()
   const periodEnd = toDate(subscription?.currentPeriodEnd)
 
   const isExpired =
@@ -41,7 +47,7 @@ export function evaluateSubscriptionEntitlement(
     periodEnd !== null &&
     periodEnd.getTime() <= now.getTime()
 
-  const isPaid = isPaidPlan && statusActive && !isExpired
+  const isPaid = isPaidPlan && (statusActive || graceActive) && !isExpired
   const isEntitled = isPaidPlan ? isPaid : true
   const daysRemaining = periodEnd
     ? Math.max(0, Math.ceil((periodEnd.getTime() - now.getTime()) / DAY_MS))

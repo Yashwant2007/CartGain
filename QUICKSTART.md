@@ -29,10 +29,14 @@ NEXTAUTH_URL="http://localhost:3000"
 # Use a free Supabase database
 DATABASE_URL="postgresql://..."
 
-# Razorpay (test mode)
+# Razorpay (WooCommerce stores only; Shopify stores use Shopify Billing)
 RAZORPAY_KEY_ID="rzp_test_..."
 RAZORPAY_KEY_SECRET="..."
 RAZORPAY_WEBHOOK_SECRET="..."
+RAZORPAY_PLAN_ID_GROWTH_MONTHLY=""
+RAZORPAY_PLAN_ID_GROWTH_YEARLY=""
+RAZORPAY_PLAN_ID_PRO_MONTHLY=""
+RAZORPAY_PLAN_ID_PRO_YEARLY=""
 
 # Resend (Email - free 100k/mo)
 RESEND_API_KEY="re_..."
@@ -43,7 +47,7 @@ FROM_NAME="CartGain"
 **Quick setup for free services**:
 - **Database**: [Supabase](https://supabase.com) → New project → Connection string
 - **Resend**: [Resend](https://resend.com) → Sign up → API Keys
-- **Razorpay**: [Razorpay](https://razorpay.com) → Settings → API Keys (test mode)
+- **Razorpay**: [Razorpay](https://razorpay.com) → Settings → API Keys (test mode). Create four INR plans (`growth` ₹1,499/month or ₹14,990/year; `pro` ₹3,999/month or ₹39,990/year) and copy their plan ids into the env vars above. Register `https://cart-gain.com/api/webhooks/razorpay` with `subscription.charged`, `subscription.paused`, `subscription.resumed`, `subscription.cancelled`, `subscription.completed`, `payment.failed`, `payment.captured` and `order.paid` events in production.
 
 ---
 

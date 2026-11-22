@@ -1,6 +1,7 @@
 import prisma from '@/lib/db'
 import { FREE_CARTS_THRESHOLD, getPlan } from '@/lib/payment'
 import { evaluateSubscriptionEntitlement } from '@/lib/subscription-entitlement'
+import { resolveStoreSubscription } from '@/lib/billing/store-subscription'
 
 export type SubscriptionStatus = {
   hasSubscription: boolean
@@ -130,8 +131,10 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
   }
 }
 
-export async function getSubscription(userId: string) {
-  return prisma.subscription.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } })
+export async function getSubscription(userId: string, storeId?: string | null) {
+  const resolved = await resolveStoreSubscription(userId, storeId)
+  if (!resolved) return null
+  return resolved as any
 }
 
 export async function createFreeSubscription(userId: string) {

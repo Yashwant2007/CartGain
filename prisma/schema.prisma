@@ -447,6 +447,148 @@ model Subscription {
   @@index([subscriptionId])
 }
 
+// ── WooCommerce / Razorpay Billing (isolated from Shopify Billing) ──
+// These models are intentionally separate from Subscription/Invoice. Shopify
+// App Store subscriptions keep their existing provider-owned records and
+// entitlement path; WooCommerce stores are billed only through Razorpay.
+
+model RazorpayCustomer {
+  id                 String   @id @default(cuid())
+  userId             String
+  storeId            String
+  razorpayCustomerId String   @unique
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([storeId])
+  @@index([userId])
+}
+
+model RazorpaySubscription {
+  id                             String    @id @default(cuid())
+  userId                         String
+  storeId                        String    @unique
+  plan                           String
+  status                         String    @default("pending") // pending, active, past_due, cancelled, expired, paused
+  billingPeriod                  String    @default("monthly") // monthly, yearly
+  provider                       String    @default("razorpay")
+  razorpayCustomerId             String?
+  razorpaySubscriptionId         String?   @unique
+  previousRazorpaySubscriptionId String?
+  pendingPlanId                  String?
+  pendingBillingPeriod           String?
+  pendingAmount                  Float?
+  pendingStartAt                 DateTime?
+  pendingAuthorizedAt            DateTime?
+  amount                         Float
+  currency                       String    @default("INR")
+  currentPeriodStart             DateTime
+  currentPeriodEnd               DateTime
+  nextBillingAt                  DateTime?
+  gracePeriodEnd                 DateTime?
+  cancelAtPeriodEnd              Boolean   @default(false)
+  cancelledAt                    DateTime?
+  lastPaymentId                  String?
+  lastEventAt                    DateTime?
+  cartsUsedInPeriod              Int       @default(0)
+  overageMessages                Int       @default(0)
+  cartOverage                    Int       @default(0)
+  bargainSessionsUsed            Int       @default(0)
+  bargainDealsUsed               Int       @default(0)
+  bargainOverageDeals            Int       @default(0)
+  revenueShareAccrued            Float     @default(0)
+  bargainAccrued                 Float     @default(0)
+  createdAt                      DateTime  @default(now())
+  updatedAt                      DateTime  @updatedAt
+
+  payments    RazorpayPayment[]
+  invoices    RazorpayInvoice[]
+  usageEvents RazorpayUsageEvent[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([razorpayCustomerId])
+}
+
+model RazorpayPayment {
+  id                     String   @id @default(cuid())
+  userId                 String
+  storeId                String
+  subscriptionId         String?
+  razorpaySubscriptionId String?
+  orderId                String?
+  paymentId              String   @unique
+  eventId                String?
+  amount                 Float
+  currency               String   @default("INR")
+  status                 String   @default("authorized") // authorized, captured, failed, refunded
+  method                 String?
+  failureCode            String?
+  failureReason          String?
+  rawEvent               Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  subscription RazorpaySubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([storeId])
+  @@index([razorpaySubscriptionId])
+  @@index([orderId])
+  @@index([eventId])
+}
+
+model RazorpayInvoice {
+  id                    String    @id @default(cuid())
+  userId                String
+  storeId               String
+  subscriptionId        String
+  kind                  String    @default("subscription") // subscription, usage
+  amount                Float
+  currency              String    @default("INR")
+  status                String    @default("pending") // pending, paid, failed, cancelled
+  periodStart           DateTime
+  periodEnd             DateTime
+  dueDate               DateTime
+  paidAt                DateTime?
+  razorpayOrderId       String?   @unique
+  razorpayPaymentId     String?
+  razorpayPaymentLinkId String?   @unique
+  paymentLinkUrl        String?
+  description           String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  subscription RazorpaySubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, kind, periodEnd])
+  @@index([userId])
+  @@index([storeId])
+  @@index([subscriptionId])
+  @@index([status])
+}
+
+model RazorpayUsageEvent {
+  id              String    @id @default(cuid())
+  userId          String
+  storeId         String
+  subscriptionId  String
+  kind            String // bargain_deal, cart_overage, message_overage, revenue_share
+  referenceId     String?
+  netAmount       Float     @default(0)
+  chargeAmount    Float
+  revSharePercent Float?
+  invoicedAt      DateTime?
+  invoiceId       String?
+  createdAt       DateTime  @default(now())
+
+  subscription RazorpaySubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, kind, referenceId])
+  @@index([storeId])
+  @@index([invoicedAt])
+}
+
 // ── Bargain System Models (AI Negotiation at Checkout) ──
 
 model BargainConfig {

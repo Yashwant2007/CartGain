@@ -39,6 +39,31 @@ describe('evaluateSubscriptionEntitlement', () => {
     expect(result.effectivePlanId).toBe('free')
   })
 
+  it('keeps a past_due paid plan entitled during its grace window', () => {
+    const withinGrace = evaluateSubscriptionEntitlement(
+      {
+        plan: 'growth',
+        status: 'past_due',
+        currentPeriodEnd: daysFromNow(20),
+        gracePeriodEnd: daysFromNow(3),
+      },
+      NOW,
+    )
+    const afterGrace = evaluateSubscriptionEntitlement(
+      {
+        plan: 'growth',
+        status: 'past_due',
+        currentPeriodEnd: daysFromNow(20),
+        gracePeriodEnd: daysFromNow(-1),
+      },
+      NOW,
+    )
+    expect(withinGrace.isPaid).toBe(true)
+    expect(withinGrace.effectivePlanId).toBe('growth')
+    expect(afterGrace.isPaid).toBe(false)
+    expect(afterGrace.effectivePlanId).toBe('free')
+  })
+
   it('keeps legacy active paid rows with no recorded period end entitled', () => {
     const result = evaluateSubscriptionEntitlement(
       { plan: 'growth', status: 'active', currentPeriodEnd: null },

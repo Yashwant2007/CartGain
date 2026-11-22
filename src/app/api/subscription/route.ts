@@ -9,6 +9,9 @@ import {
 } from '@/lib/shopify-billing/service'
 import { getAuthContext, unauthorizedResponse } from '@/lib/embedded-auth'
 import { evaluateSubscriptionEntitlement } from '@/lib/subscription-entitlement'
+import { isWooCommercePlatform, resolveBillingStore, resolveStoreSubscription } from '@/lib/billing/store-subscription'
+import { isRazorpayConfigured, missingRazorpayBaseEnv, missingRazorpayPlanEnv } from '@/lib/billing/razorpay/config'
+import { reconcileRazorpaySubscriptionForStore } from '@/lib/billing/razorpay/service'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,27 +21,28 @@ export async function GET(request: NextRequest) {
     if (!auth?.user?.id) {
       return unauthorizedResponse()
     }
-    const session = { user: { id: auth.user.id } } as any
+    const userId = auth.user.id
+    const store = await resolveBillingStore(userId, request.nextUrl.searchParams.get('storeId') || auth.store?.id)
+    const isWooStore = !!store && isWooCommercePlatform(store.platform)
+    let resolved = await resolveStoreSubscription(userId, store?.id, store)
+    const isRazorpay = isWooStore || resolved?.kind === 'razorpay'
 
-    // Safety net: when Shopify redirects the merchant back after approving a
-    // subscription, pull the authoritative state immediately instead of waiting
-    // for the app_subscriptions/update webhook to land.
     if (request.nextUrl.searchParams.get('billing') === 'success') {
-      await reconcileShopifySubscriptionForUser(session.user.id)
+      if (isRazorpay && store) {
+        await reconcileRazorpaySubscriptionForStore(userId, store.id).catch(() => null)
+        resolved = await resolveStoreSubscription(userId, store.id, store)
+      } else {
+        await reconcileShopifySubscriptionForUser(userId)
+        resolved = await resolveStoreSubscription(userId, store?.id, store)
+      }
     }
 
-    const subscription = await prisma.subscription.findFirst({
-      where: { userId: session.user.id },
-    })
-
-    const shopifyStore = subscription?.shopDomain
-      ? await resolveShopifyStoreForDomain(session.user.id, subscription.shopDomain)
-      : await resolveShopifyStoreForUser(session.user.id)
+    const shopifyStore = !isRazorpay && resolved?.shopDomain
+      ? await resolveShopifyStoreForDomain(userId, resolved.shopDomain)
+      : !isRazorpay
+        ? await resolveShopifyStoreForUser(userId)
+        : null
     const availability = shopifyBillingAvailability(shopifyStore)
-
-    const store = await prisma.store.findFirst({
-      where: { userId: session.user.id },
-    })
 
     let cartsProcessed = 0
     let cartsRecovered = 0
@@ -47,47 +51,61 @@ export async function GET(request: NextRequest) {
       const processed = await prisma.message.groupBy({
         by: ['cartId'],
         where: {
-          campaign: { userId: session.user.id },
+          campaign: { userId },
           status: 'sent',
         },
       })
       cartsProcessed = processed.length
-      cartsRecovered = await prisma.recoveredCart.count({
-        where: { storeId: store.id },
-      })
-      activeCampaigns = await prisma.campaign.count({
-        where: { storeId: store.id, isActive: true },
-      })
+      cartsRecovered = await prisma.recoveredCart.count({ where: { storeId: store.id } })
+      activeCampaigns = await prisma.campaign.count({ where: { storeId: store.id, isActive: true } })
     }
 
-    const invoices = subscription
-      ? await prisma.invoice.findMany({
-          where: { subscriptionId: subscription.id },
-          orderBy: { createdAt: 'desc' },
-        })
+    const invoices = resolved
+      ? isRazorpay
+        ? await prisma.razorpayInvoice.findMany({
+            where: { subscriptionId: resolved.id },
+            orderBy: { createdAt: 'desc' },
+          })
+        : await prisma.invoice.findMany({
+            where: { subscriptionId: resolved.id },
+            orderBy: { createdAt: 'desc' },
+          })
       : []
 
-    const entitlement = evaluateSubscriptionEntitlement(subscription)
+    const entitlement = evaluateSubscriptionEntitlement(resolved)
     const resolvedPlan = Object.values(PLANS).find(p => p.id === entitlement.effectivePlanId) || PLANS.FREE
+    const razorpayMissing = [...missingRazorpayBaseEnv(), ...missingRazorpayPlanEnv()]
 
     return NextResponse.json({
-      subscription: subscription
+      subscription: resolved
         ? {
-            id: subscription.id,
-            plan: subscription.plan,
-            status: subscription.status,
-            provider: subscription.provider,
-            shopDomain: subscription.shopDomain,
-            smsCredits: subscription.smsCredits,
-            smsCreditsUsed: subscription.smsCreditsUsed,
-            revenueShareAccrued: subscription.revenueShareAccrued,
-            revenueSharePaid: subscription.revenueSharePaid,
-            currentPeriodEnd: subscription.currentPeriodEnd,
-            cartsUsedInPeriod: subscription.cartsUsedInPeriod,
-            cartsLimit: subscription.cartsLimit,
-            overageEnabled: subscription.overageEnabled,
-            overageMessages: subscription.overageMessages,
-            cartOverage: subscription.cartOverage,
+            id: resolved.id,
+            plan: resolved.plan,
+            status: resolved.status,
+            provider: resolved.provider,
+            billingKind: resolved.kind,
+            storeId: resolved.storeId,
+            shopDomain: resolved.shopDomain ?? null,
+            revenueShareAccrued: resolved.revenueShareAccrued,
+            revenueSharePaid: 0,
+            currentPeriodEnd: resolved.currentPeriodEnd,
+            currentPeriodStart: resolved.currentPeriodStart,
+            billingPeriod: resolved.billingPeriod ?? null,
+            cancelAtPeriodEnd: resolved.cancelAtPeriodEnd ?? false,
+            pendingPlanId: resolved.pendingPlanId ?? null,
+            pendingBillingPeriod: resolved.pendingBillingPeriod ?? null,
+            pendingStartAt: resolved.pendingStartAt ?? null,
+            pendingAuthorizedAt: resolved.pendingAuthorizedAt ?? null,
+            nextBillingAt: isRazorpay
+              ? (await prisma.razorpaySubscription.findUnique({ where: { id: resolved.id }, select: { nextBillingAt: true } }))?.nextBillingAt ?? null
+              : null,
+            amount: resolved.amount ?? null,
+            currency: resolved.currency ?? null,
+            cartsUsedInPeriod: resolved.cartsUsedInPeriod,
+            cartsLimit: resolvedPlan.maxCarts,
+            overageEnabled: entitlement.isPaid && resolvedPlan.bargainOverageDealPrice > 0,
+            overageMessages: resolved.overageMessages,
+            cartOverage: resolved.cartOverage,
             resolvedPlan: {
               id: resolvedPlan.id,
               name: resolvedPlan.name,
@@ -107,20 +125,30 @@ export async function GET(request: NextRequest) {
           }
         : null,
       store: store
-        ? { id: store.id, name: store.name, currency: store.currency, cartsProcessed, cartsRecovered }
+        ? {
+            id: store.id,
+            name: store.name,
+            domain: store.domain,
+            platform: store.platform,
+            currency: store.currency,
+            cartsProcessed,
+            cartsRecovered,
+          }
         : null,
       invoices,
       plans: PLANS,
       billing: {
-        provider: 'shopify',
+        provider: isRazorpay ? 'razorpay' : 'shopify',
         shopifyAvailable: availability.available,
         shopifyCurrency: availability.currency,
         shopifyUnavailableReason: availability.reason ?? null,
         shopifyTokenState: availability.tokenState,
-        shopDomain: subscription?.shopDomain ?? shopifyStore?.domain ?? null,
-        legacyBilling: !!subscription && subscription.provider !== 'shopify' &&
-          subscription.provider !== 'manual' &&
-          (subscription.status === 'active' || subscription.status === 'pending'),
+        shopDomain: resolved?.shopDomain ?? shopifyStore?.domain ?? null,
+        legacyBilling: !!resolved && !isRazorpay && resolved.provider !== 'shopify' &&
+          resolved.provider !== 'manual' &&
+          (resolved.status === 'active' || resolved.status === 'pending'),
+        razorpayConfigured: isRazorpayConfigured() && razorpayMissing.length === 0,
+        razorpayMissingConfig: razorpayMissing,
       },
       meta: {
         activeCampaigns,

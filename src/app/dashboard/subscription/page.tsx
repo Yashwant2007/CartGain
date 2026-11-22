@@ -13,6 +13,18 @@ type SubscriptionData = {
   status: string
   provider?: string
   shopDomain?: string | null
+  storeId?: string | null
+  platform?: string | null
+  billingKind?: 'shopify' | 'razorpay'
+  currentPeriodStart?: string
+  billingPeriod?: string | null
+  cancelAtPeriodEnd?: boolean
+  pendingPlanId?: string | null
+  pendingBillingPeriod?: string | null
+  pendingStartAt?: string | null
+  pendingAuthorizedAt?: string | null
+  nextBillingAt?: string | null
+  amount?: number | null
   revenueShareAccrued: number
   revenueSharePaid: number
   currentPeriodEnd: string
@@ -32,7 +44,9 @@ type SubscriptionData = {
 }
 
 type BillingInfo = {
-  provider: 'shopify'
+  provider: 'shopify' | 'razorpay'
+  razorpayConfigured?: boolean
+  razorpayMissingConfig?: string[]
   shopifyAvailable: boolean
   shopifyCurrency: string | null
   shopifyUnavailableReason: string | null
@@ -44,6 +58,8 @@ type BillingInfo = {
 type StoreData = {
   id: string
   name: string
+  domain?: string | null
+  platform?: string | null
   currency: string
   cartsRecovered?: number
 }
@@ -62,10 +78,24 @@ type InvoiceData = {
   periodEnd: string
   dueDate: string
   paidAt: string | null
+  paymentLinkUrl?: string | null
   createdAt: string
 }
 
 type PlanKey = keyof typeof PLANS
+
+function loadRazorpayCheckout(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.reject(new Error('Checkout is unavailable'))
+  if ((window as any).Razorpay) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+    script.async = true
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Could not load Razorpay Checkout'))
+    document.body.appendChild(script)
+  })
+}
 
 export default function SubscriptionPage() {
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
@@ -90,7 +120,8 @@ export default function SubscriptionPage() {
 
   const abortFetchData = useRef<(() => void) | null>(null)
 
-  const billingCurrency = billingInfo?.shopifyCurrency ?? store?.currency ?? 'INR'
+  const isRazorpayBilling = billingInfo?.provider === 'razorpay'
+  const billingCurrency = isRazorpayBilling ? 'INR' : billingInfo?.shopifyCurrency ?? store?.currency ?? 'INR'
   const formatMoney = (amount: number) =>
     new Intl.NumberFormat(billingCurrency === 'INR' ? 'en-IN' : 'en-US', {
       style: 'currency',
@@ -99,8 +130,10 @@ export default function SubscriptionPage() {
       maximumFractionDigits: Number.isInteger(amount) ? 0 : 2,
     }).format(amount)
   const planPrice = (plan: (typeof PLANS)[keyof typeof PLANS], period: 'monthly' | 'yearly') =>
-    resolveBillingPrice(plan.id, period, billingCurrency)?.amount
-      ?? (period === 'yearly' ? plan.yearlyPrice : plan.price)
+    isRazorpayBilling
+      ? (period === 'yearly' ? plan.yearlyPrice : plan.price)
+      : resolveBillingPrice(plan.id, period, billingCurrency)?.amount
+        ?? (period === 'yearly' ? plan.yearlyPrice : plan.price)
   const planOverage = (plan: (typeof PLANS)[keyof typeof PLANS]) =>
     resolveOveragePrices(plan.id, billingCurrency)
   const planUsageCap = (plan: (typeof PLANS)[keyof typeof PLANS]) =>
@@ -181,6 +214,12 @@ export default function SubscriptionPage() {
     : null
   const currentPlan = normalizedKey ? PLANS[normalizedKey] : null
 
+  const pendingPlanKey = subscription?.pendingPlanId
+    ? (Object.keys(PLANS).find(k => PLANS[k].id === subscription.pendingPlanId) as PlanKey | undefined)
+    : undefined
+  const hasPendingPlanChange = isRazorpayBilling && !!subscription?.pendingPlanId
+  const pendingPlan = pendingPlanKey ? PLANS[pendingPlanKey] : null
+
   const cartsUsed = subscription?.cartsUsedInPeriod ?? 0
   const recoveredCarts = recoveryMetrics.cartsRecovered || store?.cartsRecovered || 0
   const freeCartsRemaining = Math.max(0, FREE_CARTS_THRESHOLD - cartsUsed)
@@ -193,7 +232,10 @@ export default function SubscriptionPage() {
     setCancelling(true)
     setCancelError(null)
     try {
-      const res = await shopifySessionFetch('/api/subscription/cancel', { method: 'POST' })
+      const res = await shopifySessionFetch(
+        isRazorpayBilling ? '/api/billing/razorpay/cancel' : '/api/subscription/cancel',
+        { method: 'POST', headers: isRazorpayBilling ? { 'Content-Type': 'application/json' } : undefined, body: isRazorpayBilling ? JSON.stringify({ storeId: store?.id }) : undefined },
+      )
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to cancel')
       setShowCancelConfirm(false)
@@ -212,6 +254,62 @@ export default function SubscriptionPage() {
     try {
       const plan = PLANS[planKey]
       if (!plan || plan.price === 0) return
+
+      if (isRazorpayBilling) {
+        const res = await shopifySessionFetch('/api/billing/razorpay/create-subscription', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan: plan.id, period: billing, storeId: store?.id }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to create subscription')
+        if (!data.keyId || !data.subscriptionId) {
+          throw new Error('Razorpay did not return a checkout session.')
+        }
+
+        let scheduledMessage: string | null = null
+        await loadRazorpayCheckout()
+        await new Promise<void>((resolve, reject) => {
+          const checkout = new (window as any).Razorpay({
+            key: data.keyId,
+            subscription_id: data.subscriptionId,
+            name: data.name,
+            description: data.description,
+            prefill: data.prefill,
+            theme: { color: '#22d3ee' },
+            handler: async (response: any) => {
+              try {
+                const verifyRes = await shopifySessionFetch('/api/billing/razorpay/verify', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    subscriptionId: data.subscriptionId,
+                    paymentId: response.razorpay_payment_id,
+                    signature: response.razorpay_signature,
+                    storeId: store?.id,
+                  }),
+                })
+                const verifyData = await verifyRes.json()
+                if (!verifyRes.ok) throw new Error(verifyData.error || 'Payment verification failed')
+                if (verifyData.status === 'scheduled') {
+                  const startsOn = verifyData.effectiveAt || data.effectiveAt
+                  scheduledMessage = startsOn
+                    ? `${plan.name} authorized — starts ${new Date(startsOn).toLocaleDateString('en-IN')}`
+                    : `${plan.name} authorized`
+                }
+                resolve()
+              } catch (error) {
+                reject(error)
+              }
+            },
+            modal: { ondismiss: () => reject(new Error('Checkout was closed before payment')) },
+          })
+          checkout.open()
+        })
+        setPurchaseSuccess(scheduledMessage || plan.name)
+        setTimeout(() => { fetchData() }, 1500)
+        return
+      }
 
       const res = await shopifySessionFetch('/api/payment/create-subscription', {
         method: 'POST',
@@ -254,9 +352,46 @@ export default function SubscriptionPage() {
         <div className="bg-emerald-900/30 border border-emerald-500/40 rounded-xl p-6 backdrop-blur-sm text-center">
           <div className="text-4xl mb-3">🎉</div>
           <h2 className="text-xl font-bold text-white mb-2">Welcome to {purchaseSuccess}!</h2>
-          <p className="text-sm text-emerald-300/80 mb-3">Your Shopify subscription is active. Recovery will continue without interruption.</p>
+          <p className="text-sm text-emerald-300/80 mb-3">Your {isRazorpayBilling ? 'Razorpay' : 'Shopify'} billing update is confirmed. Recovery will continue without interruption.</p>
           <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-xs text-blue-300/60 mt-3">Refreshing your plan details...</p>
+        </div>
+      )}
+
+      {isRazorpayBilling && billingInfo?.razorpayConfigured === false && (
+        <div className="bg-amber-900/20 border border-amber-500/30 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-amber-200">Razorpay billing is not configured</h2>
+          <p className="text-xs text-blue-300/70 mt-1">
+            Missing environment variables: {(billingInfo.razorpayMissingConfig || []).join(', ') || 'unknown'}.
+            Checkout is disabled until these are set in Vercel.
+          </p>
+        </div>
+      )}
+
+      {hasPendingPlanChange && pendingPlanKey && (
+        <div className="bg-cyan-900/20 border border-cyan-500/30 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-cyan-200">
+              {subscription?.pendingAuthorizedAt ? `${pendingPlan?.name ?? 'Your new plan'} is authorized` : `Finish setting up ${pendingPlan?.name ?? 'your new plan'}`}
+            </h2>
+            <p className="text-xs text-blue-300/70 mt-1">
+              {subscription?.pendingStartAt
+                ? `Your current plan stays active until ${new Date(subscription.pendingStartAt).toLocaleDateString('en-IN')}. `
+                : 'Your current plan stays active until the new plan is charged. '}
+              {subscription?.pendingAuthorizedAt
+                ? 'No further action is needed.'
+                : 'Open Razorpay Checkout once to authorize the scheduled change; no charge is taken now.'}
+            </p>
+          </div>
+          {!subscription?.pendingAuthorizedAt && (
+            <button
+              onClick={() => handlePurchase(pendingPlanKey)}
+              disabled={processing !== null || billingInfo?.razorpayConfigured === false}
+              className="px-5 py-2 rounded-lg text-xs font-medium whitespace-nowrap bg-gradient-to-r from-cyan-500 to-blue-500 text-white disabled:opacity-50 disabled:cursor-wait"
+            >
+              {processing === pendingPlanKey ? 'Opening checkout...' : 'Authorize plan change'}
+            </button>
+          )}
         </div>
       )}
 
@@ -280,12 +415,12 @@ export default function SubscriptionPage() {
             Renewal due in {entitlement.daysRemaining} day{entitlement.daysRemaining === 1 ? '' : 's'}
           </h2>
           <p className="text-xs text-blue-300/70 mt-1">
-            Shopify will charge the payment method on file for your store. Change your plan below before renewal if needed.
+            {isRazorpayBilling ? 'Razorpay will charge the payment method on file when the subscription renews.' : 'Shopify will charge the payment method on file for your store.'} Change your plan below before renewal if needed.
           </p>
         </div>
       )}
 
-      {billingInfo?.shopifyUnavailableReason === 'reconnect_required' && (
+      {!isRazorpayBilling && billingInfo?.shopifyUnavailableReason === 'reconnect_required' && (
         <div className="bg-amber-900/20 border border-amber-500/30 rounded-xl p-5 flex items-center justify-between gap-4">
           <div>
             <h2 className="text-sm font-semibold text-amber-200">Reconnect Shopify to manage billing</h2>
@@ -302,7 +437,7 @@ export default function SubscriptionPage() {
         </div>
       )}
 
-      {billingInfo?.legacyBilling && (
+      {!isRazorpayBilling && billingInfo?.legacyBilling && (
         <div className="bg-amber-900/20 border border-amber-500/30 rounded-xl p-5">
           <h2 className="text-sm font-semibold text-amber-200">Move this plan to Shopify billing</h2>
           <p className="text-xs text-blue-300/70 mt-1">
@@ -645,7 +780,9 @@ export default function SubscriptionPage() {
           </div>
 
           <p className="text-xs text-blue-300/60 mb-4">
-            Revenue share and overage are charged automatically through Shopify within the usage cap you approved. No separate payment is needed.
+            {isRazorpayBilling
+              ? 'Usage above your plan allowance is invoiced through Razorpay at the end of each billing period. Pay any pending invoice from the link below.'
+              : 'Revenue share and overage are charged automatically through Shopify within the usage cap you approved. No separate payment is needed.'}
           </p>
 
           {invoices.length > 0 ? (
@@ -665,7 +802,14 @@ export default function SubscriptionPage() {
                       <td className="py-3 text-white">
                         {new Date(inv.periodStart).toLocaleDateString('en-IN')} - {new Date(inv.periodEnd).toLocaleDateString('en-IN')}
                       </td>
-                      <td className="py-3 text-white font-medium">{formatMoney(inv.amount)}</td>
+                      <td className="py-3 text-white font-medium">
+                        {formatMoney(inv.amount)}
+                        {isRazorpayBilling && inv.paymentLinkUrl && inv.status === 'pending' && (
+                          <a href={inv.paymentLinkUrl} target="_blank" rel="noreferrer" className="block mt-1 text-xs text-cyan-300 hover:text-cyan-200 underline">
+                            Pay invoice
+                          </a>
+                        )}
+                      </td>
                       <td className="py-3">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           inv.status === 'paid'
@@ -753,7 +897,9 @@ export default function SubscriptionPage() {
           <div className="mb-6 text-xs text-blue-300/70 flex items-center gap-2">
             <Shield size={14} />
             <span>
-              {billingInfo.shopifyAvailable
+              {isRazorpayBilling
+                ? 'Billing for this WooCommerce store is handled securely by Razorpay. Prices shown are the canonical INR plan prices.'
+                : billingInfo.shopifyAvailable
                 ? `Billing is handled securely by Shopify${billingInfo.shopDomain ? ` for ${billingInfo.shopDomain}` : ''}. Charges appear on your Shopify invoice.`
                 : billingInfo.shopifyUnavailableReason === 'reconnect_required'
                 ? 'Reconnect Shopify above to choose or change a plan.'
@@ -770,6 +916,7 @@ export default function SubscriptionPage() {
           {Object.values(PLANS).filter(p => p.id !== 'enterprise').map((plan) => {
             const isFree = plan.price === 0
             const isCurrentPlan = isFree ? isFreeUser : isPaidUser && currentPlan?.id === plan.id
+            const isPendingPlan = hasPendingPlanChange && pendingPlanKey === (Object.keys(PLANS).find(k => PLANS[k].id === plan.id) as PlanKey | undefined)
             const isGrowth = plan.recommended === true
 
             // Determine what the button should do and look like
@@ -813,6 +960,8 @@ export default function SubscriptionPage() {
             const btnLabel = (() => {
               if (processing === plan.id.toUpperCase()) return 'Processing...'
               if (cancelling && isFree) return 'Cancelling...'
+              if (isPendingPlan && !subscription?.pendingAuthorizedAt) return 'Authorize plan change'
+              if (hasPendingPlanChange && !isFree) return 'Plan change pending'
               if (isCurrentPlan) return isFree ? '✓ Current Plan (Free)' : '✓ Current Plan'
               if (isFree && isPaidUser) return 'Downgrade to Free'
               if (canDowngrade) return `Switch to ${plan.name}`
@@ -822,6 +971,7 @@ export default function SubscriptionPage() {
 
             const handleClick = () => {
               if (isCurrentPlan) return
+              if (hasPendingPlanChange && isPendingPlan && subscription?.pendingAuthorizedAt) return
               if (isFree && isPaidUser) { setShowCancelConfirm(true); return }
               if (plan.price > 0) { handlePurchase(plan.id.toUpperCase() as PlanKey) }
             }
@@ -899,7 +1049,7 @@ export default function SubscriptionPage() {
                 {/* CTA Button */}
                 <button
                   onClick={handleClick}
-                  disabled={isCurrentPlan || processing === plan.id.toUpperCase() || (cancelling && isFree && isPaidUser)}
+                  disabled={isCurrentPlan || processing === plan.id.toUpperCase() || (cancelling && isFree && isPaidUser) || (hasPendingPlanChange && !isPendingPlan) || (isRazorpayBilling && billingInfo?.razorpayConfigured === false)}
                   className={`w-full py-3 rounded-xl font-semibold text-sm transition-all duration-200 ${btnStyle} ${
                     processing === plan.id.toUpperCase() || cancelling ? 'opacity-60 cursor-wait' : ''
                   }`}

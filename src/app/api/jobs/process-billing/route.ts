@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { processRevenueShareBilling } from '@/lib/jobs/processRevenueShareBilling'
+import { processRazorpayBilling } from '@/lib/jobs/processRazorpayBilling'
 import { sendAlertOnError } from '@/lib/alerter'
 import { requireJobAuth } from '@/lib/job-auth'
 
@@ -11,12 +12,19 @@ export async function GET(request: NextRequest) {
   if (authError) return authError
 
   try {
-    const result = await processRevenueShareBilling()
+    const shopifyResult = await processRevenueShareBilling()
+    let razorpayResult: Awaited<ReturnType<typeof processRazorpayBilling>> | null = null
+    try {
+      razorpayResult = await processRazorpayBilling()
+    } catch (error) {
+      console.warn('Razorpay billing sweep skipped:', error instanceof Error ? error.message : error)
+    }
 
     return NextResponse.json({
       message: 'Revenue share billing processed',
       status: 'processed',
-      result,
+      result: shopifyResult,
+      razorpayResult,
     })
   } catch (error) {
     console.error('Revenue share billing cron error:', error)

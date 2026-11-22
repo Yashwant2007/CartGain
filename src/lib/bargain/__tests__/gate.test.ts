@@ -6,6 +6,7 @@ function makeGate(overrides: Partial<BargainGate> = {}): BargainGate {
     storeId: 'store_1',
     userId: 'user_1',
     subscriptionId: 'sub_1',
+    billingKind: 'shopify',
     planId: 'growth',
     plan: {
       id: 'growth',
