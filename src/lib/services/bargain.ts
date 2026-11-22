@@ -42,6 +42,8 @@ import {
   type NegotiationStyle,
 } from '@/lib/bargain/merchant-modes'
 import { analyzeSocialSignals, socialSignalsToPromptBlock, type SocialSignals } from '@/lib/bargain/behavior'
+import { liveTurnPromptBlock, type LiveTurnAnalysis } from '@/lib/bargain/live-turn'
+import { sessionMemoryPromptBlock, type SessionMemory } from '@/lib/bargain/session-memory'
 import { applyLearningCounterBias } from '@/lib/bargain/learning/strategies'
 import type { LearningGuidance } from '@/lib/bargain/learning/types'
 import { SHOPKEEPER_PERSONALITY_GUIDANCE } from '@/lib/bargain/experience/personality'
@@ -206,6 +208,12 @@ export interface NegotiationContext {
   /** Deterministic buyer-seriousness read (mirrors the engine). A genuine buyer
    *  earns a little more movement; a time-waster is held firmer. */
   seriousness?: 'serious' | 'casual' | 'time_waster'
+  /** Server-classified shape of the current message: random noise, emoji, joke,
+   *  probe, greeting, price, etc. Never derived by the model itself. */
+  liveTurn?: LiveTurnAnalysis
+  /** Bounded, deterministic memory of what this shopper has actually revealed
+   *  in the session. It steers tone and next move; it never changes price. */
+  sessionMemory?: SessionMemory
   /** The AI's most recent standing counter. Lets the reciprocal pacing stay
    *  monotonic (a real shopkeeper does not RAISE a price mid-haggle) without ever
    *  consulting the hidden floor. */
@@ -2212,6 +2220,16 @@ export function buildSystemPrompt(
   }
 
   const contextParts: string[] = []
+
+  const liveTurnBlock = liveTurnPromptBlock(ctx.liveTurn)
+  if (liveTurnBlock) {
+    contextParts.push('\n' + liveTurnBlock)
+  }
+
+  const memoryBlock = sessionMemoryPromptBlock(ctx.sessionMemory, currencySymbol)
+  if (memoryBlock) {
+    contextParts.push('\n' + memoryBlock)
+  }
 
   // ── FLOOR PROTECTION ──
   // The literal numeric floor is NEVER placed in the system prompt. If it were,

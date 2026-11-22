@@ -18,6 +18,9 @@ import {
   type NegotiationResult,
 } from '@/lib/services/bargain'
 import { detectLanguage } from '@/lib/bargain/language'
+import { analyzeSocialSignals } from '@/lib/bargain/behavior'
+import { analyzeLiveTurn } from '@/lib/bargain/live-turn'
+import { buildSessionMemory } from '@/lib/bargain/session-memory'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
 import {
   buildGoalContextForNegotiation,
@@ -312,6 +315,18 @@ export async function POST(request: NextRequest) {
         : undefined
 
     const shopkeeperPersonality = publishedPersonality(merchant.config)
+    const shopperSignals = analyzeSocialSignals({
+      history,
+      currentMessage: interpretedMessage,
+      exclusions: [productTitle, storeName].filter((s): s is string => typeof s === 'string' && s.length > 0),
+    })
+    const liveTurn = analyzeLiveTurn({
+      message: interpretedMessage,
+      intent: intentAnalysis.intent,
+      signals: shopperSignals,
+      customerOffer: offer,
+      repeatedMessage: shopperSignals.reasking,
+    })
 
     const ctx: NegotiationContext = {
       storeName,
@@ -337,6 +352,15 @@ export async function POST(request: NextRequest) {
     ctx.seriousness = classifySeriousness(history, interpretedMessage, ctx, 0)
     ctx.lastCounter = [...history].reverse()
       .find((m) => m.role === 'ai' && typeof m.offeredPrice === 'number')?.offeredPrice ?? null
+    ctx.liveTurn = liveTurn
+    ctx.sessionMemory = buildSessionMemory({
+      intent: intentAnalysis,
+      signals: shopperSignals,
+      liveTurn,
+      customerOfferTrend,
+      seriousness: ctx.seriousness,
+      currencySymbol,
+    })
 
     // Real catalog facts for item demos: when the merchant's store + a real
     // Shopify product id are available, quote verified facts (description,
@@ -447,7 +471,7 @@ export async function POST(request: NextRequest) {
     let turnSource: string | undefined
     let result: NegotiationResult
     try {
-      result = await negotiateStep(ctx2, history, interpretedMessage, offer ?? undefined, `demo_${session.user.id}`)
+      result = await negotiateStep(ctx2, history, interpretedMessage, offer ?? undefined, `demo_${session.user.id}`, liveTurn.compact)
       turnSource = typeof (result as any)?.metadata?.aiSource === 'string' ? (result as any).metadata.aiSource : undefined
     } catch {
       result = offer != null

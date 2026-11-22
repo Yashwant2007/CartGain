@@ -4,6 +4,9 @@ import { bargainOfferSchema, validateOrThrow, handleValidationError } from '@/li
 import { negotiateStep, ruleBasedDecision, chatFallback, buildOpeningMessage, buildCustomerContext, classifySeriousness, computeMinPrice, retentionOffer, quotedFloor, type NegotiationContext } from '@/lib/services/bargain'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { detectWalkout, extractPrice, extractQuantity, normalizeCustomerText } from '@/lib/bargain/text'
+import { analyzeSocialSignals } from '@/lib/bargain/behavior'
+import { analyzeLiveTurn } from '@/lib/bargain/live-turn'
+import { buildSessionMemory } from '@/lib/bargain/session-memory'
 import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
 import { uiText, currencySymbolFor, formatMoney } from '@/lib/bargain/i18n'
 import { detectLanguage } from '@/lib/bargain/language'
@@ -798,6 +801,26 @@ export async function POST(request: NextRequest) {
         'PURCHASE_READY',
       ].includes(intentAnalysis.intent)
 
+    const history = bargainSession.messages
+      .filter((m: any) => m.role === 'customer' || m.role === 'ai')
+      .map((m: any) => ({
+        role: (m.role === 'customer' ? 'customer' : 'ai') as 'customer' | 'ai',
+        content: m.content,
+        offeredPrice: m.offeredPrice ?? undefined,
+      }))
+    const shopperSignals = analyzeSocialSignals({
+      history,
+      currentMessage: interpretedMessage,
+      exclusions: [productTitle, bargainSession.store.name].filter((s): s is string => typeof s === 'string' && s.length > 0),
+    })
+    const liveTurn = analyzeLiveTurn({
+      message: interpretedMessage,
+      intent: intentAnalysis.intent,
+      signals: shopperSignals,
+      customerOffer,
+      repeatedMessage: shopperSignals.reasking,
+    })
+
     // Module 8 — emergency "Pause AI agent" keeps negotiation alive on the
     // deterministic rule engine only. It never calls a provider, so it is safe
     // when a merchant needs to stop AI spend or a misbehaving model instantly.
@@ -811,7 +834,7 @@ export async function POST(request: NextRequest) {
       const endAi = bargainRequestMetrics.startTimer(aiPaused ? 'reflex_turn' : 'ai_turn')
       try {
         if (!aiPaused) {
-          return await negotiateStep(negotiationCtx, negotiationHistory, message, offer, bargainSession.id)
+          return await negotiateStep(negotiationCtx, negotiationHistory, message, offer, bargainSession.id, liveTurn.compact)
         }
         if (offer != null) {
           const ruled = ruleBasedDecision(offer, negotiationCtx)
@@ -894,13 +917,6 @@ export async function POST(request: NextRequest) {
       bargainSession.messages.filter((m: any) => m.role === 'customer').map((m: any) => m.content as string),
     )
 
-    const history = bargainSession.messages
-      .filter((m: any) => m.role === 'customer' || m.role === 'ai')
-      .map((m: any) => ({
-        role: (m.role === 'customer' ? 'customer' : 'ai') as 'customer' | 'ai',
-        content: m.content,
-        offeredPrice: m.offeredPrice ?? undefined,
-      }))
     const lastCounter = [...bargainSession.messages].reverse()
       .find((m: any) => m.role === 'ai' && m.offeredPrice != null)?.offeredPrice ?? null
 
@@ -939,6 +955,15 @@ export async function POST(request: NextRequest) {
     }
     ctx.seriousness = classifySeriousness(history, interpretedMessage, ctx, 0)
     ctx.lastCounter = lastCounter
+    ctx.liveTurn = liveTurn
+    ctx.sessionMemory = buildSessionMemory({
+      intent: intentAnalysis,
+      signals: shopperSignals,
+      liveTurn,
+      customerOfferTrend,
+      seriousness: ctx.seriousness,
+      currencySymbol,
+    })
 
     // ── WALKOUT HANDLING ──
     if (isWalkout) {
