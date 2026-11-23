@@ -167,18 +167,18 @@ export function absurdOfferReply(offer: number, ctx: NegotiationContext): string
   const banks: Record<Persona, { s1: string[]; s2: string[]; s3: string[] }> = {
     strict_negotiator: {
       s1: [
-        `${price} is not a serious offer for ${item}. I don't negotiate on jokes — give me a realistic number.`,
-        `That's not a serious offer. ${price} won't get you ${item} — name a realistic number.`,
-        `I'll be blunt: ${price} is not a serious offer. Come back with a realistic number and I'll work with you.`,
+        `${price} is a little too ambitious for ${item}. No hard feelings — give me a realistic number and I'll see what I can do.`,
+        `That one made me smile. ${price} won't get you ${item}, but a realistic number gives us something to work with.`,
+        `Let's keep it real: ${price} isn't in the ballpark for ${item}. Name a realistic number and we'll talk.`,
       ],
       s2: [
-        `You're edging up, but ${price} is still not in the conversation for ${item}. Stop testing me and give me a realistic number.`,
-        `${price} is still far off. I hear the bump — it's just not enough. Name a realistic number.`,
+        `You're edging up, and I see it. ${price} is still not in the conversation for ${item} — give me a realistic number.`,
+        `${price} is still far off. I hear the bump, and it helps; a realistic number would help more.`,
       ],
       s3: [
         `We're going in circles. ${price} isn't happening. My realistic starting point is ${anchor} — meet me near that and we have a deal.`,
-        `Enough of this. ${price} won't work for ${item}. I can start around ${anchor}; if that's workable, the deal is yours.`,
-        `Straight talk: ${price} is off the table. My position starts at ${anchor}. Bring a serious offer and we'll close.`,
+        `I want to close this for you. ${price} won't work for ${item}, but I can start around ${anchor}; if that's workable, the deal is yours.`,
+        `Straight talk: ${price} is off the table. My position starts at ${anchor}. Bring a real number and we'll close.`,
       ],
     },
     playful_friend: {

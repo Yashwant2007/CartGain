@@ -201,6 +201,19 @@ const BUDGET_BEFORE =
 const BUDGET_AFTER =
   /^\s*(?:is|was)?\s*(?:my\s+)?(?:budget|max(?:imum)?|limit|cap|upper\s+limit)\b/i
 
+const TOPIC_NUMBER_BEFORE =
+  /\b(?:gta|grand\s+theft\s+auto|minecraft|fortnite|call\s+of\s+duty|cod|pubg|roblox|valorant|nba|nfl|ipl|iphone|ipad|android|windows|macbook|playstation|ps|xbox|nintendo|switch|steam|season|episode|chapter|level|stage|version|ver|v|gen|generation|year|grade|class|flat|house|apartment|apt|room|street|road|lane|plot|sector|gate|floor|bus|train|flight|seat|table)\s*(?:no\.?|number|part|version|gen|generation|season|episode|chapter|level|stage|edition|series)?\s*(?:#)?\s*[₹$€£]?\s*$/i
+
+const TOPIC_NUMBER_AFTER =
+  /^\s*(?:k|km|kg|gb|mb|tb|inch(?:es)?|mm|cm|ft|feet|star(?:s)?|mp|megapixel|mah|fps|hz|watts?|w|years?|yrs?|months?|weeks?|days?|hours?|hrs?|minutes?|mins?|seconds?|secs?|am|pm|season|episode|chapter|level|stage|version|gen|generation|series|model|edition|no\.?|number|#)(?:\b|$)/i
+
+const SAVING_GOAL_BEFORE =
+  /\b(?:sav(?:e|ing|ed)|putting\s+aside|setting\s+aside|collecting|need(?:ed)?\s+to\s+save|have\s+to\s+save|goal|target)\b[^.!?\d]{0,30}[₹$€£]?\s*$/i
+
+const YEAR_CONTEXT_BEFORE = /\b(?:in|since|from|during|around|by|until|till|back\s+in)\s*$/i
+
+const YEAR_CONTEXT_AFTER = /^\s*(?:(?:was|is|were|will\s+be|going\s+to\s+be|gonna\s+be)\s+)*(?:wild|crazy|insane|lit|fire|happening|going\s+on|trending|viral|the\s+year|a\s+good\s+year)\b/i
+
 const STRONG_BID_BEFORE =
   /\b(?:i(?:'ll|\s+will|\s+can|\s+'?d|\s+would)\s+(?:give|pay|offer|do|take|spend|buy)(?:\s+you)?|i\s+(?:give|pay|offer)|(?:can|could|will|would)\s+you\s+(?:do|take|accept|give|make|sell|offer|come\s+down)|give\s+it\s+to\s+me\s+for|(?:my\s+)?final(?:\s+offer)?(?:\s+is|\s+at|:|=)?|my\s+offer(?:\s+is|\s+at|:|=)?|(?:^|[\s,])offer\s*[₹$€£]?\s*$|bid\s*[₹$€£]?\s*$)\s*[₹$€£]?\s*$/i
 
@@ -220,6 +233,7 @@ export type NonOfferNumberContext =
   | 'complaint'
   | 'reference'
   | 'duration'
+  | 'casual'
   | null
 
 function nonOfferContext(before: string, after: string, anchored: boolean): NonOfferNumberContext {
@@ -227,6 +241,8 @@ function nonOfferContext(before: string, after: string, anchored: boolean): NonO
   if (!anchored && NON_PRICE_UNIT_AFTER.test(after)) return 'duration'
   if (!anchored && QUANTITY_UNIT_AFTER.test(after)) return 'quantity'
   if (!anchored && QUANTITY_BEFORE.test(before)) return 'quantity'
+  if (TOPIC_NUMBER_BEFORE.test(before) || TOPIC_NUMBER_AFTER.test(after) || SAVING_GOAL_BEFORE.test(before)) return 'casual'
+  if (YEAR_CONTEXT_BEFORE.test(before) || YEAR_CONTEXT_AFTER.test(after)) return 'casual'
   if (IDENTIFIER_BEFORE.test(before) || IDENTIFIER_AFTER.test(after)) return 'identifier'
   if (CONTACT_BEFORE.test(before)) return 'contact'
   if (BUDGET_BEFORE.test(before) || BUDGET_AFTER.test(after)) return 'budget'

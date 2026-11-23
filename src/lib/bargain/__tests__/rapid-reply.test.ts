@@ -39,6 +39,13 @@ describe('rapid low-information replies', () => {
     expect(result?.reply).not.toMatch(/floor|minimum|discount|₹|\$/i)
   })
 
+  it('answers trend chatter without claiming a trend or opening a price', () => {
+    const result = rapidReplyForTurn({ mode: 'trend_talk', language: 'en', productTitle: 'Trail Shoes' })
+    expect(result?.reply).toContain("won't pretend")
+    expect(result?.reply).toContain('Trail Shoes')
+    expect(result?.reply).not.toMatch(/floor|minimum|₹|\$/i)
+  })
+
   it('has claim-free replies for random, joke, flattery and hesitation', () => {
     expect(rapidReplyForTurn({ mode: 'random', language: 'en', productTitle: 'Trail Shoes' })?.reply).toContain('scrambled')
     expect(rapidReplyForTurn({ mode: 'joke', language: 'en', productTitle: 'Trail Shoes' })?.reply).toContain('keep it light')

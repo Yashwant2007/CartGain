@@ -30,4 +30,24 @@ describe('live turn analysis', () => {
     expect(adjusted.emojiBudget).toBe(0)
     expect(adjusted.humorAllowed).toBe(false)
   })
+
+  it('keeps a price complaint human when it also carries casual trend context', () => {
+    const turn = analyzeLiveTurn({
+      message: 'broo this is too much i have to buy gta 6 i am saving money pls understand',
+      intent: 'PRICE_ONLY',
+    })
+    expect(turn.mode).toBe('price')
+    expect(turn.noPrice).toBe(false)
+    expect(turn.humorAllowed).toBe(true)
+    expect(turn.prompt).toContain('casual/trend context')
+    expect(turn.prompt).toContain('never echo them as offers')
+  })
+
+  it('reads trend chatter without treating a title number as a bid', () => {
+    const turn = analyzeLiveTurn({ message: 'anyone else hyped for gta 6?' })
+    expect(turn.mode).toBe('trend_talk')
+    expect(turn.compact).toBe(true)
+    expect(turn.noPrice).toBe(true)
+    expect(turn.prompt).toContain('without claiming what is trending')
+  })
 })

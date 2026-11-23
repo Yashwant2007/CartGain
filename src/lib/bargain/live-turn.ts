@@ -22,6 +22,7 @@ export const LIVE_TURN_MODES = [
   'emoji_only',
   'nonsense',
   'random',
+  'trend_talk',
 ] as const
 
 export type LiveTurnMode = (typeof LIVE_TURN_MODES)[number]
@@ -50,8 +51,9 @@ const NON_TEXT_RE = /[\uD800-\uDBFF\uDC00-\uDFFF\u0000-\u002F\u003A-\u0040\u005B
 const INSULT_RE = /\b(idiot|stupid|dumb|scam|rip[\s-]?off|ripping me off|robber|thief|fraud|liar|bullshit|\bbs\b|trash|useless|waste of (?:my )?time|shut up|stop wasting|ridiculous|insult(?:ing)?|disgusting|bakwas|chap|loot|dhoka)\b/i
 const PROBE_RE = /\b(ignore (?:previous|your) (?:instructions|rules)|system prompt|your prompt|developer mode|reveal your|show me your|what are your instructions|who programmed you|are you (?:an? )?(?:ai|bot|robot)|tell me about yourself|how do you work|your rules)\b/i
 const OFF_TOPIC_RE = /\b(weather|politics|election|news|sports|cricket|football|movie|film|music|game|gaming|cryptocurrency|bitcoin|meaning of life|joke|funny story)\b/i
+const CASUAL_TALK_RE = /\b(gta|grand\s+theft\s+auto|minecraft|fortnite|call\s+of\s+duty|pubg|roblox|valorant|nba|nfl|ipl|game|gaming|gameplay|streamer|netflix|movie|film|series|season|episode|anime|cricket|football|concert|album|song|celebrity|influencer|trend|trending|viral|saving(?:\s+up)?|save\s+up|iphone|android|windows|playstation|ps\d|xbox|model|version)\b/i
 const JOKE_RE = /\b(haha|hehe|lol|lmao|jk\b|kidding|joke|funny|😅|😂|🤣)\b/i
-const PRICE_RE = /\b(price|cost|discount|offer|deal|budget|cheap|cheaper|lower|less|best you can do|final|last price|₹|rs\.?|inr|\$|usd)\b/i
+const PRICE_RE = /\b(price|cost|discount|offer|deal|budget|cheap|cheaper|lower|less|best you can do|final|last price|too\s+(?:much|high|expensive|pricey|steep)|expensive|pricey|costly|overpriced|can'?t\s+afford|₹|rs\.?|inr|\$|usd)\b/i
 const PRODUCT_RE = /\b(product|item|size|colour|color|quality|material|stock|shipping|delivery|return|warranty|genuine|original|variant|features?|specs?)\b/i
 const GREETING_RE = /^\s*(hi|hey|heyy|hello|helo|namaste|namaskar|yo|good\s+(morning|afternoon|evening))\b/i
 const POSITIVE_RE = /\b(thanks|thank you|appreciate|great|awesome|amazing|wonderful|love (?:it|this|you)|you rock|superb|brilliant|nice (?:one|job|work)|well done)\b/i
@@ -95,6 +97,7 @@ function modeFor(input: LiveTurnInput): LiveTurnMode {
   if (!textOnly(message) && EMOJI_RE.test(message)) return 'emoji_only'
   if (!textOnly(message)) return 'nonsense'
   if (isKeyboardMash(message)) return 'random'
+  if (CASUAL_TALK_RE.test(lowered) && !PRODUCT_RE.test(lowered) && !PRICE_RE.test(lowered)) return 'trend_talk'
   if (signals?.question || input.intent === 'PRODUCT_QUESTION') return 'question'
   if (OFF_TOPIC_RE.test(lowered) && !PRODUCT_RE.test(lowered) && !PRICE_RE.test(lowered)) return 'off_topic'
   if (signals?.emotion === 'playful') return 'playful'
@@ -105,7 +108,7 @@ function modeFor(input: LiveTurnInput): LiveTurnMode {
   return 'ordinary'
 }
 
-function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null): Omit<LiveTurnAnalysis, 'mode'> {
+function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message = ''): Omit<LiveTurnAnalysis, 'mode'> {
   const terse = signals?.terse === true
   const playful = signals?.emotion === 'playful' || signals?.emotion === 'excited'
   const base = {
@@ -135,6 +138,16 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null): Omit<L
         emojiBudget: playful ? 1 : 0,
         humorAllowed: playful,
         prompt: 'The shopper sent mostly emoji. Read the mood lightly, do not over-interpret it as agreement or a bid, and ask ONE short clarifying question. Never quote or change a price from emoji alone.',
+      }
+    case 'trend_talk':
+      return {
+        ...base,
+        replyLength: 'brief',
+        compact: true,
+        noPrice: true,
+        emojiBudget: playful ? 1 : 0,
+        humorAllowed: playful,
+        prompt: 'The shopper brought up a game, show, sport, creator, saving goal or other casual/trend topic. Acknowledge it briefly in a human, current-feeling way without claiming what is trending or inventing details. Numbers in titles, versions, model names, years or goals are not offers. Then ask ONE focused question about this product, the real concern, or a genuine price they want checked. Do not lecture, discount, or follow the tangent.',
       }
     case 'off_topic':
       return {
@@ -231,12 +244,19 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null): Omit<L
         replyLength: 'brief',
         prompt: 'They are ready to buy. Confirm only a price the backend has actually issued, keep checkout calm and singular, and do not add a new offer or extra question.',
       }
-    case 'price':
+    case 'price': {
+      const casual = CASUAL_TALK_RE.test(message)
+      const light = casual && signals?.emotion !== 'frustrated'
       return {
         ...base,
         replyLength: terse ? 'brief' : 'normal',
-        prompt: 'This is a price turn. Diagnose or answer the real concern first, then make one honest, floor-safe move with a reason and one clear next step. Label any concession instead of silently folding.',
+        emojiBudget: light ? 1 : 0,
+        humorAllowed: light,
+        prompt: casual
+          ? 'This price turn also carries casual/trend context (game, show, sport, creator, saving goal or similar). Acknowledge it in one warm, human line without claiming what is trending or inventing details, then validate the real budget or price concern and ask for a genuine number. Numbers inside titles, versions, model names, years or saving goals are not bids; never echo them as offers. Keep any humor kind and never joke about money trouble.'
+          : 'This is a price turn. Diagnose or answer the real concern first, then make one honest, floor-safe move with a reason and one clear next step. Label any concession instead of silently folding.',
       }
+    }
     case 'question':
       return {
         ...base,
@@ -253,7 +273,7 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null): Omit<L
 
 export function analyzeLiveTurn(input: LiveTurnInput): LiveTurnAnalysis {
   const mode = modeFor(input)
-  return { mode, ...analysisFor(mode, input.signals) }
+  return { mode, ...analysisFor(mode, input.signals, input.message) }
 }
 
 export function voiceAdjustedLiveTurn(

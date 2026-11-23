@@ -415,10 +415,16 @@ export function shopperIntentToPromptBlock(analysis: IntentAnalysis): string {
       complaint: 'a price they are objecting to',
       reference: 'a listed/reference price',
       duration: 'a time or age',
+      casual: 'a game/show/sport/trend, model/version, year, address or saving-goal reference',
     }
     lines.push(
       `- A number in this message is ${labels[analysis.nonOfferNumberContext]}, NOT an offer. Only a number the shopper clearly presents as what they will pay counts as a bid. Do not quote this number back as their offer, do not counter against it, and do not spend a negotiation move on it; answer the actual question or concern first.`,
     )
+    if (analysis.nonOfferNumberContext === 'casual') {
+      lines.push(
+        `- CASUAL/TOPIC REFERENCE: if the shopper mentions games, shows, sport, creators, saving up for something else or another trend/topic, acknowledge it briefly in a natural, human way. Do not claim what is trending or invent facts about it, keep any humor kind, then return to the product, the real concern, or a genuine price question.`,
+      )
+    }
   }
   if (analysis.intent === 'PRODUCT_QUESTION') {
     lines.push(`- If the question is about a feature not in PRODUCT CONTEXT, admit you don't have verified details and point to the product page.`)

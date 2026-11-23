@@ -10,6 +10,7 @@ export const RAPID_REPLY_MODES = [
   'hesitation',
   'probe',
   'insult',
+  'trend_talk',
 ] as const
 
 export type RapidReplyMode = (typeof RAPID_REPLY_MODES)[number]
@@ -48,6 +49,7 @@ const EN: Copy = {
   hesitation: "No rush. What is holding you back on {item} — fit, trust, or the number?",
   probe: "I'm here to help with this item and its price. Ask me about the product or make an offer.",
   insult: "Let's keep it respectful. I'm happy to help with {item} when you are ready.",
+  trend_talk: "Nice reference — I won't pretend to know what is trending. Want {item} details, or a number you're comfortable with?",
 }
 
 const HINGLISH: Copy = {
@@ -62,6 +64,7 @@ const HINGLISH: Copy = {
   hesitation: 'Koi jaldi nahi. {item} mein kya rok raha hai — fit, trust, ya number?',
   probe: 'Main is item aur iske price mein madad karne ke liye yahin hoon. Product ke baare mein poochhiye ya offer dijiye.',
   insult: 'Chalo, respectful rehte hain. Jab aap ready hon, {item} mein madad kar dunga.',
+  trend_talk: 'Accha reference hai — main trend ka dava nahi karta. {item} ki details chahiye, ya apna price?',
 }
 
 const HI: Copy = {
@@ -76,6 +79,7 @@ const HI: Copy = {
   hesitation: 'कोई जल्दी नहीं। {item} में क्या रोक रहा है — फिट, भरोसा, या मूल्य?',
   probe: 'मैं इस उत्पाद और उसके मूल्य में मदद करने के लिए यहाँ हूँ। उत्पाद के बारे में पूछें या प्रस्ताव दें।',
   insult: 'आइए, सम्मानजनक रहें। जब आप तैयार हों, मैं {item} में मदद करूँगा।',
+  trend_talk: 'शानदार संदर्भ — मैं ट्रेंड का दावा नहीं करूँगा। {item} की जानकारी चाहिए, या आपका मूल्य?',
 }
 
 const TA: Copy = {
@@ -86,6 +90,7 @@ const TA: Copy = {
   off_topic: 'விஷயத்திற்கு வருவோம். {item} பற்றி கேளுங்கள் அல்லது விலை சொல்லுங்கள்.',
   probe: 'இந்த பொருள் மற்றும் அதன் விலையில் உதவ நான் இங்கே இருக்கிறேன். கேள்வி கேளுங்கள் அல்லது விலை சொல்லுங்கள்.',
   insult: 'மரியாதையாக இருக்கலாம். நீங்கள் தயாரானபோது {item} உதவி செய்வேன்.',
+  trend_talk: 'நல்ல குறிப்பு — ட்ரெண்ட் பற்றி நான் உறுதி சொல்ல மாட்டேன். {item} விவரங்களா, ఉங்கள் விலையா?',
 }
 
 const TE: Copy = {
@@ -96,6 +101,7 @@ const TE: Copy = {
   off_topic: 'విషయానికి వద్దాం. {item} గురించి అడగండి లేదా ధర చెప్పండి.',
   probe: 'ఈ ఉత్పత్తి మరియు దాని ధరలో సహాయం చేయడానికి నేను ఇక్కడ ఉన్నాను. ప్రశ్న అడగండి లేదా ఆఫర్ చేయండి.',
   insult: 'గౌరవంగా ఉందాం. మీరు సిద్ధంగా ఉన్నప్పుడు {item} లో సహాయం చేస్తాను.',
+  trend_talk: 'మంచి సూచన — ట్రెండ్ గురించి నేను నిర్ధారణ చేయను. {item} వివరాలా, మీ ధరా?',
 }
 
 const BN: Copy = {
@@ -106,6 +112,7 @@ const BN: Copy = {
   off_topic: 'চলুন, বিষয়ে ফিরে আসি। {item} সম্পর্কে জিজ্ঞাসা করুন অথবা দাম বলুন।',
   probe: 'আমি এই পণ্য ও এর দামে সাহায্য করতে এখানে আছি। প্রশ্ন করুন অথবা অফার দিন।',
   insult: 'চলুন, শ্রদ্ধাশীল থাকি। আপনি প্রস্তুত হলে {item} সাহায্য করব।',
+  trend_talk: 'ভালো ইশারা — ট্রেন্ড নিয়ে আমি দাবি করব না। {item} বিবরণ চাই, নাকি আপনার দাম?',
 }
 
 const MR: Copy = {
@@ -116,6 +123,7 @@ const MR: Copy = {
   off_topic: 'चला, विषयावर येऊया. {item} बद्दल विचारा किंवा किंमत सांगा.',
   probe: 'मी या उत्पादनाच्या किंमतीत मदत करण्यासाठी इथे आहे. प्रश्न विचारा किंवा ऑफर द्या.',
   insult: 'चला, आदराने राहूया. तुम्ही तयार झाल्यावर {item} मदत करेन.',
+  trend_talk: 'छान संदर्भ — ट्रेंडबद्दल मी दावा करणार नाही. {item} बद्दल माहिती हवी आहे, की तुमची किंमत?',
 }
 
 const GU: Copy = {
@@ -126,6 +134,7 @@ const GU: Copy = {
   off_topic: 'ચાલો, વિષય પર આવીએ. {item} વિશે પૂછો કે કિંમત કહો.',
   probe: 'હું આ ઉત્પાદન અને તેની કિંમતમાં મદદ કરવા અહીં છું. પ્રશ્ન પૂછો કે ઑફર આપો.',
   insult: 'ચાલો, આદરપૂર્વક રહીએ. તમે તૈયાર થાઓ એટલે {item} માં મદદ કરીશ.',
+  trend_talk: 'સારો સંદર્ભ — ટ્રેન્ડ વિશે હું દાવો કરીશ નહીં. {item} વિશે માહિતી જોઈએ છે, કે તમારી કિંમત?',
 }
 
 const PA: Copy = {
@@ -136,6 +145,7 @@ const PA: Copy = {
   off_topic: "ਆਓ, ਵਿਸ਼ੇ 'ਤੇ ਵਾਪਸ ਆਈਏ। {item} ਬਾਰੇ ਪੁੱਛੋ ਜਾਂ ਕੀਮਤ ਦੱਸੋ।",
   probe: 'ਮੈਂ ਇਸ ਉਤਪਾਦ ਅਤੇ ਇਸਦੀ ਕੀਮਤ ਵਿੱਚ ਮਦਦ ਕਰਨ ਲਈ ਇੱਥੇ ਹਾਂ। ਸਵਾਲ ਪੁੱਛੋ ਜਾਂ ਪੇਸ਼ਕਸ਼ ਕਰੋ।',
   insult: 'ਆਓ, ਸਤਿਕਾਰ ਨਾਲ ਰਹੀਏ। ਜਦੋਂ ਤੁਸੀਂ ਤਿਆਰ ਹੋਵੋ, ਮੈਂ {item} ਵਿੱਚ ਮਦਦ ਕਰਾਂਗਾ।',
+  trend_talk: 'ਚੰਗਾ ਹਵਾਲਾ — ਟ੍ਰੈਂਡ ਬਾਰੇ ਮੈਂ ਦਾਅਵਾ ਨਹੀਂ ਕਰਾਂਗਾ। {item} ਬਾਰੇ ਜਾਣਕਾਰੀ ਚਾਹੀਦੀ ਹੈ, ਜਾਂ ਤੁਹਾਡੀ ਕੀਮਤ?',
 }
 
 const COPY: Record<string, Copy> = {

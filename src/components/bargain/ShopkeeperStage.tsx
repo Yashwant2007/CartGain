@@ -297,24 +297,24 @@ const STAGE_CSS = `
   .cg-stage-avatar::after { width: 56px; height: 8px; }
   .cg-stage.cg-stage--compact .cg-stage-avatar { width: 128px; height: 140px; }
   .cg-stage.cg-stage--compact .cg-stage-avatar > * { transform: scale(.8); }
-  .cg-stage.cg-stage--side { width: 132px; padding: 8px 0; }
+  .cg-stage.cg-stage--side { width: 140px; padding: 8px 0; }
   .cg-stage.cg-stage--side .cg-stage-avatar {
     width: 184px;
     height: 210px;
-    transform: scale(.78);
+    transform: scale(.84);
     transform-origin: top center;
-    margin: -4px 0 -46px;
+    margin: -4px 0 -30px;
   }
   .cg-stage.cg-stage--side .cg-stage-copy { display: none; }
 }
 @container cgwidget (max-width: 520px) {
-  .cg-stage.cg-stage--side { width: 132px; padding: 8px 0; }
+  .cg-stage.cg-stage--side { width: 140px; padding: 8px 0; }
   .cg-stage.cg-stage--side .cg-stage-avatar {
     width: 184px;
     height: 210px;
-    transform: scale(.78);
+    transform: scale(.84);
     transform-origin: top center;
-    margin: -4px 0 -46px;
+    margin: -4px 0 -30px;
   }
   .cg-stage.cg-stage--side .cg-stage-copy { display: none; }
 }

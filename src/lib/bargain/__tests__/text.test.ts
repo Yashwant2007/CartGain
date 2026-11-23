@@ -312,6 +312,22 @@ describe('extractPrice', () => {
     expect(extractPrice('my order #1234, offer ₹650')).toBe(650)
     expect(extractPrice('model 2024, final 800')).toBe(800)
   })
+
+  it('does not read games, versions, models, addresses or saving goals as bids', () => {
+    expect(extractPrice('broo this is too much i have to buy gta 6 i am saving money pls understand')).toBeNull()
+    expect(extractPrice('gta 6 is fire')).toBeNull()
+    expect(extractPrice('saving up for iphone 16')).toBeNull()
+    expect(extractPrice('windows 11 is fine')).toBeNull()
+    expect(extractPrice('2024 model')).toBeNull()
+    expect(extractPrice('flat 12, street 5')).toBeNull()
+    expect(extractPrice('2026 is going to be wild')).toBeNull()
+  })
+
+  it('still reads a real bid alongside casual topic numbers', () => {
+    expect(extractPrice('gta 6, but I can pay 450')).toBe(450)
+    expect(extractPrice('iphone 16 is expensive, final 400')).toBe(400)
+    expect(extractPrice('saving for gta 6, offer ₹500')).toBe(500)
+  })
 })
 
 describe('classifyNonOfferNumber', () => {
@@ -326,6 +342,9 @@ describe('classifyNonOfferNumber', () => {
     expect(classifyNonOfferNumber('the other brand is giving it for ₹500')).toBe('comparison')
     expect(classifyNonOfferNumber('RivalX charges 999')).toBe('comparison')
     expect(classifyNonOfferNumber('the price is 1000')).toBe('reference')
+    expect(classifyNonOfferNumber('gta 6')).toBe('casual')
+    expect(classifyNonOfferNumber('saving up for iphone 16')).toBe('casual')
+    expect(classifyNonOfferNumber('2024 model')).toBe('casual')
   })
 
   it('returns null when the number is a genuine offer', () => {

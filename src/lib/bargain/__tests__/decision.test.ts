@@ -660,7 +660,8 @@ describe('Edge Cases - Persona Consistency', () => {
     const friendly = ruleBasedDecision(absurd, baseCtx({ persona: 'friendly_shopkeeper' }))
 
     expect(strict.reply.toLowerCase()).not.toContain('😄')
-    expect(strict.reply).toMatch(/not a serious offer|realistic number/i)
+    expect(strict.reply).toMatch(/realistic number/i)
+    expect(strict.reply).not.toMatch(/I'll be blunt|not a serious offer/i)
     expect(playful.reply).toMatch(/play ball|throw in the box/i)
     expect(friendly.reply.toLowerCase()).toMatch(/friend/)
     // Absurd offers are never countered — no price in the reply text either

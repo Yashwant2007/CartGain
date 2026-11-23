@@ -96,6 +96,14 @@ describe('analyzeIntent', () => {
     expect(analyzeIntent('my order #1234').nonOfferNumberContext).toBe('identifier')
     expect(analyzeIntent('my budget is 700').nonOfferNumberContext).toBe('budget')
     expect(analyzeIntent('call me at 5').nonOfferNumberContext).toBe('contact')
+    expect(analyzeIntent('broo this is too much i have to buy gta 6 i am saving money pls understand').nonOfferNumberContext).toBe('casual')
+  })
+
+  it('reads a casual saving-story message as a price complaint without inventing an offer', () => {
+    const a = analyzeIntent('broo this is too much i have to buy gta 6 i am saving money pls understand')
+    expect(a.priceComplaint).toBe(true)
+    expect(a.offersPriceSignal).toBe(false)
+    expect(a.nonOfferNumberContext).toBe('casual')
   })
 
   it('does not treat arbitrary numbers as offers', () => {
@@ -140,6 +148,12 @@ describe('shopperIntentToPromptBlock', () => {
     const block = shopperIntentToPromptBlock(analyzeIntent('I need 2 items'))
     expect(block).toContain('NOT an offer')
     expect(block).toContain('Do not quote this number back as their offer')
+  })
+
+  it('adds honest casual-topic guidance without claiming a trend', () => {
+    const block = shopperIntentToPromptBlock(analyzeIntent('broo this is too much i have to buy gta 6 i am saving money pls understand'))
+    expect(block).toContain('CASUAL/TOPIC REFERENCE')
+    expect(block).toContain('Do not claim what is trending')
   })
 })
 

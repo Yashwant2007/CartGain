@@ -288,7 +288,9 @@ describe('living shopkeeper stage', () => {
     expect(css).toContain('.cg-stage.cg-stage--side {')
     expect(css).toContain('width: 208px;')
     expect(css).toContain('height: 226px;')
-    expect(css).toContain('width: 132px;')
+    expect(css).toContain('width: 140px;')
+    expect(css).toContain('transform: scale(.84);')
+    expect(css).toContain('margin: -4px 0 -30px;')
   })
 
   it('does not substitute a flat character when the 3D stage is not enabled', () => {
