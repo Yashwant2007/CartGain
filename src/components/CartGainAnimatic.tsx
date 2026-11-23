@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import styles from './CartGainAnimatic.module.css'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -166,8 +167,7 @@ export default function CartGainAnimatic() {
             <div className={styles.waCard}>
               <div className={styles.waHeader}>
                 <div className={styles.waIcon}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/logo.png" alt="CartGain" className={styles.waLogo} />
+                  <Image src="/logo.png" alt="CartGain" width={28} height={28} sizes="28px" className={styles.waLogo} />
                 </div>
                 <div>
                   <div className={styles.waFrom}>CartGain on WhatsApp</div>
@@ -282,8 +282,7 @@ export default function CartGainAnimatic() {
             <div className={styles.s6Bg}></div>
             <div className={styles.endFrame}>
               <div className={styles.logoMark}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo.png" alt="CartGain" className={styles.logoImg} />
+                <Image src="/logo.png" alt="CartGain" width={80} height={80} sizes="80px" className={styles.logoImg} />
               </div>
               <div className={styles.brandName}>
                 CartGain<span className={styles.brandTm}>™</span>

@@ -31,7 +31,7 @@ type DemoReply = {
 const PRODUCT = {
   id: 'home-demo-serum',
   title: 'Vitamin C Brightening Serum',
-  image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=400&h=400&fit=crop',
+  image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=96&h=96&fit=crop',
   basePrice: 1499,
   merchantPrice: 1299,
   floorPrice: 1100,
@@ -159,11 +159,11 @@ export default function HeroNegotiationDemo() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-white">Morgan · AI Shopkeeper</span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-900/40 border border-emerald-600/40 text-emerald-300 text-[10px] font-semibold">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-900/40 border border-emerald-600/40 text-emerald-300 text-xs font-semibold">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> LIVE DEMO
                 </span>
               </div>
-              <p className="text-[11px] text-blue-300/60 truncate">Try a question, a lowball, or a real offer.</p>
+              <p className="text-xs text-blue-200/90 truncate">Try a question, a lowball, or a real offer.</p>
             </div>
             <Sparkles className="w-4 h-4 text-cyan-400 hidden sm:block" />
           </div>
@@ -173,7 +173,7 @@ export default function HeroNegotiationDemo() {
             <img src={PRODUCT.image} alt={PRODUCT.title} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-xs sm:text-sm font-semibold text-white truncate">{PRODUCT.title}</p>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] sm:text-[11px] text-blue-300/70">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs sm:text-sm text-blue-200/90">
                 <span>Base <span className="line-through">{money(PRODUCT.basePrice)}</span></span>
                 <span className="text-white font-semibold">Merchant price {money(PRODUCT.merchantPrice)}</span>
                 <span className="text-amber-300">Floor {money(PRODUCT.floorPrice)}</span>
@@ -198,12 +198,12 @@ export default function HeroNegotiationDemo() {
                 >
                   <p>{m.text}</p>
                   {m.offeredPrice != null && (
-                    <span className="mt-1 inline-block rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold">
+                    <span className="mt-1 inline-block rounded-full bg-white/15 px-2 py-0.5 text-xs font-semibold">
                       Offer {money(m.offeredPrice)}
                     </span>
                   )}
                   {m.code && (
-                    <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-300">
+                    <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-emerald-300">
                       <BadgeCheck className="w-3.5 h-3.5" /> Code {m.code}
                     </span>
                   )}
@@ -229,7 +229,7 @@ export default function HeroNegotiationDemo() {
                   type="button"
                   onClick={() => void send(prompt)}
                   disabled={loading}
-                  className="rounded-full border border-blue-700/50 bg-blue-900/30 px-2.5 py-1.5 text-[10px] sm:text-[11px] text-blue-200 hover:bg-blue-800/40 disabled:opacity-50"
+                  className="min-h-11 rounded-full border border-blue-700/50 bg-blue-900/30 px-3 py-2 text-xs sm:text-sm text-blue-200 hover:bg-blue-800/40 disabled:opacity-50"
                 >
                   {prompt}
                 </button>
@@ -250,7 +250,7 @@ export default function HeroNegotiationDemo() {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask a question or name your price…"
                 aria-label="Ask a question or name your price"
-                className="min-h-[44px] flex-1 rounded-xl border border-blue-800/50 bg-slate-950/50 px-3 text-[16px] text-white outline-none placeholder:text-blue-400/50 focus:border-cyan-500"
+                className="min-h-[44px] flex-1 rounded-xl border border-blue-800/50 bg-slate-950/50 px-3 text-[16px] text-white outline-none placeholder:text-blue-300/80 focus:border-cyan-500"
               />
               <button
                 type="submit"
@@ -266,26 +266,26 @@ export default function HeroNegotiationDemo() {
               <ShieldCheck className="w-4 h-4" /> Demo complete — reset the page to bargain again.
             </div>
           )}
-          {error && <p className="mt-2 text-[11px] text-rose-300">{error}</p>}
-          <div className="mt-3 pt-2.5 border-t border-blue-800/30 text-[11px] text-blue-300/50 flex items-center gap-1.5">
+          {error && <p className="mt-2 text-xs text-rose-300">{error}</p>}
+          <div className="mt-3 pt-2.5 border-t border-blue-800/30 text-xs text-blue-200/80 flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
             Attempts {attemptsUsed}/3 · The floor is enforced by the engine, never by the AI.
           </div>
         </div>
 
         <div className="lg:col-span-2 border-t lg:border-t-0 lg:border-l border-blue-800/30 p-4 sm:p-5 flex flex-col justify-center">
-          <p className="text-[11px] uppercase tracking-wider text-blue-300/60 font-semibold mb-3">The deal, on paper</p>
+          <p className="text-xs uppercase tracking-wider text-blue-200/90 font-semibold mb-3">The deal, on paper</p>
           <div className="space-y-2.5">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-blue-300/70">Base price</span>
+              <span className="text-blue-200/90">Base price</span>
               <span className="text-blue-100 font-medium line-through">{money(PRODUCT.basePrice)}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-blue-300/70">Merchant-set price</span>
+              <span className="text-blue-200/90">Merchant-set price</span>
               <span className="text-white font-semibold">{money(PRODUCT.merchantPrice)}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-blue-300/70">Protected floor</span>
+              <span className="text-blue-200/90">Protected floor</span>
               <span className="text-amber-300 font-medium">{money(PRODUCT.floorPrice)}</span>
             </div>
             <div className="rounded-xl bg-emerald-900/30 border border-emerald-600/40 px-3 py-2.5 flex items-center justify-between">
@@ -294,10 +294,10 @@ export default function HeroNegotiationDemo() {
               </span>
               <span className="text-emerald-300 text-lg font-bold">✓</span>
             </div>
-            <p className="text-[11px] text-blue-300/50 leading-relaxed">
+            <p className="text-xs text-blue-200/80 leading-relaxed">
               This is the same shopkeeper engine used in the storefront. Questions stay questions — only a real bid spends a bargaining round.
             </p>
-            <div className="rounded-xl border border-blue-700/40 bg-blue-950/40 px-3 py-2.5 flex items-center gap-2 text-[11px] text-blue-200">
+            <div className="rounded-xl border border-blue-700/40 bg-blue-950/40 px-3 py-2.5 flex items-center gap-2 text-xs text-blue-200">
               <Store className="w-4 h-4 text-cyan-300" /> Sample catalog product · no store connection required
             </div>
           </div>

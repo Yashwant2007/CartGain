@@ -68,7 +68,7 @@ export default function PrivacyPolicyPage() {
                     <ul className="list-disc pl-5 space-y-2">
                       <li><strong>Functional Data:</strong> Basic identifiers needed to run the service (for example, IP address and browser/device details in standard server logs).</li>
                       <li><strong>Session Data:</strong> Temporary session identifiers to keep you logged in.</li>
-                      <li><strong>Cookies:</strong> We use essential cookies for functionality (such as keeping you logged in). We do not run third-party advertising or analytics trackers that profile visitors.</li>
+                      <li><strong>Cookies:</strong> We use essential cookies for functionality (such as keeping you logged in) and Google Analytics cookies on public marketing pages for aggregate traffic measurement. We do not run third-party advertising trackers that profile visitors across sites.</li>
                     </ul>
                   </div>
                 </div>
@@ -84,7 +84,7 @@ export default function PrivacyPolicyPage() {
                   <li><strong>Data Minimization:</strong> We collect and process only the minimum personal data required to provide cart recovery value to merchants.</li>
                   <li><strong>Service Delivery:</strong> To provide, maintain, and improve our cart recovery services.</li>
                   <li><strong>Communication:</strong> To send recovery notifications via WhatsApp and email on your behalf (the corresponding providers are configured and activated before these channels go live).</li>
-                  <li><strong>Analytics:</strong> To track recovery performance, measure the storefront experience funnel, compare presentation variants, and adjust recovered-revenue reporting for refunds and cancellations.</li>
+                  <li><strong>Analytics:</strong> To track recovery performance, measure the storefront experience funnel, compare presentation variants, adjust recovered-revenue reporting for refunds and cancellations, and understand aggregate traffic on public marketing pages through Google Analytics.</li>
                   <li><strong>Bounded learning:</strong> To evaluate negotiation strategies and improve future offers. Learning is optional, can run in shadow mode, stays within merchant-approved pricing rules, and never replaces the hard price floor. Merchant voice settings (tone, humour level, emoji use and language) guide style only.</li>
                   <li><strong>Security:</strong> To detect and prevent fraud, unauthorized access, and security incidents.</li>
                   <li><strong>Legal Compliance:</strong> To comply with applicable laws and regulations.</li>

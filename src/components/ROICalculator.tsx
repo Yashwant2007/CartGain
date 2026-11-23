@@ -151,8 +151,9 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
         {/* Inputs */}
         <div className="grid grid-cols-2 gap-4 mb-5">
           <div>
-            <label className="block text-xs font-medium text-blue-200/80 mb-1.5">Monthly Visitors</label>
+            <label htmlFor="roi-monthly-visitors" className="block text-xs font-medium text-blue-200/90 mb-1.5">Monthly Visitors</label>
             <input
+              id="roi-monthly-visitors"
               type="range" min="1000" max="100000" step="1000"
               value={monthlyVisitors || 0}
               onChange={(e) => { setMonthlyVisitors(Number(e.target.value)); handleInputChange() }}
@@ -163,16 +164,17 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
               <input
                 type="number" value={monthlyVisitors} aria-label="Monthly Website Visitors"
                 onChange={(e) => { setMonthlyVisitors(e.target.value ? Number(e.target.value) : ''); handleInputChange() }}
-                className="w-20 px-2 py-1.5 border border-blue-500/30 bg-slate-700/50 text-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-20 px-2 py-2.5 min-h-11 border border-blue-500/30 bg-slate-700/50 text-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                 disabled={!isLoggedIn && showResults}
               />
-              <span className="text-xs text-blue-300/60 ml-1.5">/mo</span>
+              <span className="text-xs text-blue-200/90 ml-1.5">/mo</span>
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-blue-200/80 mb-1.5">Avg Cart Value</label>
+            <label htmlFor="roi-cart-value" className="block text-xs font-medium text-blue-200/90 mb-1.5">Avg Cart Value</label>
             <input
+              id="roi-cart-value"
               type="range" min="100" max="5000" step="50"
               value={avgCartValue || 0}
               onChange={(e) => { setAvgCartValue(Number(e.target.value)); handleInputChange() }}
@@ -180,19 +182,20 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
               disabled={!isLoggedIn && showResults}
             />
             <div className="flex items-center mt-1.5">
-              <span className="text-xs text-blue-300/60">₹</span>
+              <span className="text-xs text-blue-200/90">₹</span>
               <input
                 type="number" value={avgCartValue} aria-label="Average Cart Value"
                 onChange={(e) => { setAvgCartValue(e.target.value ? Number(e.target.value) : ''); handleInputChange() }}
-                className="w-20 px-2 py-1.5 border border-blue-500/30 bg-slate-700/50 text-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ml-1"
+                className="w-20 px-2 py-2.5 min-h-11 border border-blue-500/30 bg-slate-700/50 text-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ml-1"
                 disabled={!isLoggedIn && showResults}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-blue-200/80 mb-1.5">Current Rate</label>
+            <label htmlFor="roi-current-rate" className="block text-xs font-medium text-blue-200/90 mb-1.5">Current Rate</label>
             <input
+              id="roi-current-rate"
               type="range" min="0" max="10" step="0.5"
               value={currentRecoveryRate || 0}
               onChange={(e) => { setCurrentRecoveryRate(Number(e.target.value)); handleInputChange() }}
@@ -204,16 +207,17 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
                 type="number" value={currentRecoveryRate} aria-label="Current recovery rate"
                 onChange={(e) => { setCurrentRecoveryRate(e.target.value ? Number(e.target.value) : ''); handleInputChange() }}
                 step="0.5"
-                className="w-20 px-2 py-1.5 border border-blue-500/30 bg-slate-700/50 text-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-20 px-2 py-2.5 min-h-11 border border-blue-500/30 bg-slate-700/50 text-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                 disabled={!isLoggedIn && showResults}
               />
-              <span className="text-xs text-blue-300/60 ml-1.5">%</span>
+              <span className="text-xs text-blue-200/90 ml-1.5">%</span>
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-blue-200/80 mb-1.5">Target Rate</label>
+            <label htmlFor="roi-target-rate" className="block text-xs font-medium text-blue-200/90 mb-1.5">Target Rate</label>
             <input
+              id="roi-target-rate"
               type="range" min="5" max="25" step="0.5"
               value={targetRecoveryRate || 0}
               onChange={(e) => { setTargetRecoveryRate(Number(e.target.value)); handleInputChange() }}
@@ -225,17 +229,17 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
                 type="number" value={targetRecoveryRate} aria-label="Target recovery rate"
                 onChange={(e) => { setTargetRecoveryRate(e.target.value ? Number(e.target.value) : ''); handleInputChange() }}
                 step="0.5"
-                className="w-20 px-2 py-1.5 border border-blue-500/30 bg-slate-700/50 text-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-20 px-2 py-2.5 min-h-11 border border-blue-500/30 bg-slate-700/50 text-white rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                 disabled={!isLoggedIn && showResults}
               />
-              <span className="text-xs text-blue-300/60 ml-1.5">%</span>
+              <span className="text-xs text-blue-200/90 ml-1.5">%</span>
             </div>
           </div>
         </div>
 
         {/* Plan Selection */}
         <div className="mb-5">
-          <label className="block text-xs font-medium text-blue-200/80 mb-2">Select Plan</label>
+          <label className="block text-xs font-medium text-blue-200/90 mb-2">Select Plan</label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {PLANS.map((p, i) => (
               <button
@@ -248,13 +252,13 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
                 }`}
               >
                 {p.recommended && (
-                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-cyan-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">Best</span>
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-cyan-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">Best</span>
                 )}
                 <div className={`text-xs font-bold ${selectedPlan === i ? 'text-blue-300' : 'text-white'}`}>{p.name}</div>
                 <div className="text-sm font-bold text-white mt-0.5">
                   {typeof p.price === 'number' ? `₹${p.price.toLocaleString('en-IN')}` : p.price}
                 </div>
-                <div className="text-[10px] text-blue-300/50">
+                <div className="text-xs text-blue-200/80">
                   {typeof p.maxCarts === 'number' ? `${p.maxCarts.toLocaleString('en-IN')} carts` : 'Unlimited'}
                 </div>
               </button>
@@ -275,7 +279,7 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
           {isLoggedIn ? 'Calculate ROI' : showResults ? 'Free calculation used' : 'Calculate ROI'}
         </button>
         {!isLoggedIn && !showResults && hasDataEntered && (
-          <p className="text-[10px] text-blue-300/50 text-center mt-1.5">One free calculation • Unlimited after signup</p>
+          <p className="text-xs text-blue-200/80 text-center mt-1.5">One free calculation • Unlimited after signup</p>
         )}
 
         {/* Results */}
@@ -286,15 +290,15 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
               <div className="bg-slate-700/40 rounded-xl p-3 border border-slate-600/30">
                 <div className="flex items-center gap-1.5 mb-1">
                   <ShoppingCart className="w-3 h-3 text-blue-400" />
-                  <span className="text-[10px] text-blue-300/60">Carts Processed</span>
+                  <span className="text-xs text-blue-200/90">Carts Processed</span>
                 </div>
                 <p className="text-lg font-bold text-white">{processedCarts.toLocaleString('en-IN')}</p>
-                <p className="text-[10px] text-blue-300/40">on {plan.name} · {abandonedCarts.toLocaleString('en-IN')} abandoned/mo</p>
+                <p className="text-xs text-blue-300/40">on {plan.name} · {abandonedCarts.toLocaleString('en-IN')} abandoned/mo</p>
               </div>
               <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
-                <span className="text-[10px] text-red-400/80">Lost Revenue</span>
+                <span className="text-xs text-red-400/80">Lost Revenue</span>
                 <p className="text-lg font-bold text-red-400">₹{lostRevenue.toLocaleString('en-IN')}</p>
-                <p className="text-[10px] text-red-400/40">per month</p>
+                <p className="text-xs text-red-400/40">per month</p>
               </div>
             </div>
 
@@ -303,18 +307,18 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
               <div className="bg-emerald-500/10 rounded-xl p-3 border border-emerald-500/20">
                 <div className="flex items-center gap-1 mb-1">
                   <TrendingUp className="w-3 h-3 text-emerald-400" />
-                  <span className="text-[10px] text-emerald-400/80">Recovery Gain</span>
+                  <span className="text-xs text-emerald-400/80">Recovery Gain</span>
                 </div>
                 <p className="text-lg font-bold text-emerald-400">+₹{additionalRecoveryRevenue.toLocaleString('en-IN')}</p>
-                <p className="text-[10px] text-emerald-400/40">+{additionalRecovered.toLocaleString('en-IN')} carts</p>
+                <p className="text-xs text-emerald-400/40">+{additionalRecovered.toLocaleString('en-IN')} carts</p>
               </div>
               <div className="bg-blue-500/10 rounded-xl p-3 border border-blue-500/20">
                 <div className="flex items-center gap-1 mb-1">
                   <Zap className="w-3 h-3 text-blue-400" />
-                  <span className="text-[10px] text-blue-400/80">Bargain Gain</span>
+                  <span className="text-xs text-blue-400/80">Bargain Gain</span>
                 </div>
                 <p className="text-lg font-bold text-blue-300">+₹{bargainRevenue.toLocaleString('en-IN')}</p>
-                <p className="text-[10px] text-blue-400/40">{acceptedDeals.toLocaleString('en-IN')} accepted deals</p>
+                <p className="text-xs text-blue-400/40">{acceptedDeals.toLocaleString('en-IN')} accepted deals</p>
               </div>
             </div>
 
@@ -322,20 +326,20 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
             <div className="bg-slate-700/30 rounded-xl p-3 border border-slate-600/30">
               <div className="flex items-center gap-1.5 mb-2">
                 <Zap className="w-3 h-3 text-blue-400" />
-                <span className="text-xs font-medium text-blue-200/80">CartGain Cost</span>
+                <span className="text-xs font-medium text-blue-200/90">CartGain Cost</span>
               </div>
               <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-blue-300/60">{plan.name} subscription</span>
+                  <span className="text-blue-200/90">{plan.name} subscription</span>
                   <span className="text-white">{subscriptionCost > 0 ? `₹${subscriptionCost.toLocaleString('en-IN')}/mo` : 'Free'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-blue-300/60">Revenue share
+                  <span className="text-blue-200/90">Revenue share
                     {plan.revShare > 0 ? ` (${plan.revShare}%, capped)` : ''}</span>
                   <span className="text-white">{revenueShareCost > 0 ? `₹${revenueShareCost.toLocaleString('en-IN')}/mo` : '₹0/mo'}</span>
                 </div>
                 <div className="flex justify-between border-t border-slate-600/30 pt-1.5">
-                  <span className="text-blue-200/80 font-medium">Total cost</span>
+                  <span className="text-blue-200/90 font-medium">Total cost</span>
                   <span className="text-white font-bold">{totalMonthlyCost > 0 ? `₹${totalMonthlyCost.toLocaleString('en-IN')}/mo` : '₹0/mo'}</span>
                 </div>
               </div>
@@ -350,7 +354,7 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
                   <p className="text-blue-200/70 text-xs">+₹{additionalRecoveryRevenue.toLocaleString('en-IN')} recovery · +₹{bargainRevenue.toLocaleString('en-IN')} bargain</p>
                 </div>
                 <div className="bg-white/20 rounded-xl px-3 py-2 text-center">
-                  <p className="text-blue-100 text-[10px]">ROI</p>
+                  <p className="text-blue-100 text-xs">ROI</p>
                   <p className="text-xl font-bold text-white">{roi === 999 ? '∞' : `${roi}%`}</p>
                 </div>
               </div>
@@ -359,15 +363,15 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
             {/* Summary */}
             <div className="bg-slate-700/30 rounded-xl p-3 border border-slate-600/30 text-xs space-y-1.5">
               <div className="flex justify-between">
-                <span className="text-blue-300/60">Recovery rate improvement</span>
+                <span className="text-blue-200/90">Recovery rate improvement</span>
                 <span className="text-emerald-400 font-semibold">+{(targetRate - currentRate).toFixed(1)}%</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-blue-300/60">Additional carts recovered</span>
+                <span className="text-blue-200/90">Additional carts recovered</span>
                 <span className="text-emerald-400 font-semibold">+{additionalRecovered.toLocaleString('en-IN')}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-blue-300/60">Bargain sessions included</span>
+                <span className="text-blue-200/90">Bargain sessions included</span>
                 <span className="text-emerald-400 font-semibold">
                   {typeof plan.bargainSessions === 'number' ? plan.bargainSessions.toLocaleString('en-IN') : 'Unlimited'}
                 </span>
@@ -379,7 +383,7 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
               <Link href="/signup" className="inline-flex items-center gap-1.5 bg-blue-600 text-white font-semibold py-2 px-5 rounded-xl hover:bg-blue-500 transition text-sm shadow-lg shadow-blue-500/20">
                 Start Free Trial <ArrowRight className="w-4 h-4" />
               </Link>
-              <p className="text-[10px] text-blue-300/40 mt-2">2-min setup • First 50 carts free</p>
+              <p className="text-xs text-blue-300/40 mt-2">2-min setup • First 50 carts free</p>
             </div>
           </div>
         )}
@@ -388,7 +392,7 @@ export default function ROICalculator({ isLoggedIn = false }: { isLoggedIn?: boo
           <div className="mt-5 p-4 bg-slate-700/30 border border-slate-600/30 rounded-xl text-center">
             <Lock className="w-6 h-6 text-blue-400 mx-auto mb-2" />
             <h4 className="font-semibold text-white text-sm mb-1">Want to adjust?</h4>
-            <p className="text-xs text-blue-300/60 mb-3">Sign up for unlimited calculations.</p>
+            <p className="text-xs text-blue-200/90 mb-3">Sign up for unlimited calculations.</p>
             <Link href="/signup" className="inline-flex items-center gap-1 bg-blue-600 text-white font-semibold py-1.5 px-4 rounded-lg hover:bg-blue-500 transition text-xs">
               Sign Up Free
             </Link>

@@ -5,6 +5,7 @@ import './globals.css'
 import Providers from './providers'
 import { ClientErrorBoundary } from './components/ClientErrorBoundary'
 import EmbeddedAuthBootstrap from '@/components/EmbeddedAuthBootstrap'
+import GoogleAnalytics from '@/components/GoogleAnalytics'
 import AppIntroWrapper from './components/AppIntroWrapper'
 import {
   APP_BRIDGE_CDN_SRC,
@@ -227,6 +228,7 @@ export default async function RootLayout({
         />
       </head>
       <body className="font-sans bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
+        <GoogleAnalytics />
         <ClientErrorBoundary>
           <Providers>
             <EmbeddedAuthBootstrap />

@@ -30,8 +30,9 @@ export default function CookiePolicyPage() {
                   1. What are cookies?
                 </h2>
                 <p className="leading-relaxed">
-                  Cookies are small text files stored in your browser by a website. We use cookies
-                  strictly for functionality — to keep you signed in and to protect your account.
+                  Cookies are small text files stored in your browser by a website. We use essential
+                  cookies for functionality and security, and Google Analytics cookies on public
+                  marketing pages to understand aggregate site usage.
                 </p>
               </section>
 
@@ -78,6 +79,16 @@ export default function CookiePolicyPage() {
                         <td className="py-3">Secures the OAuth sign-in flow (PKCE)</td>
                         <td className="py-3">Essential (security)</td>
                       </tr>
+                      <tr>
+                        <td className="py-3">_ga</td>
+                        <td className="py-3">Distinguishes visitors for aggregate Google Analytics reporting on public pages</td>
+                        <td className="py-3">Analytics (Google)</td>
+                      </tr>
+                      <tr>
+                        <td className="py-3">_ga_*</td>
+                        <td className="py-3">Maintains Google Analytics session state on public pages</td>
+                        <td className="py-3">Analytics (Google)</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -86,12 +97,12 @@ export default function CookiePolicyPage() {
               <section>
                 <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3">
                   <Lock className="w-6 h-6 text-cyan-400" />
-                  3. What we do NOT use
+                  3. What we do not use
                 </h2>
                 <ul className="list-disc pl-5 space-y-2">
                   <li><strong>No advertising cookies.</strong> We do not run any ad networks or retargeting.</li>
-                  <li><strong>No third-party analytics trackers.</strong> We do not use Google Analytics, Meta Pixel, or similar tools that profile visitors across sites.</li>
-                  <li><strong>No persistent tracking of site visitors.</strong> The customer-facing bargain page does not store cookies on shoppers&apos; devices.</li>
+                  <li><strong>No cross-site profiling.</strong> Google Analytics is used only on public CartGain marketing pages for aggregate measurement; we do not use Meta Pixel or similar cross-site advertising trackers.</li>
+                  <li><strong>No persistent tracking of shoppers.</strong> The customer-facing bargain page and recovery links do not store analytics cookies on shoppers&apos; devices.</li>
                 </ul>
               </section>
 
@@ -101,11 +112,11 @@ export default function CookiePolicyPage() {
                   4. Managing cookies
                 </h2>
                 <p className="leading-relaxed">
-                  Because our cookies are essential to signing in and securing your account, disabling
-                  them will prevent you from using the CartGain dashboard. You can still control and
-                  delete cookies through your browser settings at any time. Because we use no
-                  non-essential cookies, no consent banner is required — deleting these cookies simply
-                  signs you out.
+                  Essential cookies are required to sign in and secure your account; disabling them
+                  will prevent you from using the CartGain dashboard. Analytics cookies are
+                  non-essential and can be blocked or deleted through your browser settings without
+                  affecting your ability to use the dashboard. You can also opt out through the
+                  Google Analytics opt-out browser add-on.
                 </p>
               </section>
 

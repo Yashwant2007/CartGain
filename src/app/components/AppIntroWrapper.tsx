@@ -12,8 +12,7 @@ export default function AppIntroWrapper({ children }: { children: React.ReactNod
   const pathname = usePathname()
 
   useEffect(() => {
-    // Don't show intro on certain routes
-    if (pathname?.startsWith('/bargain/embed') || pathname?.startsWith('/s/bargain')) {
+    if (!pathname?.startsWith('/dashboard')) {
       setShowIntro(false)
       setIsReady(true)
       return

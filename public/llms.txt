@@ -1,25 +1,34 @@
 # CartGain
 
-> AI-powered cart recovery and negotiation platform for e-commerce businesses.
+> AI-powered cart recovery and negotiation platform for Shopify, WooCommerce, and other e-commerce stores.
 
-## Overview
-CartGain helps Shopify and e-commerce stores recover abandoned carts using AI-powered WhatsApp and Email campaigns, plus an AI negotiator that converts price-sensitive shoppers without cutting below your margin floor.
+CartGain helps merchants recover abandoned carts with consent-gated WhatsApp and Email journeys, and converts price objections with an AI shopkeeper that never prices below the merchant-set floor.
 
-## Key Features
-- AI Cart Recovery (WhatsApp + Email multi-channel)
-- AI Price Negotiation Widget
-- Smart targeting and automation
-- Revenue tracking and analytics
-- Built for Shopify stores
+## Key features
 
-## Links
-- Website: https://cart-gain.com
-- Pricing: https://cart-gain.com/pricing
-- Login: https://cart-gain.com/login
-- Signup: https://cart-gain.com/signup
+- AI cart recovery with explicit opt-in, quiet hours, and refund-aware analytics
+- AI price negotiation widget with server-authoritative pricing and a real discount code
+- Shopify and WooCommerce integrations
+- Storefront experience studio, shopkeeper personalities, and A/B testing
+- Legal pages, API docs, and a public demo
+
+## Documentation
+
+- [Website](https://cart-gain.com)
+- [Pricing](https://cart-gain.com/pricing)
+- [AI negotiator](https://cart-gain.com/bargain)
+- [API documentation](https://cart-gain.com/docs/api)
+- [Contact](https://cart-gain.com/contact)
+
+## Legal and trust
+
+- [Privacy Policy](https://cart-gain.com/privacy)
+- [Terms of Service](https://cart-gain.com/terms)
+- [Data Processing Agreement](https://cart-gain.com/dpa)
+- [Security Policy](https://cart-gain.com/security-policy)
+- [Cookie Policy](https://cart-gain.com/cookies)
 
 ## Contact
-- Support: support@cart-gain.com
 
-## Company
-CartGain - AI negotiation & cart recovery for e-commerce
+- Email: support@cart-gain.com
+- WhatsApp: [Message CartGain](https://wa.me/918708718426)

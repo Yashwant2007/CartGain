@@ -19,7 +19,7 @@ const STATS = [
 export default function DashboardPreview() {
   return (
     <div className="relative rounded-2xl overflow-hidden border border-blue-700/40 shadow-2xl bg-slate-950">
-      <div className="absolute top-3 right-4 z-10 px-2.5 py-1 rounded-full bg-amber-400/10 border border-amber-500/40 text-amber-300 text-[10px] font-semibold uppercase tracking-wider">
+      <div className="absolute top-3 right-4 z-10 px-2.5 py-1 rounded-full bg-amber-400/10 border border-amber-500/40 text-amber-300 text-xs font-semibold uppercase tracking-wider">
         Example · Demo data
       </div>
 
@@ -30,8 +30,8 @@ export default function DashboardPreview() {
           <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/70"></span>
           <span className="w-2.5 h-2.5 rounded-full bg-green-500/70"></span>
         </div>
-        <span className="text-[11px] text-blue-300/70 font-mono ml-2">CartGain · Revenue Overview</span>
-        <span className="ml-auto text-[10px] text-emerald-300 font-semibold inline-flex items-center gap-1">
+        <span className="text-[11px] text-blue-200/90 font-mono ml-2">CartGain · Revenue Overview</span>
+        <span className="ml-auto text-xs text-emerald-300 font-semibold inline-flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> LIVE SYNC
         </span>
       </div>
@@ -43,10 +43,10 @@ export default function DashboardPreview() {
             <div key={s.label} className="bg-slate-800/60 border border-blue-700/30 rounded-xl p-3 sm:p-4">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <s.icon className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="text-[10px] sm:text-[11px] text-blue-300/70">{s.label}</span>
+                <span className="text-xs sm:text-[11px] text-blue-200/90">{s.label}</span>
               </div>
               <p className="text-lg sm:text-2xl font-bold text-white">{s.value}</p>
-              <p className="text-[10px] sm:text-[11px] text-blue-300/50 mt-0.5">{s.sub}</p>
+              <p className="text-xs sm:text-[11px] text-blue-200/80 mt-0.5">{s.sub}</p>
             </div>
           ))}
         </div>
@@ -56,14 +56,14 @@ export default function DashboardPreview() {
           <div className="lg:col-span-3 bg-slate-800/40 border border-blue-700/30 rounded-xl p-4 sm:p-5">
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-semibold text-blue-200">Recovered revenue by day (₹)</span>
-              <span className="text-[10px] text-blue-300/50">attributed to CartGain</span>
+              <span className="text-xs text-blue-200/80">attributed to CartGain</span>
             </div>
             <div className="flex items-end gap-2 sm:gap-3 h-32">
               {DAILY.map((v, i) => (
                 <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                  <span className="text-[9px] sm:text-[10px] text-blue-300/60">₹{v}</span>
+                  <span className="text-[11px] sm:text-xs text-blue-200/90">₹{v}</span>
                   <div
-                    className="w-full rounded-t-md bg-gradient-to-t from-cyan-600/80 to-blue-400/80 hover:from-cyan-500 hover:to-blue-300 transition-all"
+                    className="w-full rounded-t-md bg-gradient-to-t from-cyan-600/80 to-blue-400/80 hover:from-cyan-500 hover:to-blue-300 transition-colors"
                     style={{ height: `${(v / MAX) * 100}%` }}
                   ></div>
                 </div>
@@ -71,7 +71,7 @@ export default function DashboardPreview() {
             </div>
             <div className="flex gap-2 sm:gap-3 mt-1.5">
               {DAYS.map((d, i) => (
-                <div key={d} className="flex-1 text-center text-[9px] sm:text-[10px] text-blue-300/60">{d}</div>
+                <div key={d} className="flex-1 text-center text-[11px] sm:text-xs text-blue-200/90">{d}</div>
               ))}
             </div>
           </div>
@@ -102,7 +102,7 @@ export default function DashboardPreview() {
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-blue-300/40 mt-4 leading-relaxed">
+            <p className="text-xs text-blue-200/80 mt-4 leading-relaxed">
               Illustrative figures from a sample store. Your dashboard shows only revenue we attribute to CartGain
               recovery messages within the 72-hour window.
             </p>

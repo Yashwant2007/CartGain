@@ -63,7 +63,7 @@
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
 .ctrlBtn:hover {
@@ -91,7 +91,7 @@
   border-radius: 50%;
   background: #1e3a5f;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
 }
 
 .dot::after {
@@ -140,7 +140,6 @@
   border: 1px solid #1e3a5f;
   position: relative;
   overflow: hidden;
-  animation: phoneLight 0.8s ease infinite;
 }
 
 .phone::after {
@@ -750,18 +749,6 @@
   background: linear-gradient(90deg, transparent, #10B981, transparent);
   margin: 12px auto 0;
   animation: glowPulse 2s ease infinite;
-}
-
-@keyframes phoneLight {
-  0%,
-  80%,
-  100% {
-    border-color: #1e3a5f;
-  }
-  40% {
-    border-color: #10B981;
-    box-shadow: 0 0 12px #10B98140;
-  }
 }
 
 @keyframes notif {

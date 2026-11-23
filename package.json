@@ -52,6 +52,12 @@
     "typescript": "^5.4.5",
     "zod": "^3.23.8"
   },
+  "browserslist": [
+    "last 2 Chrome versions",
+    "last 2 Firefox versions",
+    "last 2 Safari versions",
+    "last 2 Edge versions"
+  ],
   "overrides": {
     "uuid": "^11.0.0"
   },

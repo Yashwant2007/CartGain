@@ -15,7 +15,7 @@ import DashboardPreview from '@/components/DashboardPreview'
 import { Button } from '@/components/Button'
 import Badge from '@/components/Badge'
 import { useState, useEffect } from 'react'
-import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/payment'
+import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/plan-constants'
 
 // Integration modal data
 const INTEGRATION_DETAILS = {
@@ -217,16 +217,16 @@ export default function HomePage() {
 
             {/* Desktop links */}
             <div className="hidden md:flex items-center space-x-1">
-              <Link href="#what" className="px-3 py-2 text-sm font-medium text-blue-200 hover:text-blue-100 hover:bg-blue-600/10 rounded-md transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600">
+              <Link href="#what" className="px-3 py-2.5 min-h-11 inline-flex items-center text-sm font-medium text-blue-200 hover:text-blue-100 hover:bg-blue-600/10 rounded-md transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600">
                 Why CartGain
               </Link>
-              <Link href="#how-it-works" className="px-3 py-2 text-sm font-medium text-blue-200 hover:text-blue-100 hover:bg-blue-600/10 rounded-md transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600">
+              <Link href="#how-it-works" className="px-3 py-2.5 min-h-11 inline-flex items-center text-sm font-medium text-blue-200 hover:text-blue-100 hover:bg-blue-600/10 rounded-md transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600">
                 How It Works
               </Link>
-              <Link href="#bargain" className="px-3 py-2 text-sm font-medium text-blue-200 hover:text-blue-100 hover:bg-blue-600/10 rounded-md transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600">
+              <Link href="#bargain" className="px-3 py-2.5 min-h-11 inline-flex items-center text-sm font-medium text-blue-200 hover:text-blue-100 hover:bg-blue-600/10 rounded-md transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600">
                 AI Negotiator
               </Link>
-              <Link href="#pricing" className="px-3 py-2 text-sm font-medium text-blue-200 hover:text-blue-100 hover:bg-blue-600/10 rounded-md transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600">
+              <Link href="#pricing" className="px-3 py-2.5 min-h-11 inline-flex items-center text-sm font-medium text-blue-200 hover:text-blue-100 hover:bg-blue-600/10 rounded-md transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600">
                 Pricing
               </Link>
             </div>
@@ -253,17 +253,15 @@ export default function HomePage() {
         </div>
 
         {/* Mobile menu */}
-        {mobileOpen && (
-          <div id="mobile-menu" className="md:hidden border-t border-blue-800/30 bg-slate-900/95 backdrop-blur-lg px-4 py-4 space-y-1">
-            <Link href="#what" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 text-sm font-medium text-blue-200 hover:bg-blue-600/10 rounded-md">Why CartGain</Link>
-            <Link href="#how-it-works" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 text-sm font-medium text-blue-200 hover:bg-blue-600/10 rounded-md">How It Works</Link>
-            <Link href="#bargain" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 text-sm font-medium text-blue-200 hover:bg-blue-600/10 rounded-md">AI Negotiator</Link>
-            <Link href="#pricing" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 text-sm font-medium text-blue-200 hover:bg-blue-600/10 rounded-md">Pricing</Link>
-            <Link href="/signup" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 text-sm font-semibold text-white bg-primary-600 rounded-lg text-center mt-2">
-              Start Free
-            </Link>
-          </div>
-        )}
+        <div id="mobile-menu" hidden={!mobileOpen} className="md:hidden border-t border-blue-800/30 bg-slate-900/95 backdrop-blur-lg px-4 py-4 space-y-1">
+          <Link href="#what" onClick={() => setMobileOpen(false)} className="block px-3 py-3 text-sm font-medium text-blue-200 hover:bg-blue-600/10 rounded-md">Why CartGain</Link>
+          <Link href="#how-it-works" onClick={() => setMobileOpen(false)} className="block px-3 py-3 text-sm font-medium text-blue-200 hover:bg-blue-600/10 rounded-md">How It Works</Link>
+          <Link href="#bargain" onClick={() => setMobileOpen(false)} className="block px-3 py-3 text-sm font-medium text-blue-200 hover:bg-blue-600/10 rounded-md">AI Negotiator</Link>
+          <Link href="#pricing" onClick={() => setMobileOpen(false)} className="block px-3 py-3 text-sm font-medium text-blue-200 hover:bg-blue-600/10 rounded-md">Pricing</Link>
+          <Link href="/signup" onClick={() => setMobileOpen(false)} className="block px-3 py-3 text-sm font-semibold text-white bg-primary-600 rounded-lg text-center mt-2 min-h-11">
+            Start Free
+          </Link>
+        </div>
       </nav>
 
       <main id="main">
@@ -357,7 +355,7 @@ export default function HomePage() {
                 </div>
                 <div>
                   <p className="font-semibold text-white text-sm sm:text-base">{v.title}</p>
-                  <p className="text-xs text-blue-300/70 mt-0.5">{v.desc}</p>
+                  <p className="text-xs text-blue-200/90 mt-0.5">{v.desc}</p>
                 </div>
               </div>
             ))}
@@ -502,7 +500,7 @@ export default function HomePage() {
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-600 to-blue-600 flex items-center justify-center mb-3">
                       <s.icon className="w-5 h-5 text-white" />
                     </div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-300/60 mb-1">Step {i + 1}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-blue-200/90 mb-1">Step {i + 1}</p>
                     <h3 className="text-lg font-bold text-white mb-1">{s.title}</h3>
                     <p className="text-sm text-blue-200/80">{s.desc}</p>
                   </div>
@@ -524,7 +522,7 @@ export default function HomePage() {
                       <span className="inline-block bg-green-600/20 border border-green-600/40 rounded-lg px-3 py-1 text-xs">
                         <span className="font-semibold text-green-300">Hour 1</span>
                       </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-900/40 border border-emerald-600/40 text-[10px] font-semibold text-emerald-300">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-900/40 border border-emerald-600/40 text-xs font-semibold text-emerald-300">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> LIVE
                       </span>
                     </div>
@@ -553,7 +551,7 @@ export default function HomePage() {
                       <span className="inline-block bg-purple-600/20 border border-purple-600/40 rounded-lg px-3 py-1 text-xs">
                         <span className="font-semibold text-purple-300">Day 1</span>
                       </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-900/40 border border-emerald-600/40 text-[10px] font-semibold text-emerald-300">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-900/40 border border-emerald-600/40 text-xs font-semibold text-emerald-300">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> LIVE
                       </span>
                     </div>
@@ -655,7 +653,7 @@ export default function HomePage() {
                 <p className="text-xs text-blue-400/70 mt-1">Standard across D2C e-commerce</p>
               </div>
             </div>
-            <p className="text-center text-[11px] text-blue-400/50 mt-6">Benchmark and industry-average figures shown for context — not a guarantee of your results.</p>
+            <p className="text-center text-xs text-blue-200/80 mt-6">Benchmark and industry-average figures shown for context — not a guarantee of your results.</p>
           </div>
         </section>
 
@@ -700,7 +698,7 @@ export default function HomePage() {
                 </div>
                 <div className="relative">
                   <div className="rounded-2xl border border-blue-700/40 bg-slate-900/80 backdrop-blur-sm p-6 shadow-xl">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-blue-300/70 mb-4">Live Negotiation Preview</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-blue-200/90 mb-4">Live Negotiation Preview</div>
                     <div className="space-y-3">
                       <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm text-white">I love this serum, but ₹1,499 is too much. Can you do ₹1,200?</div>
@@ -721,12 +719,12 @@ export default function HomePage() {
                         <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-emerald-600/40 border border-emerald-500/40 px-4 py-3 text-sm text-emerald-200">Done! Here&apos;s your code: <span className="font-bold">BARGAIN10</span> — 24 hours only.</div>
                       </div>
                     </div>
-                    <div className="mt-5 pt-4 border-t border-blue-700/30 flex items-center justify-between text-xs text-blue-300/60">
+                    <div className="mt-5 pt-4 border-t border-blue-700/30 flex items-center justify-between text-xs text-blue-200/90">
                       <span>Floor price set by you: ₹1,250</span>
                       <span className="text-emerald-400">Margin protected ✓</span>
                     </div>
                   </div>
-                  <p className="mt-3 text-[11px] text-blue-300/50 text-center">
+                  <p className="mt-3 text-xs text-blue-200/80 text-center">
                     The negotiation engine never offers, and never can offer, below your floor.
                   </p>
                 </div>
@@ -885,7 +883,7 @@ export default function HomePage() {
               </div>
 
               <div className="rounded-2xl border border-blue-700/30 bg-slate-900/60 overflow-hidden">
-                <div className="px-6 py-4 border-b border-blue-800/30 grid grid-cols-3 text-xs font-semibold uppercase tracking-wider text-blue-300/60">
+                <div className="px-6 py-4 border-b border-blue-800/30 grid grid-cols-3 text-xs font-semibold uppercase tracking-wider text-blue-200/90">
                   <span>Capability</span>
                   <span className="text-center">Klaviyo</span>
                   <span className="text-center text-cyan-300">CartGain</span>
@@ -904,7 +902,7 @@ export default function HomePage() {
                     <span className="text-center text-cyan-300">{row.b}</span>
                   </div>
                 ))}
-                <div className="px-6 py-4 text-xs text-blue-300/50 leading-relaxed">
+                <div className="px-6 py-4 text-xs text-blue-200/80 leading-relaxed">
                   Feature markers show where each tool leads today. CartGain integrates alongside your existing stack — no rip-and-replace.
                 </div>
               </div>
@@ -984,7 +982,7 @@ export default function HomePage() {
                   <div className="bg-gradient-to-br from-green-600/20 to-green-700/20 rounded-lg w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0">
                     <ShoppingBag className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-400" />
                   </div>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-900/40 border border-emerald-600/40 text-[10px] font-semibold text-emerald-300">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-900/40 border border-emerald-600/40 text-xs font-semibold text-emerald-300">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> LIVE
                   </span>
                 </div>
@@ -998,7 +996,7 @@ export default function HomePage() {
                   <div className="bg-gradient-to-br from-purple-600/20 to-purple-700/20 rounded-lg w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0">
                     <Package className="w-7 h-7 sm:w-8 sm:h-8 text-purple-400" />
                   </div>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-900/40 border border-emerald-600/40 text-[10px] font-semibold text-emerald-300">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-900/40 border border-emerald-600/40 text-xs font-semibold text-emerald-300">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> LIVE
                   </span>
                 </div>
@@ -1012,7 +1010,7 @@ export default function HomePage() {
                   <div className="bg-gradient-to-br from-orange-600/20 to-orange-700/20 rounded-lg w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0">
                     <Settings className="w-7 h-7 sm:w-8 sm:h-8 text-orange-400" />
                   </div>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-900/40 border border-amber-600/40 text-[10px] font-semibold text-amber-300">ROADMAP</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-900/40 border border-amber-600/40 text-xs font-semibold text-amber-300">ROADMAP</span>
                 </div>
                 <h3 className="text-lg sm:text-xl font-bold text-white mb-2">Magento</h3>
                 <p className="text-blue-200 text-xs sm:text-sm mb-4">Enterprise API integration. On our roadmap.</p>
@@ -1031,7 +1029,7 @@ export default function HomePage() {
 
             <div className="text-center py-6 sm:py-8 border-t border-blue-700/30">
               <p className="text-blue-200 mb-4 text-xs sm:text-sm">Any platform with webhook support can connect today. Not sure? Ask us.</p>
-              <a href="https://wa.me/918708718426" target="_blank" rel="noopener noreferrer" className="inline-block px-6 py-2 sm:py-3 border border-emerald-500 text-emerald-400 rounded-lg hover:bg-emerald-600/10 transition font-medium text-xs sm:text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400">
+              <a href="https://wa.me/918708718426" target="_blank" rel="noopener noreferrer" aria-label="Contact CartGain on WhatsApp" className="inline-flex items-center px-6 py-3 min-h-11 border border-emerald-500 text-emerald-400 rounded-lg hover:bg-emerald-600/10 transition-colors font-medium text-xs sm:text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400">
                 <MessageSquare className="w-4 h-4 inline-block mr-1.5" />
                 Contact Us
               </a>
@@ -1057,7 +1055,7 @@ export default function HomePage() {
                   className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
                     billing === 'monthly'
                       ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
-                      : 'text-blue-300/60 hover:text-blue-300'
+                      : 'text-blue-200/90 hover:text-blue-300'
                   }`}
                 >
                   Monthly
@@ -1067,7 +1065,7 @@ export default function HomePage() {
                   className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
                     billing === 'yearly'
                       ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
-                      : 'text-blue-300/60 hover:text-blue-300'
+                      : 'text-blue-200/90 hover:text-blue-300'
                   }`}
                 >
                   Yearly
@@ -1082,7 +1080,7 @@ export default function HomePage() {
                 <Zap className="w-7 h-7 text-white" />
               </div>
               <h3 className="text-2xl font-bold text-white mb-2">Start Free — {FREE_CARTS_THRESHOLD} Recovered Carts, ₹0</h3>
-              <p className="text-blue-300/70 mb-6 max-w-xl mx-auto text-sm">
+              <p className="text-blue-200/90 mb-6 max-w-xl mx-auto text-sm">
                 Recover your first {FREE_CARTS_THRESHOLD} abandoned carts completely free.
                 WhatsApp &amp; Email included today. Upgrade when you grow.
               </p>
@@ -1113,7 +1111,7 @@ export default function HomePage() {
                 return (
                   <div
                     key={plan.id}
-                    className={`relative rounded-2xl p-6 sm:p-8 flex flex-col ${theme.bg} border-2 ${theme.border} hover:shadow-xl ${theme.glow} transition-all duration-300 h-full group`}
+                    className={`relative rounded-2xl p-6 sm:p-8 flex flex-col ${theme.bg} border-2 ${theme.border} hover:shadow-xl ${theme.glow} transition-[transform,box-shadow,border-color] duration-300 h-full group`}
                   >
                     {isGrowth && (
                       <span className="absolute -top-3 right-4 px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold rounded-full shadow-lg shadow-amber-500/30">
@@ -1128,12 +1126,12 @@ export default function HomePage() {
 
                     <div className="mb-1">
                       <span className="text-3xl sm:text-4xl font-bold text-white">₹{displayPrice.toLocaleString('en-IN')}</span>
-                      <span className="text-base text-blue-300/60 ml-1">{period}</span>
+                      <span className="text-base text-blue-200/90 ml-1">{period}</span>
                     </div>
                     <p className="text-xs text-emerald-400/80 mb-1">
                       Est. additional recovery ₹{plan.estimatedRecovery.min.toLocaleString('en-IN')}-{plan.estimatedRecovery.max.toLocaleString('en-IN')}/mo
                     </p>
-                    <p className="text-xs text-blue-300/40 mb-5">
+                    <p className="text-xs text-blue-200/80 mb-5">
                       + {plan.revSharePercent}% revenue share on CartGain-attributed recoveries (capped at ₹{plan.revShareCap.toLocaleString('en-IN')}/mo), after the first {FREE_CARTS_THRESHOLD}
                     </p>
 
@@ -1141,13 +1139,13 @@ export default function HomePage() {
                     <div className="mb-6 grid grid-cols-2 gap-2 text-center">
                       <div className="bg-slate-900/50 border border-blue-700/30 rounded-lg py-2.5">
                         <div className="text-lg font-bold text-emerald-400">{plan.bargainSessions === Infinity ? '∞' : plan.bargainSessions.toLocaleString('en-IN')}</div>
-                        <div className="text-[10px] uppercase tracking-wide text-blue-300/50">Bargain sessions</div>
+                        <div className="text-xs uppercase tracking-wide text-blue-200/80">Bargain sessions</div>
                       </div>
                       <div className="bg-slate-900/50 border border-blue-700/30 rounded-lg py-2.5">
                         <div className="text-lg font-bold text-emerald-400">{plan.bargainDeals === Infinity ? '∞' : plan.bargainDeals.toLocaleString('en-IN')}{plan.bargainOverageDealPrice > 0 ? '+' : ''}</div>
-                        <div className="text-[10px] uppercase tracking-wide text-blue-300/50">Accepted deals</div>
+                        <div className="text-xs uppercase tracking-wide text-blue-200/80">Accepted deals</div>
                         {plan.bargainOverageDealPrice > 0 && (
-                          <div className="text-[10px] text-amber-300/70 mt-0.5">then ₹{plan.bargainOverageDealPrice}/extra</div>
+                          <div className="text-xs text-amber-300/70 mt-0.5">then ₹{plan.bargainOverageDealPrice}/extra</div>
                         )}
                       </div>
                     </div>
@@ -1165,7 +1163,7 @@ export default function HomePage() {
 
                     <Link
                       href="/signup"
-                      className={`w-full py-3 rounded-lg font-semibold text-center text-sm sm:text-base min-h-12 inline-flex items-center justify-center transition-all bg-gradient-to-r ${theme.gradient} text-white hover:shadow-lg group-hover:scale-[1.02] ${
+                      className={`w-full py-3 rounded-lg font-semibold text-center text-sm sm:text-base min-h-12 inline-flex items-center justify-center transition-[transform,box-shadow] bg-gradient-to-r ${theme.gradient} text-white hover:shadow-lg group-hover:scale-[1.02] ${
                         isGrowth ? 'hover:shadow-amber-500/50' : 'hover:shadow-violet-500/50'
                       }`}
                     >
@@ -1267,11 +1265,9 @@ export default function HomePage() {
                       <h3 className="text-base sm:text-lg font-semibold text-white">{faq.q}</h3>
                       <ChevronDown className={`w-5 h-5 text-cyan-400 flex-shrink-0 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
                     </button>
-                    {open && (
-                      <div id={`faq-panel-${i}`} role="region" aria-labelledby={`faq-button-${i}`} className="px-5 sm:px-6 pb-5">
-                        <p className="text-sm text-blue-100 leading-relaxed">{faq.a}</p>
-                      </div>
-                    )}
+                    <div id={`faq-panel-${i}`} role="region" aria-labelledby={`faq-button-${i}`} hidden={!open} className="px-5 sm:px-6 pb-5">
+                      <p className="text-sm text-blue-100 leading-relaxed">{faq.a}</p>
+                    </div>
                   </div>
                 )
               })}
@@ -1279,11 +1275,11 @@ export default function HomePage() {
 
             <div className="mt-12 bg-gradient-to-r from-blue-900/40 to-cyan-900/40 border border-blue-700/40 rounded-xl p-8 text-center">
               <p className="text-white font-semibold mb-4">Didn&apos;t find your answer?</p>
-              <a href="https://wa.me/918708718426" target="_blank" rel="noopener noreferrer" className="inline-block px-6 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/50 transition font-medium">
+              <a href="https://wa.me/918708718426" target="_blank" rel="noopener noreferrer" aria-label="Contact CartGain on WhatsApp" className="inline-flex items-center px-6 py-3 min-h-12 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/50 transition-shadow font-medium">
                 <MessageSquare className="w-4 h-4 inline-block mr-1.5" />
                 Contact Us — We&apos;ll Explain Everything
               </a>
-              <p className="text-blue-300/60 text-xs mt-4">Or email us at <a href="mailto:support@cart-gain.com" className="text-cyan-400 hover:underline">support@cart-gain.com</a></p>
+              <p className="text-blue-200/90 text-xs mt-4">Or email us at <a href="mailto:support@cart-gain.com" className="text-cyan-400 hover:underline">support@cart-gain.com</a></p>
             </div>
           </div>
         </section>
@@ -1327,32 +1323,32 @@ export default function HomePage() {
               </p>
             </div>
             <div>
-              <h4 className="font-semibold mb-4 text-sm sm:text-base">Product</h4>
+              <h3 className="font-semibold mb-4 text-sm sm:text-base">Product</h3>
               <ul className="space-y-2 text-gray-400 text-xs sm:text-sm">
-                <li><Link href="#what" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Why CartGain</Link></li>
-                <li><Link href="#bargain" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">AI Negotiator</Link></li>
-                <li><Link href="#pricing" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Pricing</Link></li>
-                <li><Link href="/demo" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Live Demo</Link></li>
+                <li><Link href="#what" className="inline-block py-1.5 hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Why CartGain</Link></li>
+                <li><Link href="#bargain" className="inline-block py-1.5 hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">AI Negotiator</Link></li>
+                <li><Link href="#pricing" className="inline-block py-1.5 hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Pricing</Link></li>
+                <li><Link href="/demo" className="inline-block py-1.5 hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Live Demo</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold mb-4 text-sm sm:text-base">How It Works</h4>
+              <h3 className="font-semibold mb-4 text-sm sm:text-base">How It Works</h3>
               <ul className="space-y-2 text-gray-400 text-xs sm:text-sm">
-                <li><Link href="#how-it-works" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Recovery pipeline</Link></li>
-                <li><Link href="#dashboard" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Revenue dashboard</Link></li>
-                <li><Link href="#calculator" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">ROI calculator</Link></li>
-                <li><Link href="#integrations" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Integrations</Link></li>
+                <li><Link href="#how-it-works" className="inline-block py-1.5 hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Recovery pipeline</Link></li>
+                <li><Link href="#dashboard" className="inline-block py-1.5 hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Revenue dashboard</Link></li>
+                <li><Link href="#calculator" className="inline-block py-1.5 hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">ROI calculator</Link></li>
+                <li><Link href="#integrations" className="inline-block py-1.5 hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Integrations</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold mb-4 text-sm sm:text-base">Legal &amp; Contact</h4>
+              <h3 className="font-semibold mb-4 text-sm sm:text-base">Legal &amp; Contact</h3>
               <ul className="space-y-2 text-gray-400 text-xs sm:text-sm">
-                <li><Link href="/privacy" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Privacy Policy</Link></li>
-                <li><Link href="/terms" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Terms of Service</Link></li>
-                <li><Link href="/dpa" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">DPA</Link></li>
-                <li><Link href="/cookies" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Cookie Policy</Link></li>
-                <li><Link href="/security-policy" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Security</Link></li>
-                <li><a href="mailto:support@cart-gain.com" className="hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Email Us</a></li>
+                <li><Link href="/privacy" className="inline-block py-1.5 hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Privacy Policy</Link></li>
+                <li><Link href="/terms" className="inline-block py-1.5 hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Terms of Service</Link></li>
+                <li><Link href="/dpa" className="inline-block py-1.5 hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">DPA</Link></li>
+                <li><Link href="/cookies" className="inline-block py-1.5 hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Cookie Policy</Link></li>
+                <li><Link href="/security-policy" className="inline-block py-1.5 hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Security</Link></li>
+                <li><a href="mailto:support@cart-gain.com" className="inline-block py-1.5 hover:text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded">Email Us</a></li>
               </ul>
             </div>
           </div>
