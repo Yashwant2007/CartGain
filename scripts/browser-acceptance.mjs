@@ -176,7 +176,7 @@ async function main() {
     ])
 
     const embedQuery = new URLSearchParams({
-      shop: process.env.BROWSER_ACCEPTANCE_SHOP || 'test5cg.myshopify.com',
+      shop: process.env.BROWSER_ACCEPTANCE_SHOP || 'test6cg.myshopify.com',
       product: 'gid://shopify/Product/1',
       variant: 'gid://shopify/ProductVariant/1',
       price: '999',
