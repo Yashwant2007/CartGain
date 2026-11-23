@@ -1,4 +1,5 @@
 import {
+  buildPlatformCheckoutLink,
   buildRecoveryLink,
   buildStoreCheckoutLink,
   isSafeDiscountCode,
@@ -113,5 +114,39 @@ describe('recovery links', () => {
         discountCode: 'GAINABC123',
       })
     ).toBe('https://shop.myshopify.com/discount/GAINABC123')
+  })
+
+  it('builds a WooCommerce cart link with a coupon and product id', () => {
+    expect(
+      buildPlatformCheckoutLink({
+        platform: 'woocommerce',
+        domain: 'https://shop.example.com/',
+        cartId: 'wc-cart-token',
+        discountCode: 'GAINABC123',
+        items: [{ productId: '42', variationId: '43' }],
+      })
+    ).toBe('https://shop.example.com/cart/?coupon_code=GAINABC123&product_id=43')
+  })
+
+  it('drops unsafe WooCommerce coupons and still links to the cart', () => {
+    expect(
+      buildPlatformCheckoutLink({
+        platform: 'woocommerce',
+        domain: 'shop.example.com',
+        cartId: 'wc-cart-token',
+        discountCode: '<script>',
+      })
+    ).toBe('https://shop.example.com/cart/')
+  })
+
+  it('delegates Shopify stores to the existing checkout link builder', () => {
+    expect(
+      buildPlatformCheckoutLink({
+        platform: 'shopify',
+        domain: 'shop.myshopify.com',
+        cartId: 'abc123',
+        discountCode: 'GAINABC123',
+      })
+    ).toBe('https://shop.myshopify.com/discount/GAINABC123?redirect=%2Fcart%2Fabc123')
   })
 })

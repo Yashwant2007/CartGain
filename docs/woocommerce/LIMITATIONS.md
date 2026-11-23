@@ -8,3 +8,5 @@
 - The shared WhatsApp sender remains deployment-wide; WooCommerce stores do not receive a separate BYO number flow in this release.
 - Migration `20261120130000_add_woocommerce_integration` is additive but must be applied before deploying code that queries the new tables.
 - Merchant UI surfaces for WooCommerce connection management are minimal; the API and plugin status panel are authoritative in this release.
+- Order attribution and refund netting depend on paid/cancelled/refunded plugin webhooks. Custom checkout or refund flows that bypass WooCommerce hooks need a follow-up adapter or reconciliation job.
+- WooCommerce checkout resume links point to the store cart with `coupon_code` and `product_id`; stores that replace the default cart/checkout with a custom SPA may need a link adapter.

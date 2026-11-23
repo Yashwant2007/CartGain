@@ -15,14 +15,23 @@ jest.mock('@/lib/recovery/recipients', () => ({
   cancelPendingRecoveryForCart: jest.fn(async () => undefined),
 }))
 
+jest.mock('../order-attribution', () => ({
+  attributeWooBargainOrder: jest.fn(async () => undefined),
+  attributeWooRecoveryOrder: jest.fn(async () => undefined),
+  netWooOrderRefund: jest.fn(async () => undefined),
+}))
+
 import { Prisma } from '@prisma/client'
 import prisma from '@/lib/db'
 import { cancelPendingRecoveryForCart } from '@/lib/recovery/recipients'
 import type { WebhookEvent } from '../schemas'
+import { attributeWooBargainOrder, attributeWooRecoveryOrder } from '../order-attribution'
 import { claimPlatformEvent, processWooWebhookEvent } from '../events'
 
 const mockPrisma = prisma as any
 const mockCancel = cancelPendingRecoveryForCart as jest.Mock
+const mockAttributeBargain = attributeWooBargainOrder as jest.Mock
+const mockAttributeRecovery = attributeWooRecoveryOrder as jest.Mock
 
 const ctx = {
   store: { id: 'store-1', domain: 'https://shop.example.com', platform: 'woocommerce' },
@@ -224,5 +233,11 @@ describe('processWooWebhookEvent', () => {
     })
     expect(mockCancel).toHaveBeenCalledWith('cart-row-1', 'purchased')
     expect(mockPrisma.platformOrder.upsert.mock.calls[0][0].update.status).toBe('completed')
+    expect(mockAttributeBargain).toHaveBeenCalledTimes(1)
+    expect(mockAttributeRecovery).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'store-1', userId: '' }),
+      expect.objectContaining({ platformOrderId: '9001' }),
+      'cart-row-1',
+    )
   })
 })

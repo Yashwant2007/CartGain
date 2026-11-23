@@ -81,6 +81,16 @@ final class CartGain_WC_Tracking
         }
         foreach (WC()->cart->get_cart() as $values) {
             $product = isset($values['data']) && is_object($values['data']) ? $values['data'] : null;
+            $image_url = '';
+            if ($product && method_exists($product, 'get_image_id')) {
+                $image_id = (int) $product->get_image_id();
+                if ($image_id > 0) {
+                    $resolved = wp_get_attachment_image_url($image_id, 'medium_large');
+                    if (is_string($resolved)) {
+                        $image_url = esc_url_raw($resolved);
+                    }
+                }
+            }
             $items[] = array(
                 'productId' => isset($values['product_id']) ? (int) $values['product_id'] : 0,
                 'variationId' => isset($values['variation_id']) ? (int) $values['variation_id'] : 0,
@@ -88,6 +98,7 @@ final class CartGain_WC_Tracking
                 'lineTotal' => isset($values['line_total']) ? (string) round((float) $values['line_total'], 2) : '0',
                 'name' => $product && method_exists($product, 'get_name') ? sanitize_text_field($product->get_name()) : '',
                 'sku' => $product && method_exists($product, 'get_sku') ? sanitize_text_field($product->get_sku()) : '',
+                'imageUrl' => $image_url,
             );
             if (count($items) >= 100) {
                 break;

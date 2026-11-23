@@ -18,7 +18,7 @@ export default function PrivacyPolicyPage() {
           </div>
           <h1 className="text-4xl font-bold text-white mb-4">Privacy Policy</h1>
           <p className="text-lg text-blue-200 max-w-2xl mx-auto">
-            Last updated: October 27, 2026
+            Last updated: November 23, 2026
           </p>
         </div>
 
@@ -49,7 +49,7 @@ export default function PrivacyPolicyPage() {
                     <h3 className="text-lg font-semibold text-white mb-3">1. Personal Data</h3>
                     <ul className="list-disc pl-5 space-y-2">
                       <li><strong>Account Information:</strong> Name, email address, phone number, company name, and password when you create an account.</li>
-                      <li><strong>Payment Information:</strong> Subscription and invoice records. App charges are processed by Shopify through Shopify Billing; payment card details are handled by Shopify and are not stored by CartGain.</li>
+                      <li><strong>Payment Information:</strong> Subscription and invoice records. Shopify store charges are processed by Shopify Billing; WooCommerce store charges are processed by Razorpay. Payment card details are handled by the relevant processor and are not stored by CartGain.</li>
                       <li><strong>Communication Data:</strong> Messages you send us via support, chat, or email.</li>
                     </ul>
                   </div>
@@ -57,7 +57,7 @@ export default function PrivacyPolicyPage() {
                   <div>
                     <h3 className="text-lg font-semibold text-white mb-3">2. Business Data</h3>
                     <ul className="list-disc pl-5 space-y-2">
-                      <li><strong>Store Information:</strong> E-commerce platform details, store URL, and API credentials.</li>
+                      <li><strong>Store Information:</strong> E-commerce platform (Shopify or WooCommerce), store URL, webhook configuration, and scoped API credentials.</li>
                       <li><strong>Customer Data:</strong> Abandoned cart information including customer names, emails, phone numbers, and cart contents.</li>
                       <li><strong>Storefront Experience Data:</strong> Limited presentation events from the bargain widget (invitation impression, invitation click, chat open) with a pseudonymous visitor key, the store, product, design variant, personality, and version. These events measure storefront performance; they do not include chat message text.</li>
                       <li><strong>Analytics Data:</strong> Recovery rates, conversion metrics, campaign performance, storefront funnel metrics, and purchase values adjusted for refunds and cancellations.</li>
@@ -87,7 +87,7 @@ export default function PrivacyPolicyPage() {
                   <li><strong>Service Delivery:</strong> To provide, maintain, and improve our cart recovery services.</li>
                   <li><strong>Communication:</strong> To send recovery notifications via WhatsApp and email on your behalf (the corresponding providers are configured and activated before these channels go live).</li>
                   <li><strong>Analytics:</strong> To track recovery performance, measure the storefront experience funnel, compare presentation variants, and adjust recovered-revenue reporting for refunds and cancellations.</li>
-                  <li><strong>Bounded learning:</strong> To evaluate negotiation strategies and improve future offers. Learning is optional, can run in shadow mode, stays within merchant-approved pricing rules, and never replaces the hard price floor.</li>
+                  <li><strong>Bounded learning:</strong> To evaluate negotiation strategies and improve future offers. Learning is optional, can run in shadow mode, stays within merchant-approved pricing rules, and never replaces the hard price floor. Merchant voice settings (tone, humour level, emoji use and language) guide style only.</li>
                   <li><strong>Security:</strong> To detect and prevent fraud, unauthorized access, and security incidents.</li>
                   <li><strong>Legal Compliance:</strong> To comply with applicable laws and regulations.</li>
                 </ul>
@@ -113,10 +113,10 @@ export default function PrivacyPolicyPage() {
                 </h2>
                 <p className="mb-4">We share data with the following categories of third parties:</p>
                 <ul className="list-disc pl-5 space-y-2">
-                  <li><strong>E-commerce Platform:</strong> Shopify, to sync cart, order, and discount data.</li>
+                  <li><strong>E-commerce Platform:</strong> Shopify or your self-hosted WooCommerce store, to sync cart, product, order, refund, and discount data.</li>
                   <li><strong>Communication Providers:</strong> WhatsApp Business API (operated by Meta) and Resend (Email) — activated as configured. Messages may be sent from a shared CartGain WhatsApp number or a merchant-supplied WhatsApp Business number. Inbound STOP/START replies are matched to the relevant merchant store using the recipient phone number and cart history.</li>
                   <li><strong>AI Services:</strong> OpenAI (GPT-4o / GPT-4o-mini) and, as a fallback, Groq (gpt-oss-120b) for AI-powered message generation — customer names and cart product details are processed to generate personalized recovery messages. Per OpenAI&apos;s published API data-usage policy, API inputs and outputs are not used for model training; the same applies to Groq for the OSS model used.</li>
-                  <li><strong>Payment Processors:</strong> Shopify Billing for app subscriptions and usage charges.</li>
+                  <li><strong>Payment Processors:</strong> Shopify Billing for Shopify subscriptions and usage charges; Razorpay for WooCommerce subscriptions.</li>
                   <li><strong>Cloud Infrastructure:</strong> Vercel and Supabase for hosting and database.</li>
                   <li><strong>Legal Authorities:</strong> When required by law or to protect our rights.</li>
                 </ul>
@@ -144,7 +144,7 @@ export default function PrivacyPolicyPage() {
                   We retain your data for as long as your account is active or as needed to provide services. Applied retention limits:
                 </p>
                 <ul className="list-disc pl-5 space-y-2 mt-3">
-                  <li><strong>Cart data:</strong> Customer contact details, cart contents, the Shopify customer id and any stored checkout recovery URL are anonymized or cleared 90 days after abandonment; the cart token is replaced with an opaque identifier.</li>
+                  <li><strong>Cart data:</strong> Customer contact details, cart contents, the platform customer id, coupon identifiers and any stored checkout recovery URL are anonymized or cleared 90 days after abandonment; the cart token is replaced with an opaque identifier.</li>
                   <li><strong>Bargain sessions:</strong> AI negotiation sessions and messages are deleted 90 days after they start.</li>
                   <li><strong>Negotiation learning:</strong> Learning outcomes and session-linked learning data are pruned after 90 days; detailed learning events follow the store&apos;s retention setting (180 days by default).</li>
                   <li><strong>Storefront experience events:</strong> Invitation impressions, clicks, and chat-open events are retained for 180 days and then pruned.</li>

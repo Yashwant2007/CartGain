@@ -18,7 +18,7 @@ export default function DPAPage() {
           </div>
           <h1 className="text-4xl font-bold text-white mb-4">Data Processing Agreement</h1>
           <p className="text-lg text-blue-200 max-w-2xl mx-auto">
-            Last updated: October 27, 2026
+            Last updated: November 23, 2026
           </p>
         </div>
 
@@ -65,7 +65,7 @@ export default function DPAPage() {
                   <ul className="list-disc pl-5 mt-2">
                     <li>Customer name, email address, and phone number</li>
                     <li>Shipping address and billing information</li>
-                    <li>Cart contents, product details, and order values</li>
+                    <li>Cart contents, product details, coupon codes, order values, refunds and net recovered revenue</li>
                     <li>Communication preferences and opt-in/opt-out status</li>
                     <li>Message delivery status and engagement metrics</li>
                     <li>Storefront experience events (invitation impression, click, chat open), a pseudonymous visitor key, and the design/personality/version shown</li>
@@ -74,7 +74,7 @@ export default function DPAPage() {
                 </div>
                 <div>
                   <p className="font-semibold text-white">Nature and Purpose of Processing:</p>
-                  <p>Automated sending of cart recovery notifications via email, WhatsApp, and push-style web alerts to encourage customers to complete their purchases; optional AI price negotiation within merchant-set limits; storefront experience measurement; and bounded evaluation of negotiation strategies. CartGain may send WhatsApp messages from a shared sender number or a merchant-supplied WhatsApp Business number. Inbound STOP/START replies are matched to the relevant store using the recipient&apos;s phone number and cart history.</p>
+                  <p>Automated sending of cart recovery notifications via email and WhatsApp to encourage customers to complete their purchases; optional AI price negotiation within merchant-set limits; storefront experience measurement; order and refund attribution for Shopify and WooCommerce stores; and bounded evaluation of negotiation strategies. CartGain may send WhatsApp messages from a shared sender number or a merchant-supplied WhatsApp Business number. Inbound STOP/START replies are matched to the relevant store using the recipient&apos;s phone number and cart history.</p>
                 </div>
                 <div>
                   <p className="font-semibold text-white">Duration of Processing:</p>
@@ -155,8 +155,13 @@ export default function DPAPage() {
                     </tr>
                     <tr>
                       <td className="py-3">Shopify</td>
-                      <td className="py-3">App subscription and usage billing</td>
+                      <td className="py-3">Store data, app subscription and usage billing</td>
                       <td className="py-3">Global (Shopify processing)</td>
+                    </tr>
+                    <tr>
+                      <td className="py-3">Razorpay</td>
+                      <td className="py-3">WooCommerce subscription payments</td>
+                      <td className="py-3">India / processor-determined regions</td>
                     </tr>
                     <tr>
                       <td className="py-3">OpenAI</td>

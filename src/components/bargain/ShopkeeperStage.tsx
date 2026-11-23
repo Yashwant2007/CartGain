@@ -53,6 +53,8 @@ interface Props {
   showUnavailable?: boolean
   /** Compact avatar-only rendering used by the storefront invitation. */
   compact?: boolean
+  /** Side-rail rendering used by the bargain chat so the conversation owns the height. */
+  side?: boolean
   onUnavailable?: () => void
 }
 
@@ -250,15 +252,60 @@ const STAGE_CSS = `
   justify-content: center;
   overflow: visible;
 }
-.cg-stage.cg-stage--compact .cg-stage-avatar > * { transform: scale(.7); transform-origin: 50% 100%; }
+.cg-stage.cg-stage--compact .cg-stage-avatar > * { transform: scale(.82); transform-origin: 50% 100%; }
+.cg-stage.cg-stage--side {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  width: 168px;
+  height: auto;
+  min-height: 0;
+  gap: 4px;
+  padding: 8px 0 10px;
+  border-bottom: 0;
+  border-right: 1px solid #eef2f7;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 78%);
+  overflow: hidden;
+}
+.cg-stage.cg-stage--side::before,
+.cg-stage.cg-stage--side .cg-stage-spot { display: none; }
+.cg-stage.cg-stage--side .cg-stage-avatar {
+  width: 168px;
+  height: 194px;
+  align-items: flex-start;
+  margin-top: -6px;
+}
+.cg-stage.cg-stage--side .cg-stage-copy {
+  width: 100%;
+  flex: 0 0 auto;
+  align-items: center;
+  text-align: center;
+  gap: 3px;
+  padding: 0 10px;
+}
+.cg-stage.cg-stage--side .cg-stage-line {
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.35;
+  -webkit-line-clamp: 2;
+}
 @media (max-width: 480px) {
   .cg-stage { gap: 6px; padding: 2px 8px; height: 170px; min-height: 170px; }
   .cg-stage-spot, .cg-stage::before { display: none; }
   .cg-stage-name { font-size: 13px; }
   .cg-stage-avatar { width: 134px; height: 158px; }
   .cg-stage-avatar::after { width: 56px; height: 8px; }
-  .cg-stage.cg-stage--compact .cg-stage-avatar { width: 108px; height: 120px; }
-  .cg-stage.cg-stage--compact .cg-stage-avatar > * { transform: scale(.58); }
+  .cg-stage.cg-stage--compact .cg-stage-avatar { width: 128px; height: 140px; }
+  .cg-stage.cg-stage--compact .cg-stage-avatar > * { transform: scale(.72); }
+  .cg-stage.cg-stage--side { width: 112px; padding: 8px 0; }
+  .cg-stage.cg-stage--side .cg-stage-avatar {
+    width: 168px;
+    height: 194px;
+    transform: scale(.67);
+    transform-origin: top center;
+    margin: -4px 0 -58px;
+  }
+  .cg-stage.cg-stage--side .cg-stage-copy { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cg-stage-halo, .cg-stage-line { animation: none !important; }
@@ -286,6 +333,7 @@ export default function ShopkeeperStage({
   enable3D = false,
   showUnavailable = false,
   compact = false,
+  side = false,
   onUnavailable,
   targetRef = null,
   forbiddenRefs = [],
@@ -321,7 +369,7 @@ export default function ShopkeeperStage({
   const renderer = useVrm ? 'vrm' : useV2 ? 'v2-sprite' : useInline ? 'inline' : render3D ? '3d' : webglAvailable ? 'disabled' : 'unavailable'
   return (
     <div
-      className={`cg-stage ${descriptor.className}${compact ? ' cg-stage--compact' : ''}`}
+      className={`cg-stage ${descriptor.className}${compact ? ' cg-stage--compact' : ''}${side ? ' cg-stage--side' : ''}`}
       data-expression={expression}
       data-avatar-personality={personality}
       data-avatar-state={state ?? ''}
@@ -332,6 +380,7 @@ export default function ShopkeeperStage({
       data-character-style={characterStyle}
       data-essential-motion={essentialMotionOnly ? 'true' : 'false'}
       data-compact={compact ? 'true' : 'false'}
+      data-side={side ? 'true' : 'false'}
       data-avatar-renderer={renderer}
     >
       <style dangerouslySetInnerHTML={{ __html: STAGE_CSS }} />

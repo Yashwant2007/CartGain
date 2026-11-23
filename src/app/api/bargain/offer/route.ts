@@ -5,7 +5,8 @@ import { negotiateStep, ruleBasedDecision, chatFallback, buildOpeningMessage, bu
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { detectWalkout, extractPrice, extractQuantity, normalizeCustomerText } from '@/lib/bargain/text'
 import { analyzeSocialSignals } from '@/lib/bargain/behavior'
-import { analyzeLiveTurn } from '@/lib/bargain/live-turn'
+import { analyzeLiveTurn, voiceAdjustedLiveTurn } from '@/lib/bargain/live-turn'
+import { loadStoreVoice } from '@/lib/conversation/store'
 import { adaptiveContextForTurn } from '@/lib/bargain/learning/behavior-context'
 import { rapidReplyForTurn } from '@/lib/bargain/rapid-reply'
 import { buildSessionMemory } from '@/lib/bargain/session-memory'
@@ -42,13 +43,18 @@ import {
 } from '@/lib/bargain/recommendations'
 import { fetchShopifyProducts } from '@/lib/shopify'
 import { toNumericId } from '@/lib/shopify-line-items'
-import { issueRetentionDiscount, buildBargainClaimUrl, type IssuedBargainCode } from '@/lib/bargain/purchase'
+import { issueRetentionDiscount, buildBargainClaimUrl, generateBargainCode, type IssuedBargainCode } from '@/lib/bargain/purchase'
 import { track } from '@/lib/analytics/track'
 import { resolveSessionLearning, recordLearningEvent, loadLearningConfig } from '@/lib/bargain/learning/service'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import { bargainRequestMetrics } from '@/lib/bargain/request-metrics'
 import type { BargainDecision, BargainOfferSuccess } from '@/lib/bargain/api-types'
-import { bargainPlatformFor, findBargainProductOverride } from '@/lib/woocommerce/bargain-adapter'
+import {
+  bargainPlatformFor,
+  buildWooCommerceCheckoutUrl,
+  createOrReuseWooCommerceCoupon,
+  findBargainProductOverride,
+} from '@/lib/woocommerce/bargain-adapter'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,8 +80,75 @@ async function issueRetentionForPlatform(
   sessionId: string,
   price: number,
 ): Promise<IssuedBargainCode | null> {
-  if (platform === 'woocommerce') return null
-  return issueRetentionDiscount(sessionId, price).catch(() => null)
+  if (platform !== 'woocommerce') return issueRetentionDiscount(sessionId, price).catch(() => null)
+
+  try {
+    const session = await prisma.bargainSession.findUnique({
+      where: { id: sessionId },
+      include: { store: true },
+    })
+    if (!session?.store) return null
+
+    if (session.discountCode && session.finalPrice != null) {
+      const purchaseUrl = session.purchaseUrl ?? buildWooCommerceCheckoutUrl({
+        domain: session.store.domain,
+        code: session.discountCode,
+        productId: session.shopifyProductId,
+        variantId: session.variantId,
+      })
+      if (!session.purchaseUrl) {
+        await prisma.bargainSession.update({ where: { id: session.id }, data: { purchaseUrl } }).catch(() => {})
+      }
+      return { code: session.discountCode, finalPrice: session.finalPrice, purchaseUrl }
+    }
+
+    const { minPrice } = await computeMinPrice({
+      storeId: session.storeId,
+      shopifyProductId: session.shopifyProductId,
+      originalPrice: session.originalPrice,
+      bulkQuantity: session.bulkQuantity ?? undefined,
+      platform: 'woocommerce',
+      platformProductId: session.shopifyProductId,
+    })
+    const safePrice = Math.round(Math.min(session.originalPrice, Math.max(minPrice, price)) * 100) / 100
+    if (safePrice >= session.originalPrice) return null
+
+    const code = generateBargainCode()
+    const discountPercent = Math.round(((session.originalPrice - safePrice) / session.originalPrice) * 10_000) / 100
+    const coupon = await createOrReuseWooCommerceCoupon({
+      store: session.store,
+      code,
+      value: discountPercent,
+      type: 'percentage',
+      minimumSubtotal: safePrice,
+      productIds: [session.shopifyProductId],
+      expiresAt: session.expiredAt,
+      description: `CartGain bargain ${code}`,
+    })
+    if (!coupon) return null
+
+    await prisma.bargainSession.update({
+      where: { id: session.id },
+      data: {
+        discountCode: coupon.code,
+        discountCodeCustomerEmail: session.customerEmail,
+        discountCodeCartToken: session.cartToken,
+        finalPrice: safePrice,
+        bargainFloor: minPrice,
+        purchaseUrl: coupon.purchaseUrl,
+      },
+    })
+
+    await track({
+      name: 'cartgain_bargain_retention_issued',
+      storeId: session.storeId,
+      properties: { price: safePrice, originalPrice: session.originalPrice, platform: 'woocommerce' },
+    })
+
+    return { code: coupon.code, finalPrice: safePrice, purchaseUrl: coupon.purchaseUrl }
+  } catch {
+    return null
+  }
 }
 
 function withFinalCode(reply: string, lang: string, retention: IssuedBargainCode, currency: string): string {
@@ -815,13 +888,15 @@ export async function POST(request: NextRequest) {
       currentMessage: interpretedMessage,
       exclusions: [productTitle, bargainSession.store.name].filter((s): s is string => typeof s === 'string' && s.length > 0),
     })
-    const liveTurn = analyzeLiveTurn({
+    const voice = await loadStoreVoice(bargainSession.storeId).catch(() => undefined)
+    let liveTurn = analyzeLiveTurn({
       message: interpretedMessage,
       intent: intentAnalysis.intent,
       signals: shopperSignals,
       customerOffer,
       repeatedMessage: shopperSignals.reasking,
     })
+    if (voice) liveTurn = voiceAdjustedLiveTurn(liveTurn, voice)
     const adaptive = adaptiveContextForTurn({
       liveTurn,
       intent: intentAnalysis,
@@ -966,6 +1041,7 @@ export async function POST(request: NextRequest) {
     ctx.lastCounter = lastCounter
     ctx.liveTurn = liveTurn
     ctx.adaptive = adaptive
+    ctx.voice = voice
     ctx.sessionMemory = buildSessionMemory({
       intent: intentAnalysis,
       signals: shopperSignals,

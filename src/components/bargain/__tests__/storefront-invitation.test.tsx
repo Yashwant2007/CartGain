@@ -60,6 +60,24 @@ describe('StorefrontInvitation', () => {
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
 
+  it('caps the card and scales the avatar for the selected size on mobile', () => {
+    const { container } = render(
+      <StorefrontInvitation
+        experience={{ ...DEFAULT_BARGAIN_EXPERIENCE, avatarSize: 'lg' }}
+        viewport="mobile"
+        onOpen={() => {}}
+        showAvatar={false}
+      />,
+    )
+    const card = container.querySelector('.cg-premium-invite') as HTMLElement
+    expect(card.className).toContain('cg-premium-invite--avatar-lg')
+    expect(card.className).toContain('cg-premium-invite--mobile')
+    const css = container.querySelector('style')?.textContent ?? ''
+    expect(css).toContain('--cg-invite-avatar-scale: 1.24')
+    expect(css).toContain('scale(calc(var(--cg-invite-avatar-scale) * var(--cg-invite-avatar-size-scale)))')
+    expect(css).toContain('max-width: 330px')
+  })
+
   it('lets the merchant override copy and hide optional chrome', () => {
     const { container } = render(
       <StorefrontInvitation

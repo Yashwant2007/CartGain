@@ -1,5 +1,5 @@
 .cartgain-bargain {
-    width: 100%;
+    width: min(360px, 100%);
     max-width: 100%;
     margin: 18px 0;
     border: 1px solid #e2e8f0;

@@ -83,7 +83,7 @@ describe('fallback tier selection', () => {
     const ctorArg = openAiMock.mock.calls[0][0]
     expect(ctorArg.baseURL).toBe('https://api.groq.com/openai/v1')
     expect(ctorArg.apiKey).toBe('fb-key')
-    expect(ctorArg.timeout).toBe(20000)
+    expect(ctorArg.timeout).toBe(15000)
 
     // The request that goes on the wire must carry the fallback model, never
     // the primary's, and must land on the fallback host.

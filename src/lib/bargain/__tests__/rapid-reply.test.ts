@@ -38,4 +38,17 @@ describe('rapid low-information replies', () => {
     expect(result?.reply).toContain('respectful')
     expect(result?.reply).not.toMatch(/floor|minimum|discount|₹|\$/i)
   })
+
+  it('has claim-free replies for random, joke, flattery and hesitation', () => {
+    expect(rapidReplyForTurn({ mode: 'random', language: 'en', productTitle: 'Trail Shoes' })?.reply).toContain('scrambled')
+    expect(rapidReplyForTurn({ mode: 'joke', language: 'en', productTitle: 'Trail Shoes' })?.reply).toContain('keep it light')
+    expect(rapidReplyForTurn({ mode: 'flattery', language: 'en', productTitle: 'Trail Shoes' })?.reply).toContain('Thanks')
+    expect(rapidReplyForTurn({ mode: 'hesitation', language: 'en', productTitle: 'Trail Shoes' })?.reply).toContain('No rush')
+    expect(rapidReplyForTurn({ mode: 'hesitation', language: 'hi', productTitle: 'Trail Shoes' })?.reply).toContain('जल्दी')
+
+    for (const mode of ['random', 'joke', 'flattery', 'hesitation']) {
+      const result = rapidReplyForTurn({ mode, language: 'en', productTitle: 'Trail Shoes' })
+      expect(result?.reply).not.toMatch(/floor|minimum|₹|\$/i)
+    }
+  })
 })

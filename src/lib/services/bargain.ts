@@ -28,6 +28,7 @@ import {
   type NegotiationGoalContext,
 } from '@/lib/bargain/engine'
 import { productContextToPromptBlock, type ProductContext } from '@/lib/bargain/product-context'
+import { voicePromptBlock, type BrandVoice } from '@/lib/conversation/voice'
 import { shippingPromptBlock, type ShippingConfig } from '@/lib/bargain/shipping'
 import { paymentPromptBlock } from '@/lib/bargain/payment'
 import { analyzeIntent, shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
@@ -217,6 +218,7 @@ export interface NegotiationContext {
    *  in the session. It steers tone and next move; it never changes price. */
   sessionMemory?: SessionMemory
   adaptive?: AdaptiveContext
+  voice?: BrandVoice
   /** The AI's most recent standing counter. Lets the reciprocal pacing stay
    *  monotonic (a real shopkeeper does not RAISE a price mid-haggle) without ever
    *  consulting the hidden floor. */
@@ -2237,6 +2239,10 @@ export function buildSystemPrompt(
   const adaptiveBlock = adaptivePromptBlock(ctx.adaptive)
   if (adaptiveBlock) {
     contextParts.push('\n' + adaptiveBlock)
+  }
+
+  if (ctx.voice) {
+    contextParts.push('\n' + voicePromptBlock({ ...ctx.voice, signOff: undefined }))
   }
 
   // ── FLOOR PROTECTION ──

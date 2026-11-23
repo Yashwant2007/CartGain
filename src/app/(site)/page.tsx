@@ -34,16 +34,17 @@ const INTEGRATION_DETAILS = {
   },
   woocommerce: {
     title: 'WooCommerce Integration',
-    description: 'API and webhook-based integration for WooCommerce stores — actively on our roadmap.',
+    description: 'Production plugin, REST API and webhook integration for WooCommerce stores.',
     features: [
       'REST API + webhook support',
-      'Automatic webhook configuration',
-      'Works with any WooCommerce theme',
-      'No coding skills needed',
-      'Onboarding support from our team',
+      'Plugin-managed webhook registration',
+      'Works with classic and block themes',
+      'HPOS-compatible order sync',
+      'Bargain widget shortcode and app block',
+      'Shopify billing or Razorpay subscriptions',
       'Regular updates',
     ],
-    setup: 'WooCommerce is on our roadmap. Contact us to join the early-access list.',
+    setup: 'Install the CartGain WooCommerce plugin, enter your store URL, and paste the connection code from your CartGain dashboard.',
   },
   magento: {
     title: 'Magento Integration',
@@ -141,7 +142,7 @@ const FAQS = [
   },
   {
     q: 'What if my platform isn\'t Shopify?',
-    a: 'Today CartGain ships a direct Shopify integration. WooCommerce, Magento, and other platforms are on our roadmap and available via REST API + webhooks. Contact us and we\'ll walk you through the best path for your store.',
+    a: 'CartGain supports Shopify and WooCommerce directly. Shopify uses the App Store app; WooCommerce uses our plugin with REST API and webhooks. Magento and other platforms are available through a custom REST integration — contact us and we\'ll walk you through the best path for your store.',
   },
   {
     q: 'When do I see results?',
@@ -973,7 +974,7 @@ export default function HomePage() {
             <div className="text-center mb-12 sm:mb-16">
               <h2 id="integrations-heading" className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">Works with your platform</h2>
               <p className="text-base sm:text-lg md:text-xl text-blue-100 max-w-2xl mx-auto">
-                Shopify today. Everything else via API & webhooks — with WooCommerce and Magento on the roadmap.
+                Direct Shopify and WooCommerce support. Magento and other platforms via REST API &amp; webhooks.
               </p>
             </div>
 
@@ -997,10 +998,12 @@ export default function HomePage() {
                   <div className="bg-gradient-to-br from-purple-600/20 to-purple-700/20 rounded-lg w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0">
                     <Package className="w-7 h-7 sm:w-8 sm:h-8 text-purple-400" />
                   </div>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-900/40 border border-amber-600/40 text-[10px] font-semibold text-amber-300">ROADMAP</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-900/40 border border-emerald-600/40 text-[10px] font-semibold text-emerald-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> LIVE
+                  </span>
                 </div>
                 <h3 className="text-lg sm:text-xl font-bold text-white mb-2">WooCommerce</h3>
-                <p className="text-blue-200 text-xs sm:text-sm mb-4">API &amp; webhook-based. On our roadmap — join the waitlist.</p>
+                <p className="text-blue-200 text-xs sm:text-sm mb-4">Plugin-based cart sync, recovery and bargaining. Install, connect, go live.</p>
                 <button onClick={() => openModal('woocommerce')} className="text-cyan-400 text-xs sm:text-sm font-semibold hover:text-cyan-300 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 rounded inline-block">Learn more →</button>
               </div>
 

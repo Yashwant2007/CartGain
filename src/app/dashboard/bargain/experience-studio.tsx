@@ -6,7 +6,7 @@ import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 import { Sparkles, Save, Eye, RotateCcw, CheckCircle2, History, Bot } from 'lucide-react'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import StorefrontInvitation from '@/components/bargain/StorefrontInvitation'
-import { PERSONALITY_META, DESIGN_VARIANT_META, type AvatarVariant, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
+import { PERSONALITY_META, DESIGN_VARIANT_META, applyInvitationDesignPreset, type AvatarVariant, type BargainExperienceConfig } from '@/lib/bargain/experience/types'
 import { V2_AVATARS, V2_CELL_POSITIONS, isV2AvatarVariant } from '@/lib/bargain/experience/v2-shopkeepers'
 import {
   REACTION_EXPRESSION,
@@ -362,7 +362,7 @@ export function BargainExperienceStudio() {
             <h3 className="text-white font-medium mb-3">Storefront Invitation Design</h3>
             <div className="grid gap-3">
               {DESIGN_VARIANT_META.map(d => (
-                <button key={d.id} onClick={() => setExp({ ...exp, designVariant: d.id })} className={`p-4 rounded-xl border text-left transition ${exp.designVariant === d.id ? 'border-cyan-500/60 bg-cyan-950/20' : 'border-blue-800/40 bg-slate-950/40'}`}>
+                <button key={d.id} onClick={() => setExp(applyInvitationDesignPreset(exp, d.id))} className={`p-4 rounded-xl border text-left transition ${exp.designVariant === d.id ? 'border-cyan-500/60 bg-cyan-950/20' : 'border-blue-800/40 bg-slate-950/40'}`}>
                   <div className="text-white font-medium">{d.name}</div>
                   <div className="text-sm text-blue-300/70 mt-1">{d.positioning}</div>
                   <div className="text-xs text-blue-400/60 mt-2">CTA: {d.defaultCta} • Copy: {d.defaultCopy}</div>

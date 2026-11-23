@@ -1,5 +1,6 @@
 import type { SocialSignals } from './behavior'
 import type { ShopperIntent } from './intent'
+import { maxEmojis, type BrandVoice } from '@/lib/conversation/voice'
 
 export const LIVE_TURN_MODES = [
   'ordinary',
@@ -20,6 +21,7 @@ export const LIVE_TURN_MODES = [
   'insult',
   'emoji_only',
   'nonsense',
+  'random',
 ] as const
 
 export type LiveTurnMode = (typeof LIVE_TURN_MODES)[number]
@@ -82,6 +84,7 @@ function modeFor(input: LiveTurnInput): LiveTurnMode {
   if (input.intent === 'PURCHASE_READY') return 'purchase'
   if (input.intent === 'PURCHASE_HESITATION') return 'hesitation'
   if (signals?.emotion === 'frustrated') return 'frustrated'
+  if (signals?.emotion === 'hesitant') return 'hesitation'
   if (input.repeatedMessage || signals?.reasking) return 'reask'
   if (input.customerOffer != null || input.intent === 'PRICE_ONLY' || input.intent === 'BUDGET_CONSTRAINT' || PRICE_RE.test(message)) {
     return 'price'
@@ -91,10 +94,11 @@ function modeFor(input: LiveTurnInput): LiveTurnMode {
   }
   if (!textOnly(message) && EMOJI_RE.test(message)) return 'emoji_only'
   if (!textOnly(message)) return 'nonsense'
-  if (isKeyboardMash(message)) return 'nonsense'
+  if (isKeyboardMash(message)) return 'random'
   if (signals?.question || input.intent === 'PRODUCT_QUESTION') return 'question'
   if (OFF_TOPIC_RE.test(lowered) && !PRODUCT_RE.test(lowered) && !PRICE_RE.test(lowered)) return 'off_topic'
-  if (signals?.emotion === 'playful' || JOKE_RE.test(message)) return 'playful'
+  if (signals?.emotion === 'playful') return 'playful'
+  if (JOKE_RE.test(message)) return 'joke'
   if (POSITIVE_RE.test(message) || signals?.emotion === 'excited') return 'flattery'
   if (GREETING_RE.test(message) || signals?.greeted) return 'greeting'
   if (message.length <= 24) return 'small_talk'
@@ -113,6 +117,7 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null): Omit<L
   }
 
   switch (mode) {
+    case 'random':
     case 'nonsense':
       return {
         ...base,
@@ -191,6 +196,8 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null): Omit<L
     case 'hesitation':
       return {
         ...base,
+        compact: true,
+        noPrice: true,
         prompt: 'They are unsure, not rejecting. Reflect the concern in your own words, reduce one verified risk, and ask ONE gentle question. Do not lead with a discount.',
       }
     case 'playful':
@@ -203,6 +210,8 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null): Omit<L
     case 'flattery':
       return {
         ...base,
+        compact: true,
+        noPrice: true,
         emojiBudget: 1,
         humorAllowed: true,
         prompt: 'They are being warm or complimentary. Thank them once briefly, keep the momentum, and use one focused next step. Do not let flattery become a reason to discount.',
@@ -210,6 +219,8 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null): Omit<L
     case 'joke':
       return {
         ...base,
+        compact: true,
+        noPrice: true,
         emojiBudget: 1,
         humorAllowed: true,
         prompt: 'They made a joke. Smile with one short line if it fits your persona, then return to the product or number. Keep humor kind, brief and non-financial.',
@@ -243,6 +254,18 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null): Omit<L
 export function analyzeLiveTurn(input: LiveTurnInput): LiveTurnAnalysis {
   const mode = modeFor(input)
   return { mode, ...analysisFor(mode, input.signals) }
+}
+
+export function voiceAdjustedLiveTurn(
+  turn: LiveTurnAnalysis,
+  voice?: BrandVoice | null,
+): LiveTurnAnalysis {
+  if (!voice) return turn
+  const emojiBudget = Math.min(turn.emojiBudget, maxEmojis(voice, 'whatsapp')) as 0 | 1
+  const humorAllowed = turn.humorAllowed && voice.humorLevel !== 'none'
+  return emojiBudget === turn.emojiBudget && humorAllowed === turn.humorAllowed
+    ? turn
+    : { ...turn, emojiBudget, humorAllowed }
 }
 
 export function liveTurnPromptBlock(turn?: LiveTurnAnalysis | null): string {

@@ -11,9 +11,9 @@ describe('analyzeLiveTurn', () => {
     expect(turn.compact).toBe(false)
   })
 
-  it('treats keyboard mash as nonsense and keeps it off the price path', () => {
+  it('treats keyboard mash as random noise and keeps it off the price path', () => {
     const turn = analyzeLiveTurn({ message: 'asdfghjkl' })
-    expect(turn.mode).toBe('nonsense')
+    expect(turn.mode).toBe('random')
     expect(turn.noPrice).toBe(true)
     expect(turn.compact).toBe(true)
   })
@@ -51,7 +51,7 @@ describe('analyzeLiveTurn', () => {
 
   it('renders a concise live-turn prompt block', () => {
     const block = liveTurnPromptBlock(analyzeLiveTurn({ message: 'asdfghjkl' }))
-    expect(block).toContain('LIVE TURN (NONSENSE)')
+    expect(block).toContain('LIVE TURN (RANDOM)')
     expect(block).toContain('ONE short clarifying question')
     expect(block).toContain('Do not move the price')
   })
@@ -136,7 +136,7 @@ describe('live coaching prompt integration', () => {
       sessionMemory: buildSessionMemory({ liveTurn }),
     } as NegotiationContext
     const prompt = buildSystemPrompt(ctx, { signals: neutralSignals() } as any, { compact: true })
-    expect(prompt).toContain('LIVE TURN (NONSENSE)')
+    expect(prompt).toContain('LIVE TURN (RANDOM)')
     expect(prompt).toContain('SESSION MEMORY')
   })
 })

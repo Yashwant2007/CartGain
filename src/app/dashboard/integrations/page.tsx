@@ -15,6 +15,12 @@ type IntegrationItem = {
   storeName?: string
   lastSync?: string
   credits?: number
+  webhookConfigured?: boolean
+  healthStatus?: string | null
+  healthDetail?: string | null
+  lastHealthCheckAt?: string | null
+  credentialFingerprint?: string | null
+  counts?: { products: number; orders: number }
 }
 
 type IntegrationStatus = {
@@ -652,6 +658,11 @@ function IntegrationCard({
             )}
             {integration.connected && integration.lastSync && (
               <p className="text-xs text-blue-300/50 mt-0.5">Last sync: {new Date(integration.lastSync).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+            )}
+            {integration.id === 'woocommerce' && integration.connected && (
+              <p className={`text-xs mt-1 ${integration.healthStatus === 'healthy' ? 'text-emerald-400/80' : 'text-amber-300/90'}`}>
+                Webhook: {integration.webhookConfigured ? 'configured' : 'missing'} · Health: {integration.healthStatus || 'not checked'} · {integration.counts?.products ?? 0} products · {integration.counts?.orders ?? 0} orders
+              </p>
             )}
             {isMessaging && integration.credits !== undefined && (
               <p className="text-xs text-cyan-400/80 mt-1.5">

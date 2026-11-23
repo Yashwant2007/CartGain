@@ -659,26 +659,29 @@ export default function StorefrontBargainWidget({
         />
       )}
 
-      <ShopkeeperStage
-        personality={avatarPersonality}
-        expression={character.expression}
-        state={character.state}
-        event={character.event}
-        eventSequence={character.eventSequence}
-        eventContext={character}
-        gesture={character.gesture}
-        position={character.position}
-        reaction={character.reaction}
-        avatarVariant={avatarVariant}
-        name={`${PERSONA_NAME[persona]} · Shopkeeper`}
-        status={t('online')}
-        line={stageLine}
-        enable3D
-        targetRef={scrollRef}
-        forbiddenRefs={[composerInputRef]}
-      />
+      <div className="cgf-conversation-shell flex items-stretch" data-cgf-conversation-shell="">
+        <ShopkeeperStage
+          side
+          personality={avatarPersonality}
+          expression={character.expression}
+          state={character.state}
+          event={character.event}
+          eventSequence={character.eventSequence}
+          eventContext={character}
+          gesture={character.gesture}
+          position={character.position}
+          reaction={character.reaction}
+          avatarVariant={avatarVariant}
+          name={`${PERSONA_NAME[persona]} · Shopkeeper`}
+          status={t('online')}
+          line={stageLine}
+          enable3D
+          targetRef={scrollRef}
+          forbiddenRefs={[composerInputRef]}
+        />
 
-      {step === 'intro' && (
+        <div className="min-w-0 flex-1">
+          {step === 'intro' && (
         <div className="p-4 space-y-3">
           <div className="flex items-start gap-3">
             {!isCart && line.image ? (
@@ -900,20 +903,22 @@ export default function StorefrontBargainWidget({
         </div>
       )}
 
-      {step === 'rejected' && (
-        <div className="p-4 space-y-3 text-center">
-          <p className="text-red-500 font-semibold text-sm">{t('negotiationEndedTitle')}</p>
-          <p className="text-xs text-gray-500">{t('noDealThisTime')}</p>
-          <div className="flex justify-center gap-2">
-            <a href={checkoutUrl} onClick={() => reactAvatar('checkout_started', { checkoutStarted: true })} className={buttonCls + ' no-underline'}>
-              {t('continueToCheckout')}
-            </a>
-            <button type="button" className={ghostCls} onClick={openBargain}>
-              {t('tryAgainShort')}
-            </button>
-          </div>
+          {step === 'rejected' && (
+            <div className="p-4 space-y-3 text-center">
+              <p className="text-red-500 font-semibold text-sm">{t('negotiationEndedTitle')}</p>
+              <p className="text-xs text-gray-500">{t('noDealThisTime')}</p>
+              <div className="flex justify-center gap-2">
+                <a href={checkoutUrl} onClick={() => reactAvatar('checkout_started', { checkoutStarted: true })} className={buttonCls + ' no-underline'}>
+                  {t('continueToCheckout')}
+                </a>
+                <button type="button" className={ghostCls} onClick={openBargain}>
+                  {t('tryAgainShort')}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

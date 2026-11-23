@@ -5,7 +5,7 @@
 1. Apply `prisma/migrations/20261120130000_add_woocommerce_integration/migration.sql` to the target Postgres database through the normal Prisma migration flow.
 2. Deploy the Next.js app. Vercel runs `prisma generate && next build`.
 3. Confirm no new required environment variables were introduced. Reuse the existing app URL, encryption, job auth, email, and WhatsApp settings.
-4. Verify health and that the WooCommerce routes are reachable.
+4. Verify health and that the WooCommerce routes are reachable. Plugin `1.0.7` ships product images, customer names, coupon codes, totals/discounts, and refund identifiers in event payloads.
 
 ## Plugin package
 
@@ -31,4 +31,5 @@ The ZIP root must contain a single `cartgain-woocommerce/` directory. Bump the p
 - Run the manual acceptance checklist in `TESTING.md`.
 - Confirm the new tables are RLS-enabled and not reachable through the Supabase Data API with anon/authenticated roles.
 - Confirm a fresh four-scope Shopify install still works; WooCommerce changes are additive and must not alter Shopify OAuth or Billing.
+- Confirm WooCommerce bargain retention coupons, recovery checkout links, paid-order attribution, and refund/cancel netting on a staging store.
 - Confirm existing bargain and recovery jobs still run on their normal schedules.

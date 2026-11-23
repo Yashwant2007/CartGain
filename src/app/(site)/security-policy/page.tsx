@@ -118,9 +118,10 @@ export default function SecurityPolicyPage() {
               <li>Upstash (Redis) — job queue &amp; caching</li>
               <li>OpenAI — AI negotiation model (GPT-4o / GPT-4o-mini)</li>
               <li>Groq — AI development/fallback inference (gpt-oss-120b)</li>
-              <li>Resend — transactional email (not yet runtime-configured)</li>
-              <li>Meta (WhatsApp Cloud API) — WhatsApp delivery (not yet runtime-configured)</li>
-              <li>Shopify Billing — app subscriptions and usage charges</li>
+              <li>Resend — transactional email</li>
+              <li>Meta (WhatsApp Cloud API) — WhatsApp delivery</li>
+              <li>Shopify Billing — Shopify app subscriptions and usage charges</li>
+              <li>Razorpay — WooCommerce subscription payments</li>
             </ul>
             <p className="text-xs text-slate-400 mt-3">
               Data processed by each provider is purpose-limited and minimized (for example, only

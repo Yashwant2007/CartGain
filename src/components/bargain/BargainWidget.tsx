@@ -371,7 +371,7 @@ export default function BargainWidget({
   // collapses the window to ~180px. A fixed height is announced via cg_resize
   // and the parent grows the iframe to match; width-based breakpoints are safe
   // (width is set by the parent column, not by us).
-  const [panelHeight, setPanelHeight] = useState(isEmbed ? 760 : 0)
+  const [panelHeight, setPanelHeight] = useState(isEmbed ? 680 : 0)
 
   // Drawer mode: the widget fills 100% of its host and the THEME controller —
   // not this component — decides visibility (open/close keep the same iframe
@@ -419,7 +419,7 @@ export default function BargainWidget({
 
   useEffect(() => {
     if (!isEmbed) return
-    const compute = () => setPanelHeight(window.innerWidth <= 480 ? 680 : 760)
+    const compute = () => setPanelHeight(window.innerWidth <= 480 ? 600 : 680)
     compute()
     window.addEventListener('resize', compute)
     return () => window.removeEventListener('resize', compute)
@@ -1675,52 +1675,58 @@ export default function BargainWidget({
             />
           )}
 
-          {avatarEnabled && !unavailable && !limit && (
-            <ShopkeeperStage
-              personality={personality}
-              expression={character.expression}
-              state={character.state}
-              event={character.event}
-              eventSequence={character.eventSequence}
-              eventContext={character}
-              gesture={character.gesture}
-              position={character.position}
-              reaction={character.reaction}
-              avatarVariant={avatarVariant}
-              characterStyle={characterStyle}
-              essentialMotionOnly={essentialMotionOnly}
-              name={shopkeeperName}
-              status={t('shopkeeperOnline')}
-              line={stageLine}
-              motionEnabled={experience?.motionEnabled !== false}
-              gaze={gaze}
-              targetRef={scrollRef}
-              forbiddenRefs={[composerRef]}
-              enable3D
-            />
-          )}
+          {/* ── Conversation shell: the shopkeeper stands beside the chat so
+              the message list keeps the full panel height instead of spending
+              ~204px on a top banner. The composer stays full-width below. ── */}
+          <div className="cg-conversation-shell" style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+            {avatarEnabled && !unavailable && !limit && (
+              <ShopkeeperStage
+                side
+                personality={personality}
+                expression={character.expression}
+                state={character.state}
+                event={character.event}
+                eventSequence={character.eventSequence}
+                eventContext={character}
+                gesture={character.gesture}
+                position={character.position}
+                reaction={character.reaction}
+                avatarVariant={avatarVariant}
+                characterStyle={characterStyle}
+                essentialMotionOnly={essentialMotionOnly}
+                name={shopkeeperName}
+                status={t('shopkeeperOnline')}
+                line={stageLine}
+                motionEnabled={experience?.motionEnabled !== false}
+                gaze={gaze}
+                targetRef={scrollRef}
+                forbiddenRefs={[composerRef]}
+                enable3D
+              />
+            )}
 
-          {/* ── Conversation ── */}
-          <div
-            ref={scrollRef}
-            className="cg-chat-log"
-            role="log"
-            aria-live="polite"
-            aria-relevant="additions"
-            aria-label={t('tabChat')}
-            onScroll={handleConversationScroll}
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              overscrollBehavior: 'contain',
-              padding: '18px 20px 14px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 18,
-              background: '#ffffff',
-              minHeight: 0,
-            }}
-          >
+            {/* ── Conversation ── */}
+            <div
+              ref={scrollRef}
+              className="cg-chat-log"
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions"
+              aria-label={t('tabChat')}
+              onScroll={handleConversationScroll}
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                overscrollBehavior: 'contain',
+                padding: '16px 18px 14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16,
+                background: '#ffffff',
+                minWidth: 0,
+                minHeight: 0,
+              }}
+            >
             {activeTab === 'info' && (
               <BargainOfferSummary
                 originalPrice={livePrice}
@@ -2059,6 +2065,7 @@ export default function BargainWidget({
                     </div>
                   </StateCard>
                 )}
+            </div>
           </div>
 
           {activeTab === 'chat' && conversationUnread > 0 && (

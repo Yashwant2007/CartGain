@@ -3,6 +3,11 @@ import prisma from '@/lib/db'
 import { cancelPendingRecoveryForCart } from '@/lib/recovery/recipients'
 import type { WebhookEvent } from './schemas'
 import { mergeCartItems, normalizeCartEvent, normalizeCustomer, normalizeOrderEvent } from './normalize'
+import {
+  attributeWooBargainOrder,
+  attributeWooRecoveryOrder,
+  netWooOrderRefund,
+} from './order-attribution'
 
 export class WooEventError extends Error {
   readonly code: string
@@ -17,7 +22,7 @@ export class WooEventError extends Error {
 type PlatformEventRef = { id: string }
 
 type Context = {
-  store: { id: string; domain: string; platform: string }
+  store: { id: string; domain: string; platform: string; userId?: string; timezone?: string | null }
   connection: { id: string; status: string }
 }
 
@@ -354,6 +359,27 @@ async function upsertOrder(event: WebhookEvent, ctx: Context) {
       await cancelPendingRecoveryForCart(cart.id, 'purchased').catch(() => undefined)
       convertedCartId = cart.id
     }
+  }
+
+  const attributionStore = {
+    ...ctx.store,
+    userId: ctx.store.userId ?? '',
+    timezone: ctx.store.timezone ?? null,
+  }
+  if (event.type === 'order_paid') {
+    await attributeWooBargainOrder(attributionStore, order).catch((err) => {
+      console.error('[WOO_BARGAIN_ATTRIBUTE]', err)
+    })
+    if (convertedCartId) {
+      await attributeWooRecoveryOrder(attributionStore, order, convertedCartId).catch((err) => {
+        console.error('[WOO_RECOVERY_ATTRIBUTE]', err)
+      })
+    }
+  }
+  if (event.type === 'order_cancelled' || event.type === 'order_refunded') {
+    await netWooOrderRefund(attributionStore, order, event.type === 'order_cancelled' ? 'cancelled' : 'refund').catch((err) => {
+      console.error('[WOO_REFUND_NETTING]', err)
+    })
   }
 
   return { platformOrderId: order.platformOrderId, convertedCartId }

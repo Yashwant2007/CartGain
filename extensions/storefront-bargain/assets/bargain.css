@@ -79,12 +79,14 @@
 
 /* ── Inline published experience (replaces the "Bargain now" CTA) ───────── */
 .cg-bargain-inline {
-  width: 100%;
+  width: min(360px, 100%);
+  max-width: 100%;
   margin: 4px 0 8px;
 }
 .cg-bargain-inline-frame {
   display: block;
   width: 100%;
+  max-width: 100%;
   border: 0;
   background: transparent;
   overflow: hidden;

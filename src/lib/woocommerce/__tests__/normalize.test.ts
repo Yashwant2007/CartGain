@@ -173,6 +173,50 @@ describe('WooCommerce normalization', () => {
     expect(normalizeOrderEvent({})).toBeNull()
   })
 
+  it('normalizes plugin order payloads with camelCase ids, coupons and totals', () => {
+    const order = normalizeOrderEvent({
+      order: {
+        orderId: 9100,
+        cartKey: 'wc-key',
+        customerId: 9,
+        total: '180.00',
+        subtotal: '200.00',
+        discountTotal: '20.00',
+        couponCodes: ['GAIN123'],
+        items: [
+          {
+            itemId: 17,
+            productId: 42,
+            variationId: 43,
+            lineTotal: '180.00',
+            imageUrl: 'https://shop.example.com/shoe.png',
+          },
+        ],
+        customerName: 'Ada Lovelace',
+        email: 'ada@example.com',
+      },
+    })
+
+    expect(order).toMatchObject({
+      platformOrderId: '9100',
+      cartId: 'wc-key',
+      externalCustomerId: '9',
+      total: 180,
+      subtotal: 200,
+      discountTotal: 20,
+      couponCodes: ['GAIN123'],
+      customerName: 'Ada Lovelace',
+    })
+    const items = order?.items as Array<Record<string, unknown>> | undefined
+    expect(items?.[0]).toMatchObject({
+      productId: '42',
+      variationId: '43',
+      price: 180,
+      total: 180,
+      imageUrl: 'https://shop.example.com/shoe.png',
+    })
+  })
+
   it('normalizes customers from billing and shipping fields', () => {
     expect(
       normalizeCustomer({

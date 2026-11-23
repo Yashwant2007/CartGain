@@ -1,7 +1,7 @@
 import { applyShopkeeperPersonality, defaultsUpdate, fromDb, publishedPersonality, sanitizeExperience, toDbUpdate } from '../config'
 import { enginePersonaFor, resolveShopkeeperPersonality } from '../personality'
 import { expressionForEvent } from '../expressions'
-import { DEFAULT_BARGAIN_EXPERIENCE } from '../types'
+import { applyInvitationDesignPreset, DEFAULT_BARGAIN_EXPERIENCE } from '../types'
 import { buildSystemPrompt } from '../../../services/bargain'
 
 describe('bargain experience config', () => {
@@ -53,6 +53,22 @@ describe('bargain experience config', () => {
     expect(exp.fontFamily).toBe('system')
     expect(exp.draftVersion).toBe(1)
     expect(exp.publishedVersion).toBe(12)
+  })
+
+  it('applies the full invitation preset when a storefront design is chosen', () => {
+    const updated = applyInvitationDesignPreset(
+      { ...DEFAULT_BARGAIN_EXPERIENCE, customGreeting: 'Old copy', ctaLabel: 'Old CTA' },
+      'playful-bargain-club',
+    )
+    expect(updated.designVariant).toBe('playful-bargain-club')
+    expect(updated.invitationHeadline).toBe('Think you can beat this price? 😏')
+    expect(updated.invitationSubtitle).toBe('A cheeky little negotiation, no pressure at all.')
+    expect(updated.ctaLabel).toBe('Challenge the price')
+    expect(updated.customGreeting).toBeNull()
+    expect(updated.accentColor).toBe('#f97316')
+    expect(updated.backgroundColor).toBe('#fff8ed')
+    expect(updated.fontFamily).toBe('rounded')
+    expect(updated.invitationIndicators).toEqual({ quickReply: true, noPressure: true, smartDeals: true })
   })
 
   it('keeps draft edits out of the published snapshot', () => {

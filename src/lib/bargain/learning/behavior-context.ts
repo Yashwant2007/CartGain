@@ -62,6 +62,7 @@ function behaviorFromMode(mode: string): BehaviorGroup | null {
     case 'greeting':
     case 'small_talk': return 'social'
     case 'nonsense':
+    case 'random':
     case 'off_topic':
     case 'probe':
     case 'reask': return 'chaotic'

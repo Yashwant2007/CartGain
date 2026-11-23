@@ -46,6 +46,19 @@ it('shows all eight chat reactions for the selected avatar and previews the clic
   })
 })
 
+it('applies the complete invitation preset when a design is selected', async () => {
+  const { container } = render(<BargainExperienceStudio />)
+  await waitFor(() => expect(screen.getByPlaceholderText('Got a price in mind?')).toBeTruthy())
+
+  fireEvent.click(screen.getByText('Playful Bargain Club'))
+
+  await waitFor(() => {
+    expect((screen.getByPlaceholderText('Got a price in mind?') as HTMLInputElement).value).toBe('Think you can beat this price? 😏')
+  })
+  expect((screen.getByPlaceholderText("Let's chat and make a better deal! 🚀") as HTMLInputElement).value).toBe('A cheeky little negotiation, no pressure at all.')
+  expect(container.querySelector('.cg-premium-invite')?.getAttribute('style')).toContain('#f97316')
+})
+
 it('previews invitation edits and blocks publishing until they are saved', async () => {
   const { container } = render(<BargainExperienceStudio />)
   await waitFor(() => expect(screen.getByPlaceholderText('Got a price in mind?')).toBeTruthy())

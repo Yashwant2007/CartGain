@@ -215,7 +215,7 @@ export function normalizeCartItems(raw: unknown): NormalizedCartItem[] {
         quantity: integer(item.quantity),
         price: firstNumber(item.price, item.line_price, item.subtotal),
         lineTotal: firstNumber(item.lineTotal, item.line_total, item.total, item.subtotal),
-        imageUrl: imageUrl(item.imageUrl ?? item.image ?? array(item.images)[0]),
+        imageUrl: imageUrl(item.imageUrl ?? item.image_url ?? item.image ?? array(item.images)[0]),
         sku: text(item.sku),
         inventory: firstNumber(
           item.inventory,
@@ -287,11 +287,21 @@ export type NormalizedCart = {
 export function normalizeCartEvent(data: unknown): NormalizedCart | null {
   const root = record(data) ?? {}
   const source = record(root.cart) ?? root
+  const totals = record(source.totals) ?? {}
   const cartId = firstText(source.id, source.cart_id, source.cartId, source.token, source.cart_token)
-  const total = firstNumber(source.total, source.total_price, source.subtotal)
+  const total = firstNumber(source.total, source.total_price, source.subtotal, totals.total, totals.subtotal)
   const items = normalizeCartItems(source.items ?? source.line_items)
   if (!cartId || total === null || items.length === 0) return null
-  const customerSource = source.customer ?? root.customer ?? {}
+  const customerSource = {
+    ...(record(root.customer) ?? {}),
+    ...(record(source.customer) ?? {}),
+    ...(root.email ? { email: root.email } : {}),
+    ...(root.phone ? { phone: root.phone } : {}),
+    ...(root.firstName ? { first_name: root.firstName } : {}),
+    ...(root.lastName ? { last_name: root.lastName } : {}),
+    ...(source.email ? { email: source.email } : {}),
+    ...(source.phone ? { phone: source.phone } : {}),
+  }
   return {
     cartId,
     items,
@@ -307,15 +317,15 @@ function normalizeOrderItems(raw: unknown): unknown[] {
       const item = record(entry)
       if (!item) return null
       return {
-        id: text(item.id),
-        productId: text(item.product_id),
-        variationId: text(item.variation_id),
+        id: text(item.id ?? item.itemId),
+        productId: firstText(item.product_id, item.productId),
+        variationId: firstText(item.variation_id, item.variationId),
         name: text(item.name),
         quantity: integer(item.quantity),
-        price: firstNumber(item.price, item.subtotal),
-        total: number(item.total),
+        price: firstNumber(item.price, item.subtotal, item.lineTotal, item.line_total),
+        total: firstNumber(item.total, item.lineTotal, item.line_total) ?? 0,
         sku: text(item.sku),
-        imageUrl: imageUrl(item.image),
+        imageUrl: imageUrl(item.imageUrl ?? item.image_url ?? item.image),
       }
     })
     .filter(Boolean)
@@ -334,30 +344,42 @@ function normalizeCouponCodes(raw: unknown): string[] {
 export function normalizeOrderEvent(data: unknown): PlatformOrderRecord | null {
   const root = record(data) ?? {}
   const source = record(root.order) ?? root
+  const totals = record(source.totals) ?? {}
   const orderId = firstText(source.id, source.order_id, source.orderId)
   if (!orderId) return null
   const billing = record(source.billing) ?? {}
-  const customer = normalizeCustomer(source.customer ?? source)
-  const refunds = array(source.refund_lines ?? source.refunds).reduce<number>((sum, entry) => {
+  const customer = normalizeCustomer({
+    ...source,
+    ...(root.customerName ? { name: root.customerName } : {}),
+    ...(root.customerEmail ? { email: root.customerEmail } : {}),
+    ...(root.customerPhone ? { phone: root.customerPhone } : {}),
+  })
+  const refundLines = array(source.refund_lines ?? source.refunds)
+  const refunds = refundLines.reduce<number>((sum, entry) => {
     const refund = record(entry)
     const value = number(refund?.total ?? refund?.amount)
     return sum + Math.abs(value ?? 0)
   }, 0)
+  const refundTotal = firstNumber(root.refundAmount, source.refundTotal, source.refundedTotal, totals.refunded)
+  const billingFirst = firstText(billing.first_name, billing.firstName)
+  const billingLast = firstText(billing.last_name, billing.lastName)
 
   return {
     platformOrderId: orderId,
-    cartId: firstText(source.cart_id, source.cartId, source.cart_hash, root.cartId),
-    externalCustomerId: firstText(customer.externalCustomerId, source.customer_id),
+    cartId: firstText(source.cart_id, source.cartId, source.cart_hash, source.cartKey, root.cartId),
+    externalCustomerId: firstText(customer.externalCustomerId, source.customer_id, source.customerId),
     status: text(source.status),
     currency: text(source.currency),
-    total: firstNumber(source.total, source.total_price, source.order_total) ?? 0,
-    refundedTotal: refunds,
-    customerEmail: firstText(customer.email, billing.email, source.billing_email),
-    customerPhone: firstText(customer.phone, billing.phone, source.billing_phone),
-    customerName: firstText(customer.name, source.customer_name),
-    items: normalizeOrderItems(source.line_items),
-    couponCodes: normalizeCouponCodes(source.coupon_lines ?? source.discount_codes),
-    placedAt: date(source.date_created ?? source.created_at ?? source.placedAt),
+    total: firstNumber(source.total, source.total_price, source.order_total, totals.total) ?? 0,
+    subtotal: firstNumber(source.subtotal, source.subtotal_price, totals.subtotal),
+    discountTotal: firstNumber(source.discountTotal, source.discount_total, totals.discount),
+    refundedTotal: Math.max(refunds, Math.abs(refundTotal ?? 0), Math.abs(number(totals.refunded) ?? 0)),
+    customerEmail: firstText(customer.email, billing.email, source.billing_email, root.customerEmail),
+    customerPhone: firstText(customer.phone, billing.phone, source.billing_phone, root.customerPhone),
+    customerName: firstText(customer.name, source.customer_name, source.customerName, root.customerName, [billingFirst, billingLast].filter(Boolean).join(' ')),
+    items: normalizeOrderItems(source.line_items ?? source.items),
+    couponCodes: normalizeCouponCodes(source.coupon_lines ?? source.couponCodes ?? source.discount_codes),
+    placedAt: date(source.date_created ?? source.created_at ?? source.createdAt ?? source.placedAt),
     paidAt: date(source.date_paid ?? source.paidAt),
     cancelledAt: date(source.date_cancelled ?? source.cancelledAt),
     refundedAt: date(source.date_refunded ?? source.refundedAt),

@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
     // Product title/link/image are NEVER trusted from the public form: a
     // crafted request could otherwise use the merchant's brand to send
     // arbitrary copy or a phishing link to any email address. Resolve the
-    // product from Shopify and drop the reminder if it cannot be verified.
+    // product from the connected storefront and drop the reminder if it cannot be verified.
     let productTitle: string | null = null
     let productUrl: string | null = null
     let productImage: string | null = null
@@ -163,6 +163,7 @@ export async function POST(request: NextRequest) {
           id: true,
           domain: true,
           currency: true,
+          platform: true,
           apiKey: true,
           shopifyRefreshToken: true,
           shopifyTokenExpiresAt: true,
@@ -173,6 +174,8 @@ export async function POST(request: NextRequest) {
           store,
           storeId,
           shopifyProductId: productId,
+          platform: store.platform,
+          platformProductId: productId,
           currency: store.currency || 'USD',
           baseUrl: `https://${store.domain}`,
           useCache: true,

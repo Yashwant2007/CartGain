@@ -6,7 +6,7 @@ Tested up to: 6.8
 Requires PHP: 7.4
 WC requires at least: 7.0
 WC tested up to: 9.0
-Stable tag: 1.0.6
+Stable tag: 1.0.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -105,6 +105,9 @@ No. The plugin only sends consent and cart/order data. CartGain's recovery engin
 On CartGain servers. The iframe only receives public product data and a cart token.
 
 == Changelog ==
+
+= 1.0.7 =
+* Send product images, coupon codes, customer names and refund identifiers so recovery messages and purchase attribution are accurate.
 
 = 1.0.6 =
 * Apply the negotiated bargain coupon and product from the accepted-offer link, then redirect straight to checkout.

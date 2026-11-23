@@ -171,3 +171,94 @@ export const DESIGN_VARIANT_META: DesignVariantMeta[] = [
   { id: 'unlock-your-deal', name: 'Unlock Your Deal', positioning: 'Refined for beauty, gifting, premium products', defaultCopy: 'Your personal deal awaits ✨', defaultCta: 'Unlock your deal' },
   { id: 'human-shopkeeper', name: 'Human Shopkeeper', positioning: 'Conversational, friendly, localized experiences', defaultCopy: 'Bhai, price ki baat karein? 😄', defaultCta: "Let's negotiate" },
 ]
+
+interface InvitationDesignPreset {
+  headline: string | null
+  subtitle: string | null
+  cta: string | null
+  accent: string
+  secondary: string
+  background: string
+  text: string
+  button: string
+  border: string
+  font: InvitationFont
+}
+
+export const INVITATION_DESIGN_PRESETS: Record<InvitationDesign, InvitationDesignPreset> = {
+  'smart-assistant': {
+    headline: null,
+    subtitle: null,
+    cta: null,
+    accent: '#7c3aed',
+    secondary: '#a78bfa',
+    background: '#faf9ff',
+    text: '#111827',
+    button: '#7c3aed',
+    border: '#ddd6fe',
+    font: 'system',
+  },
+  'playful-bargain-club': {
+    headline: 'Think you can beat this price? 😏',
+    subtitle: 'A cheeky little negotiation, no pressure at all.',
+    cta: 'Challenge the price',
+    accent: '#f97316',
+    secondary: '#fbbf24',
+    background: '#fff8ed',
+    text: '#7c2d12',
+    button: '#ea580c',
+    border: '#fed7aa',
+    font: 'rounded',
+  },
+  'unlock-your-deal': {
+    headline: 'Your personal deal awaits ✨',
+    subtitle: "Tell us what feels right — we'll do our best.",
+    cta: 'Unlock your deal',
+    accent: '#b8860b',
+    secondary: '#f6d365',
+    background: '#fffcf4',
+    text: '#3f2d10',
+    button: '#b8860b',
+    border: '#fde68a',
+    font: 'serif',
+  },
+  'human-shopkeeper': {
+    headline: 'Bhai, price ki baat karein? 😄',
+    subtitle: 'Batao, kya price chalega?',
+    cta: "Let's negotiate",
+    accent: '#0f766e',
+    secondary: '#5eead4',
+    background: '#f0fdfa',
+    text: '#134e4a',
+    button: '#0f766e',
+    border: '#99f6e4',
+    font: 'system',
+  },
+}
+
+export function applyInvitationDesignPreset(
+  config: BargainExperienceConfig,
+  design: InvitationDesign,
+): BargainExperienceConfig {
+  const preset = INVITATION_DESIGN_PRESETS[design]
+  return {
+    ...config,
+    designVariant: design,
+    invitationVisible: true,
+    invitationHeadline: preset.headline,
+    invitationSubtitle: preset.subtitle,
+    invitationCtaVisible: true,
+    invitationSparkleVisible: true,
+    invitationTextAlign: 'left',
+    invitationIndicators: { quickReply: true, noPressure: true, smartDeals: true },
+    customGreeting: null,
+    ctaLabel: preset.cta,
+    accentColor: preset.accent,
+    accentSecondaryColor: preset.secondary,
+    backgroundColor: preset.background,
+    textColor: preset.text,
+    buttonColor: preset.button,
+    borderColor: preset.border,
+    fontFamily: preset.font,
+  }
+}

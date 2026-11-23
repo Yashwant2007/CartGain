@@ -18,7 +18,7 @@ export default function TermsPage() {
           </div>
           <h1 className="text-4xl font-bold text-white mb-4">Terms of Service</h1>
           <p className="text-lg text-blue-200 max-w-2xl mx-auto">
-            Last updated: October 27, 2026
+            Last updated: November 23, 2026
           </p>
         </div>
 
@@ -41,7 +41,7 @@ export default function TermsPage() {
                 2. Description of Service
               </h2>
               <p className="leading-relaxed">
-                CartGain provides an automated abandoned cart recovery platform that helps e-commerce businesses recover lost sales through multi-channel communication (email, WhatsApp). The Platform integrates with e-commerce platforms such as Shopify to detect abandoned carts and send recovery messages on behalf of the merchant. The Platform also offers optional AI price negotiation within merchant-set limits, storefront experience presentation, performance analytics (including refund-adjusted revenue), and bounded negotiation learning. AI output may be produced by a primary or fallback model and is subject to your settings and the hard price floor; it is not legal, financial, or professional advice.
+                CartGain provides an automated abandoned cart recovery platform that helps e-commerce businesses recover lost sales through multi-channel communication (email, WhatsApp). The Platform integrates with Shopify and WooCommerce to detect abandoned carts, issue verified discount codes, track attributable orders and refunds, and send recovery messages on behalf of the merchant. The Platform also offers optional AI price negotiation within merchant-set limits, storefront experience presentation, performance analytics (including refund-adjusted revenue), and bounded negotiation learning. AI output may be produced by a primary or fallback model and is subject to your settings and the hard price floor; it is not legal, financial, or professional advice.
               </p>
             </section>
 
@@ -79,9 +79,9 @@ export default function TermsPage() {
                 5. Fees, Payments &amp; Renewals
               </h2>
               <ul className="list-disc pl-5 space-y-2">
-                <li><strong>Subscription Fees:</strong> Paid plans are billed monthly or annually through Shopify Billing in the currency of the merchant&apos;s Shopify store.</li>
-                <li><strong>Revenue Share:</strong> In addition to the subscription fee, a revenue share percentage applies to net recovered revenue after the first 50 free carts. Net recovered revenue means the gross order value less verified refunds, cancellations, chargebacks, and applicable taxes. Rates: Growth 3.5% and Pro 3%, capped monthly at the amount shown in your store currency when you approve Shopify Billing (₹5,000 / US$60 for Growth; ₹10,000 / US$120 for Pro).</li>
-                <li><strong>Payment Processor:</strong> All app charges are processed securely through Shopify Billing and appear on your Shopify invoice. We do not store your full payment card details.</li>
+                <li><strong>Subscription Fees:</strong> Paid Shopify plans are billed monthly or annually through Shopify Billing in the store currency. Paid WooCommerce plans are billed through Razorpay in INR.</li>
+                <li><strong>Revenue Share:</strong> In addition to the subscription fee, a revenue share percentage applies to net recovered revenue after the first 50 free carts. Net recovered revenue means the gross order value less verified refunds, cancellations, chargebacks, and applicable taxes. Rates: Growth 3.5% and Pro 3%, capped monthly at the amount shown when you approve billing (₹5,000 / US$60 for Growth; ₹10,000 / US$120 for Pro).</li>
+                <li><strong>Payment Processor:</strong> Shopify app charges are processed securely through Shopify Billing and appear on your Shopify invoice. WooCommerce subscriptions are processed through Razorpay. We do not store your full payment card details.</li>
                 <li><strong>Auto-Renewal:</strong> Subscriptions automatically renew at the end of each billing period unless cancelled before the renewal date.</li>
                 <li><strong>Refunds:</strong> Subscription fees are non-refundable except as required by applicable law. Revenue share is calculated on net recovered revenue and may be adjusted for verified refunds or cancellations that occur after an order is attributed to CartGain.</li>
                 <li><strong>Taxes:</strong> You are responsible for all applicable taxes, including GST, VAT, or similar transaction taxes.</li>

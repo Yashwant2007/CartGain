@@ -57,6 +57,8 @@ export type PlatformOrderRecord = {
   status?: string | null
   currency?: string | null
   total: number
+  subtotal?: number | null
+  discountTotal?: number | null
   refundedTotal?: number
   customerEmail?: string | null
   customerPhone?: string | null

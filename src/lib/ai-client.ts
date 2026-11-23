@@ -38,8 +38,8 @@ let primaryClient: OpenAI | null = null
 let fallbackClient: OpenAI | null = null
 
 const DEFAULT_FALLBACK_BASE_URL = 'https://api.groq.com/openai/v1'
-const DEFAULT_PRIMARY_TIMEOUT_MS = 10_000
-const DEFAULT_FALLBACK_TIMEOUT_MS = 20_000
+const DEFAULT_PRIMARY_TIMEOUT_MS = 8_000
+const DEFAULT_FALLBACK_TIMEOUT_MS = 15_000
 // Our own primary/fallback failover already covers provider errors. The
 // OpenAI SDK's default two retries stack on top of that and can add 10+ seconds
 // to a single reply when a provider sends `retry-after`, so fail over now.

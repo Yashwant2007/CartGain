@@ -19,7 +19,8 @@ import {
 } from '@/lib/services/bargain'
 import { detectLanguage } from '@/lib/bargain/language'
 import { analyzeSocialSignals } from '@/lib/bargain/behavior'
-import { analyzeLiveTurn } from '@/lib/bargain/live-turn'
+import { analyzeLiveTurn, voiceAdjustedLiveTurn } from '@/lib/bargain/live-turn'
+import { loadStoreVoice } from '@/lib/conversation/store'
 import { adaptiveContextForTurn } from '@/lib/bargain/learning/behavior-context'
 import { buildSessionMemory } from '@/lib/bargain/session-memory'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
@@ -321,13 +322,17 @@ export async function POST(request: NextRequest) {
       currentMessage: interpretedMessage,
       exclusions: [productTitle, storeName].filter((s): s is string => typeof s === 'string' && s.length > 0),
     })
-    const liveTurn = analyzeLiveTurn({
+    const voice = merchant.store?.id
+      ? await loadStoreVoice(merchant.store.id).catch(() => undefined)
+      : undefined
+    let liveTurn = analyzeLiveTurn({
       message: interpretedMessage,
       intent: intentAnalysis.intent,
       signals: shopperSignals,
       customerOffer: offer,
       repeatedMessage: shopperSignals.reasking,
     })
+    if (voice) liveTurn = voiceAdjustedLiveTurn(liveTurn, voice)
     const adaptive = adaptiveContextForTurn({
       liveTurn,
       intent: intentAnalysis,
@@ -360,6 +365,7 @@ export async function POST(request: NextRequest) {
       .find((m) => m.role === 'ai' && typeof m.offeredPrice === 'number')?.offeredPrice ?? null
     ctx.liveTurn = liveTurn
     ctx.adaptive = adaptive
+    ctx.voice = voice
     ctx.sessionMemory = buildSessionMemory({
       intent: intentAnalysis,
       signals: shopperSignals,

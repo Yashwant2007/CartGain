@@ -88,3 +88,42 @@ export function buildStoreCheckoutLink(opts: {
   }
   return cartPath ? `https://${domain}${cartPath}` : `https://${domain}`
 }
+
+function firstWooProductId(items: unknown): string | null {
+  if (!Array.isArray(items)) return null
+  for (const entry of items) {
+    if (!entry || typeof entry !== 'object') continue
+    const item = entry as Record<string, unknown>
+    const raw = item.variationId ?? item.variation_id ?? item.productId ?? item.product_id ?? item.shopifyProductId
+    const id = typeof raw === 'string' || typeof raw === 'number' ? String(raw) : ''
+    const match = id.match(/\d+/)
+    if (match && Number(match[0]) > 0) return match[0]
+  }
+  return null
+}
+
+export function buildPlatformCheckoutLink(opts: {
+  platform?: string | null
+  domain: string
+  cartId: string
+  recoveryUrlStatus?: string | null
+  discountCode?: string | null
+  items?: unknown
+}): string {
+  if (opts.platform === 'woocommerce') {
+    const domain = normalizeDomain(opts.domain)
+    const url = new URL(`https://${domain}/cart/`)
+    if (isSafeDiscountCode(opts.discountCode)) {
+      url.searchParams.set('coupon_code', opts.discountCode)
+    }
+    const productId = firstWooProductId(opts.items)
+    if (productId) url.searchParams.set('product_id', productId)
+    return url.toString()
+  }
+  return buildStoreCheckoutLink({
+    domain: opts.domain,
+    shopifyCartId: opts.cartId,
+    recoveryUrlStatus: opts.recoveryUrlStatus,
+    discountCode: opts.discountCode,
+  })
+}

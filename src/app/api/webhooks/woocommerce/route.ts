@@ -34,7 +34,18 @@ export async function POST(req: NextRequest) {
 
   const connection = await prisma.platformConnection.findUnique({
     where: { id: connectionId },
-    include: { store: { select: { id: true, domain: true, platform: true, webhookSecret: true } } },
+    include: {
+      store: {
+        select: {
+          id: true,
+          domain: true,
+          platform: true,
+          webhookSecret: true,
+          userId: true,
+          timezone: true,
+        },
+      },
+    },
   })
   if (!connection || connection.platform !== 'woocommerce' || connection.status !== 'active') {
     logReject('unknown_connection', connectionId)

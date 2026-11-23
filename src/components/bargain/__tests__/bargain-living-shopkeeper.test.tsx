@@ -115,6 +115,8 @@ describe('BargainWidget living shopkeeper', () => {
       const el = stage(container)
       expect(el?.getAttribute('data-avatar-state')).toBeTruthy()
     })
+    expect(stage(container)?.getAttribute('data-side')).toBe('true')
+    expect(container.querySelector('.cg-conversation-shell')).toBeTruthy()
     // The entrance is followed by a greeting — never a random pose.
     await waitFor(() => {
       const el = stage(container)

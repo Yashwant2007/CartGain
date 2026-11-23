@@ -9,7 +9,7 @@ import CaptureCustomerContact from './CaptureCustomerName'
 import { getExperienceConfig } from '@/lib/bargain/experience/config'
 import { getAbandonedBargainContextForCartToken } from '@/lib/bargain/hooks'
 import { fetchShopifyProductDetail } from '@/lib/shopify'
-import { buildStoreCheckoutLink } from '@/lib/recovery/links'
+import { buildPlatformCheckoutLink } from '@/lib/recovery/links'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,17 +47,22 @@ export default async function CartRecoveryPage({
 
   const symbol = getSymbol(cart.currency || cart.store.currency)
   const itemsArray = Array.isArray(cart.items) ? cart.items : []
+  const isWooCommerce = cart.store.platform === 'woocommerce'
   const items = itemsArray.map((item: any) => ({
     ...item,
-    shopifyProductId: item.shopifyProductId || '',
+    shopifyProductId: item.shopifyProductId || item.productId || item.product_id || '',
+    variantId: item.variantId || item.variationId || item.variation_id || null,
+    image: item.image || item.imageUrl || item.image_url || 'https://via.placeholder.com/64',
   }))
   const storeId = cart.store.id
-  const checkoutUrl = buildStoreCheckoutLink({
+  const checkoutUrl = buildPlatformCheckoutLink({
+    platform: cart.store.platform,
     domain: cart.store.domain,
-    shopifyCartId: cart.cartId,
+    cartId: cart.cartId,
     recoveryUrlStatus: cart.recoveryUrlStatus,
+    items,
   })
-  const canResumeCheckout = checkoutUrl.includes('/cart/')
+  const canResumeCheckout = isWooCommerce || checkoutUrl.includes('/cart/')
 
   // Published storefront experience: when a merchant has published an
   // invitation (design + CTA + avatar), show the engaging StorefrontInvitation
@@ -77,7 +82,7 @@ export default async function CartRecoveryPage({
   // Fetch the primary product's live description so the recovery link really
   // shows the item, not just a title and a price.
   const firstProductId = items?.[0]?.shopifyProductId
-  const productDetail = firstProductId
+  const productDetail = firstProductId && !isWooCommerce
     ? await fetchShopifyProductDetail(cart.store, firstProductId).catch(() => null)
     : null
   const productDescription = productDetail?.body_plain?.trim() || null
@@ -122,7 +127,9 @@ export default async function CartRecoveryPage({
         <BargainWidget
           defaultOpen={focusBargain}
           storeId={storeId}
+          platform={isWooCommerce ? 'woocommerce' : 'shopify'}
           shopifyProductId={items?.[0]?.shopifyProductId || ''}
+          variantId={items?.[0]?.variantId || undefined}
           originalPrice={perItemPrice}
           currency={cart.currency || 'INR'}
           cartToken={cart.cartId}

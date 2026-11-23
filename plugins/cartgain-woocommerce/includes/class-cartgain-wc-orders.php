@@ -108,12 +108,28 @@ final class CartGain_WC_Orders
             $consent = array();
         }
 
+        $coupon_codes = array();
+        if (method_exists($order, 'get_coupon_codes')) {
+            $coupon_codes = $order->get_coupon_codes();
+        } elseif (method_exists($order, 'get_used_coupons')) {
+            $coupon_codes = $order->get_used_coupons();
+        }
+        $coupon_codes = array_values(array_unique(array_map('sanitize_text_field', (array) $coupon_codes)));
+        $billing_first = method_exists($order, 'get_billing_first_name') ? sanitize_text_field((string) $order->get_billing_first_name()) : '';
+        $billing_last = method_exists($order, 'get_billing_last_name') ? sanitize_text_field((string) $order->get_billing_last_name()) : '';
+        $customer_name = trim($billing_first . ' ' . $billing_last);
+
         $data = array(
             'orderId' => (int) $order->get_id(),
             'orderNumber' => method_exists($order, 'get_order_number') ? sanitize_text_field($order->get_order_number()) : (string) $order->get_id(),
             'customerId' => $customer_id,
+            'customerName' => $customer_name,
             'status' => method_exists($order, 'get_status') ? sanitize_key($order->get_status()) : '',
+            'total' => method_exists($order, 'get_total') ? (string) round((float) $order->get_total(), 2) : '0',
+            'subtotal' => method_exists($order, 'get_subtotal') ? (string) round((float) $order->get_subtotal(), 2) : '0',
+            'discountTotal' => method_exists($order, 'get_discount_total') ? (string) round((float) $order->get_discount_total(), 2) : '0',
             'items' => $items,
+            'couponCodes' => $coupon_codes,
             'totals' => array(
                 'subtotal' => method_exists($order, 'get_subtotal') ? (string) $order->get_subtotal() : '0',
                 'total' => method_exists($order, 'get_total') ? (string) $order->get_total() : '0',

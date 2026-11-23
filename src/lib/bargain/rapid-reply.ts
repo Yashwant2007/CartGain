@@ -3,7 +3,11 @@ export const RAPID_REPLY_MODES = [
   'small_talk',
   'emoji_only',
   'nonsense',
+  'random',
   'off_topic',
+  'joke',
+  'flattery',
+  'hesitation',
   'probe',
   'insult',
 ] as const
@@ -30,14 +34,18 @@ export interface RapidReplyResult {
   }
 }
 
-type Copy = Record<RapidReplyMode, string>
+type Copy = Partial<Record<RapidReplyMode, string>>
 
 const EN: Copy = {
   greeting: 'Hey! Tell me what you are looking for, or name your price — I will keep it quick.',
   small_talk: 'Sure — what would you like to know about {item}, or what price do you have in mind?',
   emoji_only: '🙂 What would you like to know — product details or your price?',
   nonsense: "Sorry, I didn't catch that. Tell me what you need about {item}, or share your price.",
+  random: "That came through a bit scrambled. No worries — what would you like to know about {item}, or what price are you thinking?",
   off_topic: "Let's stay on track. A question about {item}, or the price you have in mind?",
+  joke: "Ha, fair — I will keep it light. On {item}, would you like the quick details or your best price checked?",
+  flattery: "Thanks, that is kind. I will keep this useful: what would you like to know about {item}, or what price do you have in mind?",
+  hesitation: "No rush. What is holding you back on {item} — fit, trust, or the number?",
   probe: "I'm here to help with this item and its price. Ask me about the product or make an offer.",
   insult: "Let's keep it respectful. I'm happy to help with {item} when you are ready.",
 }
@@ -47,7 +55,11 @@ const HINGLISH: Copy = {
   small_talk: 'Bilkul — {item} ke baare mein kya jaanna chahte hain, ya aapka kya budget hai?',
   emoji_only: '🙂 Bataiye, product details chahiye ya apna price?',
   nonsense: 'Sorry, samajh nahi aaya. {item} ke baare mein kya chahte hain, ya price bata dijiye?',
+  random: 'Thoda sa confusing aa gaya, koi baat nahi. {item} ke baare mein kya jaanna chahte hain, ya kya price soch rahe hain?',
   off_topic: 'Chalo, wapas topic par. {item} ke baare mein poochhiye ya price bataiye.',
+  joke: 'Haha, theek — main bhi light rakhta hoon. {item} ki quick details chahiye ya apna best price check karana hai?',
+  flattery: 'Thanks, bahut kind baat hai. Ab useful rehte hain — {item} ke baare mein kya jaanna hai, ya kya price soch rahe hain?',
+  hesitation: 'Koi jaldi nahi. {item} mein kya rok raha hai — fit, trust, ya number?',
   probe: 'Main is item aur iske price mein madad karne ke liye yahin hoon. Product ke baare mein poochhiye ya offer dijiye.',
   insult: 'Chalo, respectful rehte hain. Jab aap ready hon, {item} mein madad kar dunga.',
 }
@@ -57,7 +69,11 @@ const HI: Copy = {
   small_talk: 'ज़रूर — {item} के बारे में क्या जानना चाहेंगे, या आपका क्या बजट है?',
   emoji_only: '🙂 बताइए, उत्पाद की जानकारी चाहिए या आपका मूल्य?',
   nonsense: 'क्षमा करें, समझ नहीं आया। {item} के बारे में क्या चाहते हैं, या मूल्य बता दीजिए?',
+  random: 'थोड़ा अस्पष्ट आ गया, कोई बात नहीं। {item} के बारे में क्या जानना चाहेंगे, या क्या मूल्य सोच रहे हैं?',
   off_topic: 'चलिए, विषय पर वापस आते हैं। {item} के बारे में पूछें या मूल्य बताइए।',
+  joke: 'हाहा, ठीक — मैं भी हल्का रखूँगा। {item} की संक्षिप्त जानकारी चाहिए या अपना सर्वश्रेष्ठ मूल्य जाँचवाना है?',
+  flattery: 'धन्यवाद, यह बहुत दयालु बात है। अब उपयोगी रहते हैं — {item} के बारे में क्या जानना है, या क्या मूल्य सोच रहे हैं?',
+  hesitation: 'कोई जल्दी नहीं। {item} में क्या रोक रहा है — फिट, भरोसा, या मूल्य?',
   probe: 'मैं इस उत्पाद और उसके मूल्य में मदद करने के लिए यहाँ हूँ। उत्पाद के बारे में पूछें या प्रस्ताव दें।',
   insult: 'आइए, सम्मानजनक रहें। जब आप तैयार हों, मैं {item} में मदद करूँगा।',
 }
@@ -170,7 +186,7 @@ export function rapidReplyForTurn(input: RapidReplyInput): RapidReplyResult | nu
   const lang = normalizedLang(input.language)
   const table = COPY[lang] ?? EN
   const product = safeProductTitle(input.productTitle) ?? ITEM_WORD[lang] ?? ITEM_WORD.en
-  let reply = table[input.mode].replace('{item}', product)
+  let reply = (table[input.mode] ?? EN[input.mode] ?? EN.small_talk ?? '').replace('{item}', product)
   if ((input.emojiBudget ?? 0) <= 0) {
     reply = reply.replace(/^🙂\s*/, '')
   }

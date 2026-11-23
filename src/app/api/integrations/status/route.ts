@@ -22,6 +22,27 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ message: 'No store found for this account' }, { status: 404 })
     }
 
+    const wooConnection = await prisma.platformConnection.findUnique({
+      where: { storeId_platform: { storeId: store.id, platform: 'woocommerce' } },
+      select: {
+        status: true,
+        webhookUrl: true,
+        webhookSecret: true,
+        lastHealthStatus: true,
+        lastHealthCheckAt: true,
+        lastHealthDetail: true,
+        updatedAt: true,
+        credentials: {
+          where: { status: 'active' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { keyFingerprint: true, status: true },
+        },
+        _count: { select: { products: true, orders: true } },
+      },
+    })
+    const wooConnected = Boolean(wooConnection && wooConnection.status === 'active' && wooConnection.credentials.length > 0)
+
     const response = {
       store: {
         id: store.id,
@@ -47,8 +68,15 @@ export async function GET(req: NextRequest) {
           name: 'WooCommerce',
           description: 'Sync carts from your WooCommerce store',
           icon: '📦',
-          connected: store.platform === 'woocommerce',
-          status: store.platform === 'woocommerce' ? 'active' : 'disconnected',
+          connected: wooConnected,
+          status: wooConnected ? 'active' : store.platform === 'woocommerce' ? 'attention' : 'disconnected',
+          webhookConfigured: Boolean(wooConnection?.webhookSecret),
+          healthStatus: wooConnection?.lastHealthStatus ?? null,
+          healthDetail: wooConnection?.lastHealthDetail ?? null,
+          lastHealthCheckAt: wooConnection?.lastHealthCheckAt?.toISOString() ?? null,
+          lastSync: wooConnection?.updatedAt.toISOString() ?? null,
+          credentialFingerprint: wooConnection?.credentials[0]?.keyFingerprint ?? null,
+          counts: wooConnection?._count ?? { products: 0, orders: 0 },
         },
         {
           id: 'magento',
