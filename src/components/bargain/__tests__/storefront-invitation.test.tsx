@@ -73,9 +73,26 @@ describe('StorefrontInvitation', () => {
     expect(card.className).toContain('cg-premium-invite--avatar-lg')
     expect(card.className).toContain('cg-premium-invite--mobile')
     const css = container.querySelector('style')?.textContent ?? ''
-    expect(css).toContain('--cg-invite-avatar-scale: 1.24')
+    expect(css).toContain('--cg-invite-avatar-scale: 1')
     expect(css).toContain('scale(calc(var(--cg-invite-avatar-scale) * var(--cg-invite-avatar-size-scale)))')
-    expect(css).toContain('max-width: 330px')
+    expect(css).toContain('max-width: 380px')
+    expect(css).toContain('min-height: 96px')
+    expect(css).toContain('width: 118px')
+    expect(css).toContain('height: 126px')
+    expect(css).toContain('max-width: 340px')
+  })
+
+  it('applies the selected invitation design to the published card', () => {
+    const { container } = render(
+      <StorefrontInvitation
+        experience={{ ...DEFAULT_BARGAIN_EXPERIENCE, designVariant: 'unlock-your-deal' }}
+        onOpen={() => {}}
+        showAvatar={false}
+      />,
+    )
+    const card = container.querySelector('.cg-premium-invite') as HTMLElement
+    expect(card.getAttribute('data-invitation-design')).toBe('unlock-your-deal')
+    expect(card.className).toContain('cg-premium-invite--design-unlock-your-deal')
   })
 
   it('lets the merchant override copy and hide optional chrome', () => {

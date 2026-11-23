@@ -22,6 +22,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://cart-gain.com'),
   title: 'CartGain | AI Negotiation & Cart Recovery for E-commerce',
   description:
     'Recover abandoned carts with AI-powered WhatsApp and Email recovery — plus an AI negotiator that turns "Too Expensive" into sold orders without cutting below your floor price. First 50 recovered carts free.',
@@ -138,8 +139,6 @@ export default async function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="true" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="CartGain" />
-        
-        <link rel="canonical" href="https://cart-gain.com" />
         <meta name="author" content="CartGain" />
         <meta name="publisher" content="CartGain" />
         

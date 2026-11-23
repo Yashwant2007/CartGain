@@ -1,6 +1,5 @@
-import { analyzeIntent } from '../intent'
-import { extractPrice } from '../text'
 import { isConversationState } from '../conversation-state'
+import { classifyShopperCue } from './shopper-cues'
 import type { AvatarState } from './avatar-state'
 import type { ExpressionState } from './expressions'
 import type { V2AvatarVariant } from './v2-shopkeepers'
@@ -136,10 +135,6 @@ const SHEET_BY_VARIANT: Record<V2AvatarVariant, Record<ReactionSheet, string>> =
   },
 }
 
-const RUDE_RE = /\b(idiot|stupid|dumb|scam|rip[\s-]?off|ripping me off|robber|thief|fraud|liar|bullshit|\bbs\b|trash|useless|waste of (?:my )?time|shut up|stop wasting|ridiculous|insult(?:ing)?|disgusting|bakwas|chap|loot|dhoka)\b/i
-const FLATTERY_RE = /\b(thanks|thank you|appreciate|you(?:'re| are) (?:so |very |really )?(?:great|helpful|kind|awesome|amazing|wonderful|the best)|nice (?:one|job|work)|well done|love (?:this|it|you)|good (?:service|job)|you rock|superb|brilliant)\b/i
-const COUNTER_RE = /\b(counter|meet me (?:at|in the middle)|i can do(?!\s+(?:₹|\d))|i'?ll do(?!\s+(?:₹|\d))|how about|what about|can you do|could you do|final offer|last offer|meet halfway|split the difference)\b/i
-
 export function isBargainReaction(value: unknown): value is BargainReaction {
   return typeof value === 'string' && (V2_REACTIONS as readonly { id: string }[]).some((r) => r.id === value)
 }
@@ -164,20 +159,14 @@ export function reactionForShopperMessage(
   const text = message.trim()
   if (!text) return 'extras'
 
-  const intent = analyzeIntent(text)
-  if (RUDE_RE.test(text)) return 'rude'
-  if (intent.intent === 'WALKOUT') return 'walk_away'
-  if (intent.intent === 'PURCHASE_READY') return 'deal'
-  if (FLATTERY_RE.test(text)) return 'flattery'
-  if (intent.intent === 'PURCHASE_HESITATION') return 'hesitation'
-
-  const offer = extractPrice(text)
-  const ratio = offer != null && originalPrice != null && Number.isFinite(originalPrice) && originalPrice > 0
-    ? offer / originalPrice
-    : null
-  if (ratio != null && ratio <= 0.6) return 'lowball'
-  if (intent.priceComplaint || intent.intent === 'COMPARISON' || intent.intent === 'BUDGET_CONSTRAINT') return 'lowball'
-  if (COUNTER_RE.test(text) || (ratio != null && ratio <= 0.95)) return 'counter'
+  const cue = classifyShopperCue(text, originalPrice)
+  if (cue === 'insult') return 'rude'
+  if (cue === 'walkout') return 'walk_away'
+  if (cue === 'purchase_ready') return 'deal'
+  if (cue === 'flattery' || cue === 'joke') return 'flattery'
+  if (cue === 'mash' || cue === 'hesitation') return 'hesitation'
+  if (cue === 'lowball' || cue === 'complaint') return 'lowball'
+  if (cue === 'counter') return 'counter'
 
   return 'extras'
 }
@@ -208,7 +197,7 @@ export function reactionForAnimation(
   if (event === 'deal_accepted' || ctx.ended === 'accepted') return 'deal'
   if (event === 'checkout_started') return 'deal'
   if (event === 'deal_rejected' || ctx.ended === 'rejected' || ctx.ended === 'abandoned') {
-    return fromMessage && fromMessage !== 'extras' ? fromMessage : 'walk_away'
+    return 'walk_away'
   }
   if (fromMessage && event !== 'customer_typing') return fromMessage
   if (event === 'counter_offer') return 'counter'

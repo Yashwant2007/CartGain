@@ -1,6 +1,7 @@
 import type { ShopkeeperPersonality } from './types'
 import { analyzeIntent } from '../intent'
 import { extractPrice } from '../text'
+import { classifyShopperCue } from './shopper-cues'
 
 export const EXPRESSION_STATES = [
   'idle',
@@ -124,7 +125,14 @@ export function expressionForShopperMessage(
 
   const intent = analyzeIntent(text)
   const ratio = lowballRatio(text, originalPrice)
+  const cue = classifyShopperCue(text, originalPrice)
 
+  if (cue === 'insult') {
+    return personality === 'strict_shopkeeper' ? 'warning' : personality === 'playful_shopkeeper' ? 'amused' : 'concerned'
+  }
+  if (cue === 'mash') return personality === 'playful_shopkeeper' ? 'amused' : personality === 'strict_shopkeeper' ? 'skeptical' : 'uncertain'
+  if (cue === 'joke') return personality === 'strict_shopkeeper' ? 'focused' : 'amused'
+  if (cue === 'flattery') return personality === 'strict_shopkeeper' ? 'impressed' : 'happy'
 
   if (intent.intent === 'WALKOUT') {
     if (personality === 'strict_shopkeeper') return 'declining'

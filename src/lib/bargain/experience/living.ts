@@ -131,27 +131,33 @@ export function resolveShopkeeperAnimation(
   event: LivingEvent,
   ctx: FireAvatarContext = {},
 ): ShopkeeperAnimation {
-  const state = avatarStateForEvent(personality, event, ctx)
-  const expression = expressionForLivingEvent(personality, event, ctx)
+  const freshTurn = event === 'customer_message' || event === 'customer_typing'
+    || event === 'ai_thinking' || event === 'ai_typing'
+    || event === 'widget_opened' || event === 'greeting'
+  const turnCtx: FireAvatarContext = freshTurn
+    ? { ...ctx, ended: null, decision: null }
+    : ctx
+  const state = avatarStateForEvent(personality, event, turnCtx)
+  const expression = expressionForLivingEvent(personality, event, turnCtx)
   const gesture = gestureFor(personality, state)
   const position = positionForContext({
-    customerMessage: ctx.customerMessage ?? null,
-    decision: ctx.decision ?? null,
-    ended: ctx.ended ?? null,
-    hasRecommendations: ctx.hasRecommendations,
-    checkoutStarted: ctx.checkoutStarted,
-    opening: ctx.opening,
+    customerMessage: turnCtx.customerMessage ?? null,
+    decision: turnCtx.decision ?? null,
+    ended: turnCtx.ended ?? null,
+    hasRecommendations: turnCtx.hasRecommendations,
+    checkoutStarted: turnCtx.checkoutStarted,
+    opening: turnCtx.opening,
   })
-  const override = priorityAnimationForConversationState(personality, ctx.conversationState)
+  const override = priorityAnimationForConversationState(personality, turnCtx.conversationState)
   return {
-    ...ctx,
+    ...turnCtx,
     event,
     eventSequence: ++livingEventSequence,
     state: override?.state ?? state,
     expression: override?.expression ?? expression,
     gesture: override?.gesture ?? gesture,
     position: override?.position ?? position,
-    reaction: reactionForAnimation(event, ctx) ?? undefined,
+    reaction: reactionForAnimation(event, turnCtx) ?? undefined,
   }
 }
 

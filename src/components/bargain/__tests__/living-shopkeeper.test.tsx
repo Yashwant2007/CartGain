@@ -1,8 +1,8 @@
 /**
  * @jest-environment jsdom
  */
-import { describe, expect, it, beforeEach } from '@jest/globals'
-import { render } from '@testing-library/react'
+import { describe, expect, it, beforeEach, jest } from '@jest/globals'
+import { render, screen, waitFor } from '@testing-library/react'
 import { AnimationClip, Box3, BoxGeometry, Group, Mesh, MeshStandardMaterial, Object3D, QuaternionKeyframeTrack, Vector3 } from 'three'
 import { ShopkeeperAvatar } from '@/components/bargain/ShopkeeperAvatar'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
@@ -10,6 +10,19 @@ import { AVATAR_STATES } from '@/lib/bargain/experience/avatar-state'
 import { gestureFor } from '@/lib/bargain/experience/character'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import { applyRobotPersonality, buildProceduralRobot, customClips, fitRobotToStage, prepareAssetClips } from '@/components/bargain/LivingShopkeeper3D'
+
+jest.mock('@/components/bargain/LivingShopkeeper3D.lazy', () => {
+  const React = jest.requireActual('react') as typeof import('react')
+  return {
+    __esModule: true,
+    default: function LazyShopkeeperMock({ onUnavailable }: { onUnavailable?: () => void }) {
+      React.useEffect(() => {
+        onUnavailable?.()
+      }, [onUnavailable])
+      return React.createElement('div', { 'data-testid': 'three-robot' })
+    },
+  }
+})
 
 const PERSONALITIES: ShopkeeperPersonality[] = [
   'friendly_shopkeeper',
@@ -259,6 +272,25 @@ describe('living shopkeeper stage', () => {
     expect(css).toMatch(/\.cg-stage \{[^}]*pointer-events: none;/)
   })
 
+  it('renders a larger side-rail avatar on desktop and touch layouts', () => {
+    const { container } = render(
+      <ShopkeeperStage
+        side
+        personality="friendly_shopkeeper"
+        expression="listening"
+        state="listening"
+        name="Buddy"
+        status="Online"
+        line="Hi"
+      />,
+    )
+    const css = Array.from(container.querySelectorAll('style')).map((n) => n.textContent ?? '').join('\n')
+    expect(css).toContain('.cg-stage.cg-stage--side {')
+    expect(css).toContain('width: 208px;')
+    expect(css).toContain('height: 226px;')
+    expect(css).toContain('width: 132px;')
+  })
+
   it('does not substitute a flat character when the 3D stage is not enabled', () => {
     const { container } = render(
       <ShopkeeperStage
@@ -272,6 +304,28 @@ describe('living shopkeeper stage', () => {
     )
     expect(container.querySelector('.cg-avatar, .cg-sa')).toBeNull()
     expect(container.querySelector('.cg-stage')?.getAttribute('data-avatar-renderer')).toBe('disabled')
+  })
+
+  it('falls back to the inline shopkeeper when the 3D renderer is unavailable', async () => {
+    const { container } = render(
+      <ShopkeeperStage
+        personality="friendly_shopkeeper"
+        expression="negotiating"
+        state="negotiating"
+        gesture="open_palms"
+        avatarVariant="robot"
+        name="Buddy"
+        status="Online"
+        line=""
+        enable3D
+        showUnavailable
+      />,
+    )
+    await waitFor(() => {
+      expect(container.querySelector('.cg-stage')?.getAttribute('data-avatar-renderer')).toBe('inline-fallback')
+    })
+    expect(container.querySelector('.cg-avatar, .cg-sa')).toBeTruthy()
+    expect(screen.getByRole('status')).toBeTruthy()
   })
 
   it('renders a merchant-selected v2 shopkeeper sprite', () => {

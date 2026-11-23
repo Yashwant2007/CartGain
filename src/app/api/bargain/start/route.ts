@@ -192,6 +192,13 @@ export async function POST(request: NextRequest) {
       update: {},
     })
 
+    if ((config as any).enabled === false) {
+      return NextResponse.json(
+        { message: 'Bargaining is not enabled for this store.' },
+        { status: 403 },
+      )
+    }
+
     // Module 8 — the merchant's emergency pause is enforced at session start,
     // not only on later turns, so a paused store cannot accrue new shoppers.
     if ((config as any).emergencyPaused === true) {
@@ -348,7 +355,7 @@ export async function POST(request: NextRequest) {
             OR: rejoinClauses,
           },
           orderBy: { startedAt: 'desc' },
-          include: { messages: { orderBy: { createdAt: 'asc' }, take: 1 } },
+          include: { messages: { orderBy: { createdAt: 'asc' }, take: 200 } },
         })
       : null
     if (existing) {

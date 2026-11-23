@@ -567,7 +567,13 @@ export default function StorefrontBargainWidget({
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.message || 'Failed to create discount code')
+      if (!res.ok) {
+        if (res.status === 402) {
+          setError(t('negotiationEnded'))
+          return
+        }
+        throw new Error(data.message || 'Failed to create discount code')
+      }
       if (typeof data.code !== 'string' || !data.code) throw new Error('Shopify did not confirm a discount code')
       setDiscountCode(data.code)
       setPurchaseUrl(typeof data.purchaseUrl === 'string' && data.purchaseUrl ? data.purchaseUrl : null)
@@ -589,10 +595,10 @@ export default function StorefrontBargainWidget({
   }
 
   const buttonCls =
-    'px-4 py-2 rounded-lg font-semibold text-sm transition-colors disabled:opacity-50 ' +
+    'min-h-[46px] px-4 py-2 rounded-lg font-semibold text-sm transition-colors disabled:opacity-50 ' +
     'bg-indigo-600 text-white hover:bg-indigo-700 disabled:cursor-not-allowed'
   const ghostCls =
-    'px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200'
+    'min-h-[46px] px-4 py-2 rounded-lg font-semibold text-sm transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200'
 
   return (
     <div
@@ -610,7 +616,7 @@ export default function StorefrontBargainWidget({
         .cgf-chat-log { background: linear-gradient(180deg, #f8fafc 0%, #ffffff 18%, #ffffff 100%); border-radius: 12px; padding: 12px; scrollbar-width: thin; scrollbar-color: #c7d2fe transparent }
         .cgf-chat-log::-webkit-scrollbar { width: 7px }
         .cgf-chat-log::-webkit-scrollbar-thumb { background: #c7d2fe; border-radius: 999px }
-        .cgf-bubble { max-width: 86%; box-shadow: 0 2px 8px rgba(15,23,42,0.04) }
+        .cgf-bubble { max-width: calc(100% - 1.5rem); box-shadow: 0 2px 8px rgba(15,23,42,0.04) }
         .cgf-typing { box-shadow: 0 2px 8px rgba(15,23,42,0.04) }
         .cgf-composer { transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease }
         .cgf-composer:focus-within { border-color: #818cf8; background: #fff; box-shadow: 0 0 0 3px rgba(99,102,241,0.12) }
@@ -743,10 +749,10 @@ export default function StorefrontBargainWidget({
               return (
                 <div
                   key={msg.id}
-                  className={`cgf-msg cgf-bubble rounded-xl px-4 py-3 text-sm leading-6 ${
+                  className={`cgf-msg cgf-bubble rounded-xl px-4 py-3 text-[16px] leading-6 ${
                     isCustomer
-                      ? 'bg-indigo-600 text-white text-right ml-8'
-                      : 'bg-gray-100 text-gray-700 mr-8'
+                      ? 'bg-indigo-600 text-white text-right ml-6'
+                      : 'bg-gray-100 text-gray-700 mr-6'
                   }`}
                 >
                   {msg.content}
@@ -820,9 +826,13 @@ export default function StorefrontBargainWidget({
                 }
               }}
               onBlur={() => { customerTypingRef.current = false }}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return
+                e.preventDefault()
+                void handleSend()
+              }}
               placeholder={t('offerPlaceholder', { symbol: currencySymbolFor(currency) })}
-              className="flex-1 bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-indigo-500"
+              className="flex-1 min-h-[46px] bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-indigo-500"
               aria-label={t('yourOfferOrMessage')}
             />
             <button

@@ -7,6 +7,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:browser": "node scripts/browser-acceptance.mjs",
     "typecheck": "tsc --noEmit",
     "avatar:validate": "node scripts/validate-cartgain-robot-avatar.mjs",
     "build": "prisma generate && next build",

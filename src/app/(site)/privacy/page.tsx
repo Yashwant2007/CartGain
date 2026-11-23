@@ -4,6 +4,7 @@ import Link from 'next/link'
 export const metadata = {
   title: 'Privacy Policy - CartGain',
   description: 'CartGain Privacy Policy - How we collect, use, and protect your data in compliance with GDPR, India DPDP Act, and global standards.',
+  alternates: { canonical: '/privacy' },
 }
 
 export default function PrivacyPolicyPage() {

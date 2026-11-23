@@ -4,6 +4,7 @@ import Link from 'next/link'
 export const metadata: Metadata = {
   title: 'Security Policy | CartGain',
   description: 'CartGain security policy — how we protect merchant and customer data.',
+  alternates: { canonical: '/security-policy' },
 }
 
 export default function SecurityPolicyPage() {

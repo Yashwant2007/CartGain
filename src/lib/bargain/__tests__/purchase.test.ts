@@ -455,6 +455,27 @@ describe('rememberConfirmedOrder', () => {
     }))
   })
 
+  it('unlocks fingerprint-only and issued-code checkout sessions', async () => {
+    mockPrisma.bargainPurchaseMemory.createMany.mockResolvedValue({ count: 1 })
+    mockPrisma.bargainSession.updateMany.mockResolvedValue({ count: 1 })
+    const purchasedAt = new Date('2026-11-18T10:05:00Z')
+
+    await rememberConfirmedOrder({
+      storeId: 'store1',
+      shopifyOrderId: 'order-79',
+      customerFingerprint: 'fp-12345678',
+      appliedCodes: ['GAIN-123'],
+      purchasedAt,
+      lineItems: [{ product_id: 'gid://shopify/Product/55', variant_id: 99, title: 'Trail Runner' }],
+    })
+
+    const where = mockPrisma.bargainSession.updateMany.mock.calls[0][0].where
+    expect(where.AND[0].OR).toEqual(expect.arrayContaining([
+      { customerFingerprint: 'fp-12345678' },
+      { discountCode: 'GAIN-123' },
+    ]))
+  })
+
   it('does not unlock a checkout session for an unrelated later order', async () => {
     mockPrisma.bargainPurchaseMemory.createMany.mockResolvedValue({ count: 1 })
     mockPrisma.bargainSession.updateMany.mockResolvedValue({ count: 0 })

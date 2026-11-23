@@ -14,15 +14,11 @@ import {
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import {
-  expressionForEvent,
-  expressionForShopperMessage,
-  expressionForTurn,
-  type ExpressionState,
-} from '@/lib/bargain/experience/expressions'
+  resolveShopkeeperAnimation,
+  type FireAvatarContext,
+  type ShopkeeperAnimation,
+} from '@/lib/bargain/experience/living'
 import type { AvatarVariant, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
-import { gestureFor } from '@/lib/bargain/experience/character'
-import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
-import type { AvatarPosition } from '@/lib/bargain/experience/positions'
 import {
   buildOpeningMessage,
   ruleBasedDecision,
@@ -81,18 +77,11 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
   const [input, setInput] = useState('')
   const [attemptsUsed, setAttemptsUsed] = useState(0)
   const [thinking, setThinking] = useState(false)
-  const [avatarExpression, setAvatarExpression] = useState<ExpressionState>('listening')
   const [ended, setEnded] = useState<null | 'accepted' | 'rejected' | 'abandoned'>(null)
-  // The living shopkeeper: the demo drives the same body/gesture/position
-  // vocabulary as the storefront widgets, from real conversation events only.
-  const demoAvatarState: AvatarState = ended === 'accepted'
-    ? 'celebrating'
-    : ended
-      ? 'goodbye'
-      : thinking
-        ? 'thinking'
-        : 'listening'
-  const demoAvatarPosition: AvatarPosition = ended === 'accepted' ? 'celebration' : 'conversation'
+  const [character, setCharacter] = useState<ShopkeeperAnimation>(() => resolveShopkeeperAnimation(defaultPersona, 'idle'))
+  const fireAvatar = (event: Parameters<typeof resolveShopkeeperAnimation>[1], ctx: FireAvatarContext = {}) => {
+    setCharacter(resolveShopkeeperAnimation(personality, event, ctx))
+  }
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -135,7 +124,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
     setFinalPrice(null)
     setThinking(false)
     setAiError(null)
-    setAvatarExpression('listening')
+    fireAvatar('idle')
   }
 
   function start() {
@@ -143,7 +132,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
     dealAcceptedRef.current = false
     setAiError(null)
     setMessages([{ role: 'ai', content: buildOpeningMessage(buildCtx(0)) }])
-    setAvatarExpression(expressionForEvent(personality, 'CHAT_OPENED'))
+    fireAvatar('widget_opened', { opening: true })
     setAttemptsUsed(0)
     setEnded(null)
     setFinalPrice(null)
@@ -160,7 +149,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
     const userText = input.trim()
     const offer = extractPrice(userText)
     const isWalkout = detectWalkout(userText)
-    setAvatarExpression(expressionForShopperMessage(personality, userText, price))
+    fireAvatar('customer_message', { customerMessage: userText, originalPrice: price })
     // Only a turn that quotes a price spends an attempt — plain chat is free.
     // Otherwise a few friendly "how are you / my budget is tight" messages burn
     // the whole budget before the customer ever names a number, and the first
@@ -272,14 +261,14 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
       if (sessionIdRef.current !== sid) return
       setMessages(prev => [...prev, { role: 'ai', content: reply, offeredPrice: counterOffer }])
       setThinking(false)
-      setAvatarExpression(expressionForTurn(personality, {
+      fireAvatar(decision === 'counter' ? 'counter_offer' : 'ai_reply', {
         customerMessage: userText,
         aiReply: reply,
         counterOffer,
         originalPrice: price,
         decision,
         ended: newEnded,
-      }))
+      })
       if (newEnded) {
         setEnded(newEnded)
         if (newFinal != null) setFinalPrice(newFinal)
@@ -320,7 +309,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
     }])
     setFinalPrice(amount)
     setEnded('accepted')
-    setAvatarExpression('celebrating')
+    fireAvatar('deal_accepted', { decision: 'accept', ended: 'accepted' })
     setAiError(null)
   }
 
@@ -332,11 +321,11 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
       offeredPrice: null,
     }])
     setEnded('abandoned')
-    setAvatarExpression(expressionForTurn(personality, {
+    fireAvatar('deal_rejected', {
       customerMessage: 'No thanks, that is still too high for me.',
       decision: 'reject',
       ended: 'abandoned',
-    }))
+    })
   }
 
   return (
@@ -383,7 +372,7 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
                 key={p.id}
                 onClick={() => {
                   setPersonality(p.id)
-                  setAvatarExpression(expressionForEvent(p.id, 'CHAT_OPENED'))
+                  setCharacter(resolveShopkeeperAnimation(p.id, 'widget_opened', { opening: true }))
                   started && reset()
                 }}
                 className={`w-full text-left p-2.5 rounded-lg transition ${
@@ -472,10 +461,14 @@ export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minPro
       <div className="lg:col-span-2 bg-slate-900/60 border border-blue-800/30 rounded-xl overflow-hidden self-start">
         <ShopkeeperStage
           personality={personality}
-          expression={avatarExpression}
-          state={demoAvatarState}
-          gesture={gestureFor(personality, demoAvatarState)}
-          position={demoAvatarPosition}
+          expression={character.expression}
+          state={character.state}
+          event={character.event}
+          eventSequence={character.eventSequence}
+          eventContext={character}
+          gesture={character.gesture}
+          position={character.position}
+          reaction={character.reaction}
           avatarVariant={avatarVariant}
           name={`${personaMeta.name} · Salesperson`}
           status="Preview"

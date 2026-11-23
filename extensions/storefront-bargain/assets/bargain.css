@@ -79,7 +79,7 @@
 
 /* ── Inline published experience (replaces the "Bargain now" CTA) ───────── */
 .cg-bargain-inline {
-  width: min(360px, 100%);
+  width: min(380px, 100%);
   max-width: 100%;
   margin: 4px 0 8px;
 }
@@ -94,7 +94,7 @@
 }
 /* App embed: the experience card floats, then hands off to the side chat. */
 .cg-bargain-embed .cg-bargain-inline {
-  width: min(320px, calc(100vw - 36px));
+  width: min(380px, calc(100vw - 32px));
   margin: 0;
 }
 .cg-bargain-inline--floating .cg-bargain-inline-frame {

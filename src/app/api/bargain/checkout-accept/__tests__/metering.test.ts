@@ -18,6 +18,7 @@ import { POST } from '@/app/api/bargain/checkout-accept/route'
 import prisma from '@/lib/db'
 import { getBargainGate, decideDealMode, recordBargainDealOps } from '@/lib/bargain/gate'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 
 jest.mock('@/lib/db', () => ({
   __esModule: true,
@@ -116,6 +117,7 @@ describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
     expect(body.code).toMatch(/^BARGAIN-[0-9A-F]{8}$/)
     expect(mintMock).toHaveBeenCalledTimes(1)
     expect(mintMock.mock.calls[0][0].code).toBe(body.code)
+    expect(checkSimpleRateLimit).toHaveBeenCalledWith(expect.stringContaining('bargain_checkout_accept_'))
   })
 
   it('returns a purchase URL that applies the negotiated code to the variant cart', async () => {

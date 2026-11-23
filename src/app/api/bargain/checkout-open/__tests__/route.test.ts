@@ -18,6 +18,7 @@ jest.mock('@/lib/rate-limit', () => ({
 
 import { POST } from '@/app/api/bargain/checkout-open/route'
 import prisma from '@/lib/db'
+import { checkSimpleRateLimit } from '@/lib/rate-limit'
 import { signSessionToken } from '@/lib/bargain/session-bind'
 
 const mockPrisma = prisma as any
@@ -56,9 +57,37 @@ describe('POST /api/bargain/checkout-open', () => {
     }))
 
     expect(res.status).toBe(200)
+    expect(checkSimpleRateLimit).toHaveBeenCalledWith(expect.stringContaining('bargain_checkout_open_'))
     expect(mockPrisma.bargainSession.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'sess-1', checkoutOpenedAt: null },
       data: { checkoutOpenedAt: expect.any(Date) },
+    }))
+  })
+
+  it('backfills a device fingerprint when the checkout-origin session has none', async () => {
+    mockPrisma.bargainSession.findUnique.mockResolvedValue({
+      id: 'sess-2',
+      customerFingerprint: null,
+      customerEmail: null,
+      cartToken: null,
+      purchaseUrl: 'https://shop.example/discount/BARGAIN-TEST',
+      discountCode: 'BARGAIN-TEST',
+      status: 'rejected',
+      checkoutOpenedAt: null,
+    })
+
+    const res = await POST(request({
+      sessionId: 'sess-2',
+      customerFingerprint: 'fp-12345678',
+      sessionToken: signSessionToken('sess-2'),
+    }))
+
+    expect(res.status).toBe(200)
+    expect(mockPrisma.bargainSession.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: {
+        checkoutOpenedAt: expect.any(Date),
+        customerFingerprint: 'fp-12345678',
+      },
     }))
   })
 

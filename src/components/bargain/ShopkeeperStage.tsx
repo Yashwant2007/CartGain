@@ -252,12 +252,12 @@ const STAGE_CSS = `
   justify-content: center;
   overflow: visible;
 }
-.cg-stage.cg-stage--compact .cg-stage-avatar > * { transform: scale(.82); transform-origin: 50% 100%; }
+.cg-stage.cg-stage--compact .cg-stage-avatar > * { transform: scale(.9); transform-origin: 50% 100%; }
 .cg-stage.cg-stage--side {
   display: flex;
   flex-direction: column;
   align-self: stretch;
-  width: 168px;
+  width: 208px;
   height: auto;
   min-height: 0;
   gap: 4px;
@@ -270,8 +270,8 @@ const STAGE_CSS = `
 .cg-stage.cg-stage--side::before,
 .cg-stage.cg-stage--side .cg-stage-spot { display: none; }
 .cg-stage.cg-stage--side .cg-stage-avatar {
-  width: 168px;
-  height: 194px;
+  width: 208px;
+  height: 226px;
   align-items: flex-start;
   margin-top: -6px;
 }
@@ -289,21 +289,32 @@ const STAGE_CSS = `
   line-height: 1.35;
   -webkit-line-clamp: 2;
 }
-@media (max-width: 480px) {
+@media (max-width: 640px), (pointer: coarse) {
   .cg-stage { gap: 6px; padding: 2px 8px; height: 170px; min-height: 170px; }
   .cg-stage-spot, .cg-stage::before { display: none; }
   .cg-stage-name { font-size: 13px; }
   .cg-stage-avatar { width: 134px; height: 158px; }
   .cg-stage-avatar::after { width: 56px; height: 8px; }
   .cg-stage.cg-stage--compact .cg-stage-avatar { width: 128px; height: 140px; }
-  .cg-stage.cg-stage--compact .cg-stage-avatar > * { transform: scale(.72); }
-  .cg-stage.cg-stage--side { width: 112px; padding: 8px 0; }
+  .cg-stage.cg-stage--compact .cg-stage-avatar > * { transform: scale(.8); }
+  .cg-stage.cg-stage--side { width: 132px; padding: 8px 0; }
   .cg-stage.cg-stage--side .cg-stage-avatar {
-    width: 168px;
-    height: 194px;
-    transform: scale(.67);
+    width: 184px;
+    height: 210px;
+    transform: scale(.78);
     transform-origin: top center;
-    margin: -4px 0 -58px;
+    margin: -4px 0 -46px;
+  }
+  .cg-stage.cg-stage--side .cg-stage-copy { display: none; }
+}
+@container cgwidget (max-width: 520px) {
+  .cg-stage.cg-stage--side { width: 132px; padding: 8px 0; }
+  .cg-stage.cg-stage--side .cg-stage-avatar {
+    width: 184px;
+    height: 210px;
+    transform: scale(.78);
+    transform-origin: top center;
+    margin: -4px 0 -46px;
   }
   .cg-stage.cg-stage--side .cg-stage-copy { display: none; }
 }
@@ -365,8 +376,9 @@ export default function ShopkeeperStage({
   const useVrm = isVrmAvatarVariant(selectedVariant)
   const useV2 = selectedVariant === 'morgan' || selectedVariant === 'riley' || selectedVariant === 'alex' || useVrm
   const useInline = selectedVariant === 'signature' || selectedVariant === 'minimal'
+  const showInlineFallback = selectedVariant === 'robot' && enable3D && !webglAvailable
   const render3D = selectedVariant === 'robot' && enable3D && webglAvailable
-  const renderer = useVrm ? 'vrm' : useV2 ? 'v2-sprite' : useInline ? 'inline' : render3D ? '3d' : webglAvailable ? 'disabled' : 'unavailable'
+  const renderer = useVrm ? 'vrm' : useV2 ? 'v2-sprite' : useInline ? 'inline' : render3D ? '3d' : showInlineFallback ? 'inline-fallback' : webglAvailable ? 'disabled' : 'unavailable'
   return (
     <div
       className={`cg-stage ${descriptor.className}${compact ? ' cg-stage--compact' : ''}${side ? ' cg-stage--side' : ''}`}
@@ -397,13 +409,13 @@ export default function ShopkeeperStage({
             essentialMotionOnly={essentialMotionOnly}
             reaction={reaction}
           />
-        ) : useInline ? (
+        ) : useInline || showInlineFallback ? (
           <ShopkeeperAvatar
             personality={personality}
             expression={expression}
             state={state}
             gesture={gesture}
-            characterStyle={useInline ? characterStyle : 'signature'}
+            characterStyle={characterStyle}
             motionEnabled={motionEnabled}
             essentialMotionOnly={essentialMotionOnly}
             gaze={gaze}
@@ -426,11 +438,12 @@ export default function ShopkeeperStage({
               onUnavailable?.()
             }}
           />
-        ) : showUnavailable && !webglAvailable ? (
+        ) : null}
+        {showUnavailable && !webglAvailable && (
           <div className="cg-stage-unavailable" role="status">
             The interactive 3D robot could not load in this browser. The bargain chat remains available.
           </div>
-        ) : null}
+        )}
       </div>
       <div className="cg-stage-copy">
         <div className="cg-stage-name">

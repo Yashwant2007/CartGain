@@ -6,6 +6,12 @@ import {
 import { Button } from '@/components/Button'
 import FeatureCard from '@/components/FeatureCard'
 
+export const metadata = {
+  title: 'AI Bargaining | CartGain',
+  description: 'CartGain AI bargaining turns “too expensive” into agreed deals while protecting your floor price.',
+  alternates: { canonical: '/bargain' },
+}
+
 const CAPABILITIES = [
   {
     icon: <MessageSquare className="w-6 h-6 sm:w-7 sm:h-7 text-cyan-400" />,

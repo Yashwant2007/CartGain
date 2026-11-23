@@ -4,6 +4,7 @@ import Link from 'next/link'
 export const metadata = {
   title: 'Data Processing Agreement - CartGain',
   description: 'CartGain Data Processing Agreement (DPA) - Our commitment to data protection, GDPR compliance, and data processing terms for merchants.',
+  alternates: { canonical: '/dpa' },
 }
 
 export default function DPAPage() {

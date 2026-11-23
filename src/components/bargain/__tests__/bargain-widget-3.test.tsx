@@ -132,6 +132,43 @@ describe('BargainWidget conversation-first layout', () => {
     })
   })
 
+  it('restores the negotiated transcript and last counter when rejoining a session', async () => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/bargain/start')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            sessionId: 'session-1',
+            session: {
+              id: 'session-1',
+              status: 'active',
+              attemptsUsed: 2,
+              currentOffer: 750,
+              finalPrice: 700,
+              messages: [
+                { id: 'm1', role: 'ai', content: 'Welcome', offeredPrice: null, createdAt: new Date(Date.now() - 5000).toISOString() },
+                { id: 'm2', role: 'customer', content: '700 please', offeredPrice: 700, createdAt: new Date(Date.now() - 3000).toISOString() },
+                { id: 'm3', role: 'ai', content: 'I can do 750', offeredPrice: 750, createdAt: new Date(Date.now() - 1000).toISOString() },
+              ],
+            },
+            openingMessage: 'Welcome',
+            expiresAt: new Date(Date.now() + 600_000).toISOString(),
+            existingSession: true,
+          }),
+        }
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true }) }
+    }) as unknown as typeof fetch
+
+    render(<BargainWidget {...baseProps} />)
+
+    await waitFor(() => expect(screen.getByText('I can do 750')).toBeTruthy(), { timeout: 3000 })
+    expect(screen.getByText('700 please')).toBeTruthy()
+    expect(screen.getByText(/Accept offer/)).toBeTruthy()
+  })
+
   it('keeps the chat log on the Deal tab and renders recommendations outside it', async () => {
     const { container } = render(<BargainWidget {...baseProps} />)
 
@@ -200,6 +237,57 @@ describe('BargainWidget conversation-first layout', () => {
       expect.objectContaining({ method: 'POST', keepalive: true }),
     ))
     await waitFor(() => expect(screen.queryByRole('log')).toBeNull())
+    openSpy.mockRestore()
+  })
+
+  it('does not claim the checkout is locked when the server lock write fails', async () => {
+    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null)
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/bargain/start')) {
+        return {
+          ok: true, status: 200,
+          json: async () => ({
+            sessionId: 'session-1',
+            openingMessage: 'Welcome, what price feels fair?',
+            expiresAt: new Date(Date.now() + 600_000).toISOString(),
+          }),
+        }
+      }
+      if (url.includes('/api/bargain/offer')) {
+        return {
+          ok: true, status: 200,
+          json: async () => ({
+            reply: 'That is the last I can do.',
+            decision: 'reject',
+            sessionStatus: 'rejected',
+            discountCode: 'BARGAIN-TEST',
+            finalPrice: 700,
+            purchaseUrl: 'https://shop.example/discount/BARGAIN-TEST',
+          }),
+        }
+      }
+      if (url.includes('/api/bargain/checkout-open')) {
+        return { ok: false, status: 500, json: async () => ({ ok: false }) }
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true }) }
+    }) as unknown as typeof fetch
+
+    render(<BargainWidget {...baseProps} />)
+    await waitFor(() => expect(screen.getByLabelText('Ask about this product or make an offer…')).toBeTruthy(), { timeout: 3000 })
+    const input = screen.getByLabelText('Ask about this product or make an offer…')
+    fireEvent.change(input, { target: { value: '600' } })
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 })
+
+    await waitFor(() => expect(screen.getByText('Checkout at your price')).toBeTruthy(), { timeout: 3000 })
+    fireEvent.click(screen.getByText('Checkout at your price'))
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/bargain/checkout-open'),
+      expect.objectContaining({ method: 'POST', keepalive: true }),
+    ))
+    expect(openSpy).toHaveBeenCalled()
+    expect(screen.queryByText('Your checkout is open')).toBeNull()
     openSpy.mockRestore()
   })
 

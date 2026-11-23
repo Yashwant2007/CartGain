@@ -766,13 +766,33 @@ async function processOrderCreate(data: any, store: any, domain: string) {
       where: { storeId_cartId: { storeId: store.id, cartId: fallbackToken } },
     })
   }
+  const orderCustomerId = data.customer?.id ? String(data.customer.id) : null
+  try {
+    await rememberConfirmedOrder({
+      storeId: store.id,
+      shopifyOrderId: data.id ? String(data.id) : '',
+      email: orderEmail,
+      phone: orderPhone,
+      cartToken: preferredToken ?? null,
+      checkoutToken: fallbackToken ?? null,
+      customerId: orderCustomerId ? normalizeCustomerId(orderCustomerId) || orderCustomerId : null,
+      purchasedAt: data.created_at ? new Date(data.created_at) : new Date(),
+      currency: data.currency || null,
+      lineItems: Array.isArray(data.line_items) ? data.line_items : [],
+      appliedCodes: Array.isArray(data.discount_codes)
+        ? data.discount_codes.map((entry: any) => entry?.code).filter(Boolean)
+        : [],
+    })
+  } catch (err) {
+    console.error('[BARGAIN_PURCHASE_MEMORY]', err)
+  }
+
   if (!cart) return
 
   // Backfill contact fields on orders/create — carts recorded by older
   // webhooks/sync runs may predate the customerId column or be missing the
   // name/phone/email the order carries. Ensures customers/redact can locate
   // every cart and recovery/dashboard views show the same person.
-  const orderCustomerId = data.customer?.id ? String(data.customer.id) : null
   const orderBackfill: {
     customerId?: string
     customerName?: string
@@ -810,26 +830,6 @@ async function processOrderCreate(data: any, store: any, domain: string) {
   const discountAmount = parseFloat(data.total_discounts || '0')
   const netAmount = Math.max(0, grossAmount - discountAmount)
   const discountUsed = discountAmount > 0
-
-  try {
-    await rememberConfirmedOrder({
-      storeId: store.id,
-      shopifyOrderId: shopifyOrderId ?? '',
-      email: orderEmail,
-      phone: orderPhone,
-      cartToken: preferredToken ?? null,
-      checkoutToken: fallbackToken ?? null,
-      customerId: orderCustomerId ? normalizeCustomerId(orderCustomerId) || orderCustomerId : null,
-      purchasedAt: orderCreatedAt,
-      currency: data.currency || null,
-      lineItems: Array.isArray(data.line_items) ? data.line_items : [],
-      appliedCodes: Array.isArray(data.discount_codes)
-        ? data.discount_codes.map((entry: any) => entry?.code).filter(Boolean)
-        : [],
-    })
-  } catch (err) {
-    console.error('[BARGAIN_PURCHASE_MEMORY]', err)
-  }
 
   // ── AI Salesperson: attribute confirmed bargain orders to the daily goal ──
   // Idempotent per shopifyOrderId; never blocks cart recovery if it fails.

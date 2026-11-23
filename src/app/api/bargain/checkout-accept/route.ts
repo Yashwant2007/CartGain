@@ -15,6 +15,7 @@ import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { normalizeShopDomain, shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
 import { loadQuoteByToken, revalidateQuote, markQuoteCheckoutPending } from '@/lib/bargain/quote'
 import { checkoutAcceptedMessage } from '@/lib/bargain/post-deal'
+import { CHECKOUT_ACCEPT_RATE_KEY } from '@/lib/bargain/checkout-lock'
 import {
   bargainPlatformFor,
   buildWooCommerceCheckoutUrl,
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
     // returns a distinguishable below-floor rejection, so unbounded probing
     // could binary-search the merchant floor. The per-shop code budget (below)
     // does not cover rejections; this does.
-    const rate = await checkSimpleRateLimit(`bargain_checkout_${clientIp(request.headers)}`)
+    const rate = await checkSimpleRateLimit(`${CHECKOUT_ACCEPT_RATE_KEY}${clientIp(request.headers)}`)
     if (!rate.allowed) {
       return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
         status: 429,

@@ -1,3 +1,6 @@
+export const CHECKOUT_OPEN_RATE_KEY = 'bargain_checkout_open_'
+export const CHECKOUT_ACCEPT_RATE_KEY = 'bargain_checkout_accept_'
+
 export interface BargainBuyerIdentity {
   customerFingerprint?: string | null
   customerEmail?: string | null

@@ -4,7 +4,7 @@
 
 1. Apply `prisma/migrations/20261120130000_add_woocommerce_integration/migration.sql` to the target Postgres database through the normal Prisma migration flow.
 2. Deploy the Next.js app. Vercel runs `prisma generate && next build`.
-3. Confirm no new required environment variables were introduced. Reuse the existing app URL, encryption, job auth, email, and WhatsApp settings.
+3. Confirm no new required environment variables were introduced. Reuse the existing app URL, encryption, job auth, email, and WhatsApp settings. Plugin `1.0.9` ships the wider, shorter invitation and larger chat shopkeeper.
 4. Verify health and that the WooCommerce routes are reachable. Plugin `1.0.7` ships product images, customer names, coupon codes, totals/discounts, and refund identifiers in event payloads.
 
 ## Plugin package

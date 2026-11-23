@@ -30,6 +30,22 @@ const bargainWidgetCsp = [
   "object-src 'none'",
 ].join('; ')
 
+const noIndexRoutes = [
+  '/dashboard',
+  '/dashboard/:path*',
+  '/login',
+  '/signup',
+  '/forgot-password',
+  '/verify-email',
+  '/setup',
+  '/demo',
+  '/auth/error',
+  '/s/bargain',
+  '/shopify-auth-start',
+  '/shopify-auth-success',
+  '/shopify-connected',
+]
+
 const nextConfig = {
   images: {
     remotePatterns: [
@@ -131,6 +147,10 @@ const nextConfig = {
           { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
         ],
       },
+      ...noIndexRoutes.map((source) => ({
+        source,
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
+      })),
     ]
   },
 }

@@ -185,6 +185,7 @@ export interface ConfirmedOrderMemory {
   phone?: string | null
   cartToken?: string | null
   checkoutToken?: string | null
+  customerFingerprint?: string | null
   customerId?: string | null
   purchasedAt: Date
   currency?: string | null
@@ -219,21 +220,23 @@ export async function rememberConfirmedOrder(params: ConfirmedOrderMemory): Prom
 
   await prisma.bargainPurchaseMemory.createMany({ data: rows, skipDuplicates: true }).catch(() => {})
 
+  const codeValues = Array.from(new Set((params.appliedCodes ?? []).map((code) => String(code).trim()).filter(Boolean)))
   const sessionOrs = [
     ...bargainSessionIdentityClauses({
       customerEmail: params.email,
       cartToken: params.cartToken,
       customerPhone: params.phone,
+      customerFingerprint: params.customerFingerprint,
     }),
     ...(params.checkoutToken && params.checkoutToken !== params.cartToken
       ? [{ cartToken: params.checkoutToken }]
       : []),
+    ...codeValues.map((discountCode) => ({ discountCode })),
   ]
   if (sessionOrs.length === 0) return
 
   const productIds = Array.from(new Set(items.map((item: any) => normalizeMemoryProductId(item?.product_id ?? item?.product?.id)).filter(Boolean)))
   const variantIds = Array.from(new Set(items.map((item: any) => item?.variant_id != null ? String(item.variant_id) : '').filter(Boolean)))
-  const codeValues = Array.from(new Set((params.appliedCodes ?? []).map((code) => String(code).trim()).filter(Boolean)))
   const purchaseOrs: Record<string, string>[] = []
   for (const id of productIds) {
     purchaseOrs.push({ shopifyProductId: id })

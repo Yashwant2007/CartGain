@@ -20,6 +20,7 @@ import { buildQuickOffers } from '@/lib/bargain/offers'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import type { BargainRecommendation, RecommendationHistory } from '@/lib/bargain/api-types'
 import LivingShopkeeper3D from '@/components/bargain/LivingShopkeeper3D.lazy'
+import ShopkeeperAvatar from '@/components/bargain/ShopkeeperAvatar'
 import BargainRecommendationPanel from '@/components/bargain/BargainRecommendationPanel'
 import {
   createConversationId,
@@ -141,6 +142,7 @@ export default function DemoContent() {
   const t = (key: UiKey, vars?: Record<string, string | number>) => uiText(language, key, vars)
   const avatarPersonality = AVATAR_PERSONALITY[persona]
   const [character, setCharacter] = useState<ShopkeeperAnimation>(() => resolveShopkeeperAnimation('friendly_shopkeeper', 'idle'))
+  const [robotAvailable, setRobotAvailable] = useState(true)
   const fireAvatar = useCallback((event: LivingEvent, ctx: FireAvatarContext = {}) => {
     setCharacter((prev) => resolveShopkeeperAnimation(avatarPersonality, event, { ...prev, ...ctx }))
   }, [avatarPersonality])
@@ -843,15 +845,30 @@ export default function DemoContent() {
         {/* Chat panel */}
         {started && (
           <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl overflow-hidden">
-            <LivingShopkeeper3D
-              personality={avatarPersonality}
-              state={demo3DState}
-              event={character.event}
-              eventSequence={character.eventSequence}
-              eventContext={character}
-              motionEnabled
-              quality="high"
-            />
+            {robotAvailable ? (
+              <LivingShopkeeper3D
+                personality={avatarPersonality}
+                state={demo3DState}
+                event={character.event}
+                eventSequence={character.eventSequence}
+                eventContext={character}
+                motionEnabled
+                essentialMotionOnly={false}
+                quality="high"
+                onUnavailable={() => setRobotAvailable(false)}
+              />
+            ) : (
+              <ShopkeeperAvatar
+                personality={avatarPersonality}
+                expression={character.expression}
+                state={character.state}
+                gesture={character.gesture}
+                characterStyle="signature"
+                motionEnabled
+                essentialMotionOnly={false}
+                gaze={null}
+              />
+            )}
             <div className="px-4 py-2 border-b border-blue-800/30 flex items-center justify-between text-xs text-blue-300/70">
               <span>{thinking ? t('negotiating') : t('attemptsLeftLabel', { n: attemptsLeft })}</span>
               {ended && (

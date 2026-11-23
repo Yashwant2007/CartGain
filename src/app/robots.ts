@@ -1,6 +1,6 @@
-import { MetadataRoute } from 'next'
+import type { MetadataRoute } from 'next'
 
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'
+const CANONICAL_ORIGIN = 'https://cart-gain.com'
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -9,6 +9,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       disallow: ['/dashboard', '/api/', '/r/'],
     },
-    sitemap: `${baseUrl}/sitemap.xml`,
+    sitemap: `${CANONICAL_ORIGIN}/sitemap.xml`,
   }
 }

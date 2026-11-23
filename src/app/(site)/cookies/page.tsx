@@ -4,6 +4,7 @@ import Link from 'next/link'
 export const metadata = {
   title: 'Cookie Policy - CartGain',
   description: 'CartGain Cookie Policy - The cookies we use, why we use them, and how to manage them.',
+  alternates: { canonical: '/cookies' },
 }
 
 export default function CookiePolicyPage() {

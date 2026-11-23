@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainCheckoutOpenSchema, handleValidationError, validateOrThrow } from '@/lib/validation/bargain'
 import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
+import { CHECKOUT_OPEN_RATE_KEY } from '@/lib/bargain/checkout-lock'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
-    const rate = await checkSimpleRateLimit(`bargain_checkout_${clientIp(request.headers)}`)
+    const rate = await checkSimpleRateLimit(`${CHECKOUT_OPEN_RATE_KEY}${clientIp(request.headers)}`)
     if (!rate.allowed) {
       return NextResponse.json({ message: 'Too many requests. Please try again later.' }, {
         status: 429,
@@ -46,9 +47,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'No checkout is available for this session' }, { status: 409 })
     }
 
+    const checkoutUpdate: { checkoutOpenedAt: Date; customerFingerprint?: string } = {
+      checkoutOpenedAt: new Date(),
+    }
+    if (data.customerFingerprint && !session.customerFingerprint) {
+      checkoutUpdate.customerFingerprint = data.customerFingerprint
+    }
     await prisma.bargainSession.updateMany({
       where: { id: session.id, checkoutOpenedAt: null },
-      data: { checkoutOpenedAt: new Date() },
+      data: checkoutUpdate,
     })
 
     return NextResponse.json({ ok: true }, { status: 200 })

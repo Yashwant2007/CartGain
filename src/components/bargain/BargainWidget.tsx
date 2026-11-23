@@ -43,7 +43,6 @@ import type {
   BargainStartSuccess,
   CgEmbedMessage,
   CgParentMessage,
-  PlanLimit,
   PublicBargainSession,
   RecommendationHistory,
 } from '@/lib/bargain/api-types'
@@ -419,10 +418,21 @@ export default function BargainWidget({
 
   useEffect(() => {
     if (!isEmbed) return
-    const compute = () => setPanelHeight(window.innerWidth <= 480 ? 600 : 680)
+    const compute = (width?: number) => {
+      const measured = width ?? rootRef.current?.getBoundingClientRect().width ?? window.innerWidth
+      setPanelHeight(measured <= 360 ? 600 : measured <= 480 ? 640 : 680)
+    }
     compute()
-    window.addEventListener('resize', compute)
-    return () => window.removeEventListener('resize', compute)
+    const onResize = () => compute()
+    window.addEventListener('resize', onResize)
+    const observer = typeof ResizeObserver !== 'undefined' && rootRef.current
+      ? new ResizeObserver((entries) => compute(entries[0]?.contentRect.width))
+      : null
+    if (rootRef.current) observer?.observe(rootRef.current)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      observer?.disconnect()
+    }
   }, [isEmbed])
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -551,21 +561,23 @@ export default function BargainWidget({
     } catch {
       window.location.href = url
     }
+    fireAvatar('checkout_started', { checkoutStarted: true })
+    let lockConfirmed = false
     if (sessionId) {
       try {
-        void fetch(`${apiBase}/api/bargain/checkout-open`, {
+        const res = await fetch(`${apiBase}/api/bargain/checkout-open`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId, ...buyerIdentity(), sessionToken }),
           keepalive: true,
         })
+        lockConfirmed = res.ok
       } catch {}
     }
-    setCheckoutLocked(true)
+    setCheckoutLocked(lockConfirmed)
     // The character walks the shopper to the checkout action, then the panel
     // steps aside. The checkout itself already opened in a new tab, so the
     // short beat costs nothing and makes the handoff legible.
-    fireAvatar('checkout_started', { checkoutStarted: true })
     if (checkoutTimerRef.current) window.clearTimeout(checkoutTimerRef.current)
     checkoutTimerRef.current = window.setTimeout(() => {
       checkoutTimerRef.current = null
@@ -634,7 +646,7 @@ export default function BargainWidget({
   // Screen-reader status announcements for state transitions.
   useEffect(() => {
     let s = ''
-    if (limit) s = t('limitReached')
+    if (limit) s = t('negotiationEnded')
     else if (unavailable) s = t('itemUnavailable')
     else if (sessionEnded && decision === 'accept') s = t('dealAccepted')
     else if (sessionEnded && endedReason === 'expired') s = t('offerSessionExpired')
@@ -771,6 +783,35 @@ export default function BargainWidget({
         throw new Error(data.message ?? 'Could not start bargaining')
       }
       setCheckoutLocked(false)
+      setDecision('idle')
+      setSessionEnded(false)
+      setFinalPrice(null)
+      setDiscountCode(null)
+      setPurchaseUrl(null)
+      setEndedReason(null)
+      setFloorReached(false)
+      setRejection(null)
+      setAttemptsUsed(null)
+      if (data.session) {
+        const restoredSession = data.session
+        if (typeof restoredSession.attemptsUsed === 'number') setAttemptsUsed(restoredSession.attemptsUsed)
+        if (typeof restoredSession.finalPrice === 'number') setFinalPrice(restoredSession.finalPrice)
+        if (restoredSession.discountCode) setDiscountCode(restoredSession.discountCode)
+        if (restoredSession.purchaseUrl) setPurchaseUrl(restoredSession.purchaseUrl)
+        setFloorReached(Boolean(restoredSession.discountCode))
+        if (restoredSession.status === 'accepted' || restoredSession.status === 'accepting' || restoredSession.status === 'purchased') {
+          setDecision('accept')
+          setSessionEnded(true)
+          setEndedReason('accepted')
+        } else if (restoredSession.status === 'rejected') {
+          setDecision('reject')
+          setSessionEnded(true)
+          setEndedReason('rejected')
+        } else if (restoredSession.status === 'expired' || restoredSession.status === 'abandoned') {
+          setSessionEnded(true)
+          setEndedReason(restoredSession.status)
+        }
+      }
       setSessionId(data.sessionId)
       if (data.sessionToken) setSessionToken(data.sessionToken)
       setExpiresAt(data.expiresAt ?? null)
@@ -1363,6 +1404,8 @@ export default function BargainWidget({
       className={prefersReduced ? 'cartgain-bargain bargain-widget-root cg-reduced-motion' : 'cartgain-bargain bargain-widget-root'}
       style={{
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        containerType: 'inline-size',
+        containerName: 'cgwidget',
         ...(isEmbed
           ? isDrawer
             ? {
@@ -2011,37 +2054,21 @@ export default function BargainWidget({
                   </StateCard>
                 )}
 
-                {/* Plan limit reached */}
+                {/* Customer-safe capacity notice — never expose plan/billing details here. */}
                 {limit && (
-                  <div role="alert" className="cg-limit" style={{
-                    margin: '0 4px',
-                    padding: '18px 16px',
-                    fontSize: 13.5,
-                    lineHeight: 1.55,
-                    color: '#1e293b',
-                    background: 'linear-gradient(135deg,#eef2ff,#f5f3ff)',
-                    borderRadius: 14,
-                    border: '1px solid #c7d2fe',
-                    textAlign: 'center',
-                  }}>
-                    <div style={{ fontWeight: 800, color: '#4338ca', marginBottom: 5, fontSize: 14 }}>
-                      {limit.code === 'bargain_sessions_exhausted'
-                        ? t('planSessionLimitTitle')
-                        : t('planDealLimitTitle')}
-                    </div>
-                    <div style={{ color: '#475569', marginBottom: 12 }}>
-                      {limit.code === 'bargain_sessions_exhausted'
-                        ? t('planSessionLimitBody')
-                        : t('planDealLimitBody')}
-                    </div>
-                    <a
-                      href={limit.upgradeUrl ?? 'https://cart-gain.com/pricing'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="cg-btn cg-btn-primary"
+                  <div role="alert">
+                    <StateCard
+                      icon={<MessageCircle size={18} />}
+                      tone="slate"
+                      title={t('negotiationEnded')}
+                      body={t('noHardFeelings')}
                     >
-                      {t('viewPlans')}
-                    </a>
+                      {linkout && (
+                        <div className="cg-card-cta">
+                          <a href={linkout} className="cg-btn cg-btn-primary">{t('skip')}</a>
+                        </div>
+                      )}
+                    </StateCard>
                   </div>
                 )}
 
@@ -2463,6 +2490,11 @@ export default function BargainWidget({
         }
         @supports (padding: max(0px)) {
           .cartgain-bargain .cg-panel-fixed, .cartgain-bargain .cg-panel-mini { padding-bottom: env(safe-area-inset-bottom) }
+        }
+        @media (max-height: 560px) and (max-width: 680px) {
+          .cartgain-bargain .cg-goal,
+          .cartgain-bargain .cg-rounds { display: none !important; }
+          .cartgain-bargain .cg-rail { padding-top: 6px; padding-bottom: 6px; }
         }
       ` }} />
     </div>

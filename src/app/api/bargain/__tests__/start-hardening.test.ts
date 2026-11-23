@@ -45,6 +45,7 @@ jest.mock('@/lib/services/bargain', () => {
     ...actual,
     negotiateStep: jest.fn(async () => ({ reply: 'hi', tactic: 'chat', sentiment: 'neutral' })),
     buildCustomerContext: jest.fn(async () => null),
+    computeMinPrice: jest.fn(async () => ({ minPrice: 500, isBargainable: true, reason: null })),
   }
 })
 
@@ -225,5 +226,41 @@ describe('POST /api/bargain/start — hardening', () => {
     expect(res.status).toBe(201)
     expect(prismaMock.bargainPurchaseMemory.findMany).not.toHaveBeenCalled()
     expect(body.lastBought).toBeNull()
+  })
+
+  it('restores the full negotiating transcript and authoritative state on rejoin', async () => {
+    enableBargaining()
+    prismaMock.bargainSession.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'sess-1',
+        shopifyProductId: 'gid://shopify/Product/1',
+        originalPrice: 1000,
+        currentOffer: 750,
+        finalPrice: 700,
+        status: 'active',
+        attemptsUsed: 2,
+        discountCode: null,
+        purchaseUrl: null,
+        language: 'en',
+        startedAt: new Date('2026-11-23T10:00:00Z'),
+        expiredAt: new Date(Date.now() + 600_000),
+        messages: [
+          { id: 'm1', role: 'ai', content: 'Welcome', offeredPrice: null, createdAt: new Date('2026-11-23T10:00:01Z') },
+          { id: 'm2', role: 'customer', content: '700 please', offeredPrice: 700, createdAt: new Date('2026-11-23T10:00:05Z') },
+          { id: 'm3', role: 'ai', content: 'I can do 750', offeredPrice: 750, createdAt: new Date('2026-11-23T10:00:07Z') },
+        ],
+      })
+
+    const res = await POST(makeRequest({ customerFingerprint: 'fp-12345678' }))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.existingSession).toBe(true)
+    expect(body.session.messages).toHaveLength(3)
+    expect(body.session.messages.map((message: any) => message.role)).toEqual(['ai', 'customer', 'ai'])
+    expect(body.session).toMatchObject({ attemptsUsed: 2, currentOffer: 750, finalPrice: 700, status: 'active' })
+    const include = prismaMock.bargainSession.findFirst.mock.calls[1][0].include
+    expect(include.messages.take).toBe(200)
   })
 })

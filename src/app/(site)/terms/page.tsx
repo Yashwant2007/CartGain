@@ -4,6 +4,7 @@ import Link from 'next/link'
 export const metadata = {
   title: 'Terms of Service - CartGain',
   description: 'CartGain Terms of Service - Terms governing the use of our cart recovery platform, including billing, compliance, and legal agreements.',
+  alternates: { canonical: '/terms' },
 }
 
 export default function TermsPage() {
