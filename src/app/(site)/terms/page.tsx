@@ -1,11 +1,8 @@
 import { FileText, Shield, CreditCard, MessageSquare, AlertTriangle, Scale, Mail, Ban, Lock, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
+import { createPageMetadata } from '@/lib/seo'
 
-export const metadata = {
-  title: 'Terms of Service - CartGain',
-  description: 'CartGain Terms of Service - Terms governing the use of our cart recovery platform, including billing, compliance, and legal agreements.',
-  alternates: { canonical: '/terms' },
-}
+export const metadata = createPageMetadata('/terms')
 
 export default function TermsPage() {
   return (

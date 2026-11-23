@@ -5,8 +5,15 @@ import { ShieldCheck, Lock } from 'lucide-react'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import DemoContent from './demo-content'
+import { createNoIndexMetadata } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata = createNoIndexMetadata({
+  title: 'Live Demo | CartGain',
+  description: 'Preview the CartGain AI bargaining and cart recovery experience.',
+  path: '/demo',
+})
 
 export default async function DemoPage() {
   const session = await getServerSession(authOptions)

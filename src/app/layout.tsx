@@ -12,6 +12,7 @@ import {
   getShopifyEmbedContext,
   isShopifyEmbedRequest,
 } from '@/lib/shopify-app-bridge'
+import { CANONICAL_ORIGIN, createPageMetadata } from '@/lib/seo'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -22,10 +23,8 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://cart-gain.com'),
-  title: 'CartGain | AI Negotiation & Cart Recovery for E-commerce',
-  description:
-    'Recover abandoned carts with AI-powered WhatsApp and Email recovery — plus an AI negotiator that turns "Too Expensive" into sold orders without cutting below your floor price. First 50 recovered carts free.',
+  ...createPageMetadata('/'),
+  metadataBase: new URL(CANONICAL_ORIGIN),
   keywords: [
     'AI cart recovery',
     'abandoned cart recovery',
@@ -42,43 +41,6 @@ export const metadata: Metadata = {
     'Shopify apps',
     'cart abandonment recovery',
   ],
-  openGraph: {
-    title: 'CartGain | Turn "Too Expensive" Into Sold',
-    description:
-      'AI negotiation engine for e-commerce. CartGain recovers abandoned carts over WhatsApp and Email, negotiates with price-sensitive shoppers, and hits your floor — first 50 recovered carts free.',
-    url: 'https://cart-gain.com',
-    type: 'website',
-    siteName: 'CartGain',
-    images: [
-      {
-        url: 'https://images.unsplash.com/photo-1556740738-b6a63e27c4df?w=1200&h=630&fit=crop',
-        width: 1200,
-        height: 630,
-        alt: 'CartGain - AI negotiation and abandoned cart recovery platform',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'CartGain | Turn "Too Expensive" Into Sold',
-    description:
-      'AI negotiation engine for e-commerce. Recover abandoned carts over WhatsApp and Email, negotiate without killing margin, track revenue recovered.',
-    images: ['https://images.unsplash.com/photo-1556740738-b6a63e27c4df?w=1200&h=630&fit=crop'],
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-snippet': -1,
-      'max-image-preview': 'large',
-      'max-video-preview': -1,
-    },
-  },
-  alternates: {
-    canonical: 'https://cart-gain.com',
-  },
 }
 
 export default async function RootLayout({

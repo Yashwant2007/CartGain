@@ -1,11 +1,8 @@
 import { Mail, MapPin, Phone, Shield, MessageSquare } from 'lucide-react'
 import Link from 'next/link'
+import { createPageMetadata } from '@/lib/seo'
 
-export const metadata = {
-  title: 'Contact Us - CartGain',
-  description: 'Get in touch with CartGain. Email, address, and contact information for support, sales, and legal inquiries.',
-  alternates: { canonical: '/contact' },
-}
+export const metadata = createPageMetadata('/contact')
 
 export default function ContactPage() {
   return (

@@ -1,6 +1,5 @@
 import type { MetadataRoute } from 'next'
-
-const CANONICAL_ORIGIN = 'https://cart-gain.com'
+import { CANONICAL_ORIGIN } from '@/lib/seo'
 
 export default function robots(): MetadataRoute.Robots {
   return {

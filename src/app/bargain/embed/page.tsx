@@ -1,18 +1,18 @@
-import type { Metadata } from 'next'
 import prisma from '@/lib/db'
 import { resolveActiveStoreIdByShopDomain } from '@/lib/stores/resolve-by-domain'
 import BargainWidget from '@/components/bargain/BargainWidget'
 import EmbedErrorBoundary from '@/components/bargain/EmbedErrorBoundary'
 import { fromDb } from '@/lib/bargain/experience/config'
 import type { BargainExperienceConfig } from '@/lib/bargain/experience/types'
+import { createNoIndexMetadata } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
 
-export const metadata: Metadata = {
-  title: 'Bargain | CartGain',
-  description: 'Real-time price negotiation for your cart.',
-  robots: { index: false, follow: false },
-}
+export const metadata = createNoIndexMetadata({
+  title: 'Bargain Widget | CartGain',
+  description: 'Real-time AI price negotiation for your shopping cart.',
+  path: '/bargain/embed',
+})
 
 // Public storefront embed — iframed on Shopify product + cart pages (no auth).
 // Query params: shop, product, variant, price, currency, title, image, mode,

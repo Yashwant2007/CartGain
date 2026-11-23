@@ -1,11 +1,8 @@
 import { Cookie, Lock, Info, Mail } from 'lucide-react'
 import Link from 'next/link'
+import { createPageMetadata } from '@/lib/seo'
 
-export const metadata = {
-  title: 'Cookie Policy - CartGain',
-  description: 'CartGain Cookie Policy - The cookies we use, why we use them, and how to manage them.',
-  alternates: { canonical: '/cookies' },
-}
+export const metadata = createPageMetadata('/cookies')
 
 export default function CookiePolicyPage() {
   return (

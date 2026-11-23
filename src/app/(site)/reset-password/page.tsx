@@ -1,12 +1,12 @@
 import { Suspense } from 'react'
-import type { Metadata } from 'next'
 import ResetPasswordForm from './ResetPasswordForm'
+import { createNoIndexMetadata } from '@/lib/seo'
 
-export const metadata: Metadata = {
-  title: 'Reset Your Password | CartGain',
-  description: 'Set a new password for your CartGain account.',
-  robots: { index: false, follow: false },
-}
+export const metadata = createNoIndexMetadata({
+  title: 'Reset Password | CartGain',
+  description: 'Set a new password for your CartGain merchant account.',
+  path: '/reset-password',
+})
 
 export default function ResetPasswordPage() {
   return (

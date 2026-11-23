@@ -1,11 +1,7 @@
-import type { Metadata } from 'next'
 import Link from 'next/link'
+import { createPageMetadata } from '@/lib/seo'
 
-export const metadata: Metadata = {
-  title: 'Security Policy | CartGain',
-  description: 'CartGain security policy — how we protect merchant and customer data.',
-  alternates: { canonical: '/security-policy' },
-}
+export const metadata = createPageMetadata('/security-policy')
 
 export default function SecurityPolicyPage() {
   return (

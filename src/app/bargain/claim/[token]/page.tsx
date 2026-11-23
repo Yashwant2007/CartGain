@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { ArrowRight, CheckCircle2, ShieldCheck, Tag } from 'lucide-react'
 import prisma from '@/lib/db'
@@ -7,14 +6,14 @@ import { fetchShopifyProductDetail } from '@/lib/shopify'
 import { buildBargainCheckoutUrl } from '@/lib/bargain/purchase'
 import { findPlatformProduct, productField, wooProductUrl } from '@/lib/woocommerce/bargain-adapter'
 import CopyCodeButton from './CopyCodeButton'
+import { createNoIndexMetadata } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
 
-export const metadata: Metadata = {
-  title: 'Your negotiated price | CartGain',
+export const metadata = createNoIndexMetadata({
+  title: 'Your Negotiated Price | CartGain',
   description: 'Complete your purchase at the price you negotiated.',
-  robots: { index: false, follow: false },
-}
+})
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$', INR: '₹', EUR: '€', GBP: '£', JPY: '¥',

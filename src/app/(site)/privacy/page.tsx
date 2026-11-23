@@ -1,11 +1,8 @@
 import { Shield, Lock, Eye, Database, Globe, Mail, Phone, Sparkles } from 'lucide-react'
 import Link from 'next/link'
+import { createPageMetadata } from '@/lib/seo'
 
-export const metadata = {
-  title: 'Privacy Policy - CartGain',
-  description: 'CartGain Privacy Policy - How we collect, use, and protect your data in compliance with GDPR, India DPDP Act, and global standards.',
-  alternates: { canonical: '/privacy' },
-}
+export const metadata = createPageMetadata('/privacy')
 
 export default function PrivacyPolicyPage() {
   return (

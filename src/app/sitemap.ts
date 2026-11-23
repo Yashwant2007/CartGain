@@ -1,25 +1,10 @@
 import { statSync } from 'fs'
 import path from 'path'
 import type { MetadataRoute } from 'next'
+import { PUBLIC_PAGE_PATHS, canonicalUrl } from '@/lib/seo'
+import type { PublicPagePath } from '@/lib/seo'
 
-const CANONICAL_ORIGIN = 'https://cart-gain.com'
-
-const PUBLIC_PAGES = [
-  '/',
-  '/pricing',
-  '/bargain',
-  '/contact',
-  '/privacy',
-  '/terms',
-  '/dpa',
-  '/security-policy',
-  '/cookies',
-  '/docs/api',
-] as const
-
-type PublicPage = (typeof PUBLIC_PAGES)[number]
-
-const PAGE_FILES: Record<PublicPage, string> = {
+const PAGE_FILES: Record<PublicPagePath, string> = {
   '/': 'src/app/(site)/page.tsx',
   '/pricing': 'src/app/(site)/pricing/page.tsx',
   '/bargain': 'src/app/(site)/bargain/page.tsx',
@@ -32,7 +17,7 @@ const PAGE_FILES: Record<PublicPage, string> = {
   '/docs/api': 'src/app/(site)/docs/api/page.tsx',
 }
 
-function lastModifiedFor(page: PublicPage): Date | undefined {
+function lastModifiedFor(page: PublicPagePath): Date | undefined {
   try {
     return statSync(path.join(process.cwd(), PAGE_FILES[page])).mtime
   } catch {
@@ -41,10 +26,10 @@ function lastModifiedFor(page: PublicPage): Date | undefined {
 }
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  return PUBLIC_PAGES.map((page) => {
+  return PUBLIC_PAGE_PATHS.map((page) => {
     const lastModified = lastModifiedFor(page)
     return {
-      url: page === '/' ? CANONICAL_ORIGIN : `${CANONICAL_ORIGIN}${page}`,
+      url: canonicalUrl(page),
       ...(lastModified ? { lastModified } : {}),
     }
   })

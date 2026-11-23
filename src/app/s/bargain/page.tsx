@@ -5,8 +5,15 @@ import { ShieldCheck, Lock } from 'lucide-react'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
 import BargainView from './bargain-view'
+import { createNoIndexMetadata } from '@/lib/seo'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata = createNoIndexMetadata({
+  title: 'Bargain Preview | CartGain',
+  description: 'Preview the CartGain AI bargaining experience for your store.',
+  path: '/s/bargain',
+})
 
 // Stale theme extensions (pre c134ce14) iframe THIS url instead of
 // /bargain/embed. They pass shop+product+price+mode storefront params.

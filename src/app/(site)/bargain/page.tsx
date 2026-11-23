@@ -5,12 +5,9 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/Button'
 import FeatureCard from '@/components/FeatureCard'
+import { createPageMetadata } from '@/lib/seo'
 
-export const metadata = {
-  title: 'AI Bargaining | CartGain',
-  description: 'CartGain AI bargaining turns “too expensive” into agreed deals while protecting your floor price.',
-  alternates: { canonical: '/bargain' },
-}
+export const metadata = createPageMetadata('/bargain')
 
 const CAPABILITIES = [
   {

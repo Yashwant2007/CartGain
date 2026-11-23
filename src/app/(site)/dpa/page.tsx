@@ -1,11 +1,8 @@
 import { Shield, FileText, Database, Lock, Users, Globe, Mail, Bell, Trash2, CheckCircle, Scale } from 'lucide-react'
 import Link from 'next/link'
+import { createPageMetadata } from '@/lib/seo'
 
-export const metadata = {
-  title: 'Data Processing Agreement - CartGain',
-  description: 'CartGain Data Processing Agreement (DPA) - Our commitment to data protection, GDPR compliance, and data processing terms for merchants.',
-  alternates: { canonical: '/dpa' },
-}
+export const metadata = createPageMetadata('/dpa')
 
 export default function DPAPage() {
   return (

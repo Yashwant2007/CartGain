@@ -36,6 +36,7 @@ const noIndexRoutes = [
   '/login',
   '/signup',
   '/forgot-password',
+  '/reset-password',
   '/verify-email',
   '/setup',
   '/demo',
@@ -44,6 +45,9 @@ const noIndexRoutes = [
   '/shopify-auth-start',
   '/shopify-auth-success',
   '/shopify-connected',
+  '/bargain/embed',
+  '/bargain/claim/:path*',
+  '/cart/:path*',
 ]
 
 const nextConfig = {
