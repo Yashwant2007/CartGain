@@ -15,6 +15,7 @@ import { uiText, currencySymbolFor, formatMoney } from '@/lib/bargain/i18n'
 import { detectLanguage } from '@/lib/bargain/language'
 import { logDataAccess } from '@/lib/data-protection'
 import { clampOfferToSafety } from '@/lib/bargain/engine'
+import { isOverListOffer, overListOfferReply } from '@/lib/bargain/over-list-offer'
 import { detectCouponMention, detectMultiProductRequest } from '@/lib/bargain/policy'
 import { normalizeShippingConfig, computeShipping, shippingUpsellLine } from '@/lib/bargain/shipping'
 import { normalizePaymentConfig, detectPaymentIntent, prepaidSaving } from '@/lib/bargain/payment'
@@ -767,8 +768,17 @@ export async function POST(request: NextRequest) {
       // or refuse with one last, genuinely final counter.
       if (customerOffer != null && customerOffer >= minPrice) {
         const finalPrice = Math.round(Math.min(customerOffer, bargainSession.originalPrice) * 100) / 100
-        const acceptReply =
-          `Done! ${formatMoney(finalPrice, bargainSession.store.currency)} works for me — that's my last round, so let's lock it in. Tap "Accept" and your discount code is generated.`
+        const overListOffer = isOverListOffer(customerOffer, bargainSession.originalPrice)
+        const acceptReply = overListOffer
+          ? overListOfferReply({
+              rawOffer: customerOffer,
+              originalPrice: finalPrice,
+              currencySymbol: currencySymbolFor(bargainSession.store.currency),
+              persona: enginePersonaFor(publishedPersonality(config)),
+              language: lang,
+              customerMessage: interpretedMessage,
+            })
+          : `Done! ${formatMoney(finalPrice, bargainSession.store.currency)} works for me — that's my last round, so let's lock it in. Tap "Accept" and your discount code is generated.`
         await prisma.$transaction([
           prisma.bargainMessage.create({
             data: {
@@ -779,7 +789,13 @@ export async function POST(request: NextRequest) {
           prisma.bargainMessage.create({
             data: {
               sessionId: bargainSession.id, role: 'ai', content: acceptReply, offeredPrice: finalPrice,
-              metadata: { ...turnMetadata, decision: 'accept', tactic: 'accept_final_round', reason: 'budget_spent_but_acceptable' } as any,
+              metadata: {
+                ...turnMetadata,
+                decision: 'accept',
+                tactic: overListOffer ? 'accept_over_list_offer_final_round' : 'accept_final_round',
+                reason: overListOffer ? 'budget_spent_but_generous_over_list' : 'budget_spent_but_acceptable',
+                ...(overListOffer ? { overListOffer: true, rawOffer: customerOffer } : {}),
+              } as any,
             },
           }),
           prisma.bargainSession.update({

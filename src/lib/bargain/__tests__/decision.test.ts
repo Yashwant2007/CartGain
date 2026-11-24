@@ -6,6 +6,7 @@ import {
   computeMinPrice,
   negotiateStep,
   chatFallback,
+  buildSystemPrompt,
   extractJsonObject,
   type NegotiationContext,
 } from '@/lib/services/bargain'
@@ -922,5 +923,52 @@ describe('negotiateStep (best-price asks)', () => {
     expect(result.reply).not.toMatch(/loyal|returning|repeat customer/i)
     expect(result.reply).not.toContain('₹70')
     expect(result.reply).toContain(`₹${(result.counterOffer ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`)
+  })
+})
+
+describe('negotiateStep (over-list offers)', () => {
+  beforeAll(() => {
+    process.env.OPENAI_API_KEY = 'test-key'
+  })
+
+  it('thanks a generous Hinglish buyer, closes at list price, and never calls AI', async () => {
+    mockAIResponse(jest.fn(() => { throw new Error('AI must not be called for an over-list offer') }))
+
+    const result = await negotiateStep(
+      baseCtx({ originalPrice: 729.95, minPrice: 500, language: 'hinglish' }),
+      [],
+      'chlo do laga do 1300 m?',
+      1300,
+    )
+
+    expect(result.decision).toBe('accept')
+    expect(result.counterOffer).toBe(729.95)
+    expect(result.tactic).toBe('accept_over_list_offer')
+    expect(result.reply).toMatch(/Shukriya/i)
+    expect(result.reply).toContain('₹729.95')
+    expect(result.reply).toContain('₹1,300.00')
+    expect(result.reply).toMatch(/listed price se upar charge nahi/i)
+    expect(result.reply.toLowerCase()).not.toMatch(/1300.*acceptable|acceptable.*1300/)
+    expect(result.metadata).toEqual(expect.objectContaining({ aiSource: 'reflex', overListOffer: true, rawOffer: 1300 }))
+  })
+
+  it('teaches the model to close honestly on over-list offers', () => {
+    const prompt = buildSystemPrompt(
+      baseCtx({ originalPrice: 729.95 }),
+      {
+        behavior: 'generous_overbidder',
+        overListOffer: true,
+        customerOfferRaw: 1300,
+        seriousness: 'serious',
+        signals: {},
+        offTopicCount: 0,
+        concessionCount: 0,
+        lastAIOffer: null,
+      } as any,
+    )
+
+    expect(prompt).toContain('OVER-LIST OFFER')
+    expect(prompt).toContain('CUSTOMER STRATEGY: Generous over-list offer')
+    expect(prompt).toContain('Do NOT say their higher offer was accepted')
   })
 })

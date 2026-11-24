@@ -112,7 +112,7 @@ const RE = {
   // Objection language: the shopper is criticising the price, not bidding on it.
   // Used to make sure a figure mentioned in a complaint is never read as an offer.
   complaint: /\b(too\s+(?:much|high|expensive|pricey|steep|costly)|expensive|pricey|costly|overpriced|steep|a\s+lot(?:\s+of\s+(?:money|cash))?|out\s+of\s+(?:my\s+)?(?:budget|range)|above\s+my\s+budget|beyond\s+my\s+budget|not\s+worth|unaffordable|can'?t\s+afford)\b/i,
-  purchaseReady: /\b(i'?ll\s+(take|buy|get|lock)|take\s+it\b|deal\s+done|checkout|order\s+it|buying\s+it|ready\s+to\s+order|let'?s\s+(do\s+it|lock|wrap\s+it|close)|lock\s+(it|this|the\s+deal)|finaliz(e|ing)|accept\s+the\s+(price|deal))/i,
+  purchaseReady: /\b(i'?ll\s+(take|buy|get|lock)|take\s+it\b|deal\s+done|checkout|order\s+it|buying\s+it|ready\s+to\s+order|let'?s\s+(do\s+it|lock|wrap\s+it|close)|lock\s+(it|this|the\s+deal)|finaliz(e|ing)|accept\s+the\s+(price|deal)|chlo\s+(?:do\s+)?laga\s+do|chalo\s+(?:do\s+)?laga\s+do|laga\s+do|lag\s+do|deal\s+kar\s+do|final\s+kar\s+do|order\s+kar\s+do|payment\s+kar\s+(?:do|dunga)|le\s+lunga|le\s+lenge|ready\s+hoon|ready\s+hu|bhej\s+do)/i,
   mismatch: /\b(not\s+my\s+size|different\s+(size|colour|color|variant)|need(ed|s)?\s+it\s+in|available\s+in\s+my|wrong\s+(size|variant)|only\s+(left|have)\s+in)/i,
   trust: /\b(original|genuine|authentic|real|fake|duplicate|trust\b|reviews?|rating|scam|legit|certified)/i,
   quality: /\b(quality|durab(le|ility)|last\s+(long|for)|lasts\s+\w+|sturdy|flimsy|cheap(?:ly)?\s+made|well\s+made|build\s+quality|how\s+is\s+the\s+(build|quality)|broke|broken|defect(?:ive)?|damaged|worth\s+the\s+material)\b/i,

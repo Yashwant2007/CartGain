@@ -52,6 +52,12 @@ describe('analyzeIntent', () => {
     expect(a.intent).toBe('PURCHASE_READY')
   })
 
+  it('classifies Hinglish "do laga do" as readiness to buy', () => {
+    const a = analyzeIntent('chlo do laga do 1300 m?')
+    expect(a.intent).toBe('PURCHASE_READY')
+    expect(a.offersPriceSignal).toBe(true)
+  })
+
   it('classifies walkout threats', () => {
     const a = analyzeIntent('im leaving, forget it')
     expect(a.intent).toBe('WALKOUT')

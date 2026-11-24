@@ -52,6 +52,7 @@ import type { LearningGuidance } from '@/lib/bargain/learning/types'
 import { SHOPKEEPER_PERSONALITY_GUIDANCE } from '@/lib/bargain/experience/personality'
 import { strategyIntentInstruction, strategyPromptBlock } from '@/lib/bargain/experience/strategy'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import { isOverListOffer, overListOfferReply } from '@/lib/bargain/over-list-offer'
 import { findBargainProductOverride, isWooCommerce } from '@/lib/woocommerce/bargain-adapter'
 
 // Negotiation model. Defaults to the fast, low-cost `gpt-4o-mini`, which the
@@ -1847,6 +1848,7 @@ type CustomerBehavior =
   | 'round_number_gamer'
   | 'first_timer'
   | 'combo_tactician'
+  | 'generous_overbidder'
   | 'unknown'
 
 /** How likely this shopper actually intends to buy — drives how much margin to risk. */
@@ -1865,6 +1867,8 @@ export interface ConversationAnalysis {
   repeatedMessage?: boolean
   /** What the repeated message was: a price/offer, or plain talk. */
   repeatedKind?: 'offer' | 'talk' | null
+  overListOffer?: boolean
+  customerOfferRaw?: number | null
 }
 
 // Normalize a message for near-duplicate comparison: lowercase, strip
@@ -1941,6 +1945,7 @@ function analyzeConversation(
   history: { role: 'customer' | 'ai'; content: string; offeredPrice?: number }[],
   customerMessage: string,
   ctx: NegotiationContext,
+  rawOffer?: number | null,
 ): ConversationAnalysis {
   const customerMessages = history
     .filter(m => m.role === 'customer')
@@ -1974,9 +1979,13 @@ function analyzeConversation(
     }
   }
 
+  const overListOffer = isOverListOffer(rawOffer, ctx.originalPrice)
+
   let behavior: CustomerBehavior = 'unknown'
 
-  if (ctx.customerContext) {
+  if (overListOffer) {
+    behavior = 'generous_overbidder'
+  } else if (ctx.customerContext) {
     behavior = 'repeat_returner'
   }
 
@@ -1989,7 +1998,9 @@ function analyzeConversation(
     /(?:cash|upi|immediate|right now)/i.test(allCustomerText),
   ].filter(Boolean).length
 
-  if (tacticCount >= 2) {
+  if (overListOffer) {
+    behavior = 'generous_overbidder'
+  } else if (tacticCount >= 2) {
     behavior = 'combo_tactician'
   } else if (/(?:student|birthday|sympathy|tight budget|can.?t afford|single mother|unemployed)/i.test(allCustomerText)) {
     behavior = 'emotional_appealer'
@@ -2027,6 +2038,8 @@ function analyzeConversation(
     seriousness: classifySeriousness(history, customerMessage, ctx, offTopicCount),
     repeatedMessage,
     repeatedKind,
+    overListOffer,
+    customerOfferRaw: rawOffer ?? null,
     signals: analyzeSocialSignals({
       history,
       currentMessage: customerMessage,
@@ -2046,6 +2059,13 @@ function buildBehaviorHint(
   currencySymbol: string,
 ): string {
   const hints: Record<CustomerBehavior, string> = {
+    generous_overbidder:
+      `CUSTOMER STRATEGY: Generous over-list offer. They are ready to buy or ` +
+      `confused about the list price. Acknowledge the buying signal warmly, ` +
+      `state the true listed price, and close at that price. Never imply their ` +
+      `higher number was accepted, never charge above the list price, and never ` +
+      `invent urgency, scarcity, competitor matching, or an unpaid extra.`,
+
     lowball_opener:
       `CUSTOMER STRATEGY: Lowball opener. They expect to negotiate. Counter HIGH, ` +
       `nearer the listed price than your best. Don't panic-match their low anchor. ` +
@@ -2424,6 +2444,17 @@ export function buildSystemPrompt(
   }
   contextParts.push(seriousnessGuidance[conversationAnalysis.seriousness])
 
+  if (conversationAnalysis.overListOffer && conversationAnalysis.customerOfferRaw != null) {
+    const raw = conversationAnalysis.customerOfferRaw.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+    const list = ctx.originalPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+    contextParts.push(
+      `OVER-LIST OFFER: The shopper offered ${currencySymbol}${raw} while the item is listed at ${currencySymbol}${list}. ` +
+      `Treat this as strong buying intent or confusion, not a reason to invent a discount or charge more. ` +
+      `Acknowledge their generosity, state the honest listed price, and close at the listed price. ` +
+      `Do NOT say their higher offer was accepted, and do NOT imply stock limits, urgency, competitor matching, or an unpaid extra.`
+    )
+  }
+
   if (conversationAnalysis.lastAIOffer != null && conversationAnalysis.lastAIOffer > 0) {
     contextParts.push(
       `CURRENT PUBLIC COUNTER: ${currencySymbol}${conversationAnalysis.lastAIOffer.toLocaleString('en-IN', { maximumFractionDigits: 2 })}. ` +
@@ -2791,14 +2822,15 @@ export async function negotiateStep(
   trace?: AiAttemptTrace,
 ): Promise<NegotiationResult> {
   // ── INPUT VALIDATION ──
-  let validatedOffer = customerOffer != null ? customerOffer : null
+  const rawCustomerOffer = customerOffer != null && customerOffer >= 0 ? customerOffer : null
+  let validatedOffer = rawCustomerOffer
   if (validatedOffer != null) {
     if (validatedOffer < 0) validatedOffer = 0
     if (validatedOffer > ctx.originalPrice) validatedOffer = ctx.originalPrice
   }
   // ── END INPUT VALIDATION ──
 
-  const conversationAnalysis = analyzeConversation(history, customerMessage, ctx)
+  const conversationAnalysis = analyzeConversation(history, customerMessage, ctx, rawCustomerOffer)
 
   // ── ABUSE DETECTION ──
   if (sessionId) {
@@ -2865,6 +2897,30 @@ export async function negotiateStep(
       tactic: 'absurd_offer',
       sentiment: ctx.persona === 'playful_friend' ? 'playful' : ctx.persona === 'strict_negotiator' ? 'firm' : 'warm',
       metadata: { aiSource: 'reflex', absurdOffer: true, offer: validatedOffer, absurdStreak },
+    }
+  }
+
+  if (isOverListOffer(rawCustomerOffer, ctx.originalPrice)) {
+    const rawOffer = rawCustomerOffer as number
+    return {
+      reply: overListOfferReply({
+        rawOffer,
+        originalPrice: ctx.originalPrice,
+        currencySymbol: ctx.currencySymbol,
+        persona: ctx.persona,
+        language: ctx.language,
+        customerMessage,
+      }),
+      decision: 'accept',
+      counterOffer: ctx.originalPrice,
+      tactic: 'accept_over_list_offer',
+      sentiment: ctx.persona === 'strict_negotiator' ? 'firm' : ctx.persona === 'playful_friend' ? 'playful' : 'warm',
+      metadata: {
+        aiSource: 'reflex',
+        overListOffer: true,
+        rawOffer,
+        behavior: 'generous_overbidder',
+      },
     }
   }
 

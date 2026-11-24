@@ -220,6 +220,23 @@ describe('offer route — attempt budget (chat must not cost an attempt)', () =>
     expect(body.reply).not.toMatch(/used all your attempts/i)
   })
 
+  it('understands a generous over-list final offer and closes at the honest list price', async () => {
+    prismaMock.bargainSession.findUnique.mockResolvedValue(activeSession(2))
+
+    const res = await POST(makeRequest('chlo do laga do 900 m?'))
+    const body = await res.json()
+
+    expect(body.decision).toBe('accept')
+    expect(body.finalPrice).toBe(600)
+    expect(body.sessionStatus).toBe('active')
+    expect(body.reply).toMatch(/Shukriya/i)
+    expect(body.reply).toContain('$600.00')
+    expect(body.reply).toContain('$900.00')
+    expect(body.reply).toMatch(/listed price se upar charge nahi/i)
+    expect(body.reply.toLowerCase()).not.toMatch(/900.*acceptable|acceptable.*900/)
+    expect(modelCalls).toBe(0)
+  })
+
   it('gives a real final code and leaves the decision to the shopper when the last offer loses', async () => {
     prismaMock.bargainSession.findUnique.mockResolvedValue(activeSession(2))
 
