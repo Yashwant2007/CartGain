@@ -1353,7 +1353,23 @@ export default function HomePage() {
             </div>
           </div>
           <div className="border-t border-gray-800 pt-8 sm:pt-12 text-center text-gray-400 text-xs sm:text-sm">
-            © 2026 CartGain. AI revenue recovery &amp; negotiation for e-commerce. All rights reserved.
+            <p>© 2026 CartGain. AI revenue recovery &amp; negotiation for e-commerce. All rights reserved.</p>
+            <a
+              href="https://scorebadge.com/site/cart-gain.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex items-center justify-center rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+            >
+              <Image
+                src="https://scorebadge.com/badge/cart-gain.com.svg"
+                alt="cart-gain.com website score on ScoreBadge"
+                width={120}
+                height={22}
+                unoptimized
+                loading="lazy"
+                className="h-[22px] w-auto"
+              />
+            </a>
           </div>
         </div>
       </footer>
