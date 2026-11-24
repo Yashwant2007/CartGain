@@ -19,6 +19,7 @@ import {
   normalizeCustomerId,
 } from '@/lib/data-export'
 import { computeRefundNetting, isMessageAttributable } from '@/lib/attribution'
+import { RECOVERY_DELIVERED_STATUSES } from '@/lib/recovery/message-status'
 import { attributeBargainGoal, netBargainGoalRefund } from '@/lib/bargain/goals'
 import { recordLearningRefund } from '@/lib/bargain/learning/outcomes'
 import { attributeBargainPurchase, rememberConfirmedOrder, netBargainPurchaseRefund } from '@/lib/bargain/purchase'
@@ -909,7 +910,7 @@ async function processOrderCreate(data: any, store: any, domain: string) {
   const attributingMessage = await prisma.message.findFirst({
     where: {
       cartId: cart.id,
-      status: { in: ['sent', 'delivered'] as const },
+      status: { in: RECOVERY_DELIVERED_STATUSES },
       // Query a superset window; the canonical eligibility predicate then makes
       // the final call so the rule lives in ONE place (see attribution.ts).
       sentAt: { lte: orderCreatedAt, gte: windowStart },

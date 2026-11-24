@@ -12,7 +12,7 @@ import {
 } from '@/lib/whatsapp/errors'
 import { resolveRecoveryOffer } from '@/lib/recovery/offer'
 import { enrichCartItemsWithImages } from '@/lib/recovery/product-image'
-import { buildRecoveryLink } from '@/lib/recovery/links'
+import { buildRecoveryLink, recoveryAppBase } from '@/lib/recovery/links'
 import { getRecoveryShortLink } from '@/lib/recovery/short-links'
 import { buildRecoveryOfferLine } from '@/lib/recovery/offer-line'
 import { composeRecoveryMessage, singleLineMessage, stripLeadingGreeting } from '@/lib/conversation/recovery'
@@ -39,6 +39,12 @@ import {
   ensureRecipientForCart,
   markRecipientContacted,
 } from '@/lib/recovery/recipients'
+import {
+  isRecoveryDeliveredStatus,
+  isRecoveryTerminalStatus,
+  RECOVERY_DELIVERED_STATUSES,
+  RECOVERY_TERMINAL_STATUSES,
+} from '@/lib/recovery/message-status'
 import { isWhatsAppConfigured, resolveWhatsAppUtilityTemplateName } from '@/lib/whatsapp/config'
 import { decideWhatsAppMessage } from '@/lib/whatsapp/decision'
 import {
@@ -90,7 +96,7 @@ async function recordSkippedStep(
   )
   try {
     if (existing) {
-      if (existing.status === 'sent' || existing.status === 'delivered') return
+      if (isRecoveryTerminalStatus(existing.status)) return
       await prisma.message.update({
         where: { id: existing.id },
         data: { status: 'skipped', reasonCode: input.reason },
@@ -266,7 +272,7 @@ async function getCartsUsedForStore(userId: string, subscription: any): Promise<
           gte: subscription.currentPeriodStart,
           lte: subscription.currentPeriodEnd,
         },
-        status: 'sent',
+        status: { in: RECOVERY_DELIVERED_STATUSES },
       },
     })
     const total = count.length
@@ -286,7 +292,7 @@ async function getCartsUsedForStore(userId: string, subscription: any): Promise<
         gte: subscription.currentPeriodStart,
         lte: subscription.currentPeriodEnd,
       },
-      status: 'sent',
+      status: { in: RECOVERY_DELIVERED_STATUSES },
     },
   })
   return count.length
@@ -343,7 +349,7 @@ async function processStore(campaign: any, limit: number): Promise<{ sent: numbe
         by: ['cartId'],
         where: {
           campaign: { userId: campaign.userId },
-          status: 'sent',
+          status: { in: RECOVERY_DELIVERED_STATUSES },
         },
       })
       const cartsUsed = processedCarts.length
@@ -508,7 +514,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             : { customerPhone: { in: Array.from(phones) } }
         ),
       },
-      status: 'sent',
+      status: { in: RECOVERY_DELIVERED_STATUSES },
     },
     select: {
       channel: true,
@@ -554,7 +560,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
               storeId: store.id,
               OR: orConditions,
             },
-            status: { in: ['sent', 'delivered'] },
+            status: { in: RECOVERY_DELIVERED_STATUSES },
             channel: 'whatsapp',
           },
           take: 1,
@@ -594,8 +600,8 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     // deliberately `skipped` (channel unreachable / blocked for this contact).
     // A `failed` message is NOT terminal: the step stays current so it can be
     // retried with backoff instead of being skipped over.
-    const completedMessages = cart.messages.filter(
-      (m: any) => m.status === 'sent' || m.status === 'delivered',
+    const completedMessages = cart.messages.filter((m: any) =>
+      isRecoveryTerminalStatus(m.status),
     )
     const recipient = findRecipientForCart(recipients, cart)
     const contactEmail = cart.customerEmail || recipient?.email || null
@@ -678,7 +684,8 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     // complete an order, so a follow-up about that cart is allowed until they
     // unsubscribe. WhatsApp still requires explicit consent. A contact who only
     // opted into WhatsApp (basis `none`) is not emailed.
-    const emailReachable = Boolean(cart.customerEmail) && canSendRecoveryEmail(recipient)
+    const emailReachable =
+      Boolean(cart.customerEmail) && canSendRecoveryEmail(recipient, cart.customerEmail)
     if (cart.customerEmail && !emailReachable && effActiveChannels.includes('email')) {
       const reason = recipient?.suppressed || recipient?.optedOutAt
         ? 'email_suppressed'
@@ -831,7 +838,9 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     const periodStartMs = subscription?.currentPeriodStart ? new Date(subscription.currentPeriodStart).getTime() : 0
     const isNewCartInPeriod =
       cartOverageActive &&
-      !cart.messages.some((m: any) => m.status === 'sent' && m.sentAt && new Date(m.sentAt).getTime() >= periodStartMs)
+      !cart.messages.some(
+        (m: any) => isRecoveryDeliveredStatus(m.status) && m.sentAt && new Date(m.sentAt).getTime() >= periodStartMs,
+      )
 
 
     // Never pass a placeholder or an email address into the AI: it will greet
@@ -896,7 +905,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       },
     })
 
-    const appUrlBase = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
+    const appUrlBase = recoveryAppBase()
 
     // The offer is whatever the pricing layer authorised above — the copy layer
     // may DESCRIBE it, never invent or alter it.
@@ -959,12 +968,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     // concurrent worker; a sent/delivered/skipped row is terminal. A stale
     // pending row (>10 min) or a failed row is reused, so a retry sends once.
     const existingMessage: any = cart.messages.find((m: any) => m.channel === ch && m.step === step)
-    if (
-      existingMessage &&
-      (existingMessage.status === 'sent' ||
-        existingMessage.status === 'delivered' ||
-        existingMessage.status === 'skipped')
-    ) {
+    if (existingMessage && isRecoveryTerminalStatus(existingMessage.status)) {
       return { sent: 0, failed: 0 }
     }
     const stalePending =
@@ -1085,6 +1089,12 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
       }
 
       if (ch === 'email') {
+        const emailCheckoutUrl = (await linkFor('email', 'checkout')).url
+        const emailBargainUrl = (await linkFor('email', 'bargain')).url
+        const emailOptOutUrl = buildOptOutUrl(appUrlBase, {
+          storeId: store.id,
+          email: cart.customerEmail,
+        })
         const emailHtml = EmailTemplates.abandoned(
           personalName || '',
           cartItems,
@@ -1093,21 +1103,29 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           store.name,
           currencySymbol,
           composed.body,
-          buildOptOutUrl(appUrlBase, { storeId: store.id, email: cart.customerEmail }),
+          emailOptOutUrl,
           {
             emoji: voice.emojiIntensity !== 'off',
             offer: authorisedDiscount,
-            checkoutUrl: (await linkFor('email', 'checkout')).url,
-            bargainUrl: (await linkFor('email', 'bargain')).url,
+            checkoutUrl: emailCheckoutUrl,
+            bargainUrl: emailBargainUrl,
             headline: composed.headline,
             cta: composed.cta,
           },
         )
+        const textLinks = [
+          authorisedDiscount?.code && !composed.body.includes(authorisedDiscount.code)
+            ? `Use code ${authorisedDiscount.code} at checkout.`
+            : '',
+          `${composed.cta || 'Complete your order'}: ${emailCheckoutUrl}`,
+          `Prefer to name your price: ${emailBargainUrl}`,
+          `Unsubscribe: ${emailOptOutUrl}`,
+        ].filter(Boolean)
         const emailResult = await sendEmail({
           to: cart.customerEmail!,
           subject: composed.subject || `${personalName ? `${personalName}, ` : ''}your cart is still saved`,
           html: emailHtml,
-          text: composed.body,
+          text: [composed.body, ...textLinks].join('\n\n'),
         })
         sendSuccess = emailResult.success
         providerId = emailResult.messageId
@@ -1159,6 +1177,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           code: authorisedDiscount?.code,
           linkType,
           linkUrl,
+          includeLink: false,
         })
 
         const previousFailure = existingMessage?.status === 'failed'
@@ -1230,9 +1249,14 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           // The customer messaged us in the last 24h. Meta allows free-form
           // text in that window and the per-user marketing-template limit
           // (131049) does not apply, so use the same copy + offer + links.
+          const freeFormLinkLine =
+            linkType === 'bargain'
+              ? `Name your price: ${linkUrl}`
+              : `Complete your order: ${linkUrl}`
           whatsappFreeFormBody = [
             stripLeadingGreeting(composed.body, personalName).trim(),
             offerLine,
+            freeFormLinkLine,
           ]
             .filter(Boolean)
             .join('\n\n')

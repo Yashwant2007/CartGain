@@ -100,7 +100,7 @@ describe('GET /r/[id] — recovery redirect', () => {
     await GET(request('?c=email'), { params: { id: 'cart_1' } })
 
     expect(prismaMock.message.findFirst).toHaveBeenCalledWith({
-      where: { cartId: 'cart_1', status: { in: ['sent', 'delivered'] }, channel: 'email' },
+      where: { cartId: 'cart_1', status: { in: ['sent', 'delivered', 'read'] }, channel: 'email' },
       orderBy: { sentAt: 'desc' },
     })
     expect(prismaMock.message.update).toHaveBeenCalledWith({

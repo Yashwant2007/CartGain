@@ -109,4 +109,16 @@ describe('buildRecoveryOfferLine', () => {
     expect(checkout).toContain('🛒 Complete your order: https://cart-gain.com/r/abc')
     expect(bargain).toContain('💬 Name your price: https://cart-gain.com/r/def')
   })
+
+  it('omits inline links when the template button carries the CTA', () => {
+    const line = buildRecoveryOfferLine({
+      productSummary: 'Snowboard',
+      linkType: 'checkout',
+      linkUrl: 'https://cart-gain.com/r/abc',
+      includeLink: false,
+    })
+
+    expect(line).toContain('claim it now!')
+    expect(line).not.toContain('https://')
+  })
 })

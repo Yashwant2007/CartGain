@@ -31,6 +31,7 @@ export type RecoveryOfferLineInput = {
   linkType?: 'checkout' | 'bargain' | null
   /** Short redirect URL to append as text when linkType is set. */
   linkUrl?: string | null
+  includeLink?: boolean
 }
 
 export function buildRecoveryOfferLine(input: RecoveryOfferLineInput): string {
@@ -66,7 +67,7 @@ export function buildRecoveryOfferLine(input: RecoveryOfferLineInput): string {
   // bargain on reminder 2+. The label is the CTA; the URL is the store's own
   // tracked link, never a client-supplied one.
   let linkLine = ''
-  if (input.linkType && input.linkUrl) {
+  if (input.includeLink !== false && input.linkType && input.linkUrl) {
     const label = input.linkType === 'bargain' ? '💬 Name your price:' : '🛒 Complete your order:'
     linkLine = `\n${label} ${input.linkUrl}`
   }

@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.campaign.findMany({ where: { storeId } }),
       prisma.message.findFirst({
-        where: { cart: { storeId }, status: 'sent' },
+        where: { cart: { storeId }, status: { in: ['sent', 'delivered', 'read'] } },
         orderBy: { createdAt: 'asc' },
       }),
     ])

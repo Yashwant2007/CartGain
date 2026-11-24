@@ -15,6 +15,7 @@
  */
 
 import { cartHasResumeToken } from './checkout-url'
+import { CANONICAL_ORIGIN } from '@/lib/seo'
 
 export type RecoveryLinkKind = 'cart' | 'bargain' | 'checkout'
 
@@ -26,8 +27,8 @@ export function isSafeDiscountCode(code: unknown): code is string {
 
 /** The public origin our redirect links live on. */
 export function recoveryAppBase(appUrl?: string | null): string {
-  const raw = (appUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? '').trim()
-  return raw.replace(/\/$/, '')
+  const raw = (appUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? CANONICAL_ORIGIN).trim()
+  return (raw || CANONICAL_ORIGIN).replace(/\/$/, '')
 }
 
 /**

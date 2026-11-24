@@ -1,22 +1,22 @@
 # CartGain
 
-> AI-powered cart recovery and negotiation platform for Shopify, WooCommerce, and other e-commerce stores.
+> Cart recovery and AI bargaining software for Shopify and WooCommerce merchants.
 
-CartGain helps merchants recover abandoned carts with consent-gated WhatsApp and Email journeys, and converts price objections with an AI shopkeeper that never prices below the merchant-set floor.
+CartGain helps merchants recover abandoned carts with consent-gated email and WhatsApp reminders, and answer shopper price objections with an AI shopkeeper that stays inside merchant-set pricing rules.
 
 ## Key features
 
-- AI cart recovery with explicit opt-in, quiet hours, and refund-aware analytics
-- AI price negotiation widget with server-authoritative pricing and a real discount code
+- Abandoned-cart recovery with explicit email and WhatsApp opt-in, quiet hours, tracked links, and refund-aware analytics
+- AI bargaining with server-authoritative pricing, merchant-controlled minimum prices, and real discount codes
 - Shopify and WooCommerce integrations
-- Storefront experience studio, shopkeeper personalities, and A/B testing
-- Legal pages, API docs, and a public demo
+- Storefront experience settings for shopkeeper personality, invitation design, and published variants
+- Merchant analytics for recovery revenue, bargain funnels, and experiment cohorts
 
 ## Documentation
 
 - [Website](https://cart-gain.com)
 - [Pricing](https://cart-gain.com/pricing)
-- [AI negotiator](https://cart-gain.com/bargain)
+- [AI bargaining](https://cart-gain.com/bargain)
 - [API documentation](https://cart-gain.com/docs/api)
 - [Contact](https://cart-gain.com/contact)
 

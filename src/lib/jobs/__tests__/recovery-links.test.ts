@@ -222,7 +222,7 @@ describe('recovery message wiring', () => {
     expect(body[2]).toContain('SAVE15')
     expect(body[2]).toContain('15% off')
     expect(body[2]).toContain("It's still yours — claim it now!")
-    expect(body[2]).toContain('https://cart-gain.com/r/lCheck123')
+    expect(body[2]).not.toContain('https://')
     expect(body[2]).not.toContain('to=bargain')
     // Button should use the classy CTA for the checkout link
     expect(lastWhatsAppParams().buttons).toEqual([
@@ -236,7 +236,7 @@ describe('recovery message wiring', () => {
     const body: string[] = lastWhatsAppParams().body
     expect(body[2]).not.toContain('code')
     expect(body[2]).toContain("It's still yours — claim it now!")
-    expect(body[2]).toContain('https://cart-gain.com/r/lCheck123')
+    expect(body[2]).not.toContain('https://')
     expect(body[2]).not.toContain('to=bargain')
     expect(lastWhatsAppParams().buttons).toEqual([
       { type: 'url', text: 'Claim Your Item', url: 'lCheck123' },

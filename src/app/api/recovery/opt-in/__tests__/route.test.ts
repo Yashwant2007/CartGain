@@ -70,7 +70,13 @@ beforeEach(() => {
   prismaMock.cart.findUnique.mockResolvedValue(null)
   prismaMock.cart.update.mockResolvedValue({})
   prismaMock.recoveryJourney.findFirst.mockResolvedValue(null)
-  consentMock.mockResolvedValue({ id: 'identity-1' })
+  consentMock.mockResolvedValue({
+    id: 'identity-1',
+    email: 'buyer@example.com',
+    phone: '+919876543210',
+    consentEmail: true,
+    consentWhatsApp: true,
+  })
   journeyMock.mockResolvedValue({ id: 'journey-1' })
   rateMock.mockResolvedValue({ allowed: true, retryAfter: 0 })
   productContextMock.mockResolvedValue({

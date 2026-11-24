@@ -140,6 +140,6 @@ describe('computeRefundNetting — recognized revenue is net of cumulative refun
 
 describe('ATTRIBUTABLE_MESSAGE_STATUSES', () => {
   it('lists exactly the statuses that earn credit', () => {
-    expect([...ATTRIBUTABLE_MESSAGE_STATUSES]).toEqual(['sent', 'delivered'])
+    expect([...ATTRIBUTABLE_MESSAGE_STATUSES]).toEqual(['sent', 'delivered', 'read'])
   })
 })

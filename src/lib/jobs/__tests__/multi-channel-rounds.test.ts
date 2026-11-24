@@ -202,6 +202,23 @@ describe('recovery sequence — one channel per sweep', () => {
     expect(created).toMatchObject({ channel: 'email', step: 1 })
   })
 
+  it('treats a read message as a completed step', async () => {
+    prismaMock.campaign.findMany.mockResolvedValue([campaign()])
+    prismaMock.cart.findMany
+      .mockResolvedValueOnce([
+        cart({
+          messages: [{ channel: 'whatsapp', status: 'read', step: 0 }],
+        }),
+      ])
+      .mockResolvedValue([])
+
+    const result = await processAbandonedCarts(25)
+
+    expect(result.messagesSent).toBe(1)
+    expect(whatsappMock).not.toHaveBeenCalled()
+    expect(emailMock).toHaveBeenCalledTimes(1)
+  })
+
   it('holds the next step until its scheduled follow-up delay has elapsed', async () => {
     prismaMock.campaign.findMany.mockResolvedValue([campaign()])
     prismaMock.cart.findMany

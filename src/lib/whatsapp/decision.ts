@@ -20,7 +20,7 @@
  */
 
 import { evaluateWhatsAppEligibility, WhatsAppEligibilityResult } from '@/lib/recovery/eligibility'
-import { isEngagementLimitedWhatsAppFailure, isPermanentWhatsAppFailure, isConfigWhatsAppFailure } from '@/lib/whatsapp/errors'
+import { isEngagementLimitedReason, isEngagementLimitedWhatsAppFailure, isPermanentWhatsAppFailure, isConfigWhatsAppFailure } from '@/lib/whatsapp/errors'
 import { resolveWhatsAppPhoneNumberId, isWhatsAppConfigured } from '@/lib/whatsapp/config'
 
 /**
@@ -148,7 +148,10 @@ export function decideWhatsAppMessage(
 
     // 131049 / 130472: per-user marketing limit. Do not retry immediately.
     // Fall back to email for this round.
-    if (isEngagementLimitedWhatsAppFailure({ errorCode, error, errorDetails, errorSubcode })) {
+    if (
+      isEngagementLimitedWhatsAppFailure({ errorCode, error, errorDetails, errorSubcode }) ||
+      isEngagementLimitedReason(error)
+    ) {
       // A marketing-template throttle is exactly the case the utility template
       // is for. Retry through that approved path instead of giving up on WhatsApp.
       if (utilityTemplateName && recentCartActivity) {

@@ -1,5 +1,6 @@
 import prisma from '@/lib/db'
 import { computeRefundNetting, isMessageAttributable } from '@/lib/attribution'
+import { RECOVERY_DELIVERED_STATUSES } from '@/lib/recovery/message-status'
 import { attributeBargainGoal, netBargainGoalRefund } from '@/lib/bargain/goals'
 import { recordLearningRefund } from '@/lib/bargain/learning/outcomes'
 import {
@@ -166,7 +167,7 @@ export async function attributeWooRecoveryOrder(
   const message = await prisma.message.findFirst({
     where: {
       cartId,
-      status: { in: ['sent', 'delivered'] as const },
+      status: { in: RECOVERY_DELIVERED_STATUSES },
       sentAt: { lte: orderedAt, gte: windowStart },
     },
     orderBy: { sentAt: 'desc' },

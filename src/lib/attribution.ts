@@ -30,9 +30,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { ATTRIBUTION_WINDOW_HOURS } from '@/lib/payment'
+import { RECOVERY_DELIVERED_STATUSES } from '@/lib/recovery/message-status'
 
 /** Message statuses that count as "delivered to the buyer". */
-export const ATTRIBUTABLE_MESSAGE_STATUSES = ['sent', 'delivered'] as const
+export const ATTRIBUTABLE_MESSAGE_STATUSES = RECOVERY_DELIVERED_STATUSES
 
 /**
  * Pure eligibility predicate for a single recovery message.

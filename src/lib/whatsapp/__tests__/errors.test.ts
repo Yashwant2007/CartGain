@@ -55,7 +55,7 @@ describe('WhatsApp failure classification', () => {
     expect(
       isEngagementLimitedReason('provider_failed:130472:Message was not sent as part of an experiment'),
     ).toBe(true)
-    expect(isEngagementLimitedReason('whatsapp_engagement_limited')).toBe(false)
+    expect(isEngagementLimitedReason('whatsapp_engagement_limited')).toBe(true)
     expect(isEngagementLimitedReason('provider_failed:131026:Message undeliverable')).toBe(false)
     expect(isEngagementLimitedReason(null)).toBe(false)
   })

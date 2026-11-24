@@ -18,6 +18,8 @@
 // with maxFollowUps=2 yields: email, whatsapp, email, whatsapp. That preserves
 // "two follow-ups per channel" (each channel advances through every round).
 
+import { RECOVERY_TERMINAL_STATUSES } from '@/lib/recovery/message-status'
+
 export type RecoveryChannel = 'email' | 'whatsapp'
 
 export const SUPPORTED_RECOVERY_CHANNELS: readonly RecoveryChannel[] = ['email', 'whatsapp']
@@ -72,7 +74,7 @@ export type BuildSequenceOptions = {
   maxRounds?: number
 }
 
-const COMPLETED_MESSAGE_STATUSES = new Set(['sent', 'delivered', 'skipped'])
+const COMPLETED_MESSAGE_STATUSES = new Set(RECOVERY_TERMINAL_STATUSES)
 
 export function isSupportedRecoveryChannel(value: string): value is RecoveryChannel {
   return (SUPPORTED_RECOVERY_CHANNELS as readonly string[]).includes(value)

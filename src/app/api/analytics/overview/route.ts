@@ -89,8 +89,8 @@ async function computeChannelStats(storeId: string, startDate: Date, endDate: Da
       channel,
       -- "Sent" only counts messages the provider accepted. Skipped, failed and
       -- still-pending rows are tracked separately and never inflate this number.
-      COUNT(*) FILTER (WHERE status IN ('sent', 'delivered')) as sent,
-      COUNT(*) FILTER (WHERE status = 'delivered') as delivered,
+      COUNT(*) FILTER (WHERE status IN ('sent', 'delivered', 'read')) as sent,
+      COUNT(*) FILTER (WHERE status IN ('delivered', 'read')) as delivered,
       COUNT(*) FILTER (WHERE "clickedAt" IS NOT NULL) as clicked,
       -- A cart can produce several messages on the same channel. Count each
       -- converted cart ONCE (the old SUM over message rows double-counted a
@@ -203,7 +203,7 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
         createdAt: { gte: startDate, lt: endDate },
         // A skipped/failed/pending row was never sent. Keep this count distinct
         // from carts abandoned and carts recovered instead of adding them up.
-        status: { in: ['sent', 'delivered'] },
+        status: { in: ['sent', 'delivered', 'read'] },
       },
     }),
     prisma.$queryRawUnsafe<Array<{
@@ -256,7 +256,7 @@ async function computePeriodData(storeId: string, userId: string, startDate: Dat
       SELECT DISTINCT ON (rc."cartId")
         EXTRACT(EPOCH FROM (rc."recoveredAt" - m."sentAt")) / 3600 as hours
       FROM "RecoveredCart" rc
-      JOIN "Message" m ON m."cartId" = rc."cartId" AND m.status IN ('sent', 'delivered')
+      JOIN "Message" m ON m."cartId" = rc."cartId" AND m.status IN ('sent', 'delivered', 'read')
       WHERE rc."storeId" = $1
         AND rc."recoveredAt" >= $2
         AND rc."recoveredAt" < $3

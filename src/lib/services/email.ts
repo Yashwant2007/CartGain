@@ -325,7 +325,7 @@ export const EmailTemplates = {
                 <tr>
                   <td align="center">
                     <a href="${safeHref(opts?.checkoutUrl || cartUrl)}" style="display: inline-block; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: #ffffff; text-decoration: none; padding: 16px 56px; border-radius: 999px; font-weight: 700; font-size: 16px; box-shadow: 0 18px 40px -20px rgba(79, 70, 229, 0.9);">${escapeHtml(ctaLabel)} ${showEmoji ? '→' : ''}</a>
-                    <div style="margin-top: 10px; font-size: 13px; color: #94a3b8;">Secure checkout • Takes less than a minute</div>
+                    <div style="margin-top: 10px; font-size: 13px; color: #94a3b8;">Your saved cart opens in the store&rsquo;s checkout.</div>
                   </td>
                 </tr>
                 ${
@@ -334,7 +334,7 @@ export const EmailTemplates = {
                 <tr>
                   <td align="center" style="padding-top: 16px;">
                     <a href="${safeHref(opts.bargainUrl)}" style="display: inline-block; background: #ffffff; color: #4338ca; text-decoration: none; padding: 14px 40px; border-radius: 999px; font-weight: 700; font-size: 15px; border: 1px solid #c7d2fe;">${showEmoji ? '💬' : ''} Prefer to name your price? Make an offer →</a>
-                    <div style="margin-top: 10px; font-size: 13px; color: #94a3b8;">Tell us what works for you — we usually meet you there.</div>
+                    <div style="margin-top: 10px; font-size: 13px; color: #94a3b8;">Open the bargaining widget to make an offer.</div>
                   </td>
                 </tr>
                 `
@@ -391,7 +391,7 @@ export const EmailTemplates = {
     </div>
 
     <p style="text-align: center; color: #666; font-size: 14px;">
-      Offer expires in 24 hours. Don't miss out!
+      Use the code at checkout, or unsubscribe any time.
     </p>
 
     <div class="footer">

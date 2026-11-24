@@ -298,6 +298,7 @@ describe('email consent basis', () => {
   it('treats a transactional Shopify address as reachable without marketing consent', () => {
     expect(
       canSendRecoveryEmail({
+        email: 'buyer@example.com',
         consentEmail: false,
         emailConsentBasis: 'transactional',
         consentSource: 'shopify_checkout',
@@ -310,6 +311,7 @@ describe('email consent basis', () => {
   it('does not email a WhatsApp-only opt-in or a suppressed/opted-out contact', () => {
     expect(
       canSendRecoveryEmail({
+        email: null,
         consentEmail: false,
         emailConsentBasis: 'none',
         consentSource: 'whatsapp_keyword',
@@ -319,6 +321,7 @@ describe('email consent basis', () => {
     ).toBe(false)
     expect(
       canSendRecoveryEmail({
+        email: 'buyer@example.com',
         consentEmail: true,
         emailConsentBasis: 'explicit',
         consentSource: 'storefront_product_opt_in',
@@ -328,6 +331,7 @@ describe('email consent basis', () => {
     ).toBe(false)
     expect(
       canSendRecoveryEmail({
+        email: 'buyer@example.com',
         consentEmail: true,
         emailConsentBasis: 'explicit',
         consentSource: 'storefront_product_opt_in',
@@ -335,6 +339,20 @@ describe('email consent basis', () => {
         optedOutAt: new Date(),
       }),
     ).toBe(false)
+  })
+
+  it('does not send explicit consent to a different destination address', () => {
+    const identity = {
+      email: 'consented@example.com',
+      consentEmail: true,
+      emailConsentBasis: 'explicit' as const,
+      consentSource: 'storefront_product_opt_in',
+      suppressed: false,
+      optedOutAt: null,
+    }
+
+    expect(canSendRecoveryEmail(identity, 'consented@example.com')).toBe(true)
+    expect(canSendRecoveryEmail(identity, 'cart@example.com')).toBe(false)
   })
 })
 

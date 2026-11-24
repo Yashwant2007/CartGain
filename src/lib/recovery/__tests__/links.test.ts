@@ -73,6 +73,11 @@ describe('recovery links', () => {
     expect(recoveryAppBase()).toBe('https://cart-gain.com')
   })
 
+  it('falls back to the canonical origin when no app url is configured', () => {
+    delete process.env.NEXT_PUBLIC_APP_URL
+    expect(recoveryAppBase()).toBe('https://cart-gain.com')
+  })
+
   it('builds the store checkout with the discount applied', () => {
     expect(
       buildStoreCheckoutLink({

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/db'
+import { isRecoveryDeliveredStatus } from '@/lib/recovery/message-status'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,8 +41,10 @@ export async function GET(
     // provider confirmed delivery. The two used to be the same expression, so
     // the delivery rate was always 100% and a merchant could never see how
     // many messages actually reached the inbox.
-    const totalMessagesSent = messages.filter((m) => m.status === 'sent' || m.status === 'delivered').length
-    const totalMessagesDelivered = messages.filter((m) => m.status === 'delivered').length
+    const totalMessagesSent = messages.filter((m) => isRecoveryDeliveredStatus(m.status)).length
+    const totalMessagesDelivered = messages.filter((m) =>
+      m.status === 'delivered' || m.status === 'read',
+    ).length
     const totalMessagesClicked = messages.filter((m) => m.clickedAt).length
     // A converted cart can have several messages with `convertedAt` set. Count
     // distinct carts so a two-step recovery is not counted twice.

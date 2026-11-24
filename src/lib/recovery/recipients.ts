@@ -69,18 +69,31 @@ export function normalizeRecipientPhone(phone: string | null | undefined): strin
  */
 export type EmailConsentLike = Pick<
   RecipientLike,
-  'consentEmail' | 'emailConsentBasis' | 'consentSource' | 'suppressed' | 'optedOutAt'
+  | 'email'
+  | 'consentEmail'
+  | 'emailConsentBasis'
+  | 'consentSource'
+  | 'suppressed'
+  | 'optedOutAt'
 >
 
-export function canSendRecoveryEmail(identity: EmailConsentLike | null | undefined): boolean {
+export function canSendRecoveryEmail(
+  identity: EmailConsentLike | null | undefined,
+  destinationEmail?: string | null,
+): boolean {
   if (!identity) return false
   if (identity.suppressed || identity.optedOutAt) return false
-  if (identity.consentEmail === true) return true
-  if (identity.emailConsentBasis === 'transactional') return true
-  // Rolling deploy / legacy row: the migration has not run yet, but the
-  // contact was captured from a Shopify cart/checkout, so the address is
-  // transactional.
+
+  const target = destinationEmail === undefined ? identity.email : normalizeRecipientEmail(destinationEmail)
+  if (destinationEmail !== undefined && !target) return false
+  const identityEmail = normalizeRecipientEmail(identity.email)
+  if (target && identityEmail && target !== identityEmail) return false
+
+  const matchesTarget = !target || !identityEmail || identityEmail === target
+  if (identity.consentEmail === true && matchesTarget) return true
+  if (identity.emailConsentBasis === 'transactional' && matchesTarget) return true
   return (
+    matchesTarget &&
     !identity.emailConsentBasis &&
     typeof identity.consentSource === 'string' &&
     identity.consentSource.startsWith('shopify_')
@@ -246,8 +259,8 @@ export async function upsertRecipient(input: RecipientContact): Promise<Recipien
     data: {
       shopifyCustomerId: shopifyCustomerId || merged.shopifyCustomerId,
       name: name || cleanCustomerName(merged.name, email || merged.email),
-      email: email || merged.email,
-      phone: phone || merged.phone,
+      email: merged.email || email,
+      phone: merged.phone || phone,
       consentEmail: merged.consentEmail,
       consentWhatsApp: merged.consentWhatsApp,
       consentSms: merged.consentSms,
@@ -334,6 +347,12 @@ export async function recordRecipientConsent(input: {
     })) || null
   if (!identity) return null
 
+  const identityEmail = normalizeRecipientEmail(identity.email)
+  const identityPhone = normalizeRecipientPhone(identity.phone)
+  const grantEmail = wantsEmail && (!email || !identityEmail || email === identityEmail)
+  const grantWhatsApp = wantsWhatsApp && (!phone || !identityPhone || phone === identityPhone)
+  if (!grantEmail && !grantWhatsApp) return identity
+
   const keepSuppressed =
     input.overrideOptOut === false &&
     (identity.suppressed === true || identity.optedOutAt != null)
@@ -341,15 +360,15 @@ export async function recordRecipientConsent(input: {
     lastSeenAt: at,
     ...(keepSuppressed ? {} : { optedOutAt: null, suppressed: false }),
   }
-  if (email) data.email = email
-  if (phone) data.phone = phone
-  if (wantsEmail) {
+  if (grantEmail) {
+    if (email) data.email = email
     data.consentEmail = true
     data.emailConsentBasis = 'explicit'
     data.emailConsentAt = at
     data.emailConsentSource = input.source
   }
-  if (wantsWhatsApp) {
+  if (grantWhatsApp) {
+    if (phone) data.phone = phone
     data.consentWhatsApp = true
     data.whatsappConsentAt = at
     data.whatsappConsentSource = input.source
@@ -366,8 +385,8 @@ export async function recordRecipientConsent(input: {
   // Clear both spellings so an explicit re-opt-in is not blocked by a stale
   // STOP row on the next sweep.
   const OR: Array<Record<string, string>> = []
-  if (email) OR.push({ email })
-  if (phone) {
+  if (grantEmail && email) OR.push({ email })
+  if (grantWhatsApp && phone) {
     const digits = phone.replace(/\D/g, '')
     OR.push({ phone }, ...(digits !== phone ? [{ phone: digits }] : []))
   }
@@ -479,17 +498,20 @@ export async function cancelPendingRecoveryForContact(
   const phone = normalizeRecipientPhone(contact.phone)
   if (!email && !phone) return { carts: 0, messages: 0, journeys: 0 }
 
-  const OR: Array<Record<string, unknown>> = []
-  if (email) OR.push({ customerEmail: email })
-  // Carts store the phone exactly as Shopify delivered it ("+91 98765 43210"),
-  // while opt-out normalisation is digits only. `contains` matches every spacing
-  // variant so a STOP cancels pending rows immediately, not on the next sweep.
-  if (phone) OR.push({ customerPhone: { contains: phone } })
-  const carts = await prisma.cart.findMany({
-    where: { storeId, OR },
-    select: { id: true },
-    take: 500,
-  })
+  const phoneDigits = phone ? phone.replace(/\D/g, '') : null
+  const carts = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"
+    FROM "Cart"
+    WHERE "storeId" = ${storeId}
+      AND (
+        (${email}::text IS NOT NULL AND lower(trim("customerEmail")) = ${email})
+        OR (
+          ${phoneDigits}::text IS NOT NULL AND
+          regexp_replace(coalesce("customerPhone", ''), '[^0-9]', '', 'g') = ${phoneDigits}
+        )
+      )
+    LIMIT 500
+  `
 
   let messages = 0
   let journeys = 0

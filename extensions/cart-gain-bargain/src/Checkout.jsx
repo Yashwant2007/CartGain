@@ -134,7 +134,7 @@ function RecoveryOptIn() {
 
   if (!phone && !email) return null;
 
-  const save = async () => {
+  const save = async (channel) => {
     if (state === 'saving' || state === 'saved') return;
     setState('saving');
     try {
@@ -145,10 +145,10 @@ function RecoveryOptIn() {
           shop: shopDomain,
           cartToken: checkoutToken || null,
           name: name || null,
-          email: email || null,
-          phone: phone || null,
-          consentEmail: Boolean(email),
-          consentWhatsApp: Boolean(phone),
+          email: channel === 'email' ? email || null : null,
+          phone: channel === 'whatsapp' ? phone || null : null,
+          consentEmail: channel === 'email',
+          consentWhatsApp: channel === 'whatsapp',
           source: 'checkout_extension',
         }),
       });
@@ -164,17 +164,22 @@ function RecoveryOptIn() {
     <s-banner heading="Want a reminder if you do not finish?">
       <s-stack direction="block" gap="small-200">
         <s-text color="subdued">
-          {phone
-            ? 'We can text this cart to you on WhatsApp and email the link. Reply STOP to opt out.'
-            : 'We can email you a link to this cart. Unsubscribe any time.'}
+          Choose how we can remind you if you leave without ordering. Reply STOP or unsubscribe any time.
         </s-text>
         {state === 'saved' ? (
-          <s-text>Reminder saved. We will only message you if you leave without ordering.</s-text>
+          <s-text>Reminder saved. We will only message you on the channel you chose.</s-text>
         ) : (
           <s-stack direction="inline" gap="small-200">
-            <s-button onClick={save} disabled={state === 'saving'}>
-              {state === 'saving' ? 'Saving...' : phone ? 'Remind me on WhatsApp' : 'Email me my cart'}
-            </s-button>
+            {email && (
+              <s-button onClick={() => save('email')} disabled={state === 'saving'}>
+                {state === 'saving' ? 'Saving...' : 'Email me my cart'}
+              </s-button>
+            )}
+            {phone && (
+              <s-button onClick={() => save('whatsapp')} disabled={state === 'saving'}>
+                {state === 'saving' ? 'Saving...' : 'Remind me on WhatsApp'}
+              </s-button>
+            )}
             {state === 'error' && <s-text color="critical">Could not save. Please try again.</s-text>}
           </s-stack>
         )}

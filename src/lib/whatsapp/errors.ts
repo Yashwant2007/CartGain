@@ -89,5 +89,9 @@ export function isEngagementLimitedWhatsAppFailure(failure: WhatsAppFailure): bo
 }
 
 export function isEngagementLimitedReason(reasonCode: string | null | undefined): boolean {
-  return /(?:^|[:_-])(131049|130472)(?:$|[:_-])/.test(reasonCode || '')
+  const reason = reasonCode || ''
+  return (
+    reason === 'whatsapp_engagement_limited' ||
+    /(?:^|[:_-])(131049|130472)(?:$|[:_-])/.test(reason)
+  )
 }

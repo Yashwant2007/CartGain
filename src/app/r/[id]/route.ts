@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { buildPlatformCheckoutLink, isSafeDiscountCode } from '@/lib/recovery/links'
 import { cartHasResumeToken } from '@/lib/recovery/checkout-url'
+import { RECOVERY_DELIVERED_STATUSES } from '@/lib/recovery/message-status'
 
 export const dynamic = 'force-dynamic'
 
@@ -108,7 +109,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const message = await prisma.message.findFirst({
       where: {
         cartId,
-        status: { in: ['sent', 'delivered'] },
+        status: { in: RECOVERY_DELIVERED_STATUSES },
         ...(channel ? { channel } : {}),
       },
       orderBy: { sentAt: 'desc' },

@@ -112,6 +112,23 @@ export async function POST(request: NextRequest) {
       return json({ message: 'Could not save your reminder preference' }, 400)
     }
 
+    const identityEmail = normalizeRecipientEmail(identity.email)
+    const identityPhone = normalizeRecipientPhone(identity.phone)
+    const emailApplied =
+      consentEmail &&
+      (!identityEmail || email === identityEmail) &&
+      identity.consentEmail === true
+    const whatsappApplied =
+      consentWhatsApp &&
+      (!identityPhone || phone === identityPhone) &&
+      identity.consentWhatsApp === true
+    if (!emailApplied && !whatsappApplied) {
+      return json(
+        { message: 'These details do not match the saved contact. Check your email or phone and try again.' },
+        400,
+      )
+    }
+
     const cartToken = text((body as any).cartToken, 255)
     let linkedCart = false
 
@@ -189,7 +206,7 @@ export async function POST(request: NextRequest) {
     }
 
     let reminderScheduled = false
-    if (!linkedCart && productId && productTitle && (consentEmail || consentWhatsApp)) {
+    if (!linkedCart && productId && productTitle && (emailApplied || whatsappApplied)) {
       const recent = await prisma.recoveryJourney.findFirst({
         where: {
           storeId,
@@ -223,8 +240,8 @@ export async function POST(request: NextRequest) {
 
     return json({
       ok: true,
-      email: consentEmail,
-      whatsapp: consentWhatsApp,
+      email: emailApplied,
+      whatsapp: whatsappApplied,
       linkedCart,
       reminderScheduled,
     })

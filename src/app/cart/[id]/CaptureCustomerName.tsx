@@ -15,9 +15,10 @@ export default function CaptureCustomerContact({ cartId, shop, defaultName, defa
   const [name, setName] = useState(defaultName || '')
   const [phone, setPhone] = useState(defaultPhone || '')
   const [email, setEmail] = useState(defaultEmail || '')
+  const [isEmailConsentChecked, setIsEmailConsentChecked] = useState(false)
   const [isWhatsAppConsentChecked, setIsWhatsAppConsentChecked] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(Boolean(defaultName || defaultPhone || defaultEmail))
+  const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -41,14 +42,19 @@ export default function CaptureCustomerContact({ cartId, shop, defaultName, defa
         return
       }
 
-      // Email consent is automatic if email is provided (it's already on the cart
-      // from Shopify checkout). WhatsApp consent is explicit and optional.
-      const consentEmail = hasEmail
+      const consentEmail = hasEmail && isEmailConsentChecked
       const consentWhatsApp = hasPhone && isWhatsAppConsentChecked
 
-      // If only phone is provided (no email), WhatsApp consent is required to save
-      if (hasPhone && !hasEmail && !isWhatsAppConsentChecked) {
-        setError('Please agree to WhatsApp reminders to save your phone number')
+      if (isEmailConsentChecked && !hasEmail) {
+        setError('Enter a valid email address for email reminders')
+        return
+      }
+      if (isWhatsAppConsentChecked && !hasPhone) {
+        setError('Enter a valid phone number for WhatsApp reminders')
+        return
+      }
+      if (!consentEmail && !consentWhatsApp) {
+        setError('Choose at least one way to hear about this cart')
         return
       }
 
@@ -90,7 +96,7 @@ export default function CaptureCustomerContact({ cartId, shop, defaultName, defa
         </div>
         <h3 className="text-xl font-semibold text-white mb-2">Thanks, {name.trim() || 'there'}!</h3>
         <p className="text-blue-300/70 text-sm mb-6 max-w-md">
-          We&rsquo;ve saved your details. You&rsquo;ll receive a WhatsApp reminder for this cart.
+          We&rsquo;ve saved your details. You&rsquo;ll hear about this cart on the channels you selected.
         </p>
         <button
           onClick={() => setSaved(false)}
@@ -110,7 +116,7 @@ export default function CaptureCustomerContact({ cartId, shop, defaultName, defa
         </div>
         <h2 className="text-xl font-bold text-white">Complete your details</h2>
         <p className="text-blue-300/70 text-sm mt-2">
-          Enter your name and phone so we can send you a WhatsApp reminder for this cart.
+          Save your details and choose how we can remind you about this cart.
         </p>
       </div>
 
@@ -166,6 +172,19 @@ export default function CaptureCustomerContact({ cartId, shop, defaultName, defa
         <label className="flex items-center gap-3 cursor-pointer select-none group">
           <input
             type="checkbox"
+            checked={isEmailConsentChecked}
+            onChange={(e) => setIsEmailConsentChecked(e.target.checked)}
+            disabled={saving}
+            className="w-5 h-5 rounded border-blue-500 bg-slate-700/50 text-blue-500 focus:ring-blue-400 accent-blue-500"
+          />
+          <span className="text-sm text-blue-300/90 group-hover:text-blue-300 transition-colors">
+            Yes, send me email reminders for this cart
+          </span>
+        </label>
+
+        <label className="flex items-center gap-3 cursor-pointer select-none group">
+          <input
+            type="checkbox"
             checked={isWhatsAppConsentChecked}
             onChange={(e) => setIsWhatsAppConsentChecked(e.target.checked)}
             disabled={saving}
@@ -189,7 +208,7 @@ export default function CaptureCustomerContact({ cartId, shop, defaultName, defa
         disabled={
           saving ||
           (!name.trim() && !phone.trim() && !email.trim()) ||
-          (!!phone.trim() && !email.trim() && !isWhatsAppConsentChecked)
+          (!isEmailConsentChecked && !isWhatsAppConsentChecked)
         }
         className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-lg hover:shadow-cyan-500/50 active:scale-95 flex items-center justify-center gap-2"
       >
