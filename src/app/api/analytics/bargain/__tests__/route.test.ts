@@ -105,7 +105,7 @@ it('keeps the existing session funnel intact and adds experience metrics', async
 
 it('reports deterministic sales intelligence mindset, objections, recommendation posture and overhead', async () => {
   prismaMock.productEvent.findMany.mockResolvedValue([
-    { properties: { sessionId: 's1', readiness: 'evaluating', objectionCategory: 'PRICE_OBJECTION', recommendation: 'none', state: 'COUNTER_OFFER', validationChecked: true, floorSafe: true, validationReason: 'OFFER_ACCEPTED', agentCount: 5, llmCalls: 0, durationMs: 2, offerBasis: 'total', offerClarificationNeeded: false } },
+    { properties: { sessionId: 's1', readiness: 'evaluating', objectionCategory: 'PRICE_OBJECTION', recommendation: 'none', state: 'COUNTER_OFFER', validationChecked: true, floorSafe: true, validationReason: 'OFFER_ACCEPTED', agentCount: 5, llmCalls: 0, durationMs: 2, offerBasis: 'total', offerClarificationNeeded: false, trendUsed: true, trendRegion: 'IN' } },
     { properties: { sessionId: 's1', readiness: 'ready', objectionCategory: 'BUDGET_OBJECTION', recommendation: 'suggest_now', state: 'PURCHASE_READY', validationChecked: true, floorSafe: false, validationReason: 'BELOW_FLOOR_REJECTED', agentCount: 5, llmCalls: 0, durationMs: 6, offerBasis: 'per_unit', offerClarificationNeeded: false } },
     { properties: { sessionId: 's0', readiness: 'exploring', objectionCategory: 'PRICE_OBJECTION', recommendation: 'none', state: 'PRODUCT_DISCOVERY', validationChecked: true, floorSafe: true, validationReason: 'AMBIGUOUS_OFFER_BASIS', agentCount: 5, llmCalls: 0, durationMs: 10, offerBasis: 'unclear', offerClarificationNeeded: true } },
   ])
@@ -118,7 +118,9 @@ it('reports deterministic sales intelligence mindset, objections, recommendation
     validation: { checkedTurns: 3, compliantTurns: 2, blockedTurns: 1 },
     clarificationTurns: 1,
     overhead: { llmCalls: 0, agentContributions: 15, avgAgentContributions: 5, avgDurationMs: 6, p95DurationMs: 10 },
+    trend: { turns: 1, share: 33.3 },
   })
+  expect(body.intelligence.trend.regions.find((row: any) => row.key === 'IN')).toMatchObject({ turns: 1, share: 100 })
   expect(body.intelligence.offerBases.find((row: any) => row.key === 'total')).toMatchObject({ turns: 1, share: 33.3 })
   expect(body.intelligence.offerBases.find((row: any) => row.key === 'per_unit')).toMatchObject({ turns: 1 })
   expect(body.intelligence.offerBases.find((row: any) => row.key === 'unclear')).toMatchObject({ turns: 1 })

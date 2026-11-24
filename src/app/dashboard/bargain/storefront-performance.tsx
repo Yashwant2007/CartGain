@@ -61,6 +61,12 @@ type SalesIntelligence = {
   states: CounterRow[]
   offerBases: CounterRow[]
   clarificationTurns: number
+  trend: {
+    turns: number
+    share: number
+    regions: CounterRow[]
+    note: string
+  }
   validation: {
     checkedTurns: number
     compliantTurns: number
@@ -407,7 +413,7 @@ function SalesIntelligencePanel({ intelligence }: { intelligence?: SalesIntellig
         <Users className="w-4 h-4 text-cyan-400" /> Sales intelligence
         <span className="ml-auto text-xs font-normal text-blue-300/60">{intelligence.turns} turns · {intelligence.sessions} sessions</span>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-px bg-blue-800/20 text-sm">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-px bg-blue-800/20 text-sm">
         <div className="bg-slate-900 p-4">
           <div className="text-xs text-blue-300/60 uppercase tracking-wide">Extra AI calls</div>
           <div className="text-2xl font-bold text-white mt-1">{intelligence.overhead.llmCalls}</div>
@@ -432,13 +438,19 @@ function SalesIntelligencePanel({ intelligence }: { intelligence?: SalesIntellig
           <div className="text-2xl font-bold text-white mt-1">{intelligence.clarificationTurns}</div>
           <div className="text-[11px] text-blue-300/50">no price quoted</div>
         </div>
+        <div className="bg-slate-900 p-4">
+          <div className="text-xs text-blue-300/60 uppercase tracking-wide">Trend context</div>
+          <div className="text-2xl font-bold text-white mt-1">{intelligence.trend.turns}</div>
+          <div className="text-[11px] text-blue-300/50">{intelligence.trend.share}% of turns</div>
+        </div>
       </div>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-blue-800/20">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-px bg-blue-800/20">
         <CounterTable title="Customer readiness" rows={intelligence.readiness} />
         <CounterTable title="Objections handled" rows={intelligence.objections} />
         <CounterTable title="Recommendation posture" rows={intelligence.recommendations} />
         <CounterTable title="Conversation state" rows={intelligence.states} />
         <CounterTable title="Offer basis" rows={intelligence.offerBases} />
+        <CounterTable title="Trend regions" rows={intelligence.trend.regions} />
       </div>
       <p className="px-5 py-3 text-xs text-blue-300/60 flex gap-2 border-t border-blue-800/20">
         <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {intelligence.note}

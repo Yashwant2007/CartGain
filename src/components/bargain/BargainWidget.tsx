@@ -321,6 +321,7 @@ export default function BargainWidget({
   const [gaze, setGaze] = useState<{ x: number; y: number } | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [sessionToken, setSessionToken] = useState<string | null>(null)
+  const [bundleQuoteToken, setBundleQuoteToken] = useState<string | null>(null)
   const [messages, setMessages] = useState<BargainMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -784,6 +785,7 @@ export default function BargainWidget({
       }
       setCheckoutLocked(false)
       setDecision('idle')
+      setBundleQuoteToken(null)
       setSessionEnded(false)
       setFinalPrice(null)
       setDiscountCode(null)
@@ -916,6 +918,7 @@ export default function BargainWidget({
           { id: localId, role: 'customer', content: msg, offeredPrice: parseDraftOffer(msg), createdAt: new Date().toISOString(), delivery: 'sending' },
         ])
     setInput('')
+    setBundleQuoteToken(null)
     noteConversationSent()
     // Human send rhythm: your bubble paints instantly, a single delivered tick
     // lands almost immediately, the three-dot "thinking" bubble appears a beat
@@ -1039,6 +1042,7 @@ export default function BargainWidget({
         hasRecommendations: Boolean(nextRecommendations),
         conversationState: data.conversationState ?? null,
       })
+      if (data.bundleOffer?.token) setBundleQuoteToken(data.bundleOffer.token)
       if (data.discountCode) setDiscountCode(data.discountCode)
       if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
       if (data.floorReached === true) setFloorReached(true)
@@ -1172,7 +1176,7 @@ export default function BargainWidget({
       const res = await fetch(`${apiBase}/api/bargain/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, platform, ...buyerIdentity() }),
+        body: JSON.stringify({ sessionId, platform, ...buyerIdentity(), bundleQuoteToken }),
       })
       const data = (await res.json()) as BargainAcceptSuccess & {
         message?: string
@@ -1189,6 +1193,7 @@ export default function BargainWidget({
           return
         }
         if (res.status === 409 && typeof data.code === 'string' && data.code.startsWith('OFFER_REJECTED_')) {
+          setBundleQuoteToken(null)
           // Machine-readable backend rejection (unavailable / campaign expired /
           // coupon stacking / price moved). Show the server's own copy in a
           // calm state card instead of an error box.
@@ -1229,6 +1234,7 @@ export default function BargainWidget({
       ])
       setDecision('accept')
       setSessionEnded(true)
+      setBundleQuoteToken(null)
       lastFailedRef.current = null
     } catch (err: any) {
       lastFailedRef.current = { kind: 'accept' }
@@ -1250,6 +1256,7 @@ export default function BargainWidget({
     setNotice(null)
     setSessionEnded(false)
     setDecision('idle')
+    setBundleQuoteToken(null)
     setFinalPrice(null)
     setDiscountCode(null)
     setPurchaseUrl(null)

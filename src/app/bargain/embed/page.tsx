@@ -132,7 +132,7 @@ export default async function EmbedPage({
   if (!storeFound || !valid || !bargainEnabled) {
     return (
       <>
-        <EmbedDocumentReset view={view} announceEmpty />
+        <EmbedDocumentReset announceEmpty />
         <div aria-hidden style={{ width: 0, height: 0 }} />
       </>
     )
@@ -140,7 +140,7 @@ export default async function EmbedPage({
 
   return (
     <>
-      <EmbedDocumentReset view={view} />
+      <EmbedDocumentReset />
       <EmbedErrorBoundary>
         <BargainWidget
           storeId={storeId as string}
@@ -182,7 +182,7 @@ export default async function EmbedPage({
  * The inline style runs at parse time so the dark gradient is never painted,
  * even for a frame that takes a moment to hydrate.
  */
-function EmbedDocumentReset({ view, announceEmpty = false }: { view: 'inline' | 'drawer'; announceEmpty?: boolean }) {
+function EmbedDocumentReset({ announceEmpty = false }: { announceEmpty?: boolean }) {
   // A rejected embed (bad token, unknown store) must stay fully transparent: it
   // is an invisible courtesy frame that the controller hides. Painting the app's
   // white canvas there would drop an opaque block on the merchant's product page.
@@ -192,7 +192,6 @@ function EmbedDocumentReset({ view, announceEmpty = false }: { view: 'inline' | 
     body { overflow: hidden !important; overscroll-behavior: none !important; }
     /* The widget owns its own scrolling; the host document never scrolls. */
     html { overflow: hidden !important; }
-    ${view === 'drawer' && !announceEmpty ? '.cartgain-bargain { height: 100% !important; }' : ''}
   `
   const boot = announceEmpty
     ? `(function(){try{if(window.parent){window.parent.postMessage({type:'cg_empty'},'*');window.parent.postMessage({type:'cg_resize',height:0},'*');}}catch(e){}})();`

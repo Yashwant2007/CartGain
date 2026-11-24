@@ -158,9 +158,26 @@ export type BargainOfferBody = {
   sessionToken?: string | null
 }
 
+export type BargainBundleOfferView = {
+  token: string
+  items: Array<{
+    productId: string
+    variantId: string | null
+    title: string
+    quantity: number
+    listPrice: number
+    offerPrice: number
+  }>
+  listTotal: number
+  offerTotal: number
+  discountPercent: number
+  currency: string
+}
+
 export type BargainOfferSuccess = {
   reply: string
   decision: BargainDecision
+  bundleOffer?: BargainBundleOfferView | null
   counterOffer?: number | null
   sessionStatus?: string
   sessionId?: string
@@ -242,6 +259,7 @@ export type BargainAcceptBody = {
   cartToken?: string | null
   customerEmail?: string | null
   sessionToken?: string | null
+  bundleQuoteToken?: string | null
 }
 
 export type BargainAcceptSuccess = {

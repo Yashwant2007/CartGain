@@ -21,6 +21,7 @@ import { bargainCampaignStatus, detectCouponMention, detectMultiProductRequest }
 import { normalizeShippingConfig, computeShipping, shippingUpsellLine } from '@/lib/bargain/shipping'
 import { normalizePaymentConfig, detectPaymentIntent, prepaidSaving } from '@/lib/bargain/payment'
 import { buildBundle, validateBundleOffer, allocateDiscount, bundleSummary, type BundleItem } from '@/lib/bargain/bundle'
+import { createBundleQuote, BUNDLE_QUOTE_TTL_MS } from '@/lib/bargain/bundle-quote'
 import { walkoutOutcome } from '@/lib/bargain/negotiation-state'
 import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
 import { analyzeIntent } from '@/lib/bargain/intent'
@@ -56,7 +57,7 @@ import { track } from '@/lib/analytics/track'
 import { resolveSessionLearning, recordLearningEvent, loadLearningConfig } from '@/lib/bargain/learning/service'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import { bargainRequestMetrics } from '@/lib/bargain/request-metrics'
-import type { BargainDecision, BargainOfferSuccess } from '@/lib/bargain/api-types'
+import type { BargainBundleOfferView, BargainDecision, BargainOfferSuccess } from '@/lib/bargain/api-types'
 import {
   bargainPlatformFor,
   buildWooCommerceCheckoutUrl,
@@ -341,6 +342,7 @@ function duplicateTurnPayload(session: any, ai: any | null): BargainOfferSuccess
     discountCode: session.discountCode ?? null,
     purchaseUrl: session.purchaseUrl ?? null,
     claimUrl: session.claimToken ? buildBargainClaimUrl(session.claimToken) : null,
+    ...(meta.bundleOffer ? { bundleOffer: meta.bundleOffer as BargainBundleOfferView } : {}),
   }
 }
 
@@ -675,15 +677,7 @@ export async function POST(request: NextRequest) {
       // combined number — the server computes one uniform % that keeps every
       // item at/above its own floor, and Shopify's code is scoped to those
       // products with the full bundle value as the minimum subtotal.
-      let bundleOffer: {
-        items: ReturnType<typeof allocateDiscount>
-        listTotal: number
-        offerTotal: number
-        discountPercent: number
-        currencySymbol: string
-        code: string | null
-        codeStatus: 'created' | 'pending' | 'failed' | 'none'
-      } | null = null
+      let bundleOffer: (BargainBundleOfferView & { currencySymbol: string }) | null = null
 
       const bundleEnabled = config.bundleNegotiationEnabled === true
       if (bundleEnabled) {
@@ -699,24 +693,45 @@ export async function POST(request: NextRequest) {
           if (items) {
             const desiredPct = config.bundleDiscountPercent ?? 10
             const quote = buildBundle(items, { discountPercent: desiredPct })
-            if (quote && validateBundleOffer(quote).ok) {
-              // A bundled price is a proposal, not an issued deal. No Shopify
-              // code exists until the shopper accepts and the server revalidates
-              // the floor at that moment; never show a code from a chat turn.
-              bundleOffer = {
-                items: allocateDiscount(quote.items, quote.offerTotal),
+            const allocated = quote ? allocateDiscount(quote.items, quote.offerTotal) : []
+            if (quote && allocated.length >= 2 && validateBundleOffer(quote).ok) {
+              const sessionExpiry = bargainSession.expiredAt ? new Date(bargainSession.expiredAt).getTime() : Number.POSITIVE_INFINITY
+              const expiresAt = new Date(Math.min(Date.now() + BUNDLE_QUOTE_TTL_MS, sessionExpiry))
+              const token = await createBundleQuote({
+                storeId: bargainSession.storeId,
+                sessionId: bargainSession.id,
+                cartToken: bargainSession.cartToken ?? null,
+                items: quote.items.map((it) => ({
+                  productId: it.productId,
+                  variantId: it.variantId ?? null,
+                  title: it.title,
+                  price: it.price,
+                  floor: it.floor,
+                  quantity: it.quantity,
+                })),
                 listTotal: quote.listTotal,
+                floorTotal: quote.floorTotal,
                 offerTotal: quote.offerTotal,
                 discountPercent: quote.discountPercent,
-                currencySymbol,
-                code: null,
-                codeStatus: 'none',
-              }
-              await track({
-                name: 'cartgain_bundle_offer',
-                storeId: bargainSession.storeId,
-                properties: { items: quote.items.length, offerTotal: quote.offerTotal, discountPercent: quote.discountPercent },
+                currency: bargainSession.store.currency || 'INR',
+                expiresAt,
               })
+              if (token) {
+                bundleOffer = {
+                  token,
+                  items: allocated.map((item) => ({ ...item, variantId: item.variantId ?? null })),
+                  listTotal: quote.listTotal,
+                  offerTotal: quote.offerTotal,
+                  discountPercent: quote.discountPercent,
+                  currency: bargainSession.store.currency || 'INR',
+                  currencySymbol,
+                }
+                await track({
+                  name: 'cartgain_bundle_offer',
+                  storeId: bargainSession.storeId,
+                  properties: { items: quote.items.length, offerTotal: quote.offerTotal, discountPercent: quote.discountPercent },
+                })
+              }
             }
           }
         } catch {
@@ -725,7 +740,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (bundleOffer) {
-        const reply = `Bundle deal: ${bundleSummary(bundleOffer.items.map((a) => ({ productId: a.productId, title: a.title, price: a.listPrice, floor: 0, quantity: a.quantity })), currencySymbol)} — ${currencySymbol}${bundleOffer.offerTotal} (was ${currencySymbol}${bundleOffer.listTotal}, ${bundleOffer.discountPercent}% off).`
+        const reply = `Bundle deal: ${bundleSummary(bundleOffer.items.map((a) => ({ productId: a.productId, title: a.title, price: a.listPrice, floor: 0, quantity: a.quantity })), currencySymbol)} — ${currencySymbol}${bundleOffer.offerTotal} (was ${currencySymbol}${bundleOffer.listTotal}, ${bundleOffer.discountPercent}% off). Tap Accept to lock this bundle.`
         await prisma.$transaction([
           prisma.bargainMessage.create({
             data: {
@@ -737,24 +752,40 @@ export async function POST(request: NextRequest) {
           prisma.bargainMessage.create({
             data: {
               sessionId: bargainSession.id, role: 'ai', content: reply,
-              metadata: { ...turnMetadata, decision: 'chat', tactic: 'bundle_offer', policy: 'bundle_negotiation', bundleRequested: true } as any,
+              offeredPrice: bundleOffer.offerTotal,
+              metadata: {
+                ...turnMetadata,
+                decision: 'counter',
+                tactic: 'bundle_offer',
+                policy: 'bundle_negotiation',
+                bundleRequested: true,
+                bundleOffer: {
+                  token: bundleOffer.token,
+                  items: bundleOffer.items,
+                  listTotal: bundleOffer.listTotal,
+                  offerTotal: bundleOffer.offerTotal,
+                  discountPercent: bundleOffer.discountPercent,
+                  currency: bundleOffer.currency,
+                },
+              } as any,
             },
           }),
         ])
         return NextResponse.json({
           reply,
-          decision: 'chat',
+          decision: 'counter',
+          counterOffer: bundleOffer.offerTotal,
           sessionStatus: 'active',
           sessionId: bargainSession.id,
+          attemptsUsed: bargainSession.attemptsUsed ?? undefined,
           ...intelligenceResponseFields(intelligence, offerView),
           bundleOffer: {
+            token: bundleOffer.token,
             items: bundleOffer.items,
             listTotal: bundleOffer.listTotal,
             offerTotal: bundleOffer.offerTotal,
             discountPercent: bundleOffer.discountPercent,
-            currencySymbol: bundleOffer.currencySymbol,
-            code: bundleOffer.code,
-            codeStatus: bundleOffer.codeStatus,
+            currency: bundleOffer.currency,
           },
         })
       }
@@ -1715,6 +1746,8 @@ export async function POST(request: NextRequest) {
         durationMs: intelligence.metadata.durationMs,
         offerBasis: offerView.basis,
         offerClarificationNeeded: offerView.needsClarification,
+        trendUsed: Boolean(ctx.trendPrompt),
+        trendRegion: ctx.trendPrompt ? config.trendRegion ?? 'US' : null,
       },
     })
 

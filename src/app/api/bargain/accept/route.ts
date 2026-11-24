@@ -14,6 +14,7 @@ import { bargainCampaignStatus, couponMentionedInMessages } from '@/lib/bargain/
 import { track } from '@/lib/analytics/track'
 import { recordLearningAcceptance } from '@/lib/bargain/learning/outcomes'
 import { createQuote, acceptQuote, findQuoteBySessionId } from '@/lib/bargain/quote'
+import { acceptBundleQuoteForSession } from '@/lib/bargain/bundle-accept'
 import { detectPaymentIntent } from '@/lib/bargain/payment'
 import { formatMoney } from '@/lib/bargain/i18n'
 import { dealAcceptedMessage } from '@/lib/bargain/post-deal'
@@ -122,6 +123,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         message: `Cannot accept — session is ${bargainSession.status}`,
       }, { status: 409 })
+    }
+
+    if (data.bundleQuoteToken) {
+      return await acceptBundleQuoteForSession({ session: bargainSession, token: data.bundleQuoteToken })
     }
 
     // ── What can be accepted? Only a REAL AI counteroffer or an inline-accept

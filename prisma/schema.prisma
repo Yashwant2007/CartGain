@@ -178,6 +178,7 @@ model Store {
   bargainExperienceEvents    BargainExperienceEvent[]
   bargainExperiencePublishes BargainExperiencePublish[]
   bargainQuotes              BargainQuote[]
+  bargainBundleQuotes        BargainBundleQuote[]
   platformConnections        PlatformConnection[]
   connectionIntents          ConnectionIntent[]
   platformEvents             PlatformEvent[]
@@ -899,6 +900,34 @@ model BargainQuote {
   @@index([storeId, status])
   @@index([sessionId])
   @@index([discountCode])
+  @@index([cartToken])
+  @@index([expiresAt])
+}
+
+model BargainBundleQuote {
+  id              String    @id @default(cuid())
+  storeId         String
+  sessionId       String
+  cartToken       String?
+  token           String    @unique
+  items           Json
+  listTotal       Float
+  floorTotal      Float
+  offerTotal      Float
+  discountPercent Float
+  currency        String    @default("INR")
+  status          String    @default("CREATED")
+  discountCode    String?
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, discountCode])
+  @@index([storeId])
+  @@index([sessionId])
   @@index([cartToken])
   @@index([expiresAt])
 }

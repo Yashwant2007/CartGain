@@ -154,6 +154,7 @@ export const bargainAcceptSchema = z.object({
   customerEmail: z.string().email().optional().or(z.literal('')),
   cartToken: z.string().max(200).optional(),
   sessionToken: z.string().max(500).optional(),
+  bundleQuoteToken: z.string().max(1000).optional(),
 })
 
 export type BargainAcceptInput = z.infer<typeof bargainAcceptSchema>

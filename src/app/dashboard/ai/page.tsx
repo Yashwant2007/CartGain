@@ -589,9 +589,7 @@ function AISalesperson({ storeId }: { storeId: string | null }) {
       : null
   const approvedPoints = config?.approvedSellingPoints?.length ?? 0
   const disallowedClaims = config?.disallowedClaims?.length ?? 0
-  const recsOn =
-    config?.recommendationsEnabled !== false &&
-    (config?.alternativeRecommendationsEnabled !== false || config?.complementRecommendationsEnabled !== false)
+  const recsOn = config?.recommendationsEnabled !== false && config?.alternativeRecommendationsEnabled !== false
 
   const features: Array<{ icon: any; title: string; body: string }> = [
     { icon: MessageSquare, title: 'Live 1:1 negotiation', body: 'Haggles with each shopper on the product page in real time, replying to offers and counter-offers turn by turn instead of sending one flat discount.' },
@@ -599,7 +597,7 @@ function AISalesperson({ storeId }: { storeId: string | null }) {
     { icon: Bot, title: 'Persona & temperament', body: `Tone is set to "${config?.aiPersona ?? 'friendly_shopkeeper'}" with negotiation mode "${config?.negotiationMode ?? 'balanced'}", so deals match your brand and margin.` },
     { icon: Sparkles, title: 'Multilingual', body: 'Auto-detects and replies in the shopper\'s language (Hindi, Hinglish, Tamil, Telugu, Bengali and more) for higher trust and reply rates.' },
     { icon: Target, title: 'Daily goals & pacing', body: config?.goalEnabled ? `Pacing toward a ${config?.goalType ?? 'orders'} goal of ${config?.goalTarget ?? 10}, auto-adjusting how generous it is as the window progresses.` : 'Optional daily goals let the AI pace its generosity toward a target instead of discounting blindly.' },
-    { icon: Zap, title: 'Cross-sell built in', body: config?.recommendationsEnabled !== false ? 'Suggests alternatives and complementary products during negotiation to raise order value and capture what shoppers compare.' : 'Product recommendations are currently switched off in the Bargain settings.' },
+    { icon: Zap, title: 'Cross-sell built in', body: config?.recommendationsEnabled !== false && config?.alternativeRecommendationsEnabled !== false ? 'Suggests verified alternatives during negotiation to raise order value and capture what shoppers compare.' : 'Product recommendations are currently switched off in the Bargain settings.' },
   ]
 
   const improvements: Array<{ done: boolean; title: string; body: string }> = [
@@ -607,7 +605,7 @@ function AISalesperson({ storeId }: { storeId: string | null }) {
     { done: total > 0, title: 'Drive visitors into it', body: total > 0 ? `${total} session${total === 1 ? '' : 's'} recorded so far.` : 'No sessions yet. Add the storefront widget and mark products bargainable so shoppers can start making offers.' },
     { done: approvedPoints > 0, title: 'Add vetted selling points', body: approvedPoints > 0 ? `${approvedPoints} approved claim${approvedPoints === 1 ? '' : 's'} give the AI truthful reasons to hold price.` : 'Add per-product selling points so the AI can defend price truthfully — you will then see which claims actually win deals.' },
     { done: accepted > 0, title: 'Calibrate your floor', body: accepted > 0 ? `${accepted} deal${accepted === 1 ? '' : 's'} closed (${winRate}% win rate).` : 'No deals closed yet. If sessions keep ending in rejection, your floor or discount range may be too tight — review the rejected sessions.' },
-    { done: recsOn, title: 'Keep recommendations on', body: recsOn ? 'Alternatives and complements are on, so each session also records what shoppers consider alongside the negotiated item.' : 'Recommendations are off — turning them on adds cross-sell data to every recorded session.' },
+    { done: recsOn, title: 'Keep recommendations on', body: recsOn ? 'Verified alternatives are on, so each session also records what shoppers consider alongside the negotiated item.' : 'Recommendations are off — turning them on adds cross-sell data to every recorded session.' },
     { done: disallowedClaims > 0, title: 'List disallowed claims', body: disallowedClaims > 0 ? `${disallowedClaims} claim${disallowedClaims === 1 ? '' : 's'} blocked, keeping every logged conversation compliant.` : 'Recording claims the AI must never make keeps every logged conversation compliant and audit-safe.' },
   ]
 

@@ -62,6 +62,13 @@ it('renders the widget when bargaining is enabled', async () => {
   expect(html).toContain('Make an offer')
 })
 
+it('does not force a percentage height on the fixed drawer root', async () => {
+  prismaMock.bargainConfig.findUnique.mockResolvedValue({ enabled: true, language: 'en' })
+  const html = renderToStaticMarkup(await EmbedPage({ searchParams: { ...SEARCH, view: 'drawer', open: '1' } }))
+  expect(html).toContain('position:fixed')
+  expect(html).not.toContain('.cartgain-bargain { height: 100% !important; }')
+})
+
 it('renders the widget for WooCommerce storefront params', async () => {
   prismaMock.store.findUnique.mockResolvedValue({
     id: 'woo-store-1',
