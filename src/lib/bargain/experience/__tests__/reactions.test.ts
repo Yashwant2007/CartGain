@@ -3,6 +3,7 @@ import {
   V2_REACTIONS,
   reactionForAnimation,
   reactionForShopperMessage,
+  reactionForShopperReply,
   v2ReactionCell,
   v2ReactionSheet,
   type BargainReaction,
@@ -18,12 +19,36 @@ describe('bargain reactions from shopper chat', () => {
     ["Forget it, I'm leaving.", 1000, 'walk_away'],
     ["I'll take it.", 1000, 'deal'],
     ['What is it made of?', 1000, 'extras'],
+    ['Hey there!', 1000, 'flattery'],
+    ['Thanks a lot!', 1000, 'flattery'],
+    ['Haha that is funny 😂', 1000, 'flattery'],
+    ['Is this the 2026 model?', 1000, 'flattery'],
+    ['My budget is tight', 1000, 'hesitation'],
+    ['I saw it cheaper on Amazon', 1000, 'counter'],
   ])('maps %s to %s', (message, originalPrice, expected) => {
     expect(reactionForShopperMessage(message, originalPrice)).toBe(expected)
   })
 
   it('treats a complaint about the listed price as a lowball without reading it as a bid', () => {
     expect(reactionForShopperMessage('714 is too much', 1000)).toBe('lowball')
+  })
+
+  it('maps the shopkeeper reply to cheerful and contextual reactions', () => {
+    expect(reactionForShopperReply('Great question! Let me check that for you.')).toBe('flattery')
+    expect(reactionForShopperReply("Sorry, I can't go below ₹900.")).toBe('lowball')
+    expect(reactionForShopperReply('No problem, come back when you are ready.')).toBe('walk_away')
+    expect(reactionForShopperReply('Done deal, I have reserved it for you.')).toBe('deal')
+    expect(reactionForShopperReply('Take your time while you decide.')).toBe('hesitation')
+  })
+
+  it('lets the shopkeeper reply add a reaction when the shopper cue is neutral', () => {
+    const ctx = {
+      customerMessage: 'What is it made of?',
+      aiReply: 'Great question! It is cotton.',
+      originalPrice: 1000,
+    }
+    expect(reactionForAnimation('ai_reply', ctx)).toBe('flattery')
+    expect(reactionForAnimation('counter_offer', { ...ctx, aiReply: "I can't go lower than ₹920." })).toBe('lowball')
   })
 
   it('has a distinct sprite cell for every reaction and keeps each avatar on their own sheets', () => {

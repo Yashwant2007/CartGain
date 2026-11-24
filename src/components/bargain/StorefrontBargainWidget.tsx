@@ -116,7 +116,7 @@ export default function StorefrontBargainWidget({
   language = 'auto',
   demo = true,
   persona: personaProp,
-  avatarVariant = 'robot',
+  avatarVariant = 'morgan',
   maxAttempts = 3,
   minProfitPercent = 25,
   goal: goalProp,

@@ -5,12 +5,14 @@ import type { CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experi
 import type { ExpressionState } from '@/lib/bargain/experience/expressions'
 import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
 import { characterProfile, supportsGestureLayer, type GestureName } from '@/lib/bargain/experience/character'
+import { REACTION_EXPRESSION, REACTION_STATE, type BargainReaction } from '@/lib/bargain/experience/reactions'
 
 interface Props {
   personality: ShopkeeperPersonality
   expression?: ExpressionState
   /** Living Shopkeeper body state. Falls back to the face when omitted. */
   state?: AvatarState
+  reaction?: BargainReaction | null
   /** Body language for the current state. */
   gesture?: GestureName
   /** Visual rendering style of the character. */
@@ -123,8 +125,9 @@ function moodIndex(expression: ExpressionState): number {
 
 export function ShopkeeperAvatar({
   personality,
-  expression = 'idle',
-  state,
+  expression: baseExpression = 'idle',
+  state: baseState,
+  reaction = null,
   gesture = 'rest',
   characterStyle = 'signature',
   size = 'md',
@@ -133,6 +136,8 @@ export function ShopkeeperAvatar({
   gaze = null,
   className = '',
 }: Props) {
+  const expression = reaction ? REACTION_EXPRESSION[reaction] : baseExpression
+  const state = reaction ? REACTION_STATE[reaction] : baseState
   const [reducedMotion, setReducedMotion] = useState(false)
   const px = SIZE_MAP[size]
   const profile = characterProfile(personality)
@@ -311,6 +316,7 @@ export function ShopkeeperAvatar({
         data-expression={expression}
         data-mood={moodIndex(expression)}
         data-avatar-state={state ?? ''}
+        data-avatar-reaction={reaction ?? ''}
         data-gesture={gesture}
         data-character-style={characterStyle}
         role="img"

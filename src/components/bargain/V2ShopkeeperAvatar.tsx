@@ -100,6 +100,7 @@ export default function V2ShopkeeperAvatar({
         variant={variant}
         expression={expression}
         state={state}
+        reaction={reaction}
         eventSequence={eventSequence}
         motionEnabled={motionEnabled}
         essentialMotionOnly={essentialMotionOnly}

@@ -210,6 +210,7 @@ function ShopkeeperHeaderAvatar({
           variant={avatarVariant}
           expression={expression}
           state={state}
+          reaction={animation.reaction}
           eventSequence={animation.eventSequence}
           motionEnabled={motionEnabled}
           essentialMotionOnly={essentialMotionOnly}
@@ -220,6 +221,7 @@ function ShopkeeperHeaderAvatar({
             personality={personality}
             expression={expression}
             state={state}
+            reaction={animation.reaction}
             gesture={gesture}
             characterStyle={characterStyle}
             size="sm"
@@ -282,7 +284,7 @@ export default function BargainWidget({
   const customerTypingRef = useRef(false)
   const personality = resolveShopkeeperPersonality(experience?.personality, persona)
   const avatarEnabled = experience?.avatarEnabled !== false
-  const avatarVariant = experience?.avatarVariant ?? 'robot'
+  const avatarVariant = experience?.avatarVariant ?? 'morgan'
   const characterStyle = experience?.characterStyle ?? 'signature'
   const essentialMotionOnly = experience?.essentialMotionOnly === true
   const fireAvatar = useCallback((event: LivingEvent, ctx: FireAvatarContext = {}) => {

@@ -38,7 +38,7 @@ describe('bargain experience config', () => {
     expect(exp.designVariant).toBe('smart-assistant')
     expect(exp.avatarEnabled).toBe(true)
     expect(exp.motionEnabled).toBe(false)
-    expect(exp.avatarVariant).toBe('robot')
+    expect(exp.avatarVariant).toBe('morgan')
     expect(exp.customGreeting).toBe('Name your price')
     expect(exp.accentColor).toBeNull()
     expect(exp.avatarSize).toBe('md')

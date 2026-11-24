@@ -12,11 +12,13 @@ import {
   type VrmAvatarVariant,
   type VrmPreset,
 } from '@/lib/bargain/experience/vrm-shopkeepers'
+import { REACTION_EXPRESSION, REACTION_STATE, type BargainReaction } from '@/lib/bargain/experience/reactions'
 
 interface Props {
   variant: VrmAvatarVariant | string
   expression: ExpressionState
   state?: AvatarState
+  reaction?: BargainReaction | null
   eventSequence?: number
   motionEnabled?: boolean
   essentialMotionOnly?: boolean
@@ -56,14 +58,17 @@ function keyForBinding(mesh: Three.Mesh, index: number): string {
 
 export default function VrmShopkeeperAvatar({
   variant,
-  expression,
-  state,
+  expression: baseExpression,
+  state: baseState,
+  reaction = null,
   eventSequence,
   motionEnabled = true,
   essentialMotionOnly = false,
 }: Props) {
   const resolved = isVrmAvatarVariant(variant) ? variant : 'meera'
   const meta = VRM_AVATARS[resolved]
+  const expression = reaction ? REACTION_EXPRESSION[reaction] : baseExpression
+  const state = reaction ? REACTION_STATE[reaction] : baseState
   const hostRef = useRef<HTMLDivElement>(null)
   const runtimeRef = useRef<Runtime | null>(null)
   const desiredRef = useRef({
@@ -295,10 +300,11 @@ export default function VrmShopkeeperAvatar({
       ref={hostRef}
       className={`cg-vrm cg-vrm--${meta.motion}`}
       role="img"
-      aria-label={`${meta.name}, ${meta.role}, ${expression} expression`}
+      aria-label={`${meta.name}, ${meta.role}, ${reaction ? `${reaction.replace('_', ' ')} reaction` : `${expression} expression`}`}
       data-vrm-variant={resolved}
       data-vrm-state={state ?? 'idle'}
       data-vrm-expression={expression}
+      data-vrm-reaction={reaction ?? ''}
       data-vrm-status={status}
       style={{ '--cg-vrm-accent': meta.accent } as CSSProperties}
     >

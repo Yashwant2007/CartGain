@@ -415,4 +415,24 @@ describe('living shopkeeper stage', () => {
     expect(container.querySelector('.cg-vrm')?.getAttribute('data-vrm-expression')).toBe('celebrating')
     expect(container.querySelector('.cg-v2')).toBeNull()
   })
+
+  it('forwards chat reactions to a VRM shopkeeper as expression and body state', () => {
+    const { container } = render(
+      <ShopkeeperStage
+        personality="friendly_shopkeeper"
+        expression="idle"
+        state="idle"
+        avatarVariant="meera"
+        reaction="deal"
+        name="Meera"
+        status="Online"
+        line=""
+      />,
+    )
+    const avatar = container.querySelector('.cg-vrm')
+    expect(avatar?.getAttribute('data-vrm-reaction')).toBe('deal')
+    expect(avatar?.getAttribute('data-vrm-expression')).toBe('celebrating')
+    expect(avatar?.getAttribute('data-vrm-state')).toBe('celebrating')
+    expect(avatar?.getAttribute('aria-label')).toContain('deal reaction')
+  })
 })

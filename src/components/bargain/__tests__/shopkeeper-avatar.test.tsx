@@ -49,6 +49,21 @@ describe('ShopkeeperAvatar reactions', () => {
     expect(css).toContain('.cg-avatar--relieved { animation: cgAvSettle .8s ease-out 1; }')
   })
 
+  it('uses a chat reaction as the inline expression and body state', () => {
+    const { container } = render(
+      <ShopkeeperAvatar
+        personality="friendly_shopkeeper"
+        expression="idle"
+        state="idle"
+        reaction="deal"
+      />,
+    )
+    const avatar = container.querySelector('.cg-avatar')
+    expect(avatar?.getAttribute('data-expression')).toBe('celebrating')
+    expect(avatar?.getAttribute('data-avatar-state')).toBe('celebrating')
+    expect(avatar?.getAttribute('data-avatar-reaction')).toBe('deal')
+  })
+
   it('keeps the reaction face but stops motion when motion is disabled', () => {
     const { container } = render(
       <ShopkeeperAvatar personality="strict_shopkeeper" expression="declining" motionEnabled={false} />,

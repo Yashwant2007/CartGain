@@ -69,7 +69,7 @@ type DemoPanelProps = {
 export function DemoPanel({ defaultPersona, defaultLanguage, maxAttempts, minProfitPercent }: DemoPanelProps) {
   const [price, setPrice] = useState<number>(1000)
   const [personality, setPersonality] = useState<ShopkeeperPersonality>(defaultPersona)
-  const [avatarVariant, setAvatarVariant] = useState<AvatarVariant>('robot')
+  const [avatarVariant, setAvatarVariant] = useState<AvatarVariant>('morgan')
   const persona = PERSONAS.find(p => p.id === personality)?.engine ?? 'friendly_shopkeeper'
   const [language, setLanguage] = useState<string>(defaultLanguage || 'auto')
   const [started, setStarted] = useState(false)

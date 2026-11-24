@@ -36,6 +36,7 @@ import {
   type ShopkeeperAnimation,
 } from '@/lib/bargain/experience/living'
 import type { LivingEvent } from '@/lib/bargain/experience/avatar-state'
+import { REACTION_STATE } from '@/lib/bargain/experience/reactions'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import { toCharacter3DState } from '@/lib/bargain/character3d/state-map'
 
@@ -155,7 +156,8 @@ export default function DemoContent() {
   const thinkingTimerRef = useRef<number | null>(null)
   const thinkingShownAtRef = useRef(0)
   const [ended, setEnded] = useState<null | 'accepted' | 'rejected' | 'abandoned' | 'skipped'>(null)
-  const demo3DState = toCharacter3DState(character.state, avatarPersonality)
+  const demoReactionState = character.reaction ? REACTION_STATE[character.reaction] : character.state
+  const demo3DState = toCharacter3DState(demoReactionState, avatarPersonality)
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [alreadyUsed, setAlreadyUsed] = useState(false)
   // Storefront-parity feature state: verified recommendation cards + the real
@@ -862,6 +864,7 @@ export default function DemoContent() {
                 personality={avatarPersonality}
                 expression={character.expression}
                 state={character.state}
+                reaction={character.reaction}
                 gesture={character.gesture}
                 characterStyle="signature"
                 motionEnabled

@@ -12,7 +12,7 @@ import { POSITION_DESCRIPTORS, type AvatarPosition } from '@/lib/bargain/experie
 import type { AvatarVariant, CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import type { LivingEvent, LivingEventContext } from '@/lib/bargain/experience/avatar-state'
 import { isVrmAvatarVariant } from '@/lib/bargain/experience/vrm-shopkeepers'
-import type { BargainReaction } from '@/lib/bargain/experience/reactions'
+import { REACTION_STATE, type BargainReaction } from '@/lib/bargain/experience/reactions'
 
 interface Props {
   personality: ShopkeeperPersonality
@@ -373,6 +373,7 @@ export default function ShopkeeperStage({
     }
   }, [targetRef])
   const selectedVariant = avatarVariant ?? (enable3D ? 'robot' : 'none')
+  const reactionState = reaction ? REACTION_STATE[reaction] : state
   const useVrm = isVrmAvatarVariant(selectedVariant)
   const useV2 = selectedVariant === 'morgan' || selectedVariant === 'riley' || selectedVariant === 'alex' || useVrm
   const useInline = selectedVariant === 'signature' || selectedVariant === 'minimal'
@@ -389,6 +390,7 @@ export default function ShopkeeperStage({
       data-avatar-variant={selectedVariant}
       data-gesture={gesture}
       data-avatar-reaction={reaction ?? ''}
+      data-reaction-state={reaction ? reactionState : ''}
       data-character-style={characterStyle}
       data-essential-motion={essentialMotionOnly ? 'true' : 'false'}
       data-compact={compact ? 'true' : 'false'}
@@ -414,6 +416,7 @@ export default function ShopkeeperStage({
             personality={personality}
             expression={expression}
             state={state}
+            reaction={reaction}
             gesture={gesture}
             characterStyle={characterStyle}
             motionEnabled={motionEnabled}
@@ -423,7 +426,7 @@ export default function ShopkeeperStage({
         ) : render3D ? (
           <LivingShopkeeper3D
             personality={personality}
-            state={toCharacter3DState(state, personality)}
+            state={toCharacter3DState(reactionState, personality)}
             event={event}
             eventSequence={eventSequence}
             eventContext={eventContext}

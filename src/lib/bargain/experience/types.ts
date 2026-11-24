@@ -88,7 +88,7 @@ export const DEFAULT_BARGAIN_EXPERIENCE: BargainExperienceConfig = {
   designVariant: 'smart-assistant',
   avatarEnabled: true,
   motionEnabled: true,
-  avatarVariant: 'robot',
+  avatarVariant: 'morgan',
   characterStyle: 'signature',
   essentialMotionOnly: false,
   localeMode: 'store-default',
