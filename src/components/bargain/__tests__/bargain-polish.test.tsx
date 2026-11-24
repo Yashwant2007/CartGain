@@ -64,6 +64,24 @@ describe('theme controller integration', () => {
     expect(controller.length).toBeLessThan(10 * 1024)
   })
 
+  it('acks the drawer handoff and retires the dwell nudge on that ack', () => {
+    const assets = join(process.cwd(), 'extensions', 'storefront-bargain', 'assets')
+    const controller = readFileSync(join(assets, 'bargain.js'), 'utf8')
+    const dwell = readFileSync(join(assets, 'dwell.js'), 'utf8')
+    expect(controller).toContain('postMessage({type:"cg_drawer_opened"}')
+    expect(controller).toContain('new CustomEvent("cg_drawer_opened"')
+    expect(dwell).toContain("document.addEventListener('cg_drawer_opened'")
+  })
+
+  it('passes a validated parent origin from every Shopify entry point', () => {
+    const blocks = join(process.cwd(), 'extensions', 'storefront-bargain', 'blocks')
+    for (const file of ['product-bargain.liquid', 'cart-bargain.liquid', 'bargain-embed.liquid']) {
+      const liquid = readFileSync(join(blocks, file), 'utf8')
+      expect(liquid).toContain("'&parentOrigin='")
+      expect(liquid).toContain('cg_parent_origin')
+    }
+  })
+
   it('restores document scroll styles exactly when the drawer closes', () => {
     const controller = readFileSync(join(assets, 'bargain.js'), 'utf8')
     expect(controller).toContain('l.html=document.documentElement.style.overflow')

@@ -24,6 +24,7 @@ import { loadStoreVoice } from '@/lib/conversation/store'
 import { adaptiveContextForTurn } from '@/lib/bargain/learning/behavior-context'
 import { buildSessionMemory } from '@/lib/bargain/session-memory'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
+import { getBargainTrendPrompt, type TrendMerchantConfig } from '@/lib/bargain/trend'
 import {
   buildGoalContextForNegotiation,
   publicGoalView,
@@ -395,6 +396,16 @@ export async function POST(request: NextRequest) {
         console.warn('[BARGAIN_DEMO] product-context fetch failed, using verified-details fallback', err?.message ?? err)
       }
     }
+
+    ctx.trendPrompt = await getBargainTrendPrompt({
+      storeId: merchant.store?.id ?? 'demo',
+      config: merchant.config as unknown as TrendMerchantConfig,
+      product: ctx.product ?? {
+        title: productTitle ?? null,
+        productType: null,
+        tags: [],
+      },
+    })
 
     const claims = assessCustomerClaims(body.message, {
       product: ctx.product ?? null,

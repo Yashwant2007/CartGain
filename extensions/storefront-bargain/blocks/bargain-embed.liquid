@@ -6,6 +6,7 @@
   bargain.js). Works on every theme including legacy / non-OS 2.0.
 {% endcomment %}
 
+{%- assign cg_parent_origin = request.origin | default: shop.url | url_encode -%}
 {%- if block.settings.enable_product and template contains 'product' -%}
   {%- assign cg_surface = 'product' -%}
   {%- assign v = product.selected_or_first_available_variant -%}
@@ -24,7 +25,8 @@
     | append: '&price=' | append: pprice
     | append: '&currency=' | append: currency
     | append: '&image=' | append: img_enc
-    | append: '&cart_token=' | append: cart.token -%}
+    | append: '&cart_token=' | append: cart.token
+    | append: '&parentOrigin=' | append: cg_parent_origin -%}
 {%- elsif block.settings.enable_cart and template == 'cart' -%}
   {%- assign cg_surface = 'cart' -%}
   {%- assign first_item = cart.items[0] -%}
@@ -43,7 +45,8 @@
     | append: '&title=' | append: ititle
     | append: '&price=' | append: iprice
     | append: '&image=' | append: iimg_enc
-    | append: '&cart_token=' | append: cart.token -%}
+    | append: '&cart_token=' | append: cart.token
+    | append: '&parentOrigin=' | append: cg_parent_origin -%}
 {%- endif -%}
 
 {%- if widget_src -%}

@@ -136,6 +136,9 @@ document.addEventListener('click',function(e){
     t=t.parentNode;
   }
 },true);
+document.addEventListener('cg_drawer_opened',function(e){
+  if(dwell&&e.detail&&e.detail.root===dwell.root)stop();
+});
 window.addEventListener('message',function(e){
   if(!e.data||typeof e.data!=='object'||!trusted(e))return;
   if(e.data.type==='cg_empty')abort();

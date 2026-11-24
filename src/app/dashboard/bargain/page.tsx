@@ -46,6 +46,7 @@ import {
   NEGOTIATION_STYLE_LABELS,
   NEGOTIATION_STYLE_VALUES,
 } from '@/lib/bargain/merchant-modes'
+import { TREND_TOPIC_CATALOG } from '@/lib/bargain/trend/catalog'
 
 type BargainConfig = {
   id: string
@@ -75,6 +76,11 @@ type BargainConfig = {
   approvedSellingPoints: string[]
   disallowedClaims: string[]
   merchantFaq?: { question: string; answer: string }[]
+  trendIntelligenceEnabled: boolean
+  trendRegion: string
+  trendTopics: string[]
+  trendExcludedTopics: string[]
+  trendHumorEnabled: boolean
   recommendationsEnabled: boolean
   alternativeRecommendationsEnabled: boolean
   couponStackingEnabled: boolean
@@ -111,6 +117,8 @@ const LANGUAGE_OPTIONS: { value: string; label: string }[] = [
   { value: 'pa', label: 'ਪੰਜਾਬੀ (Punjabi)' },
   { value: 'or', label: 'ଓଡ଼ିଆ (Odia)' },
 ]
+
+const TREND_REGION_OPTIONS = ['US', 'GB', 'CA', 'AU', 'IN', 'DE', 'FR', 'ES', 'IT', 'PT', 'BR', 'JP']
 
 // Shared control styling so every field in the config form looks and behaves the
 // same (focus ring, disabled state, sizing).
@@ -880,6 +888,71 @@ void fetchConfig()
                         className={CONTROL_CLS}
                       />
                     </Field>
+                  )}
+                </ConfigCard>
+
+                {/* Cached public-interest trend context */}
+                <ConfigCard
+                  className="lg:col-span-2"
+                  icon={TrendingUp}
+                  title="Trend-aware conversation"
+                  description="Optionally give the salesperson subtle, cached context from official public page-view data. Refresh runs on a schedule, never on a customer message, and never changes your price or claims."
+                >
+                  <ToggleRow
+                    title="Use public-interest signals"
+                    description="Off by default. Requires the BARGAIN_TREND_INTELLIGENCE server flag. The agent may reference a relevant topic only as light context, never as demand, scarcity or price evidence."
+                    checked={configForm.trendIntelligenceEnabled ?? false}
+                    onChange={v => setConfigForm({ ...configForm, trendIntelligenceEnabled: v })}
+                  />
+                  {configForm.trendIntelligenceEnabled && (
+                    <>
+                      <Field
+                        label="Source region"
+                        hint="Selects the cached source preference. The current official source is global English-language Wikimedia page-view data; it is not a local sales signal."
+                      >
+                        <select
+                          value={configForm.trendRegion ?? 'US'}
+                          onChange={e => setConfigForm({ ...configForm, trendRegion: e.target.value })}
+                          className={CONTROL_CLS}
+                        >
+                          {TREND_REGION_OPTIONS.map(region => (
+                            <option key={region} value={region}>{region}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field
+                        label="Allowed topics"
+                        hint="Choose up to 8 safe categories. Leave empty to infer from product type and tags. Sensitive categories are always excluded."
+                      >
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {TREND_TOPIC_CATALOG.filter(topic => !topic.sensitive).map(topic => {
+                            const selected = (configForm.trendTopics ?? []).includes(topic.id)
+                            return (
+                              <label key={topic.id} className="flex items-center gap-2 rounded-lg border border-blue-800/30 bg-slate-950/60 px-3 py-2 text-sm text-slate-200">
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  onChange={() => {
+                                    const current = configForm.trendTopics ?? []
+                                    const next = selected
+                                      ? current.filter(id => id !== topic.id)
+                                      : [...current, topic.id].slice(-8)
+                                    setConfigForm({ ...configForm, trendTopics: next })
+                                  }}
+                                />
+                                {topic.label}
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </Field>
+                      <ToggleRow
+                        title="Allow a light playful reference"
+                        description="Off means neutral, factual tone. On still forbids forced memes, jokes about sensitive subjects, popularity claims and invented urgency."
+                        checked={configForm.trendHumorEnabled ?? false}
+                        onChange={v => setConfigForm({ ...configForm, trendHumorEnabled: v })}
+                      />
+                    </>
                   )}
                 </ConfigCard>
 

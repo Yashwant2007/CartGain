@@ -620,6 +620,11 @@ model BargainConfig {
   approvedSellingPoints             String[]  @default([]) // merchant-vetted claims the AI may use ("machine-washable", "7-day replacement")
   disallowedClaims                  String[]  @default([]) // claims NEVER passed to the AI (unverified review/medical/beauty claims)
   merchantFaq                       Json      @default("[]") // merchant-approved Q&A facts ([{question, answer}]) the AI may answer truthfully
+  trendIntelligenceEnabled          Boolean   @default(false) // cached, official-source public-interest context — OFF by default
+  trendRegion                       String    @default("US") // source/region preference for the cached trend refresh
+  trendTopics                       String[]  @default([]) // curated topic ids the merchant allows the agent to reference
+  trendExcludedTopics               String[]  @default([]) // curated topic ids the merchant never wants referenced
+  trendHumorEnabled                 Boolean   @default(false) // allows a light, tasteful topic reference; no memes by default
   recommendationsEnabled            Boolean   @default(true) // master toggle for cross-sell suggestions
   alternativeRecommendationsEnabled Boolean   @default(true) // "also consider" suggestions
   complementRecommendationsEnabled  Boolean   @default(true) // "you may also need" suggestions

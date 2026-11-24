@@ -7,6 +7,7 @@
 
 {% assign currency = cart.currency.iso_code | default: shop.currency %}
 {% assign shop_domain = shop.permanent_domain %}
+{% assign cg_parent_origin = request.origin | default: shop.url | url_encode %}
 {% assign first_item = cart.items[0] %}
 {% if first_item %}
   {% assign iprice = first_item.final_price | times: 1.0 | divided_by: 100 %}
@@ -24,6 +25,7 @@
   | append: '&price=' | append: iprice
   | append: '&image=' | append: iimg_enc
   | append: '&cart_token=' | append: cart.token
+  | append: '&parentOrigin=' | append: cg_parent_origin
 %}
 
 <div

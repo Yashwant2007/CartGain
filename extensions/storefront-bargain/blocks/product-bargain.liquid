@@ -18,6 +18,7 @@
 {% assign title_enc = product.title | url_encode %}
 {% assign img_enc = img_url | url_encode %}
 {% assign cg_cart_token = cart.token %}
+{% assign cg_parent_origin = request.origin | default: shop.url | url_encode %}
 {% assign widget_src = 'https://cart-gain.com/bargain/embed'
   | append: '?mode=' | append: 'item'
   | append: '&shop=' | append: shop_domain
@@ -28,6 +29,7 @@
   | append: '&currency=' | append: currency
   | append: '&image=' | append: img_enc
   | append: '&cart_token=' | append: cg_cart_token
+  | append: '&parentOrigin=' | append: cg_parent_origin
 %}
 
 {%- comment -%}

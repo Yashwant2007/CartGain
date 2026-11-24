@@ -35,6 +35,7 @@ import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-mo
 import { enginePersonaFor } from '@/lib/bargain/experience/personality'
 import { publishedPersonality } from '@/lib/bargain/experience/config'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
+import { getBargainTrendPrompt, type TrendMerchantConfig } from '@/lib/bargain/trend'
 import {
   searchRecommendations,
   recommendationReason,
@@ -1225,6 +1226,11 @@ export async function POST(request: NextRequest) {
       publicIntelligence: publicIntelligenceView(intelligence),
     }
     ctx.intelligencePrompt = intelligence.promptBlock
+    ctx.trendPrompt = await getBargainTrendPrompt({
+      storeId: bargainSession.storeId,
+      config: config as unknown as TrendMerchantConfig,
+      product: productCtx,
+    })
 
     if (effectiveOfferStructure.needsClarification && !isWalkout) {
       const clarificationReply = uiText(lang, 'clarify_offer_basis')
