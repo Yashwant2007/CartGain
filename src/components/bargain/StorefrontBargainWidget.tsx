@@ -4,9 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { ShoppingCart, CheckCheck, Clock3 } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
+import { buildQuickOffers, buildSuggestedPrompts } from '@/lib/bargain/offers'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { reciprocalCounter, isAbsurdOffer, absurdOfferReply, type NegotiationContext } from '@/lib/bargain/engine'
-import { GoalStrip } from '@/components/bargain/BargainPrimitives'
+import { GoalStrip, QuickChip } from '@/components/bargain/BargainPrimitives'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import {
   resolveShopkeeperAnimation,
@@ -14,7 +15,7 @@ import {
   type ShopkeeperAnimation,
 } from '@/lib/bargain/experience/living'
 import type { LivingEvent } from '@/lib/bargain/experience/avatar-state'
-import type { AvatarVariant, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import type { AvatarVariant, CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import type { BargainDemoGoal } from '@/lib/bargain/api-types'
 import {
   createConversationId,
@@ -95,6 +96,9 @@ type Props = {
   demo?: boolean
   persona?: string
   avatarVariant?: AvatarVariant
+  characterStyle?: CharacterStyle
+  essentialMotionOnly?: boolean
+  motionEnabled?: boolean
   maxAttempts?: number
   minProfitPercent?: number
   /** Active daily-goal preview (from /api/bargain/config or a demo turn). */
@@ -117,6 +121,9 @@ export default function StorefrontBargainWidget({
   demo = true,
   persona: personaProp,
   avatarVariant = 'robot',
+  characterStyle = 'signature',
+  essentialMotionOnly = false,
+  motionEnabled = true,
   maxAttempts = 3,
   minProfitPercent = 25,
   goal: goalProp,
@@ -188,6 +195,12 @@ export default function StorefrontBargainWidget({
   const originalPrice = line.kind === 'cart' ? line.total : line.price
   const minPrice = Math.round(originalPrice * (1 - minProfitPercent / 100) * 100) / 100
   const title = isCart ? t('yourCartOrder') : line.title
+  const lastCounter = [...messages].reverse().find((m) => m.role === 'ai' && m.price != null)?.price ?? null
+  const customerOffer = [...messages].reverse().find((m) => m.role === 'customer' && m.price != null)?.price ?? null
+  const sessionEnded = step === 'rejected' || step === 'deal' || attempts >= maxAttempts
+  const quickOffers = buildQuickOffers({ lastCounter, listedPrice: originalPrice, sessionEnded, decision: step === 'deal' ? 'accept' : 'idle' })
+  const suggestedPrompts = buildSuggestedPrompts({ lastCounter, sessionEnded, attemptsUsed: attempts })
+  const showSuggestions = step === 'chat' && !loading && input.trim() === ''
 
   const announceHeight = useCallback(() => {
     const el = rootRef.current
@@ -678,9 +691,12 @@ export default function StorefrontBargainWidget({
           position={character.position}
           reaction={character.reaction}
           avatarVariant={avatarVariant}
+          characterStyle={characterStyle}
+          essentialMotionOnly={essentialMotionOnly}
           name={`${PERSONA_NAME[persona]} · Shopkeeper`}
           status={t('online')}
           line={stageLine}
+          motionEnabled={motionEnabled}
           enable3D
           targetRef={scrollRef}
           forbiddenRefs={[composerInputRef]}
@@ -814,6 +830,27 @@ export default function StorefrontBargainWidget({
             </div>
           )}
 
+          {showSuggestions && (quickOffers.length > 0 || suggestedPrompts.length > 0) && (
+            <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label={t('makeOfferSub')}>
+              {quickOffers.slice(0, 2).map((value) => (
+                <QuickChip
+                  key={`offer-${value}`}
+                  compact
+                  label={`${t('makeOffer')} · ${money(currency, value)}`}
+                  onClick={() => { setInput(String(value)); composerInputRef.current?.focus() }}
+                />
+              ))}
+              {suggestedPrompts.slice(0, 2).map((key) => (
+                <QuickChip
+                  key={key}
+                  compact
+                  label={t(key)}
+                  onClick={() => { setInput(t(key)); composerInputRef.current?.focus() }}
+                />
+              ))}
+            </div>
+          )}
+
           <div className="cgf-composer flex gap-2">
             <input
               ref={composerInputRef}
@@ -851,6 +888,10 @@ export default function StorefrontBargainWidget({
       {step === 'deal' && finalPrice != null && (
         <div className="p-4 space-y-3 text-center">
           <p className="text-emerald-600 font-semibold text-sm">{t('dealAcceptedBanner')}</p>
+          <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 flex items-center justify-between text-xs text-gray-500">
+            <span>{t('listed')}</span>
+            <span className="font-semibold text-gray-600">{money(currency, originalPrice)}</span>
+          </div>
           <div>
             <p className="text-gray-900 font-bold text-lg">
               {isCart ? t('newOrderTotal') : t('finalPriceLabel')} {money(currency, finalPrice)}

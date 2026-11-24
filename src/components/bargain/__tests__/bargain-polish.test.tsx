@@ -104,11 +104,13 @@ describe('BargainWidget compact chrome', () => {
     expect(css).toContain('.cartgain-bargain .cg-private-note { display: none }')
   })
 
-  it('keeps the conversation and composer visible without a suggestion panel', () => {
+  it('prefills from floor-safe suggestions without sending the message', () => {
     render(<BargainWidget {...baseProps} />)
-    expect(screen.getByRole('textbox', { name: /Ask about this product/i })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Tell me about this product' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /what is included/i })).toBeNull()
+    const input = screen.getByRole('textbox', { name: /Ask about this product/i }) as HTMLInputElement
+    expect(screen.getByRole('button', { name: /Make offer · ₹889/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Tell me about this product' }))
+    expect(input.value).toBe('Tell me about this product')
+    expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy()
   })
 
   it('keeps the jump control in normal flow instead of overlapping the transcript', () => {

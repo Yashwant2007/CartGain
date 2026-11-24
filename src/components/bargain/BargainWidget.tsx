@@ -14,7 +14,7 @@ import {
   ShieldCheck, ArrowRight, Loader2, AlertCircle, RotateCcw,
 } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
-import { parseDraftOffer } from '@/lib/bargain/offers'
+import { buildQuickOffers, buildSuggestedPrompts, parseDraftOffer } from '@/lib/bargain/offers'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import ShopkeeperAvatar from '@/components/bargain/ShopkeeperAvatar'
 import V2ShopkeeperAvatar from '@/components/bargain/V2ShopkeeperAvatar'
@@ -53,6 +53,7 @@ import {
   PriceRail,
   ProductContextCard,
   ProductThumb,
+  QuickChip,
   RoundMeter,
   StateCard,
   TypingIndicator,
@@ -554,6 +555,21 @@ export default function BargainWidget({
   const draftAmount = parseDraftOffer(input)
 
   const unavailable = rejection != null && /UNAVAILABLE/i.test(rejection.reason)
+  const quickOffers = useMemo(
+    () => buildQuickOffers({ lastCounter, listedPrice: livePrice, sessionEnded, decision }),
+    [lastCounter, livePrice, sessionEnded, decision],
+  )
+  const suggestedPrompts = useMemo(
+    () => buildSuggestedPrompts({ lastCounter, sessionEnded, attemptsUsed: roundsUsed }),
+    [lastCounter, sessionEnded, roundsUsed],
+  )
+  const showSuggestions = !sessionEnded && decision !== 'accept' && !limit && !unavailable && !rejection && !loading && input.trim() === ''
+
+  function applySuggestion(value: string) {
+    setInput(value)
+    setError(null)
+    inputRef.current?.focus()
+  }
 
   async function openCheckout(url: string) {
     if (!url) return
@@ -1782,6 +1798,8 @@ export default function BargainWidget({
                 originalPrice={livePrice}
                 finalPrice={finalPrice}
                 lastCounter={lastCounter}
+                customerOffer={bestCustomerOffer}
+                round={{ used: roundsUsed, max: maxAttempts ?? 0 }}
                 currencySymbol={currencySymbol}
                 decision={decision}
                 discountCode={discountCode}
@@ -2174,6 +2192,34 @@ export default function BargainWidget({
                 flexDirection: 'column',
                 gap: 6,
               }}>
+                {showSuggestions && (quickOffers.length > 0 || suggestedPrompts.length > 0) && (
+                  <div
+                    className="cg-suggestions"
+                    role="group"
+                    aria-label={t('makeOfferSub')}
+                    style={{
+                      display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 2,
+                      scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
+                    }}
+                  >
+                    {quickOffers.slice(0, 2).map((value) => (
+                      <QuickChip
+                        key={`offer-${value}`}
+                        compact
+                        label={`${t('makeOffer')} · ${currencySymbol}${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
+                        onClick={() => applySuggestion(String(value))}
+                      />
+                    ))}
+                    {suggestedPrompts.slice(0, 2).map((key) => (
+                      <QuickChip
+                        key={key}
+                        compact
+                        label={t(key)}
+                        onClick={() => applySuggestion(t(key))}
+                      />
+                    ))}
+                  </div>
+                )}
                 {/* Message / offer composer — one calm, roomy control. Free text
                     is a real chat message; a number anywhere in it is treated
                     as the negotiation offer. */}
@@ -2346,6 +2392,8 @@ export default function BargainWidget({
         .cartgain-bargain { --cg-surface: #f8fafc; --cg-ink: #0f172a; --cg-muted: #64748b; --cg-line: #e2e8f0 }
         .cartgain-bargain .cg-chat-log { background: linear-gradient(180deg, #f8fafc 0%, #ffffff 18%, #ffffff 100%); }
         .cartgain-bargain .cg-composer-helper { color: var(--cg-muted); letter-spacing: 0.01em }
+        .cartgain-bargain .cg-suggestions { scrollbar-width: none; -ms-overflow-style: none }
+        .cartgain-bargain .cg-suggestions::-webkit-scrollbar { display: none }
         .cartgain-bargain ::-webkit-scrollbar { width: 6px }
         .cartgain-bargain ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 3px }
         .cartgain-bargain button:focus-visible,

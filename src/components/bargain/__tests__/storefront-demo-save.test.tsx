@@ -82,10 +82,20 @@ async function reachDeal() {
 }
 
 describe('StorefrontBargainWidget demo deal', () => {
+  it('prefills from floor-safe suggestions without sending', () => {
+    render(<StorefrontBargainWidget {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Start price negotiation' }))
+    const input = screen.getByLabelText('Your offer or message') as HTMLInputElement
+    fireEvent.click(screen.getByRole('button', { name: /Make offer · ₹890/ }))
+    expect(input.value).toBe('890')
+    expect(screen.getByRole('button', { name: 'Send offer' })).toBeTruthy()
+  })
+
   it('uses a sample code and never posts raw client pricing in demo mode', async () => {
     const fetchMock = stubFetch()
     render(<StorefrontBargainWidget {...props} />)
     await reachDeal()
+    expect(screen.getByText('Listed:')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Create My Discount Code' }))
 

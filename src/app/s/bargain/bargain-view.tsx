@@ -7,7 +7,7 @@ import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import BargainWidget, { type BargainItem } from '@/components/bargain/StorefrontBargainWidget'
 import type { BargainDemoGoal } from '@/lib/bargain/api-types'
-import type { AvatarVariant } from '@/lib/bargain/experience/types'
+import type { AvatarVariant, CharacterStyle } from '@/lib/bargain/experience/types'
 
 export default function BargainView() {
   return (
@@ -73,6 +73,9 @@ function PageContent() {
   const [storeCfg, setStoreCfg] = useState<{
     persona: string; language: string; maxAttempts: number; minProfitPercent: number
     avatarVariant?: AvatarVariant
+    characterStyle?: CharacterStyle
+    essentialMotionOnly?: boolean
+    motionEnabled?: boolean
     goal?: BargainDemoGoal
   }>({
     persona: 'friendly_shopkeeper',
@@ -80,6 +83,9 @@ function PageContent() {
     maxAttempts: 3,
     minProfitPercent: 25,
     avatarVariant: 'robot',
+    characterStyle: 'signature',
+    essentialMotionOnly: false,
+    motionEnabled: true,
   })
 
   useEffect(() => {
@@ -87,8 +93,15 @@ function PageContent() {
     fetch(`/api/bargain/experience?shop=${encodeURIComponent(shop)}`)
       .then(r => (r.ok ? r.json() : null))
       .then(data => {
-        if (cancelled || !data?.experience?.avatarVariant) return
-        setStoreCfg(prev => ({ ...prev, avatarVariant: data.experience.avatarVariant as AvatarVariant }))
+        if (cancelled || !data?.experience) return
+        const exp = data.experience
+        setStoreCfg(prev => ({
+          ...prev,
+          ...(exp.avatarVariant ? { avatarVariant: exp.avatarVariant as AvatarVariant } : {}),
+          ...(exp.characterStyle ? { characterStyle: exp.characterStyle as CharacterStyle } : {}),
+          ...(typeof exp.essentialMotionOnly === 'boolean' ? { essentialMotionOnly: exp.essentialMotionOnly } : {}),
+          ...(typeof exp.motionEnabled === 'boolean' ? { motionEnabled: exp.motionEnabled } : {}),
+        }))
       })
       .catch(() => {})
 
@@ -225,6 +238,9 @@ function PageContent() {
           checkoutUrl={checkoutUrl}
           persona={storeCfg.persona}
           avatarVariant={storeCfg.avatarVariant}
+          characterStyle={storeCfg.characterStyle}
+          essentialMotionOnly={storeCfg.essentialMotionOnly}
+          motionEnabled={storeCfg.motionEnabled}
           language={storeCfg.language}
           maxAttempts={storeCfg.maxAttempts}
           minProfitPercent={storeCfg.minProfitPercent}
@@ -242,7 +258,14 @@ function PageContent() {
         currency={currency}
         line={line}
         checkoutUrl={checkoutUrl}
+        persona={storeCfg.persona}
         avatarVariant={storeCfg.avatarVariant}
+        characterStyle={storeCfg.characterStyle}
+        essentialMotionOnly={storeCfg.essentialMotionOnly}
+        motionEnabled={storeCfg.motionEnabled}
+        language={storeCfg.language}
+        maxAttempts={storeCfg.maxAttempts}
+        minProfitPercent={storeCfg.minProfitPercent}
         goal={storeCfg.goal}
       />
     </Shell>

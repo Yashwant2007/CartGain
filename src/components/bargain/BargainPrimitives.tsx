@@ -687,26 +687,29 @@ export function ChatSkeleton({ t }: { t: UiText }) {
 }
 
 // ── Quick-chip / offer suggestions ────────────────────────────────────────
-export function QuickChip({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
+export function QuickChip({ label, onClick, disabled, compact, ariaLabel }: { label: string; onClick: () => void; disabled?: boolean; compact?: boolean; ariaLabel?: string }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       type="button"
+      aria-label={ariaLabel}
       style={{
         background: '#eef2ff',
         border: '1px solid #c7d2fe',
         color: '#4338ca',
         borderRadius: 999,
-        padding: '10px 18px',
-        fontSize: 13,
+        padding: compact ? '8px 13px' : '10px 18px',
+        fontSize: compact ? 12 : 13,
         fontWeight: 700,
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.5 : 1,
         transition: 'all 0.18s ease',
         outline: 'none',
-        minHeight: 44,
+        minHeight: compact ? 40 : 44,
         boxShadow: '0 2px 8px rgba(79,70,229,0.12)',
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
       }}
       onMouseEnter={(e) => { e.currentTarget.style.background = '#4f46e5'; e.currentTarget.style.borderColor = '#4f46e5'; e.currentTarget.style.color = '#ffffff'; e.currentTarget.style.transform = 'translateY(-1px)' }}
       onMouseLeave={(e) => { e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.borderColor = '#c7d2fe'; e.currentTarget.style.color = '#4338ca'; e.currentTarget.style.transform = 'none' }}
