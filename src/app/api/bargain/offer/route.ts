@@ -1156,6 +1156,7 @@ export async function POST(request: NextRequest) {
       aiModel: config.aiModel ?? undefined,
       productTitle,
       bulkQuantity: bulkQuantity ?? undefined,
+      customerOfferTotal: effectiveOfferStructure.totalAmount ?? undefined,
       walkoutTriggered: isWalkout,
       language: lang,
       customerContext: await buildCustomerContext(bargainSession.storeId, {

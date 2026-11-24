@@ -182,6 +182,7 @@ export interface NegotiationContext {
   productTitle?: string
   customerContext?: string
   bulkQuantity?: number
+  customerOfferTotal?: number
   walkoutTriggered?: boolean
   language?: string
   goal?: NegotiationGoalContext
@@ -2289,7 +2290,11 @@ export function buildSystemPrompt(
   // Bulk context (from the merchant's safe per-unit discount guidance, not the floor)
   if (ctx.bulkQuantity != null && ctx.bulkQuantity >= 2) {
     contextParts.push(
-      `BULK ORDER: ${ctx.bulkQuantity} units. ALWAYS quote BOTH per-unit AND total. ` +
+      `BULK ORDER: ${ctx.bulkQuantity} units. ` +
+      (ctx.customerOfferTotal != null
+        ? `The shopper's amount is a SINGLE ORDER TOTAL of ${ctx.currencySymbol}${ctx.customerOfferTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}; never treat it as a per-unit bid or invent a different total. `
+        : '') +
+      `ALWAYS quote BOTH per-unit AND total. ` +
       `Volume is legitimately worth a deeper per-unit discount, but a hidden system ` +
       `minimum still applies per unit and you must never go past it or reveal it. ` +
       `Use volume as YOUR leverage — "bulk orders unlock my best price."`
@@ -2775,7 +2780,7 @@ function bestPriceReply(counter: number, ctx: NegotiationContext): string {
   return `Fair question — I can do ${money} right now, and that's a price I can honor. Want me to lock it?`
 }
 
-function alignStatedOfferPrice(
+export function alignStatedOfferPrice(
   reply: string,
   counter: number,
   ctx: NegotiationContext,
@@ -2783,17 +2788,54 @@ function alignStatedOfferPrice(
 ): string {
   const rawSymbol = ctx.currencySymbol.trim() || '₹'
   const symbol = rawSymbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const matches = reply.match(new RegExp(`(?:${symbol}|Rs\\.?|INR)\\s*\\d[\\d,]*(?:\\.\\d{1,2})?`, 'gi')) ?? []
-  const values = Array.from(new Set(matches.map((m) => {
-    const parsed = Number(m.replace(/[^\d.]/g, '').replace(/,/g, ''))
-    return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : null
-  }).filter((v): v is number => v != null && v > 0)))
-  if (values.length !== 1) return reply
-  const stated = values[0]
-  if (Math.abs(stated - counter) < 0.01) return reply
-  if (customerOffer != null && Math.abs(stated - customerOffer) < 0.01) return reply
-  if (Math.abs(stated - ctx.originalPrice) < 0.01) return reply
-  return rewriteStatedPrice(reply, stated, counter)
+  const matches = Array.from(reply.matchAll(new RegExp(`(?:${symbol}|Rs\\.?|INR)\\s*\\d[\\d,]*(?:\\.\\d{1,2})?`, 'gi')))
+  if (matches.length === 0) return reply
+  const round2 = (value: number) => Math.round(value * 100) / 100
+  const quantity = ctx.bulkQuantity != null && ctx.bulkQuantity >= 2 ? ctx.bulkQuantity : 1
+  const counterTotal = round2(counter * quantity)
+  const allowed = [
+    counter,
+    counterTotal,
+    customerOffer,
+    customerOffer != null ? round2(customerOffer * quantity) : null,
+    ctx.customerOfferTotal,
+    ctx.originalPrice,
+    round2(ctx.originalPrice * quantity),
+  ].filter((value): value is number => value != null && value > 0)
+  const offenders: Array<{ match: RegExpExecArray; value: number }> = []
+  for (const match of matches) {
+    const value = round2(Number(match[0].replace(/[^\d.]/g, '').replace(/,/g, '')))
+    if (!Number.isFinite(value) || value <= 0) continue
+    if (allowed.some((candidate) => Math.abs(candidate - value) < 0.01)) continue
+    offenders.push({ match, value })
+  }
+  if (offenders.length === 0) return reply
+
+  const money = (value: number) => value.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+  let out = reply
+  for (const { match, value } of offenders.reverse()) {
+    const index = match.index ?? out.indexOf(match[0])
+    const before = out.slice(Math.max(0, index - 50), index)
+    const after = out.slice(index + match[0].length, index + match[0].length + 25)
+    const totalContext = /\b(?:total|both|all|together|for\s+(?:the\s+)?(?:\w+\s+)?(?:units?|pcs?|pieces?|items?))\b/i.test(before + after)
+    const customerSide = /\b(?:aim(?:ing)?|looking|budget|you\s+(?:said|offered|mentioned)|your\s+(?:offer|price|budget))\b/i.test(before)
+    const prefix = match[0].replace(/\d[\d,.]*$/, '')
+    let replacement: string
+    if (customerSide) {
+      const target = totalContext
+        ? ctx.customerOfferTotal ?? (customerOffer != null ? round2(customerOffer * quantity) : counterTotal)
+        : customerOffer ?? counter
+      replacement = `${prefix}${money(target)}`
+    } else if (quantity >= 2 && totalContext) {
+      replacement = `${prefix}${money(counterTotal)} total (${prefix}${money(counter)} per unit)`
+    } else if (quantity >= 2) {
+      replacement = `${prefix}${money(counter)} per unit (${prefix}${money(counterTotal)} total)`
+    } else {
+      replacement = `${prefix}${money(counter)}`
+    }
+    out = out.slice(0, index) + replacement + out.slice(index + match[0].length)
+  }
+  return out
 }
 
 function stripUnverifiedLoyalty(reply: string, ctx: NegotiationContext): string {
