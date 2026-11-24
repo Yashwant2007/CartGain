@@ -1,4 +1,4 @@
-import { alignStatedOfferPrice, rewriteStatedPrice, stripUnverifiedProductClaims, type NegotiationContext } from '@/lib/services/bargain'
+import { alignStatedOfferPrice, replacePrematureAcceptanceOnCounter, rewriteStatedPrice, stripUnverifiedProductClaims, type NegotiationContext } from '@/lib/services/bargain'
 
 const bulkCtx = {
   currencySymbol: '₹',
@@ -62,6 +62,21 @@ describe('alignStatedOfferPrice', () => {
     )
 
     expect(aligned).toContain('₹914.16 per unit (₹1,828.32 total)')
+  })
+})
+
+describe('replacePrematureAcceptanceOnCounter', () => {
+  it('replaces a false bulk acceptance with the authoritative per-unit and total counter', () => {
+    expect(replacePrematureAcceptanceOnCounter(
+      '₹1000 for the two units is acceptable. I’ll confirm your order at the listed price of ₹999 each, total ₹1998.',
+      980.81,
+      bulkCtx,
+    )).toBe('I can do ₹980.81 per unit (₹1,961.62 total) right now. Does that work for you?')
+  })
+
+  it('leaves a counter reply without acceptance language untouched', () => {
+    const reply = 'I can do ₹980.81 per unit (₹1,961.62 total). Does that work?'
+    expect(replacePrematureAcceptanceOnCounter(reply, 980.81, bulkCtx)).toBe(reply)
   })
 })
 

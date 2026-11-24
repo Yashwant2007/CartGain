@@ -2851,6 +2851,23 @@ export function alignStatedOfferPrice(
   return out
 }
 
+export function replacePrematureAcceptanceOnCounter(
+  reply: string,
+  counter: number,
+  ctx: NegotiationContext,
+): string {
+  if (!/\b(?:acceptable|accepted|agreed|deal|confirm your order|i(?:'|’)ll confirm|locked in|we have a deal)\b/i.test(reply)) {
+    return reply
+  }
+  const money = (value: number) => value.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+  const quantity = ctx.bulkQuantity != null && ctx.bulkQuantity >= 2 ? ctx.bulkQuantity : 1
+  if (quantity >= 2) {
+    const total = Math.round(counter * quantity * 100) / 100
+    return `I can do ${ctx.currencySymbol}${money(counter)} per unit (${ctx.currencySymbol}${money(total)} total) right now. Does that work for you?`
+  }
+  return `I can do ${ctx.currencySymbol}${money(counter)} right now. Does that work for you?`
+}
+
 export function stripUnverifiedProductClaims(reply: string, ctx: NegotiationContext): string {
   const verified = [
     ctx.product?.description,
@@ -3258,6 +3275,9 @@ export async function negotiateStep(
           : chatFallback(customerMessage, ctx, history.length))
     reply = stripUnverifiedLoyalty(reply, ctx)
     reply = stripUnverifiedProductClaims(reply, ctx)
+    if (safeDecision === 'counter') {
+      reply = replacePrematureAcceptanceOnCounter(reply, counterOffer, ctx)
+    }
 
     // The spoken price must match the real offer: if the model named a figure the
     // backend had to clamp (usually a below-floor guess), rewrite the reply BEFORE
