@@ -935,6 +935,7 @@ export async function POST(request: NextRequest) {
           finalPrice,
           sessionStatus: 'active',
           sessionId: bargainSession.id,
+          ...intelligenceResponseFields(intelligence, offerView),
           floorReached: true,
           attemptsUsed,
         })
@@ -967,6 +968,7 @@ export async function POST(request: NextRequest) {
         reply: rejectReply,
         decision: 'reject',
         sessionStatus: 'rejected',
+        ...intelligenceResponseFields(intelligence, offerView),
         attemptsUsed,
         discountCode: retention?.code ?? null,
         finalPrice: retention?.finalPrice ?? null,
@@ -1201,7 +1203,7 @@ export async function POST(request: NextRequest) {
       adaptive,
       sessionMemory: ctx.sessionMemory,
       customerOffer,
-      offerStructure,
+      offerStructure: effectiveOfferStructure,
       originalPrice: bargainSession.originalPrice,
       minPrice,
       attemptsUsed: bargainSession.attemptsUsed,
@@ -1216,10 +1218,14 @@ export async function POST(request: NextRequest) {
       couponsAllowed,
       durationMs: Date.now() - secondIntelligenceStartedAt,
     })
-    turnMetadata = { ...turnMetadata, bargainIntelligence: intelligence.metadata }
+    turnMetadata = {
+      ...turnMetadata,
+      bargainIntelligence: intelligence.metadata,
+      publicIntelligence: publicIntelligenceView(intelligence),
+    }
     ctx.intelligencePrompt = intelligence.promptBlock
 
-    if (offerStructure.needsClarification && !isWalkout) {
+    if (effectiveOfferStructure.needsClarification && !isWalkout) {
       const clarificationReply = uiText(lang, 'clarify_offer_basis')
       await prisma.$transaction([
         prisma.bargainMessage.create({
@@ -1236,7 +1242,7 @@ export async function POST(request: NextRequest) {
           },
         }),
       ])
-      void track({
+      await track({
         name: 'cartgain_bargain_intelligence_turn',
         storeId: bargainSession.storeId,
         properties: {
@@ -1252,7 +1258,7 @@ export async function POST(request: NextRequest) {
           agentCount: intelligence.metadata.agentCount,
           llmCalls: 0,
           durationMs: intelligence.metadata.durationMs,
-          offerBasis: offerStructure.basis,
+          offerBasis: offerView.basis,
           offerClarificationNeeded: true,
         },
       })
@@ -1263,6 +1269,7 @@ export async function POST(request: NextRequest) {
         sessionId: bargainSession.id,
         attemptsUsed: bargainSession.attemptsUsed,
         needsClarification: true,
+        conversationState: intelligence.state.current,
         offerInterpretation: offerView,
         negotiationIntelligence: publicIntelligenceView(intelligence),
       })
@@ -1306,6 +1313,7 @@ export async function POST(request: NextRequest) {
           decision: 'reject',
           sessionStatus: 'abandoned',
           terminal: true,
+          ...intelligenceResponseFields(intelligence, offerView),
           discountCode: retention?.code ?? null,
           finalPrice: retention?.finalPrice ?? null,
           purchaseUrl: retention?.purchaseUrl ?? null,
@@ -1353,6 +1361,7 @@ export async function POST(request: NextRequest) {
         counterOffer: retentionPrice,
         sessionStatus: 'active',
         sessionId: bargainSession.id,
+        ...intelligenceResponseFields(intelligence, offerView),
         // The retention turn still consumed an attempt — report it so the UI
         // round meter stays in step with the server.
         attemptsUsed,
@@ -1651,7 +1660,7 @@ export async function POST(request: NextRequest) {
       adaptive,
       sessionMemory: ctx.sessionMemory,
       customerOffer,
-      offerStructure,
+      offerStructure: effectiveOfferStructure,
       proposedPrice: safeCounter ?? undefined,
       originalPrice: bargainSession.originalPrice,
       minPrice,
@@ -1671,9 +1680,13 @@ export async function POST(request: NextRequest) {
       checkoutStarted: Boolean(bargainSession.checkoutOpenedAt),
       durationMs: Date.now() - finalIntelligenceStartedAt,
     })
-    turnMetadata = { ...turnMetadata, bargainIntelligence: intelligence.metadata }
+    turnMetadata = {
+      ...turnMetadata,
+      bargainIntelligence: intelligence.metadata,
+      publicIntelligence: publicIntelligenceView(intelligence),
+    }
     bargainRequestMetrics.record('offer_intelligence', intelligence.metadata.durationMs)
-    void track({
+    await track({
       name: 'cartgain_bargain_intelligence_turn',
       storeId: bargainSession.storeId,
       properties: {
@@ -1693,8 +1706,8 @@ export async function POST(request: NextRequest) {
         agentCount: intelligence.metadata.agentCount,
         llmCalls: 0,
         durationMs: intelligence.metadata.durationMs,
-        offerBasis: offerStructure.basis,
-        offerClarificationNeeded: offerStructure.needsClarification,
+        offerBasis: offerView.basis,
+        offerClarificationNeeded: offerView.needsClarification,
       },
     })
 

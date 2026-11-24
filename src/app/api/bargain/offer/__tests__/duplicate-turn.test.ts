@@ -116,7 +116,25 @@ const completedTurn = [
     role: 'ai',
     content: 'I can do 450',
     offeredPrice: 450,
-    metadata: { turnId: 'turn-1', decision: 'counter', tactic: 'final_offer' },
+    metadata: {
+      turnId: 'turn-1',
+      decision: 'counter',
+      tactic: 'final_offer',
+      bargainIntelligence: { conversationState: 'COUNTER_OFFER', strategy: 'VALUE_FOCUS' },
+      publicIntelligence: {
+        schemaVersion: 1,
+        customer: { readiness: 'evaluating', engagement: 'medium', urgency: 'normal', productKnowledge: 'aware', claimRisk: 'none', offerBasis: 'single', offerQuantity: 1, offerClarificationNeeded: false },
+        state: { current: 'COUNTER_OFFER', terminal: false },
+        recommendation: 'none',
+        metrics: { llmCalls: 0, deterministic: true },
+      },
+      offerBasis: 'single',
+      offerQuantity: 1,
+      offerRawAmount: 400,
+      offerUnitAmount: 400,
+      offerTotal: 400,
+      offerClarificationNeeded: false,
+    },
     createdAt: new Date('2026-11-17T10:00:01.000Z'),
   },
 ]
@@ -156,6 +174,12 @@ describe('offer route turn idempotency', () => {
       attemptsUsed: 1,
       floorReached: true,
       duplicateTurn: true,
+      conversationState: 'COUNTER_OFFER',
+      offerInterpretation: { basis: 'single', quantity: 1, rawAmount: 400, unitAmount: 400, totalAmount: 400, needsClarification: false },
+    })
+    expect(body.negotiationIntelligence).toMatchObject({
+      state: { current: 'COUNTER_OFFER', terminal: false },
+      metrics: { llmCalls: 0, deterministic: true },
     })
     expect(prismaMock.$transaction).not.toHaveBeenCalled()
     expect(prismaMock.bargainMessage.create).not.toHaveBeenCalled()

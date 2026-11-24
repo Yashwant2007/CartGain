@@ -65,6 +65,11 @@ describe('structured offer interpretation', () => {
     })
   })
 
+  it('does not treat an explicit bundle as a same-sku total', () => {
+    expect(isSameSkuTotalPhrase('serum plus moisturizer for both ₹900')).toBe(false)
+    expect(isSameSkuTotalPhrase('900 for both')).toBe(true)
+  })
+
   it('reads a reversed same-sku total phrase', () => {
     expect(parseStructuredOffer('both for 1000', null, 700)).toMatchObject({
       unitPrice: 500,
