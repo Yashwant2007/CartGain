@@ -9,6 +9,15 @@ import {
   type ShopkeeperAnimation,
 } from '@/lib/bargain/experience/living'
 import type { LivingEvent } from '@/lib/bargain/experience/avatar-state'
+import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
+import type { V2AvatarVariant } from '@/lib/bargain/experience/v2-shopkeepers'
+import { V2_AVATARS } from '@/lib/bargain/experience/v2-shopkeepers'
+import {
+  V2_REACTIONS,
+  v2ReactionCell,
+  v2ReactionSheet,
+  type BargainReaction,
+} from '@/lib/bargain/experience/reactions'
 
 type ChatMsg = {
   id: number
@@ -44,25 +53,57 @@ const QUICK_PROMPTS = [
   "I'll take it",
 ]
 
+const AVATAR_PROFILES: Record<V2AvatarVariant, { name: string; role: string; personality: ShopkeeperPersonality }> = {
+  morgan: { name: 'Morgan', role: 'Friendly Shopkeeper', personality: 'friendly_shopkeeper' },
+  riley: { name: 'Riley', role: 'Playful Shopkeeper', personality: 'playful_shopkeeper' },
+  alex: { name: 'Alex', role: 'Strict Shopkeeper', personality: 'strict_shopkeeper' },
+}
+
+const AVATAR_VARIANTS: V2AvatarVariant[] = ['morgan', 'riley', 'alex']
+
+const greetingFor = (variant: V2AvatarVariant) =>
+  `Hi! I'm ${AVATAR_PROFILES[variant].name}, the shopkeeper. Ask me about the serum or name a fair price — I'll do my best.`
+
+const HERO_STAGE_CSS = `
+.cg-hero-avatar .cg-stage-avatar { width: 104px; height: 116px; }
+.cg-hero-avatar .cg-stage-avatar > * { transform: scale(.56) !important; transform-origin: 50% 100% !important; }
+@media (max-width: 640px) { .cg-hero-avatar .cg-stage-avatar > * { transform: scale(.5) !important; } }
+`
+
 const money = (value: number) => `${PRODUCT.currency}${value.toLocaleString('en-IN')}`
 
 export default function HeroNegotiationDemo() {
+  const [avatarVariant, setAvatarVariant] = useState<V2AvatarVariant>('morgan')
   const [messages, setMessages] = useState<ChatMsg[]>([
-    { id: 0, role: 'ai', text: "Hi! I'm Morgan, the shopkeeper. Ask me about the serum or name a fair price — I'll do my best." },
+    { id: 0, role: 'ai', text: greetingFor('morgan') },
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [attemptsUsed, setAttemptsUsed] = useState(0)
   const [settled, setSettled] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [previewReaction, setPreviewReaction] = useState<BargainReaction | null>(null)
   const [character, setCharacter] = useState<ShopkeeperAnimation>(() =>
     resolveShopkeeperAnimation('friendly_shopkeeper', 'idle'),
   )
   const chatRef = useRef<HTMLDivElement>(null)
   const nextId = useRef(1)
 
+  const profile = AVATAR_PROFILES[avatarVariant]
+  const displayedReaction = previewReaction ?? character.reaction ?? null
+
   const fireAvatar = (event: LivingEvent, ctx: FireAvatarContext = {}) => {
-    setCharacter(resolveShopkeeperAnimation('friendly_shopkeeper', event, ctx))
+    setPreviewReaction(null)
+    setCharacter(resolveShopkeeperAnimation(profile.personality, event, ctx))
+  }
+
+  const chooseAvatar = (variant: V2AvatarVariant) => {
+    setAvatarVariant(variant)
+    setPreviewReaction(null)
+    setCharacter(resolveShopkeeperAnimation(AVATAR_PROFILES[variant].personality, 'greeting', { opening: true }))
+    setMessages((prev) => prev.map((message, index) => (
+      index === 0 ? { ...message, text: greetingFor(variant) } : message
+    )))
   }
 
   const scrollToLatest = () => {
@@ -134,13 +175,48 @@ export default function HeroNegotiationDemo() {
   return (
     <div className="relative rounded-2xl border border-blue-700/40 bg-slate-900/70 backdrop-blur-sm shadow-2xl overflow-hidden">
       <div className="absolute -top-20 -left-20 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl" />
+      <style dangerouslySetInnerHTML={{ __html: HERO_STAGE_CSS }} />
       <div className="relative grid grid-cols-1 lg:grid-cols-5">
         <div className="lg:col-span-3 p-4 sm:p-5">
+          <div className="mb-3 flex flex-wrap items-center gap-1.5" data-avatar-picker="v2">
+            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-blue-200/80">Shopkeeper</span>
+            {AVATAR_VARIANTS.map((variant) => {
+              const meta = V2_AVATARS[variant]
+              const selected = variant === avatarVariant
+              return (
+                <button
+                  key={variant}
+                  type="button"
+                  aria-label={`Preview ${meta.name}`}
+                  aria-pressed={selected}
+                  data-avatar-option={variant}
+                  data-avatar-selected={selected ? 'true' : 'false'}
+                  onClick={() => chooseAvatar(variant)}
+                  className={`flex min-h-11 items-center gap-1.5 rounded-full border px-2 py-1 text-xs transition ${
+                    selected
+                      ? 'border-cyan-400/70 bg-cyan-950/40 text-white'
+                      : 'border-blue-700/50 bg-blue-950/30 text-blue-200 hover:bg-blue-900/40'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="h-6 w-6 rounded-md border border-white/10 bg-white/90"
+                    style={{
+                      backgroundImage: `url(${meta.expressionSheet})`,
+                      backgroundPosition: '0% 0%',
+                      backgroundSize: '200% 200%',
+                    }}
+                  />
+                  {meta.name}
+                </button>
+              )
+            })}
+          </div>
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-[76px] h-[68px] rounded-xl bg-white/95 overflow-hidden flex items-center justify-center ring-1 ring-blue-700/40 flex-shrink-0">
+            <div className="cg-hero-avatar w-[104px] h-[116px] rounded-xl bg-white/95 overflow-hidden flex items-center justify-center ring-1 ring-blue-700/40 flex-shrink-0">
               <ShopkeeperStage
                 compact
-                personality="friendly_shopkeeper"
+                personality={profile.personality}
                 expression={character.expression}
                 state={character.state}
                 event={character.event}
@@ -148,9 +224,9 @@ export default function HeroNegotiationDemo() {
                 eventContext={character}
                 gesture={character.gesture}
                 position={character.position}
-                reaction={character.reaction}
-                avatarVariant="signature"
-                name="Morgan"
+                reaction={displayedReaction}
+                avatarVariant={avatarVariant}
+                name={profile.name}
                 status="Live"
                 line=""
                 motionEnabled
@@ -158,7 +234,7 @@ export default function HeroNegotiationDemo() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-white">Morgan · AI Shopkeeper</span>
+                <span className="text-sm font-semibold text-white">{profile.name} · {profile.role}</span>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-900/40 border border-emerald-600/40 text-emerald-300 text-xs font-semibold">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> LIVE DEMO
                 </span>
@@ -299,6 +375,38 @@ export default function HeroNegotiationDemo() {
             </p>
             <div className="rounded-xl border border-blue-700/40 bg-blue-950/40 px-3 py-2.5 flex items-center gap-2 text-xs text-blue-200">
               <Store className="w-4 h-4 text-cyan-300" /> Sample catalog product · no store connection required
+            </div>
+          </div>
+          <div className="mt-4 border-t border-blue-800/30 pt-3" data-reaction-sheet-preview={avatarVariant}>
+            <p className="text-[11px] uppercase tracking-wider text-blue-200/80 font-semibold mb-1">
+              {profile.name}&rsquo;s reaction sheet
+            </p>
+            <p className="text-[11px] text-blue-300/70 mb-2">Each pose follows what you type. Tap one to preview it.</p>
+            <div className="grid grid-cols-4 gap-1.5">
+              {V2_REACTIONS.map((reaction) => {
+                const cell = v2ReactionCell(reaction.id)
+                const active = displayedReaction === reaction.id
+                return (
+                  <button
+                    key={reaction.id}
+                    type="button"
+                    title={`${reaction.label} — ${reaction.trigger}`}
+                    aria-label={`Preview ${reaction.label} reaction`}
+                    aria-pressed={active}
+                    data-reaction-preview={reaction.id}
+                    data-active={active ? 'true' : 'false'}
+                    onClick={() => setPreviewReaction(reaction.id)}
+                    className={`h-12 rounded-lg border bg-white/90 bg-no-repeat transition ${
+                      active ? 'border-cyan-400 ring-1 ring-cyan-400/60' : 'border-white/10 hover:border-cyan-400/60'
+                    }`}
+                    style={{
+                      backgroundImage: `url(${v2ReactionSheet(avatarVariant, cell.sheet)})`,
+                      backgroundPosition: cell.position,
+                      backgroundSize: '200% 200%',
+                    }}
+                  />
+                )
+              })}
             </div>
           </div>
         </div>
