@@ -926,6 +926,32 @@ describe('negotiateStep (best-price asks)', () => {
   })
 })
 
+describe('negotiateStep (strict persona rapid replies)', () => {
+  it('suppresses rapid-reply emoji for the strict persona', async () => {
+    mockAIResponse(jest.fn(() => { throw new Error('AI must not be called for a rapid reply') }))
+
+    const result = await negotiateStep(
+      baseCtx({
+        persona: 'strict_negotiator',
+        liveTurn: {
+          mode: 'emoji_only',
+          replyLength: 'brief',
+          emojiBudget: 1,
+          humorAllowed: false,
+          compact: true,
+          noPrice: true,
+          prompt: '',
+        },
+      }),
+      [],
+      '😍😍',
+    )
+
+    expect(result.tactic).toBe('rapid_reply')
+    expect(result.reply).not.toMatch(/[\u2600-\u27BF\uFE0F]|[\uD83C-\uD83E][\uDC00-\uDFFF]/)
+  })
+})
+
 describe('negotiateStep (over-list offers)', () => {
   beforeAll(() => {
     process.env.OPENAI_API_KEY = 'test-key'

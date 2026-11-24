@@ -3,7 +3,8 @@ import prisma from '@/lib/db'
 import { bargainOfferSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { negotiateStep, ruleBasedDecision, chatFallback, buildOpeningMessage, buildCustomerContext, classifySeriousness, computeMinPrice, retentionOffer, quotedFloor, type NegotiationContext } from '@/lib/services/bargain'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
-import { detectWalkout, extractPrice, extractQuantity, normalizeCustomerText } from '@/lib/bargain/text'
+import { detectWalkout, normalizeCustomerText } from '@/lib/bargain/text'
+import { parseStructuredOffer } from '@/lib/bargain/offer-structure'
 import { analyzeSocialSignals } from '@/lib/bargain/behavior'
 import { analyzeLiveTurn, voiceAdjustedLiveTurn } from '@/lib/bargain/live-turn'
 import { loadStoreVoice } from '@/lib/conversation/store'
@@ -16,14 +17,19 @@ import { detectLanguage } from '@/lib/bargain/language'
 import { logDataAccess } from '@/lib/data-protection'
 import { clampOfferToSafety } from '@/lib/bargain/engine'
 import { isOverListOffer, overListOfferReply } from '@/lib/bargain/over-list-offer'
-import { detectCouponMention, detectMultiProductRequest } from '@/lib/bargain/policy'
+import { bargainCampaignStatus, detectCouponMention, detectMultiProductRequest } from '@/lib/bargain/policy'
 import { normalizeShippingConfig, computeShipping, shippingUpsellLine } from '@/lib/bargain/shipping'
 import { normalizePaymentConfig, detectPaymentIntent, prepaidSaving } from '@/lib/bargain/payment'
 import { buildBundle, validateBundleOffer, allocateDiscount, bundleSummary, type BundleItem } from '@/lib/bargain/bundle'
 import { walkoutOutcome } from '@/lib/bargain/negotiation-state'
 import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
 import { analyzeIntent } from '@/lib/bargain/intent'
-import { deriveConversationState } from '@/lib/bargain/conversation-state'
+import {
+  buildBargainIntelligence,
+  conversationStateFromMetadata,
+  publicIntelligenceView,
+  type BargainIntelligenceState,
+} from '@/lib/bargain/intelligence'
 import { assessCustomerClaims } from '@/lib/bargain/claims'
 import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
 import { enginePersonaFor } from '@/lib/bargain/experience/personality'
@@ -300,6 +306,23 @@ function duplicateTurnPayload(session: any, ai: any | null): BargainOfferSuccess
       ? meta.decision
       : 'chat'
   const status: string = session.status
+  const intelligenceMeta = (meta.bargainIntelligence ?? {}) as Record<string, any>
+  const publicIntelligence = meta.publicIntelligence as BargainOfferSuccess['negotiationIntelligence']
+  const state = conversationStateFromMetadata(intelligenceMeta.conversationState)
+    ?? conversationStateFromMetadata(meta.conversationState)
+  const offerInterpretation: BargainOfferSuccess['offerInterpretation'] = meta.offerBasis
+    ? {
+        basis: meta.offerBasis as NonNullable<BargainOfferSuccess['offerInterpretation']>['basis'],
+        quantity: Number(meta.offerQuantity) || 1,
+        rawAmount: meta.offerRawAmount ?? null,
+        unitAmount: meta.offerUnitAmount ?? null,
+        totalAmount: meta.offerTotal ?? null,
+        listTotal: meta.offerListTotal ?? null,
+        savingsAmount: meta.offerSavingsAmount ?? null,
+        discountPercent: meta.offerDiscountPercent ?? null,
+        needsClarification: meta.offerClarificationNeeded === true,
+      }
+    : undefined
   return {
     reply: typeof ai?.content === 'string' ? ai.content : '',
     decision,
@@ -311,9 +334,22 @@ function duplicateTurnPayload(session: any, ai: any | null): BargainOfferSuccess
     duplicateTurn: true,
     ...(status !== 'active' ? { terminal: true } : {}),
     ...(meta.tactic === 'final_offer' || meta.reason === 'budget_spent_but_acceptable' ? { floorReached: true } : {}),
+    ...(state ? { conversationState: state } : {}),
+    ...(publicIntelligence ? { negotiationIntelligence: publicIntelligence } : {}),
+    ...(offerInterpretation ? { offerInterpretation } : {}),
     discountCode: session.discountCode ?? null,
     purchaseUrl: session.purchaseUrl ?? null,
     claimUrl: session.claimToken ? buildBargainClaimUrl(session.claimToken) : null,
+  }
+}
+
+type OfferView = NonNullable<BargainOfferSuccess['offerInterpretation']>
+
+function intelligenceResponseFields(intelligence: BargainIntelligenceState, offerView: OfferView) {
+  return {
+    conversationState: intelligence.state.current,
+    negotiationIntelligence: publicIntelligenceView(intelligence),
+    offerInterpretation: offerView,
   }
 }
 
@@ -331,9 +367,8 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const data = validateOrThrow(bargainOfferSchema, body)
-    const turnMetadata = data.turnId ? { turnId: data.turnId } : {}
+    let turnMetadata: Record<string, unknown> = data.turnId ? { turnId: data.turnId } : {}
     const interpretedMessage = normalizeCustomerText(data.message)
-    const customerOffer = extractPrice(interpretedMessage)
     const isWalkout = detectWalkout(interpretedMessage)
 
     const endDbLoad = bargainRequestMetrics.startTimer('offer_db_load')
@@ -461,7 +496,41 @@ export async function POST(request: NextRequest) {
     // Resolve bulk quantity: from this message, or carry over the last known one
     const lastBulk = [...bargainSession.messages].reverse()
       .find((m: any) => (m.metadata as any)?.bulkQuantity)
-    const bulkQuantity = extractQuantity(interpretedMessage) ?? (lastBulk?.metadata as any)?.bulkQuantity ?? null
+    const offerStructure = parseStructuredOffer(
+      interpretedMessage,
+      (lastBulk?.metadata as any)?.bulkQuantity ?? null,
+      bargainSession.originalPrice,
+    )
+    const bundleRequested = detectMultiProductRequest(interpretedMessage)
+    const effectiveOfferStructure = bundleRequested
+      ? { ...offerStructure, basis: 'multi_product' as const, needsClarification: true }
+      : offerStructure
+    const bulkQuantity = effectiveOfferStructure.quantity > 1 ? effectiveOfferStructure.quantity : null
+    const customerOffer = effectiveOfferStructure.unitPrice
+    const offerView: OfferView = {
+      basis: effectiveOfferStructure.basis,
+      quantity: effectiveOfferStructure.quantity,
+      rawAmount: effectiveOfferStructure.rawAmount,
+      unitAmount: effectiveOfferStructure.unitPrice,
+      totalAmount: effectiveOfferStructure.totalAmount,
+      listTotal: effectiveOfferStructure.listTotal,
+      savingsAmount: effectiveOfferStructure.savingsAmount,
+      discountPercent: effectiveOfferStructure.discountPercent,
+      needsClarification: effectiveOfferStructure.needsClarification,
+    }
+    const campaignActive = bargainCampaignStatus(config, new Date()) === 'active'
+    turnMetadata = {
+      ...turnMetadata,
+      offerBasis: offerView.basis,
+      offerQuantity: offerView.quantity,
+      offerClarificationNeeded: offerView.needsClarification,
+      offerRawAmount: offerView.rawAmount,
+      offerUnitAmount: offerView.unitAmount,
+      ...(offerView.totalAmount != null ? { offerTotal: offerView.totalAmount } : {}),
+      ...(offerView.listTotal != null ? { offerListTotal: offerView.listTotal } : {}),
+      ...(offerView.savingsAmount != null ? { offerSavingsAmount: offerView.savingsAmount } : {}),
+      ...(offerView.discountPercent != null ? { offerDiscountPercent: offerView.discountPercent } : {}),
+    }
 
     // Has the customer already received a walkout retention offer?
     const hadRetention = bargainSession.messages.some(
@@ -517,6 +586,44 @@ export async function POST(request: NextRequest) {
       approvedSellingPoints: config.approvedSellingPoints,
       disallowedClaims: config.disallowedClaims,
     })
+
+    const intelligenceHistory = bargainSession.messages
+      .filter((m: any) => m.role === 'customer' || m.role === 'ai')
+      .map((m: any) => ({
+        role: (m.role === 'customer' ? 'customer' : 'ai') as 'customer' | 'ai',
+        content: m.content,
+        offeredPrice: m.offeredPrice ?? null,
+        decision: (m.metadata as any)?.decision ?? null,
+        intelligenceState: conversationStateFromMetadata((m.metadata as any)?.bargainIntelligence?.conversationState),
+      }))
+    const firstIntelligenceStartedAt = Date.now()
+    let intelligence: BargainIntelligenceState = buildBargainIntelligence({
+      message: interpretedMessage,
+      history: intelligenceHistory,
+      intent: intentAnalysis,
+      claims: claimAssessment,
+      product: productCtx,
+      customerOffer,
+      offerStructure: effectiveOfferStructure,
+      originalPrice: bargainSession.originalPrice,
+      minPrice,
+      attemptsUsed: bargainSession.attemptsUsed,
+      maxAttempts: config.maxAttempts,
+      sessionStatus: bargainSession.status,
+      emergencyPaused: config.emergencyPaused === true,
+      campaignActive,
+      recommendationsEnabled: recoEnabledForMessages(config),
+      recommendationAvailable: false,
+      couponMentioned,
+      couponsAllowed,
+      durationMs: Date.now() - firstIntelligenceStartedAt,
+    })
+    turnMetadata = {
+      ...turnMetadata,
+      bargainIntelligence: intelligence.metadata,
+      publicIntelligence: publicIntelligenceView(intelligence),
+    }
+
     const alreadyQuarantined = Boolean((bargainSession as any).learningQuarantined)
     const learningQuarantined = claimAssessment.manipulation || alreadyQuarantined
     if (claimAssessment.manipulation && !alreadyQuarantined) {
@@ -560,7 +667,6 @@ export async function POST(request: NextRequest) {
     // attempt claim (an informational redirect does not burn a negotiation
     // attempt) and keep the session open on THIS product. Falls back to cards
     // for budget-fit alternatives when reco is enabled.
-    const bundleRequested = detectMultiProductRequest(interpretedMessage)
     if (bundleRequested) {
       // ── §27 BUNDLE NEGOTIATION (Module 6) ──
       // When the merchant opted in, try to resolve the distinct products and
@@ -639,6 +745,7 @@ export async function POST(request: NextRequest) {
           decision: 'chat',
           sessionStatus: 'active',
           sessionId: bargainSession.id,
+          ...intelligenceResponseFields(intelligence, offerView),
           bundleOffer: {
             items: bundleOffer.items,
             listTotal: bundleOffer.listTotal,
@@ -678,6 +785,20 @@ export async function POST(request: NextRequest) {
           bundleReco = null
         }
       }
+      const responseIntelligence: BargainIntelligenceState = bundleReco
+        ? {
+            ...intelligence,
+            recommendation: 'suggest_now',
+            metadata: { ...intelligence.metadata, recommendation: 'suggest_now' },
+          }
+        : intelligence
+      if (bundleReco) {
+        turnMetadata = {
+          ...turnMetadata,
+          bargainIntelligence: responseIntelligence.metadata,
+          publicIntelligence: publicIntelligenceView(responseIntelligence),
+        }
+      }
       const reply = couponMentioned
         ? uiText(lang, 'bundle_coupon_redirect')
         : uiText(lang, 'bundle_redirect')
@@ -711,6 +832,7 @@ export async function POST(request: NextRequest) {
         decision: 'chat',
         sessionStatus: 'active',
         sessionId: bargainSession.id,
+        ...intelligenceResponseFields(responseIntelligence, offerView),
         ...(bundleReco
           ? {
               recommendations: bundleReco,
@@ -1066,6 +1188,85 @@ export async function POST(request: NextRequest) {
       seriousness: ctx.seriousness,
       currencySymbol,
     })
+
+    const secondIntelligenceStartedAt = Date.now()
+    intelligence = buildBargainIntelligence({
+      message: interpretedMessage,
+      history: intelligenceHistory,
+      intent: intentAnalysis,
+      claims: claimAssessment,
+      product: productCtx,
+      signals: shopperSignals,
+      liveTurn,
+      adaptive,
+      sessionMemory: ctx.sessionMemory,
+      customerOffer,
+      offerStructure,
+      originalPrice: bargainSession.originalPrice,
+      minPrice,
+      attemptsUsed: bargainSession.attemptsUsed,
+      maxAttempts: config.maxAttempts,
+      sessionStatus: bargainSession.status,
+      emergencyPaused: config.emergencyPaused === true,
+      campaignActive,
+      recommendationsEnabled: recoEnabledForMessages(config),
+      recommendationAvailable: false,
+      goal: goalCtx,
+      couponMentioned,
+      couponsAllowed,
+      durationMs: Date.now() - secondIntelligenceStartedAt,
+    })
+    turnMetadata = { ...turnMetadata, bargainIntelligence: intelligence.metadata }
+    ctx.intelligencePrompt = intelligence.promptBlock
+
+    if (offerStructure.needsClarification && !isWalkout) {
+      const clarificationReply = uiText(lang, 'clarify_offer_basis')
+      await prisma.$transaction([
+        prisma.bargainMessage.create({
+          data: {
+            sessionId: bargainSession.id, role: 'customer', content: data.message,
+            offeredPrice: null,
+            metadata: { ...turnMetadata } as any,
+          },
+        }),
+        prisma.bargainMessage.create({
+          data: {
+            sessionId: bargainSession.id, role: 'ai', content: clarificationReply,
+            metadata: { ...turnMetadata, decision: 'chat', tactic: 'offer_basis_clarification', reason: 'AMBIGUOUS_OFFER_BASIS' } as any,
+          },
+        }),
+      ])
+      void track({
+        name: 'cartgain_bargain_intelligence_turn',
+        storeId: bargainSession.storeId,
+        properties: {
+          sessionId: bargainSession.id,
+          state: intelligence.metadata.conversationState,
+          strategy: intelligence.metadata.strategy,
+          readiness: intelligence.metadata.readiness,
+          objectionCategory: intelligence.metadata.objectionCategory,
+          recommendation: intelligence.metadata.recommendation,
+          validationChecked: true,
+          validationReason: 'AMBIGUOUS_OFFER_BASIS',
+          floorSafe: true,
+          agentCount: intelligence.metadata.agentCount,
+          llmCalls: 0,
+          durationMs: intelligence.metadata.durationMs,
+          offerBasis: offerStructure.basis,
+          offerClarificationNeeded: true,
+        },
+      })
+      return NextResponse.json({
+        reply: clarificationReply,
+        decision: 'chat',
+        sessionStatus: 'active',
+        sessionId: bargainSession.id,
+        attemptsUsed: bargainSession.attemptsUsed,
+        needsClarification: true,
+        offerInterpretation: offerView,
+        negotiationIntelligence: publicIntelligenceView(intelligence),
+      })
+    }
 
     // ── WALKOUT HANDLING ──
     if (isWalkout) {
@@ -1438,6 +1639,65 @@ export async function POST(request: NextRequest) {
         })
       : {}
 
+    const finalIntelligenceStartedAt = Date.now()
+    intelligence = buildBargainIntelligence({
+      message: interpretedMessage,
+      history: intelligenceHistory,
+      intent: intentAnalysis,
+      claims: claimAssessment,
+      product: productCtx,
+      signals: shopperSignals,
+      liveTurn,
+      adaptive,
+      sessionMemory: ctx.sessionMemory,
+      customerOffer,
+      offerStructure,
+      proposedPrice: safeCounter ?? undefined,
+      originalPrice: bargainSession.originalPrice,
+      minPrice,
+      attemptsUsed: effectiveAttemptsUsed,
+      maxAttempts: config.maxAttempts,
+      sessionStatus,
+      emergencyPaused: config.emergencyPaused === true,
+      campaignActive,
+      recommendationsEnabled: recoEnabledForMessages(config),
+      recommendationAvailable: (recommendations ?? []).length > 0,
+      goal: goalCtx,
+      couponMentioned,
+      couponsAllowed,
+      needHumanSupport: isAbuseNoConsume,
+      dealAccepted: sessionStatus === 'accepted',
+      pendingAccept: result.decision === 'accept',
+      checkoutStarted: Boolean(bargainSession.checkoutOpenedAt),
+      durationMs: Date.now() - finalIntelligenceStartedAt,
+    })
+    turnMetadata = { ...turnMetadata, bargainIntelligence: intelligence.metadata }
+    bargainRequestMetrics.record('offer_intelligence', intelligence.metadata.durationMs)
+    void track({
+      name: 'cartgain_bargain_intelligence_turn',
+      storeId: bargainSession.storeId,
+      properties: {
+        sessionId: bargainSession.id,
+        schemaVersion: intelligence.metadata.schemaVersion,
+        state: intelligence.metadata.conversationState,
+        previousState: intelligence.metadata.previousState,
+        transitionValid: intelligence.metadata.stateTransitionValid,
+        strategy: intelligence.metadata.strategy,
+        priority: intelligence.metadata.priority,
+        readiness: intelligence.metadata.readiness,
+        objectionCategory: intelligence.metadata.objectionCategory,
+        recommendation: intelligence.metadata.recommendation,
+        validationChecked: intelligence.validation.checked,
+        validationReason: intelligence.metadata.validationReason,
+        floorSafe: intelligence.metadata.floorSafe,
+        agentCount: intelligence.metadata.agentCount,
+        llmCalls: 0,
+        durationMs: intelligence.metadata.durationMs,
+        offerBasis: offerStructure.basis,
+        offerClarificationNeeded: offerStructure.needsClarification,
+      },
+    })
+
     let customerReply = result.reply
     let terminalRetention: IssuedBargainCode | null = null
     if (sessionStatus === 'rejected') {
@@ -1537,21 +1797,15 @@ export async function POST(request: NextRequest) {
         })()
       : null
 
-    const conversationState = deriveConversationState({
-      sessionStatus,
-      attemptsUsed: effectiveAttemptsUsed,
-      dealAccepted: result.decision === 'accept' || sessionStatus === 'accepted',
-      intent: intentAnalysis.intent,
-      objection: intentAnalysis.objection,
-      offersPriceSignal: intentAnalysis.offersPriceSignal,
-      recommendationsEnabled: recoEnabledForMessages(config),
-    })
+    const conversationState = intelligence.state.current
 
     return NextResponse.json({
       reply: customerReply,
       decision: result.decision,
       counterOffer: safeCounter,
       conversationState,
+      negotiationIntelligence: publicIntelligenceView(intelligence),
+      offerInterpretation: offerView,
       sessionStatus,
       finalPrice: updatedSession.finalPrice,
       ...(terminalRetention

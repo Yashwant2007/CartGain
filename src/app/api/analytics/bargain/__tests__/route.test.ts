@@ -17,6 +17,7 @@ jest.mock('@/lib/db', () => ({
     bargainMessage: { findMany: jest.fn() },
     bargainExperienceEvent: { groupBy: jest.fn(), findMany: jest.fn() },
     bargainLearningEvent: { findMany: jest.fn() },
+    productEvent: { findMany: jest.fn() },
   },
 }))
 
@@ -26,6 +27,7 @@ const prismaMock = prisma as unknown as {
   bargainMessage: { findMany: jest.Mock }
   bargainExperienceEvent: { groupBy: jest.Mock; findMany: jest.Mock }
   bargainLearningEvent: { findMany: jest.Mock }
+  productEvent: { findMany: jest.Mock }
 }
 const authMock = getServerSession as jest.Mock
 
@@ -49,6 +51,7 @@ beforeEach(() => {
     { eventType: 'chat_open', designVariant: 'unlock-your-deal', personality: 'strict_shopkeeper', _count: { _all: 4 } },
   ])
   prismaMock.bargainLearningEvent.findMany.mockResolvedValue([])
+  prismaMock.productEvent.findMany.mockResolvedValue([])
   prismaMock.bargainExperienceEvent.findMany.mockResolvedValue([
     { visitorKey: 'v1', designVariant: 'unlock-your-deal', personality: 'strict_shopkeeper' },
     { visitorKey: 'v2', designVariant: 'unlock-your-deal', personality: 'strict_shopkeeper' },
@@ -100,6 +103,31 @@ it('keeps the existing session funnel intact and adds experience metrics', async
   })
 })
 
+it('reports deterministic sales intelligence mindset, objections, recommendation posture and overhead', async () => {
+  prismaMock.productEvent.findMany.mockResolvedValue([
+    { properties: { sessionId: 's1', readiness: 'evaluating', objectionCategory: 'PRICE_OBJECTION', recommendation: 'none', state: 'COUNTER_OFFER', validationChecked: true, floorSafe: true, validationReason: 'OFFER_ACCEPTED', agentCount: 5, llmCalls: 0, durationMs: 2, offerBasis: 'total', offerClarificationNeeded: false } },
+    { properties: { sessionId: 's1', readiness: 'ready', objectionCategory: 'BUDGET_OBJECTION', recommendation: 'suggest_now', state: 'PURCHASE_READY', validationChecked: true, floorSafe: false, validationReason: 'BELOW_FLOOR_REJECTED', agentCount: 5, llmCalls: 0, durationMs: 6, offerBasis: 'per_unit', offerClarificationNeeded: false } },
+    { properties: { sessionId: 's0', readiness: 'exploring', objectionCategory: 'PRICE_OBJECTION', recommendation: 'none', state: 'PRODUCT_DISCOVERY', validationChecked: true, floorSafe: true, validationReason: 'AMBIGUOUS_OFFER_BASIS', agentCount: 5, llmCalls: 0, durationMs: 10, offerBasis: 'unclear', offerClarificationNeeded: true } },
+  ])
+
+  const body = await (await GET(request())).json()
+
+  expect(body.intelligence).toMatchObject({
+    turns: 3,
+    sessions: 2,
+    validation: { checkedTurns: 3, compliantTurns: 2, blockedTurns: 1 },
+    clarificationTurns: 1,
+    overhead: { llmCalls: 0, agentContributions: 15, avgAgentContributions: 5, avgDurationMs: 6, p95DurationMs: 10 },
+  })
+  expect(body.intelligence.offerBases.find((row: any) => row.key === 'total')).toMatchObject({ turns: 1, share: 33.3 })
+  expect(body.intelligence.offerBases.find((row: any) => row.key === 'per_unit')).toMatchObject({ turns: 1 })
+  expect(body.intelligence.offerBases.find((row: any) => row.key === 'unclear')).toMatchObject({ turns: 1 })
+  expect(body.intelligence.readiness.find((row: any) => row.key === 'evaluating')).toMatchObject({ turns: 1, share: 33.3 })
+  expect(body.intelligence.objections.find((row: any) => row.key === 'PRICE_OBJECTION')).toMatchObject({ turns: 2, share: 66.7 })
+  expect(body.intelligence.recommendations.find((row: any) => row.key === 'suggest_now')).toMatchObject({ turns: 1 })
+  expect(body.intelligence.validation.reasons.find((row: any) => row.key === 'BELOW_FLOOR_REJECTED')).toMatchObject({ turns: 1 })
+})
+
 it('attributes historical revenue to the session snapshot and reports unknown separately', async () => {
   const body = await (await GET(request())).json()
   const design = body.experience.designs.find((row: any) => row.key === 'unlock-your-deal')
@@ -119,6 +147,13 @@ it('scopes every query to the authenticated store and selected window', async ()
   }))
   expect(prismaMock.bargainSession.findMany).toHaveBeenCalledWith(expect.objectContaining({
     where: expect.objectContaining({ storeId: 'store-1' }),
+  }))
+  expect(prismaMock.productEvent.findMany).toHaveBeenCalledWith(expect.objectContaining({
+    where: expect.objectContaining({
+      name: 'cartgain_bargain_intelligence_turn',
+      storeId: 'store-1',
+      createdAt: { gte: expect.any(Date) },
+    }),
   }))
 })
 

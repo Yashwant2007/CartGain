@@ -9,6 +9,8 @@
  */
 
 import type { ConversationState } from './conversation-state'
+import type { OfferBasis } from './offer-structure'
+import type { PublicBargainIntelligenceView } from './intelligence'
 import type {
   RecommendationCard,
   RecommendationContext,
@@ -202,6 +204,20 @@ export type BargainOfferSuccess = {
   recommendationHistory?: RecommendationHistory
   /** Deterministic conversational state for this turn (Phase 9). */
   conversationState?: ConversationState
+  /** Public-safe coordination snapshot. No prices, floors, internal strategy, raw text or PII. */
+  negotiationIntelligence?: PublicBargainIntelligenceView
+  needsClarification?: boolean
+  offerInterpretation?: {
+    basis: OfferBasis
+    quantity: number
+    rawAmount: number | null
+    unitAmount: number | null
+    totalAmount: number | null
+    listTotal: number | null
+    savingsAmount: number | null
+    discountPercent: number | null
+    needsClarification: boolean
+  }
   abuseDetected?: boolean
   abuseCategory?: string
   terminal?: boolean

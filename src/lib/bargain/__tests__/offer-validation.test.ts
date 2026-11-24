@@ -62,9 +62,17 @@ describe('validateOffer', () => {
     expect(r.reason).toBe('INVALID_PRICE')
   })
 
+  it('blocks an offer whose unit/total basis is unclear', () => {
+    const r = validateOffer({ ...base, offerClarificationNeeded: true })
+    expect(r.ok).toBe(false)
+    expect(r.reason).toBe('AMBIGUOUS_OFFER_BASIS')
+    expect(r.message).toMatch(/per item or the total/i)
+  })
+
   it('produces stable reason codes for every rejection', () => {
     const reasons: OfferValidationReason[] = [
       'INVALID_PRICE',
+      'AMBIGUOUS_OFFER_BASIS',
       'BELOW_FLOOR_REJECTED',
       'NEGOTIATION_LIMIT_REACHED',
       'VARIANT_UNAVAILABLE',

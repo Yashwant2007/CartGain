@@ -219,6 +219,7 @@ export interface NegotiationContext {
    *  in the session. It steers tone and next move; it never changes price. */
   sessionMemory?: SessionMemory
   adaptive?: AdaptiveContext
+  intelligencePrompt?: string
   voice?: BrandVoice
   /** The AI's most recent standing counter. Lets the reciprocal pacing stay
    *  monotonic (a real shopkeeper does not RAISE a price mid-haggle) without ever
@@ -2267,6 +2268,10 @@ export function buildSystemPrompt(
     contextParts.push('\n' + adaptiveBlock)
   }
 
+  if (ctx.intelligencePrompt) {
+    contextParts.push('\n' + ctx.intelligencePrompt)
+  }
+
   if (ctx.voice) {
     contextParts.push('\n' + voicePromptBlock({ ...ctx.voice, signOff: undefined }))
   }
@@ -2865,7 +2870,7 @@ export async function negotiateStep(
         mode: ctx.liveTurn.mode,
         language: ctx.language,
         productTitle: ctx.productTitle,
-        emojiBudget: ctx.liveTurn.emojiBudget,
+        emojiBudget: ctx.persona === 'strict_negotiator' ? 0 : ctx.liveTurn.emojiBudget,
       })
     : null
   if (rapidReply) return rapidReply

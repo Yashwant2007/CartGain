@@ -5,6 +5,7 @@
 // product-aware strategy instead of guessing. It deliberately runs BEFORE the
 // LLM: intent is a decision the merchant controls, not one we outsource.
 
+import { parseStructuredOffer, type OfferBasis } from './offer-structure'
 import { classifyNonOfferNumber, extractPrice, normalizeCustomerText, type NonOfferNumberContext } from './text'
 
 export type ShopperIntent =
@@ -92,6 +93,9 @@ export interface IntentAnalysis {
   budgetType: BudgetType
   /** True when the shopper is objecting to the price (not proposing to pay it). */
   priceComplaint: boolean
+  offerBasis: OfferBasis
+  offerQuantity: number
+  offerClarificationNeeded: boolean
   nonOfferNumberContext: NonOfferNumberContext
   asksBestPrice: boolean
   /** Rough product topic the shopper is after (e.g. "for oily skin"), if detectable. */
@@ -210,6 +214,9 @@ export function analyzeIntent(input: string): IntentAnalysis {
   const budget = extractBudget(message)
   const need = extractNeed(message)
   const nonOfferNumberContext = classifyNonOfferNumber(message)
+  const structuredOffer = parseStructuredOffer(message)
+  const offerBasis = priceComplaint ? 'none' : structuredOffer.basis
+  const offerClarificationNeeded = !priceComplaint && structuredOffer.needsClarification
 
   let intent: ShopperIntent = 'UNKNOWN'
   if (isWalkout) intent = 'WALKOUT'
@@ -249,6 +256,9 @@ export function analyzeIntent(input: string): IntentAnalysis {
     budget: budget?.amount ?? null,
     budgetType: budget?.type ?? null,
     priceComplaint,
+    offerBasis,
+    offerQuantity: structuredOffer.quantity,
+    offerClarificationNeeded,
     nonOfferNumberContext,
     asksBestPrice,
     need,
@@ -397,6 +407,19 @@ export function shopperIntentToPromptBlock(analysis: IntentAnalysis): string {
   if (analysis.priceComplaint) {
     lines.push(
       `- The shopper is COMPLAINING about the price — they are NOT making an offer. Any figure in this message is the price they are objecting to. NEVER read it as their bid, NEVER echo it back as "you offered X", and NEVER accept it. Acknowledge the concern briefly, justify the value from verified facts, and propose a genuine counter (still above the listed-price gap you normally open with).`,
+    )
+  }
+  if (analysis.offerClarificationNeeded) {
+    lines.push(
+      `- OFFER BASIS UNCLEAR: the shopper named an amount and a multi-unit quantity without making it clear whether the amount is PER ITEM or the TOTAL for all items. Ask ONE short clarifying question before quoting any number; do not accept, counter, or treat the amount as a per-unit bid.`,
+    )
+  } else if (analysis.offerBasis === 'total') {
+    lines.push(
+      `- The shopper's amount is explicitly a TOTAL for ${analysis.offerQuantity} units, not a per-item price. If you discuss a per-unit number, derive it from the server's authoritative answer only; never compute or promise it yourself.`,
+    )
+  } else if (analysis.offerBasis === 'per_unit') {
+    lines.push(
+      `- The shopper's amount is explicitly PER ITEM for a quantity of ${analysis.offerQuantity}. Never present it as the total order value.`,
     )
   }
   if (analysis.intent === 'COMPARISON' || analysis.objection === 'COMPARISON' || analysis.nonOfferNumberContext === 'comparison') {

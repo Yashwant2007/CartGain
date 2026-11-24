@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
   const days = Number.isFinite(daysRaw) ? Math.min(Math.max(Math.trunc(daysRaw), 1), 365) : 30
   const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
-  const [sessions, eventCounts, uniqueVisitorRows, latencyRows] = await Promise.all([
+  const [sessions, eventCounts, uniqueVisitorRows, latencyRows, intelligenceRows] = await Promise.all([
     prisma.bargainSession.findMany({
       where: { storeId: store.id, startedAt: { gte: start } },
       select: {
@@ -83,6 +83,16 @@ export async function GET(request: NextRequest) {
         latencyMs: { not: null },
       },
       select: { latencyMs: true, agentSource: true, failureCategory: true },
+      orderBy: { createdAt: 'desc' },
+      take: 10_000,
+    }),
+    prisma.productEvent.findMany({
+      where: {
+        name: 'cartgain_bargain_intelligence_turn',
+        storeId: store.id,
+        createdAt: { gte: start },
+      },
+      select: { properties: true },
       orderBy: { createdAt: 'desc' },
       take: 10_000,
     }),
@@ -135,6 +145,8 @@ export async function GET(request: NextRequest) {
       latencyBySource[source] = { samples: values.length, p95Ms: Math.round(values[Math.max(0, index)]) }
     }
   }
+
+  const intelligence = buildIntelligenceAnalytics(intelligenceRows)
 
   // Daily series (session start day) for the funnel chart.
   const byDay = new Map<string, { date: string; started: number; accepted: number; purchased: number; revenue: number }>()
@@ -286,6 +298,7 @@ export async function GET(request: NextRequest) {
       note: 'AI turn latency from production learning events. Provider failover attempts share one bounded deadline.',
     },
     requestMetrics: bargainRequestMetrics.snapshot(),
+    intelligence,
     experiments: {
       enabled: isFeatureEnabled('BARGAIN_DUAL_AGENT'),
       arms: experimentRows,
@@ -434,6 +447,117 @@ function conceptBucket(map: Map<string, ConceptMetrics>, key: string): ConceptMe
     map.set(key, bucket)
   }
   return bucket
+}
+
+type IntelligenceEventRow = { properties: unknown }
+type CountBucket = { key: string; count: number }
+type CountRow = { key: string; label: string; turns: number; share: number }
+
+function propertyBag(properties: unknown): Record<string, unknown> {
+  if (!properties || typeof properties !== 'object' || Array.isArray(properties)) return {}
+  return properties as Record<string, unknown>
+}
+
+function stringProperty(row: IntelligenceEventRow, key: string): string | null {
+  const value = propertyBag(row.properties)[key]
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function numberProperty(row: IntelligenceEventRow, key: string): number {
+  const value = propertyBag(row.properties)[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+function countBucket(map: Map<string, CountBucket>, key: string | null): void {
+  const normalized = key ?? 'unknown'
+  const bucket = map.get(normalized)
+  if (bucket) bucket.count++
+  else map.set(normalized, { key: normalized, count: 1 })
+}
+
+function countRows(map: Map<string, CountBucket>, total: number): CountRow[] {
+  const pct = (num: number, den: number) => (den > 0 ? Math.round((num / den) * 1000) / 10 : 0)
+  return Array.from(map.values())
+    .map((bucket) => ({
+      key: bucket.key,
+      label: bucket.key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+      turns: bucket.count,
+      share: pct(bucket.count, total),
+    }))
+    .sort((a, b) => b.turns - a.turns || a.key.localeCompare(b.key))
+    .slice(0, 12)
+}
+
+function buildIntelligenceAnalytics(rows: IntelligenceEventRow[]) {
+  const readiness = new Map<string, CountBucket>()
+  const objections = new Map<string, CountBucket>()
+  const recommendations = new Map<string, CountBucket>()
+  const states = new Map<string, CountBucket>()
+  const reasons = new Map<string, CountBucket>()
+  const offerBases = new Map<string, CountBucket>()
+  const sessionIds = new Set<string>()
+  const durations: number[] = []
+  let checkedTurns = 0
+  let compliantTurns = 0
+  let blockedTurns = 0
+  let llmCalls = 0
+  let agentContributions = 0
+  let clarificationTurns = 0
+
+  for (const row of rows) {
+    countBucket(readiness, stringProperty(row, 'readiness'))
+    countBucket(objections, stringProperty(row, 'objectionCategory'))
+    countBucket(recommendations, stringProperty(row, 'recommendation'))
+    countBucket(states, stringProperty(row, 'state'))
+    countBucket(offerBases, stringProperty(row, 'offerBasis'))
+    if (propertyBag(row.properties).offerClarificationNeeded === true) clarificationTurns++
+    const reason = stringProperty(row, 'validationReason')
+    if (reason) countBucket(reasons, reason)
+    const sessionId = stringProperty(row, 'sessionId')
+    if (sessionId) sessionIds.add(sessionId)
+    if (propertyBag(row.properties).validationChecked === true) {
+      checkedTurns++
+      if (propertyBag(row.properties).floorSafe === true) compliantTurns++
+      else blockedTurns++
+    }
+    llmCalls += numberProperty(row, 'llmCalls')
+    agentContributions += numberProperty(row, 'agentCount')
+    const durationMs = numberProperty(row, 'durationMs')
+    if (durationMs > 0) durations.push(durationMs)
+  }
+
+  durations.sort((a, b) => a - b)
+  const percentile = (p: number): number => {
+    if (durations.length === 0) return 0
+    const index = Math.min(durations.length - 1, Math.ceil((p / 100) * durations.length) - 1)
+    return Math.round(durations[Math.max(0, index)])
+  }
+  const avg = (value: number) => (rows.length > 0 ? Math.round((value / rows.length) * 100) / 100 : 0)
+
+  return {
+    turns: rows.length,
+    sessions: sessionIds.size,
+    readiness: countRows(readiness, rows.length),
+    objections: countRows(objections, rows.length),
+    recommendations: countRows(recommendations, rows.length),
+    states: countRows(states, rows.length),
+    offerBases: countRows(offerBases, rows.length),
+    clarificationTurns,
+    validation: {
+      checkedTurns,
+      compliantTurns,
+      blockedTurns,
+      reasons: countRows(reasons, rows.length),
+    },
+    overhead: {
+      llmCalls,
+      agentContributions,
+      avgAgentContributions: avg(agentContributions),
+      avgDurationMs: avg(durations.reduce((sum, ms) => sum + ms, 0)),
+      p95DurationMs: percentile(95),
+    },
+    note: 'Coordination is deterministic and uses no extra AI provider call. Messages, prices, floors and internal prompts are never persisted here.',
+  }
 }
 
 function conceptRow(key: string, kind: 'design' | 'personality', m: ConceptMetrics) {

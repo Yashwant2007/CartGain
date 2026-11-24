@@ -98,6 +98,7 @@ export type UiKey =
   | 'tryAgain'
   | 'bundle_redirect'
   | 'bundle_coupon_redirect'
+  | 'clarify_offer_basis'
   | 'bargainTitle'
   | 'makeOffer'
   | 'makeOfferSub'
@@ -285,6 +286,7 @@ const EN: Record<UiKey, string> = {
     tryAgain: 'Sorry, I couldn\u2019t check that right now. Let\u2019s try again.',
     bundle_redirect: "Happy to! Since each item is priced on its own, let me find the best per-item deal for you. I'll show you alternatives you can bargain individually — this one's deal stays open while you check.",
     bundle_coupon_redirect: "Great news — I can't combine that with another coupon, but I'll show you the best per-item price instead.",
+    clarify_offer_basis: 'Before I quote, is that price per item or the total for all the units? I don\'t want to give you the wrong number.',
     bargainTitle: 'Bargain with us',
     makeOffer: 'Make offer',
     makeOfferSub: 'Make an offer for this product',
@@ -481,6 +483,7 @@ const I18N: Record<UiLang, Translations> & { en: Record<UiKey, string> } = {
     tryAgain: 'Maaf karna, abhi check nahi kar paya. Phir try karein.',
     bundle_redirect: 'Koi baat nahi! Har item ki apni alag deal hoti hai. Main aapko har item ke liye best offer dhoond kar dikha deta hoon — alternatives mukhtalif prices par bargain kar sakte hain. Is item ki deal bhi khuli rahegi.',
     bundle_coupon_redirect: "Acchi khabar — main doosre coupon ke saath combine nahi kar sakta, lekin best per-item price zaroor dikhata hoon.",
+    clarify_offer_basis: 'Bas confirm kar dete hain: ye price har item ka hai ya saare units ka total? Main galat number nahi batana chahta.',
     bargainTitle: 'Hamse moal bhaav karein',
     makeOffer: 'Offer karein',
     makeOfferSub: 'Is product ke liye offer karein',
@@ -618,6 +621,7 @@ const I18N: Record<UiLang, Translations> & { en: Record<UiKey, string> } = {
     tryAgain: 'क्षमा करें, अभी जाँच नहीं कर सका। फिर से कोशिश करें।',
     bundle_redirect: 'कोई बात नहीं! हर वस्तु की अपनी अलग डील होती है। मैं हर वस्तु के लिए सबसे अच्छा ऑफ़र दिखाता हूँ — आप विकल्पों को अलग-अलग कीमतों पर मोल-भाव कर सकते हैं। इस वस्तु की डील भी खुली रहेगी।',
     bundle_coupon_redirect: 'अच्छी खबर — मैं इसे दूसरे कूपन के साथ जोड़ नहीं सकता, लेकिन सबसे अच्छी प्रति-वस्तु कीमत ज़रूर दिखाऊँगा।',
+    clarify_offer_basis: 'बस पुष्टि कर दें: यह कीमत प्रति वस्तु है या सभी इकाइयों का कुल? मैं गलत राशि नहीं बताना चाहता।',
     bargainTitle: 'हमसे मोलभाव करें',
     makeOffer: 'ऑफ़र करें',
     makeOfferSub: 'इस उत्पाद के लिए ऑफ़र दें',
@@ -755,6 +759,7 @@ const I18N: Record<UiLang, Translations> & { en: Record<UiKey, string> } = {
     tryAgain: 'மன்னிக்கவும், இப்போது சரிபார்க்க முடியவில்லை. மீண்டும் முயற்சிப்போம்.',
     bundle_redirect: 'பரவாயில்லை! ஒவ்வொரு பொருளுக்கும் அதன் சொந்த விலைப்பேச்சு உள்ளது. ஒவ்வொன்றுக்கும் சிறந்த ஒப்பந்தத்தைக் காட்டுகிறேன் — மாற்றுகளைத் தனியாகப் பேரம் பேசலாம். இந்தப் பொருளின் ஒப்பந்தம் திறந்தே இருக்கும்.',
     bundle_coupon_redirect: 'நல்ல செய்தி — மற்றொரு கூப்பனுடன் இதை இணைக்க முடியாது, ஆனால் சிறந்த பொருள் விலையைக் காட்டுகிறேன்.',
+    clarify_offer_basis: 'ஒரு சிறு உறுதிப்பாடு: இந்த விலை ஒவ்வொரு பொருளுக்கா அல்லது அனைத்து அலகுகளுக்கும் மொத்தமா? தவறான தொகையைச் சொல்ல விரும்பவில்லை.',
     bargainTitle: 'எங்களுடன் பேரம் பேசுங்கள்',
     makeOffer: 'சலுகை வழங்கு',
     makeOfferSub: 'இந்த தயாரிப்புக்கு சலுகை வழங்குங்கள்',
@@ -860,6 +865,7 @@ const I18N: Record<UiLang, Translations> & { en: Record<UiKey, string> } = {
     tryAgain: 'క్షమించండి, ఇప్పుడు తనిఖీ చేయలేకపోయాను. మళ్ళీ ప్రయత్నిద్దాం.',
     bundle_redirect: 'పర్వాలేదు! ప్రతి వస్తువుకి దాని స్వంత ఒప్పందం ఉంటుంది. ప్రతిదానికి ఉత్తమ ఒప్పందం చూపిస్తాను — ప్రత్యామ్నాయాలను విడివిడిగా బేరమాడవచ్చు. ఈ వస్తువు ఒప్పందం తెరిచి ఉంటుంది.',
     bundle_coupon_redirect: 'మంచి వార్త — దీనిని మరో కూపన్తో కలపలేను, కానీ ఉత్తమ వస్తువు ధరనే చూపిస్తాను.',
+    clarify_offer_basis: 'ఒక చిన్న ధృవీకరణ: ఈ ధర ఒక్క వస్తువుకా లేదా అన్ని యూనిట్ల మొత్తమా? తప్పు మొత్తం చెప్పాలని లేదు.',
     bargainTitle: 'మాతో బేరం చేయండి',
     makeOffer: 'ఆఫర్ ఇవ్వండి',
     makeOfferSub: 'ఈ ఉత్పత్తికి ఆఫర్ ఇవ్వండి',
@@ -965,6 +971,7 @@ const I18N: Record<UiLang, Translations> & { en: Record<UiKey, string> } = {
     tryAgain: 'দুঃখিত, এখনই চেক করতে পারিনি। আবার চেষ্টা করা যাক।',
     bundle_redirect: 'কোনো সমস্যা নেই! প্রতিটি পণ্যের নিজস্ব আলাদা ডিল থাকে। প্রতিটির জন্য সেরা অফার দেখাই — বিকল্পগুলো আলাদাভাবে দরদাম করতে পারবেন। এই পণ্যটির ডিল খোলাই থাকবে।',
     bundle_coupon_redirect: 'ভালো খবর — আমি এটা অন্য কুপন-এর সাথে যোগ করতে পারব না, তবে সেরা পণ্যভিত্তিক দাম দেখাব।',
+    clarify_offer_basis: 'একটু নিশ্চিত করে নিই: এই দামটি প্রতিটি পণ্যের না সব ইউনিটের মোট? ভুল অঙ্ক বলতে চাই না।',
     bargainTitle: 'আমাদের সঙ্গে দরদাম করুন',
     makeOffer: 'অফার করুন',
     makeOfferSub: 'এই পণ্যটির জন্য অফার করুন',
@@ -1070,6 +1077,7 @@ const I18N: Record<UiLang, Translations> & { en: Record<UiKey, string> } = {
     tryAgain: 'क्षमस्व, आत्ता तपासू शकलो नाही. पुन्हा प्रयत्न करूया.',
     bundle_redirect: 'हरकत नाही! प्रत्येक वस्तूची स्वतंत्र डील असते. प्रत्येकासाठी सर्वोत्तम ऑफर दाखवतो — पर्यायांशी वेगवेगळ्या किमतीत सौदेबाजी करू शकता. या वस्तूची डील उघडी राहील.',
     bundle_coupon_redirect: 'चांगली बातमी — मी दुसऱ्या कूपनसह हे जोडू शकत नाही, पण सर्वोत्तम प्रति-वस्तू किंमत नक्की दाखवतो.',
+    clarify_offer_basis: 'एक छोटी खात्री: ही किंमत प्रत्येक वस्तूची आहे की सर्व युनिट्सची एकूण? चुकीची रक्कम सांगू इच्छित नाही.',
     bargainTitle: 'आमच्याशी वाटाघाट करा',
     makeOffer: 'ऑफर करा',
     makeOfferSub: 'या उत्पादनासाठी ऑफर द्या',
@@ -1175,6 +1183,7 @@ const I18N: Record<UiLang, Translations> & { en: Record<UiKey, string> } = {
     tryAgain: 'માફ કરશો, હમણાં ચકાસી શક્યા નહીં. ફરી પ્રયત્ન કરીએ.',
     bundle_redirect: 'કોઈ વાંધો નહીં! દરેક વસ્તુની પોતાની અલગ ડીલ હોય છે. દરેક માટે શ્રેષ્ઠ ઓફર બતાવું છું — વિકલ્પો સાથે અલગ-અલગ કિંમતે મોલભાવ કરી શકો છો. આ વસ્તુની ડીલ ખુલ્લી જ રહેશે.',
     bundle_coupon_redirect: 'સારા સમાચાર — હું આને બીજા કૂપન સાથે જોડી શકતો નથી, પણ શ્રેષ્ઠ પ્રતિ-વસ્તુ કિંમત જરૂર બતાવીશ.',
+    clarify_offer_basis: 'એક નાની ખાતરી: આ કિંમત દરેક વસ્તુની છે કે બધા એકમોની કુલ? ખોટી રકમ કહેવી નથી.',
     bargainTitle: 'અમારી સાથે સોદાબાજી કરો',
     makeOffer: 'ઑફર કરો',
     makeOfferSub: 'આ ઉત્પાદન માટે ઑફર આપો',
@@ -1280,6 +1289,7 @@ const I18N: Record<UiLang, Translations> & { en: Record<UiKey, string> } = {
     tryAgain: 'ਮਾਫ਼ ਕਰਨਾ, ਹੁਣੇ ਚੈੱਕ ਨਹੀਂ ਕਰ ਸਕਿਆ। ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੀਏ।',
     bundle_redirect: 'ਕੋਈ ਗੱਲ ਨਹੀਂ! ਹਰ ਚੀਜ਼ ਦੀ ਆਪਣੀ ਵੱਖਰੀ ਡੀਲ ਹੁੰਦੀ ਹੈ। ਹਰੇਕ ਲਈ ਸਭ ਤੋਂ ਵਧੀਆ ਆਫਰ ਦਿਖਾਉਂਦਾ ਹਾਂ — ਵਿਕਲਪਾਂ ਨਾਲ ਵੱਖ-ਵੱਖ ਕੀਮਤ ’ਤੇ ਮੋਲਭਾਵ ਕਰ ਸਕਦੇ ਹੋ। ਇਸ ਚੀਜ਼ ਦੀ ਡੀਲ ਖੁੱਲ੍ਹੀ ਰਹੇਗੀ।',
     bundle_coupon_redirect: 'ਚੰਗੀ ਖ਼ਬਰ — ਮੈਂ ਇਸ ਨੂੰ ਦੂਜੇ ਕੂਪਨ ਨਾਲ ਜੋੜ ਨਹੀਂ ਸਕਦਾ, ਪਰ ਸਭ ਤੋਂ ਵਧੀਆ ਪ੍ਰਤੀ-ਚੀਜ਼ ਕੀਮਤ ਜ਼ਰੂਰ ਦਿਖਾਵਾਂਗਾ।',
+    clarify_offer_basis: 'ਇਕ ਛੋਟੀ ਪੁਸ਼ਟੀ: ਇਹ ਕੀਮਤ ਹਰ ਚੀਜ਼ ਦੀ ਹੈ ਜਾਂ ਸਾਰੀਆਂ ਇਕਾਈਆਂ ਦਾ ਕੁੱਲ? ਗਲਤ ਰਾਸ਼ੀ ਨਹੀਂ ਦੱਸਣੀ।',
     bargainTitle: 'ਸਾਡੇ ਨਾਲ ਗੱਲਬਾਤ ਕਰੋ',
     makeOffer: 'ਆਫਰ ਕਰੋ',
     makeOfferSub: 'ਇਸ ਉਤਪਾਦ ਲਈ ਆਫਰ ਦਿਓ',

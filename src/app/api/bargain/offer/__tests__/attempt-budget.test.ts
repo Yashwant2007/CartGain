@@ -23,6 +23,7 @@
 import { POST } from '@/app/api/bargain/offer/route'
 import prisma from '@/lib/db'
 import { signSessionToken } from '@/lib/bargain/session-bind'
+import { track } from '@/lib/analytics/track'
 
 jest.mock('@/lib/db', () => ({
   __esModule: true,
@@ -121,6 +122,7 @@ function makeRequest(message: string) {
 function activeSession(attemptsUsed: number) {
   return {
     id: 'sess-1',
+    storeId: 'store-1',
     shopifyProductId: 'gid://shopify/Product/1',
     originalPrice: 600,
     currentOffer: null,
@@ -319,5 +321,62 @@ describe('offer route — attempt budget (chat must not cost an attempt)', () =>
     // number back out. The prompt's secrecy rules own this; assert the shape of
     // the contract rather than re-testing the model.
     expect(body.counterOffer == null || body.counterOffer >= 300).toBe(true)
+  })
+
+  it('returns a public-safe intelligence snapshot and records the coordination turn', async () => {
+    prismaMock.bargainSession.findUnique.mockResolvedValue(activeSession(0))
+
+    const res = await POST(makeRequest('Tell me about this product'))
+    const body = await res.json()
+    const view = body.negotiationIntelligence
+
+    expect(res.status).toBe(200)
+    expect(view).toMatchObject({
+      schemaVersion: 1,
+      recommendation: 'none',
+      metrics: { llmCalls: 0, deterministic: true },
+    })
+    expect(view).not.toHaveProperty('strategy')
+    expect(view).not.toHaveProperty('agents')
+    expect(view).not.toHaveProperty('spin')
+    expect(view).not.toHaveProperty('validation')
+    expect(JSON.stringify(view)).not.toContain('DISCOVERY')
+    expect(JSON.stringify(view)).not.toContain('diagnose_need')
+    expect(track).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'cartgain_bargain_intelligence_turn',
+      storeId: 'store-1',
+    }))
+  })
+
+  it('clarifies an ambiguous multi-unit amount without spending an attempt or calling the model', async () => {
+    prismaMock.bargainSession.findUnique.mockResolvedValue(activeSession(0))
+
+    const res = await POST(makeRequest('₹1,000, I need 2 units'))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.needsClarification).toBe(true)
+    expect(body.decision).toBe('chat')
+    expect(body.reply).toMatch(/per item or the total/i)
+    expect(body.attemptsUsed).toBe(0)
+    expect(prismaMock.bargainSession.updateMany).not.toHaveBeenCalled()
+    expect(modelCalls).toBe(0)
+    expect(body.offerInterpretation).toMatchObject({
+      basis: 'unclear',
+      quantity: 2,
+      needsClarification: true,
+    })
+    expect(body.negotiationIntelligence.customer).toMatchObject({
+      offerBasis: 'unclear',
+      offerQuantity: 2,
+      offerClarificationNeeded: true,
+    })
+    expect(track).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'cartgain_bargain_intelligence_turn',
+      properties: expect.objectContaining({
+        validationReason: 'AMBIGUOUS_OFFER_BASIS',
+        offerClarificationNeeded: true,
+      }),
+    }))
   })
 })

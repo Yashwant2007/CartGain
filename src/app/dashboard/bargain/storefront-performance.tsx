@@ -44,6 +44,38 @@ type ConceptRow = {
   evidence: 'sufficient' | 'directional' | 'insufficient'
 }
 
+type CounterRow = {
+  key: string
+  label: string
+  turns: number
+  share: number
+}
+
+type SalesIntelligence = {
+  turns: number
+  sessions: number
+  readiness: CounterRow[]
+  objections: CounterRow[]
+  recommendations: CounterRow[]
+  states: CounterRow[]
+  offerBases: CounterRow[]
+  clarificationTurns: number
+  validation: {
+    checkedTurns: number
+    compliantTurns: number
+    blockedTurns: number
+    reasons: CounterRow[]
+  }
+  overhead: {
+    llmCalls: number
+    agentContributions: number
+    avgAgentContributions: number
+    avgDurationMs: number
+    p95DurationMs: number
+  }
+  note: string
+}
+
 type ExperimentArmRow = {
   key: string
   label: string
@@ -65,6 +97,7 @@ type ExperimentArmRow = {
 type Performance = {
   windowDays: number
   funnel: { started: number; accepted: number; purchased: number; revenue: number; grossRevenue: number; refundedRevenue: number; fullyRefundedPurchases: number }
+  intelligence?: SalesIntelligence
   experiments: { enabled: boolean; arms: ExperimentArmRow[]; note: string }
   experience: {
     impressions: number
@@ -139,7 +172,12 @@ export function StorefrontPerformance() {
   }
 
   const exp = data?.experience
-  const empty = !exp || (exp.impressions === 0 && exp.chatOpens === 0 && (data?.funnel.started ?? 0) === 0)
+  const empty = !exp || (
+    exp.impressions === 0 &&
+    exp.chatOpens === 0 &&
+    (data?.funnel.started ?? 0) === 0 &&
+    (data?.intelligence?.turns ?? 0) === 0
+  )
 
   return (
     <div className="space-y-5">
@@ -227,6 +265,7 @@ export function StorefrontPerformance() {
 
           <ConceptTable title="Invitation designs" rows={exp.designs} empty="No design telemetry yet." />
           <ConceptTable title="Shopkeeper personalities" rows={exp.personalities} empty="No personality telemetry yet." />
+          <SalesIntelligencePanel intelligence={data.intelligence} />
           <ExperimentTable experiments={data.experiments} />
 
           <div className="text-xs text-blue-300/50 flex gap-2">
@@ -324,6 +363,74 @@ function ConceptTable({ title, rows, empty }: { title: string; rows: ConceptRow[
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SalesIntelligencePanel({ intelligence }: { intelligence?: SalesIntelligence }) {
+  if (!intelligence || intelligence.turns === 0) return null
+  return (
+    <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl overflow-hidden">
+      <div className="px-5 py-3 border-b border-blue-800/30 text-blue-100 font-semibold flex items-center gap-2">
+        <Users className="w-4 h-4 text-cyan-400" /> Sales intelligence
+        <span className="ml-auto text-xs font-normal text-blue-300/60">{intelligence.turns} turns · {intelligence.sessions} sessions</span>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-px bg-blue-800/20 text-sm">
+        <div className="bg-slate-900 p-4">
+          <div className="text-xs text-blue-300/60 uppercase tracking-wide">Extra AI calls</div>
+          <div className="text-2xl font-bold text-white mt-1">{intelligence.overhead.llmCalls}</div>
+        </div>
+        <div className="bg-slate-900 p-4">
+          <div className="text-xs text-blue-300/60 uppercase tracking-wide">Avg coordination</div>
+          <div className="text-2xl font-bold text-white mt-1">{intelligence.overhead.avgDurationMs} ms</div>
+          <div className="text-[11px] text-blue-300/50">p95 {intelligence.overhead.p95DurationMs} ms</div>
+        </div>
+        <div className="bg-slate-900 p-4">
+          <div className="text-xs text-blue-300/60 uppercase tracking-wide">Commercial checks</div>
+          <div className="text-2xl font-bold text-white mt-1">{intelligence.validation.checkedTurns}</div>
+          <div className="text-[11px] text-blue-300/50">{intelligence.validation.blockedTurns} blocked</div>
+        </div>
+        <div className="bg-slate-900 p-4">
+          <div className="text-xs text-blue-300/60 uppercase tracking-wide">Agent contributions</div>
+          <div className="text-2xl font-bold text-white mt-1">{intelligence.overhead.avgAgentContributions}</div>
+          <div className="text-[11px] text-blue-300/50">per turn, deterministic</div>
+        </div>
+        <div className="bg-slate-900 p-4">
+          <div className="text-xs text-blue-300/60 uppercase tracking-wide">Basis clarifications</div>
+          <div className="text-2xl font-bold text-white mt-1">{intelligence.clarificationTurns}</div>
+          <div className="text-[11px] text-blue-300/50">no price quoted</div>
+        </div>
+      </div>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-blue-800/20">
+        <CounterTable title="Customer readiness" rows={intelligence.readiness} />
+        <CounterTable title="Objections handled" rows={intelligence.objections} />
+        <CounterTable title="Recommendation posture" rows={intelligence.recommendations} />
+        <CounterTable title="Conversation state" rows={intelligence.states} />
+        <CounterTable title="Offer basis" rows={intelligence.offerBases} />
+      </div>
+      <p className="px-5 py-3 text-xs text-blue-300/60 flex gap-2 border-t border-blue-800/20">
+        <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {intelligence.note}
+      </p>
+    </div>
+  )
+}
+
+function CounterTable({ title, rows }: { title: string; rows: CounterRow[] }) {
+  return (
+    <div className="bg-slate-900 px-4 py-3">
+      <div className="text-blue-100 font-medium mb-2">{title}</div>
+      {rows.length === 0 ? (
+        <div className="text-xs text-blue-300/50">No turns yet.</div>
+      ) : (
+        <div className="space-y-1.5">
+          {rows.slice(0, 5).map((row) => (
+            <div key={row.key} className="flex items-center justify-between gap-3 text-xs">
+              <span className="text-blue-200 truncate">{row.label}</span>
+              <span className="text-blue-300/60 shrink-0">{row.turns} · {row.share}%</span>
+            </div>
+          ))}
         </div>
       )}
     </div>

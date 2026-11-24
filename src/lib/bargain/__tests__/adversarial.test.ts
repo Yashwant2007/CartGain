@@ -213,13 +213,13 @@ describe('Policy classifiers harden (cross-module integrity)', () => {
     // The floor is purely a function of merchant config; customer text has no
     // code path into it. Prove the boundary: the canonical accept uses the
     // SAME floor regardless of how the customer phrased their offer.
-    const offers = ['850', '₹850', '850 for both'] // last one is a bundle attempt
+    const offers = ['850', '₹850', '850 for both'] // last one is a same-SKU total offer
     for (const o of offers) {
       const v = validateOffer({ ...PRICE, requestedPrice: o === '850 for both' ? 850 : parseFloat(o.replace(/[^0-9.]/g, '')) })
-      // Valid numeric payloads still pass; the bundle phrase is handled earlier
-      // by detectMultiProductRequest, not by the price engine.
+      // Valid numeric payloads still pass; same-SKU totals are handled by the
+      // structured offer parser, not by this price engine.
       if (o === '850 for both') {
-        expect(detectMultiProductRequest(o)).toBe(true)
+        expect(detectMultiProductRequest(o)).toBe(false)
       } else {
         expect(v.ok).toBe(true)
       }

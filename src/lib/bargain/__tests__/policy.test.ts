@@ -100,6 +100,9 @@ describe('detectMultiProductRequest (§27)', () => {
     expect(detectMultiProductRequest('give me 2')).toBe(false)
     expect(detectMultiProductRequest('how much for 10 units?')).toBe(false)
     expect(detectMultiProductRequest('discount if I buy 5?')).toBe(false)
+    expect(detectMultiProductRequest('700 for both')).toBe(false)
+    expect(detectMultiProductRequest('₹1,000 for two units')).toBe(false)
+    expect(detectMultiProductRequest('2 units for ₹900')).toBe(false)
   })
 
   it('does not flag ordinary single-product negotiation', () => {

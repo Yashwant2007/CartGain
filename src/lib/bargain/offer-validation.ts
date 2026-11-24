@@ -10,6 +10,7 @@
 export type OfferValidationReason =
   | 'OFFER_ACCEPTED'
   | 'INVALID_PRICE'
+  | 'AMBIGUOUS_OFFER_BASIS'
   | 'BELOW_FLOOR_REJECTED'
   | 'NEGOTIATION_LIMIT_REACHED'
   | 'VARIANT_UNAVAILABLE'
@@ -32,6 +33,7 @@ export interface ValidateOfferInput {
   emergencyPaused?: boolean
   couponMentioned?: boolean
   couponsAllowed?: boolean
+  offerClarificationNeeded?: boolean
 }
 
 export interface OfferValidationResult {
@@ -47,6 +49,7 @@ export interface OfferValidationResult {
 const HUMAN: Record<OfferValidationReason, string | null> = {
   OFFER_ACCEPTED: null,
   INVALID_PRICE: 'That price doesn\'t look right — let\'s agree on a clean number.',
+  AMBIGUOUS_OFFER_BASIS: 'Before I quote, is that price per item or the total for all the units?',
   BELOW_FLOOR_REJECTED: 'The listed price may have changed — please refresh and renegotiate.',
   NEGOTIATION_LIMIT_REACHED: 'This conversation has reached its deal limit.',
   VARIANT_UNAVAILABLE: 'That specific option isn\'t available right now — ask about another variant.',
@@ -81,6 +84,9 @@ export function validateOffer(input: ValidateOfferInput): OfferValidationResult 
     return reject('INVALID_PRICE')
   }
 
+  if (input.offerClarificationNeeded === true) {
+    return reject('AMBIGUOUS_OFFER_BASIS')
+  }
   if (input.emergencyPaused === true) {
     return reject('BARGAIN_PAUSED')
   }

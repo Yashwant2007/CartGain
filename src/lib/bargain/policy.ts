@@ -5,6 +5,8 @@
 // The AI is never trusted to make these decisions: if a classifier fires, the
 // server converts a would-be accept into a bounded, reason-coded response.
 
+import { isSameSkuTotalPhrase } from './offer-structure'
+
 export interface CampaignWindow {
   campaignStart?: Date | string | null
   campaignEnd?: Date | string | null
@@ -78,6 +80,7 @@ const MULTI_PRODUCT_PATTERNS = [
 
 export function detectMultiProductRequest(text: string): boolean {
   if (!text || text.trim().length === 0) return false
+  if (isSameSkuTotalPhrase(text)) return false
   // A quantity-first mention ("2 serum", "3 of these") is bulk, not a bundle —
   // strip leading numeric quantity tokens so the classifier can't misfire.
   const stripped = text

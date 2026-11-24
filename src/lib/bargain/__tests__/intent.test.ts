@@ -267,3 +267,39 @@ describe('analyzeIntent — Phase 1 objection taxonomy', () => {
     expect(objectionAction('PURCHASE_HESITATION')).toMatch(/friction/i)
   })
 })
+
+describe('analyzeIntent — structured offer basis', () => {
+  it('labels a same-SKU total as a total, not per-unit', () => {
+    const a = analyzeIntent('₹1,000 for two')
+    expect(a.offerBasis).toBe('total')
+    expect(a.offerQuantity).toBe(2)
+    expect(a.offerClarificationNeeded).toBe(false)
+  })
+
+  it('labels an explicit per-unit amount separately from the order total', () => {
+    const a = analyzeIntent('700 each for 2')
+    expect(a.offerBasis).toBe('per_unit')
+    expect(a.offerQuantity).toBe(2)
+    expect(a.offerClarificationNeeded).toBe(false)
+  })
+
+  it('asks for clarification when an amount and quantity have no basis cue', () => {
+    const a = analyzeIntent('₹1000, I need 2 units')
+    expect(a.offerBasis).toBe('unclear')
+    expect(a.offerQuantity).toBe(2)
+    expect(a.offerClarificationNeeded).toBe(true)
+  })
+
+  it('does not attach an offer basis to a complaint number', () => {
+    const a = analyzeIntent('800 is too much for two')
+    expect(a.priceComplaint).toBe(true)
+    expect(a.offerBasis).toBe('none')
+    expect(a.offerClarificationNeeded).toBe(false)
+  })
+
+  it('asks the model to clarify an ambiguous offer before quoting', () => {
+    const block = shopperIntentToPromptBlock(analyzeIntent('₹1000, I need 2 units'))
+    expect(block).toContain('OFFER BASIS UNCLEAR')
+    expect(block).toContain('before quoting any number')
+  })
+})
