@@ -2809,11 +2809,9 @@ export function alignStatedOfferPrice(
     if (allowed.some((candidate) => Math.abs(candidate - value) < 0.01)) continue
     offenders.push({ match, value })
   }
-  if (offenders.length === 0) return reply
-
   const money = (value: number) => value.toLocaleString('en-IN', { maximumFractionDigits: 2 })
   let out = reply
-  for (const { match, value } of offenders.reverse()) {
+  for (const { match } of offenders.reverse()) {
     const index = match.index ?? out.indexOf(match[0])
     const before = out.slice(Math.max(0, index - 50), index)
     const after = out.slice(index + match[0].length, index + match[0].length + 25)
@@ -2835,7 +2833,45 @@ export function alignStatedOfferPrice(
     }
     out = out.slice(0, index) + replacement + out.slice(index + match[0].length)
   }
+
+  if (quantity >= 2 && !/\bper\s*(?:unit|item|pc|piece)s?\b/i.test(out) && !/\btotal\b/i.test(out)) {
+    const labeled = Array.from(out.matchAll(new RegExp(`(?:${symbol}|Rs\\.?|INR)\\s*\\d[\\d,]*(?:\\.\\d{1,2})?`, 'gi')))
+      .find((match) => {
+        const value = round2(Number(match[0].replace(/[^\d.]/g, '').replace(/,/g, '')))
+        return Math.abs(value - counter) < 0.01 || Math.abs(value - counterTotal) < 0.01
+      })
+    if (labeled) {
+      const index = labeled.index ?? out.indexOf(labeled[0])
+      const prefix = labeled[0].replace(/\d[\d,.]*$/, '')
+      const replacement = `${prefix}${money(counter)} per unit (${prefix}${money(counterTotal)} total)`
+      out = out.slice(0, index) + replacement + out.slice(index + labeled[0].length)
+    }
+  }
+
   return out
+}
+
+export function stripUnverifiedProductClaims(reply: string, ctx: NegotiationContext): string {
+  const verified = [
+    ctx.product?.description,
+    ...(ctx.product?.merchantApprovedSellingPoints ?? []),
+  ].filter(Boolean).join(' ').toLowerCase()
+  let out = reply
+  if (!/\b(?:warrant(?:y|ies)|guarantee)\b/i.test(verified)) {
+    out = out
+      .replace(/,\s*(?:(?:but|reflecting|given|considering|with|because of|since)\s+)?(?:the\s+)?quality\s+components\s+and\s+(?:a\s+)?(?:two|2|one|1|three|3|five|5)[\s\u2010-\u2015-]*(?:year|yr)s?\s+(?:warranty|guarantee)/gi, '')
+      .replace(/,\s*(?:(?:but|reflecting|given|considering|with|because of|since)\s+)?(?:the\s+)?(?:quality\s+components|premium\s+quality|authenticity|genuine\s+product|delivery\s+speed)(?:\s+and\s+[^,.!?]*)?(?:\s+alone\s+account\s+for\s+[^.!?]*)?/gi, '')
+      .replace(/\b(?:a|an)?\s*(?:two|2|one|1|three|3|five|5)[\s\u2010-\u2015-]*(?:year|yr)s?\s+(?:warranty|guarantee)\b/gi, '')
+      .replace(/,\s*(?:and\s+)?(?:a\s+)?(?:two|2|one|1|three|3|five|5)[\s\u2010-\u2015-]*(?:year|yr)s?\s+(?:warranty|guarantee)\b/gi, '')
+  }
+  if (!/\b(?:quality|premium|authentic|genuine|material)\b/i.test(verified)) {
+    out = out.replace(/\b(?:quality\s+components|premium\s+quality|authenticity|genuine\s+product)\b/gi, '')
+  }
+  return out
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.!?—])/g, '$1')
+    .replace(/^[,\s—]+/, '')
+    .trim()
 }
 
 function stripUnverifiedLoyalty(reply: string, ctx: NegotiationContext): string {
@@ -3221,6 +3257,7 @@ export async function negotiateStep(
           ? ruleBasedDecision(customerOffer, ctx).reply
           : chatFallback(customerMessage, ctx, history.length))
     reply = stripUnverifiedLoyalty(reply, ctx)
+    reply = stripUnverifiedProductClaims(reply, ctx)
 
     // The spoken price must match the real offer: if the model named a figure the
     // backend had to clamp (usually a below-floor guess), rewrite the reply BEFORE
