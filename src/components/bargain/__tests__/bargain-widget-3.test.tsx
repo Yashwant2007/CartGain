@@ -178,6 +178,8 @@ describe('BargainWidget conversation-first layout', () => {
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 })
 
     await waitFor(() => expect(screen.getAllByText('I can do 850 for you.').length).toBeGreaterThan(0))
+    expect(screen.getByText('Deal at a glance')).toBeTruthy()
+    expect(container.querySelector('.cg-stage-best')?.textContent).toContain('Best:')
     const panel = container.querySelector('[data-cg-recommendation-panel]')
     expect(panel).toBeTruthy()
     expect(screen.getByRole('log').querySelector('[data-cg-recommendation-panel]')).toBeNull()

@@ -11,7 +11,7 @@ import {
 } from 'react'
 import {
   X, Minimize2, Send, MessageCircle, CheckCircle2, Clock, Tag, Zap,
-  ShieldCheck, ArrowRight, Loader2, AlertCircle, RotateCcw,
+  ShieldCheck, ArrowRight, Loader2, AlertCircle, RotateCcw, Sparkles,
 } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import { buildQuickOffers, buildSuggestedPrompts, parseDraftOffer } from '@/lib/bargain/offers'
@@ -1763,6 +1763,7 @@ export default function BargainWidget({
                 name={shopkeeperName}
                 status={t('shopkeeperOnline')}
                 line={stageLine}
+                bestPrice={lastCounter != null ? `${t('bestSoFar')} ${currencySymbol}${lastCounter.toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : null}
                 motionEnabled={experience?.motionEnabled !== false}
                 gaze={gaze}
                 targetRef={scrollRef}
@@ -1793,7 +1794,7 @@ export default function BargainWidget({
                 minHeight: 0,
               }}
             >
-            {activeTab === 'info' && (
+            {(activeTab === 'info' || (lastCounter != null && decision !== 'accept')) && (
               <BargainOfferSummary
                 originalPrice={livePrice}
                 finalPrice={finalPrice}
@@ -2193,32 +2194,42 @@ export default function BargainWidget({
                 gap: 6,
               }}>
                 {showSuggestions && (quickOffers.length > 0 || suggestedPrompts.length > 0) && (
-                  <div
-                    className="cg-suggestions"
-                    role="group"
-                    aria-label={t('makeOfferSub')}
-                    style={{
-                      display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 2,
-                      scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
-                    }}
-                  >
-                    {quickOffers.slice(0, 2).map((value) => (
-                      <QuickChip
-                        key={`offer-${value}`}
-                        compact
-                        label={`${t('makeOffer')} · ${currencySymbol}${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
-                        onClick={() => applySuggestion(String(value))}
-                      />
-                    ))}
-                    {suggestedPrompts.slice(0, 2).map((key) => (
-                      <QuickChip
-                        key={key}
-                        compact
-                        label={t(key)}
-                        onClick={() => applySuggestion(t(key))}
-                      />
-                    ))}
-                  </div>
+                  <>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5,
+                      textTransform: 'uppercase', color: '#6366f1',
+                    }}>
+                      <Sparkles size={12} />
+                      {t('makeOfferSub')}
+                    </div>
+                    <div
+                      className="cg-suggestions"
+                      role="group"
+                      aria-label={t('makeOfferSub')}
+                      style={{
+                        display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 2,
+                        scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
+                      }}
+                    >
+                      {quickOffers.slice(0, 2).map((value) => (
+                        <QuickChip
+                          key={`offer-${value}`}
+                          compact
+                          label={`${t('makeOffer')} · ${currencySymbol}${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
+                          onClick={() => applySuggestion(String(value))}
+                        />
+                      ))}
+                      {suggestedPrompts.slice(0, 2).map((key) => (
+                        <QuickChip
+                          key={key}
+                          compact
+                          label={t(key)}
+                          onClick={() => applySuggestion(t(key))}
+                        />
+                      ))}
+                    </div>
+                  </>
                 )}
                 {/* Message / offer composer — one calm, roomy control. Free text
                     is a real chat message; a number anywhere in it is treated

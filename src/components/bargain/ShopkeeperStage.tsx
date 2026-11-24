@@ -38,6 +38,7 @@ interface Props {
   name: string
   status: string
   line: string
+  bestPrice?: string | null
   motionEnabled?: boolean
   /** Normalised gaze target in [-1, 1]; eyes follow the shopper's cursor. */
   gaze?: { x: number; y: number } | null
@@ -195,6 +196,21 @@ const STAGE_CSS = `
   -webkit-line-clamp: 2;
   animation: cgStageSpeak .3s ease-out 1;
 }
+.cg-stage-best {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 10.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .cg-stage[data-character-style="minimal"] .cg-stage-line { color: #64748b; font-size: 11.5px; }
 .cg-stage-unavailable {
   width: 100%;
@@ -257,23 +273,24 @@ const STAGE_CSS = `
   display: flex;
   flex-direction: column;
   align-self: stretch;
-  width: 208px;
+  width: 232px;
   height: auto;
   min-height: 0;
   gap: 4px;
   padding: 8px 0 10px;
   border-bottom: 0;
-  border-right: 1px solid #eef2f7;
-  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 78%);
+  border-right: 1px solid #e0e7ff;
+  background: linear-gradient(180deg, #eef2ff 0%, #ffffff 58%, #f8fafc 100%);
+  box-shadow: inset -10px 0 24px rgba(99,102,241,0.06);
   overflow: hidden;
 }
 .cg-stage.cg-stage--side::before,
 .cg-stage.cg-stage--side .cg-stage-spot { display: none; }
 .cg-stage.cg-stage--side .cg-stage-avatar {
-  width: 208px;
-  height: 226px;
+  width: 232px;
+  height: 238px;
   align-items: flex-start;
-  margin-top: -6px;
+  margin-top: -8px;
 }
 .cg-stage.cg-stage--side .cg-stage-copy {
   width: 100%;
@@ -297,22 +314,22 @@ const STAGE_CSS = `
   .cg-stage-avatar::after { width: 56px; height: 8px; }
   .cg-stage.cg-stage--compact .cg-stage-avatar { width: 128px; height: 140px; }
   .cg-stage.cg-stage--compact .cg-stage-avatar > * { transform: scale(.8); }
-  .cg-stage.cg-stage--side { width: 140px; padding: 8px 0; }
+  .cg-stage.cg-stage--side { width: 152px; padding: 8px 0; }
   .cg-stage.cg-stage--side .cg-stage-avatar {
-    width: 184px;
-    height: 210px;
-    transform: scale(.84);
+    width: 196px;
+    height: 220px;
+    transform: scale(.88);
     transform-origin: top center;
     margin: -4px 0 -30px;
   }
   .cg-stage.cg-stage--side .cg-stage-copy { display: none; }
 }
-@container cgwidget (max-width: 520px) {
-  .cg-stage.cg-stage--side { width: 140px; padding: 8px 0; }
+@container cgwidget (max-width: 420px) {
+  .cg-stage.cg-stage--side { width: 152px; padding: 8px 0; }
   .cg-stage.cg-stage--side .cg-stage-avatar {
-    width: 184px;
-    height: 210px;
-    transform: scale(.84);
+    width: 196px;
+    height: 220px;
+    transform: scale(.88);
     transform-origin: top center;
     margin: -4px 0 -30px;
   }
@@ -339,6 +356,7 @@ export default function ShopkeeperStage({
   name,
   status,
   line,
+  bestPrice = null,
   motionEnabled = true,
   gaze = null,
   enable3D = false,
@@ -451,6 +469,7 @@ export default function ShopkeeperStage({
           <span className="cg-stage-status">{status}</span>
         </div>
         <span className="cg-stage-line">{line}</span>
+        {bestPrice && <span className="cg-stage-best">{bestPrice}</span>}
       </div>
     </div>
   )

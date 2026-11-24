@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { ShoppingCart, CheckCheck, Clock3 } from 'lucide-react'
+import { ShoppingCart, CheckCheck, Clock3, Sparkles } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import { buildQuickOffers, buildSuggestedPrompts } from '@/lib/bargain/offers'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
@@ -696,6 +696,7 @@ export default function StorefrontBargainWidget({
           name={`${PERSONA_NAME[persona]} · Shopkeeper`}
           status={t('online')}
           line={stageLine}
+          bestPrice={lastCounter != null ? `${t('bestSoFar')} ${money(currency, lastCounter)}` : null}
           motionEnabled={motionEnabled}
           enable3D
           targetRef={scrollRef}
@@ -750,6 +751,27 @@ export default function StorefrontBargainWidget({
             <p className="text-xs text-gray-500">{t('attemptsLeftOf', { n: maxAttempts - attempts, m: maxAttempts })}</p>
             <p className="text-xs text-indigo-500 font-medium">{PERSONA_DISPLAY[persona]}</p>
           </div>
+
+          {(lastCounter != null || customerOffer != null) && (
+            <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-white p-3 shadow-sm">
+              <div className="text-[10px] font-extrabold uppercase tracking-wide text-indigo-500">{t('dealAtGlance')}</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="rounded-lg bg-white px-2.5 py-1.5 text-xs text-gray-500 ring-1 ring-gray-100">
+                  {t('listed')} <strong className="text-gray-700">{money(currency, originalPrice)}</strong>
+                </span>
+                {customerOffer != null && (
+                  <span className="rounded-lg bg-white px-2.5 py-1.5 text-xs text-gray-500 ring-1 ring-gray-100">
+                    {t('youOffered')} <strong className="text-gray-700">{money(currency, customerOffer)}</strong>
+                  </span>
+                )}
+                {lastCounter != null && (
+                  <span className="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs text-white">
+                    {t('counterOffer')} <strong>{money(currency, lastCounter)}</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           <div
             ref={scrollRef}
@@ -831,24 +853,30 @@ export default function StorefrontBargainWidget({
           )}
 
           {showSuggestions && (quickOffers.length > 0 || suggestedPrompts.length > 0) && (
-            <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label={t('makeOfferSub')}>
-              {quickOffers.slice(0, 2).map((value) => (
-                <QuickChip
-                  key={`offer-${value}`}
-                  compact
-                  label={`${t('makeOffer')} · ${money(currency, value)}`}
-                  onClick={() => { setInput(String(value)); composerInputRef.current?.focus() }}
-                />
-              ))}
-              {suggestedPrompts.slice(0, 2).map((key) => (
-                <QuickChip
-                  key={key}
-                  compact
-                  label={t(key)}
-                  onClick={() => { setInput(t(key)); composerInputRef.current?.focus() }}
-                />
-              ))}
-            </div>
+            <>
+              <div className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wide text-indigo-500">
+                <Sparkles size={12} />
+                {t('makeOfferSub')}
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label={t('makeOfferSub')}>
+                {quickOffers.slice(0, 2).map((value) => (
+                  <QuickChip
+                    key={`offer-${value}`}
+                    compact
+                    label={`${t('makeOffer')} · ${money(currency, value)}`}
+                    onClick={() => { setInput(String(value)); composerInputRef.current?.focus() }}
+                  />
+                ))}
+                {suggestedPrompts.slice(0, 2).map((key) => (
+                  <QuickChip
+                    key={key}
+                    compact
+                    label={t(key)}
+                    onClick={() => { setInput(t(key)); composerInputRef.current?.focus() }}
+                  />
+                ))}
+              </div>
+            </>
           )}
 
           <div className="cgf-composer flex gap-2">
