@@ -108,4 +108,16 @@ describe('GET /api/health — env reporting', () => {
     expect(body.checks.env.missing).toEqual(['N'])
     expect(body.checks.env.unpadded).toBe(true)
   })
+
+  it('reports feature flags without exposing merchant payment credentials', async () => {
+    process.env.CUSTOMER_RAZORPAY_PAYMENT_LINK = 'true'
+    process.env.BARGAIN_QUOTE = 'true'
+    process.env.RAZORPAY_CUSTOMER_KEY_SECRET = 'super-secret'
+
+    const body = await load()
+    expect(body.featureFlags.CUSTOMER_RAZORPAY_PAYMENT_LINK).toBe(true)
+    expect(body.featureFlags.BARGAIN_QUOTE).toBe(true)
+    expect(JSON.stringify(body)).not.toContain('RAZORPAY_CUSTOMER_KEY_SECRET')
+    expect(JSON.stringify(body)).not.toContain('super-secret')
+  })
 })

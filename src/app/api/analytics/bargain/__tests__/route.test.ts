@@ -193,3 +193,16 @@ it('marks the experiment as active when the dual-agent flag is enabled', async (
     else process.env.BARGAIN_DUAL_AGENT = prev
   }
 })
+
+it('adds transparent contribution metrics without inventing profit', async () => {
+  const body = await (await GET(request())).json()
+  expect(body.contribution).toMatchObject({
+    status: 'insufficient_cost_data',
+    verified: { netSales: 900, grossSales: 900, refunds: 0, discounts: 0 },
+    contributionProfit: null,
+    netAfterCartGainSubscription: null,
+  })
+  expect(body.contribution.experiment.enabled).toBe(false)
+  expect(body.contribution.experiment.incrementalNetSalesPerEligible).toBeNull()
+  expect(body.contribution.notes.join(' ')).toContain('verified order attribution')
+})

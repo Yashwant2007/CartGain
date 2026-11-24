@@ -17,10 +17,12 @@ export type FeatureFlag =
   | 'BARGAIN_QUOTE'
   // Module 7 — dual-agent learning with holdout experiments.
   | 'BARGAIN_DUAL_AGENT'
+  | 'CUSTOMER_RAZORPAY_PAYMENT_LINK'
 
 const DEFAULTS: Record<FeatureFlag, boolean> = {
   BARGAIN_QUOTE: false,
   BARGAIN_DUAL_AGENT: false,
+  CUSTOMER_RAZORPAY_PAYMENT_LINK: false,
 }
 
 /** True when `flag` is enabled for this process. Unknown values fall to the default. */

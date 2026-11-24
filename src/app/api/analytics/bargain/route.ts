@@ -5,6 +5,7 @@ import prisma from '@/lib/db'
 import { DESIGN_VARIANT_META, PERSONALITY_META } from '@/lib/bargain/experience/types'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import { bargainRequestMetrics } from '@/lib/bargain/request-metrics'
+import { buildContributionView } from '@/lib/commercial/contribution'
 
 export const dynamic = 'force-dynamic'
 
@@ -261,6 +262,9 @@ export async function GET(request: NextRequest) {
 
   const clickToChat = rate(eventTotal.chat_open, eventTotal.invitation_click)
   const chatToSession = rate(started, eventTotal.chat_open)
+  const contribution = buildContributionView(sessions, {
+    experimentEnabled: isFeatureEnabled('BARGAIN_DUAL_AGENT'),
+  })
 
   return NextResponse.json({
     windowDays: days,
@@ -276,6 +280,7 @@ export async function GET(request: NextRequest) {
       refundedRevenue: Math.round(refundedRevenue * 100) / 100,
       fullyRefundedPurchases,
     },
+    contribution,
     rates: {
       negotiationRate: rate(negotiated, started),
       offerRate: rate(offered, started),

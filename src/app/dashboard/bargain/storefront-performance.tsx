@@ -15,6 +15,7 @@ import {
   TrendingUp,
   Users,
   FlaskConical,
+  Wallet,
 } from 'lucide-react'
 
 type ConceptRow = {
@@ -94,10 +95,38 @@ type ExperimentArmRow = {
   evidence: ConceptRow['evidence']
 }
 
+type ContributionView = {
+  status: 'insufficient_cost_data' | 'measurable'
+  verified: {
+    eligibleCustomers: number
+    purchasedSessions: number
+    netSales: number
+    grossSales: number
+    refunds: number
+    discounts: number
+    netSalesPerEligibleCustomer: number
+  }
+  unavailableCosts: { code: string; label: string; status: string; amount: number | null; note: string }[]
+  contributionProfit: number | null
+  netAfterCartGainSubscription: number | null
+  subscriptionFees: number | null
+  experiment: {
+    enabled: boolean
+    treatmentSessions: number
+    controlSessions: number
+    treatmentNetSalesPerEligible: number | null
+    controlNetSalesPerEligible: number | null
+    incrementalNetSalesPerEligible: number | null
+    note: string
+  }
+  notes: string[]
+}
+
 type Performance = {
   windowDays: number
   funnel: { started: number; accepted: number; purchased: number; revenue: number; grossRevenue: number; refundedRevenue: number; fullyRefundedPurchases: number }
   intelligence?: SalesIntelligence
+  contribution?: ContributionView
   experiments: { enabled: boolean; arms: ExperimentArmRow[]; note: string }
   experience: {
     impressions: number
@@ -267,6 +296,7 @@ export function StorefrontPerformance() {
           <ConceptTable title="Shopkeeper personalities" rows={exp.personalities} empty="No personality telemetry yet." />
           <SalesIntelligencePanel intelligence={data.intelligence} />
           <ExperimentTable experiments={data.experiments} />
+          <ContributionPanel contribution={data.contribution} />
 
           <div className="text-xs text-blue-300/50 flex gap-2">
             <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -488,6 +518,66 @@ function ExperimentTable({ experiments }: { experiments: Performance['experiment
       </div>
       <p className="px-5 py-3 text-xs text-blue-300/60 flex gap-2 border-t border-blue-800/20">
         <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {experiments.note}
+      </p>
+    </div>
+  )
+}
+
+function ContributionPanel({ contribution }: { contribution?: ContributionView }) {
+  if (!contribution) return null
+  const profit = contribution.contributionProfit === null
+    ? 'Not measurable'
+    : `₹${contribution.contributionProfit.toLocaleString('en-IN')}`
+  return (
+    <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl overflow-hidden">
+      <div className="px-5 py-3 border-b border-blue-800/30 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-blue-100 font-semibold flex items-center gap-2">
+          <Wallet className="w-4 h-4 text-emerald-400" /> Contribution & margin
+        </div>
+        <span className={`text-[11px] px-2 py-0.5 rounded-full border ${
+          contribution.status === 'measurable'
+            ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/50'
+            : 'bg-amber-950/60 text-amber-300 border-amber-800/50'
+        }`}>
+          {contribution.status === 'measurable' ? 'Costs verified' : 'Costs unavailable'}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-blue-800/20 text-sm">
+        <div className="bg-slate-900 p-4">
+          <div className="text-xs text-blue-300/60 uppercase tracking-wide">Verified net sales</div>
+          <div className="text-2xl font-bold text-emerald-300 mt-1">₹{contribution.verified.netSales.toLocaleString('en-IN')}</div>
+          <div className="text-[11px] text-blue-300/50">{contribution.verified.purchasedSessions} verified orders</div>
+        </div>
+        <div className="bg-slate-900 p-4">
+          <div className="text-xs text-blue-300/60 uppercase tracking-wide">Discounts</div>
+          <div className="text-2xl font-bold text-blue-100 mt-1">₹{contribution.verified.discounts.toLocaleString('en-IN')}</div>
+          <div className="text-[11px] text-blue-300/50">₹{contribution.verified.refunds.toLocaleString('en-IN')} refunded</div>
+        </div>
+        <div className="bg-slate-900 p-4">
+          <div className="text-xs text-blue-300/60 uppercase tracking-wide">Contribution profit</div>
+          <div className="text-2xl font-bold text-white mt-1">{profit}</div>
+          <div className="text-[11px] text-blue-300/50">never inferred from discounts</div>
+        </div>
+        <div className="bg-slate-900 p-4">
+          <div className="text-xs text-blue-300/60 uppercase tracking-wide">Holdout lift</div>
+          <div className="text-2xl font-bold text-white mt-1">
+            {contribution.experiment.incrementalNetSalesPerEligible === null
+              ? '—'
+              : `₹${contribution.experiment.incrementalNetSalesPerEligible.toLocaleString('en-IN')}`}
+          </div>
+          <div className="text-[11px] text-blue-300/50">per eligible session, observed</div>
+        </div>
+      </div>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-blue-800/20">
+        {contribution.unavailableCosts.map((cost) => (
+          <div key={cost.code} className="bg-slate-900 px-4 py-3">
+            <div className="text-blue-100 font-medium">{cost.label}</div>
+            <div className="text-[11px] text-blue-300/50 mt-1">{cost.note}</div>
+          </div>
+        ))}
+      </div>
+      <p className="px-5 py-3 text-xs text-blue-300/60 flex gap-2 border-t border-blue-800/20">
+        <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {contribution.experiment.note} {contribution.notes.join(' ')}
       </p>
     </div>
   )

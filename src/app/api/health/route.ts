@@ -13,6 +13,7 @@ import {
 } from '@/lib/whatsapp/config'
 import { getShopifyApiKey } from '@/lib/shopify-app-bridge'
 import { bargainRequestMetrics, type StageLatency } from '@/lib/bargain/request-metrics'
+import { featureFlagSnapshot, type FeatureFlag } from '@/lib/feature-flags'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,7 @@ interface HealthStatus {
   uptime: number
   environment: string
   release: string
+  featureFlags: Record<FeatureFlag, boolean>
   checks: {
     database: { status: 'ok' | 'error'; latencyMs: number; error?: string }
     redis: { status: 'ok' | 'degraded' | 'error'; latencyMs?: number; error?: string }
@@ -219,6 +221,7 @@ export async function GET() {
     uptime: process.uptime(),
     environment: currentEnvironment(),
     release: currentRelease(),
+    featureFlags: featureFlagSnapshot(),
     checks: {
       database: dbStatus,
       redis: redisStatus,
