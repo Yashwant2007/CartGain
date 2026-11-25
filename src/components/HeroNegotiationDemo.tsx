@@ -1,7 +1,8 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { BadgeCheck, Send, ShieldCheck, Sparkles, Store } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { ArrowRight, BadgeCheck, Send, ShieldCheck, Sparkles, Store } from 'lucide-react'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import {
   resolveShopkeeperAnimation,
@@ -12,12 +13,7 @@ import type { LivingEvent } from '@/lib/bargain/experience/avatar-state'
 import type { ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import type { V2AvatarVariant } from '@/lib/bargain/experience/v2-shopkeepers'
 import { V2_AVATARS } from '@/lib/bargain/experience/v2-shopkeepers'
-import {
-  V2_REACTIONS,
-  v2ReactionCell,
-  v2ReactionSheet,
-  type BargainReaction,
-} from '@/lib/bargain/experience/reactions'
+import { extractPrice } from '@/lib/bargain/text'
 
 type ChatMsg = {
   id: number
@@ -72,6 +68,12 @@ const HERO_STAGE_CSS = `
 
 const money = (value: number) => `${PRODUCT.currency}${value.toLocaleString('en-IN')}`
 
+const ANONYMOUS_BID_KEY = 'cartgain:home-demo:anonymous-bids'
+const ANONYMOUS_BID_LIMIT = 1
+const LIVE_DEMO_SIGNUP_HREF = '/signup?next=/s/bargain'
+const SIGNUP_GATE_REPLY =
+  "That was a good try. You've used your free homepage round — open the Live Demo to keep negotiating with the full shopkeeper engine."
+
 export default function HeroNegotiationDemo() {
   const [avatarVariant, setAvatarVariant] = useState<V2AvatarVariant>('morgan')
   const [messages, setMessages] = useState<ChatMsg[]>([
@@ -81,8 +83,10 @@ export default function HeroNegotiationDemo() {
   const [loading, setLoading] = useState(false)
   const [attemptsUsed, setAttemptsUsed] = useState(0)
   const [settled, setSettled] = useState(false)
+  const [signupRequired, setSignupRequired] = useState(false)
+  const [anonymousBidsUsed, setAnonymousBidsUsed] = useState(0)
+  const [gateReady, setGateReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [previewReaction, setPreviewReaction] = useState<BargainReaction | null>(null)
   const [character, setCharacter] = useState<ShopkeeperAnimation>(() =>
     resolveShopkeeperAnimation('friendly_shopkeeper', 'idle'),
   )
@@ -90,16 +94,24 @@ export default function HeroNegotiationDemo() {
   const nextId = useRef(1)
 
   const profile = AVATAR_PROFILES[avatarVariant]
-  const displayedReaction = previewReaction ?? character.reaction ?? null
+  const displayedReaction = character.reaction ?? null
+
+  useEffect(() => {
+    try {
+      const stored = Number(window.localStorage.getItem(ANONYMOUS_BID_KEY) ?? '0')
+      setAnonymousBidsUsed(Number.isFinite(stored) && stored > 0 ? Math.min(stored, ANONYMOUS_BID_LIMIT) : 0)
+    } catch {
+      setAnonymousBidsUsed(0)
+    }
+    setGateReady(true)
+  }, [])
 
   const fireAvatar = (event: LivingEvent, ctx: FireAvatarContext = {}) => {
-    setPreviewReaction(null)
     setCharacter(resolveShopkeeperAnimation(profile.personality, event, ctx))
   }
 
   const chooseAvatar = (variant: V2AvatarVariant) => {
     setAvatarVariant(variant)
-    setPreviewReaction(null)
     setCharacter(resolveShopkeeperAnimation(AVATAR_PROFILES[variant].personality, 'greeting', { opening: true }))
     setMessages((prev) => prev.map((message, index) => (
       index === 0 ? { ...message, text: greetingFor(variant) } : message
@@ -117,14 +129,28 @@ export default function HeroNegotiationDemo() {
     scrollToLatest()
   }
 
+  const gateAnonymousBid = (text: string) => {
+    setSignupRequired(true)
+    window.setTimeout(() => {
+      fireAvatar('ai_reply', { customerMessage: text, originalPrice: PRODUCT.merchantPrice })
+      pushMessage({ id: nextId.current++, role: 'ai', text: SIGNUP_GATE_REPLY })
+    }, 260)
+  }
+
   const send = async (rawText?: string) => {
     const text = (rawText ?? input).trim()
-    if (!text || loading || settled) return
+    if (!text || loading || settled || !gateReady) return
     setInput('')
     setError(null)
-    setLoading(true)
     fireAvatar('customer_message', { customerMessage: text, originalPrice: PRODUCT.merchantPrice })
     pushMessage({ id: nextId.current++, role: 'customer', text })
+
+    if (extractPrice(text) !== null && anonymousBidsUsed >= ANONYMOUS_BID_LIMIT) {
+      gateAnonymousBid(text)
+      return
+    }
+
+    setLoading(true)
 
     try {
       const res = await fetch('/api/bargain/home-demo', {
@@ -162,6 +188,15 @@ export default function HeroNegotiationDemo() {
         code: data.decision === 'accept' ? 'LUMINA-SERUM10' : undefined,
       })
       setAttemptsUsed(data.attemptsUsed)
+      if (data.offerDetected) {
+        const used = Math.min(ANONYMOUS_BID_LIMIT, anonymousBidsUsed + 1)
+        setAnonymousBidsUsed(used)
+        try {
+          window.localStorage.setItem(ANONYMOUS_BID_KEY, String(used))
+        } catch {
+          setAnonymousBidsUsed(used)
+        }
+      }
       if (data.decision === 'accept' || data.decision === 'reject') setSettled(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Demo unavailable')
@@ -297,7 +332,7 @@ export default function HeroNegotiationDemo() {
             )}
           </div>
 
-          {!settled && (
+          {!settled && !signupRequired && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {QUICK_PROMPTS.map((prompt) => (
                 <button
@@ -313,6 +348,20 @@ export default function HeroNegotiationDemo() {
             </div>
           )}
 
+          {signupRequired && (
+            <div data-signup-gate="true" className="mt-3 rounded-xl border border-cyan-500/40 bg-cyan-950/30 p-3">
+              <p className="text-xs sm:text-sm text-blue-100">
+                You&apos;ve used your free homepage round. Keep bargaining with the full shopkeeper engine in the Live Demo.
+              </p>
+              <Link
+                href={LIVE_DEMO_SIGNUP_HREF}
+                data-live-demo-cta="home-gate"
+                className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-lg bg-cyan-500 px-3 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+              >
+                <Sparkles className="w-4 h-4" /> Sign up for Live Demo <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+          )}
           {!settled ? (
             <form
               className="mt-3 flex gap-2"
@@ -324,8 +373,8 @@ export default function HeroNegotiationDemo() {
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask a question or name your price…"
-                aria-label="Ask a question or name your price"
+                placeholder={signupRequired ? 'Ask a follow-up question…' : 'Ask a question or name your price…'}
+                aria-label={signupRequired ? 'Ask a follow-up question' : 'Ask a question or name your price'}
                 className="min-h-[44px] flex-1 rounded-xl border border-blue-800/50 bg-slate-950/50 px-3 text-[16px] text-white outline-none placeholder:text-blue-300/80 focus:border-cyan-500"
               />
               <button
@@ -339,13 +388,15 @@ export default function HeroNegotiationDemo() {
             </form>
           ) : (
             <div className="mt-3 rounded-xl border border-emerald-700/40 bg-emerald-900/20 px-3 py-2.5 text-xs text-emerald-200 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4" /> Demo complete — reset the page to bargain again.
+              <ShieldCheck className="w-4 h-4" /> Demo complete — open the Live Demo to bargain again.
             </div>
           )}
           {error && <p className="mt-2 text-xs text-rose-300">{error}</p>}
           <div className="mt-3 pt-2.5 border-t border-blue-800/30 text-xs text-blue-200/80 flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            Attempts {attemptsUsed}/3 · The floor is enforced by the engine, never by the AI.
+            {signupRequired
+              ? 'Free homepage round used · the full Live Demo gives you all three rounds.'
+              : `Attempts ${attemptsUsed}/3 · The floor is enforced by the engine, never by the AI.`}
           </div>
         </div>
 
@@ -375,38 +426,6 @@ export default function HeroNegotiationDemo() {
             </p>
             <div className="rounded-xl border border-blue-700/40 bg-blue-950/40 px-3 py-2.5 flex items-center gap-2 text-xs text-blue-200">
               <Store className="w-4 h-4 text-cyan-300" /> Sample catalog product · no store connection required
-            </div>
-          </div>
-          <div className="mt-4 border-t border-blue-800/30 pt-3" data-reaction-sheet-preview={avatarVariant}>
-            <p className="text-[11px] uppercase tracking-wider text-blue-200/80 font-semibold mb-1">
-              {profile.name}&rsquo;s reaction sheet
-            </p>
-            <p className="text-[11px] text-blue-300/70 mb-2">Each pose follows what you type. Tap one to preview it.</p>
-            <div className="grid grid-cols-4 gap-1.5">
-              {V2_REACTIONS.map((reaction) => {
-                const cell = v2ReactionCell(reaction.id)
-                const active = displayedReaction === reaction.id
-                return (
-                  <button
-                    key={reaction.id}
-                    type="button"
-                    title={`${reaction.label} — ${reaction.trigger}`}
-                    aria-label={`Preview ${reaction.label} reaction`}
-                    aria-pressed={active}
-                    data-reaction-preview={reaction.id}
-                    data-active={active ? 'true' : 'false'}
-                    onClick={() => setPreviewReaction(reaction.id)}
-                    className={`h-12 rounded-lg border bg-white/90 bg-no-repeat transition ${
-                      active ? 'border-cyan-400 ring-1 ring-cyan-400/60' : 'border-white/10 hover:border-cyan-400/60'
-                    }`}
-                    style={{
-                      backgroundImage: `url(${v2ReactionSheet(avatarVariant, cell.sheet)})`,
-                      backgroundPosition: cell.position,
-                      backgroundSize: '200% 200%',
-                    }}
-                  />
-                )
-              })}
             </div>
           </div>
         </div>

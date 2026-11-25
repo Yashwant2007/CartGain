@@ -19,6 +19,10 @@ import HeroNegotiationDemo from '../HeroNegotiationDemo'
 describe('HeroNegotiationDemo', () => {
   const originalFetch = global.fetch
 
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
   afterEach(() => {
     global.fetch = originalFetch
   })
@@ -54,7 +58,7 @@ describe('HeroNegotiationDemo', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/bargain/home-demo', expect.objectContaining({ method: 'POST' }))
   })
 
-  it('uses the selected avatar sheet and follows the shopper words for every reaction', async () => {
+  it('keeps the live avatar reacting to shopper words without a manual reaction sheet', async () => {
     const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -72,17 +76,12 @@ describe('HeroNegotiationDemo', () => {
     render(<HeroNegotiationDemo />)
     const stage = screen.getByTestId('shopkeeper-stage')
     expect(stage.getAttribute('data-avatar-variant')).toBe('morgan')
-    expect(screen.getAllByLabelText(/Preview .* reaction/)).toHaveLength(8)
+    expect(screen.queryByLabelText(/Preview .* reaction/)).toBeNull()
+    expect(screen.queryByText(/reaction sheet/i)).toBeNull()
 
     fireEvent.click(screen.getByLabelText('Preview Alex'))
     expect(stage.getAttribute('data-avatar-variant')).toBe('alex')
     expect(stage.getAttribute('data-name')).toBe('Alex')
-    expect(screen.getByText('Alex’s reaction sheet')).toBeTruthy()
-
-    const lowballPreview = screen.getByLabelText('Preview Lowball reaction')
-    expect(lowballPreview.getAttribute('style')).toContain('alex-reactions-a.png')
-    fireEvent.click(lowballPreview)
-    expect(stage.getAttribute('data-reaction')).toBe('lowball')
 
     fireEvent.change(screen.getByLabelText('Ask a question or name your price'), {
       target: { value: 'This is such a scam.' },
@@ -91,6 +90,41 @@ describe('HeroNegotiationDemo', () => {
 
     expect(await screen.findByText('I understand.', {}, { timeout: 2000 })).toBeTruthy()
     expect(stage.getAttribute('data-reaction')).toBe('rude')
-    expect(screen.getByLabelText('Preview Rude reaction').getAttribute('data-active')).toBe('true')
+  })
+
+  it('keeps the real engine for the first bid, then caps anonymous bidding with a Live Demo signup CTA', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        reply: 'I can do ₹1,250.',
+        decision: 'counter',
+        counterOffer: 1250,
+        offer: 999,
+        offerDetected: true,
+        attemptsUsed: 1,
+        conversationState: 'NEGOTIATING',
+      }),
+    } as Response)
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    render(<HeroNegotiationDemo />)
+
+    fireEvent.change(screen.getByLabelText('Ask a question or name your price'), {
+      target: { value: '₹999 please' },
+    })
+    fireEvent.click(screen.getByLabelText('Send message'))
+
+    expect(await screen.findByText('I can do ₹1,250.', {}, { timeout: 2000 })).toBeTruthy()
+    expect(screen.queryByText(/used your free homepage round/)).toBeNull()
+
+    fireEvent.change(screen.getByLabelText('Ask a question or name your price'), {
+      target: { value: '₹1,050 please' },
+    })
+    fireEvent.click(screen.getByLabelText('Send message'))
+
+    expect(await screen.findByText(/open the Live Demo to keep negotiating/, {}, { timeout: 2000 })).toBeTruthy()
+    expect(screen.getAllByText(/used your free homepage round/).length).toBeGreaterThan(0)
+    expect(screen.getByText('Sign up for Live Demo').closest('a')?.getAttribute('href')).toBe('/signup?next=/s/bargain')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
