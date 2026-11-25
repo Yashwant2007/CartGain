@@ -49,7 +49,7 @@ export default function BargainOfferSummary({
   return (
     <div style={{
       width: '100%', minWidth: 0, flexShrink: 0,
-      padding: '14px 15px', borderRadius: 18,
+      padding: '10px 12px', borderRadius: 16,
       background: agreed
         ? 'linear-gradient(145deg, #f0fdf4 0%, #ffffff 62%, #eef2ff 100%)'
         : 'linear-gradient(145deg, #f8faff 0%, #ffffff 68%, #f5f3ff 100%)',
@@ -59,11 +59,11 @@ export default function BargainOfferSummary({
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
         <div style={{
-          width: 32, height: 32, borderRadius: 10, flexShrink: 0,
+          width: 26, height: 26, borderRadius: 9, flexShrink: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: agreed ? '#dcfce7' : '#eef2ff', color: agreed ? '#15803d' : '#4f46e5',
         }}>
-          {agreed ? <CheckCircle2 size={17} /> : <Tag size={17} />}
+          {agreed ? <CheckCircle2 size={15} /> : <Tag size={15} />}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 10.5, fontWeight: 800, color: agreed ? '#15803d' : '#4f46e5', textTransform: 'uppercase', letterSpacing: 0.6 }}>
@@ -87,22 +87,22 @@ export default function BargainOfferSummary({
 
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(112px, 1fr))',
-        gap: 8, marginTop: 12,
+        gap: 6, marginTop: 9,
       }}>
         {listed != null && (
-          <div style={{ padding: '9px 10px', borderRadius: 12, background: '#ffffff', border: '1px solid #eef2f7' }}>
+          <div style={{ padding: '7px 8px', borderRadius: 12, background: '#ffffff', border: '1px solid #eef2f7' }}>
             <div style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 700 }}>{t('listed')}</div>
-            <div style={{ fontSize: 14, color: '#64748b', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{money(listed)}</div>
+            <div style={{ fontSize: 12.5, color: '#64748b', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{money(listed)}</div>
           </div>
         )}
         {customer != null && (
-          <div style={{ padding: '9px 10px', borderRadius: 12, background: '#ffffff', border: '1px solid #eef2f7' }}>
+          <div style={{ padding: '7px 8px', borderRadius: 12, background: '#ffffff', border: '1px solid #eef2f7' }}>
             <div style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 700 }}>{t('youOffered')}</div>
-            <div style={{ fontSize: 14, color: '#475569', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{money(customer)}</div>
+            <div style={{ fontSize: 12.5, color: '#475569', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{money(customer)}</div>
           </div>
         )}
         <div style={{
-          padding: '9px 10px', borderRadius: 12,
+          padding: '7px 8px', borderRadius: 12,
           background: standing != null ? (agreed ? '#f0fdf4' : '#eef2ff') : '#f8fafc',
           border: `1px solid ${standing != null ? (agreed ? '#bbf7d0' : '#e0e7ff') : '#eef2f7'}`,
         }}>
@@ -110,7 +110,7 @@ export default function BargainOfferSummary({
             {agreed ? t('yourFinalPrice') : t('counterOffer')}
           </div>
           {standing != null ? (
-            <div style={{ fontSize: 16, color: agreed ? '#15803d' : '#4f46e5', fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>
+            <div style={{ fontSize: 14, color: agreed ? '#15803d' : '#4f46e5', fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>
               {money(standing)}
             </div>
           ) : (
@@ -120,9 +120,9 @@ export default function BargainOfferSummary({
           )}
         </div>
         {savings != null && savingsPercent != null && savingsPercent > 0 && (
-          <div style={{ padding: '9px 10px', borderRadius: 12, background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+          <div style={{ padding: '7px 8px', borderRadius: 12, background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
             <div style={{ fontSize: 10.5, color: '#15803d', fontWeight: 800 }}>{t('bestSoFar')}</div>
-            <div style={{ fontSize: 14, color: '#15803d', fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>
+            <div style={{ fontSize: 12.5, color: '#15803d', fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>
               {money(savings)} · {savingsPercent}%
             </div>
           </div>

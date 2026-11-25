@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { ShoppingCart, CheckCheck, Clock3, Sparkles } from 'lucide-react'
+import { ShoppingCart, CheckCheck, Clock3 } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
-import { buildQuickOffers, buildSuggestedPrompts } from '@/lib/bargain/offers'
+import { buildSuggestedPrompts } from '@/lib/bargain/offers'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { reciprocalCounter, isAbsurdOffer, absurdOfferReply, type NegotiationContext } from '@/lib/bargain/engine'
 import { GoalStrip, QuickChip } from '@/components/bargain/BargainPrimitives'
@@ -198,8 +198,8 @@ export default function StorefrontBargainWidget({
   const lastCounter = [...messages].reverse().find((m) => m.role === 'ai' && m.price != null)?.price ?? null
   const customerOffer = [...messages].reverse().find((m) => m.role === 'customer' && m.price != null)?.price ?? null
   const sessionEnded = step === 'rejected' || step === 'deal' || attempts >= maxAttempts
-  const quickOffers = buildQuickOffers({ lastCounter, listedPrice: originalPrice, sessionEnded, decision: step === 'deal' ? 'accept' : 'idle' })
   const suggestedPrompts = buildSuggestedPrompts({ lastCounter, sessionEnded, attemptsUsed: attempts })
+    .filter((key) => key !== 'bestOfferPrompt')
   const showSuggestions = step === 'chat' && !loading && input.trim() === ''
 
   const announceHeight = useCallback(() => {
@@ -626,7 +626,7 @@ export default function StorefrontBargainWidget({
           bubble entrance keep the negotiation feeling quick and professional. */}
       <style dangerouslySetInnerHTML={{ __html: `
         .cgf-msg { animation: cgfMsgIn 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) }
-        .cgf-chat-log { background: linear-gradient(180deg, #f8fafc 0%, #ffffff 18%, #ffffff 100%); border-radius: 12px; padding: 12px; scrollbar-width: thin; scrollbar-color: #c7d2fe transparent }
+        .cgf-chat-log { background: linear-gradient(180deg, #f8fafc 0%, #ffffff 18%, #ffffff 100%); border-radius: 12px; padding: 10px; scrollbar-width: thin; scrollbar-color: #c7d2fe transparent }
         .cgf-chat-log::-webkit-scrollbar { width: 7px }
         .cgf-chat-log::-webkit-scrollbar-thumb { background: #c7d2fe; border-radius: 999px }
         .cgf-bubble { max-width: calc(100% - 1.5rem); box-shadow: 0 2px 8px rgba(15,23,42,0.04) }
@@ -775,7 +775,7 @@ export default function StorefrontBargainWidget({
 
           <div
             ref={scrollRef}
-            className="cgf-chat-log space-y-3 overflow-y-auto pr-1"
+            className="cgf-chat-log space-y-2.5 overflow-y-auto pr-1"
             role="log"
             aria-live="polite"
             aria-label={t('conversationLabel')}
@@ -787,7 +787,7 @@ export default function StorefrontBargainWidget({
               return (
                 <div
                   key={msg.id}
-                  className={`cgf-msg cgf-bubble rounded-xl px-4 py-3 text-[16px] leading-6 ${
+                  className={`cgf-msg cgf-bubble rounded-xl px-3.5 py-2.5 text-[13.5px] leading-5 ${
                     isCustomer
                       ? 'bg-indigo-600 text-white text-right ml-6'
                       : 'bg-gray-100 text-gray-700 mr-6'
@@ -852,31 +852,17 @@ export default function StorefrontBargainWidget({
             </div>
           )}
 
-          {showSuggestions && (quickOffers.length > 0 || suggestedPrompts.length > 0) && (
-            <>
-              <div className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wide text-indigo-500">
-                <Sparkles size={12} />
-                {t('makeOfferSub')}
-              </div>
-              <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label={t('makeOfferSub')}>
-                {quickOffers.slice(0, 2).map((value) => (
-                  <QuickChip
-                    key={`offer-${value}`}
-                    compact
-                    label={`${t('makeOffer')} · ${money(currency, value)}`}
-                    onClick={() => { setInput(String(value)); composerInputRef.current?.focus() }}
-                  />
-                ))}
-                {suggestedPrompts.slice(0, 2).map((key) => (
-                  <QuickChip
-                    key={key}
-                    compact
-                    label={t(key)}
-                    onClick={() => { setInput(t(key)); composerInputRef.current?.focus() }}
-                  />
-                ))}
-              </div>
-            </>
+          {showSuggestions && suggestedPrompts.length > 0 && (
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5" role="group" aria-label={t('askProduct')}>
+              {suggestedPrompts.slice(0, 2).map((key) => (
+                <QuickChip
+                  key={key}
+                  compact
+                  label={t(key)}
+                  onClick={() => { setInput(t(key)); composerInputRef.current?.focus() }}
+                />
+              ))}
+            </div>
           )}
 
           <div className="cgf-composer flex gap-2">
@@ -897,7 +883,7 @@ export default function StorefrontBargainWidget({
                 void handleSend()
               }}
               placeholder={t('offerPlaceholder', { symbol: currencySymbolFor(currency) })}
-              className="flex-1 min-h-[46px] bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-indigo-500"
+              className="flex-1 min-h-[44px] bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-[15px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-indigo-500"
               aria-label={t('yourOfferOrMessage')}
             />
             <button

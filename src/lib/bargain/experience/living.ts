@@ -157,7 +157,7 @@ export function resolveShopkeeperAnimation(
     expression: override?.expression ?? expression,
     gesture: override?.gesture ?? gesture,
     position: override?.position ?? position,
-    reaction: reactionForAnimation(event, turnCtx) ?? undefined,
+    reaction: reactionForAnimation(event, turnCtx, personality) ?? undefined,
   }
 }
 

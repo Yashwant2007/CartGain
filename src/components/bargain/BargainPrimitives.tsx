@@ -149,10 +149,10 @@ export function MessageBubble({ m, t, currencySymbol, personaChip, isFinal, show
               ? '#f8fafc'
               : '#ffffff',
           color: isCustomer ? '#ffffff' : m.role === 'system' ? '#334155' : '#334155',
-          padding: '13px 16px',
+          padding: '10px 13px',
           borderRadius: isCustomer ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-          fontSize: 15.5,
-          lineHeight: 1.62,
+          fontSize: 13.5,
+          lineHeight: 1.5,
           border: m.role !== 'customer' ? '1px solid #e3e8f0' : 'none',
           boxShadow: m.role !== 'customer' ? '0 1px 4px rgba(15,23,42,0.07)' : '0 2px 10px rgba(79,70,229,0.22)',
           wordBreak: 'break-word',
@@ -187,7 +187,7 @@ export function MessageBubble({ m, t, currencySymbol, personaChip, isFinal, show
               {label}
             </span>
             <span style={{ flex: 1 }} />
-            <span style={{ fontSize: 15, fontWeight: 800, color: isCustomer ? '#ffffff' : isFinal ? '#b45309' : '#15803d', fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontSize: 13.5, fontWeight: 800, color: isCustomer ? '#ffffff' : isFinal ? '#b45309' : '#15803d', fontVariantNumeric: 'tabular-nums' }}>
               {currencySymbol}{m.offeredPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
             </span>
           </div>

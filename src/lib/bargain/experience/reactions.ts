@@ -2,6 +2,7 @@ import { isConversationState } from '../conversation-state'
 import { classifyShopperCue } from './shopper-cues'
 import type { AvatarState } from './avatar-state'
 import type { ExpressionState } from './expressions'
+import type { ShopkeeperPersonality } from './types'
 import type { V2AvatarVariant } from './v2-shopkeepers'
 
 export const V2_REACTIONS = [
@@ -148,6 +149,25 @@ export function v2ReactionCell(reaction: BargainReaction): { sheet: ReactionShee
   return { sheet: cell?.sheet ?? 'b', position: cell?.position ?? '100% 100%' }
 }
 
+const REPLY_DECLINE_RE = /\b(can'?t|cannot|won'?t|not possible|impossible|below|no can do|not able|out of (?:my )?range)\b/i
+const REPLY_FLATTERY_RE = /\b(thank you|thanks|appreciate|pleasure working|happy to help)\b/i
+const REPLY_WARM_RE = /\b(congrat|deal done|deal is done|agreed|accepted|locked|perfect|great choice|enjoy|confirmed)\b/i
+const REPLY_EXTRAS_RE = /\b(alternatives?|other options?|recommend|show you|here(?:'s| is) what|included|made of|shipping|material|detail|features?|question)\b/i
+const REPLY_HESITATION_RE = /\b(take your time|let me think|while you decide|not sure|maybe|later|hmm)\b/i
+const REPLY_COUNTER_RE = /\b(counter|meet me|work with|can do|could do|middle|final offer|last offer|split the difference)\b/i
+
+function reactionForAiReply(reply: string): BargainReaction | null {
+  const text = reply.trim()
+  if (!text) return null
+  if (REPLY_DECLINE_RE.test(text)) return 'lowball'
+  if (REPLY_FLATTERY_RE.test(text)) return 'flattery'
+  if (REPLY_WARM_RE.test(text)) return 'deal'
+  if (REPLY_EXTRAS_RE.test(text)) return 'extras'
+  if (REPLY_HESITATION_RE.test(text)) return 'hesitation'
+  if (REPLY_COUNTER_RE.test(text)) return 'counter'
+  return null
+}
+
 /**
  * Pick the visual reaction from the shopper's own words. This is presentation
  * only: it never changes the reply, the counter-offer or the floor.
@@ -155,11 +175,13 @@ export function v2ReactionCell(reaction: BargainReaction): { sheet: ReactionShee
 export function reactionForShopperMessage(
   message: string,
   originalPrice?: number | null,
+  personality?: ShopkeeperPersonality,
 ): BargainReaction {
   const text = message.trim()
   if (!text) return 'extras'
 
   const cue = classifyShopperCue(text, originalPrice)
+  if (cue === 'chat' && personality === 'friendly_shopkeeper') return 'flattery'
   if (cue === 'insult') return 'rude'
   if (cue === 'walkout') return 'walk_away'
   if (cue === 'purchase_ready') return 'deal'
@@ -173,16 +195,27 @@ export function reactionForShopperMessage(
 
 export interface ReactionAnimationContext {
   customerMessage?: string | null
+  aiReply?: string | null
+  counterOffer?: number | null
   originalPrice?: number | null
   decision?: string | null
   ended?: string | null
   conversationState?: string | null
+  hasRecommendations?: boolean
+  checkoutStarted?: boolean
 }
 
-/** Keep the face attached to the shopper's words across the whole turn. */
+const DECISION_REACTION: Record<string, BargainReaction> = {
+  counter: 'counter',
+  accept: 'deal',
+  reject: 'lowball',
+}
+
+/** Choose one bounded sprite cell from the event that actually just happened. */
 export function reactionForAnimation(
   event: string,
   ctx: ReactionAnimationContext = {},
+  personality?: ShopkeeperPersonality,
 ): BargainReaction | null {
   if (isConversationState(ctx.conversationState)) {
     if (ctx.conversationState === 'COMPLETED') return 'deal'
@@ -190,17 +223,28 @@ export function reactionForAnimation(
     if (['CUSTOMER_HESITATION', 'HUMAN_SUPPORT_REQUIRED'].includes(ctx.conversationState)) return 'hesitation'
   }
 
-  const fromMessage = ctx.customerMessage
-    ? reactionForShopperMessage(ctx.customerMessage, ctx.originalPrice)
-    : null
-
   if (event === 'deal_accepted' || ctx.ended === 'accepted') return 'deal'
-  if (event === 'checkout_started') return 'deal'
+  if (event === 'checkout_started' || ctx.checkoutStarted) return 'deal'
   if (event === 'deal_rejected' || ctx.ended === 'rejected' || ctx.ended === 'abandoned') {
     return 'walk_away'
   }
-  if (fromMessage && event !== 'customer_typing') return fromMessage
+  if (event === 'customer_message' && ctx.customerMessage) {
+    return reactionForShopperMessage(ctx.customerMessage, ctx.originalPrice, personality)
+  }
   if (event === 'counter_offer') return 'counter'
+
+  const decisionReaction = ctx.decision ? DECISION_REACTION[ctx.decision] ?? null : null
+  if (event === 'ai_reply' && decisionReaction) return decisionReaction
+  if (event === 'ai_reply' && ctx.counterOffer != null && Number.isFinite(ctx.counterOffer)) return 'counter'
+  if (event === 'recommendations_shown' || event === 'recommendation_selected') return 'extras'
+  if (event === 'ai_reply' && ctx.hasRecommendations) return 'extras'
+  if (event === 'ai_reply' && ctx.aiReply) {
+    const fromReply = reactionForAiReply(ctx.aiReply)
+    if (fromReply) return fromReply
+  }
+  if (event === 'ai_reply' && ctx.customerMessage) {
+    return reactionForShopperMessage(ctx.customerMessage, ctx.originalPrice, personality)
+  }
 
   return null
 }

@@ -104,13 +104,23 @@ describe('BargainWidget compact chrome', () => {
     expect(css).toContain('.cartgain-bargain .cg-private-note { display: none }')
   })
 
-  it('prefills from floor-safe suggestions without sending the message', () => {
+  it('keeps only conversational prompts and prefills without sending the message', () => {
     render(<BargainWidget {...baseProps} />)
     const input = screen.getByRole('textbox', { name: /Ask about this product/i }) as HTMLInputElement
-    expect(screen.getByRole('button', { name: /Make offer · ₹889/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Make offer ·/ })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Tell me about this product' }))
     expect(input.value).toBe('Tell me about this product')
     expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy()
+  })
+
+  it('uses the wider storefront drawer and compact panel sizing', () => {
+    const { container } = render(<BargainWidget {...baseProps} />)
+    const css = Array.from(container.querySelectorAll('style'))
+      .map((node) => node.textContent ?? '')
+      .join('\n')
+    expect(css).toContain('width: clamp(440px, 44vw, 560px);')
+    const drawerCss = readFileSync(join(process.cwd(), 'extensions', 'storefront-bargain', 'assets', 'bargain.css'), 'utf8')
+    expect(drawerCss).toContain('width: min(560px, 94vw);')
   })
 
   it('keeps the jump control in normal flow instead of overlapping the transcript', () => {

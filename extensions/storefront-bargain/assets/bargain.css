@@ -123,7 +123,7 @@
   right: 0;
   bottom: 0;
   z-index: 10001;
-  width: min(430px, 94vw);
+  width: min(560px, 94vw);
   background: #fff;
   box-shadow: -12px 0 40px rgba(0, 0, 0, 0.18);
   transform: translateX(100%);

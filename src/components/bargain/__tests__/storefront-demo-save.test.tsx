@@ -82,12 +82,13 @@ async function reachDeal() {
 }
 
 describe('StorefrontBargainWidget demo deal', () => {
-  it('prefills from floor-safe suggestions without sending', () => {
+  it('keeps only conversational prompts and prefills without sending', () => {
     render(<StorefrontBargainWidget {...props} />)
     fireEvent.click(screen.getByRole('button', { name: 'Start price negotiation' }))
     const input = screen.getByLabelText('Your offer or message') as HTMLInputElement
-    fireEvent.click(screen.getByRole('button', { name: /Make offer · ₹890/ }))
-    expect(input.value).toBe('890')
+    expect(screen.queryByRole('button', { name: /Make offer ·/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Tell me about this product' }))
+    expect(input.value).toBe('Tell me about this product')
     expect(screen.getByRole('button', { name: 'Send offer' })).toBeTruthy()
   })
 

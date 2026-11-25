@@ -38,11 +38,25 @@ describe('bargain reactions from shopper chat', () => {
     expect(positions.size).toBe(8)
   })
 
-  it('follows the shoppers words across thinking and reply events but not while typing', () => {
+  it('reacts to the shopper message without reusing it for thinking and typing beats', () => {
     expect(reactionForAnimation('customer_message', { customerMessage: '₹50 is all I can do.', originalPrice: 1000 })).toBe('lowball')
-    expect(reactionForAnimation('ai_thinking', { customerMessage: '₹50 is all I can do.', originalPrice: 1000 })).toBe('lowball')
-    expect(reactionForAnimation('ai_reply', { customerMessage: '₹50 is all I can do.', originalPrice: 1000 })).toBe('lowball')
+    expect(reactionForAnimation('ai_thinking', { customerMessage: '₹50 is all I can do.', originalPrice: 1000 })).toBeNull()
     expect(reactionForAnimation('customer_typing', { customerMessage: '₹50 is all I can do.', originalPrice: 1000 })).toBeNull()
+  })
+
+  it('derives distinct reply reactions from the real turn outcome and copy', () => {
+    const customerMessage = '₹50 is all I can do.'
+    expect(reactionForAnimation('ai_reply', { customerMessage, originalPrice: 1000, decision: 'counter' })).toBe('counter')
+    expect(reactionForAnimation('ai_reply', { customerMessage, originalPrice: 1000, ended: 'accepted' })).toBe('deal')
+    expect(reactionForAnimation('ai_reply', { customerMessage, originalPrice: 1000, aiReply: "That's below what I can do." })).toBe('lowball')
+    expect(reactionForAnimation('ai_reply', { customerMessage, originalPrice: 1000, aiReply: 'Here is what is included and how shipping works.' })).toBe('extras')
+    expect(reactionForAnimation('ai_reply', { customerMessage, originalPrice: 1000, aiReply: 'Take your time while you decide.' })).toBe('hesitation')
+    expect(reactionForAnimation('ai_reply', { customerMessage, originalPrice: 1000, aiReply: 'Thank you, I appreciate it.' })).toBe('flattery')
+  })
+
+  it('uses a friendly avatar reaction for ordinary chat', () => {
+    expect(reactionForAnimation('customer_message', { customerMessage: 'Hello there' }, 'friendly_shopkeeper')).toBe('flattery')
+    expect(reactionForAnimation('customer_message', { customerMessage: 'Hello there' }, 'strict_shopkeeper')).toBe('extras')
   })
 
   it('lets a verified terminal conversation state override the chat reaction', () => {

@@ -11,10 +11,10 @@ import {
 } from 'react'
 import {
   X, Minimize2, Send, MessageCircle, CheckCircle2, Clock, Tag, Zap,
-  ShieldCheck, ArrowRight, Loader2, AlertCircle, RotateCcw, Sparkles,
+  ShieldCheck, ArrowRight, Loader2, AlertCircle, RotateCcw,
 } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
-import { buildQuickOffers, buildSuggestedPrompts, parseDraftOffer } from '@/lib/bargain/offers'
+import { buildSuggestedPrompts, parseDraftOffer } from '@/lib/bargain/offers'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import ShopkeeperAvatar from '@/components/bargain/ShopkeeperAvatar'
 import V2ShopkeeperAvatar from '@/components/bargain/V2ShopkeeperAvatar'
@@ -545,7 +545,7 @@ export default function BargainWidget({
   }, [messages])
 
   const showRoundMeter = !sessionEnded && decision !== 'accept' && maxAttempts != null && maxAttempts > 0
-  const showPriceRail = !sessionEnded && decision !== 'accept' && lastCounter != null
+  const showPriceRail = !isEmbed && !sessionEnded && decision !== 'accept' && lastCounter != null
 
   // The shopper's offer, parsed with the SAME complaint-aware logic the server
   // uses. A complaint ("729 is too much") is not an offer, so it must not read
@@ -555,12 +555,9 @@ export default function BargainWidget({
   const draftAmount = parseDraftOffer(input)
 
   const unavailable = rejection != null && /UNAVAILABLE/i.test(rejection.reason)
-  const quickOffers = useMemo(
-    () => buildQuickOffers({ lastCounter, listedPrice: livePrice, sessionEnded, decision }),
-    [lastCounter, livePrice, sessionEnded, decision],
-  )
   const suggestedPrompts = useMemo(
-    () => buildSuggestedPrompts({ lastCounter, sessionEnded, attemptsUsed: roundsUsed }),
+    () => buildSuggestedPrompts({ lastCounter, sessionEnded, attemptsUsed: roundsUsed })
+      .filter((key) => key !== 'bestOfferPrompt'),
     [lastCounter, sessionEnded, roundsUsed],
   )
   const showSuggestions = !sessionEnded && decision !== 'accept' && !limit && !unavailable && !rejection && !loading && input.trim() === ''
@@ -1610,7 +1607,7 @@ export default function BargainWidget({
 
           {/* ── Header: product identity + close/minimise ── */}
           <div style={{
-            padding: '14px 14px 0',
+            padding: '10px 14px 0',
             borderBottom: '1px solid #eef2f7',
             background: 'linear-gradient(180deg, #ffffff, #fafbff)',
           }}>
@@ -1618,7 +1615,7 @@ export default function BargainWidget({
               {renderHeaderAvatar(40)}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                  <span style={{ fontWeight: 800, fontSize: 14.5, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span style={{ fontWeight: 800, fontSize: 13, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {t('bargainTitle')}
                   </span>
                   {personaChip && (
@@ -1631,7 +1628,7 @@ export default function BargainWidget({
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 1.5, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <div style={{ fontSize: 10.5, color: '#64748b', marginTop: 1.5, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                   <span style={{ width: 7, height: 7, borderRadius: 4, background: '#34d399', flexShrink: 0, boxShadow: '0 0 0 3px rgba(52,211,153,0.18)' }} />
                   <span style={{ fontWeight: 700, color: '#059669', flexShrink: 0 }}>{t('shopkeeperOnline')}</span>
                   <span style={{ color: '#cbd5e1', flexShrink: 0 }}>·</span>
@@ -1643,7 +1640,7 @@ export default function BargainWidget({
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
                 background: '#eef2ff', color: '#4f46e5', border: '1px solid #e0e7ff',
-                borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                  borderRadius: 999, padding: '3px 9px', fontSize: 11, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
               }}>
                 <Zap size={11} />
                 {currencySymbol}{livePrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
@@ -1666,7 +1663,7 @@ export default function BargainWidget({
             </div>
 
             {/* Tabs + status/trust/timer in ONE slim row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 7 }}>
               <div style={{ display: 'flex', gap: 2 }}>
                 {([
                   { key: 'chat', label: t('tabChat'), icon: <MessageCircle size={13} /> },
@@ -1681,14 +1678,14 @@ export default function BargainWidget({
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 5,
-                      padding: '10px 14px',
+                      padding: '8px 12px',
                       minHeight: 40,
                       background: activeTab === tab.key ? '#eef2ff' : 'transparent',
                       color: activeTab === tab.key ? '#4f46e5' : '#64748b',
                       border: '1px solid transparent',
                       borderColor: activeTab === tab.key ? '#e0e7ff' : 'transparent',
                       borderRadius: 10,
-                      fontSize: 12.5,
+                      fontSize: 11.5,
                       fontWeight: activeTab === tab.key ? 700 : 600,
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
@@ -1706,12 +1703,12 @@ export default function BargainWidget({
                   <RoundMeter used={roundsUsed} max={maxAttempts} t={t} />
                 )}
                 {timeLeft != null && !sessionEnded && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#64748b', fontSize: 11.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#64748b', fontSize: 10.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     <Clock size={11} style={{ color: '#94a3b8' }} />
                     <span>{t('expiresIn', { n: Math.floor(timeLeft / 60) + ':' + String(timeLeft % 60).padStart(2, '0') })}</span>
                   </span>
                 )}
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#64748b', fontSize: 11, minWidth: 0 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#64748b', fontSize: 10, minWidth: 0 }}>
                   <ShieldCheck size={12} style={{ color: '#94a3b8', flexShrink: 0 }} />
                   <span className="cg-private-note" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('privateNote')}</span>
                 </span>
@@ -1719,7 +1716,7 @@ export default function BargainWidget({
                   href={linkout ? `${linkout}?ai_opt_out=1` : undefined}
                   onClick={linkout ? undefined : (e) => { e.preventDefault(); void optOutOfAI() }}
                   className="cg-link"
-                  style={{ color: '#6366f1', textDecoration: 'none', fontWeight: 600, cursor: 'pointer', outline: 'none', fontSize: 11.5, flexShrink: 0 }}
+                  style={{ color: '#6366f1', textDecoration: 'none', fontWeight: 600, cursor: 'pointer', outline: 'none', fontSize: 10.5, flexShrink: 0 }}
                 >
                   {t('skip')}
                 </a>
@@ -1785,10 +1782,10 @@ export default function BargainWidget({
                 flex: 1,
                 overflowY: 'auto',
                 overscrollBehavior: 'contain',
-                padding: '16px 18px 14px',
+                padding: '10px 12px 10px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 16,
+                gap: 10,
                 background: '#ffffff',
                 minWidth: 0,
                 minHeight: 0,
@@ -2186,50 +2183,32 @@ export default function BargainWidget({
               )}
 
               <div style={{
-                padding: '10px 14px 12px',
+                padding: '8px 12px 10px',
                 background: '#ffffff',
                 borderTop: '1px solid #eef2f7',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 6,
+                gap: 5,
               }}>
-                {showSuggestions && (quickOffers.length > 0 || suggestedPrompts.length > 0) && (
-                  <>
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5,
-                      textTransform: 'uppercase', color: '#6366f1',
-                    }}>
-                      <Sparkles size={12} />
-                      {t('makeOfferSub')}
-                    </div>
-                    <div
-                      className="cg-suggestions"
-                      role="group"
-                      aria-label={t('makeOfferSub')}
-                      style={{
-                        display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 2,
-                        scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
-                      }}
-                    >
-                      {quickOffers.slice(0, 2).map((value) => (
-                        <QuickChip
-                          key={`offer-${value}`}
-                          compact
-                          label={`${t('makeOffer')} · ${currencySymbol}${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
-                          onClick={() => applySuggestion(String(value))}
-                        />
-                      ))}
-                      {suggestedPrompts.slice(0, 2).map((key) => (
-                        <QuickChip
-                          key={key}
-                          compact
-                          label={t(key)}
-                          onClick={() => applySuggestion(t(key))}
-                        />
-                      ))}
-                    </div>
-                  </>
+                {showSuggestions && suggestedPrompts.length > 0 && (
+                  <div
+                    className="cg-suggestions"
+                    role="group"
+                    aria-label={t('askProduct')}
+                    style={{
+                      display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 1,
+                      scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
+                    }}
+                  >
+                    {suggestedPrompts.slice(0, 2).map((key) => (
+                      <QuickChip
+                        key={key}
+                        compact
+                        label={t(key)}
+                        onClick={() => applySuggestion(t(key))}
+                      />
+                    ))}
+                  </div>
                 )}
                 {/* Message / offer composer — one calm, roomy control. Free text
                     is a real chat message; a number anywhere in it is treated
@@ -2284,15 +2263,15 @@ export default function BargainWidget({
                       flex: 1,
                       minWidth: 0,
                       width: 0,
-                      padding: '12px 4px',
+                      padding: '8px 4px',
                       border: 'none',
                       background: 'transparent',
                       color: '#0f172a',
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: 500,
                       lineHeight: 1.35,
                       outline: 'none',
-                      minHeight: 54,
+                      minHeight: 46,
                     }}
                   />
                   <button
@@ -2318,7 +2297,7 @@ export default function BargainWidget({
                     justifyContent: 'space-between',
                     gap: 8,
                     padding: '0 3px',
-                    fontSize: 11.5,
+                    fontSize: 10.5,
                     lineHeight: 1.3,
                     color: '#94a3b8',
                   }}>
@@ -2420,7 +2399,7 @@ export default function BargainWidget({
           color: #ffffff;
           border-radius: 12px;
           padding: 0 16px;
-          height: 44px;
+          height: 42px;
           font-weight: 700;
           box-shadow: 0 4px 12px rgba(99,102,241,0.35);
           transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
@@ -2439,9 +2418,9 @@ export default function BargainWidget({
         .cartgain-bargain .cg-panel-fixed {
           position: fixed; z-index: 9999;
           right: 16px; bottom: 16px;
-          width: clamp(420px, 42vw, 540px);
+          width: clamp(440px, 44vw, 560px);
           max-width: calc(100vw - 32px);
-          height: min(820px, calc(100dvh - 32px));
+          height: min(860px, calc(100dvh - 32px));
           max-height: calc(100dvh - 32px);
           min-height: 0;
           border-radius: 24px;
@@ -2475,7 +2454,7 @@ export default function BargainWidget({
         .cg-btn {
           border: none; border-radius: 12px; cursor: pointer;
           display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-          font-weight: 800; font-size: 15px; outline: none; touch-action: manipulation;
+          font-weight: 800; font-size: 13.5px; outline: none; touch-action: manipulation;
           transition: all 0.18s ease; padding: 12px 16px; min-height: 48px;
         }
         .cg-btn:disabled { opacity: 0.55; cursor: default }
@@ -2498,8 +2477,8 @@ export default function BargainWidget({
         .cg-btn-send:active { transform: translateY(1px) }
         .cg-btn-send:disabled { opacity: 0.6; box-shadow: none }
         .cg-btn-send--inline {
-          width: auto; flex: 0 0 auto; min-height: 50px; padding: 0 16px;
-          border-radius: 13px; font-size: 14px; white-space: nowrap;
+          width: auto; flex: 0 0 auto; min-height: 46px; padding: 0 14px;
+          border-radius: 13px; font-size: 13px; white-space: nowrap;
         }
         .cg-send-label { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
         @media (max-width: 380px) {
