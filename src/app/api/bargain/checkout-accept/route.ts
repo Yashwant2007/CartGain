@@ -269,8 +269,11 @@ export async function POST(request: NextRequest) {
     // configured AND outside it — no window means always active.
     const config = await prisma.bargainConfig.findUnique({
       where: { storeId: store.id },
-      select: { campaignStart: true, campaignEnd: true, emergencyPaused: true },
+      select: { enabled: true, campaignStart: true, campaignEnd: true, emergencyPaused: true },
     })
+    if (config?.enabled === false) {
+      return NextResponse.json({ message: 'Bargaining disabled' }, { status: 403, headers })
+    }
     const campaignActive = bargainCampaignStatus(config, new Date()) === 'active'
 
     const validation = validateOffer({
@@ -427,6 +430,7 @@ export async function POST(request: NextRequest) {
           purchaseUrl,
           customerEmail: safeCustomerEmail,
           status: 'accepted',
+          acceptedAt: new Date(),
           expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         },
       }),

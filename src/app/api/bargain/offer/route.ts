@@ -20,6 +20,7 @@ import { isOverListOffer, overListOfferReply } from '@/lib/bargain/over-list-off
 import { bargainCampaignStatus, detectCouponMention, detectMultiProductRequest } from '@/lib/bargain/policy'
 import { normalizeShippingConfig, computeShipping, shippingUpsellLine } from '@/lib/bargain/shipping'
 import { normalizePaymentConfig, detectPaymentIntent, prepaidSaving } from '@/lib/bargain/payment'
+import { applyRulePreferences } from '@/lib/bargain/rule-preferences'
 import { buildBundle, validateBundleOffer, allocateDiscount, bundleSummary, type BundleItem } from '@/lib/bargain/bundle'
 import { walkoutOutcome } from '@/lib/bargain/negotiation-state'
 import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
@@ -1064,7 +1065,7 @@ export async function POST(request: NextRequest) {
           return await negotiateStep(negotiationCtx, negotiationHistory, message, offer, bargainSession.id, liveTurn.compact)
         }
         if (offer != null) {
-          const ruled = ruleBasedDecision(offer, negotiationCtx)
+          const ruled = applyRulePreferences(ruleBasedDecision(offer, negotiationCtx), negotiationCtx)
           return {
             ...ruled,
             metadata: { ...(ruled.metadata ?? {}), aiSource: 'reflex', aiFallbackReason: 'merchant_paused_ai' },

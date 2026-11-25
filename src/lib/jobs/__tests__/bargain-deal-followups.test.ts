@@ -65,6 +65,25 @@ describe('processBargainDealFollowups', () => {
     )
   })
 
+  it('uses acceptedAt instead of createdAt when the deal was accepted later', async () => {
+    const acceptedJustNow = { ...baseSession, acceptedAt: new Date() }
+    p.bargainSession.findMany.mockResolvedValue([acceptedJustNow])
+    p.bargainSession.findUnique.mockResolvedValue(acceptedJustNow)
+
+    const res = await processBargainDealFollowups()
+
+    expect(res.sent).toBe(0)
+    expect(email).not.toHaveBeenCalled()
+    expect(p.bargainSession.findMany.mock.calls[0][0].where).toEqual(
+      expect.objectContaining({
+        OR: [
+          { acceptedAt: { lte: expect.any(Date) } },
+          { acceptedAt: null, createdAt: { lte: expect.any(Date) } },
+        ],
+      }),
+    )
+  })
+
   it('is idempotent — a claimed (session, stage, channel) is skipped, never double-sent', async () => {
     p.bargainSession.findMany.mockResolvedValue([baseSession])
     p.bargainSession.findUnique.mockResolvedValue(baseSession)

@@ -752,6 +752,7 @@ model BargainSession {
   checkoutOpenedAt          DateTime? // shopper opened checkout; chat closes until a real order arrives
   checkoutPurchaseAt        DateTime? // any confirmed order from this buyer after checkout opened
   checkoutPurchaseOrderId   String? // Shopify order id that unlocked this checkout lock
+  acceptedAt                DateTime?
   purchasedAt               DateTime? // when an order confirmed using this bargain code
   purchasedOrderId          String? // Shopify order id — idempotent purchase attribution (scoped to the store: Shopify order ids are per-shop sequences)
   purchaseValue             Float? // recognized net value of the bargain purchase (after refunds)

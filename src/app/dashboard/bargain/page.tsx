@@ -46,6 +46,7 @@ import {
   NEGOTIATION_STYLE_LABELS,
   NEGOTIATION_STYLE_VALUES,
 } from '@/lib/bargain/merchant-modes'
+import { defaultGoalWindow, formatZonedDateTimeInput, parseZonedDateTimeInput } from '@/lib/bargain/dashboard-goal-time'
 
 type BargainConfig = {
   id: string
@@ -202,6 +203,8 @@ export default function BargainDashboardPage() {
   const [configForm, setConfigForm] = useState<Partial<BargainConfig>>({})
   const [savingConfig, setSavingConfig] = useState(false)
   const [configMessage, setConfigMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const savedConfigForm = config ? normalizeConfigForm(config) : null
+  const configDirty = savedConfigForm != null && JSON.stringify(savedConfigForm) !== JSON.stringify(configForm)
 
   const [sessions, setSessions] = useState<BargainSession[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
@@ -307,6 +310,12 @@ void fetchConfig()
     }
   }
 
+  function discardConfigChanges() {
+    if (!savedConfigForm) return
+    setConfigForm(savedConfigForm)
+    setConfigMessage(null)
+  }
+
     async function fetchSessions() {
     if (!storeId) return
     setLoadingSessions(true)
@@ -404,7 +413,7 @@ void fetchConfig()
 
       {/* Config tab */}
       {tab === 'config' && (
-        <div className="space-y-5">
+        <div className="space-y-3">
           {!config ? (
             configMessage ? (
               <div className="space-y-4 rounded-2xl border border-blue-800/30 bg-slate-900/60 p-8 text-center">
@@ -424,12 +433,12 @@ void fetchConfig()
             )
           ) : (
             <>
-              {/* Sticky action bar */}
-              <div className="sticky top-16 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-800/30 bg-slate-950/80 px-4 py-3 backdrop-blur">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className={`inline-flex h-2.5 w-2.5 rounded-full ${configForm.enabled ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-                  <span className="font-medium text-blue-100">
-                    Bargain is {configForm.enabled ? 'live' : 'paused'}
+              <div className="sticky top-16 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-800/30 bg-slate-950/80 px-4 py-2.5 backdrop-blur">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className={`inline-flex h-2.5 w-2.5 rounded-full ${config.enabled ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+                  <span className="font-medium text-blue-100">Bargain is {config.enabled ? 'live' : 'paused'}</span>
+                  <span className={`text-xs ${configDirty ? 'text-amber-300' : 'text-blue-300/60'}`}>
+                    {configDirty ? 'Unsaved changes' : 'All changes saved'}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -438,9 +447,18 @@ void fetchConfig()
                       {configMessage.text}
                     </span>
                   )}
+                  {configDirty && (
+                    <button
+                      onClick={discardConfigChanges}
+                      disabled={savingConfig}
+                      className="flex items-center rounded-lg border border-blue-800/40 px-3 py-2 text-sm text-blue-200 transition hover:bg-slate-800 disabled:opacity-50"
+                    >
+                      <RotateCcw className="mr-1.5 h-4 w-4" /> Discard
+                    </button>
+                  )}
                   <button
                     onClick={saveConfig}
-                    disabled={savingConfig}
+                    disabled={savingConfig || !configDirty}
                     className="flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-50"
                   >
                     {savingConfig ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
@@ -449,7 +467,7 @@ void fetchConfig()
                 </div>
               </div>
 
-              <div className="grid gap-5 lg:grid-cols-2">
+              <div className="grid gap-3 lg:grid-cols-2">
                 {/* Master switch */}
                 <ConfigCard
                   className="lg:col-span-2"
@@ -737,7 +755,7 @@ void fetchConfig()
                   <ToggleRow
                     title="Nudge shoppers who linger on a product page"
                     description="After the dwell time, pulse the Bargain button and show a small “want a better price?” hint. The shopper must click to start a negotiation. Counts visible time only and stops as soon as they engage or dismiss."
-                    checked={configForm.dwellNudgeEnabled ?? true}
+                    checked={configForm.dwellNudgeEnabled ?? false}
                     onChange={v => setConfigForm({ ...configForm, dwellNudgeEnabled: v })}
                   />
                   {configForm.dwellNudgeEnabled && (
@@ -950,11 +968,32 @@ void fetchConfig()
                     title="Enable daily goal"
                     description="When on, negotiation intensity follows your progress automatically."
                     checked={configForm.goalEnabled ?? false}
-                    onChange={v => setConfigForm({ ...configForm, goalEnabled: v })}
+                    onChange={v => {
+                      const timeZone = configForm.goalTimezone ?? 'Asia/Kolkata'
+                      const defaults = v && !configForm.goalStartTime && !configForm.goalEndTime
+                        ? defaultGoalWindow(timeZone)
+                        : null
+                      setConfigForm({
+                        ...configForm,
+                        goalEnabled: v,
+                        ...(v
+                          ? {
+                              goalTimezone: timeZone,
+                              goalTarget: configForm.goalTarget ?? 10,
+                              ...(defaults
+                                ? {
+                                    goalStartTime: parseZonedDateTimeInput(defaults.start, timeZone),
+                                    goalEndTime: parseZonedDateTimeInput(defaults.end, timeZone),
+                                  }
+                                : {}),
+                            }
+                          : {}),
+                      })
+                    }}
                   />
 
                   {configForm.goalEnabled && (
-                    <div className="space-y-5 rounded-xl border border-blue-800/30 bg-slate-950/30 p-4 sm:p-5">
+                    <div className="space-y-3 rounded-xl border border-blue-800/30 bg-slate-950/30 p-4">
                       <div className="grid gap-4 sm:grid-cols-3">
                         <Field label="Goal measures">
                           <select
@@ -985,19 +1024,25 @@ void fetchConfig()
                       </div>
 
                       <div className="grid gap-4 sm:grid-cols-3">
-                        <Field label="Window starts" hint="Set in your browser; shown in your store timezone.">
+                        <Field label="Window starts" hint="Shown in the store timezone.">
                           <input
                             type="datetime-local"
-                            value={toLocalDateTimeInput(configForm.goalStartTime ?? null)}
-                            onChange={e => setConfigForm({ ...configForm, goalStartTime: fromLocalDateTimeInput(e.target.value) })}
+                            value={formatZonedDateTimeInput(configForm.goalStartTime ?? null, configForm.goalTimezone ?? 'Asia/Kolkata')}
+                            onChange={e => setConfigForm({
+                              ...configForm,
+                              goalStartTime: parseZonedDateTimeInput(e.target.value, configForm.goalTimezone ?? 'Asia/Kolkata'),
+                            })}
                             className={CONTROL_CLS}
                           />
                         </Field>
                         <Field label="Window ends" hint="Orders placed in this window count toward the goal.">
                           <input
                             type="datetime-local"
-                            value={toLocalDateTimeInput(configForm.goalEndTime ?? null)}
-                            onChange={e => setConfigForm({ ...configForm, goalEndTime: fromLocalDateTimeInput(e.target.value) })}
+                            value={formatZonedDateTimeInput(configForm.goalEndTime ?? null, configForm.goalTimezone ?? 'Asia/Kolkata')}
+                            onChange={e => setConfigForm({
+                              ...configForm,
+                              goalEndTime: parseZonedDateTimeInput(e.target.value, configForm.goalTimezone ?? 'Asia/Kolkata'),
+                            })}
                             className={CONTROL_CLS}
                           />
                         </Field>
@@ -1052,16 +1097,22 @@ void fetchConfig()
                         <Field label="Campaign starts" hint="Leave empty to run for the whole goal window.">
                           <input
                             type="datetime-local"
-                            value={toLocalDateTimeInput(configForm.campaignStart ?? null)}
-                            onChange={e => setConfigForm({ ...configForm, campaignStart: fromLocalDateTimeInput(e.target.value) })}
+                            value={formatZonedDateTimeInput(configForm.campaignStart ?? null, configForm.goalTimezone ?? 'Asia/Kolkata')}
+                            onChange={e => setConfigForm({
+                              ...configForm,
+                              campaignStart: parseZonedDateTimeInput(e.target.value, configForm.goalTimezone ?? 'Asia/Kolkata'),
+                            })}
                             className={CONTROL_CLS}
                           />
                         </Field>
                         <Field label="Campaign ends" hint="The AI only references the campaign while it is live.">
                           <input
                             type="datetime-local"
-                            value={toLocalDateTimeInput(configForm.campaignEnd ?? null)}
-                            onChange={e => setConfigForm({ ...configForm, campaignEnd: fromLocalDateTimeInput(e.target.value) })}
+                            value={formatZonedDateTimeInput(configForm.campaignEnd ?? null, configForm.goalTimezone ?? 'Asia/Kolkata')}
+                            onChange={e => setConfigForm({
+                              ...configForm,
+                              campaignEnd: parseZonedDateTimeInput(e.target.value, configForm.goalTimezone ?? 'Asia/Kolkata'),
+                            })}
                             className={CONTROL_CLS}
                           />
                         </Field>
@@ -1407,22 +1458,6 @@ void fetchConfig()
     </div>
   )
 }
-// Convert an ISO timestamp to a <input type="datetime-local"> value (browser-local).
-function toLocalDateTimeInput(iso: string | null): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-// Convert a datetime-local value back to ISO (or null to clear).
-function fromLocalDateTimeInput(v: string): string | null {
-  if (!v) return null
-  const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? null : d.toISOString()
-}
-
 // "4h 32m" style countdown to the window close (client clock), else '—'.
 function formatTimeRemaining(iso: string | null): string {
   if (!iso) return '—'
@@ -1462,7 +1497,7 @@ function ConfigCard({
   children: ReactNode
 }) {
   return (
-    <section className={`rounded-2xl border border-blue-800/30 bg-slate-900/60 p-5 sm:p-6 ${className}`}>
+    <section className={`rounded-xl border border-blue-800/30 bg-slate-900/60 p-4 sm:p-5 ${className}`}>
       <div className="mb-4 flex items-start gap-3">
         <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-900/40">
           <Icon className="h-5 w-5 text-blue-300" />
@@ -1472,7 +1507,7 @@ function ConfigCard({
           <p className="mt-0.5 text-sm text-blue-300/60">{description}</p>
         </div>
       </div>
-      <div className="space-y-4">{children}</div>
+      <div className="space-y-3">{children}</div>
     </section>
   )
 }

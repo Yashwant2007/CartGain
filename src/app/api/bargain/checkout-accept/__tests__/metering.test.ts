@@ -245,3 +245,21 @@ describe('POST /api/bargain/checkout-accept — buyer binding', () => {
     expect(created.customerEmail).toBeNull()
   })
 })
+
+describe('POST /api/bargain/checkout-accept — master controls', () => {
+  it('blocks acceptance when the merchant has disabled bargaining', async () => {
+    prismaMock.bargainConfig.findUnique.mockResolvedValue({ enabled: false })
+
+    const res = await POST(makeRequest())
+
+    expect(res.status).toBe(403)
+    expect(mintMock).not.toHaveBeenCalled()
+    expect(prismaMock.bargainSession.create).not.toHaveBeenCalled()
+  })
+
+  it('stamps acceptedAt on the created session', async () => {
+    await POST(makeRequest())
+    const created = prismaMock.bargainSession.create.mock.calls[0][0].data
+    expect(created.acceptedAt).toBeInstanceOf(Date)
+  })
+})

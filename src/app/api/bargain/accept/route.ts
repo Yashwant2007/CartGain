@@ -230,6 +230,7 @@ export async function POST(request: NextRequest) {
     const config = await prisma.bargainConfig.findUnique({
       where: { storeId: bargainSession.storeId },
       select: {
+        enabled: true,
         campaignStart: true,
         campaignEnd: true,
         couponStackingEnabled: true,
@@ -237,6 +238,9 @@ export async function POST(request: NextRequest) {
         maxAttempts: true,
       },
     })
+    if (config?.enabled === false) {
+      return NextResponse.json({ message: 'Bargaining disabled' }, { status: 403 })
+    }
     const campaignActive = bargainCampaignStatus(config, new Date()) === 'active'
 
     // §24 Coupon stacking: if the customer ever mentioned another coupon/promo
@@ -484,6 +488,7 @@ export async function POST(request: NextRequest) {
         where: { id: bargainSession.id, status: 'accepting' },
         data: {
           status: 'accepted',
+          acceptedAt: new Date(),
           finalPrice: executable.finalPrice,
           bargainFloor: minPrice,
           bulkQuantity: executable.bulkQuantity,

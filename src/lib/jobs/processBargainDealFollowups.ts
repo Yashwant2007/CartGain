@@ -42,7 +42,10 @@ export async function processBargainDealFollowups(limitStores = 50) {
         status: 'accepted',
         purchasedAt: null,
         expiredAt: { gt: now },
-        createdAt: { lte: new Date(now.getTime() - minDelay * 60000) },
+        OR: [
+          { acceptedAt: { lte: new Date(now.getTime() - minDelay * 60000) } },
+          { acceptedAt: null, createdAt: { lte: new Date(now.getTime() - minDelay * 60000) } },
+        ],
       },
       include: { store: true },
       orderBy: { createdAt: 'asc' },
@@ -55,7 +58,8 @@ export async function processBargainDealFollowups(limitStores = 50) {
         select: { stage: true },
       })
       const sentStages = priorFollowups.map((f) => f.stage)
-      const stage = dueStage({ acceptedAt: session.createdAt, now, delays, sentStages })
+      const acceptedAt = session.acceptedAt ?? session.createdAt
+      const stage = dueStage({ acceptedAt, now, delays, sentStages })
       if (stage == null) continue
 
       // Re-verify the deal is still redeemable and unpaid right before sending.

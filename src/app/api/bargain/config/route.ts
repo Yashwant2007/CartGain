@@ -123,6 +123,12 @@ export async function PUT(request: NextRequest) {
     if (clean.goalEnabled === true || clean.goalStartTime != null || clean.goalEndTime != null) {
       const start = clean.goalStartTime as Date | null | undefined
       const end = clean.goalEndTime as Date | null | undefined
+      if (clean.goalEnabled === true && (start == null || end == null)) {
+        return NextResponse.json(
+          { message: 'Choose a daily goal start and end time before enabling it', status: 'error' },
+          { status: 400 },
+        )
+      }
       if ((clean.goalStartTime == null) !== (clean.goalEndTime == null)) {
         return NextResponse.json(
           { message: 'goalStartTime and goalEndTime must be set together', status: 'error' },

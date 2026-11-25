@@ -169,4 +169,23 @@ describe('accept → secure quote wiring', () => {
     expect(body.quoteToken).toBeNull()
     expect(mockPrisma.bargainQuote.create).not.toHaveBeenCalled()
   })
+
+  it('blocks acceptance when the merchant has disabled bargaining', async () => {
+    mockPrisma.bargainConfig.findUnique.mockResolvedValue({ enabled: false })
+    const res = await POST(makeRequest())
+
+    expect(res.status).toBe(403)
+    expect(mockPrisma.bargainSession.updateMany).not.toHaveBeenCalled()
+    expect(mockPrisma.bargainQuote.create).not.toHaveBeenCalled()
+  })
+
+  it('stamps acceptedAt on the session that claims the deal', async () => {
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(200)
+
+    const update = mockPrisma.bargainSession.updateMany.mock.calls.find(
+      ([args]: any[]) => args?.data?.status === 'accepted',
+    )
+    expect(update?.[0].data.acceptedAt).toBeInstanceOf(Date)
+  })
 })
