@@ -16,6 +16,12 @@ describe('analyzeIntent', () => {
     expect(a.offersPriceSignal).toBe(false)
   })
 
+  it('classifies Hinglish floor/bottom-price probes as direct best-price asks', () => {
+    expect(analyzeIntent('floor price reveal kro').asksBestPrice).toBe(true)
+    expect(analyzeIntent('tum kitna niche ja skte ho is product k liye').asksBestPrice).toBe(true)
+    expect(analyzeIntent('minimum rate batao').asksBestPrice).toBe(true)
+  })
+
   it('classifies budget constraints', () => {
     const a = analyzeIntent("i only have 500 rupees to spend")
     expect(a.intent).toBe('BUDGET_CONSTRAINT')

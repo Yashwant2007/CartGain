@@ -5,7 +5,7 @@ import type { CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experi
 import type { ExpressionState } from '@/lib/bargain/experience/expressions'
 import type { AvatarState } from '@/lib/bargain/experience/avatar-state'
 import { characterProfile, supportsGestureLayer, type GestureName } from '@/lib/bargain/experience/character'
-import { REACTION_EXPRESSION, REACTION_STATE, type BargainReaction } from '@/lib/bargain/experience/reactions'
+import { REACTION_EXPRESSION, REACTION_MOTION, REACTION_STATE, type BargainReaction } from '@/lib/bargain/experience/reactions'
 
 interface Props {
   personality: ShopkeeperPersonality
@@ -56,6 +56,18 @@ const AVATAR_CSS = `
 .cg-avatar--impressed { animation: cgAvPop .5s cubic-bezier(.2,.9,.3,1.3) 1; }
 .cg-avatar--relieved { animation: cgAvSettle .8s ease-out 1; }
 .cg-avatar--warning { animation: cgAvShake .52s ease-in-out; }
+.cg-avatar[data-reaction-motion="listen"] { animation: cgAvSettle .5s ease-out 1; }
+.cg-avatar[data-reaction-motion="settle"] { animation: cgAvSettle .5s ease-out 1; }
+.cg-avatar[data-reaction-motion="pop"] { animation: cgAvPop .46s cubic-bezier(.2,.9,.3,1.4) 1; }
+.cg-avatar[data-reaction-motion="shake"] { animation: cgAvShake .5s ease-in-out 1; }
+.cg-avatar[data-reaction-motion="nod"] { animation: cgAvNod .56s ease-in-out 1; }
+.cg-avatar[data-reaction-motion="bounce"] { animation: cgAvBounce .7s ease-in-out 1; }
+.cg-avatar[data-reaction-motion="wave"] { animation: cgAvGreet .7s ease-in-out 1; }
+.cg-avatar[data-reaction-motion="tilt"] { animation: cgAvSway .62s ease-in-out 1; }
+.cg-avatar[data-reaction-motion="lean"] { animation: cgAvLean .62s ease-out 1; }
+.cg-avatar[data-reaction-motion="present"] { animation: cgAvPointIn .5s ease-out 1; }
+.cg-avatar[data-reaction-motion="recede"] { animation: cgAvShrug .62s ease-out 1; }
+.cg-avatar[data-reaction-motion="celebrate"] { animation: cgAvCelebrate .9s ease-in-out 1; }
 .cg-av-blink { animation: cgAvBlink 4.6s infinite; transform-box: fill-box; transform-origin: center; }
 .cg-av-gaze { transition: transform 160ms ease-out; will-change: transform; }
 .cg-av-think-dot { animation: cgAvThink 1.2s ease-in-out infinite; }
@@ -125,7 +137,7 @@ function moodIndex(expression: ExpressionState): number {
 
 export function ShopkeeperAvatar({
   personality,
-  expression: baseExpression = 'idle',
+  expression: baseExpression,
   state: baseState,
   reaction = null,
   gesture = 'rest',
@@ -136,8 +148,12 @@ export function ShopkeeperAvatar({
   gaze = null,
   className = '',
 }: Props) {
-  const expression = reaction ? REACTION_EXPRESSION[reaction] : baseExpression
-  const state = reaction ? REACTION_STATE[reaction] : baseState
+  const expression = reaction && (!baseExpression || baseExpression === 'idle')
+    ? REACTION_EXPRESSION[reaction]
+    : baseExpression ?? 'idle'
+  const state = reaction && (!baseState || baseState === 'idle')
+    ? REACTION_STATE[reaction]
+    : baseState
   const [reducedMotion, setReducedMotion] = useState(false)
   const px = SIZE_MAP[size]
   const profile = characterProfile(personality)
@@ -152,6 +168,7 @@ export function ShopkeeperAvatar({
     glasses: profile.accessory === 'glasses',
   }
   const animate = motionEnabled && !reducedMotion
+  const reactionMotion = reaction && animate ? REACTION_MOTION[reaction] : null
   // Decorative motion (idle loops, blinking, confetti) is the first thing to
   // go when a merchant asks for essential-only motion.
   const decorative = animate && !essentialMotionOnly
@@ -317,6 +334,7 @@ export function ShopkeeperAvatar({
         data-mood={moodIndex(expression)}
         data-avatar-state={state ?? ''}
         data-avatar-reaction={reaction ?? ''}
+        data-reaction-motion={reactionMotion ?? ''}
         data-gesture={gesture}
         data-character-style={characterStyle}
         role="img"

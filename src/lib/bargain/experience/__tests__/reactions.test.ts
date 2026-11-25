@@ -1,5 +1,10 @@
+import { AVATAR_STATES } from '../avatar-state'
+import { EXPRESSION_STATES } from '../expressions'
 import { resolveShopkeeperAnimation } from '../living'
 import {
+  REACTION_EXPRESSION,
+  REACTION_MOTION,
+  REACTION_STATE,
   V2_REACTIONS,
   reactionForAnimation,
   reactionForShopperMessage,
@@ -7,24 +12,30 @@ import {
   v2ReactionCell,
   v2ReactionSheet,
   type BargainReaction,
+  type ReactionMotion,
 } from '../reactions'
 
 describe('bargain reactions from shopper chat', () => {
   it.each<[string, number | null, BargainReaction]>([
-    ['₹50 is all I can do.', 1000, 'lowball'],
+    ['₹50 is all I can do.', 1000, 'absurd'],
+    ['Can you do ₹500?', 1000, 'lowball'],
     ['Can you do ₹800?', 1000, 'counter'],
+    ['I saw it cheaper on Amazon', 1000, 'comparing'],
     ['This is such a scam.', 1000, 'rude'],
     ["You've been really helpful, thank you!", 1000, 'flattery'],
+    ['Thanks a lot!', 1000, 'thanks'],
+    ['Haha that is funny 😂', 1000, 'joke'],
+    ['Hey there!', 1000, 'greeting'],
+    ['Is this the 2026 model?', 1000, 'trend'],
+    ['What is it made of?', 1000, 'question'],
+    ['Do you have something else?', 1000, 'recommendation'],
     ['Let me think about it.', 1000, 'hesitation'],
+    ['Sorry, what do you mean?', 1000, 'confused'],
+    ['My budget is tight', 1000, 'budget'],
+    ['Sorry, I meant ₹800.', 1000, 'apology'],
     ["Forget it, I'm leaving.", 1000, 'walk_away'],
     ["I'll take it.", 1000, 'deal'],
-    ['What is it made of?', 1000, 'extras'],
-    ['Hey there!', 1000, 'flattery'],
-    ['Thanks a lot!', 1000, 'flattery'],
-    ['Haha that is funny 😂', 1000, 'flattery'],
-    ['Is this the 2026 model?', 1000, 'flattery'],
-    ['My budget is tight', 1000, 'hesitation'],
-    ['I saw it cheaper on Amazon', 1000, 'counter'],
+    ['This store looks nice.', 1000, 'extras'],
   ])('maps %s to %s', (message, originalPrice, expected) => {
     expect(reactionForShopperMessage(message, originalPrice)).toBe(expected)
   })
@@ -39,6 +50,8 @@ describe('bargain reactions from shopper chat', () => {
     expect(reactionForShopperReply('No problem, come back when you are ready.')).toBe('walk_away')
     expect(reactionForShopperReply('Done deal, I have reserved it for you.')).toBe('deal')
     expect(reactionForShopperReply('Take your time while you decide.')).toBe('hesitation')
+    expect(reactionForShopperReply('You are welcome.')).toBe('thanks')
+    expect(reactionForShopperReply('Here are two options.')).toBe('recommendation')
   })
 
   it('lets the shopkeeper reply add a reaction when the shopper cue is neutral', () => {
@@ -63,10 +76,24 @@ describe('bargain reactions from shopper chat', () => {
     expect(positions.size).toBe(8)
   })
 
+  it('gives every reaction a valid expression, body state and distinct motion hook', () => {
+    const ids = V2_REACTIONS.map((reaction) => reaction.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids.length).toBeGreaterThanOrEqual(18)
+    const motions = new Set<ReactionMotion>()
+    for (const id of ids) {
+      expect(EXPRESSION_STATES).toContain(REACTION_EXPRESSION[id])
+      expect(AVATAR_STATES).toContain(REACTION_STATE[id])
+      expect(REACTION_MOTION[id]).toBeTruthy()
+      motions.add(REACTION_MOTION[id])
+    }
+    expect(motions.size).toBeGreaterThanOrEqual(10)
+  })
+
   it('follows the shoppers words across thinking and reply events but not while typing', () => {
-    expect(reactionForAnimation('customer_message', { customerMessage: '₹50 is all I can do.', originalPrice: 1000 })).toBe('lowball')
-    expect(reactionForAnimation('ai_thinking', { customerMessage: '₹50 is all I can do.', originalPrice: 1000 })).toBe('lowball')
-    expect(reactionForAnimation('ai_reply', { customerMessage: '₹50 is all I can do.', originalPrice: 1000 })).toBe('lowball')
+    expect(reactionForAnimation('customer_message', { customerMessage: '₹50 is all I can do.', originalPrice: 1000 })).toBe('absurd')
+    expect(reactionForAnimation('ai_thinking', { customerMessage: '₹50 is all I can do.', originalPrice: 1000 })).toBe('absurd')
+    expect(reactionForAnimation('ai_reply', { customerMessage: '₹50 is all I can do.', originalPrice: 1000 })).toBe('absurd')
     expect(reactionForAnimation('customer_typing', { customerMessage: '₹50 is all I can do.', originalPrice: 1000 })).toBeNull()
   })
 

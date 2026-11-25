@@ -368,8 +368,10 @@ describe('living shopkeeper stage', () => {
     )
     const stage = container.querySelector('.cg-stage')
     expect(stage?.getAttribute('data-avatar-reaction')).toBe('rude')
+    expect(stage?.getAttribute('data-reaction-motion')).toBe('shake')
     const avatar = container.querySelector('.cg-v2')
     expect(avatar?.getAttribute('data-v2-reaction')).toBe('rude')
+    expect(avatar?.getAttribute('data-v2-reaction-motion')).toBe('shake')
     expect(avatar?.getAttribute('data-v2-sheet')).toBe('reaction')
     expect(avatar?.getAttribute('data-v2-cell')).toBe('countering')
     const art = container.querySelector('.cg-v2-art') as HTMLElement | null
@@ -377,6 +379,26 @@ describe('living shopkeeper stage', () => {
     expect(art?.style.backgroundImage).toContain('alex-reactions-a.png')
     expect(art?.style.backgroundPosition).toBe('0% 100%')
     expect(avatar?.getAttribute('aria-label')).toContain('rude reaction')
+  })
+
+  it('distinguishes reactions that share a sprite cell with grounded motion', () => {
+    const { container } = render(
+      <ShopkeeperStage
+        personality="friendly_shopkeeper"
+        expression="happy"
+        state="happy"
+        avatarVariant="morgan"
+        reaction="thanks"
+        name="Morgan"
+        status="Online"
+        line=""
+      />,
+    )
+    const avatar = container.querySelector('.cg-v2')
+    expect(avatar?.getAttribute('data-v2-reaction')).toBe('thanks')
+    expect(avatar?.getAttribute('data-v2-reaction-motion')).toBe('nod')
+    expect(avatar?.getAttribute('data-v2-sheet')).toBe('reaction')
+    expect((container.querySelector('.cg-v2-art') as HTMLElement | null)?.style.backgroundPosition).toBe('100% 100%')
   })
 
   it('keeps the expression sheet when no chat reaction is present', () => {
@@ -431,6 +453,7 @@ describe('living shopkeeper stage', () => {
     )
     const avatar = container.querySelector('.cg-vrm')
     expect(avatar?.getAttribute('data-vrm-reaction')).toBe('deal')
+    expect(avatar?.getAttribute('data-vrm-reaction-motion')).toBe('celebrate')
     expect(avatar?.getAttribute('data-vrm-expression')).toBe('celebrating')
     expect(avatar?.getAttribute('data-vrm-state')).toBe('celebrating')
     expect(avatar?.getAttribute('aria-label')).toContain('deal reaction')

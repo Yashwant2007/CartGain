@@ -13,7 +13,7 @@ import { rapidReplyForTurn } from '@/lib/bargain/rapid-reply'
 import { buildSessionMemory } from '@/lib/bargain/session-memory'
 import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
 import { uiText, currencySymbolFor, formatMoney } from '@/lib/bargain/i18n'
-import { detectLanguage } from '@/lib/bargain/language'
+import { detectLanguage, detectLanguageRequest } from '@/lib/bargain/language'
 import { logDataAccess } from '@/lib/data-protection'
 import { clampOfferToSafety } from '@/lib/bargain/engine'
 import { isOverListOffer, overListOfferReply } from '@/lib/bargain/over-list-offer'
@@ -65,11 +65,10 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-// Respect an explicit store/session language; otherwise detect from the
-// customer's current message so the reply matches the language they speak.
+// An explicit "hindi m bat kro" / "marathi m bat kro" instruction wins over the
+// merchant default; otherwise respect a configured language, then auto-mirror.
 function detectedLang(sessionOrConfig: string | null | undefined, customerMessage: string): string {
-  if (sessionOrConfig && sessionOrConfig !== 'auto') return sessionOrConfig
-  return detectLanguage(customerMessage) ?? 'auto'
+  return detectLanguageRequest(customerMessage) ?? (sessionOrConfig && sessionOrConfig !== 'auto' ? sessionOrConfig : detectLanguage(customerMessage) ?? 'auto')
 }
 
 function finalQuoteFor(session: any, minPrice: number): number {
@@ -470,12 +469,18 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Resolve the negotiation language: honor an explicit session/config
-    // language; otherwise detect the customer's language from THIS message so
-    // every reply (AI + fixed strings) is spoken in the same language they use.
-    // Deliberately NOT persisted back to the session when auto — persisting a
-    // detected language would lock the session and break future mirroring.
-    const lang = detectedLang(bargainSession.language ?? config.language, interpretedMessage)
+    // Resolve the negotiation language: an explicit shopper request wins, then
+    // an explicit session/config language, then auto-mirror THIS message. Only
+    // the explicit request is persisted; auto-detection is intentionally not
+    // sticky so later messages can keep switching naturally.
+    const requestedLanguage = detectLanguageRequest(interpretedMessage)
+    const lang = requestedLanguage ?? detectedLang(bargainSession.language ?? config.language, interpretedMessage)
+    if (requestedLanguage && bargainSession.language !== requestedLanguage) {
+      await prisma.bargainSession.update({
+        where: { id: bargainSession.id },
+        data: { language: requestedLanguage },
+      })
+    }
 
     // Automated decision-making opt-out (DPDP Act 2023, GDPR Art. 22): end the
     // session without the AI consuming an attempt or responding.

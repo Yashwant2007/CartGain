@@ -215,10 +215,81 @@ export function absurdOfferReply(offer: number, ctx: NegotiationContext): string
     },
   }
 
+  const pick = (pool: string[]): string => pool[(stableHash(shown) + streak) % pool.length]
+  const lang = (ctx.language || '').toLowerCase()
+
+  // A customer bargaining in Hinglish/Hindi/Marathi must not get a English
+  // jab back. These are bounded, persona-true translations of the SAME three
+  // escalation stages — no new pricing logic, no floor disclosure.
+  if (lang === 'hinglish') {
+    const pools: Record<Persona, { s1: string[]; s2: string[]; s3: string[] }> = {
+      strict_negotiator: {
+        s1: [`${price} thoda zyada hai. Real number batao, phir baat karenge.`, `Bhai, ${price} se ye ${item} nahi milega. Sahi figure do.`, `Himmat achhi hai, par ${price} kam hai. Real offer bhejo.`],
+        s2: [`Thoda upar aa gaye ho, par ${price} abhi door hai. Real number batao.`, `${price} abhi bhi nahi chalega. Batao, final kya soch rahe ho?`],
+        s3: [`Bhai, ${price} to nahi hoga. Main ${anchor} se shuru kar sakta hoon — uske paas aa jao, deal kar deta hoon.`, `Seedhi baat: ${price} off the table hai. Meri position ${anchor} hai. Real number lao.`, `Do baar bata diya — ${price} nahi. ${anchor} ke aas-paas khelo, pakka deal.`,],
+      },
+      playful_friend: {
+        s1: [`Ha! ${price}? Isse to box bhi free mein mil jayega 😄 Chalo, real number maro!`, `${price}?? Bhai mazaakachhi! Ek solid number bhejo, haggling ka maza lenge 😄`, `Nice try! 😄 ${price} se kaam nahi chalega, par effort pasand hai. Real number?`],
+        s2: [`Dekha, thoda upar aa gaye! 😄 ${price} phir bhi no. Play ball karo.`, `Ooh ${price} — abhi bhi bahut chhota hai. Koi number jise main seriously le sakoon?`],
+        s3: [`Bas bas, test samajh gaya 😄 ${price} nahi, par main ${anchor} se khel sakta hoon.`, `Bhai tum persistent ho! ${price} masih joke hai. Real talk — ${anchor} se start karein?`, `Cards table pe: ${price} nahi. ${anchor} ke around aa jao, deal pakki 😄`],
+      },
+      friendly_shopkeeper: {
+        s1: [`Bhaiya, ${price} se to packing bhi nahi milegi 😄 Thoda real number batao, dekhte hain kya kar sakta hoon.`, `Ha bhai, ${price} warm-up hai, offer nahi. Sach me kitna dena chahte ho?`, `Mujhe tumhari himmat pasand hai, par ${price} kaam nahi karega. Fair number batao?`],
+        s2: [`Tum thoda upar aa rahe ho bhai, aur main dekh raha hoon — par ${price} abhi bhi door hai.`, `Bhai, ${price} se deal nahi banegi. Thoda realistic number do, main try karunga.`],
+        s3: [`Bhai, ${price} genuinely nahi chalega. Main ${anchor} se start kar sakta hoon — agar ye theek hai to deal kar deta hoon.`, `Straight bol raha hoon: ${price} is item ke liye possible nahi. ${anchor} ke aas-paas kuch kar sakta hoon.`, `${price} to nahi, par main tumhe khali nahi bhejna chahta. ${anchor} ke around chalega?`],
+      },
+    }
+    const bank = pools[ctx.persona] ?? pools.friendly_shopkeeper
+    return pick(stage === 1 ? bank.s1 : stage === 2 ? bank.s2 : bank.s3)
+  }
+
+  if (lang === 'hi') {
+    const pools: Record<Persona, { s1: string[]; s2: string[]; s3: string[] }> = {
+      strict_negotiator: {
+        s1: [`${price} बहुत कम है। वास्तविक संख्या बताइए, तब बात करेंगे।`, `${price} से यह ${item} नहीं मिलेगा। सही प्रस्ताव दें।`, `प्रयास अच्छा है, पर ${price} पर्याप्त नहीं है। वास्तविक ऑफ़र भेजें।`],
+        s2: [`आप थोड़े ऊपर आए हैं, पर ${price} अभी दूर है। वास्तविक संख्या बताइए।`, `${price} अभी भी संभव नहीं है। अंतिम क्या सोच रहे हैं?`],
+        s3: [`${price} स्वीकार्य नहीं है। मैं ${anchor} से शुरू कर सकता हूँ — इसके आस-पास आएँ, सौदा कर दूँगा।`, `सीधी बात: ${price} संभव नहीं। मेरी स्थिति ${anchor} है। वास्तविक प्रस्ताव लाएँ।`, `दो बार कह चुका हूँ — ${price} नहीं। ${anchor} के आस-पास बात करें।`],
+      },
+      playful_friend: {
+        s1: [`हाहा! ${price}? इससे तो डिब्बा भी मुफ़्त मिल जाएगा 😄 चलो, असली नंबर मारो!`, `${price}?? भाई मज़ाक़ अच्छा! एक पक्का नंबर भेजो 😄`, `अच्छी कोशिश! 😄 ${price} से काम नहीं चलेगा, पर हिम्मत पसंद है। असली नंबर?`],
+        s2: [`देखा, थोड़े ऊपर आ गए! 😄 ${price} फिर भी नहीं। खेल में आ जाओ।`, `ओह ${price} — अभी भी बहुत छोटा है। ऐसा नंबर दो जिसे मैं गंभीरता से लूँ।`],
+        s3: [`बस बस, समझ गया 😄 ${price} नहीं, पर मैं ${anchor} से खेल सकता हूँ।`, `तुम बड़े persevering हो! ${price} अभी भी मज़ाक़ है। सच कहूँ — ${anchor} से शुरू करें?`, `कार्ड मेज़ पर: ${price} नहीं। ${anchor} के आस-पास आ जाओ, सौदा पक्का 😄`],
+      },
+      friendly_shopkeeper: {
+        s1: [`भैया, ${price} से तो पैकिंग भी नहीं मिलेगी 😄 थोड़ा वास्तविक नंबर बताइए, देखते हैं क्या कर सकता हूँ।`, `हाँ भैया, ${price} तो सिर्फ़ शुरुआत है, ऑफ़र नहीं। सच में कितना देना चाहते हैं?`, `आपकी हिम्मत पसंद है, पर ${price} काम नहीं करेगा। उचित नंबर बताएँ?`],
+        s2: [`आप थोड़े ऊपर आ रहे हैं और मैं देख रहा हूँ — पर ${price} अभी बहुत दूर है।`, `भैया, ${price} से सौदा नहीं बनेगा। थोड़ा यथार्थवादी नंबर दें, मैं कोशिश करूँगा।`],
+        s3: [`भैया, ${price} वास्तव में संभव नहीं। मैं ${anchor} से शुरू कर सकता हूँ — मान्य हो तो सौदा कर दूँगा।`, `सीधे कह रहा हूँ: ${price} इस वस्तु के लिए संभव नहीं। ${anchor} के आस-पास कुछ कर सकता हूँ।`, `${price} तो नहीं, पर मैं आपको खाली नहीं भेजना चाहता। ${anchor} के आस-पास चलेगा?`],
+      },
+    }
+    const bank = pools[ctx.persona] ?? pools.friendly_shopkeeper
+    return pick(stage === 1 ? bank.s1 : stage === 2 ? bank.s2 : bank.s3)
+  }
+
+  if (lang === 'mr') {
+    const pools: Record<Persona, { s1: string[]; s2: string[]; s3: string[] }> = {
+      strict_negotiator: {
+        s1: [`${price} खूप कम आहे. खरी किंमत सांगा, मग बोलू.`, `${price} ने हे ${item} मिळणार नाही. योग्य ऑफर द्या.`, `हिम्मत चांगली आहे, परंतु ${price} पुरेसे नाही. खरा ऑफर पाठवा.`],
+        s2: [`तुम्ही थोडे वर आलात, पर ${price} अजून दूर आहे. खरी किंमत सांगा.`, `${price} अजूनही शक्य नाही. शेवटी काय विचार करत आहात?`],
+        s3: [`${price} मान्य नाही. मी ${anchor} पासून सुरू करू शकतो — त्याजवळ या, डील करून देतो.`, `सरळ सांगतो: ${price} शक्य नाही. माझी स्थिती ${anchor} आहे. खरा ऑफर आणा.`, `दोनदा सांगितले — ${price} नाही. ${anchor} जवळ बोलू.`],
+      },
+      playful_friend: {
+        s1: [`हा! ${price}? याने तर डब्बासुद्धा मोफत मिळेल 😄 चल, खरा नंबर मार!`, `${price}?? भाऊ छान मजा! एक पक्का नंबर पाठव 😄`, `छान प्रयत्न! 😄 ${price}ने काम होणार नाही, परंतु हिम्मत आवडली. खरा नंबर?`],
+        s2: [`पाहिलंत, थोडे वर आलात! 😄 ${price} अजून नाही. खेळात या.`, `ओह ${price} — अजून खूप छोटे आहे. असा नंबर द्या जो मी गंभीरपणे घेईन.`],
+        s3: [`बस बस, समजलो 😄 ${price} नाही, परंतु मी ${anchor} पासून खेळू शकतो.`, `तुम्ही खूप खटपटी आहात! ${price} अजूनही मजा आहे. सरळ सांगू — ${anchor} पासून सुरू करू?`, `कार्ड टेबलवर: ${price} नाही. ${anchor} जवळ या, डील पक्की 😄`],
+      },
+      friendly_shopkeeper: {
+        s1: [`भाऊ, ${price}ने तर पॅकिंगही मिळणार नाही 😄 थोडा खरा नंबर सांगा, काय करू शकतो ते पाहू.`, `हो भाऊ, ${price} ही सुरुवात आहे, ऑफर नाही. खरंच कितना देऊ इच्छिता?`, `तुमची हिम्मत आवडली, परंतु ${price} होणार नाही. योग्य नंबर सांगा?`],
+        s2: [`तुम्ही थोडे वर येत आहात, मी पाहतोय — परंतु ${price} अजून दूर आहे.`, `भाऊ, ${price}ने डील होणार नाही. थोडा वास्तविक नंबर द्या, मी प्रयत्न करेन.`],
+        s3: [`भाऊ, ${price} खरंच होणार नाही. मी ${anchor} पासून सुरू करू शकतो — मान्य असेल तर डील करून देतो.`, `सरळ सांगतो: ${price} या वस्तुसाठी शक्य नाही. ${anchor} जवळ काही करू शकतो.`, `${price} नाही, परंतु मी तुम्हाला रिकामे पाठवू इच्छित नाही. ${anchor} जवळ चलेगा?`],
+      },
+    }
+    const bank = pools[ctx.persona] ?? pools.friendly_shopkeeper
+    return pick(stage === 1 ? bank.s1 : stage === 2 ? bank.s2 : bank.s3)
+  }
+
   const bank = banks[ctx.persona] ?? banks.friendly_shopkeeper
   const pool = stage === 1 ? bank.s1 : stage === 2 ? bank.s2 : bank.s3
-  const idx = (stableHash(shown) + streak) % pool.length
-  return pool[idx]
+  return pick(pool)
 }
 
 // ── Reciprocal counter: bargain like a person, not a schedule ──

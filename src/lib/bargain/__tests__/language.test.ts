@@ -1,4 +1,4 @@
-import { detectLanguage } from '../language'
+import { detectLanguage, detectLanguageRequest } from '../language'
 
 describe('detectLanguage', () => {
   it('detects Devanagari script as Hindi (with Marathi markers as Marathi)', () => {
@@ -49,5 +49,22 @@ describe('detectLanguage', () => {
   it('prefers the script when a message mixes scripts and Latin', () => {
     expect(detectLanguage('yeh theek nahi है')).toBe('hi')
     expect(detectLanguage('it is too expensive, இது mele')).toBe('ta')
+  })
+})
+
+describe('detectLanguageRequest', () => {
+  it('detects explicit Roman-script language switch requests', () => {
+    expect(detectLanguageRequest('hindi m bat kro')).toBe('hinglish')
+    expect(detectLanguageRequest('hindi mein baat karo')).toBe('hinglish')
+    expect(detectLanguageRequest('हिंदी में बात करो')).toBe('hi')
+    expect(detectLanguageRequest('marathi m bat kro')).toBe('mr')
+    expect(detectLanguageRequest('marathi mein bola')).toBe('mr')
+    expect(detectLanguageRequest('speak in english please')).toBe('en')
+  })
+
+  it('ignores ordinary messages that merely mention a language', () => {
+    expect(detectLanguageRequest('bhai ₹1800 mein de do')).toBeNull()
+    expect(detectLanguageRequest('is product ka price kya hai?')).toBeNull()
+    expect(detectLanguageRequest('floor price reveal kro')).toBeNull()
   })
 })

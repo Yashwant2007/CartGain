@@ -92,6 +92,25 @@ describe('structured offer interpretation', () => {
     })
   })
 
+  it('does not record a price for purchase-quantity or bundle-count questions', () => {
+    expect(parseStructuredOffer('i will buy 4 of these how much will you charge', null, 1000)).toMatchObject({
+      rawAmount: null,
+      unitPrice: null,
+      totalAmount: null,
+      quantity: 4,
+      basis: 'none',
+      needsClarification: false,
+    })
+    expect(parseStructuredOffer('i am saying i will buy 4 products in bundle how much can you charge', null, 1000)).toMatchObject({
+      rawAmount: null,
+      unitPrice: null,
+      totalAmount: null,
+      quantity: 4,
+      basis: 'none',
+      needsClarification: false,
+    })
+  })
+
   it('keeps casual version numbers out of offer interpretation', () => {
     expect(parseStructuredOffer('gta 6 is going to be wild')).toMatchObject({
       rawAmount: null,

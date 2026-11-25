@@ -12,7 +12,7 @@ import { POSITION_DESCRIPTORS, type AvatarPosition } from '@/lib/bargain/experie
 import type { AvatarVariant, CharacterStyle, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
 import type { LivingEvent, LivingEventContext } from '@/lib/bargain/experience/avatar-state'
 import { isVrmAvatarVariant } from '@/lib/bargain/experience/vrm-shopkeepers'
-import { REACTION_STATE, type BargainReaction } from '@/lib/bargain/experience/reactions'
+import { REACTION_MOTION, REACTION_STATE, type BargainReaction } from '@/lib/bargain/experience/reactions'
 
 interface Props {
   personality: ShopkeeperPersonality
@@ -374,6 +374,7 @@ export default function ShopkeeperStage({
   }, [targetRef])
   const selectedVariant = avatarVariant ?? (enable3D ? 'robot' : 'none')
   const reactionState = reaction ? REACTION_STATE[reaction] : state
+  const reactionMotion = reaction ? REACTION_MOTION[reaction] : null
   const useVrm = isVrmAvatarVariant(selectedVariant)
   const useV2 = selectedVariant === 'morgan' || selectedVariant === 'riley' || selectedVariant === 'alex' || useVrm
   const useInline = selectedVariant === 'signature' || selectedVariant === 'minimal'
@@ -390,6 +391,7 @@ export default function ShopkeeperStage({
       data-avatar-variant={selectedVariant}
       data-gesture={gesture}
       data-avatar-reaction={reaction ?? ''}
+      data-reaction-motion={reactionMotion ?? ''}
       data-reaction-state={reaction ? reactionState : ''}
       data-character-style={characterStyle}
       data-essential-motion={essentialMotionOnly ? 'true' : 'false'}

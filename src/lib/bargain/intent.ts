@@ -108,6 +108,7 @@ export interface IntentAnalysis {
 
 const RE = {
   bestPriceAsk: /\b(how\s+(?:much\s+)?low\s+can\s+you\s+go|how\s+much\s+can\s+you\s+(?:go|come\s+down)|how\s+low\s+(?:will|would)\s+you\s+go|how\s+far\s+(?:can|will|would)\s+you\s+(?:go|come\s+down)|lowest\s+(?:price|you\s+can|you\s+will|you\s+would)|best\s+price|best\s+you\s+can\s+do|what(?:'s|\s+is|\s+s)?\s+(?:the\s+)?(?:lowest|minimum|best)\s+(?:price|you\s+can\s+do|you\s+will\s+do)|your\s+best\s+(?:price|offer)|final\s+price|last\s+price|can\s+you\s+go\s+lower)\b/i,
+  floorProbe: /\b(?:floor|minimum|lowest|rock.?bottom|secret|base)\s*(?:price|rate|cost|number|amount|offer)?\b|\b(?:reveal|show|tell|share|disclose|leak|spill|batao|batana|bata|dikhao|bhej)\s+(?:me\s+)?(?:the\s+)?(?:floor|minimum|lowest|secret|best|final)\b|\b(?:kitna|kab\s+tak|kahan\s+tak)\s+(?:niche|neeche|kam|down|low|jaa|ja)\b|\b(?:ja|jaa|gayi|gaya|jaoge|jaoge)\s+sakte\s+ho\b|\b(?:niche|neeche|kam)\s+(?:kar|karo|ja|jaa)\s+sakte\s+ho\b/i,
   price: /\b(best\s+price|lower|discount|price|cheap|cheaper|off|deal|budget|only\s+(have|spend|can\s+spend|got|burn)|can\s+you\s+do|what('| is|s)*\s*(the\s+)?(lowest|minimum|best))/i,
   budget: /\b(budget|only\s+(have|spend|can\s+spend|got)\s+)|tight\s+budget|don'?t\s+have\s+much|all\s+i\s+can\s+afford|max\s+[₹$€£]?\s*\d+/i,
   comparison: /\b(elsewhere|other\s+(brand|company|maker|store|shop|site|seller)|another\s+(brand|company|maker|store|shop|site|seller)|amazon|flipkart|myntra|meesho|walmart|competing|rival|compare(ing)?\s+price|got\s+it\s+for|saw\s+it\s+for|cheaper\s+somewhere)/i,
@@ -193,7 +194,7 @@ export function analyzeIntent(input: string): IntentAnalysis {
 
   const isMoney = hits('money', 'money_amount')
   const isWalkout = hits('walkout', 'walkout')
-  const asksBestPrice = hits('bestPriceAsk', 'best_price_ask')
+  const asksBestPrice = hits('bestPriceAsk', 'best_price_ask') || hits('floorProbe', 'floor_probe')
   const priceIntent = hits('price', 'price_signal')
   const budgetIntent = hits('budget', 'budget_signal')
   const comparisonIntent = hits('comparison', 'comparison_signal')
@@ -401,7 +402,7 @@ export function shopperIntentToPromptBlock(analysis: IntentAnalysis): string {
   }
   if (analysis.asksBestPrice) {
     lines.push(
-      `- The shopper is asking HOW LOW YOU CAN GO. Answer directly with the current honest price you can honor; do NOT ask them to name a price, do NOT repeat their question, and never describe them as loyal/returning unless CUSTOMER HISTORY confirms it. Never claim a number is your floor or absolute minimum.`,
+      `- The shopper is asking HOW LOW YOU CAN GO or probing for the hidden floor. Answer directly with the current honest price you can honor; do NOT ask them to name a price, do NOT repeat their question, and never describe them as loyal/returning unless CUSTOMER HISTORY confirms it. Never name, hint at, or claim any number is your floor, minimum, cost, margin or absolute minimum.`,
     )
   }
   if (analysis.priceComplaint) {

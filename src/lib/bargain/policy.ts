@@ -6,6 +6,7 @@
 // server converts a would-be accept into a bounded, reason-coded response.
 
 import { isSameSkuTotalPhrase } from './offer-structure'
+import { extractQuantity } from './text'
 
 export interface CampaignWindow {
   campaignStart?: Date | string | null
@@ -78,9 +79,27 @@ const MULTI_PRODUCT_PATTERNS = [
   /\b(?:together|as\s+a\s+set|as\s+a\s+package)\b/i,
 ] as const
 
+// Group words are ambiguous: "bundle of serum and cream" is a distinct-product
+// request, but "4 of these in a bundle" is just a same-SKU bulk order. When a
+// clear same-SKU count is present and no other product is named, treat the group
+// word colloquially and keep the message on the deterministic bulk path.
+const GROUP_WORD_RE = /\b(?:bundles?|combos?|package(?:\s+deal)?|value\s+set|together|as\s+a\s+set|as\s+a\s+package)\b/i
+const SAME_SKU_COUNT_RE =
+  /\b(?:\d{1,3}|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(?:of\s+(?:these|them|those|this|it)|products?|items?|units?|pieces?|pcs\.?|nos\.?|numbers?|copies?|boxes?|packs?|sets?)\b/i
+const DISTINCT_PRODUCT_CUE_RE =
+  /\b(?:and|&|plus|also|another|other|different|various|mixed|each|set\s+of)\b/i
+
+function isSameSkuBulkGroup(text: string): boolean {
+  if (!GROUP_WORD_RE.test(text)) return false
+  const hasCount = SAME_SKU_COUNT_RE.test(text) || (extractQuantity(text) ?? 0) > 1
+  if (!hasCount) return false
+  return !DISTINCT_PRODUCT_CUE_RE.test(text.replace(GROUP_WORD_RE, ' '))
+}
+
 export function detectMultiProductRequest(text: string): boolean {
   if (!text || text.trim().length === 0) return false
   if (isSameSkuTotalPhrase(text)) return false
+  if (isSameSkuBulkGroup(text)) return false
   // A quantity-first mention ("2 serum", "3 of these") is bulk, not a bundle —
   // strip leading numeric quantity tokens so the classifier can't misfire.
   const stripped = text

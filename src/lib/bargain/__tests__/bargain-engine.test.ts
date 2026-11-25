@@ -47,6 +47,19 @@ describe('ruleBasedDecision', () => {
     expect(r.counterOffer).toBeUndefined()
   })
 
+  it('replies to an absurd lowball in the customer language without countering', () => {
+    for (const language of ['hinglish', 'hi', 'mr']) {
+      const r = ruleBasedDecision(8, baseCtx({ language, attemptsUsed: 0 }))
+      expect(r.decision).toBe('chat')
+      expect(r.tactic).toBe('absurd_offer')
+      expect(r.counterOffer).toBeUndefined()
+      expect(r.reply).toMatch(/₹8/)
+    }
+    expect(ruleBasedDecision(8, baseCtx({ language: 'hinglish' })).reply).toMatch(/Bhai|batao|number/i)
+    expect(ruleBasedDecision(8, baseCtx({ language: 'hi' })).reply).toMatch(/भैया|कितना|ऑफ़र|शुरुआत/i)
+    expect(ruleBasedDecision(8, baseCtx({ language: 'mr' })).reply).toMatch(/भाऊ|नंबर|कमी/i)
+  })
+
   it('quotes above the hidden floor on the final attempt', () => {
     const r = ruleBasedDecision(500, baseCtx({ attemptsUsed: 2, maxAttempts: 3 }))
     expect(r.decision).toBe('counter')

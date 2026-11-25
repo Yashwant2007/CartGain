@@ -181,10 +181,16 @@ const NON_PRICE_UNIT_AFTER =
   /^\s*(?:kids?|children|child|yrs?|years?|months?|weeks?|days?|hours?|hrs?|minutes?|mins?|seconds?|secs?|people|persons?|members?|guys?|girls?|boys?|reviews?|stars?|times?|percent|%|\d\s*(?:am|pm)\b)/i
 
 const QUANTITY_UNIT_AFTER =
-  /^\s*(?:pieces?|units?|items?|qty\.?|pcs\.?|nos\.?|numbers?|copies?|boxes?|packs?|sets?|dozen)\b/i
+  /^\s*(?:products?|pieces?|units?|items?|qty\.?|pcs\.?|nos\.?|numbers?|copies?|boxes?|packs?|sets?|dozen)\b/i
 
 const QUANTITY_BEFORE =
-  /\b(?:qty|quantity|pieces?|units?|items?|pcs\.?|nos\.?|copies?|boxes?|packs?|sets?)\s*(?:of|is|are|:|=)?\s*[₹$€£]?\s*$/i
+  /\b(?:qty|quantity|products?|pieces?|units?|items?|pcs\.?|nos\.?|copies?|boxes?|packs?|sets?)\s*(?:of|is|are|:|=)?\s*[₹$€£]?\s*$/i
+
+// "I will buy 4", "take 3", "order 6" are purchase counts, not bids. The bare
+// number is bounded like extractQuantity(): small counts only, so "I will buy
+// 950" can still be read as a price offer when nothing else clues the amount.
+const PURCHASE_COUNT_BEFORE =
+  /\b(?:buy|buying|bought|take|taking|order|ordered|purchase|purchasing|grabbing|add|adding|pick|picking)\s+(?:about\s+|around\s+)?$/i
 
 const IDENTIFIER_BEFORE =
   /\b(?:order|invoice|ticket|tracking|product|model|sku|variant|style|id|no\.?|number|reference|ref)\s*(?:no\.?|number|id|#)?\s*[₹$€£]?\s*$/i
@@ -236,11 +242,12 @@ export type NonOfferNumberContext =
   | 'casual'
   | null
 
-function nonOfferContext(before: string, after: string, anchored: boolean): NonOfferNumberContext {
+function nonOfferContext(before: string, after: string, anchored: boolean, value?: number): NonOfferNumberContext {
   if (/%|percent/i.test(after.slice(0, 6))) return 'percent'
   if (!anchored && NON_PRICE_UNIT_AFTER.test(after)) return 'duration'
   if (!anchored && QUANTITY_UNIT_AFTER.test(after)) return 'quantity'
   if (!anchored && QUANTITY_BEFORE.test(before)) return 'quantity'
+  if (!anchored && value != null && value <= 20 && PURCHASE_COUNT_BEFORE.test(before)) return 'quantity'
   if (TOPIC_NUMBER_BEFORE.test(before) || TOPIC_NUMBER_AFTER.test(after) || SAVING_GOAL_BEFORE.test(before)) return 'casual'
   if (YEAR_CONTEXT_BEFORE.test(before) || YEAR_CONTEXT_AFTER.test(after)) return 'casual'
   if (IDENTIFIER_BEFORE.test(before) || IDENTIFIER_AFTER.test(after)) return 'identifier'
@@ -263,7 +270,8 @@ export function classifyNonOfferNumber(message: string): NonOfferNumberContext {
   while ((match = numberRe.exec(normalized)) !== null) {
     const before = normalized.slice(0, match.index)
     const after = normalized.slice(match.index + match[0].length)
-    const context = nonOfferContext(before, after, false)
+    const value = parseFloat(match[0].replace(/,/g, ''))
+    const context = nonOfferContext(before, after, false, value)
     if (context) return context
   }
   return null
@@ -372,7 +380,7 @@ export function extractPrice(input: string): number | null {
       if (nextEcho || prevEcho) continue
     }
 
-    const context = nonOfferContext(before, after, c.anchored)
+    const context = nonOfferContext(before, after, c.anchored, c.val)
     if (context && context !== 'complaint' && context !== 'reference') continue
 
     const ownBidBefore = STRONG_BID_BEFORE.test(before.slice(-30))

@@ -62,6 +62,7 @@ describe('ShopkeeperAvatar reactions', () => {
     expect(avatar?.getAttribute('data-expression')).toBe('celebrating')
     expect(avatar?.getAttribute('data-avatar-state')).toBe('celebrating')
     expect(avatar?.getAttribute('data-avatar-reaction')).toBe('deal')
+    expect(avatar?.getAttribute('data-reaction-motion')).toBe('celebrate')
   })
 
   it('keeps the reaction face but stops motion when motion is disabled', () => {

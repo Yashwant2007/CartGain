@@ -12,7 +12,7 @@ import {
   type VrmAvatarVariant,
   type VrmPreset,
 } from '@/lib/bargain/experience/vrm-shopkeepers'
-import { REACTION_EXPRESSION, REACTION_STATE, type BargainReaction } from '@/lib/bargain/experience/reactions'
+import { REACTION_EXPRESSION, REACTION_MOTION, REACTION_STATE, type BargainReaction } from '@/lib/bargain/experience/reactions'
 
 interface Props {
   variant: VrmAvatarVariant | string
@@ -67,8 +67,13 @@ export default function VrmShopkeeperAvatar({
 }: Props) {
   const resolved = isVrmAvatarVariant(variant) ? variant : 'meera'
   const meta = VRM_AVATARS[resolved]
-  const expression = reaction ? REACTION_EXPRESSION[reaction] : baseExpression
-  const state = reaction ? REACTION_STATE[reaction] : baseState
+  const expression = reaction && (!baseExpression || baseExpression === 'idle')
+    ? REACTION_EXPRESSION[reaction]
+    : baseExpression ?? 'idle'
+  const state = reaction && (!baseState || baseState === 'idle')
+    ? REACTION_STATE[reaction]
+    : baseState
+  const reactionMotion = reaction ? REACTION_MOTION[reaction] : null
   const hostRef = useRef<HTMLDivElement>(null)
   const runtimeRef = useRef<Runtime | null>(null)
   const desiredRef = useRef({
@@ -305,6 +310,7 @@ export default function VrmShopkeeperAvatar({
       data-vrm-state={state ?? 'idle'}
       data-vrm-expression={expression}
       data-vrm-reaction={reaction ?? ''}
+      data-vrm-reaction-motion={reactionMotion ?? ''}
       data-vrm-status={status}
       style={{ '--cg-vrm-accent': meta.accent } as CSSProperties}
     >

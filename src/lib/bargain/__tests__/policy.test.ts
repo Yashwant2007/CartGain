@@ -103,6 +103,16 @@ describe('detectMultiProductRequest (§27)', () => {
     expect(detectMultiProductRequest('700 for both')).toBe(false)
     expect(detectMultiProductRequest('₹1,000 for two units')).toBe(false)
     expect(detectMultiProductRequest('2 units for ₹900')).toBe(false)
+    expect(detectMultiProductRequest('i will buy 4 of these how much will you charge')).toBe(false)
+    expect(detectMultiProductRequest('i am saying i will buy 4 products in bundle how much can you charge')).toBe(false)
+    expect(detectMultiProductRequest('bundle of 4 items')).toBe(false)
+    expect(detectMultiProductRequest('4 units together')).toBe(false)
+  })
+
+  it('still flags a real mixed bundle even when a count is present', () => {
+    expect(detectMultiProductRequest('4 products in bundle: serum and moisturizer')).toBe(true)
+    expect(detectMultiProductRequest('bundle of serum plus moisturizer')).toBe(true)
+    expect(detectMultiProductRequest('3 items together: shirt and shoes')).toBe(true)
   })
 
   it('does not flag ordinary single-product negotiation', () => {

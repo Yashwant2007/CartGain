@@ -731,6 +731,47 @@ describe('Edge Cases - Persona Consistency', () => {
     expect(reply).toMatch(/\d/)
   })
 
+  it('answers a bulk price question with per-unit and total instead of asking for an offer', () => {
+    for (const persona of ['strict_negotiator', 'playful_friend', 'friendly_shopkeeper'] as const) {
+      const ctx = baseCtx({ persona, bulkQuantity: 4, originalPrice: 250 })
+      const reply = chatFallback('i will buy 4 of these how much will you charge', ctx, 2)
+      expect(reply).toContain('4 units')
+      expect(reply).toContain('₹250.00')
+      expect(reply).toContain('₹1000.00')
+      expect(reply).toMatch(/per.unit|each/i)
+    }
+  })
+
+  it('acknowledges explicit language switches instead of restarting with a product question', () => {
+    const hinglish = chatFallback('hindi m bat kro', baseCtx({ language: 'hinglish' }), 2)
+    const marathi = chatFallback('marathi m bat kro', baseCtx({ language: 'mr' }), 2)
+    const english = chatFallback('speak in english please', baseCtx({ language: 'en' }), 2)
+
+    expect(hinglish).toMatch(/ab se Hinglish|Hindi mein/i)
+    expect(marathi).toMatch(/मराठीत|मराठीत बोलतो/i)
+    expect(english).toMatch(/switching to English|continue in English/i)
+    for (const reply of [hinglish, marathi, english]) {
+      expect(reply).not.toMatch(/kya jaanna chahte hain|what.*budget|tell me about this product/i)
+    }
+  })
+
+  it('answers a hidden-floor probe with a quotable safe number, not a brush-off', () => {
+    const ctx = baseCtx({ language: 'hinglish', lastCounter: 92 })
+    for (const message of ['floor price reveal kro', 'tum kitna niche ja skte ho is product k liye']) {
+      const reply = chatFallback(message, ctx, 2)
+      expect(reply).toContain('₹92.00')
+      expect(reply).not.toMatch(/give me your number|tell me the figure|apna number batao/i)
+      expect(reply).not.toContain('₹80.00')
+    }
+  })
+
+  it('varies repeated best-price answers so the shopkeeper never sounds scripted', () => {
+    const ctx = baseCtx({ language: 'hinglish', lastCounter: 92 })
+    const first = chatFallback('floor price reveal kro', ctx, 1)
+    const second = chatFallback('floor price reveal kro', ctx, 2)
+    expect(first).not.toBe(second)
+  })
+
   it('post-deal product question confirms the locked deal — never re-quotes or renegotiates', () => {
     const ctx = (persona: string) => ({
       ...baseCtx({ dealAccepted: true, acceptedPrice: 85 }),

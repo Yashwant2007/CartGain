@@ -10,7 +10,10 @@ export type ShopperCue =
   | 'trend'
   | 'walkout'
   | 'purchase_ready'
+  | 'recommendation'
   | 'flattery'
+  | 'apology'
+  | 'confusion'
   | 'hesitation'
   | 'budget'
   | 'lowball'
@@ -28,7 +31,10 @@ const GRATITUDE_RE = /\b(thanks|thank you|appreciate it|much appreciated|dhanyav
 const TREND_RE = /\b(trend|trending|viral|meme|202[4-9]|gta|iphone|windows|chatgpt|instagram|reels|whatsapp|cricket|ipl|movie|game|gaming)\b/i
 const WALKOUT_RE = /\b(forget it|i(?:'m| am) (?:out|leaving|done)|not interested|cancel(?:ling)?|bye|goodbye|no thanks|stop|walk away)\b/i
 const PURCHASE_READY_RE = /\b(i(?:'ll| will) take it|buy(?:ing)?(?: it)?|checkout|purchase|order(?: it)?|yes(?: please)?|let(?:'s| us) do it|deal)\b/i
-const FLATTERY_RE = /\b(thanks|thank you|appreciate|you(?:'re| are) (?:so |very |really )?(?:great|helpful|kind|awesome|amazing|wonderful|the best)|nice (?:one|job|work)|well done|love (?:this|it|you)|good (?:service|job)|you rock|superb|brilliant)\b/i
+const RECOMMENDATION_RE = /\b(recommend|suggest|alternatives?|other options?|something else|similar|instead|what else do you have|show me more)\b/i
+const FLATTERY_RE = /\b(you(?:'re| are|'ve been| have been) (?:so |very |really )?(?:great|helpful|kind|awesome|amazing|wonderful|the best)|nice (?:one|job|work)|well done|love (?:this|it|you)|good (?:service|job)|you rock|superb|brilliant)\b/i
+const CONFUSION_RE = /\b(confused|confusing|don'?t understand|do not understand|what do you mean|huh|not clear|lost me)\b/i
+const APOLOGY_RE = /\b(sorry|apologies|my bad|my mistake)\b/i
 const HESITATION_RE = /\b(let me think|thinking|not sure|maybe|later|wait|hmm|hesitant|need time)\b/i
 const BUDGET_RE = /\b(budget|can'?t afford|cannot afford|too tight|low on cash|student discount|pocket money)\b/i
 const COMPLAINT_RE = /\b(too (?:much|expensive|high|costly)|expensive|pricey|costs? too|overpriced|discount|cheap)\b/i
@@ -44,11 +50,14 @@ export function classifyShopperCue(message: string, originalPrice?: number | nul
   if (MASH_RE.test(text)) return 'mash'
   if (JOKE_RE.test(text)) return 'joke'
   if (GREETING_RE.test(text)) return 'greeting'
+  if (FLATTERY_RE.test(text)) return 'flattery'
   if (GRATITUDE_RE.test(text)) return 'gratitude'
   if (TREND_RE.test(text)) return 'trend'
   if (WALKOUT_RE.test(text)) return 'walkout'
   if (PURCHASE_READY_RE.test(text)) return 'purchase_ready'
-  if (FLATTERY_RE.test(text)) return 'flattery'
+  if (RECOMMENDATION_RE.test(text)) return 'recommendation'
+  if (CONFUSION_RE.test(text)) return 'confusion'
+  if (APOLOGY_RE.test(text)) return 'apology'
   if (HESITATION_RE.test(text)) return 'hesitation'
   if (BUDGET_RE.test(text)) return 'budget'
 
@@ -67,6 +76,7 @@ export function classifyShopperCue(message: string, originalPrice?: number | nul
     return 'complaint'
   }
   if (COUNTER_RE.test(text) || (ratio != null && ratio <= 0.95)) return 'counter'
+  if (intent.intent === 'RECOMMENDATION_REQUEST' || intent.intent === 'PRODUCT_DISCOVERY') return 'recommendation'
   if (QUESTION_RE.test(text) || intent.intent === 'PRODUCT_QUESTION' || intent.intent === 'VALUE_UNCLEAR') return 'question'
 
   return 'chat'

@@ -32,6 +32,7 @@ import { voicePromptBlock, type BrandVoice } from '@/lib/conversation/voice'
 import { shippingPromptBlock, type ShippingConfig } from '@/lib/bargain/shipping'
 import { paymentPromptBlock } from '@/lib/bargain/payment'
 import { analyzeIntent, shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
+import { detectLanguageRequest } from '@/lib/bargain/language'
 import { deriveConversationState, conversationStateGuidance } from '@/lib/bargain/conversation-state'
 import { validateReplyClaimAdherence } from '@/lib/bargain/claims'
 import { rapidReplyForTurn } from '@/lib/bargain/rapid-reply'
@@ -1272,7 +1273,7 @@ function buildLanguageGuidance(language: string | undefined, currencySymbol: str
   const cur = currencySymbol
 
   if (lang === 'auto') {
-    return `LANGUAGE: SPEAK THE CUSTOMER'S LANGUAGE, ALWAYS. Reply in the exact same language as the customer's MOST RECENT message — that is the #1 rule of this conversation, more important than anything else in this prompt. If they write in Hinglish, reply in Hinglish. If they write in Tamil, reply in Tamil. If they switch language mid-conversation, switch with them immediately. A reply in the customer's language converts; a reply in another language makes them think the shopkeeper is mechanical and drives the deal away. On Indian stores, Hinglish (Roman-script Hindi mixed naturally with English) is the most common — use it when the customer does. Tamil, Telugu, Bengali, Marathi, Gujarati, Punjabi, Kannada, Malayalam and Odia should be answered in kind. Always keep numbers in standard digits and the currency symbol (${cur}) intact.`
+    return `LANGUAGE: SPEAK THE CUSTOMER'S LANGUAGE, ALWAYS. Reply in the exact same language as the customer's MOST RECENT message — that is the #1 rule of this conversation, more important than anything else in this prompt. If they write in Hinglish, reply in Hinglish. If they write in Tamil, reply in Tamil. If they switch language mid-conversation (for example "hindi m bat kro" or "marathi m bat kro"), switch with them immediately, acknowledge the switch briefly in the NEW language, and CONTINUE the same negotiation — never restart with a generic product/budget question. A reply in the customer's language converts; a reply in another language makes them think the shopkeeper is mechanical and drives the deal away. On Indian stores, Hinglish (Roman-script Hindi mixed naturally with English) is the most common — use it when the customer does. Tamil, Telugu, Bengali, Marathi, Gujarati, Punjabi, Kannada, Malayalam and Odia should be answered in kind. Always keep numbers in standard digits and the currency symbol (${cur}) intact.`
   }
 
   if (lang === 'hinglish') {
@@ -1399,10 +1400,48 @@ export function detectRepeatedMessage(
   return { repeated: true, kind }
 }
 
+function languageSwitchAck(ctx: NegotiationContext, lang: string): string {
+  const money = `${ctx.currencySymbol}${ctx.originalPrice.toFixed(2)}`
+  if (lang === 'hinglish') {
+    return ctx.persona === 'strict_negotiator'
+      ? `Bilkul, ab Hindi mein baat karenge. ${money} listed hai — apna number bataiye.`
+      : `Bilkul bhai, ab se Hinglish mein baat karta hoon 😊 ${money} challenge hai — batao, kya number chalega?`
+  }
+  if (lang === 'hi') {
+    return ctx.persona === 'strict_negotiator'
+      ? `बिलकुल, अब हिंदी में बात करेंगे। ${money} सूचीबद्ध है — अपना प्रस्ताव बताइए।`
+      : `बिलकुल भैया, अब हिंदी में बात करूँगा 😊 ${money} लिस्ट प्राइस है — बताइए, क्या नंबर चलेगा?`
+  }
+  if (lang === 'mr') {
+    return ctx.persona === 'strict_negotiator'
+      ? `नक्कीच, आता मराठीत बोलू. ${money} ही सूची किंमत आहे — तुमची किंमत सांगा.`
+      : `नक्कीच भाऊ, आता मराठीत बोलतो 😊 ${money} लिस्ट किंमत आहे — सांगा, काय नंबर चालेल?`
+  }
+  if (lang === 'en') {
+    return ctx.persona === 'strict_negotiator'
+      ? `Understood — I'll continue in English. ${money} is listed; state your number.`
+      : `Sure, switching to English 😊 ${money} is the listed price — what number were you thinking?`
+  }
+  return `Sure — I'll continue in your language. ${money} is listed; what's your number?`
+}
+
 export function chatFallback(customerMessage: string, ctx: NegotiationContext, historyLength = 0): string {
   const item = ctx.productTitle ? `this ${ctx.productTitle}` : 'this item'
   const price = `${ctx.currencySymbol}${ctx.originalPrice.toFixed(2)}`
   const low = customerMessage.toLowerCase()
+
+  const requestedLanguage = detectLanguageRequest(customerMessage)
+  if (requestedLanguage) return languageSwitchAck(ctx, requestedLanguage)
+
+  const asksFloor = ctx.intent?.asksBestPrice === true || analyzeIntent(customerMessage).asksBestPrice
+  if (asksFloor) {
+    const standing = ctx.lastCounter
+    const candidate = standing != null && standing > quotedFloor(ctx) && standing < ctx.originalPrice
+      ? standing
+      : effectiveCounter(ctx, null, null)
+    const best = Math.round(Math.min(ctx.originalPrice, Math.max(quotedFloor(ctx), candidate)) * 100) / 100
+    return bestPriceReply(best, ctx, historyLength)
+  }
 
   const isProductQuestion =
     /(?:describe|explain|tell me (?:about|more)|what (?:is|are|about)|about (?:this|the)|details?|features?|specs?|material|quality|how (?:is|good)|worth\s+(?:it|the)|think of|review)/i.test(low) &&
@@ -1460,6 +1499,22 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
     /\b(?:other|another)\s+(?:brand|company|maker|store|shop|site|seller)|competitor|elsewhere/i.test(low)
   if (isComparison) {
     return strengthenComparisonPitch(`I can't confirm prices elsewhere, but I can work with you here at ${price}.`, ctx)
+  }
+
+  const bulkQty = ctx.bulkQuantity != null && ctx.bulkQuantity >= 2 ? Math.floor(ctx.bulkQuantity) : null
+  const isBulkPriceQuestion =
+    bulkQty != null &&
+    /\b(?:how much|what(?:'s|\s+is)\s+(?:the\s+)?(?:price|rate|cost)|charge|costs?|price\s+for|rate\s+for)\b/i.test(low) &&
+    !/\b(?:offer|discount)\b/i.test(low)
+  if (isBulkPriceQuestion && bulkQty != null) {
+    const unit = `${ctx.currencySymbol}${ctx.originalPrice.toFixed(2)}`
+    const total = `${ctx.currencySymbol}${(Math.round(ctx.originalPrice * bulkQty * 100) / 100).toFixed(2)}`
+    const bulkPriceQ: Record<Persona, string> = {
+      strict_negotiator: `For ${bulkQty} units, the listed rate is ${unit} each — ${total} total. Tell me your target per unit or for all ${bulkQty}, and I'll give you one clear number.`,
+      playful_friend: `For ${bulkQty} units: ${unit} each, ${total} all together. That's the list, now let's make it fun — what per-unit or total number are you thinking? 😄`,
+      friendly_shopkeeper: `Happy to help, friend! For ${bulkQty} units it's ${unit} each — ${total} for all ${bulkQty}. Tell me the per-unit or total price you had in mind and I'll see what I can do.`,
+    }
+    return bulkPriceQ[ctx.persona]
   }
 
   if (isProductQuestion) {
@@ -2769,15 +2824,68 @@ const PRESSURE_SAFE_REPLY: Record<Persona, string> = {
   playful_friend: "No rush — the number's real. Shall I lock it for you?",
 }
 
-function bestPriceReply(counter: number, ctx: NegotiationContext): string {
-  const money = `${ctx.currencySymbol}${counter.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
-  if (ctx.persona === 'strict_negotiator') {
-    return `${money} is where I am. I can honor that now — say the word and I'll lock it.`
+function bestPriceReply(counter: number, ctx: NegotiationContext, repeatCount = 0): string {
+  const money = `${ctx.currencySymbol}${counter.toFixed(2)}`
+  const lang = (ctx.language || '').toLowerCase()
+  const pick = (options: string[]): string => pickVaried(options, `best-price|${lang}|${ctx.persona}|${repeatCount}|${money}`)
+
+  if (lang === 'hinglish') {
+    if (ctx.persona === 'strict_negotiator') return pick([
+      `${money} par main aa sakta hoon. Batao, lock karun?`,
+      `Meri position ${money} hai. Yahi price main honor karunga.`,
+    ])
+    if (ctx.persona === 'playful_friend') return pick([
+      `Fair question! 😄 Main ${money} kar sakta hoon — koi chhupa hua number nahi. Lock karun?`,
+      `Bata dena yaar — ${money} par deal pakki! 😄`,
+    ])
+    return pick([
+      `Bhai, main ${money} kar sakta hoon — ye price main honor karunga. Lock karun? 👍`,
+      `Fair question! ${money} chalega, aur ye final-ish number hai. Batao, lock karein? 😊`,
+    ])
   }
-  if (ctx.persona === 'playful_friend') {
-    return `Fair question! I can do ${money} right now — no mystery number, just a price I can honor.`
+
+  if (lang === 'hi') {
+    if (ctx.persona === 'strict_negotiator') return pick([
+      `मैं ${money} तक आ सकता हूँ। बताइए, लॉक करूँ?`,
+      `मेरी स्थिति ${money} है। यही कीमत मैं सम्मान करूँगा।`,
+    ])
+    if (ctx.persona === 'playful_friend') return pick([
+      `बढ़िया सवाल! 😄 मैं ${money} कर सकता हूँ — कोई छुपा नंबर नहीं। लॉक करूँ?`,
+      `बताइए तो — ${money} पर डील पक्की! 😄`,
+    ])
+    return pick([
+      `भैया, मैं ${money} कर सकता हूँ — ये कीमत मैं निभाऊँगा। लॉक करें? 👍`,
+      `सही सवाल है! ${money} चलेगा। बताइए, लॉक कर दूँ? 😊`,
+    ])
   }
-  return `Fair question — I can do ${money} right now, and that's a price I can honor. Want me to lock it?`
+
+  if (lang === 'mr') {
+    if (ctx.persona === 'strict_negotiator') return pick([
+      `मी ${money} पर येऊ शकतो. सांगा, लॉक करू?`,
+      `माझी स्थिती ${money} आहे. हीच किंमत मी मान्य करेन.`,
+    ])
+    if (ctx.persona === 'playful_friend') return pick([
+      `छान प्रश्न! 😄 मी ${money} करू शकतो — काही गुप्त नंबर नाही. लॉक करू?`,
+      `सांगा तर — ${money}वर डील पक्की! 😄`,
+    ])
+    return pick([
+      `भाऊ, मी ${money} करू शकतो — ही किंमत मी मान्य करेन. लॉक करू? 👍`,
+      `योग्य प्रश्न! ${money} चालेल. सांगा, लॉक करून देऊ? 😊`,
+    ])
+  }
+
+  if (ctx.persona === 'strict_negotiator') return pick([
+    `${money} is where I am. I can honor that now — say the word and I'll lock it.`,
+    `This is the price I can honor: ${money}. Tell me if you'll take it.`,
+  ])
+  if (ctx.persona === 'playful_friend') return pick([
+    `Fair question! I can do ${money} right now — no mystery number, just a price I can honor. 😄`,
+    `Deal energy: ${money}. Say the word and I'll lock it before the shopkeeper changes their mind. 😄`,
+  ])
+  return pick([
+    `Fair question — I can do ${money} right now, and that's a price I can honor. Want me to lock it? 😊`,
+    `Here's the honest number: ${money}. If that works, I'll lock it for you. 👍`,
+  ])
 }
 
 export function alignStatedOfferPrice(
@@ -3031,8 +3139,11 @@ export async function negotiateStep(
       ? standing
       : effectiveCounter(ctx, null, null)
     const bestPrice = Math.round(Math.min(ctx.originalPrice, Math.max(quotedFloor(ctx), candidate)) * 100) / 100
+    const repeatCount = history.filter(
+      (m) => m.role === 'customer' && normalizeForCompare(m.content) === normalizeForCompare(customerMessage),
+    ).length
     return {
-      reply: bestPriceReply(bestPrice, ctx),
+      reply: bestPriceReply(bestPrice, ctx, repeatCount),
       decision: 'counter',
       counterOffer: bestPrice,
       tactic: 'best_price_answer',

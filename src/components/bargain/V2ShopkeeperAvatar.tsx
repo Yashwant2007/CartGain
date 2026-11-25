@@ -12,7 +12,7 @@ import {
   type V2AvatarVariant,
 } from '@/lib/bargain/experience/v2-shopkeepers'
 import { isVrmAvatarVariant } from '@/lib/bargain/experience/vrm-shopkeepers'
-import { v2ReactionCell, v2ReactionSheet, type BargainReaction } from '@/lib/bargain/experience/reactions'
+import { REACTION_MOTION, v2ReactionCell, v2ReactionSheet, type BargainReaction } from '@/lib/bargain/experience/reactions'
 import VrmShopkeeperAvatar from './VrmShopkeeperAvatar'
 
 interface Props {
@@ -45,6 +45,18 @@ const V2_CSS = `
 .cg-v2--essential.cg-v2--motion-enter .cg-v2-art { animation: cgV2Enter .5s cubic-bezier(.2,.9,.3,1.2) 1; }
 .cg-v2--essential.cg-v2--motion-celebrate .cg-v2-art { animation: cgV2Celebrate .8s cubic-bezier(.2,1.3,.3,1) 1; }
 .cg-v2--essential.cg-v2--motion-recede .cg-v2-art { animation: cgV2Recede .45s ease-out 1; }
+.cg-v2[data-v2-reaction-motion="listen"] .cg-v2-art { animation: cgV2ReactSettle .5s ease-out 1; }
+.cg-v2[data-v2-reaction-motion="settle"] .cg-v2-art { animation: cgV2ReactSettle .5s ease-out 1; }
+.cg-v2[data-v2-reaction-motion="pop"] .cg-v2-art { animation: cgV2ReactPop .46s cubic-bezier(.2,.9,.3,1.4) 1; }
+.cg-v2[data-v2-reaction-motion="shake"] .cg-v2-art { animation: cgV2ReactShake .5s ease-in-out 1; }
+.cg-v2[data-v2-reaction-motion="nod"] .cg-v2-art { animation: cgV2ReactNod .56s ease-in-out 1; }
+.cg-v2[data-v2-reaction-motion="bounce"] .cg-v2-art { animation: cgV2ReactBounce .7s ease-in-out 1; }
+.cg-v2[data-v2-reaction-motion="wave"] .cg-v2-art { animation: cgV2ReactWave .7s ease-in-out 1; }
+.cg-v2[data-v2-reaction-motion="tilt"] .cg-v2-art { animation: cgV2ReactTilt .62s ease-in-out 1; }
+.cg-v2[data-v2-reaction-motion="lean"] .cg-v2-art { animation: cgV2ReactLean .62s ease-out 1; }
+.cg-v2[data-v2-reaction-motion="present"] .cg-v2-art { animation: cgV2ReactPresent .62s cubic-bezier(.2,.9,.3,1.2) 1; }
+.cg-v2[data-v2-reaction-motion="recede"] .cg-v2-art { animation: cgV2ReactRecede .62s ease-out 1; }
+.cg-v2[data-v2-reaction-motion="celebrate"] .cg-v2-art { animation: cgV2Celebrate .8s cubic-bezier(.2,1.3,.3,1) 1; }
 .cg-v2[data-expression="disappointed"] .cg-v2-art,
 .cg-v2[data-expression="error"] .cg-v2-art { filter: saturate(.86) drop-shadow(0 4px 8px rgba(15,23,42,.06)); }
 @keyframes cgV2Breathe { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-1px) scale(1.012); } }
@@ -54,6 +66,16 @@ const V2_CSS = `
 @keyframes cgV2Enter { 0% { transform: translateX(22px) scale(.92); opacity: .25; } 70% { transform: translateX(-3px) scale(1.03); opacity: 1; } 100% { transform: translateX(0) scale(1); opacity: 1; } }
 @keyframes cgV2Celebrate { 0%,100% { transform: translateY(0) scale(1) rotate(0deg); } 40% { transform: translateY(-6px) scale(1.06) rotate(-2deg); } 70% { transform: translateY(-2px) scale(1.03) rotate(2deg); } }
 @keyframes cgV2Recede { 0% { transform: translateX(0) scale(1); opacity: 1; } 100% { transform: translateX(-4px) scale(.96); opacity: .72; } }
+@keyframes cgV2ReactSettle { 0% { transform: translateY(2px) scale(.985); } 100% { transform: translateY(0) scale(1); } }
+@keyframes cgV2ReactPop { 0% { transform: scale(.92); } 55% { transform: scale(1.07); } 100% { transform: scale(1); } }
+@keyframes cgV2ReactShake { 0%,100% { transform: translateX(0) rotate(0deg); } 25% { transform: translateX(-3px) rotate(-1.5deg); } 60% { transform: translateX(3px) rotate(1.5deg); } }
+@keyframes cgV2ReactNod { 0%,100% { transform: rotate(0deg) translateY(0); } 45% { transform: rotate(2deg) translateY(2px); } }
+@keyframes cgV2ReactBounce { 0%,100% { transform: translateY(0) scale(1); } 40% { transform: translateY(-5px) scale(1.035); } 72% { transform: translateY(0) scale(.985); } }
+@keyframes cgV2ReactWave { 0%,100% { transform: rotate(0deg); } 35% { transform: rotate(-3deg); } 70% { transform: rotate(3deg); } }
+@keyframes cgV2ReactTilt { 0%,100% { transform: rotate(0deg) translateY(0); } 50% { transform: rotate(2deg) translateY(-2px); } }
+@keyframes cgV2ReactLean { 0%,100% { transform: translateX(0) scale(1); } 50% { transform: translateX(4px) scale(1.02); } }
+@keyframes cgV2ReactPresent { 0% { transform: translateX(-4px) scale(.97); opacity: .75; } 65% { transform: translateX(3px) scale(1.03); opacity: 1; } 100% { transform: translateX(0) scale(1); } }
+@keyframes cgV2ReactRecede { 0% { transform: translateX(0) scale(1); } 55% { transform: translateX(-4px) scale(.97); } 100% { transform: translateX(0) scale(1); } }
 @media (max-width: 480px) { .cg-v2 { width: 134px; height: 158px; } .cg-v2-art { width: 134px; height: 134px; top: 10px; } .cg-v2-shadow { width: 58px; } }
 @media (prefers-reduced-motion: reduce) { .cg-v2, .cg-v2 * { animation: none !important; transition: none !important; } }
 `
@@ -76,6 +98,7 @@ export default function V2ShopkeeperAvatar({
   const artPosition = reactionCell?.position ?? V2_CELL_POSITIONS[cell]
   const motion = v2MotionForState(state)
   const animate = motionEnabled && !reducedMotion
+  const reactionMotion = reaction && animate ? REACTION_MOTION[reaction] : null
   const rootClass = [
     'cg-v2',
     `cg-v2--${meta.motion}`,
@@ -116,6 +139,7 @@ export default function V2ShopkeeperAvatar({
       data-v2-variant={resolved}
       data-v2-cell={cell}
       data-v2-reaction={reaction ?? ''}
+      data-v2-reaction-motion={reactionMotion ?? ''}
       data-v2-sheet={reactionCell ? 'reaction' : 'expression'}
       data-v2-state={state ?? ''}
       data-v2-motion={motion}
@@ -124,6 +148,7 @@ export default function V2ShopkeeperAvatar({
       <style dangerouslySetInnerHTML={{ __html: V2_CSS }} />
       <span className="cg-v2-glow" aria-hidden="true" />
       <span
+        key={`${reaction ?? 'expression'}:${artPosition}:${eventSequence ?? 0}`}
         className={`cg-v2-art${reactionCell ? ' cg-v2-art--reaction' : ''}`}
         aria-hidden="true"
         style={{ backgroundImage: `url(${artImage})`, backgroundPosition: artPosition }}

@@ -36,6 +36,42 @@ const HINGLISH_WORDS = [
   'dogi', 'dogey', 'bhaiyo',
 ]
 
+type DetectedLanguage = 'hi' | 'mr' | 'ta' | 'te' | 'bn' | 'gu' | 'pa' | 'kn' | 'ml' | 'or' | 'hinglish' | 'en'
+
+const LANGUAGE_REQUESTS: { code: DetectedLanguage; re: RegExp }[] = [
+  { code: 'hi', re: /(?:हिन्दी|हिंदी)/ },
+  { code: 'hinglish', re: /\b(?:hindi(?:\s+(?:m|me|mein))?|hinglish|roman\s+hindi|hinglish\s+me(?:in)?)\b/i },
+  { code: 'mr', re: /(?:\b(?:marathi|marāṭhī)\b|मराठी)/i },
+  { code: 'ta', re: /(?:\btamil\b|தமிழ்)/i },
+  { code: 'te', re: /(?:\btelugu\b|తెలుగు)/i },
+  { code: 'bn', re: /(?:\bbengali\b|\bbangla\b|বাংলা)/i },
+  { code: 'gu', re: /(?:\bgujarati\b|ગુજરાતી)/i },
+  { code: 'pa', re: /(?:\bpunjabi\b|ਪੰਜਾਬੀ)/i },
+  { code: 'kn', re: /(?:\bkannada\b|ಕನ್ನಡ)/i },
+  { code: 'ml', re: /(?:\bmalayalam\b|മലയാളം)/i },
+  { code: 'or', re: /(?:\bodia\b|\boriya\b|ଓଡ଼ିଆ)/i },
+  { code: 'en', re: /\b(?:english|in\s+english)\b/i },
+]
+
+const LANGUAGE_SWITCH_CUE =
+  /(?:\b(?:bolo|bol|bole|baat|bat|batao|bata|kar|karo|kro|karna|speak|talk|reply|answer|write|use|switch|change|mein|me|m)\b)|(?:बात|बोल|बोलो|बताओ|बता|करो|करें|में|मे)/i
+
+/**
+ * Detect an explicit "talk in Hindi/Marathi/…" instruction. This must win over
+ * a merchant's configured language and over ordinary script detection, otherwise
+ * a shopper asking "hindi m bat kro" keeps getting the old language forever.
+ */
+export function detectLanguageRequest(text: string): DetectedLanguage | null {
+  if (!text || !text.trim()) return null
+  const cleaned = text.trim()
+  if (cleaned.length > 100) return null
+  for (const { code, re } of LANGUAGE_REQUESTS) {
+    if (!re.test(cleaned)) continue
+    if (LANGUAGE_SWITCH_CUE.test(cleaned) || cleaned.split(/\s+/).length <= 6) return code
+  }
+  return null
+}
+
 export function detectLanguage(text: string): 'hi' | 'mr' | 'ta' | 'te' | 'bn' | 'gu' | 'pa' | 'kn' | 'ml' | 'or' | 'hinglish' | 'en' | null {
   if (!text || !text.trim()) return null
 

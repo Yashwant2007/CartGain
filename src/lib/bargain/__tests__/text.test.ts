@@ -298,6 +298,8 @@ describe('extractPrice', () => {
 
   it('does not treat quantities, identifiers, budgets, or contact details as offers', () => {
     expect(extractPrice('I need 2 items')).toBeNull()
+    expect(extractPrice('i will buy 4 of these how much will you charge')).toBeNull()
+    expect(extractPrice('i am saying i will buy 4 products in bundle how much can you charge')).toBeNull()
     expect(extractPrice('product 12345')).toBeNull()
     expect(extractPrice('model 2024')).toBeNull()
     expect(extractPrice('my order #1234')).toBeNull()
@@ -333,6 +335,8 @@ describe('extractPrice', () => {
 describe('classifyNonOfferNumber', () => {
   it('labels non-offer number contexts', () => {
     expect(classifyNonOfferNumber('I need 2 items')).toBe('quantity')
+    expect(classifyNonOfferNumber('i will buy 4 of these how much will you charge')).toBe('quantity')
+    expect(classifyNonOfferNumber('i am saying i will buy 4 products in bundle how much can you charge')).toBe('quantity')
     expect(classifyNonOfferNumber('my order #1234')).toBe('identifier')
     expect(classifyNonOfferNumber('my budget is 700')).toBe('budget')
     expect(classifyNonOfferNumber('call me at 5')).toBe('contact')
