@@ -50,7 +50,7 @@ describe('HeroNegotiationDemo', () => {
     expect(screen.getByLabelText('Use Alex in the demo')).toBeTruthy()
     expect(screen.getAllByText('₹1,499').length).toBeGreaterThan(0)
     expect(screen.getAllByText('₹1,299').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('₹1,100').length).toBeGreaterThan(0)
+    expect(screen.queryByText('₹1,100')).toBeNull()
     expect(screen.getByTestId('shopkeeper-stage')).toBeTruthy()
     expect(screen.queryByLabelText('Ask a question or name your price')).toBeNull()
 
@@ -65,6 +65,15 @@ describe('HeroNegotiationDemo', () => {
     expect(await screen.findByText('It is a gentle vitamin C serum for daily use.', {}, { timeout: 2000 })).toBeTruthy()
     expect(container.textContent).not.toContain('Offer ₹')
     expect(fetchMock).toHaveBeenCalledWith('/api/bargain/home-demo', expect.objectContaining({ method: 'POST' }))
+  })
+
+  it('never reveals the hidden floor in previews and uses the enlarged avatar', () => {
+    const { container } = render(<HeroNegotiationDemo />)
+
+    expect(container.textContent).not.toMatch(/\bfloor\b|minimum/i)
+    expect(screen.queryByText('₹1,100')).toBeNull()
+    expect(container.innerHTML).toContain('width: 128px')
+    expect(container.innerHTML).toContain('scale(.68)')
   })
 
   it('keeps the selected avatar and live reactions without a manual reaction sheet', async () => {

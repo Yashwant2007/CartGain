@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   chatFallback,
   classifySeriousness,
+  detectFloorLeak,
+  detectMetaFloorTalk,
+  detectPercentFloorLeak,
   negotiateStep,
   ruleBasedDecision,
   type NegotiationContext,
@@ -25,6 +28,16 @@ const SAMPLE_PRODUCT = {
   currencySymbol: '₹',
 }
 
+const PUBLIC_PRODUCT = {
+  id: SAMPLE_PRODUCT.id,
+  title: SAMPLE_PRODUCT.title,
+  image: SAMPLE_PRODUCT.image,
+  basePrice: SAMPLE_PRODUCT.basePrice,
+  merchantPrice: SAMPLE_PRODUCT.merchantPrice,
+  currencySymbol: SAMPLE_PRODUCT.currencySymbol,
+}
+
+const FLOOR_SAFE_REPLY = 'I only quote a price I can honor — give me a number that works for you.'
 const MAX_ATTEMPTS = 3
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n))
 
@@ -106,10 +119,18 @@ export async function POST(request: NextRequest) {
         : { reply: chatFallback(interpretedMessage, ctx, history.length), decision: 'chat' as const, tactic: 'home_demo_fallback', sentiment: 'neutral' }
     }
 
+    const leakedFloor =
+      detectFloorLeak(result.reply, SAMPLE_PRODUCT.floorPrice, SAMPLE_PRODUCT.merchantPrice) ||
+      detectPercentFloorLeak(result.reply, SAMPLE_PRODUCT.floorPrice, SAMPLE_PRODUCT.merchantPrice) ||
+      detectMetaFloorTalk(result.reply)
+    const reply = leakedFloor ? FLOOR_SAFE_REPLY : result.reply
+    const decision = leakedFloor && result.decision === 'accept' ? ('counter' as const) : result.decision
+    const counterOffer = leakedFloor && result.decision === 'accept' ? null : result.counterOffer ?? null
+
     const conversationState = deriveConversationState({
       attemptsUsed,
       walkoutTriggered: false,
-      dealAccepted: result.decision === 'accept',
+      dealAccepted: decision === 'accept',
       intent: intent.intent,
       objection: intent.objection,
       offersPriceSignal: intent.offersPriceSignal,
@@ -117,14 +138,14 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({
-      reply: result.reply,
-      decision: result.decision,
-      counterOffer: result.counterOffer ?? null,
+      reply,
+      decision,
+      counterOffer,
       offer,
       offerDetected: offer != null,
       attemptsUsed: Math.min(MAX_ATTEMPTS, attemptsUsed),
       conversationState,
-      product: SAMPLE_PRODUCT,
+      product: PUBLIC_PRODUCT,
     })
   } catch (error) {
     console.error('[BARGAIN_HOME_DEMO]', error)
