@@ -115,11 +115,6 @@ const LATEST_UPDATES = [
     desc: 'Pick a friendly, strict or playful shopkeeper, choose one of four storefront invitations, and publish or roll back instantly.',
   },
   {
-    icon: MessageSquare,
-    title: 'Shopkeepers that react',
-    desc: 'The avatar listens, thinks, counters and celebrates in real time — with reduced-motion and avatar controls respected.',
-  },
-  {
     icon: BarChart3,
     title: 'Storefront performance',
     desc: 'Follow impressions → clicks → chats → deals, compare designs, and see net revenue after refunds and cancellations.',
@@ -830,7 +825,7 @@ export default function HomePage() {
                 New ways to present your shopkeeper, measure the storefront, and keep every deal inside your rules.
               </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {LATEST_UPDATES.map((update) => (
                 <div key={update.title} className="bg-slate-800/40 border border-blue-700/30 rounded-2xl p-5 sm:p-6">
                   <div className="w-11 h-11 bg-gradient-to-br from-cyan-600/20 to-blue-600/20 border border-cyan-500/25 rounded-xl flex items-center justify-center mb-4">
