@@ -1,3 +1,4 @@
+import nextConfig from '../../../next.config.js'
 import robots from '@/app/robots'
 import sitemap from '@/app/sitemap'
 import {
@@ -122,5 +123,17 @@ describe('public SEO metadata', () => {
     })
     expect(dynamic.alternates?.canonical).toBeNull()
     expect(dynamic.robots).toMatchObject({ index: false, follow: false })
+  })
+
+  it('marks both web manifests noindex instead of treating them as pages', async () => {
+    const headers = await nextConfig.headers()
+
+    for (const source of ['/manifest.webmanifest', '/site.webmanifest']) {
+      const entry = headers.find((header: { source: string }) => header.source === source)
+      expect(entry?.headers).toContainEqual({
+        key: 'X-Robots-Tag',
+        value: 'noindex, nofollow',
+      })
+    }
   })
 })

@@ -7,6 +7,25 @@ export const metadata = createPageMetadata('/privacy')
 export default function PrivacyPolicyPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'WebPage',
+            name: 'Privacy Policy | CartGain',
+            description:
+              'How CartGain collects, uses, shares, retains, and protects merchant and shopper data, including consent, retention, and data protection rights.',
+            url: 'https://cart-gain.com/privacy',
+            dateModified: '2026-11-23',
+            publisher: {
+              '@type': 'Organization',
+              name: 'CartGain',
+              url: 'https://cart-gain.com',
+            },
+          }),
+        }}
+      />
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-12">
           <div className="flex justify-center mb-6">
@@ -19,6 +38,17 @@ export default function PrivacyPolicyPage() {
             Last updated: November 23, 2026
           </p>
         </div>
+
+        <section className="mb-8 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-6 text-left">
+          <h2 className="text-xl font-bold text-white mb-3">Privacy at a glance</h2>
+          <ul className="list-disc space-y-2 pl-5 text-blue-100">
+            <li><strong>Who we serve:</strong> Merchants using CartGain for cart recovery, AI bargaining, analytics, and security on Shopify or WooCommerce stores.</li>
+            <li><strong>What we process:</strong> Merchant account details, store configuration, abandoned cart contact and line-item data, and bounded presentation and learning events. We do not use raw chat text as a learning key.</li>
+            <li><strong>Your choices:</strong> Merchants control email and WhatsApp channels and are responsible for obtaining customer consent. Shoppers can opt out of messages and skip AI bargaining at any time.</li>
+            <li><strong>How long we keep it:</strong> Cart, bargain session, and communication data are retained for 90 days; audit and storefront experience logs for 180 days. Opt-out records are kept to honor customer choices.</li>
+            <li><strong>Your rights:</strong> You can request access, correction, deletion, restriction, portability, or object to certain processing by emailing <a href="mailto:support@cart-gain.com" className="text-cyan-300 hover:underline">support@cart-gain.com</a>.</li>
+          </ul>
+        </section>
 
         <div className="bg-slate-800/50 border border-blue-700/30 rounded-2xl p-8 backdrop-blur-sm">
           <div className="prose prose-invert max-w-none">
