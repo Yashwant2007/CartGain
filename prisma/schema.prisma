@@ -691,6 +691,11 @@ model BargainConfig {
   dealFollowupEnabled               Boolean   @default(false)
   dealFollowupDelaysMinutes         Json? // e.g. [15, 180, 1200]
   dealFollowupMax                   Int       @default(3)
+  trendIntelligenceEnabled          Boolean   @default(false)
+  trendRegion                       String    @default("US")
+  trendTopics                       String[]  @default([])
+  trendExcludedTopics               String[]  @default([])
+  trendHumorEnabled                 Boolean   @default(false)
   createdAt                         DateTime  @default(now())
   updatedAt                         DateTime  @updatedAt
 

@@ -79,6 +79,11 @@ export const bargainConfigUpsertSchema = z.object({
   dealFollowupEnabled: z.boolean().optional(),
   dealFollowupDelaysMinutes: z.array(z.number().int().min(1).max(60 * 24 * 7)).max(5).nullable().optional(),
   dealFollowupMax: z.number().int().min(1).max(5).optional(),
+  trendIntelligenceEnabled: z.boolean().optional(),
+  trendRegion: z.enum(['US', 'GB', 'CA', 'AU', 'IN', 'DE', 'FR', 'ES', 'IT', 'PT', 'BR', 'JP']).nullable().optional(),
+  trendTopics: z.array(z.enum(['fitness', 'skincare', 'fashion', 'sneakers', 'electronics', 'gaming', 'travel', 'home_decor', 'coffee', 'tea', 'cycling', 'camping', 'photography', 'books', 'music', 'pets', 'gardening', 'wellness'])).max(8).nullable().optional(),
+  trendExcludedTopics: z.array(z.enum(['fitness', 'skincare', 'fashion', 'sneakers', 'electronics', 'gaming', 'travel', 'home_decor', 'coffee', 'tea', 'cycling', 'camping', 'photography', 'books', 'music', 'pets', 'gardening', 'wellness'])).max(8).nullable().optional(),
+  trendHumorEnabled: z.boolean().optional(),
 })
 
 export type BargainConfigUpsertInput = z.infer<typeof bargainConfigUpsertSchema>

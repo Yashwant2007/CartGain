@@ -56,6 +56,7 @@ import { issueRetentionDiscount, buildBargainClaimUrl, generateBargainCode, type
 import { track } from '@/lib/analytics/track'
 import { resolveSessionLearning, recordLearningEvent, loadLearningConfig } from '@/lib/bargain/learning/service'
 import { isFeatureEnabled } from '@/lib/feature-flags'
+import { getBargainTrendPrompt } from '@/lib/bargain/trend'
 import { bargainRequestMetrics } from '@/lib/bargain/request-metrics'
 import type { BargainDecision, BargainOfferSuccess } from '@/lib/bargain/api-types'
 import {
@@ -1151,6 +1152,11 @@ export async function POST(request: NextRequest) {
 
     const lastCounter = [...bargainSession.messages].reverse()
       .find((m: any) => m.role === 'ai' && m.offeredPrice != null)?.offeredPrice ?? null
+    const trendPrompt = await getBargainTrendPrompt({
+      storeId: bargainSession.storeId,
+      config,
+      product: productCtx ?? { title: productTitle ?? null, productType: null, tags: [] },
+    })
 
     const ctx: NegotiationContext = {
       storeName: bargainSession.store.name,
@@ -1190,6 +1196,7 @@ export async function POST(request: NextRequest) {
     ctx.lastCounter = lastCounter
     ctx.liveTurn = liveTurn
     ctx.adaptive = adaptive
+    ctx.trendPrompt = trendPrompt
     ctx.voice = voice
     ctx.sessionMemory = buildSessionMemory({
       intent: intentAnalysis,
@@ -1731,6 +1738,26 @@ export async function POST(request: NextRequest) {
         durationMs: intelligence.metadata.durationMs,
         offerBasis: offerView.basis,
         offerClarificationNeeded: offerView.needsClarification,
+      },
+    })
+
+    await track({
+      name: 'cartgain_conversational_quality',
+      storeId: bargainSession.storeId,
+      properties: {
+        sessionId: bargainSession.id,
+        persona: shopkeeperPersonality,
+        liveTurnMode: liveTurn.mode,
+        humorAllowed: liveTurn.humorAllowed,
+        emojiBudget: liveTurn.emojiBudget,
+        intent: intentAnalysis.intent,
+        objection: intentAnalysis.objection ?? null,
+        attempt: attemptsUsed,
+        turnIndex: history.filter((m: any) => m.role === 'customer').length + 1,
+        continuedFromPreviousTurn: history.filter((m: any) => m.role === 'customer').length >= 2,
+        trendUsed: Boolean(trendPrompt),
+        trendRegion: config.trendRegion ?? 'US',
+        aiSource: result.metadata?.aiSource ?? 'unknown',
       },
     })
 

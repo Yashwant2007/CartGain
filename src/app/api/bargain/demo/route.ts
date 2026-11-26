@@ -34,6 +34,7 @@ import { assessCustomerClaims } from '@/lib/bargain/claims'
 import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
 import { enginePersonaFor } from '@/lib/bargain/experience/personality'
 import { publishedPersonality } from '@/lib/bargain/experience/config'
+import { getBargainTrendPrompt } from '@/lib/bargain/trend'
 import { extractPrice, normalizeCustomerText } from '@/lib/bargain/text'
 import { fetchShopifyProducts } from '@/lib/shopify'
 import {
@@ -395,6 +396,12 @@ export async function POST(request: NextRequest) {
         console.warn('[BARGAIN_DEMO] product-context fetch failed, using verified-details fallback', err?.message ?? err)
       }
     }
+
+    ctx.trendPrompt = await getBargainTrendPrompt({
+      storeId: merchant.store?.id ?? 'demo',
+      config: merchant.config,
+      product: ctx.product ?? { title: productTitle ?? null, productType: null, tags: [] },
+    })
 
     const claims = assessCustomerClaims(body.message, {
       product: ctx.product ?? null,

@@ -94,6 +94,27 @@ type BargainConfig = {
   dealFollowupEnabled: boolean
   dealFollowupDelaysMinutes: number[] | null
   dealFollowupMax: number
+  trendIntelligenceEnabled: boolean
+  trendRegion: string
+  trendTopics: string[]
+  trendExcludedTopics: string[]
+  trendHumorEnabled: boolean
+}
+
+const TREND_REGION_OPTIONS = ['US', 'GB', 'CA', 'AU', 'IN', 'DE', 'FR', 'ES', 'IT', 'PT', 'BR', 'JP']
+
+const TREND_TOPIC_OPTIONS = [
+  'fitness', 'skincare', 'fashion', 'sneakers', 'electronics', 'gaming',
+  'travel', 'home_decor', 'coffee', 'tea', 'cycling', 'camping',
+  'photography', 'books', 'music', 'pets', 'gardening', 'wellness',
+]
+
+function parseTrendTopics(value: string): string[] {
+  return Array.from(new Set(
+    value.split(',')
+      .map(topic => topic.trim().toLowerCase().replace(/[\s-]+/g, '_'))
+      .filter(topic => TREND_TOPIC_OPTIONS.includes(topic)),
+  )).slice(0, 8)
 }
 
 // All supported negotiation languages (mirrors SUPPORTED_LANGUAGES in the engine).
@@ -954,6 +975,63 @@ void fetchConfig()
                         className={CONTROL_CLS}
                       />
                     </Field>
+                  )}
+                </ConfigCard>
+
+                <ConfigCard
+                  className="lg:col-span-2"
+                  icon={TrendingUp}
+                  title="Trend intelligence"
+                  description="Add optional, source-tagged public interest context to replies. Data is refreshed daily from Wikimedia page views; it is never treated as local demand, price proof, or a scarcity claim."
+                >
+                  <ToggleRow
+                    title="Enable cached trend context"
+                    description="Requires the BARGAIN_TREND_INTELLIGENCE server flag. No per-message browsing or extra AI calls."
+                    checked={configForm.trendIntelligenceEnabled ?? false}
+                    onChange={v => setConfigForm({ ...configForm, trendIntelligenceEnabled: v })}
+                  />
+                  {configForm.trendIntelligenceEnabled && (
+                    <>
+                      <Field label="Trend region" hint="Public Wikimedia page-view region code.">
+                        <select
+                          value={configForm.trendRegion ?? 'US'}
+                          onChange={e => setConfigForm({ ...configForm, trendRegion: e.target.value })}
+                          className={CONTROL_CLS}
+                        >
+                          {TREND_REGION_OPTIONS.map(region => (
+                            <option key={region} value={region}>{region}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field
+                        label="Curated topics"
+                        hint={`Up to 8. Allowed: ${TREND_TOPIC_OPTIONS.join(', ')}.`}
+                      >
+                        <input
+                          type="text"
+                          value={(configForm.trendTopics ?? []).join(', ')}
+                          onChange={e => setConfigForm({ ...configForm, trendTopics: parseTrendTopics(e.target.value) })}
+                          className={CONTROL_CLS}
+                        />
+                      </Field>
+                      <Field
+                        label="Excluded topics"
+                        hint="These topics are removed even when inferred from the product."
+                      >
+                        <input
+                          type="text"
+                          value={(configForm.trendExcludedTopics ?? []).join(', ')}
+                          onChange={e => setConfigForm({ ...configForm, trendExcludedTopics: parseTrendTopics(e.target.value) })}
+                          className={CONTROL_CLS}
+                        />
+                      </Field>
+                      <ToggleRow
+                        title="Allow tasteful trend humor"
+                        description="Only when the live turn already allows humor. Never forces a joke or meme."
+                        checked={configForm.trendHumorEnabled ?? false}
+                        onChange={v => setConfigForm({ ...configForm, trendHumorEnabled: v })}
+                      />
+                    </>
                   )}
                 </ConfigCard>
 

@@ -5,6 +5,7 @@ import prisma from '@/lib/db'
 import { DESIGN_VARIANT_META, PERSONALITY_META } from '@/lib/bargain/experience/types'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import { bargainRequestMetrics } from '@/lib/bargain/request-metrics'
+import { summarizeHumorImpact } from '@/lib/bargain/evals/conversational-intelligence'
 import { buildContributionView } from '@/lib/commercial/contribution'
 
 export const dynamic = 'force-dynamic'
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
   const days = Number.isFinite(daysRaw) ? Math.min(Math.max(Math.trunc(daysRaw), 1), 365) : 30
   const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
-  const [sessions, eventCounts, uniqueVisitorRows, latencyRows, intelligenceRows] = await Promise.all([
+  const [sessions, eventCounts, uniqueVisitorRows, latencyRows, intelligenceRows, qualityRows] = await Promise.all([
     prisma.bargainSession.findMany({
       where: { storeId: store.id, startedAt: { gte: start } },
       select: {
@@ -97,6 +98,16 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
       take: 10_000,
     }),
+    prisma.productEvent.findMany({
+      where: {
+        name: 'cartgain_conversational_quality',
+        storeId: store.id,
+        createdAt: { gte: start },
+      },
+      select: { properties: true },
+      orderBy: { createdAt: 'desc' },
+      take: 10_000,
+    }),
   ])
 
   const sessionIds = sessions.map((s) => s.id)
@@ -120,6 +131,8 @@ export async function GET(request: NextRequest) {
   const grossRevenue = sessions.reduce((sum, s) => sum + (s.purchasedAt ? s.purchaseGrossValue ?? s.purchaseValue ?? 0 : 0), 0)
   const refundedRevenue = sessions.reduce((sum, s) => sum + (s.purchasedAt ? s.purchaseRefundedAmount ?? 0 : 0), 0)
   const fullyRefundedPurchases = sessions.filter((s) => s.purchasedAt && s.purchaseRefundStatus === 'fully_refunded').length
+  const purchasedSessionIds = new Set(sessions.filter((s) => Boolean(s.purchasedAt)).map((s) => s.id))
+  const humorImpact = summarizeHumorImpact(qualityRows, purchasedSessionIds)
 
   const discountPercents = sessions
     .filter((s) => s.finalPrice !== null && s.originalPrice > 0)
@@ -304,6 +317,10 @@ export async function GET(request: NextRequest) {
     },
     requestMetrics: bargainRequestMetrics.snapshot(),
     intelligence,
+    conversationalQuality: {
+      humorImpact,
+      note: 'Turn-level observations. Continuation and purchase differences are correlations, not proof that humor caused the outcome.',
+    },
     experiments: {
       enabled: isFeatureEnabled('BARGAIN_DUAL_AGENT'),
       arms: experimentRows,

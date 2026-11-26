@@ -222,6 +222,7 @@ export interface NegotiationContext {
   sessionMemory?: SessionMemory
   adaptive?: AdaptiveContext
   intelligencePrompt?: string
+  trendPrompt?: string
   voice?: BrandVoice
   /** The AI's most recent standing counter. Lets the reciprocal pacing stay
    *  monotonic (a real shopkeeper does not RAISE a price mid-haggle) without ever
@@ -2339,6 +2340,10 @@ export function buildSystemPrompt(
 
   if (ctx.intelligencePrompt) {
     contextParts.push('\n' + ctx.intelligencePrompt)
+  }
+
+  if (ctx.trendPrompt) {
+    contextParts.push('\n' + ctx.trendPrompt)
   }
 
   if (ctx.voice) {
