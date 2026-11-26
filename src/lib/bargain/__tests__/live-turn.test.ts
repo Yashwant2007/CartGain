@@ -50,4 +50,23 @@ describe('live turn analysis', () => {
     expect(turn.noPrice).toBe(true)
     expect(turn.prompt).toContain('without claiming what is trending')
   })
+
+  it('routes catalog questions to a non-compact discovery mode', () => {
+    for (const message of [
+      'or ese products dikhao',
+      'mujhe ek watch bhi chahiye vo h kya tumhare pas',
+      'do you have watch in your store?',
+    ]) {
+      const turn = analyzeLiveTurn({ message })
+      expect(turn.mode).toBe('discovery')
+      expect(turn.compact).toBe(false)
+      expect(turn.noPrice).toBe(true)
+      expect(turn.prompt).toContain('Never ask for a phone number')
+    }
+  })
+
+  it('keeps attribute questions out of discovery mode', () => {
+    const turn = analyzeLiveTurn({ message: 'do you have this in stock?', intent: 'PRODUCT_QUESTION' })
+    expect(turn.mode).toBe('question')
+  })
 })

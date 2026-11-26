@@ -10,6 +10,8 @@ import {
   recommendationReason,
   recommendationReasonForCard,
   recommendationShownMetadata,
+  recommendationStoppedInHistory,
+  recommendationStoppedMetadata,
   scoreRecoCandidate,
   searchRecommendations,
   withRecommendationShown,
@@ -194,6 +196,18 @@ describe('searchRecommendations', () => {
 describe('decideRecommendation', () => {
   const base = { minPrice: 300 }
 
+  it('stays quiet after the shopper asks for no more products', () => {
+    const message = 'no more products, I just want this one'
+    const out = decideRecommendation({
+      ...base,
+      intent: analyzeIntent(message),
+      message,
+      budget: 100,
+    })
+    expect(out.decision).toBe('DO_NOT_RECOMMEND')
+    expect(out.recommend).toBe(false)
+  })
+
   it('routes a discount request to the current product (A)', () => {
     const a = analyzeIntent('can you give me a discount?')
     const out = decideRecommendation({ ...base, intent: a, message: 'can you give me a discount?' })
@@ -316,6 +330,14 @@ describe('recommendation history', () => {
     expect(recommendationExcludedProductIds(history)).toEqual(expect.arrayContaining(['2', '3']))
   })
 
+  it('records an explicit stop so later turns stay quiet', () => {
+    const history = readRecommendationHistory([
+      messageAt('2026-01-01T00:00:00.000Z', recommendationStoppedMetadata()),
+    ])
+    expect(recommendationStoppedInHistory(history)).toBe(true)
+    expect(history.stoppedAt).toBeTruthy()
+  })
+
   it('never repeats rejected or dismissed products and finds new alternatives', async () => {
     const history = readRecommendationHistory([
       messageAt('2026-01-01T00:00:00.000Z', recommendationShownMetadata({ productIds: ['2', '3'] })),
@@ -349,6 +371,21 @@ describe('recommendation history', () => {
       { strictBudget: true },
     )
     expect(out.cards).toEqual([])
+  })
+
+  it('keeps a verified direct product URL on the card', async () => {
+    const out = await searchRecommendations(
+      { store, shopifyProductId: '1', currency: 'INR' },
+      async () => ({
+        products: [rawProduct({
+          id: '2',
+          productUrl: 'https://shop.example/products/hand-watch?variant=v2',
+          variants: [{ id: 'v2', title: '', price: 400, available: true }],
+        })],
+        nextCursor: null, prevCursor: null, error: null,
+      }),
+    )
+    expect(out.cards[0].productUrl).toBe('https://shop.example/products/hand-watch?variant=v2')
   })
 
   it('caps a bundle of alternatives at two cards and keeps them unique', async () => {

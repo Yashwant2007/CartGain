@@ -265,6 +265,7 @@ export type BargainAcceptSuccess = {
   message: string
   shipping?: BargainShippingView | null
   payment?: BargainPaymentView | null
+  postAcceptAddOns?: BargainRecommendation[]
 }
 
 // ── Recommendations (server-built, sanitized) ────────────────────────────

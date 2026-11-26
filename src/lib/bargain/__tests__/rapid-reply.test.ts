@@ -27,10 +27,11 @@ describe('rapid low-information replies', () => {
     expect(playful?.reply.startsWith('🙂')).toBe(true)
   })
 
-  it('refuses to handle ordinary, price and question turns', () => {
+  it('refuses to handle ordinary, price, question and discovery turns', () => {
     expect(rapidReplyForTurn({ mode: 'ordinary' })).toBeNull()
     expect(rapidReplyForTurn({ mode: 'price' })).toBeNull()
     expect(rapidReplyForTurn({ mode: 'question' })).toBeNull()
+    expect(rapidReplyForTurn({ mode: 'discovery' })).toBeNull()
   })
 
   it('keeps hostile replies professional and claim-free', () => {

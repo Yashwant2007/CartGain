@@ -31,7 +31,7 @@ import { productContextToPromptBlock, type ProductContext } from '@/lib/bargain/
 import { voicePromptBlock, type BrandVoice } from '@/lib/conversation/voice'
 import { shippingPromptBlock, type ShippingConfig } from '@/lib/bargain/shipping'
 import { paymentPromptBlock } from '@/lib/bargain/payment'
-import { analyzeIntent, shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
+import { analyzeIntent, hasRecommendationStopRequest, shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
 import { detectLanguageRequest } from '@/lib/bargain/language'
 import { deriveConversationState, conversationStateGuidance } from '@/lib/bargain/conversation-state'
 import { validateReplyClaimAdherence } from '@/lib/bargain/claims'
@@ -1441,6 +1441,19 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
       : effectiveCounter(ctx, null, null)
     const best = Math.round(Math.min(ctx.originalPrice, Math.max(quotedFloor(ctx), candidate)) * 100) / 100
     return bestPriceReply(best, ctx, historyLength)
+  }
+
+  const isDiscovery =
+    !hasRecommendationStopRequest(customerMessage) &&
+    (ctx.intent?.intent === 'PRODUCT_DISCOVERY' || ctx.intent?.intent === 'RECOMMENDATION_REQUEST' ||
+      /\b(do\s+you\s+have\s+(?:a\s+)?(?:any\s+)?(?!this\b|it\b|the\b|one\b|these\b|those\b)|what\s+do\s+you\s+(have|sell)|products?\s+dikhao|mujhe\s+.{1,28}\s+chahiye|tumhare\s+pas|other\s+(products?|options?)|anything\s+(else|similar)|something\s+(else|similar))\b/i.test(low))
+  if (isDiscovery) {
+    const discovery: Record<Persona, string> = {
+      strict_negotiator: `I'll check the store's real catalogue for that. I'll only show you items I can verify — no guesses, and no need to share a number first.`,
+      playful_friend: `Let me peek at what's actually in the store for that. If there's a real match, I'll put the link right here — no pressure to pick it.`,
+      friendly_shopkeeper: `Let me check our real catalogue for you, friend. If I find a match, I'll show it with the direct link — no need to share your number first.`,
+    }
+    return discovery[ctx.persona]
   }
 
   const isProductQuestion =

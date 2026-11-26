@@ -7,6 +7,7 @@ export const LIVE_TURN_MODES = [
   'price',
   'purchase',
   'question',
+  'discovery',
   'greeting',
   'small_talk',
   'hesitation',
@@ -55,6 +56,7 @@ const CASUAL_TALK_RE = /\b(gta|grand\s+theft\s+auto|minecraft|fortnite|call\s+of
 const JOKE_RE = /\b(haha|hehe|lol|lmao|jk\b|kidding|joke|funny|😅|😂|🤣)\b/i
 const PRICE_RE = /\b(price|cost|discount|offer|deal|budget|cheap|cheaper|lower|less|best you can do|final|last price|too\s+(?:much|high|expensive|pricey|steep)|expensive|pricey|costly|overpriced|can'?t\s+afford|₹|rs\.?|inr|\$|usd)\b/i
 const PRODUCT_RE = /\b(product|item|size|colour|color|quality|material|stock|shipping|delivery|return|warranty|genuine|original|variant|features?|specs?)\b/i
+const DISCOVERY_RE = /\b(do\s+you\s+have\s+(?:a\s+)?(?:any\s+)?(?!this\b|it\b|the\b|one\b|these\b|those\b)|what\s+do\s+you\s+(have|sell)|looking\s+for|searching\s+for|show\s+me\s+(more|other|your)|see\s+what\s+you\s+have|recommend|suggest|anything\s+(else|similar)|something\s+(else|similar)|other\s+(products?|options?|alternatives?)|alternatives?|products?\s+dikhao|mujhe\s+[a-z][a-z\s-]{1,28}\s+(bhi\s+)?chahiye|tumhare\s+pas|kya\s+options?)\b/i
 const GREETING_RE = /^\s*(hi|hey|heyy|hello|helo|namaste|namaskar|yo|good\s+(morning|afternoon|evening))\b/i
 const POSITIVE_RE = /\b(thanks|thank you|appreciate|great|awesome|amazing|wonderful|love (?:it|this|you)|you rock|superb|brilliant|nice (?:one|job|work)|well done)\b/i
 
@@ -98,6 +100,7 @@ function modeFor(input: LiveTurnInput): LiveTurnMode {
   if (!textOnly(message)) return 'nonsense'
   if (isKeyboardMash(message)) return 'random'
   if (CASUAL_TALK_RE.test(lowered) && !PRODUCT_RE.test(lowered) && !PRICE_RE.test(lowered)) return 'trend_talk'
+  if (input.intent === 'PRODUCT_DISCOVERY' || input.intent === 'RECOMMENDATION_REQUEST' || DISCOVERY_RE.test(lowered)) return 'discovery'
   if (signals?.question || input.intent === 'PRODUCT_QUESTION') return 'question'
   if (OFF_TOPIC_RE.test(lowered) && !PRODUCT_RE.test(lowered) && !PRICE_RE.test(lowered)) return 'off_topic'
   if (signals?.emotion === 'playful') return 'playful'
@@ -188,6 +191,13 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message
         compact: true,
         noPrice: true,
         prompt: 'This is low-information chat. Answer in one warm sentence and ask ONE focused question that moves toward product fit, concern or price. Do not invent a number.',
+      }
+    case 'discovery':
+      return {
+        ...base,
+        replyLength: 'brief',
+        noPrice: true,
+        prompt: 'The shopper is asking about other products or whether the store has a specific kind of item. Answer that exact question first using only verified catalog facts available in this conversation. Never ask for a phone number or invent a price, popularity claim, stock claim or offer. If verified options are shown below, point to them once and stop. If no verified match is available, say so plainly and ask ONE useful question about type, style, use case or budget.',
       }
     case 'reask':
       return {

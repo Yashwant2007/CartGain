@@ -1,6 +1,7 @@
 import {
   classifyShopperIntentCategory,
   hasExplicitRecommendationAsk,
+  hasRecommendationStopRequest,
   type IntentAnalysis,
   type ShopperObjection,
 } from './intent'
@@ -24,6 +25,7 @@ export interface RecommendationCard {
   currency: string
   imageUrl: string | null
   productUrl: string | null
+  rawProductUrl?: string | null
   available: boolean
   onSale: boolean
   budgetFit: BudgetFit
@@ -57,6 +59,7 @@ export interface RecommendationEligibilityInput {
   message?: string
   sessionStatus?: string | null
   engineDecision?: string | null
+  history?: RecommendationHistory | null
   walkout?: boolean
   explicitAsk?: boolean
   acceptingDeal?: boolean
@@ -90,6 +93,9 @@ export function decideRecommendation(input: RecommendationEligibilityInput): Rec
   }
 
   const analysis = input.intent ?? null
+  if (hasRecommendationStopRequest(input.message) || recommendationStoppedInHistory(input.history ?? null)) {
+    return decide('DO_NOT_RECOMMEND', 'shopper asked to stop showing products')
+  }
   const category = analysis
     ? classifyShopperIntentCategory(analysis, input.message)
     : null
@@ -141,6 +147,7 @@ export interface RecommendationHistory {
   rejectedProductIds: string[]
   lastShownProductIds: string[]
   lastShownAt: string | null
+  stoppedAt: string | null
 }
 
 export interface RecommendationMessageLike {
@@ -176,6 +183,7 @@ function emptyHistory(): RecommendationHistory {
     rejectedProductIds: [],
     lastShownProductIds: [],
     lastShownAt: null,
+    stoppedAt: null,
   }
 }
 
@@ -216,6 +224,9 @@ export function readRecommendationHistory(messages: RecommendationMessageLike[])
     const metadata = asRecord(message.metadata)
     if (!metadata) continue
     const fallbackAt = asIso(message.createdAt)
+    if (metadata.recommendationStopped === true && !history.stoppedAt) {
+      history.stoppedAt = asIso(metadata.recommendationStoppedAt) ?? fallbackAt
+    }
     const shown = asRecord(metadata.recommendations)
     if (shown && Array.isArray(shown.productIds)) {
       const at = asIso(shown.at) ?? fallbackAt
@@ -257,6 +268,17 @@ export function recommendationShownMetadata(input: {
   }
 }
 
+export function recommendationStoppedMetadata(at?: string | null): Record<string, unknown> {
+  return {
+    recommendationStopped: true,
+    recommendationStoppedAt: at ?? new Date().toISOString(),
+  }
+}
+
+export function recommendationStoppedInHistory(history: RecommendationHistory | null | undefined): boolean {
+  return history?.stoppedAt != null
+}
+
 export function recommendationEventMetadata(input: {
   action: RecommendationFeedbackAction
   productId: string
@@ -286,6 +308,7 @@ export function withRecommendationShown(
     dismissedProductIds: [...history.dismissedProductIds],
     rejectedProductIds: [...history.rejectedProductIds],
     lastShownProductIds: [...history.lastShownProductIds],
+    stoppedAt: history.stoppedAt,
   }
   const at = input.at ?? new Date().toISOString()
   const reasons = [input.reason, input.decision].filter((r): r is string => typeof r === 'string' && r.length > 0)
@@ -335,6 +358,7 @@ export interface RecoCandidate {
   variantTitle: string | null
   options: string[]
   imageUrl: string | null
+  productUrl: string | null
   variantId: string
   price: number
   compareAtPrice: number | null
@@ -377,6 +401,7 @@ export function normalizeRecoCandidate(raw: any): RecoCandidate | null {
   const compareRaw = pick.compare_at_price != null ? parseFloat(String(pick.compare_at_price)) : null
   const compare = compareRaw != null && Number.isFinite(compareRaw) && compareRaw > price ? compareRaw : null
   const img = raw.images?.[0]?.src ?? raw.image?.src ?? null
+  const rawUrl = typeof raw.productUrl === 'string' && raw.productUrl ? raw.productUrl : null
 
   return {
     productId: normalizeProductId(raw.id),
@@ -391,6 +416,7 @@ export function normalizeRecoCandidate(raw: any): RecoCandidate | null {
     variantTitle: typeof pick.title === 'string' && pick.title.toLowerCase() !== 'default' ? pick.title : null,
     options: rawOptions(raw, pick),
     imageUrl: typeof img === 'string' && img ? img : null,
+    productUrl: rawUrl,
     variantId: String(pick.id ?? ''),
     price,
     compareAtPrice: compare,
@@ -482,6 +508,7 @@ export interface RankedCard {
   price: number
   compareAtPrice?: number | null
   imageUrl: string | null
+  productUrl: string | null
   available: boolean
   onSale: boolean
   tags: string[]
@@ -561,6 +588,7 @@ export function rankRecommendations(
       price: c.price,
       compareAtPrice: c.compareAtPrice,
       imageUrl: c.imageUrl,
+      productUrl: c.productUrl,
       available: c.available,
       onSale: c.onSale,
       tags: c.tags.slice(0, 6),
@@ -702,9 +730,9 @@ export async function searchRecommendations(
     cards: cards.map((c) => ({
       ...c,
       currency: request.currency,
-      productUrl: c.handle
+      productUrl: c.productUrl ?? (c.handle
         ? `https://${request.store.domain}/products/${c.handle}?variant=${c.variantId}`
-        : null,
+        : null),
     })),
     reason: options?.reason ?? (request.budget != null ? 'budget' : request.need != null ? 'discovery' : 'requested'),
     truncated: scored.length > picked.length,

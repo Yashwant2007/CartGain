@@ -195,6 +195,60 @@ export function platformProductId(row: any): string | null {
   return text(pick(row, ['platformProductId', 'externalProductId', 'productId', 'wcProductId']) ?? row?.id)
 }
 
+export async function listWooCommerceRecommendationProducts(storeId: string, store?: any): Promise<any[]> {
+  const rows = await listPlatformProducts(storeId)
+  const storeContext = store ?? { id: storeId, domain: '' }
+  return rows.map((row) => {
+    const id = platformProductId(row)
+    const price = platformProductPrice(row)
+    if (!id || price == null || price <= 0) return null
+    const status = text(productField(row, ['status', 'state', 'visibility'])) ?? 'active'
+    const stockStatus = text(productField(row, ['stockStatus', 'stock_status', 'availability']))
+    const regular = numberOrNull(productField(row, ['regularPrice', 'regular_price', 'compareAtPrice', 'compare_at_price']))
+    const image = productField(row, ['imageUrl', 'image', 'featuredImage'])
+    const images = productField(row, ['images'])
+    const imageSrc =
+      text(pick(image as any, ['src', 'url'])) ??
+      text((Array.isArray(images) ? images[0] : null) as any) ??
+      text(pick(Array.isArray(images) ? images[0] : null, ['src', 'url'])) ??
+      null
+    const rawTags = productField(row, ['tags'])
+    const tags = Array.isArray(rawTags) ? rawTags.map((tag: any) => text(tag) ?? '').filter(Boolean).join(',') : text(rawTags) ?? ''
+    const available =
+      boolOrNull(productField(row, ['available', 'inStock', 'isAvailable', 'purchasable'])) ??
+      boolOrNull(stockStatus) ??
+      (['active', 'publish', 'published'].includes(status.toLowerCase()))
+    const variantRows = productField(row, ['variants'])
+    const variants = Array.isArray(variantRows) && variantRows.length > 0
+      ? variantRows.map((variant: any) => ({
+          id: text(pick(variant, ['id', 'variantId', 'platformVariantId', 'externalVariantId'])) ?? id,
+          title: text(pick(variant, ['title', 'name'])) ?? 'Default',
+          price: numberOrNull(pick(variant, ['price', 'salePrice', 'amount'])) ?? price,
+          compare_at_price: numberOrNull(pick(variant, ['compareAtPrice', 'regularPrice', 'compare_at_price'])) ?? regular ?? null,
+          available: boolOrNull(pick(variant, ['available', 'inStock', 'isAvailable', 'purchasable'])) ?? boolOrNull(stockStatus) ?? available,
+        }))
+      : [{
+          id: platformProductVariantId(row, id) ?? id,
+          title: 'Default',
+          price,
+          compare_at_price: regular != null && regular > price ? regular : null,
+          available,
+        }]
+    return {
+      id,
+      title: text(productField(row, ['title', 'name'])) ?? 'this product',
+      handle: text(productField(row, ['handle', 'slug'])) ?? null,
+      product_type: text(productField(row, ['productType', 'product_type', 'type'])) ?? null,
+      vendor: text(productField(row, ['vendor', 'brand'])) ?? null,
+      tags,
+      status,
+      variants,
+      images: imageSrc ? [{ src: imageSrc }] : [],
+      productUrl: wooProductUrl(row, storeContext, id),
+    }
+  }).filter(Boolean)
+}
+
 export function platformProductPrice(row: any): number | null {
   return numberOrNull(productField(row, ['salePrice', 'sale_price', 'price', 'regularPrice', 'regular_price', 'displayPrice']))
 }

@@ -58,6 +58,7 @@ const history = {
   rejectedProductIds: [],
   lastShownProductIds: [],
   lastShownAt: null,
+  stoppedAt: null,
 }
 
 beforeEach(() => {
@@ -168,5 +169,13 @@ describe('BargainRecommendationPanel', () => {
     fireEvent.click(screen.getAllByRole('link', { name: /View/ })[0])
     expect(onEvent.mock.calls.filter(([action]) => action === 'viewed')).toHaveLength(1)
     expect(onEvent.mock.calls.filter(([action]) => action === 'clicked')).toHaveLength(1)
+  })
+
+  it('auto-expands verified discovery cards and marks them viewed once', () => {
+    const onEvent = jest.fn()
+    render(<BargainRecommendationPanel recommendations={[cards[0]]} autoExpand onEvent={onEvent} />)
+    expect(screen.getByText('Alpha Runner')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /better matches found/ }).getAttribute('aria-expanded')).toBe('true')
+    expect(onEvent.mock.calls.filter(([action]) => action === 'viewed')).toHaveLength(1)
   })
 })

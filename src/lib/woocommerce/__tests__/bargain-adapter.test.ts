@@ -22,6 +22,7 @@ import {
   findBargainProductOverride,
   getWooCommerceCredentials,
   isWooCommerce,
+  listWooCommerceRecommendationProducts,
   platformProductId,
   platformProductPrice,
   wooProductUrl,
@@ -85,6 +86,23 @@ describe('WooCommerce bargain adapter helpers', () => {
       .toBe('https://shop.example.com/product/trail-boots')
     expect(wooProductUrl({ permalink: 'https://evil.test/product/trail-boots', slug: 'trail-boots' }, store, '42'))
       .toBe('https://shop.example.com/product/trail-boots')
+  })
+
+  it('lists WooCommerce catalog rows with shop-domain product links', async () => {
+    mockPrisma.platformProduct.findMany.mockResolvedValue([{
+      platformProductId: 'woo-42',
+      title: 'Trail Boots',
+      salePrice: 80,
+      regularPrice: 100,
+      slug: 'trail-boots',
+      status: 'publish',
+    }])
+    const products = await listWooCommerceRecommendationProducts(store.id, store)
+    expect(products).toHaveLength(1)
+    expect(products[0]).toEqual(expect.objectContaining({
+      title: 'Trail Boots',
+      productUrl: 'https://shop.example.com/product/trail-boots',
+    }))
   })
 
   it('uses decrypted connection credentials', async () => {

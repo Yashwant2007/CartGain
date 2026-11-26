@@ -361,6 +361,8 @@ export default function BargainWidget({
   const [recommendations, setRecommendations] = useState<BargainRecommendation[] | null>(null)
   const [recommendationReason, setRecommendationReason] = useState<string | null>(null)
   const [recommendationHistory, setRecommendationHistory] = useState<RecommendationHistory | null>(null)
+  const [postAcceptAddOns, setPostAcceptAddOns] = useState<BargainRecommendation[] | null>(null)
+  const [showAddOns, setShowAddOns] = useState(false)
   // Daily-goal strip (public view): real server progress + close time only.
   // Seeded from /start, refreshed on every offer turn.
   const [goal, setGoal] = useState<BargainGoalView | null>(null)
@@ -1226,6 +1228,8 @@ export default function BargainWidget({
       setShopifyStatus(data.shopifyStatus)
       setShippingInfo(data.shipping ?? null)
       setPaymentInfo(data.payment ?? null)
+      setPostAcceptAddOns(Array.isArray(data.postAcceptAddOns) && data.postAcceptAddOns.length > 0 ? data.postAcceptAddOns : null)
+      setShowAddOns(false)
       setMessages(prev => [
         ...prev,
         {
@@ -1266,6 +1270,8 @@ export default function BargainWidget({
     setRecommendations(null)
     setRecommendationReason(null)
     setRecommendationHistory(null)
+    setPostAcceptAddOns(null)
+    setShowAddOns(false)
     setFloorReached(false)
     setShippingInfo(null)
     setPaymentInfo(null)
@@ -2141,9 +2147,40 @@ export default function BargainWidget({
               reason={recommendationReason}
               history={recommendationHistory}
               onEvent={handleRecommendationEvent}
+              autoExpand={recommendationReason === 'discovery' || recommendationReason === 'requested' || recommendationReason === 'complementary'}
               ariaLabel={t('alternativesTitle')}
               language={language}
             />
+          )}
+
+          {activeTab === 'chat' && decision === 'accept' && postAcceptAddOns && postAcceptAddOns.length > 0 && (
+            <div style={{ background: '#ffffff', borderTop: '1px solid #eef2f7' }}>
+              <button
+                type="button"
+                aria-expanded={showAddOns}
+                onClick={() => setShowAddOns((value) => !value)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 7,
+                  padding: '9px 13px', background: '#fafbff', border: 'none',
+                  color: '#4338ca', cursor: 'pointer', textAlign: 'left', minWidth: 0, minHeight: 44,
+                  fontSize: 12, fontWeight: 700,
+                }}
+              >
+                <Zap size={13} style={{ color: '#8b5cf6', flexShrink: 0 }} />
+                <span style={{ flex: 1, minWidth: 0 }}>{t('addOnsTitle')}</span>
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>{showAddOns ? '−' : '+'}</span>
+              </button>
+              {showAddOns && (
+                <BargainRecommendationPanel
+                  recommendations={postAcceptAddOns}
+                  reason="complementary"
+                  autoExpand
+                  onEvent={handleRecommendationEvent}
+                  ariaLabel={t('addOnsTitle')}
+                  language={language}
+                />
+              )}
+            </div>
           )}
 
           {/* ── Offer composer ── */}

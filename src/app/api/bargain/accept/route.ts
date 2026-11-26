@@ -27,10 +27,18 @@ import {
 import { currencySymbolFor, formatMoney } from '@/lib/bargain/i18n'
 import { dealAcceptedMessage } from '@/lib/bargain/post-deal'
 import {
+  readRecommendationHistory,
+  recommendationStoppedInHistory,
+  searchRecommendations,
+  type RecommendationCard,
+} from '@/lib/bargain/recommendations'
+import { fetchShopifyProducts } from '@/lib/shopify'
+import {
   bargainPlatformFor,
   buildWooCommerceCheckoutUrl,
   createOrReuseWooCommerceCoupon,
   getWooCommerceProductFacts,
+  listWooCommerceRecommendationProducts,
 } from '@/lib/woocommerce/bargain-adapter'
 
 export const dynamic = 'force-dynamic'
@@ -272,6 +280,8 @@ export async function POST(request: NextRequest) {
         freeShippingThreshold: true,
         paymentAwareEnabled: true,
         prepaidIncentivePercent: true,
+        recommendationsEnabled: true,
+        alternativeRecommendationsEnabled: true,
       },
     })
     if (config?.enabled === false) {
@@ -604,6 +614,37 @@ export async function POST(request: NextRequest) {
       console.error('[BARGAIN_ACCEPT_QUOTE]', (quoteErr as Error)?.message ?? quoteErr)
     }
 
+    let postAcceptAddOns: RecommendationCard[] = []
+    if (config?.recommendationsEnabled === true && config?.alternativeRecommendationsEnabled === true) {
+      try {
+        const messages = await prisma.bargainMessage.findMany({
+          where: { sessionId: bargainSession.id },
+          orderBy: { createdAt: 'asc' },
+          select: { role: true, content: true, createdAt: true, metadata: true },
+        })
+        const history = readRecommendationHistory(messages)
+        if (!recommendationStoppedInHistory(history)) {
+          const catalogFetcher = platform === 'woocommerce'
+            ? (async () => ({ products: await listWooCommerceRecommendationProducts(bargainSession.storeId, bargainSession.store) })) as any
+            : fetchShopifyProducts
+          const outcome = await searchRecommendations(
+            {
+              store: bargainSession.store,
+              shopifyProductId: productId,
+              currency: bargainSession.store.currency,
+              need: null,
+            },
+            catalogFetcher,
+            currentPrice,
+            { history, reason: 'complementary', limit: 1 },
+          )
+          postAcceptAddOns = outcome.cards
+        }
+      } catch (addOnError) {
+        console.error('[BARGAIN_ACCEPT_ADD_ONS]', (addOnError as Error)?.message ?? addOnError)
+      }
+    }
+
     return NextResponse.json({
       sessionId: bargainSession.id,
       originalPrice: currentPrice,
@@ -618,6 +659,7 @@ export async function POST(request: NextRequest) {
       expiresAt: bargainSession.expiredAt.toISOString(),
       shipping: shippingView,
       payment: paymentView,
+      ...(postAcceptAddOns.length > 0 ? { postAcceptAddOns } : {}),
       message: dealAcceptedMessage({
         price: formatMoney(executable.finalPrice, bargainSession.store.currency),
         code: shopifyCode.code,

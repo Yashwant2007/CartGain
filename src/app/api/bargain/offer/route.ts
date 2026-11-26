@@ -24,7 +24,7 @@ import { applyRulePreferences } from '@/lib/bargain/rule-preferences'
 import { buildBundle, validateBundleOffer, allocateDiscount, bundleSummary, type BundleItem } from '@/lib/bargain/bundle'
 import { walkoutOutcome } from '@/lib/bargain/negotiation-state'
 import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
-import { analyzeIntent } from '@/lib/bargain/intent'
+import { analyzeIntent, hasRecommendationStopRequest } from '@/lib/bargain/intent'
 import {
   buildBargainIntelligence,
   conversationStateFromMetadata,
@@ -43,6 +43,7 @@ import {
   allowsRecommendations,
   readRecommendationHistory,
   recommendationShownMetadata,
+  recommendationStoppedMetadata,
   withRecommendationShown,
   type RecommendationCard,
   type RecommendationReason,
@@ -62,6 +63,7 @@ import {
   buildWooCommerceCheckoutUrl,
   createOrReuseWooCommerceCoupon,
   findBargainProductOverride,
+  listWooCommerceRecommendationProducts,
 } from '@/lib/woocommerce/bargain-adapter'
 
 export const dynamic = 'force-dynamic'
@@ -578,7 +580,7 @@ export async function POST(request: NextRequest) {
     })
     endProduct()
     const catalogFetcher = platform === 'woocommerce'
-      ? (async () => ({ products: [] })) as any
+      ? (async () => ({ products: await listWooCommerceRecommendationProducts(bargainSession.storeId, bargainSession.store) })) as any
       : fetchShopifyProducts
 
     // Deterministic shopper-intent classification of the current message. Cheap,
@@ -1569,6 +1571,7 @@ export async function POST(request: NextRequest) {
         purchased: false,
         budget,
         minPrice,
+        history: recoHistory,
       })
       recoDecision = eligibility.decision
       if (allowsRecommendations(recoDecision)) {
@@ -1647,13 +1650,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const recommendationMetadata = recommendations && recoReason
-      ? recommendationShownMetadata({
-          productIds: recommendations.map((card) => card.productId),
-          reason: recoReason,
-          decision: recoDecision,
-        })
-      : {}
+    const stopMetadata = hasRecommendationStopRequest(interpretedMessage)
+      ? recommendationStoppedMetadata()
+      : null
+    if (stopMetadata?.recommendationStoppedAt) {
+      recommendationHistory = {
+        ...recommendationHistory,
+        stoppedAt: String(stopMetadata.recommendationStoppedAt),
+      }
+    }
+
+    const recommendationMetadata = {
+      ...(recommendations && recoReason
+        ? recommendationShownMetadata({
+            productIds: recommendations.map((card) => card.productId),
+            reason: recoReason,
+            decision: recoDecision,
+          })
+        : {}),
+      ...(stopMetadata ?? {}),
+    }
 
     const finalIntelligenceStartedAt = Date.now()
     intelligence = buildBargainIntelligence({
@@ -1719,6 +1735,26 @@ export async function POST(request: NextRequest) {
     })
 
     let customerReply = result.reply
+    const discoveryRequested =
+      !stopMetadata &&
+      (intentAnalysis.intent === 'PRODUCT_DISCOVERY' ||
+        intentAnalysis.intent === 'RECOMMENDATION_REQUEST' ||
+        liveTurn.mode === 'discovery')
+    if (recoEnabled && discoveryRequested) {
+      if (recommendations && recommendations.length > 0) {
+        const need = (intentAnalysis.need ?? '').toLowerCase().trim()
+        const firstNeedWord = need.split(/\s+/)[0] ?? ''
+        const exactMatch = firstNeedWord.length > 2 && recommendations.some((card) =>
+          card.title.toLowerCase().includes(firstNeedWord),
+        )
+        customerReply = `${customerReply} ${uiText(lang, exactMatch ? 'catalog_exact_match' : 'catalog_options_found')}`
+      } else {
+        customerReply = `${customerReply} ${uiText(lang, 'catalog_no_match')}`
+      }
+    } else if (recoEnabled && !stopMetadata && recoReason === 'complementary' && recommendations && recommendations.length > 0) {
+      customerReply = `${customerReply} ${uiText(lang, 'catalog_addons')}`
+    }
+
     let terminalRetention: IssuedBargainCode | null = null
     if (sessionStatus === 'rejected') {
       const finalQuote = finalQuoteFor(bargainSession, minPrice)

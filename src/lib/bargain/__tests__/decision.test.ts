@@ -710,6 +710,21 @@ describe('Edge Cases - Persona Consistency', () => {
     expect(friendly.toLowerCase()).toContain('friend')
   })
 
+  it('catalog discovery never asks for a phone number or offer', () => {
+    const personas = ['strict_negotiator', 'playful_friend', 'friendly_shopkeeper'] as const
+    for (const message of [
+      'or ese products dikhao',
+      'mujhe ek watch bhi chahiye vo h kya tumhare pas',
+      'do you have watch in your store?',
+    ]) {
+      for (const persona of personas) {
+        const reply = chatFallback(message, baseCtx({ persona }), 2)
+        expect(reply.toLowerCase()).toMatch(/catalog|check|store/)
+        expect(reply).not.toMatch(/give me your number|apna number|tell me the figure|budget/i)
+      }
+    }
+  })
+
   it('mid-conversation acknowledgement asks for a number WITHOUT re-quoting the listed price', () => {
     // Live storefront transcript: "…listed price $600.00 hai…" came back turn
     // after turn, immediately after $600 had already been quoted. The shopper

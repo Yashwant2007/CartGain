@@ -112,7 +112,7 @@ const RE = {
   price: /\b(best\s+price|lower|discount|price|cheap|cheaper|off|deal|budget|only\s+(have|spend|can\s+spend|got|burn)|can\s+you\s+do|what('| is|s)*\s*(the\s+)?(lowest|minimum|best))/i,
   budget: /\b(budget|only\s+(have|spend|can\s+spend|got)\s+)|tight\s+budget|don'?t\s+have\s+much|all\s+i\s+can\s+afford|max\s+[₹$€£]?\s*\d+/i,
   comparison: /\b(elsewhere|other\s+(brand|company|maker|store|shop|site|seller)|another\s+(brand|company|maker|store|shop|site|seller)|amazon|flipkart|myntra|meesho|walmart|competing|rival|compare(ing)?\s+price|got\s+it\s+for|saw\s+it\s+for|cheaper\s+somewhere)/i,
-  productQuestion: /\b(material|made\s+of|ingredient|composition|sizes?|colour|color|warrant(y|ies)|guarantee|feature(s)?|specs?\b|specification|compatible|certif|measurement|dimensions?|weight|battery|usb|cotton|leather|capacity|speed|does\s+it\s+have|do\s+you\s+have|how\s+many|comes\s+with|included)/i,
+  productQuestion: /\b(material|made\s+of|ingredient|composition|sizes?|colour|color|warrant(y|ies)|guarantee|feature(s)?|specs?\b|specification|compatible|certif|measurement|dimensions?|weight|battery|usb|cotton|leather|capacity|speed|does\s+it\s+have|do\s+you\s+have\s+(?:a\s+)?(?:warrant|guarantee|size|colour|color|feature|spec|battery|usb|capacity|certif)|how\s+many|comes\s+with|included)/i,
   value: /\b(worth|value|good\s+product|is\s+this\s+(good|worth)|how\s+is\s+the\s+(quality|build)|better\s+than|what('s| is| do)\s+(i\s+)?get)/i,
   // Objection language: the shopper is criticising the price, not bidding on it.
   // Used to make sure a figure mentioned in a complaint is never read as an offer.
@@ -128,10 +128,11 @@ const RE = {
   walkout: /\b(bye|goodbye|leaving|walk\s+away|finding\s+elsewhere|go(s)?\s+elsewhere|not\s+interested|never\s+mind|forget\s+it|skip\s+it|moving\s+on|i'?ll\s+pass)/i,
   money: /[₹$€£]\s*\d+|\d+\s*(rup(ee|ees)|bucks|rs)/i,
   recommendationRequest: /\b(recommend|suggest(ion)?s?|anything\s+(else|similar|better)|something\s+(else|similar|cheaper)|show\s+(me\s+)?(more|other|alternat)|what\s+(else|other|alternat|more)\s|other\s+(options?|products?|alternatives?)|alternatives?|second\s+options?|any\s+other|koi\s+aur|kuch\s+aur|aur\s+(bhi|koi|kuch)|chahiye)\b/i,
-  discovery: /\b(looking\s+for|searching\s+for|need\s+something|want\s+something|find\s+(me\s+)?a\s|help\s+me\s+find|explore\s+|browse\b|see\s+what\s+(you\s+|else\s+)?(have|exist)|do\s+you\s+have|show(?: me)?\s+your|kya\s+(hai|options?|recommend|suggest)|dikha(?:o|ye)|options?\s+dikhao)\b/i,
+  discovery: /\b(looking\s+for|searching\s+for|need\s+something|want\s+something|find\s+(me\s+)?a\s|help\s+me\s+find|explore\s+|browse\b|see\s+what\s+(you\s+|else\s+)?(have|exist)|do\s+you\s+have\s+(?:a\s+)?(?:any\s+)?(?!this\b|it\b|the\b|one\b|these\b|those\b)|what\s+do\s+you\s+(have|sell)|show(?: me)?\s+your|show(?: me)?\s+(me\s+)?(more\s+|other\s+)?products?|kya\s+(hai|options?|recommend|suggest)|dikha(?:o|ye)|options?\s+dikhao|products?\s+dikhao|mujhe\s+[a-z][a-z\s-]{1,28}\s+(bhi\s+)?chahiye|tumhare\s+pas|[a-z][a-z\s-]{1,28}\s+(bhi\s+)?chahiye)\b/i,
+  stopRecommendations: /\b(no\s+more|nothing\s+else|don'?t\s+show|stop\s+showing|not\s+interested\s+in\s+(more|other|alternatives)|aur\s+nahi|aur\s+mat|mat\s+dikhao|mat\s+bhejo)\b/i,
 }
 
-const STOPWORDS_NEED = new Set(['this', 'that', 'it', 'the', 'a', 'an', 'me', 'you', 'my', 'for', 'of', 'in', 'within', 'with', 'like', 'some', 'something', 'looking', 'want', 'wanted', 'need', 'needed', 'instead', 'near', 'under', 'price', 'budget', 'amount', 'money', 'option', 'options', 'alternative', 'alternatives', 'product', 'products', 'cheaper', 'sasta', 'discount', 'better'])
+const STOPWORDS_NEED = new Set(['this', 'that', 'it', 'the', 'a', 'an', 'me', 'you', 'your', 'my', 'for', 'of', 'in', 'within', 'with', 'like', 'some', 'something', 'looking', 'want', 'wanted', 'need', 'needed', 'instead', 'near', 'under', 'price', 'budget', 'amount', 'money', 'option', 'options', 'alternative', 'alternatives', 'product', 'products', 'cheaper', 'sasta', 'discount', 'better', 'ese', 'aise', 'ye', 'wo', 'vo', 'h', 'kya', 'pas', 'tumhare', 'bhi', 'aur', 'do', 'you', 'have', 'store', 'shop', 'hai', 'chahiye'])
 
 const NUM_PATTERN = String.raw`\d{1,3}(?:,\d{3})+|\d{2,8}(?:,\d{3})*`
 
@@ -166,20 +167,29 @@ export function extractBudget(message: string): { amount: number; type: NonNulla
   return null
 }
 
-const NEED_PATTERN = /\b(?:instead\s+of|in\s+place\s+of|koi\s+aur|any\s+other|something\s+(?:like|in|for|within)|looking\s+for|need(?:ed)?\s+(?:something|a|an)|want(?:ed)?\s+(?:something|a|an)|for\s+(?:my|the|that)|suits?\s+my|under\s+(?:my|the)\s+range)\s+([a-z][a-z0-9'\- ]{1,28})/i
+const NEED_PATTERN = /\b(?:instead\s+of|in\s+place\s+of|koi\s+aur|any\s+other|something\s+(?:like|in|for|within)|looking\s+for|need(?:ed)?\s+(?:something|a|an)|want(?:ed)?\s+(?:something|a|an)|for\s+(?:my|the|that)|suits?\s+my|under\s+(?:my|the)\s+range|do\s+you\s+have|tumhare\s+pas(?:\s+kya)?|mujhe\s+(?:ek\s+)?|[a-z][a-z\s-]{1,28}\s+(?:bhi\s+)?chahiye)\s+([a-z][a-z0-9'\- ]{1,28})/i
 
 const COMPLEMENT_RE = /\b(go(?:es)?\s+with|pair(?:s|ed)?\s+with|match(?:es)?\s+with|combine|bundle\s+with|also\s+need|add\s+to\s+(?:my|this|the)\s+(?:order|cart)|complete\s+the\s+(?:look|set|kit)|accessor(?:y|ies)|together\s+with|what\s+else\s+(?:goes|works)|with\s+this\s+(?:one|item|product))\b/i
 
-/** Deterministically pull a short product topic from the message, if any. */
-export function extractNeed(message: string): string | null {
-  const text = ` ${normalizeCustomerText(message).toLowerCase()} `
-  const m = NEED_PATTERN.exec(text)
-  if (!m) return null
-  const words = m[1]
+function cleanNeed(raw: string): string | null {
+  const words = raw
     .split(/[^a-z0-9]+/)
     .filter((w) => w.length > 0 && !STOPWORDS_NEED.has(w))
     .slice(0, 3)
   return words.length > 0 ? words.join(' ') : null
+}
+
+/** Deterministically pull a short product topic from the message, if any. */
+export function extractNeed(message: string): string | null {
+  const text = ` ${normalizeCustomerText(message).toLowerCase()} `
+  const chahiye = /\b(?:mujhe\s+)?(?:(?:ek|a)\s+)?([a-z][a-z\s-]{1,28}?)\s+(?:bhi\s+)?chahiye\b/i.exec(text)
+  if (chahiye) {
+    const need = cleanNeed(chahiye[1])
+    if (need) return need
+  }
+  const m = NEED_PATTERN.exec(text)
+  if (!m) return null
+  return cleanNeed(m[1])
 }
 
 export function analyzeIntent(input: string): IntentAnalysis {
@@ -304,6 +314,11 @@ export function classifyShopperIntentCategory(analysis: IntentForCategory, messa
 export function hasExplicitRecommendationAsk(analysis: IntentForCategory, message?: string): boolean {
   const category = classifyShopperIntentCategory(analysis, message)
   return category.code === 'J' || category.code === 'K'
+}
+
+export function hasRecommendationStopRequest(message: string | null | undefined): boolean {
+  if (!message) return false
+  return RE.stopRecommendations.test(` ${normalizeCustomerText(message).toLowerCase()} `)
 }
 
 /** Map the fine-grained objection onto the published nine-category taxonomy. */

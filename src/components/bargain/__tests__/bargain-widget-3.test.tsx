@@ -291,6 +291,60 @@ describe('BargainWidget conversation-first layout', () => {
     openSpy.mockRestore()
   })
 
+  it('keeps post-accept add-ons collapsed until the shopper asks', async () => {
+    const addOn = { ...recommendation, productId: '99', title: 'Care Kit', reason: 'Pairs well with your order' }
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/bargain/start')) {
+        return {
+          ok: true, status: 200,
+          json: async () => ({
+            sessionId: 'session-1',
+            openingMessage: 'Welcome, what price feels fair?',
+            expiresAt: new Date(Date.now() + 600_000).toISOString(),
+          }),
+        }
+      }
+      if (url.includes('/api/bargain/offer')) {
+        return {
+          ok: true, status: 200,
+          json: async () => ({
+            reply: 'Deal — 850 works.',
+            decision: 'accept',
+            counterOffer: 850,
+            attemptsUsed: 1,
+          }),
+        }
+      }
+      if (url.includes('/api/bargain/accept')) {
+        return {
+          ok: true, status: 200,
+          json: async () => ({
+            finalPrice: 850,
+            discountCode: 'BARGAIN-TEST',
+            purchaseUrl: 'https://shop.example/discount/BARGAIN-TEST',
+            postAcceptAddOns: [addOn],
+          }),
+        }
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true }) }
+    }) as unknown as typeof fetch
+
+    render(<BargainWidget {...baseProps} />)
+    await waitFor(() => expect(screen.getByLabelText('Ask about this product or make an offer…')).toBeTruthy(), { timeout: 3000 })
+    const input = screen.getByLabelText('Ask about this product or make an offer…')
+    fireEvent.change(input, { target: { value: '850' } })
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', charCode: 13 })
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Accept offer/ })).toBeTruthy(), { timeout: 3000 })
+    fireEvent.click(screen.getByRole('button', { name: /Accept offer/ }))
+
+    const addOnToggle = await waitFor(() => screen.getByRole('button', { name: /add-ons for this order/i }), { timeout: 3000 })
+    expect(screen.queryByText('Care Kit')).toBeNull()
+    fireEvent.click(addOnToggle)
+    expect(screen.getByText('Care Kit')).toBeTruthy()
+  })
+
   it('renders a locked, no-restart state when the server reports checkout open', async () => {
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       if (String(input).includes('/api/bargain/start')) {

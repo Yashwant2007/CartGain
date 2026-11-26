@@ -1,4 +1,4 @@
-import { analyzeIntent, extractBudget, extractNeed, shopperIntentToPromptBlock, intentShortLabel, objectionAction } from '../intent'
+import { analyzeIntent, extractBudget, extractNeed, hasRecommendationStopRequest, shopperIntentToPromptBlock, intentShortLabel, objectionAction } from '../intent'
 
 describe('analyzeIntent', () => {
   it('classifies price-driven messages', () => {
@@ -307,5 +307,38 @@ describe('analyzeIntent — structured offer basis', () => {
     const block = shopperIntentToPromptBlock(analyzeIntent('₹1000, I need 2 units'))
     expect(block).toContain('OFFER BASIS UNCLEAR')
     expect(block).toContain('before quoting any number')
+  })
+})
+
+describe('catalog discovery intent', () => {
+  it('reads Hinglish and English product discovery without treating it as a product question', () => {
+    for (const message of [
+      'or ese products dikhao',
+      'mujhe ek watch bhi chahiye vo h kya tumhare pas',
+      'do you have watch in your store?',
+    ]) {
+      const a = analyzeIntent(message)
+      expect(['PRODUCT_DISCOVERY', 'RECOMMENDATION_REQUEST']).toContain(a.intent)
+      expect(a.shopperCategory).toBe('J')
+      expect(a.offersPriceSignal).toBe(false)
+    }
+  })
+
+  it('extracts the wanted category from discovery requests', () => {
+    expect(analyzeIntent('mujhe ek watch bhi chahiye vo h kya tumhare pas').need).toBe('watch')
+    expect(analyzeIntent('do you have watch in your store?').need).toBe('watch')
+  })
+
+  it('keeps attribute questions as product questions', () => {
+    const a = analyzeIntent('do you have warranty on this?')
+    expect(a.intent).toBe('PRODUCT_QUESTION')
+    expect(a.intent).not.toBe('PRODUCT_DISCOVERY')
+  })
+
+  it('reads an explicit stop request on every channel', () => {
+    expect(hasRecommendationStopRequest('no more products')).toBe(true)
+    expect(hasRecommendationStopRequest('aur mat dikhao')).toBe(true)
+    expect(hasRecommendationStopRequest('bas yehi batao')).toBe(false)
+    expect(hasRecommendationStopRequest(null)).toBe(false)
   })
 })

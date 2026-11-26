@@ -98,6 +98,11 @@ export type UiKey =
   | 'tryAgain'
   | 'bundle_redirect'
   | 'bundle_coupon_redirect'
+  | 'catalog_options_found'
+  | 'catalog_exact_match'
+  | 'catalog_no_match'
+  | 'catalog_addons'
+  | 'addOnsTitle'
   | 'clarify_offer_basis'
   | 'bargainTitle'
   | 'makeOffer'
@@ -293,6 +298,11 @@ const EN: Record<UiKey, string> = {
     tryAgain: 'Sorry, I couldn\u2019t check that right now. Let\u2019s try again.',
     bundle_redirect: "Happy to! Since each item is priced on its own, let me find the best per-item deal for you. I'll show you alternatives you can bargain individually — this one's deal stays open while you check.",
     bundle_coupon_redirect: "Great news — I can't combine that with another coupon, but I'll show you the best per-item price instead.",
+    catalog_options_found: "I found a few verified options in the store. I've shown them below with direct links so you can check the exact details yourself.",
+    catalog_exact_match: "Yes — I found a verified match in the store. It's shown below with a direct link.",
+    catalog_no_match: "I couldn't find a verified match for that in the store right now. If you'd like, tell me the style or budget and I'll check again.",
+    catalog_addons: "If you want to round out this order, I've put a couple of verified add-ons below — no pressure.",
+    addOnsTitle: 'Add-ons for this order',
     clarify_offer_basis: 'Before I quote, is that price per item or the total for all the units? I don\'t want to give you the wrong number.',
     bargainTitle: 'Bargain with us',
     makeOffer: 'Make offer',

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ExternalLink, ShoppingCart, Sparkles, X } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import { normalizeProductId, type RecommendationHistory } from '@/lib/bargain/recommendations'
@@ -14,6 +14,7 @@ type Props = {
   reason?: string | null
   history?: RecommendationHistory | null
   onEvent?: (action: RecommendationEventAction, card: BargainRecommendation) => void
+  autoExpand?: boolean
   ariaLabel?: string
   language?: string
 }
@@ -146,12 +147,13 @@ export default function BargainRecommendationPanel({
   reason,
   history,
   onEvent,
+  autoExpand = false,
   ariaLabel,
   language = 'auto',
 }: Props) {
   const t = (key: UiKey, vars?: Record<string, string | number>) => uiText(language, key, vars)
   const label = ariaLabel ?? t('recoAriaLabel')
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(autoExpand)
   const [hidden, setHidden] = useState<Set<string>>(() => new Set())
   const viewedRef = useRef<Set<string>>(new Set())
   const clickedRef = useRef<Set<string>>(new Set())
@@ -180,20 +182,24 @@ export default function BargainRecommendationPanel({
   }, [excluded, hidden, recommendations])
 
   useEffect(() => {
-    setExpanded(false)
+    setExpanded(autoExpand)
     setHidden(new Set())
     viewedRef.current = new Set()
     clickedRef.current = new Set()
-  }, [signature])
+  }, [signature, autoExpand])
 
-  const markViewed = () => {
+  const markViewed = useCallback(() => {
     for (const card of visible) {
       const key = cardKey(card)
       if (viewedRef.current.has(key)) continue
       viewedRef.current.add(key)
       onEvent?.('viewed', card)
     }
-  }
+  }, [onEvent, visible])
+
+  useEffect(() => {
+    if (autoExpand && expanded) markViewed()
+  }, [autoExpand, expanded, markViewed])
 
   const markClicked = (card: BargainRecommendation) => {
     const key = cardKey(card)
