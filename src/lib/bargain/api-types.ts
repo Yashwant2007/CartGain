@@ -133,6 +133,21 @@ export type BargainDemoGoal = BargainGoalView & {
   mode?: 'ahead' | 'on_track' | 'behind' | 'idle'
 }
 
+export type BargainShippingView = {
+  total: number
+  shippingCost: number
+  freeShipping: boolean
+  subtotal: number
+  remainingForFreeShipping: number
+  unitsForFreeShipping: number | null
+  upsell: string | null
+}
+
+export type BargainPaymentView = {
+  intent: 'prepaid' | 'cod' | 'unknown'
+  prepaidSaving: number | null
+}
+
 export type BargainStartSuccess = {
   sessionId: string
   /** Signed token bound to the session. Proof-of-origin the widget echoes on
@@ -145,6 +160,8 @@ export type BargainStartSuccess = {
   existingSession?: boolean
   /** Active daily-goal view, when the store runs one. */
   goal?: BargainGoalView
+  shipping?: BargainShippingView | null
+  payment?: BargainPaymentView | null
 }
 
 // ── Offer ────────────────────────────────────────────────────────────────
@@ -180,23 +197,12 @@ export type BargainOfferSuccess = {
    * shipping-aware negotiation. Honest shipping cost + total for the standing
    * price, plus a truthful free-shipping upsell line. Never carries the floor.
    */
-  shipping?: {
-    total: number
-    shippingCost: number
-    freeShipping: boolean
-    subtotal: number
-    remainingForFreeShipping: number
-    unitsForFreeShipping: number | null
-    upsell: string | null
-  } | null
+  shipping?: BargainShippingView | null
   /**
    * Payment-method awareness (Module 5), present only when the merchant enabled
    * it. The shopper's detected intent and the public COD→prepaid saving (if any).
    */
-  payment?: {
-    intent: 'prepaid' | 'cod' | 'unknown'
-    prepaidSaving: number | null
-  } | null
+  payment?: BargainPaymentView | null
   recommendations?: BargainRecommendation[]
   recommendationReason?: string
   recommendationContext?: RecommendationContext | null
@@ -246,6 +252,8 @@ export type BargainAcceptBody = {
 
 export type BargainAcceptSuccess = {
   sessionId: string
+  /** Current authoritative listed price used to validate the accepted deal. */
+  originalPrice: number
   finalPrice: number
   discountPercent: number
   discountCode: string
@@ -255,6 +263,8 @@ export type BargainAcceptSuccess = {
   currency: string
   expiresAt: string
   message: string
+  shipping?: BargainShippingView | null
+  payment?: BargainPaymentView | null
 }
 
 // ── Recommendations (server-built, sanitized) ────────────────────────────

@@ -38,6 +38,8 @@ import type {
   BargainGoalView,
   BargainMessage,
   BargainOfferSuccess,
+  BargainPaymentView,
+  BargainShippingView,
   BargainRecommendation,
   BargainRejection,
   BargainStartSuccess,
@@ -50,6 +52,7 @@ import {
   ChatSkeleton,
   GoalStrip,
   MessageBubble,
+  PriceBreakdown,
   PriceRail,
   ProductContextCard,
   ProductThumb,
@@ -346,12 +349,8 @@ export default function BargainWidget({
   const [returning, setReturning] = useState(false)
   const [endedReason, setEndedReason] = useState<'accepted' | 'rejected' | 'expired' | 'abandoned' | 'optout' | null>(null)
   const [floorReached, setFloorReached] = useState(false)
-  const [shippingInfo, setShippingInfo] = useState<{
-    total: number
-    shippingCost: number
-    freeShipping: boolean
-    upsell: string | null
-  } | null>(null)
+  const [shippingInfo, setShippingInfo] = useState<BargainShippingView | null>(null)
+  const [paymentInfo, setPaymentInfo] = useState<BargainPaymentView | null>(null)
   // Server-authoritative round count. The offer route increments attemptsUsed
   // atomically and (importantly) DECREMENTS it again when a turn is rejected as
   // abuse, so counting our own bubbles would drift. The API reports the truth;
@@ -794,6 +793,8 @@ export default function BargainWidget({
       setFloorReached(false)
       setRejection(null)
       setAttemptsUsed(null)
+      setShippingInfo(null)
+      setPaymentInfo(null)
       if (data.session) {
         const restoredSession = data.session
         if (typeof restoredSession.attemptsUsed === 'number') setAttemptsUsed(restoredSession.attemptsUsed)
@@ -820,6 +821,8 @@ export default function BargainWidget({
       setLastBought(data.lastBought ?? null)
       if (data.returning) setReturning(true)
       if (data.goal) setGoal(data.goal)
+      setShippingInfo(data.shipping ?? null)
+      setPaymentInfo(data.payment ?? null)
       if (data.existingSession) fireAvatar('greeting', { opening: true })
       if (data.existingSession && data.session?.messages?.length) {
         const restored: BargainMessage[] = data.session.messages.map((m: BargainMessage) => ({
@@ -1044,7 +1047,8 @@ export default function BargainWidget({
       if (data.discountCode) setDiscountCode(data.discountCode)
       if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
       if (data.floorReached === true) setFloorReached(true)
-      if (data.shipping && typeof data.shipping.total === 'number') setShippingInfo(data.shipping)
+      setShippingInfo(data.shipping ?? null)
+      setPaymentInfo(data.payment ?? null)
       if (typeof data.attemptsUsed === 'number') setAttemptsUsed(data.attemptsUsed)
       if (data.goal) setGoal(data.goal)
       if (data.finalPrice != null) setFinalPrice(data.finalPrice)
@@ -1220,6 +1224,8 @@ export default function BargainWidget({
       setDiscountCode(data.discountCode)
       setPurchaseUrl(data.purchaseUrl ?? null)
       setShopifyStatus(data.shopifyStatus)
+      setShippingInfo(data.shipping ?? null)
+      setPaymentInfo(data.payment ?? null)
       setMessages(prev => [
         ...prev,
         {
@@ -1262,6 +1268,7 @@ export default function BargainWidget({
     setRecommendationHistory(null)
     setFloorReached(false)
     setShippingInfo(null)
+    setPaymentInfo(null)
     setRejection(null)
     setActiveTab('chat')
     void startSession()
@@ -1780,6 +1787,7 @@ export default function BargainWidget({
                 currencySymbol={currencySymbol}
                 decision={decision}
                 discountCode={discountCode}
+                shipping={shippingInfo}
                 productTitle={productCtx.title}
                 sessionEnded={sessionEnded}
                 t={t}
@@ -1816,23 +1824,17 @@ export default function BargainWidget({
                />
             ))}
 
-                {/* Shipping transparency (Module 4) — honest total + free-shipping value-add */}
-                {shippingInfo && decision !== 'accept' && (
+                {(shippingInfo || paymentInfo) && (
                   <div style={{ alignSelf: 'flex-start', width: '100%', animation: 'cgMsgIn 0.2s ease-out' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, margin: '2px 6px', fontSize: 12, color: '#475569' }}>
-                      <span style={{ fontWeight: 600 }}>
-                        {t('shippingCost')}: {shippingInfo.freeShipping ? t('freeShipping') : `${currencySymbol}${shippingInfo.shippingCost}`}
-                      </span>
-                      <span style={{ color: '#cbd5e1' }}>·</span>
-                      <span>
-                        {t('orderTotal')}: <strong style={{ color: '#0f172a' }}>{currencySymbol}{shippingInfo.total}</strong>
-                      </span>
-                    </div>
-                    {shippingInfo.upsell && (
-                      <div style={{ margin: '2px 6px 0', fontSize: 12, color: '#4f46e5', fontWeight: 600 }}>
-                        {shippingInfo.upsell}
-                      </div>
-                    )}
+                    <PriceBreakdown
+                      t={t}
+                      currencySymbol={currencySymbol}
+                      listedPrice={livePrice}
+                      currentPrice={decision === 'accept' ? finalPrice : lastCounter}
+                      priceLabel={decision === 'accept' ? 'yourFinalPrice' : floorReached ? 'finalOffer' : 'counterOffer'}
+                      shipping={shippingInfo}
+                      payment={paymentInfo}
+                    />
                   </div>
                 )}
 

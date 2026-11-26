@@ -14,8 +14,17 @@ import { bargainCampaignStatus, couponMentionedInMessages } from '@/lib/bargain/
 import { track } from '@/lib/analytics/track'
 import { recordLearningAcceptance } from '@/lib/bargain/learning/outcomes'
 import { createQuote, acceptQuote, findQuoteBySessionId } from '@/lib/bargain/quote'
-import { detectPaymentIntent } from '@/lib/bargain/payment'
-import { formatMoney } from '@/lib/bargain/i18n'
+import {
+  detectPaymentIntent,
+  normalizePaymentConfig,
+  prepaidSaving,
+} from '@/lib/bargain/payment'
+import {
+  computeShipping,
+  normalizeShippingConfig,
+  shippingUpsellLine,
+} from '@/lib/bargain/shipping'
+import { currencySymbolFor, formatMoney } from '@/lib/bargain/i18n'
 import { dealAcceptedMessage } from '@/lib/bargain/post-deal'
 import {
   bargainPlatformFor,
@@ -50,6 +59,28 @@ function purchaseUrlForDeal(opts: {
     variantId: opts.variantId,
     quantity: opts.quantity,
   })
+}
+
+async function priceChangedResponse(opts: {
+  storeId: string
+  currentPrice: number
+  agreedPrice: number
+  currency: string
+  reason: string
+}) {
+  await track({
+    name: 'cartgain_offer_rejected',
+    storeId: opts.storeId,
+    properties: { reason: 'PRICE_CHANGED', detail: opts.reason },
+  })
+  return NextResponse.json({
+    message: `The listed price for this deal is now ${formatMoney(opts.currentPrice, opts.currency)}. Your agreed ${formatMoney(opts.agreedPrice, opts.currency)} can no longer be applied. Please refresh and make a fresh offer.`,
+    reason: 'PRICE_CHANGED',
+    code: 'OFFER_REJECTED_PRICE_CHANGED',
+    currentPrice: opts.currentPrice,
+    agreedPrice: opts.agreedPrice,
+    currency: opts.currency,
+  }, { status: 409 })
 }
 
 // POST /api/bargain/accept — customer accepts the final price; generate Shopify discount code
@@ -236,6 +267,11 @@ export async function POST(request: NextRequest) {
         couponStackingEnabled: true,
         emergencyPaused: true,
         maxAttempts: true,
+        shippingAwareEnabled: true,
+        shippingFlatCost: true,
+        freeShippingThreshold: true,
+        paymentAwareEnabled: true,
+        prepaidIncentivePercent: true,
       },
     })
     if (config?.enabled === false) {
@@ -283,6 +319,18 @@ export async function POST(request: NextRequest) {
       couponsAllowed,
     })
     if (!validation.ok) {
+      if (
+        validation.reason === 'BELOW_FLOOR_REJECTED' ||
+        (validation.reason === 'INVALID_PRICE' && finalPrice > currentPrice)
+      ) {
+        return priceChangedResponse({
+          storeId: bargainSession.storeId,
+          currentPrice,
+          agreedPrice: finalPrice,
+          currency: bargainSession.store.currency,
+          reason: validation.reason,
+        })
+      }
       await track({
         name: 'cartgain_offer_rejected',
         storeId: bargainSession.storeId,
@@ -307,13 +355,31 @@ export async function POST(request: NextRequest) {
       bulkQuantity: offerBulkQuantity,
     })
     if (!executable.ok) {
-      return NextResponse.json({
-        message:
-          executable.reason === 'below_floor'
-            ? 'Price mismatch — the listed price may have changed. Please refresh and renegotiate.'
-            : 'Price mismatch — session may have been tampered with.',
-      }, { status: 409 })
+      return priceChangedResponse({
+        storeId: bargainSession.storeId,
+        currentPrice,
+        agreedPrice: finalPrice,
+        currency: bargainSession.store.currency,
+        reason: executable.reason,
+      })
     }
+
+    const currencySymbol = currencySymbolFor(bargainSession.store.currency)
+    const shippingConfig = normalizeShippingConfig((config ?? {}) as any)
+    const paymentConfig = normalizePaymentConfig((config ?? {}) as any)
+    const shippingView = shippingConfig.enabled
+      ? (() => {
+          const quote = computeShipping({
+            config: shippingConfig,
+            unitPrice: executable.finalPrice,
+            quantity: executable.bulkQuantity,
+          })
+          return { ...quote, upsell: shippingUpsellLine(quote, currencySymbol, { config: shippingConfig }) }
+        })()
+      : null
+    const paymentView = paymentConfig.enabled
+      ? { intent: paymentIntent, prepaidSaving: prepaidSaving(paymentConfig) }
+      : null
 
     // Plan gate — free tiers hard-stop at the deal quota; paid tiers fall back
     // to overage billing only when the store is opted in.
@@ -352,9 +418,11 @@ export async function POST(request: NextRequest) {
       })
       if (refreshed?.status === 'accepted' && refreshed.discountCode) {
         const existingQuote = await findQuoteBySessionId(bargainSession.id).catch(() => null)
+        const alreadyAgreedPrice = refreshed.finalPrice ?? refreshed.originalPrice
         return NextResponse.json({
           sessionId: bargainSession.id,
-          finalPrice: refreshed.finalPrice ?? refreshed.originalPrice,
+          originalPrice: currentPrice,
+          finalPrice: alreadyAgreedPrice,
           discountCode: refreshed.discountCode,
           quoteToken: existingQuote?.token ?? null,
           shopifyStatus: 'created',
@@ -369,6 +437,8 @@ export async function POST(request: NextRequest) {
               quantity: refreshed.bulkQuantity,
             }),
           currency: bargainSession.store.currency,
+          shipping: shippingView,
+          payment: paymentView,
           message: 'Deal already locked — code issued.',
         })
       }
@@ -536,6 +606,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       sessionId: bargainSession.id,
+      originalPrice: currentPrice,
       finalPrice: executable.finalPrice,
       discountPercent,
       discountCode: shopifyCode.code,
@@ -545,6 +616,8 @@ export async function POST(request: NextRequest) {
       purchaseUrl,
       currency: bargainSession.store.currency,
       expiresAt: bargainSession.expiredAt.toISOString(),
+      shipping: shippingView,
+      payment: paymentView,
       message: dealAcceptedMessage({
         price: formatMoney(executable.finalPrice, bargainSession.store.currency),
         code: shopifyCode.code,

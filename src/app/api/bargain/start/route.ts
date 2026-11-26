@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainStartSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
 import { buildOpeningMessage, computeMinPrice, buildCustomerContext, SUPPORTED_LANGUAGES, type NegotiationContext } from '@/lib/services/bargain'
+import { computeShipping, normalizeShippingConfig, shippingUpsellLine } from '@/lib/bargain/shipping'
+import { normalizePaymentConfig, prepaidSaving } from '@/lib/bargain/payment'
 import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
 import { enginePersonaFor } from '@/lib/bargain/experience/personality'
 import { fromDb } from '@/lib/bargain/experience/config'
@@ -545,6 +547,18 @@ export async function POST(request: NextRequest) {
       properties: { returning: returning === true },
     })
 
+    const shippingConfig = normalizeShippingConfig(config as any)
+    const paymentConfig = normalizePaymentConfig(config as any)
+    const shippingView = shippingConfig.enabled
+      ? (() => {
+          const quote = computeShipping({ config: shippingConfig, unitPrice: originalPrice })
+          return { ...quote, upsell: shippingUpsellLine(quote, currencySymbol, { config: shippingConfig }) }
+        })()
+      : null
+    const paymentView = paymentConfig.enabled
+      ? { intent: 'unknown' as const, prepaidSaving: prepaidSaving(paymentConfig) }
+      : null
+
     return NextResponse.json({
       sessionId: bargainSession.id,
       sessionToken: signSessionToken(bargainSession.id) ?? undefined,
@@ -554,6 +568,8 @@ export async function POST(request: NextRequest) {
       returning,
       lastBought: data.cartToken ? lastBought : null,
       goal: publicGoalView(goalCtx),
+      shipping: shippingView,
+      payment: paymentView,
     }, { status: 201 })
   } catch (error) {
     const validationResponse = handleValidationError(error)

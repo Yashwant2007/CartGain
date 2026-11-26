@@ -8,7 +8,15 @@
 import type { ReactNode } from 'react'
 import { Tag, Zap, ShieldCheck, Loader2, ShoppingBag, CheckCheck, Clock3, Sparkles } from 'lucide-react'
 import { uiText, type UiKey } from '@/lib/bargain/i18n'
-import type { BargainDecision, BargainMessage, BargainRecommendation, BargainDemoGoal, BargainGoalView } from '@/lib/bargain/api-types'
+import type {
+  BargainDecision,
+  BargainMessage,
+  BargainPaymentView,
+  BargainRecommendation,
+  BargainDemoGoal,
+  BargainGoalView,
+  BargainShippingView,
+} from '@/lib/bargain/api-types'
 
 export type UiText = (key: UiKey, vars?: Record<string, string | number>) => string
 
@@ -277,6 +285,75 @@ export function StateCard({ icon, tone, title, body, children }: {
   )
 }
 
+export function PriceBreakdown({
+  t,
+  currencySymbol,
+  listedPrice,
+  currentPrice,
+  priceLabel = 'counterOffer',
+  shipping,
+  payment,
+}: {
+  t: UiText
+  currencySymbol: string
+  listedPrice: number
+  currentPrice: number | null
+  priceLabel?: UiKey
+  shipping?: BargainShippingView | null
+  payment?: BargainPaymentView | null
+}) {
+  const round2 = (n: number) => Math.round(n * 100) / 100
+  const fmt = (n: number) => `${currencySymbol}${round2(n).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+  const effective = currentPrice ?? listedPrice
+  const subtotal = shipping?.subtotal ?? effective
+  const shippingCost = shipping?.shippingCost ?? 0
+  const total = shipping?.total ?? round2(subtotal + shippingCost)
+
+  return (
+    <div role="group" aria-label={t('dealAtGlance')} style={{
+      display: 'flex', flexDirection: 'column', gap: 5,
+      padding: '10px 12px', borderRadius: 12,
+      border: '1px solid #dbe2f5', background: 'linear-gradient(135deg,#f8faff,#f1f5ff)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>{t('listedItemPrice')}</span>
+        <strong style={{ fontSize: 12.5, color: '#475569' }}>{fmt(listedPrice)}</strong>
+      </div>
+      {currentPrice != null && (
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: '#4f46e5' }}>{t(priceLabel)}</span>
+          <strong style={{ fontSize: 14, color: '#4f46e5' }}>{fmt(currentPrice)}</strong>
+        </div>
+      )}
+      {shipping && (
+        <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: 5, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>{t('shippingSetByStore')}</span>
+            <strong style={{ fontSize: 12.5, color: shipping.freeShipping ? '#15803d' : '#475569' }}>
+              {shipping.freeShipping ? t('freeShipping') : fmt(shippingCost)}
+            </strong>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#0f172a' }}>{t('itemPlusShipping')}</span>
+            <strong style={{ fontSize: 15, color: '#0f172a' }}>{fmt(total)}</strong>
+          </div>
+          {shipping.upsell && (
+            <div style={{ fontSize: 11, color: '#4f46e5', fontWeight: 600 }}>{shipping.upsell}</div>
+          )}
+          <div style={{ fontSize: 10.5, color: '#94a3b8' }}>{t('beforeTaxNote')}</div>
+        </div>
+      )}
+      {payment?.intent !== 'prepaid' && (
+        <div style={{ fontSize: 11, color: '#0f766e', fontWeight: 600 }}>
+          {payment && payment.prepaidSaving != null
+            ? t('onlinePaymentSaving', { amount: fmt(payment.prepaidSaving) })
+            : t('onlinePaymentBenefit')}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Deal details tab ──────────────────────────────────────────────────────
 // Mirrors the merchant's own pricing levers without ever revealing the floor.
 export function DealInfoPanel({ t, currencySymbol, originalPrice, finalPrice, decision, discountCode, productTitle, sessEnded }: {
@@ -293,12 +370,12 @@ export function DealInfoPanel({ t, currencySymbol, originalPrice, finalPrice, de
   const discountPct = finalPrice != null && finalPrice > 0 ? Math.round((1 - finalPrice / originalPrice) * 100) : null
   const rows: { label: string; value: ReactNode; tint?: 'green' | 'indigo' | 'neutral' }[] = [
     {
-      label: 'Listed price',
+      label: t('listedItemPrice'),
       value: <span style={{ fontWeight: 800 }}>{currencySymbol}{originalPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>,
     },
     decision === 'accept' && finalPrice != null
       ? {
-          label: 'Deal price',
+          label: t('yourFinalPrice'),
           value: <span style={{ fontWeight: 800, color: '#15803d' }}>{currencySymbol}{finalPrice.toLocaleString('en-IN', { maximumFractionDigits: 2 })}{discountPct != null ? ` (−${discountPct}%)` : ''}</span>,
           tint: 'green' as const,
         }

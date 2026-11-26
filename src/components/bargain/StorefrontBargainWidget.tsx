@@ -6,7 +6,7 @@ import { ShoppingCart, CheckCheck, Clock3 } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import { extractPrice, detectWalkout } from '@/lib/bargain/text'
 import { reciprocalCounter, isAbsurdOffer, absurdOfferReply, type NegotiationContext } from '@/lib/bargain/engine'
-import { GoalStrip } from '@/components/bargain/BargainPrimitives'
+import { GoalStrip, PriceBreakdown } from '@/components/bargain/BargainPrimitives'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import {
   resolveShopkeeperAnimation,
@@ -15,7 +15,7 @@ import {
 } from '@/lib/bargain/experience/living'
 import type { LivingEvent } from '@/lib/bargain/experience/avatar-state'
 import type { AvatarVariant, ShopkeeperPersonality } from '@/lib/bargain/experience/types'
-import type { BargainDemoGoal } from '@/lib/bargain/api-types'
+import type { BargainDemoGoal, BargainPaymentView, BargainShippingView } from '@/lib/bargain/api-types'
 import {
   createConversationId,
   minThinkingMs,
@@ -154,12 +154,8 @@ export default function StorefrontBargainWidget({
   // Daily-goal strip: seeded from the config fetch, refreshed on every demo
   // turn (progress/pace come only from the server).
   const [goalState, setGoalState] = useState<BargainDemoGoal | undefined>(goalProp)
-  const [shippingInfo, setShippingInfo] = useState<{
-    total: number
-    shippingCost: number
-    freeShipping: boolean
-    upsell: string | null
-  } | null>(null)
+  const [shippingInfo, setShippingInfo] = useState<BargainShippingView | null>(null)
+  const [paymentInfo, setPaymentInfo] = useState<BargainPaymentView | null>(null)
   useEffect(() => {
     if (goalProp) setGoalState(goalProp)
   }, [goalProp])
@@ -383,7 +379,8 @@ export default function StorefrontBargainWidget({
         setPersona(ENGINE_TO_LOCAL[data.persona])
       }
       if (data.goal) setGoalState(data.goal)
-      if (data.shipping && typeof data.shipping.total === 'number') setShippingInfo(data.shipping)
+      setShippingInfo(data.shipping ?? null)
+      setPaymentInfo(data.payment ?? null)
 
       const nextAttempt = attempts + 1
       // A joke offer far below the floor gets a persona reply but must not burn
@@ -789,14 +786,16 @@ export default function StorefrontBargainWidget({
             )}
           </div>
 
-          {shippingInfo && (
-            <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-xs text-gray-600">
-              <div className="flex items-center justify-between">
-                <span>{t('shippingCost')}: {shippingInfo.freeShipping ? t('freeShort') : money(currency, shippingInfo.shippingCost)}</span>
-                <span>{t('orderTotal')}: <strong className="text-gray-900">{money(currency, shippingInfo.total)}</strong></span>
-              </div>
-              {shippingInfo.upsell && <p className="mt-1 text-indigo-600 font-medium">{shippingInfo.upsell}</p>}
-            </div>
+          {(shippingInfo || paymentInfo) && (
+            <PriceBreakdown
+              t={t}
+              currencySymbol={currencySymbolFor(currency)}
+              listedPrice={originalPrice}
+              currentPrice={finalPrice ?? [...messages].reverse().find((m) => m.role === 'ai' && m.price != null)?.price ?? null}
+              priceLabel={finalPrice != null ? 'yourFinalPrice' : 'counterOffer'}
+              shipping={shippingInfo}
+              payment={paymentInfo}
+            />
           )}
 
           {conversationUnread > 0 && (
@@ -862,6 +861,18 @@ export default function StorefrontBargainWidget({
               })}
             </p>
           </div>
+
+          {(shippingInfo || paymentInfo) && (
+            <PriceBreakdown
+              t={t}
+              currencySymbol={currencySymbolFor(currency)}
+              listedPrice={originalPrice}
+              currentPrice={finalPrice}
+              priceLabel="yourFinalPrice"
+              shipping={shippingInfo}
+              payment={paymentInfo}
+            />
+          )}
 
           <div className="bg-gray-100 rounded-lg p-3 space-y-2">
             {codeSaved && discountCode ? (

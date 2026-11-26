@@ -123,6 +123,13 @@ export type UiKey =
   | 'shippingCost'
   | 'orderTotal'
   | 'freeShipping'
+  | 'listedItemPrice'
+  | 'agreedPrice'
+  | 'shippingSetByStore'
+  | 'itemPlusShipping'
+  | 'beforeTaxNote'
+  | 'onlinePaymentBenefit'
+  | 'onlinePaymentSaving'
   | 'dealAgreed'
   | 'dealClosed'
   | 'dealAtGlance'
@@ -311,6 +318,13 @@ const EN: Record<UiKey, string> = {
     shippingCost: 'Shipping',
     orderTotal: 'Total',
     freeShipping: 'Free shipping',
+    listedItemPrice: 'Listed item price',
+    agreedPrice: 'Price on the table',
+    shippingSetByStore: 'Shipping set by the store',
+    itemPlusShipping: 'Item + shipping',
+    beforeTaxNote: 'Taxes or duties, if any, are added at checkout.',
+    onlinePaymentBenefit: 'Paying online avoids cash handling at delivery.',
+    onlinePaymentSaving: 'Paying online can save you {amount} on this order.',
     tabChat: 'Chat',
     tabDeal: 'Deal',
     dealAgreed: 'Deal agreed',
@@ -508,6 +522,13 @@ const I18N: Record<UiLang, Translations> & { en: Record<UiKey, string> } = {
     shippingCost: 'Shipping',
     orderTotal: 'Total',
     freeShipping: 'Free shipping',
+    listedItemPrice: 'Listed item price',
+    agreedPrice: 'Table par price',
+    shippingSetByStore: 'Store dwara tay shipping',
+    itemPlusShipping: 'Item + shipping',
+    beforeTaxNote: 'Tax ya duty, agar ho, checkout par add hote hain.',
+    onlinePaymentBenefit: 'Online pay karne se delivery par cash sambhalne se bachat hoti hai.',
+    onlinePaymentSaving: 'Online pay karne par is order par {amount} ki bachat ho sakti hai.',
     dealAgreed: 'Deal pakka',
     dealClosed: 'Deal band',
     dealAtGlance: 'Deal ek nazar mein',
@@ -646,6 +667,13 @@ const I18N: Record<UiLang, Translations> & { en: Record<UiKey, string> } = {
     shippingCost: 'शिपिंग',
     orderTotal: 'कुल',
     freeShipping: 'मुफ़्त शिपिंग',
+    listedItemPrice: 'सूचीबद्ध वस्तु मूल्य',
+    agreedPrice: 'तय मूल्य',
+    shippingSetByStore: 'दुकान द्वारा निर्धारित शिपिंग',
+    itemPlusShipping: 'वस्तु + शिपिंग',
+    beforeTaxNote: 'कर या शुल्क, यदि कोई हो, चेकआउट पर जोड़े जाएँगे।',
+    onlinePaymentBenefit: 'ऑनलाइन भुगतान से डिलीवरी पर नकद संभालने से बचा जा सकता है।',
+    onlinePaymentSaving: 'ऑनलाइन भुगतान करने पर इस ऑर्डर पर {amount} की बचत हो सकती है।',
     dealAgreed: 'सौदा तय',
     dealClosed: 'सौदा बंद',
     dealAtGlance: 'सौदा एक नज़र में',

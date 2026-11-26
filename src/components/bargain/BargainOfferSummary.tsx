@@ -1,7 +1,7 @@
 'use client'
 
 import { CheckCircle2, Tag } from 'lucide-react'
-import type { BargainDecision } from '@/lib/bargain/api-types'
+import type { BargainDecision, BargainShippingView } from '@/lib/bargain/api-types'
 import { uiText, type UiKey } from '@/lib/bargain/i18n'
 
 type Props = {
@@ -11,6 +11,7 @@ type Props = {
   currencySymbol: string
   decision: BargainDecision
   discountCode?: string | null
+  shipping?: BargainShippingView | null
   productTitle?: string | null
   sessionEnded?: boolean
   t?: (key: UiKey, vars?: Record<string, string | number>) => string
@@ -23,6 +24,7 @@ export default function BargainOfferSummary({
   currencySymbol,
   decision,
   discountCode,
+  shipping,
   productTitle,
   sessionEnded,
   t = (key, vars) => uiText('en', key, vars),
@@ -54,6 +56,12 @@ export default function BargainOfferSummary({
         }}>
           {productTitle || t('yourNegotiation')}
         </div>
+        {shipping && shownPrice != null && (
+          <div style={{ fontSize: 10.5, color: '#64748b', fontWeight: 600 }}>
+            {t('itemPlusShipping')}: {money(shipping.total ?? shownPrice + shipping.shippingCost)}
+            {!shipping.freeShipping && shipping.shippingCost > 0 ? ` · ${t('shippingCost')} ${money(shipping.shippingCost)}` : ''}
+          </div>
+        )}
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end', minWidth: 0 }}>
         {shownPrice != null && shownPrice < originalPrice && (

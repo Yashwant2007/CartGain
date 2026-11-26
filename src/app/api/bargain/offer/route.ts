@@ -1810,7 +1810,7 @@ export async function POST(request: NextRequest) {
       ? (() => {
           const quote = computeShipping({
             config: shippingConfig,
-            unitPrice: safeCounter ?? customerOffer ?? bargainSession.originalPrice,
+            unitPrice: terminalRetention?.finalPrice ?? safeCounter ?? customerOffer ?? bargainSession.originalPrice,
             quantity: bulkQuantity ?? 1,
           })
           return { ...quote, upsell: shippingUpsellLine(quote, currencySymbol, { config: shippingConfig }) }

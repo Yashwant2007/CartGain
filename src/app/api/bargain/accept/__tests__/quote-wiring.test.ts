@@ -9,6 +9,8 @@
 import { POST } from '@/app/api/bargain/accept/route'
 import prisma from '@/lib/db'
 import { verifyQuoteToken } from '@/lib/bargain/quote'
+import { validateOffer } from '@/lib/bargain/offer-validation'
+import { fetchShopifyProductPrice } from '@/lib/shopify'
 
 jest.mock('@/lib/db', () => {
   const mock: any = {
@@ -187,5 +189,61 @@ describe('accept → secure quote wiring', () => {
       ([args]: any[]) => args?.data?.status === 'accepted',
     )
     expect(update?.[0].data.acceptedAt).toBeInstanceOf(Date)
+  })
+
+  it('explains a price change instead of claiming tampering when the live price moved', async () => {
+    jest.mocked(fetchShopifyProductPrice).mockResolvedValueOnce(1800)
+    mockPrisma.bargainSession.findUnique.mockResolvedValueOnce(session({
+      originalPrice: 2000,
+      currentOffer: 2000,
+      finalPrice: 2000,
+      status: 'accepted',
+    }))
+    jest.mocked(validateOffer).mockReturnValueOnce({
+      ok: false,
+      reason: 'INVALID_PRICE',
+      requestedPrice: 2000,
+      originalPrice: 1800,
+      floorPrice: 700,
+      message: null,
+    })
+
+    const res = await POST(makeRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(body.code).toBe('OFFER_REJECTED_PRICE_CHANGED')
+    expect(body.reason).toBe('PRICE_CHANGED')
+    expect(body.currentPrice).toBe(1800)
+    expect(body.agreedPrice).toBe(2000)
+    expect(body.message).toContain('1,800')
+    expect(body.message).toContain('2,000')
+    expect(body.message).not.toMatch(/tamper/i)
+    expect(mockPrisma.bargainSession.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('returns authoritative original price, shipping total, and payment view on success', async () => {
+    mockPrisma.bargainConfig.findUnique.mockResolvedValueOnce({
+      enabled: true,
+      shippingAwareEnabled: true,
+      shippingFlatCost: 40,
+      freeShippingThreshold: 1000,
+      paymentAwareEnabled: true,
+      prepaidIncentivePercent: 5,
+    })
+
+    const res = await POST(makeRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.originalPrice).toBe(1000)
+    expect(body.finalPrice).toBe(850)
+    expect(body.shipping).toMatchObject({
+      subtotal: 850,
+      shippingCost: 40,
+      total: 890,
+      freeShipping: false,
+    })
+    expect(body.payment).toMatchObject({ intent: 'unknown', prepaidSaving: null })
   })
 })

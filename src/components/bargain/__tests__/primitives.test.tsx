@@ -5,6 +5,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import {
   ChatSkeleton,
   MessageBubble,
+  PriceBreakdown,
   PriceRail,
   RoundMeter,
   StateCard,
@@ -150,6 +151,58 @@ describe('RoundMeter (offer budget)', () => {
   it('renders nothing when the budget is unknown (never invents a count)', () => {
     const { container } = render(<RoundMeter used={1} max={null} t={t} />)
     expect(container.firstChild).toBeNull()
+  })
+})
+
+describe('PriceBreakdown (truthful item + shipping total)', () => {
+  const t = (key: UiKey, vars?: Record<string, string | number>) =>
+    vars ? `${key}:${vars.amount ?? ''}` : key
+
+  it('shows listed, agreed, merchant shipping, total, and payment note without inventing numbers', () => {
+    const { container } = render(
+      <PriceBreakdown
+        t={t}
+        currencySymbol="₹"
+        listedPrice={2400}
+        currentPrice={2222.72}
+        priceLabel="counterOffer"
+        shipping={{
+          subtotal: 2222.72,
+          shippingCost: 40,
+          total: 2262.72,
+          freeShipping: false,
+          remainingForFreeShipping: 177.28,
+          unitsForFreeShipping: null,
+          upsell: 'Add ₹177.28 more to unlock free shipping.',
+        }}
+        payment={{ intent: 'cod', prepaidSaving: null }}
+      />,
+    )
+
+    expect(screen.getByText('listedItemPrice')).toBeTruthy()
+    expect(screen.getByText('counterOffer')).toBeTruthy()
+    expect(container.textContent).toContain('₹2,400')
+    expect(container.textContent).toContain('₹2,222.72')
+    expect(container.textContent).toContain('₹40')
+    expect(container.textContent).toContain('₹2,262.72')
+    expect(screen.getByText('beforeTaxNote')).toBeTruthy()
+    expect(screen.getByText('onlinePaymentBenefit')).toBeTruthy()
+    expect(container.textContent).not.toMatch(/[\uD83C-\uDBFF\uDC00-\uDFFF]/)
+  })
+
+  it('hides payment guidance when the shopper has already chosen prepaid', () => {
+    const { container } = render(
+      <PriceBreakdown
+        t={t}
+        currencySymbol="₹"
+        listedPrice={2400}
+        currentPrice={2222.72}
+        priceLabel="yourFinalPrice"
+        shipping={null}
+        payment={{ intent: 'prepaid', prepaidSaving: null }}
+      />,
+    )
+    expect(container.textContent).not.toContain('onlinePaymentBenefit')
   })
 })
 
