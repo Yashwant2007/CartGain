@@ -191,6 +191,39 @@ describe('searchRecommendations', () => {
     const out = await searchRecommendations({ store, shopifyProductId: '1', currency: 'INR' }, fetchNone)
     expect(out.cards).toEqual([])
   })
+
+  it('returns no cards when a named need has no verified catalog match', async () => {
+    const out = await searchRecommendations(
+      { store, shopifyProductId: '0', currency: 'INR', need: 'watch' },
+      async () => ({
+        products: [
+          rawProduct({ id: '9', title: 'Snowboard', product_type: 'sports', variants: [{ id: 'v9', title: '', price: 800, available: true }] }),
+          rawProduct({ id: '10', title: 'Ski Wax', product_type: 'sports', variants: [{ id: 'v10', title: '', price: 25, available: true }] }),
+        ],
+        nextCursor: null, prevCursor: null, error: null,
+      }),
+      999,
+      { reason: 'discovery' },
+    )
+    expect(out.cards).toEqual([])
+  })
+
+  it('returns only verified matches for a named need', async () => {
+    const out = await searchRecommendations(
+      { store, shopifyProductId: '0', currency: 'INR', need: 'watch' },
+      async () => ({
+        products: [
+          rawProduct({ id: '9', title: 'Snowboard', product_type: 'sports', variants: [{ id: 'v9', title: '', price: 800, available: true }] }),
+          rawProduct({ id: '11', title: 'Trail Watch', product_type: 'accessories', tags: 'watch,time', variants: [{ id: 'v11', title: '', price: 1999, available: true }] }),
+        ],
+        nextCursor: null, prevCursor: null, error: null,
+      }),
+      999,
+      { reason: 'discovery' },
+    )
+    expect(out.cards).toHaveLength(1)
+    expect(out.cards[0].title).toBe('Trail Watch')
+  })
 })
 
 describe('decideRecommendation', () => {

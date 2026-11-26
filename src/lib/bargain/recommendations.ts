@@ -690,11 +690,13 @@ export async function searchRecommendations(
     ...recommendationExcludedProductIds(history),
     ...(options?.excludeProductIds ?? []).map(normalizeProductId),
   ])
+  const requestedNeedTokens = needTokens(request.need)
   const fetched = await fetchProducts(request.store, { limit: 250 })
   const similarProduct = options?.similarProductRaw ? normalizeRecoCandidate(options.similarProductRaw) : null
   const scored: ScoredCandidate[] = fetched.products
     .map(normalizeRecoCandidate)
     .filter((c): c is RecoCandidate => c != null && c.available && c.variantId.length > 0)
+    .filter((c) => requestedNeedTokens.length === 0 || overlapCount(requestedNeedTokens, candidateHaystack(c)) > 0)
     .filter((c) => !excluded.has(c.productId))
     .filter((c) => !(options?.strictBudget && request.budget != null && c.price > request.budget))
     .map((c) => ({
