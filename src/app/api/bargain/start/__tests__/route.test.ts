@@ -32,7 +32,10 @@ jest.mock('@/lib/rate-limit', () => ({
 
 jest.mock('@/lib/shopify', () => ({
   fetchShopifyProductPrice: jest.fn(async () => null),
+  fetchShopifyShopInfo: jest.fn(async () => null),
 }))
+
+const fetchShopifyShopInfoMock = jest.requireMock('@/lib/shopify').fetchShopifyShopInfo as jest.Mock
 
 jest.mock('@/lib/services/bargain', () => ({
   ...jest.requireActual('@/lib/services/bargain'),
@@ -134,6 +137,7 @@ beforeEach(() => {
   db.bargainSession.create.mockResolvedValue({ id: 'new-session', messages: [] })
   db.bargainPurchaseMemory.findMany.mockResolvedValue([])
   db.cart.findUnique.mockResolvedValue(null)
+  fetchShopifyShopInfoMock.mockResolvedValue(null)
 })
 
 describe('/api/bargain/start — ownership-aware rejoin and disclosure', () => {
@@ -231,5 +235,24 @@ describe('/api/bargain/start — ownership-aware rejoin and disclosure', () => {
     expect(res.status).toBe(201)
     expect(body.sessionId).toBe('new-session')
     expect(db.bargainSession.findFirst).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('/api/bargain/start — currency authority', () => {
+  it('does not persist a client-supplied currency when Shopify does not confirm it', async () => {
+    fetchShopifyShopInfoMock.mockResolvedValue({ currencyCode: 'USD' })
+
+    await POST(makeRequest({ currency: 'INR' }))
+
+    expect(db.store.update).not.toHaveBeenCalled()
+  })
+
+  it('persists a currency only when Shopify confirms the same currency', async () => {
+    fetchShopifyShopInfoMock.mockResolvedValue({ currencyCode: 'inr' })
+
+    await POST(makeRequest({ currency: 'INR' }))
+
+    expect(db.store.update).toHaveBeenCalledTimes(1)
+    expect(db.store.update.mock.calls[0][0].data).toEqual({ currency: 'INR' })
   })
 })

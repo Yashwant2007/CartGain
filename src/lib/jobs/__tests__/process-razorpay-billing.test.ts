@@ -96,6 +96,25 @@ describe('processRazorpayBilling', () => {
     }))
   })
 
+  it('advances the period when usage is below the invoice floor so paid access does not expire', async () => {
+    prismaMock.razorpayUsageEvent.findMany.mockResolvedValue([usageEvent('revenue_share', 50)])
+
+    const result = await processRazorpayBilling()
+
+    expect(result).toEqual({ processed: 0, skipped: 1, errors: [] })
+    expect(prismaMock.razorpayInvoice.create).not.toHaveBeenCalled()
+    expect(prismaMock.razorpayUsageEvent.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ invoiceId: expect.stringContaining('waived:') }),
+    }))
+    expect(prismaMock.razorpaySubscription.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        currentPeriodStart: expect.any(Date),
+        currentPeriodEnd: expect.any(Date),
+        revenueShareAccrued: 0,
+      }),
+    }))
+  })
+
   it('cancels at period end without reviving a cancelled subscription', async () => {
     prismaMock.razorpaySubscription.findMany.mockResolvedValue([subscription({ cancelAtPeriodEnd: true })])
     prismaMock.razorpayUsageEvent.findMany.mockResolvedValue([usageEvent('revenue_share', 250)])

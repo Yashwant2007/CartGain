@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
     const normalizedCustomerId = normalizeShopifyCustomerId(shopifyCustomerId)
     const safeCustomerEmail =
       typeof customerEmail === 'string' && customerEmail.length <= 254 && customerEmail.includes('@')
-        ? customerEmail
+        ? customerEmail.trim().toLowerCase()
         : null
 
     // Find the store by its Shopify domain. Domain is not proof of ownership
@@ -162,29 +162,37 @@ export async function POST(request: NextRequest) {
     const rawBulk = bulkQuantity != null ? Math.floor(Number(bulkQuantity)) : null
     const safeBulk = rawBulk != null && Number.isFinite(rawBulk) && rawBulk >= 1 ? rawBulk : null
 
-    // Codes are server-issued. A client may echo a previously returned code to
-    // retry safely, but it can never invent one and show it as a real code.
-    let issuedCode = typeof code === 'string' && code.trim() ? code.trim() : generateBargainCode()
+    const callerCode = typeof code === 'string' && code.trim() ? code.trim() : null
+    const callerEmail = safeCustomerEmail?.trim().toLowerCase() ?? null
+    const replayOwnedCode =
+      callerCode && (callerEmail || normalizedCustomerId)
+        ? await prisma.bargainSession.findFirst({
+            where: {
+              storeId: store.id,
+              discountCode: callerCode,
+              status: 'accepted',
+              OR: [
+                ...(callerEmail ? [{ discountCodeCustomerEmail: callerEmail }] : []),
+                ...(normalizedCustomerId ? [{ externalCustomerId: normalizedCustomerId }] : []),
+              ],
+            },
+            select: { discountCode: true },
+          })
+        : null
 
-    // ── IDEMPOTENT REPLAY ──
-    // The client can retry with the SAME code (flaky network / double tap). A
-    // retried request must never mint a second Shopify code (Shopify would reject
-    // the duplicate and surface a 500) or double-meter the deal.
-    const existing = await prisma.bargainSession.findFirst({
-      where: { storeId: store.id, discountCode: issuedCode, status: 'accepted' },
-      select: { discountCode: true },
-    })
-    if (existing?.discountCode) {
+    if (replayOwnedCode?.discountCode) {
       return NextResponse.json({
         success: true,
-        code: existing.discountCode,
+        code: replayOwnedCode.discountCode,
         status: 'created',
         platform,
         ...(platform === 'woocommerce'
-          ? { purchaseUrl: buildWooCommerceCheckoutUrl({ domain: store.domain, code: existing.discountCode }) }
+          ? { purchaseUrl: buildWooCommerceCheckoutUrl({ domain: store.domain, code: replayOwnedCode.discountCode }) }
           : {}),
       }, { headers })
     }
+
+    let issuedCode = generateBargainCode()
 
     // ── FINANCIAL SAFETY ──
     // This endpoint mints codes purely from client-supplied values (the Checkout
@@ -427,8 +435,10 @@ export async function POST(request: NextRequest) {
           bargainFloor: minPrice,
           bulkQuantity: safeBulk,
           discountCode: result.code,
+          discountCodeCustomerEmail: safeCustomerEmail,
           purchaseUrl,
           customerEmail: safeCustomerEmail,
+          externalCustomerId: normalizedCustomerId,
           status: 'accepted',
           acceptedAt: new Date(),
           expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000),

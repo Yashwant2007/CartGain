@@ -43,6 +43,40 @@ function nextPeriod(start: Date, end: Date, now: Date, period: string): { start:
   }
 }
 
+function advancePeriodUpdate(subscription: any, now: Date): Record<string, unknown> {
+  if (subscription.cancelAtPeriodEnd) {
+    return {
+      status: 'cancelled',
+      cancelledAt: now,
+      nextBillingAt: null,
+      cancelAtPeriodEnd: false,
+    }
+  }
+
+  const period = nextPeriod(subscription.currentPeriodStart, subscription.currentPeriodEnd, now, subscription.billingPeriod)
+  const update: Record<string, unknown> = {
+    cartsUsedInPeriod: 0,
+    overageMessages: 0,
+    cartOverage: 0,
+    bargainSessionsUsed: 0,
+    bargainDealsUsed: 0,
+    bargainOverageDeals: 0,
+    revenueShareAccrued: 0,
+    bargainAccrued: 0,
+    currentPeriodStart: period.start,
+    currentPeriodEnd: subscription.pendingPlanId && subscription.pendingStartAt
+      ? subscription.pendingStartAt
+      : period.start,
+    nextBillingAt: subscription.pendingPlanId && subscription.pendingStartAt
+      ? subscription.pendingStartAt
+      : period.end,
+  }
+  if (subscription.pendingPlanId && subscription.pendingStartAt) {
+    update.currentPeriodEnd = period.end
+  }
+  return update
+}
+
 export async function processRazorpayBilling(): Promise<RazorpayBillingResult> {
   const result: RazorpayBillingResult = { processed: 0, skipped: 0, errors: [] }
   const claimed = await redisSetNXOrNull(SWEEP_LOCK_KEY, '1', SWEEP_LOCK_TTL_MS)
@@ -109,6 +143,17 @@ export async function processRazorpayBilling(): Promise<RazorpayBillingResult> {
         },
       })
       if (!existingPending && !shouldInvoice(invoiceAmount, overageAmount, RAZORPAY_INVOICE_FLOOR_INR)) {
+        await prisma.razorpayUsageEvent.updateMany({
+          where: { subscriptionId: subscription.id, invoiceId: null },
+          data: {
+            invoiceId: `waived:${subscription.id}:${subscription.currentPeriodEnd.toISOString()}`,
+            invoicedAt: now,
+          },
+        })
+        await prisma.razorpaySubscription.update({
+          where: { id: subscription.id },
+          data: advancePeriodUpdate(subscription, now),
+        })
         result.skipped++
         continue
       }
@@ -179,37 +224,9 @@ export async function processRazorpayBilling(): Promise<RazorpayBillingResult> {
         data: { invoiceId: invoice.id, invoicedAt: now },
       })
 
-      const period = nextPeriod(subscription.currentPeriodStart, subscription.currentPeriodEnd, now, subscription.billingPeriod)
-      const subscriptionUpdate: any = subscription.cancelAtPeriodEnd
-        ? {
-            status: 'cancelled',
-            cancelledAt: now,
-            nextBillingAt: null,
-            cancelAtPeriodEnd: false,
-          }
-        : {
-            cartsUsedInPeriod: 0,
-            overageMessages: 0,
-            cartOverage: 0,
-            bargainSessionsUsed: 0,
-            bargainDealsUsed: 0,
-            bargainOverageDeals: 0,
-            revenueShareAccrued: 0,
-            bargainAccrued: 0,
-            currentPeriodStart: period.start,
-            currentPeriodEnd: subscription.pendingPlanId && subscription.pendingStartAt
-              ? subscription.pendingStartAt
-              : period.start,
-            nextBillingAt: subscription.pendingPlanId && subscription.pendingStartAt
-              ? subscription.pendingStartAt
-              : period.end,
-          }
-      if (!subscription.cancelAtPeriodEnd && subscription.pendingPlanId && subscription.pendingStartAt) {
-        subscriptionUpdate.currentPeriodEnd = period.end
-      }
       await prisma.razorpaySubscription.update({
         where: { id: subscription.id },
-        data: subscriptionUpdate,
+        data: advancePeriodUpdate(subscription, now),
       })
 
       if (user?.email && invoice.paymentLinkUrl) {

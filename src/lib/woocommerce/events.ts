@@ -182,6 +182,7 @@ function consentTimestamp(value: unknown): Date | null {
 async function upsertCustomerIdentity(event: WebhookEvent, ctx: Context) {
   const root = record(event.data) ?? {}
   const cartKey = text(root.cartId) ?? text(root.cart_key) ?? text(root.cartToken)
+    ?? text(root.cartHash) ?? text(root.cart_hash)
   let cartContact: Record<string, unknown> = {}
   if (cartKey) {
     const cart = await prisma.cart.findFirst({

@@ -119,6 +119,31 @@ describe('processRevenueShareBilling', () => {
     expect(emailMock).not.toHaveBeenCalled()
   })
 
+  it('caps only revenue share, not separately billed overage', async () => {
+    prismaMock.revenueShareEvent.findMany.mockResolvedValue([{ revShareAmount: 6000 }])
+    prismaMock.subscription.findMany.mockResolvedValue([subscription({ overageMessages: 1 })])
+
+    await processRevenueShareBilling()
+
+    expect(usageMock).toHaveBeenCalledWith(expect.objectContaining({ amount: 5001, currency: 'INR' }))
+  })
+
+  it('corrects a stale pending invoice amount before retrying Shopify usage', async () => {
+    prismaMock.invoice.findFirst.mockResolvedValue({
+      id: 'inv-stale',
+      amount: 100,
+      status: 'pending',
+      periodEnd,
+    })
+    prismaMock.invoice.update.mockImplementation(({ data }: any) => Promise.resolve({ id: 'inv-stale', ...data }))
+
+    await processRevenueShareBilling()
+
+    expect(prismaMock.invoice.update.mock.calls.some(([call]: any[]) =>
+      call.where.id === 'inv-stale' && call.data.amount === 200 && Object.keys(call.data).length === 1,
+    )).toBe(true)
+  })
+
   it('resumes a pending invoice with the same idempotency key instead of creating a new one', async () => {
     prismaMock.invoice.findFirst.mockResolvedValue({
       id: 'inv-pending',

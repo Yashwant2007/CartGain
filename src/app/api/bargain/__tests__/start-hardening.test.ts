@@ -37,6 +37,7 @@ jest.mock('@/lib/rate-limit', () => ({
 
 jest.mock('@/lib/shopify', () => ({
   fetchShopifyProductPrice: jest.fn(async () => null),
+  fetchShopifyShopInfo: jest.fn(async () => ({ currencyCode: 'INR' })),
 }))
 
 jest.mock('@/lib/services/bargain', () => {

@@ -9,7 +9,7 @@ import { enginePersonaFor } from '@/lib/bargain/experience/personality'
 import { fromDb } from '@/lib/bargain/experience/config'
 import { currencySymbolFor, CURRENCY_SYMBOLS, formatMoney } from '@/lib/bargain/i18n'
 import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
-import { fetchShopifyProductPrice } from '@/lib/shopify'
+import { fetchShopifyProductPrice, fetchShopifyShopInfo } from '@/lib/shopify'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { getBargainGate, recordBargainSessionOp, BARGAIN_SESSIONS_EXHAUSTED } from '@/lib/bargain/gate'
 import { generateClaimToken } from '@/lib/bargain/purchase'
@@ -135,24 +135,21 @@ export async function POST(request: NextRequest) {
       data = validateOrThrow(bargainStartSchema, body)
     }
 
-    // The Shopify shop's real currency (from the Liquid embed / theme currency)
-    // is authoritative — the storestamp we created the store with may lag behind
-    // (e.g. a shop created while the app default was stale). This is a PUBLIC,
-    // unauthenticated route, so the client value is only accepted when it is a
-    // real supported currency AND the store is still on the schema default
-    // ("USD") — i.e. it has never been confirmed to a currency. Once a merchant
-    // store holds a non-default currency, this route can no longer rewrite it.
     const requestedCurrency = typeof data.currency === 'string' ? data.currency.toUpperCase() : null
     if (
+      platform === 'shopify' &&
       requestedCurrency &&
       requestedCurrency !== store.currency &&
       store.currency === 'USD' &&
       Object.prototype.hasOwnProperty.call(CURRENCY_SYMBOLS, requestedCurrency)
     ) {
-      store = await prisma.store.update({
-        where: { id: store.id },
-        data: { currency: requestedCurrency },
-      })
+      const shopInfo = await fetchShopifyShopInfo(store)
+      if (shopInfo?.currencyCode?.toUpperCase() === requestedCurrency) {
+        store = await prisma.store.update({
+          where: { id: store.id },
+          data: { currency: requestedCurrency },
+        })
+      }
     }
 
     // Verify originalPrice matches Shopify (prevents price manipulation).

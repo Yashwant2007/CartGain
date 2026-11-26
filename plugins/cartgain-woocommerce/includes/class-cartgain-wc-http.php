@@ -23,7 +23,8 @@ final class CartGain_WC_HTTP
         $timestamp = time();
         $store_id = isset($extra_headers['X-CartGain-Store-Id']) ? trim((string) $extra_headers['X-CartGain-Store-Id']) : '';
         $signature_path = '/' . ltrim((string) $path, '/');
-        $canonical = $store_id === ''
+        $is_webhook = strpos($signature_path, '/api/webhooks/woocommerce') === 0;
+        $canonical = $is_webhook
             ? $timestamp . '.' . $body
             : $timestamp . '.' . $store_id . '.' . $signature_path;
 

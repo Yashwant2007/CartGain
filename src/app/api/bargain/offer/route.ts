@@ -21,7 +21,6 @@ import { bargainCampaignStatus, detectCouponMention, detectMultiProductRequest }
 import { normalizeShippingConfig, computeShipping, shippingUpsellLine } from '@/lib/bargain/shipping'
 import { normalizePaymentConfig, detectPaymentIntent, prepaidSaving } from '@/lib/bargain/payment'
 import { applyRulePreferences } from '@/lib/bargain/rule-preferences'
-import { buildBundle, validateBundleOffer, allocateDiscount, bundleSummary, type BundleItem } from '@/lib/bargain/bundle'
 import { walkoutOutcome } from '@/lib/bargain/negotiation-state'
 import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
 import { analyzeIntent, hasRecommendationStopRequest } from '@/lib/bargain/intent'
@@ -51,7 +50,6 @@ import {
   type RecommendationDecision,
 } from '@/lib/bargain/recommendations'
 import { fetchShopifyProducts } from '@/lib/shopify'
-import { toNumericId } from '@/lib/shopify-line-items'
 import { issueRetentionDiscount, buildBargainClaimUrl, generateBargainCode, type IssuedBargainCode } from '@/lib/bargain/purchase'
 import { track } from '@/lib/analytics/track'
 import { resolveSessionLearning, recordLearningEvent, loadLearningConfig } from '@/lib/bargain/learning/service'
@@ -170,118 +168,6 @@ function withFinalCode(reply: string, lang: string, retention: IssuedBargainCode
 // "alternatives" sub-toggle are on (server-side guard; never client-side).
 function recoEnabledForMessages(config: Partial<{ recommendationsEnabled: boolean | null; alternativeRecommendationsEnabled: boolean | null }>): boolean {
   return config.recommendationsEnabled === true && config.alternativeRecommendationsEnabled === true
-}
-
-const BUNDLE_STOPWORDS = new Set([
-  'this', 'that', 'with', 'have', 'want', 'need', 'both', 'them', 'they', 'your', 'yours',
-  'please', 'price', 'deal', 'bundle', 'together', 'also', 'plus', 'and', 'the', 'for',
-  'can', 'you', 'get', 'give', 'would', 'could', 'about', 'some', 'more', 'less', 'than',
-  'what', 'when', 'will', 'make', 'take', 'these', 'those', 'from', 'into', 'over', 'just',
-])
-
-/** Significant lowercase tokens from the shopper's message (for title matching). */
-function bundleTokens(message: string): string[] {
-  return Array.from(
-    new Set(
-      message
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, ' ')
-        .split(/\s+/)
-        .filter((t) => t.length >= 4 && !BUNDLE_STOPWORDS.has(t)),
-    ),
-  )
-}
-
-function titleMatchesTokens(title: string, tokens: string[]): boolean {
-  const t = title.toLowerCase()
-  return tokens.some((tok) => t.includes(tok))
-}
-
-/**
- * Resolve the DISTINCT products of a requested bundle. Prefers the shopper's
- * own cart (real products + real prices) and also matches products the shopper
- * named against the store catalog. Every item's floor is computed server-side;
- * non-bargainable products are dropped so a bundle can never discount below a
- * merchant floor. Returns null when fewer than two distinct products remain.
- */
-async function resolveBundleItems(opts: {
-  storeId: string
-  store: any
-  cartToken: string | null
-  anchor: { productId: string; title: string; price: number }
-  message: string
-  platform?: string | null
-}): Promise<BundleItem[] | null> {
-  if (bargainPlatformFor(opts.store, opts.platform) === 'woocommerce') return null
-  const candidates: { productId: string; variantId?: string | null; title: string; price: number; quantity: number }[] = []
-  const seen = new Set<string>()
-  const push = (c: { productId?: string | null; variantId?: string | null; title?: string; price?: number; quantity?: number }) => {
-    const productId = c.productId ? String(c.productId) : ''
-    const price = Number(c.price)
-    if (!productId || seen.has(productId) || !Number.isFinite(price) || price <= 0) return
-    seen.add(productId)
-    candidates.push({
-      productId,
-      variantId: c.variantId ?? null,
-      title: c.title || 'Item',
-      price,
-      quantity: Math.max(1, Math.floor(c.quantity ?? 1)),
-    })
-  }
-
-  push({ productId: opts.anchor.productId, title: opts.anchor.title, price: opts.anchor.price, quantity: 1 })
-
-  if (opts.cartToken) {
-    try {
-      const cart = await prisma.cart.findUnique({
-        where: { storeId_cartId: { storeId: opts.storeId, cartId: opts.cartToken } },
-        select: { items: true },
-      })
-      const items = Array.isArray(cart?.items) ? (cart!.items as any[]) : []
-      for (const it of items) {
-        push({
-          productId: toNumericId(it?.productId),
-          variantId: toNumericId(it?.variantId) ?? null,
-          title: typeof it?.name === 'string' ? it.name : it?.title,
-          price: Number(it?.price),
-          quantity: Number(it?.quantity) || 1,
-        })
-      }
-    } catch {
-      // cart lookup is best-effort; fall through to catalog matching
-    }
-  }
-
-  const tokens = bundleTokens(opts.message)
-  if (tokens.length > 0) {
-    try {
-      const catalog = await fetchShopifyProducts(opts.store, { limit: 100 })
-      for (const p of catalog.products ?? []) {
-        const title = String(p?.title ?? '')
-        if (!title || !titleMatchesTokens(title, tokens)) continue
-        const price = Number(p?.variants?.[0]?.price)
-        push({ productId: toNumericId(p?.id) ?? String(p?.id ?? ''), title, price, quantity: 1 })
-      }
-    } catch {
-      // catalog match is best-effort
-    }
-  }
-
-  if (candidates.length < 2) return null
-
-  const floors = await Promise.all(
-    candidates.map((c) =>
-      computeMinPrice({ storeId: opts.storeId, shopifyProductId: c.productId, originalPrice: c.price }).catch(() => null),
-    ),
-  )
-  const items: BundleItem[] = []
-  candidates.forEach((c, i) => {
-    const f = floors[i]
-    if (!f || !f.isBargainable) return
-    items.push({ ...c, floor: Math.min(f.minPrice, c.price) })
-  })
-
-  return items.length >= 2 ? items : null
 }
 
 function duplicateTurnMatch(messages: any[], turnId: string): { customer: any; ai: any | null } | null {
@@ -677,96 +563,6 @@ export async function POST(request: NextRequest) {
     // attempt) and keep the session open on THIS product. Falls back to cards
     // for budget-fit alternatives when reco is enabled.
     if (bundleRequested) {
-      // ── §27 BUNDLE NEGOTIATION (Module 6) ──
-      // When the merchant opted in, try to resolve the distinct products and
-      // mint a deterministic, floor-safe bundle offer. The AI never invents a
-      // combined number — the server computes one uniform % that keeps every
-      // item at/above its own floor, and Shopify's code is scoped to those
-      // products with the full bundle value as the minimum subtotal.
-      let bundleOffer: {
-        items: ReturnType<typeof allocateDiscount>
-        listTotal: number
-        offerTotal: number
-        discountPercent: number
-        currencySymbol: string
-        code: string | null
-        codeStatus: 'created' | 'pending' | 'failed' | 'none'
-      } | null = null
-
-      const bundleEnabled = config.bundleNegotiationEnabled === true
-      if (bundleEnabled) {
-        try {
-          const items = await resolveBundleItems({
-            storeId: bargainSession.storeId,
-            store: bargainSession.store,
-            cartToken: bargainSession.cartToken ?? null,
-            anchor: { productId: bargainSession.shopifyProductId, title: productTitle ?? 'Item', price: bargainSession.originalPrice },
-            message: interpretedMessage,
-            platform,
-          })
-          if (items) {
-            const desiredPct = config.bundleDiscountPercent ?? 10
-            const quote = buildBundle(items, { discountPercent: desiredPct })
-            if (quote && validateBundleOffer(quote).ok) {
-              // A bundled price is a proposal, not an issued deal. No Shopify
-              // code exists until the shopper accepts and the server revalidates
-              // the floor at that moment; never show a code from a chat turn.
-              bundleOffer = {
-                items: allocateDiscount(quote.items, quote.offerTotal),
-                listTotal: quote.listTotal,
-                offerTotal: quote.offerTotal,
-                discountPercent: quote.discountPercent,
-                currencySymbol,
-                code: null,
-                codeStatus: 'none',
-              }
-              await track({
-                name: 'cartgain_bundle_offer',
-                storeId: bargainSession.storeId,
-                properties: { items: quote.items.length, offerTotal: quote.offerTotal, discountPercent: quote.discountPercent },
-              })
-            }
-          }
-        } catch {
-          bundleOffer = null
-        }
-      }
-
-      if (bundleOffer) {
-        const reply = `Bundle deal: ${bundleSummary(bundleOffer.items.map((a) => ({ productId: a.productId, title: a.title, price: a.listPrice, floor: 0, quantity: a.quantity })), currencySymbol)} — ${currencySymbol}${bundleOffer.offerTotal} (was ${currencySymbol}${bundleOffer.listTotal}, ${bundleOffer.discountPercent}% off).`
-        await prisma.$transaction([
-          prisma.bargainMessage.create({
-            data: {
-              sessionId: bargainSession.id, role: 'customer', content: data.message,
-              offeredPrice: customerOffer ?? null,
-              metadata: { ...turnMetadata, bundleRequested: true, couponMentioned: couponMentioned || undefined } as any,
-            },
-          }),
-          prisma.bargainMessage.create({
-            data: {
-              sessionId: bargainSession.id, role: 'ai', content: reply,
-              metadata: { ...turnMetadata, decision: 'chat', tactic: 'bundle_offer', policy: 'bundle_negotiation', bundleRequested: true } as any,
-            },
-          }),
-        ])
-        return NextResponse.json({
-          reply,
-          decision: 'chat',
-          sessionStatus: 'active',
-          sessionId: bargainSession.id,
-          ...intelligenceResponseFields(intelligence, offerView),
-          bundleOffer: {
-            items: bundleOffer.items,
-            listTotal: bundleOffer.listTotal,
-            offerTotal: bundleOffer.offerTotal,
-            discountPercent: bundleOffer.discountPercent,
-            currencySymbol: bundleOffer.currencySymbol,
-            code: bundleOffer.code,
-            codeStatus: bundleOffer.codeStatus,
-          },
-        })
-      }
-
       // Default fallback: redirect to per-item bargaining (preserves prior behaviour).
       let bundleReco: RecommendationCard[] | null = null
       if (recoEnabledForMessages(config) && intentAnalysis.budget != null) {

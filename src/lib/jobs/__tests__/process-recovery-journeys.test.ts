@@ -14,7 +14,7 @@ import { resolveWhatsAppUtilityTemplateName } from '@/lib/whatsapp/config'
 jest.mock('@/lib/db', () => ({
   __esModule: true,
   default: {
-    recoveryJourney: { findMany: jest.fn(), update: jest.fn() },
+    recoveryJourney: { findMany: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
     recoveryReminder: { create: jest.fn() },
     cart: { findUnique: jest.fn() },
     customerIdentity: { findUnique: jest.fn() },
@@ -71,6 +71,7 @@ beforeEach(() => {
   jest.clearAllMocks()
   prismaMock.recoveryJourney.findMany.mockResolvedValue([journey()])
   prismaMock.recoveryJourney.update.mockResolvedValue({})
+  prismaMock.recoveryJourney.updateMany.mockResolvedValue({ count: 1 })
   prismaMock.recoveryReminder.create.mockResolvedValue({})
   prismaMock.cart.findUnique.mockResolvedValue(null)
   prismaMock.customerIdentity.findUnique.mockResolvedValue({
@@ -226,5 +227,16 @@ describe('processRecoveryJourneys', () => {
 
     expect(result).toEqual({ sent: 0, failed: 1, suppressed: 0, processed: 1 })
     expect(emailMock).not.toHaveBeenCalled()
+  })
+
+  it('does not send when another worker already claimed the journey', async () => {
+    prismaMock.recoveryJourney.updateMany.mockResolvedValue({ count: 0 })
+
+    const result = await processRecoveryJourneys()
+
+    expect(result).toEqual({ sent: 0, failed: 0, suppressed: 0, processed: 1 })
+    expect(prismaMock.recoveryJourney.update).not.toHaveBeenCalled()
+    expect(emailMock).not.toHaveBeenCalled()
+    expect(whatsappMock).not.toHaveBeenCalled()
   })
 })

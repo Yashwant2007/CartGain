@@ -89,7 +89,7 @@ function makeRequest(body: Record<string, unknown> = {}) {
       originalPrice: 1000,
       finalPrice: 850,
       discountPercent: 15,
-      code: 'BARGAIN_ABC',
+      code: undefined,
       orderLevel: false,
       ...body,
     }),
@@ -125,7 +125,7 @@ describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
     const body = await res.json()
 
     expect(res.status).toBe(200)
-    expect(body.purchaseUrl).toBe('https://test/cart/777:1?discount=BARGAIN_ABC')
+    expect(body.purchaseUrl).toBe(`https://test/cart/777:1?discount=${body.code}`)
     expect(prismaMock.bargainSession.create.mock.calls[0][0].data.purchaseUrl).toBe(body.purchaseUrl)
   })
 
@@ -151,7 +151,7 @@ describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
     const created = prismaMock.bargainSession.create.mock.calls[0][0].data
     expect(created).toMatchObject({
       storeId: 'store-1',
-      discountCode: 'BARGAIN_ABC',
+      discountCode: body.code,
       finalPrice: 850,
       bargainFloor: 700,
       status: 'accepted',
@@ -200,17 +200,47 @@ describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
     expect(recordDealOpsMock.mock.calls[0][4]).toBe('overage')
   })
 
-  it('is idempotent — a retried code is NOT re-minted or double-metered', async () => {
-    prismaMock.bargainSession.findFirst.mockResolvedValue({ discountCode: 'BARGAIN_ABC' })
+  it('ignores an echoed code when the caller cannot prove ownership', async () => {
+    prismaMock.bargainSession.findFirst.mockResolvedValue(null)
 
-    const res = await POST(makeRequest())
+    const res = await POST(makeRequest({ code: 'BARGAIN_ABC' }))
     const body = await res.json()
 
     expect(res.status).toBe(200)
-    expect(body).toMatchObject({ success: true, code: 'BARGAIN_ABC' })
+    expect(body.code).toMatch(/^BARGAIN-[0-9A-F]{8}$/)
+    expect(body.code).not.toBe('BARGAIN_ABC')
+    expect(mintMock).toHaveBeenCalledTimes(1)
+    expect(prismaMock.bargainSession.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('replays an echoed code only when it is bound to the same buyer email', async () => {
+    prismaMock.bargainSession.findFirst.mockResolvedValue({ discountCode: 'BARGAIN_BOUND' })
+
+    const res = await POST(makeRequest({ code: 'BARGAIN_BOUND', customerEmail: 'Buyer@Example.com' }))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({ success: true, code: 'BARGAIN_BOUND' })
+    expect(prismaMock.bargainSession.findFirst.mock.calls[0][0].where.OR).toEqual([
+      { discountCodeCustomerEmail: 'buyer@example.com' },
+    ])
     expect(mintMock).not.toHaveBeenCalled()
     expect(prismaMock.bargainSession.create).not.toHaveBeenCalled()
     expect(recordDealOpsMock).not.toHaveBeenCalled()
+  })
+
+  it('replays an echoed code only when it is bound to the same Shopify customer id', async () => {
+    prismaMock.bargainSession.findFirst.mockResolvedValue({ discountCode: 'BARGAIN_BOUND' })
+
+    const res = await POST(makeRequest({ code: 'BARGAIN_BOUND', shopifyCustomerId: 'gid://shopify/Customer/555' }))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({ success: true, code: 'BARGAIN_BOUND' })
+    expect(prismaMock.bargainSession.findFirst.mock.calls[0][0].where.OR).toEqual([
+      { externalCustomerId: '555' },
+    ])
+    expect(mintMock).not.toHaveBeenCalled()
   })
 })
 
@@ -233,10 +263,17 @@ describe('POST /api/bargain/checkout-accept — buyer binding', () => {
     expect(mintMock.mock.calls[0][0].shopifyCustomerId).toBeNull()
   })
 
-  it('stores the customer email on the deal session when provided', async () => {
-    await POST(makeRequest({ customerEmail: 'buyer@example.com' }))
+  it('stores the normalized customer email as the code binding on the deal session', async () => {
+    await POST(makeRequest({ customerEmail: 'Buyer@Example.com' }))
     const created = prismaMock.bargainSession.create.mock.calls[0][0].data
     expect(created.customerEmail).toBe('buyer@example.com')
+    expect(created.discountCodeCustomerEmail).toBe('buyer@example.com')
+  })
+
+  it('stores the normalized customer id as the code binding on the deal session', async () => {
+    await POST(makeRequest({ shopifyCustomerId: 'gid://shopify/Customer/555' }))
+    const created = prismaMock.bargainSession.create.mock.calls[0][0].data
+    expect(created.externalCustomerId).toBe('555')
   })
 
   it('drops a non-email value rather than persisting it', async () => {

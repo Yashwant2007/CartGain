@@ -48,7 +48,9 @@ final class CartGain_WC_REST
         }
         $timestamp = $request->get_header('X-CartGain-Timestamp');
         $signature = $request->get_header('X-CartGain-Signature');
-        $canonical = $timestamp . '.';
+        $store_id = (string) $request->get_header('X-CartGain-Store-Id');
+        $path = '/wp-json' . rtrim((string) $request->get_route(), '/');
+        $canonical = $timestamp . '.' . $store_id . '.' . $path;
         return cartgain_wc_hmac_matches(cartgain_wc_hmac_hex($canonical, $secret), $signature, $timestamp);
     }
 

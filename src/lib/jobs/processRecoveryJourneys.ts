@@ -37,6 +37,7 @@ function storefrontBase(store: any): string {
 
 export async function processRecoveryJourneys(limit = 50) {
   const now = new Date()
+  const staleClaimBefore = new Date(now.getTime() - 10 * 60 * 1000)
   const journeys = await prisma.recoveryJourney.findMany({
     where: {
       status: { in: ['IDENTIFIED', 'ELIGIBILITY_CHECKED', 'SCHEDULED'] },
@@ -53,6 +54,18 @@ export async function processRecoveryJourneys(limit = 50) {
 
   for (const journey of journeys) {
     try {
+      const claimed = await prisma.recoveryJourney.updateMany({
+        where: {
+          id: journey.id,
+          OR: [
+            { status: { in: ['IDENTIFIED', 'ELIGIBILITY_CHECKED', 'SCHEDULED'] } },
+            { status: 'PROCESSING', lastProcessedAt: { lte: staleClaimBefore } },
+          ],
+        },
+        data: { status: 'PROCESSING', lastProcessedAt: now },
+      })
+      if (claimed.count !== 1) continue
+
       if (journey.cartId) {
         const cart = await prisma.cart.findUnique({ where: { id: journey.cartId }, include: { recoveredCart: true } })
         if (cart?.recoveredCart) {

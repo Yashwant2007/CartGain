@@ -136,7 +136,7 @@ export async function processRevenueShareBilling(): Promise<BillingResult> {
         : `CartGain Billing — ${subscription.currentPeriodStart.toLocaleDateString('en-IN')} to ${subscription.currentPeriodEnd.toLocaleDateString('en-IN')}`
 
       // Create the invoice record first so we have its ID for the idempotency key
-      const invoice = existingPending ?? await prisma.invoice.create({
+      let invoice = existingPending ?? await prisma.invoice.create({
         data: {
           userId: subscription.userId,
           subscriptionId: subscription.id,
@@ -147,7 +147,13 @@ export async function processRevenueShareBilling(): Promise<BillingResult> {
           dueDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
         },
       })
-      const settledAmount = invoice.amount
+      if (existingPending && existingPending.amount !== invoiceAmount) {
+        invoice = await prisma.invoice.update({
+          where: { id: existingPending.id },
+          data: { amount: invoiceAmount },
+        })
+      }
+      const settledAmount = invoiceAmount
 
       // Settle through Shopify Billing only. The merchant pre-approved the
       // usage cap, so we can never overcharge; any amount beyond the cap is
@@ -163,9 +169,10 @@ export async function processRevenueShareBilling(): Promise<BillingResult> {
       }
 
       const cap = resolveUsageCap(subscription.plan, currency) ?? revShareCap
-      const chargeAmount = Number.isFinite(cap) && cap > 0 ? Math.min(settledAmount, cap) : settledAmount
-      if (Number.isFinite(cap) && cap > 0 && settledAmount > cap) {
-        console.warn(`Shopify usage cap ${cap} < invoice ${settledAmount} for sub ${subscription.id} — billing capped, remainder written off`)
+      const cappedRevShareAmount = Number.isFinite(cap) && cap > 0 ? Math.min(revShareAmount, cap) : revShareAmount
+      const chargeAmount = Math.round((cappedRevShareAmount + overageAmount) * 100) / 100
+      if (Number.isFinite(cap) && cap > 0 && revShareAmount > cap) {
+        console.warn(`Shopify revenue-share cap ${cap} < accrued ${revShareAmount} for sub ${subscription.id} — remainder written off; overage still billed`)
       }
 
       let usageRecordId: string | undefined

@@ -128,8 +128,8 @@ final class CartGain_WC_Tracking
             return array();
         }
         return array(
-            'cartId' => $identity['session_id'],
-            'cartToken' => $identity['session_id'],
+            'cartId' => $identity['key'],
+            'cartToken' => $identity['session_id'] !== '' ? $identity['session_id'] : $identity['key'],
             'cartHash' => $identity['cart_hash'],
             'source' => 'php',
             'items' => $this->cart_items(),

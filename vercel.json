@@ -15,6 +15,18 @@
     {
       "path": "/api/jobs/refresh-bargain-trends",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/jobs/process-billing",
+      "schedule": "45 3 * * *"
+    },
+    {
+      "path": "/api/jobs/retry-payments",
+      "schedule": "15 4 * * *"
+    },
+    {
+      "path": "/api/jobs/weekly-report",
+      "schedule": "0 7 * * 1"
     }
   ],
   "functions": {

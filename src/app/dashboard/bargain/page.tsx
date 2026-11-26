@@ -28,7 +28,6 @@ import {
   Palette,
   Truck,
   Wallet,
-  Package,
   AlertTriangle,
   Pause,
   Bell,
@@ -885,37 +884,6 @@ void fetchConfig()
                         step="0.5"
                         value={configForm.prepaidIncentivePercent ?? 0}
                         onChange={e => setConfigForm({ ...configForm, prepaidIncentivePercent: Math.min(30, Math.max(0, parseFloat(e.target.value) || 0)) })}
-                        className={CONTROL_CLS}
-                      />
-                    </Field>
-                  )}
-                </ConfigCard>
-
-                {/* Bundle / multi-item negotiation */}
-                <ConfigCard
-                  className="lg:col-span-2"
-                  icon={Package}
-                  title="Bundle & multi-item deals"
-                  description="When a shopper asks for several products together, offer one deterministic bundle price instead of redirecting them. The server computes a single discount that keeps every item at or above its own floor — the AI never invents a combined number."
-                >
-                  <ToggleRow
-                    title="Offer bundle prices"
-                    description="Detects multi-product requests and resolves the distinct products (from the shopper's cart or by name). Each item stays at or above its own floor."
-                    checked={configForm.bundleNegotiationEnabled ?? false}
-                    onChange={v => setConfigForm({ ...configForm, bundleNegotiationEnabled: v })}
-                  />
-                  {configForm.bundleNegotiationEnabled && (
-                    <Field
-                      label="Desired bundle discount (%)"
-                      hint="The % off the combined list total. Clamped down to the tightest per-item floor, so it can never breach a merchant floor."
-                    >
-                      <input
-                        type="number"
-                        min={0}
-                        max={90}
-                        step="1"
-                        value={configForm.bundleDiscountPercent ?? 10}
-                        onChange={e => setConfigForm({ ...configForm, bundleDiscountPercent: Math.min(90, Math.max(0, parseFloat(e.target.value) || 0)) })}
                         className={CONTROL_CLS}
                       />
                     </Field>
