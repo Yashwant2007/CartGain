@@ -15,6 +15,8 @@ import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { normalizeShopDomain, shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
 import { loadQuoteByToken, revalidateQuote, markQuoteCheckoutPending } from '@/lib/bargain/quote'
 import { checkoutAcceptedMessage } from '@/lib/bargain/post-deal'
+import { enginePersonaFor } from '@/lib/bargain/experience/personality'
+import { publishedPersonality } from '@/lib/bargain/experience/config'
 import { CHECKOUT_ACCEPT_RATE_KEY } from '@/lib/bargain/checkout-lock'
 import {
   bargainPlatformFor,
@@ -446,7 +448,10 @@ export async function POST(request: NextRequest) {
       code: result.code,
       status: result.status,
       platform,
-      message: checkoutAcceptedMessage({ code: result.code }),
+      message: checkoutAcceptedMessage({
+        code: result.code,
+        persona: enginePersonaFor(publishedPersonality(config)),
+      }),
       ...(purchaseUrl ? { purchaseUrl } : {}),
     }, { headers })
   } catch (error) {

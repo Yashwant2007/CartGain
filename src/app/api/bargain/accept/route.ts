@@ -26,6 +26,8 @@ import {
 } from '@/lib/bargain/shipping'
 import { currencySymbolFor, formatMoney } from '@/lib/bargain/i18n'
 import { dealAcceptedMessage } from '@/lib/bargain/post-deal'
+import { enginePersonaFor } from '@/lib/bargain/experience/personality'
+import { publishedPersonality } from '@/lib/bargain/experience/config'
 import {
   readRecommendationHistory,
   recommendationStoppedInHistory,
@@ -660,6 +662,7 @@ export async function POST(request: NextRequest) {
         price: formatMoney(executable.finalPrice, bargainSession.store.currency),
         code: shopifyCode.code,
         verified: shopifyCode.status === 'created',
+        persona: enginePersonaFor(publishedPersonality(config)),
       }),
     })
   } catch (error) {
