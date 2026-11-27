@@ -33,7 +33,7 @@ import { voicePromptBlock, type BrandVoice } from '@/lib/conversation/voice'
 import { shippingPromptBlock, type ShippingConfig } from '@/lib/bargain/shipping'
 import { paymentPromptBlock } from '@/lib/bargain/payment'
 import { analyzeIntent, hasRecommendationStopRequest, shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
-import { detectLanguageRequest } from '@/lib/bargain/language'
+import { detectLanguage, detectLanguageRequest } from '@/lib/bargain/language'
 import { deriveConversationState, conversationStateGuidance } from '@/lib/bargain/conversation-state'
 import { validateReplyClaimAdherence } from '@/lib/bargain/claims'
 import { rapidReplyForTurn } from '@/lib/bargain/rapid-reply'
@@ -1304,7 +1304,7 @@ export function buildOpeningMessage(ctx: NegotiationContext): string {
   const customer = customerContext?.toLowerCase() ?? ''
   const returning = /return|again|previous|past|history/.test(customer)
   const persona = ctx.persona || 'friendly_shopkeeper'
-  const lang = detectLanguage(language, '')
+  const lang = detectLanguage(language || '') ?? (language as any) ?? 'en'
 
   if (returning) {
     if (persona === 'strict_negotiator') {
@@ -1332,23 +1332,9 @@ export function buildOpeningMessage(ctx: NegotiationContext): string {
   if (lang === 'hinglish') return `Welcome! 😊 ${productTitle} ${price} par listed hai. Details chahiye ya koi deal sochi hai?`
   return `Welcome, friend! 😊 ${productTitle} is listed at ${price}. Want the details, or have a deal in mind?`
 }
-/**
- * Loud, countable signal that a shopper is being served a template instead of
- * a real negotiation.
- *
- * This is the failure that was invisible for far too long: when the primary
- * provider's quota trips, `getAiClient()` returns null and every conversation
- * silently degrades to `chatFallback` — canned replies — for the whole breaker window (15 min per warm instance). The
- * price X hai" — for the whole breaker window (15 min per warm instance). The
- * storefront looked alive, the session worked, nothing threw, and the only
- * symptom was that the bot "felt off". Nobody could tell the difference between
- * a deliberately terse persona and a dead model.
- *
- * Never log message text or customer PII here — reason and tier only.
- */
 function reportAiDegradation(reason: 'ai_unavailable' | 'parse_fallback' | 'all_tiers_failed', detail?: string): void {
   console.error(
-    `[BARGAIN_AI_DEGRADED] reason=${reason}${detail ? ` detail=${detail}` : ''} — serving template replies; shoppers are NOT getting a live negotiation`,
+    `[BARGAIN_AI_DEGRADED] reason=${reason}${detail ? ` detail=${detail}` : ''} G�� serving template replies; shoppers are NOT getting a live negotiation`,
   )
   try {
     // Fire-and-forget: never block or throw on the negotiation hot path.
@@ -1361,7 +1347,7 @@ function reportAiDegradation(reason: 'ai_unavailable' | 'parse_fallback' | 'all_
 }
 
 // Deterministic variety for the offline fallback. When both AI tiers are down,
-// the template path is all a shopper sees — and returning the SAME fixed line
+// the template path is all a shopper sees G�� and returning the SAME fixed line
 // for every different question is what made the bot feel broken. These variants
 // are chosen from a stable hash of the message, so different questions get
 // different phrasing (while a repeat of the same message stays consistent).
@@ -1379,8 +1365,8 @@ function pickVaried<T>(options: T[], seed: string): T {
 }
 
 // Detect a near-verbatim repeat of one of the shopper's OWN earlier messages.
-// `kind` distinguishes a repeated price/offer (→ hold firm) from repeated plain
-// talk (→ change the approach). Pure and exported so it is unit-testable.
+// `kind` distinguishes a repeated price/offer (G�� hold firm) from repeated plain
+// talk (G�� change the approach). Pure and exported so it is unit-testable.
 export function detectRepeatedMessage(
   customerMessage: string,
   history: { role: 'customer' | 'ai'; content: string }[],
@@ -1391,7 +1377,7 @@ export function detectRepeatedMessage(
     (m) => m.role === 'customer' && normalizeForCompare(m.content) === currentNorm,
   )
   if (!repeated) return { repeated: false, kind: null }
-  const kind: 'offer' | 'talk' = /(?:₹|rs\.?\s*|inr\s*)?\d[\d,]*(?:\.\d+)?/i.test(customerMessage)
+  const kind: 'offer' | 'talk' = /(?:G�|rs\.?\s*|inr\s*)?\d[\d,]*(?:\.\d+)?/i.test(customerMessage)
     ? 'offer'
     : 'talk'
   return { repeated: true, kind }
@@ -1402,7 +1388,7 @@ function languageSwitchAck(ctx: NegotiationContext, lang: string): string {
   if (lang === 'hinglish') {
     return ctx.persona === 'strict_negotiator'
       ? `Bilkul, ab Hindi mein baat karenge. ${money} listed hai — apna price bataiye.`
-      : `Bilkul bhai, ab se Hinglish mein baat karta hoon 😊 ${money} challenge hai — batao, kya price chalega?`
+      : `Bilkul bhai, ab se Hinglish mein baat karta hoon 😊 ${money} listed hai — batao, kya price chalega?`
   }
   if (lang === 'hi') {
     return ctx.persona === 'strict_negotiator'
@@ -1421,7 +1407,6 @@ function languageSwitchAck(ctx: NegotiationContext, lang: string): string {
   }
   return `Sure — I'll continue in your language. ${money} is listed; what's your price?`
 }
-
 function contextAwareFallback(customerMessage: string, ctx: NegotiationContext, historyLength: number): string | null {
   if (historyLength === 0) return null
   const flavors = ctx.liveTurn?.contextFlavors ?? detectContextFlavors(customerMessage)
@@ -1436,6 +1421,7 @@ function contextAwareFallback(customerMessage: string, ctx: NegotiationContext, 
   })
   return reply?.reply ?? null
 }
+
 
 export function chatFallback(customerMessage: string, ctx: NegotiationContext, historyLength = 0): string {
   const item = ctx.productTitle ? `this ${ctx.productTitle}` : 'this item'
