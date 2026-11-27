@@ -1520,13 +1520,21 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
   }
 
   if (isShippingOrPolicyQuestion) {
+    const shippingSummary = ctx.shipping
+      ? shippingPromptBlock(ctx.shipping, ctx.currencySymbol)
+          ?.replace(/^SHIPPING TRANSPARENCY: /, '')
+          .split('FREE-SHIPPING THRESHOLD:')[0]
+          .split('Never reveal')[0]
+          .trim()
+      : null
     const policyReply: Record<Persona, string> = {
-      strict_negotiator: `I can only confirm what's shown in the verified store/product details. ${ctx.shipping?.publicSummary ? `Shipping: ${ctx.shipping.publicSummary}.` : 'I don\'t have verified shipping, return, warranty, or COD details here.'} If you want, we can focus on ${item} at ${price}.`,
-      playful_friend: `Good question 🙂 I don't want to guess policy details. ${ctx.shipping?.publicSummary ? `What I can confirm on shipping is: ${ctx.shipping.publicSummary}.` : 'I don\'t have verified shipping, return, warranty, or COD details here.'} Want me to help with ${item} itself, or check a price?`,
-      friendly_shopkeeper: `Great question — I only want to share confirmed details 😊 ${ctx.shipping?.publicSummary ? `Shipping: ${ctx.shipping.publicSummary}.` : 'I don\'t have verified shipping, return, warranty, or COD details here.'} I can still help with ${item} details or a fair price if you'd like.`,
+      strict_negotiator: `I can only confirm what's shown in the verified store/product details. ${shippingSummary ? shippingSummary : "I don't have verified shipping, return, warranty, or COD details here."} If you want, we can focus on ${item} at ${price}.`,
+      playful_friend: `Good question ?? I don't want to guess policy details. ${shippingSummary ? `What I can confirm: ${shippingSummary}` : "I don't have verified shipping, return, warranty, or COD details here."} Want me to help with ${item} itself, or check a price?`,
+      friendly_shopkeeper: `Great question ? I only want to share confirmed details ?? ${shippingSummary ? shippingSummary : "I don't have verified shipping, return, warranty, or COD details here."} I can still help with ${item} details or a fair price if you'd like.`,
     }
     return policyReply[ctx.persona]
   }
+
 
   const bulkQty = ctx.bulkQuantity != null && ctx.bulkQuantity >= 2 ? Math.floor(ctx.bulkQuantity) : null
   const isBulkPriceQuestion =
