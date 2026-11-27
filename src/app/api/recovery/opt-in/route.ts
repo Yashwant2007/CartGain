@@ -21,7 +21,6 @@ export const dynamic = 'force-dynamic'
 const ALLOWED_SOURCES = new Set([
   'storefront_product',
   'storefront_cart',
-  'checkout_extension',
 ])
 
 function text(value: unknown, max: number): string | null {

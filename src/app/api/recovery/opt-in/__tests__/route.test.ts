@@ -153,11 +153,11 @@ describe('POST /api/recovery/opt-in', () => {
     )
   })
 
-  it('grants email immediately when checkout supplied the trusted contact', async () => {
+  it('grants email immediately when cart supplied the trusted contact', async () => {
     prismaMock.cart.findUnique.mockResolvedValue(
       cart({ customerEmail: 'buyer@example.com', customerPhone: '+919876543210' }),
     )
-    const res = await POST(makeRequest({ source: 'checkout_extension', cartToken: 'cart-token-1' }))
+    const res = await POST(makeRequest({ source: 'storefront_cart', cartToken: 'cart-token-1' }))
     const body = await res.json()
 
     expect(res.status).toBe(200)
@@ -273,7 +273,7 @@ describe('POST /api/recovery/opt-in', () => {
   it('does not grant WhatsApp consent from a typed phone number alone', async () => {
     upsertMock.mockResolvedValue(identity({ consentWhatsApp: false }))
     const res = await POST(
-      makeRequest({ consentEmail: false, consentWhatsApp: true, source: 'checkout_extension' }),
+      makeRequest({ consentEmail: false, consentWhatsApp: true, source: 'storefront_cart' }),
     )
     const body = await res.json()
 

@@ -137,7 +137,7 @@ export const openApiSpec = {
                     cartToken: { type: 'string', description: 'Shopify cart token' },
                     productId: { type: 'string' },
                     sessionId: { type: 'string' },
-                    source: { type: 'string', enum: ['storefront_product', 'storefront_cart', 'checkout_extension'] },
+                    source: { type: 'string', enum: ['storefront_product', 'storefront_cart'] },
                     consentEmail: { type: 'boolean' },
                     consentWhatsApp: { type: 'boolean' },
                   },
