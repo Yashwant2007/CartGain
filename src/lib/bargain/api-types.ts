@@ -8,6 +8,7 @@
  * price claim of its own (floor/manufacturing values stay server-side).
  */
 
+import type { PublicEngineResponse } from './engine-contract'
 import type { ConversationState } from './conversation-state'
 import type { OfferBasis } from './offer-structure'
 import type { PublicBargainIntelligenceView } from './intelligence'
@@ -227,7 +228,14 @@ export type BargainOfferSuccess = {
   }
   abuseDetected?: boolean
   abuseCategory?: string
+  /** Deterministic taxonomy from the shared engine contract, safe for the widget. */
+  detectedIntent?: string
+  detectedObjection?: string
+  objectionCategory?: string
+  escalation?: 'human_support_required'
+  engineResponse?: PublicEngineResponse
   terminal?: boolean
+  terminationKind?: 'opt_out' | 'human_support'
   /** Retention deal minted when the negotiation ends WITHOUT an accept. */
   discountCode?: string | null
   purchaseUrl?: string | null
@@ -240,6 +248,10 @@ export type BargainOfferTerminal = {
   message?: string
   terminal?: boolean
   status?: 'accepted' | 'rejected' | 'expired' | 'abandoned'
+  terminationKind?: 'opt_out' | 'human_support'
+  conversationState?: ConversationState
+  escalation?: 'human_support_required'
+  engineResponse?: PublicEngineResponse
 }
 
 // ── Accept ───────────────────────────────────────────────────────────────

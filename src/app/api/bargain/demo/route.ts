@@ -30,6 +30,8 @@ import {
   publicGoalView,
 } from '@/lib/bargain/goals'
 import { analyzeIntent } from '@/lib/bargain/intent'
+import { adaptNegotiationResult, sanitizeEngineResponseForCustomer } from '@/lib/bargain/engine-contract'
+import { applicationTerminationBody } from '@/lib/bargain/application-termination'
 import { deriveConversationState } from '@/lib/bargain/conversation-state'
 import { assessCustomerClaims } from '@/lib/bargain/claims'
 import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-modes'
@@ -215,6 +217,14 @@ export async function POST(request: NextRequest) {
     // Auto = speak the customer's language. Detect from their latest message and
     // hand the engine an explicit language so the reply mirror is reliable.
     const effectiveLanguage = language !== 'auto' ? language : (detectLanguage(interpretedMessage) ?? 'auto')
+    const intentAnalysis = analyzeIntent(interpretedMessage)
+    const terminationLang = effectiveLanguage !== 'auto' ? effectiveLanguage : (detectLanguage(interpretedMessage) ?? 'en')
+    if (intentAnalysis.optOutRequested) {
+      return NextResponse.json(applicationTerminationBody('opt_out', terminationLang), { status: 200 })
+    }
+    if (intentAnalysis.needHumanSupport) {
+      return NextResponse.json(applicationTerminationBody('human_support', terminationLang), { status: 200 })
+    }
 
     const storeName = typeof body.storeName === 'string' ? body.storeName.slice(0, 60) : 'Lumina Beauty'
     const productTitle = typeof body.productTitle === 'string' ? body.productTitle.slice(0, 120) : undefined
@@ -249,10 +259,6 @@ export async function POST(request: NextRequest) {
         console.warn('[BARGAIN_DEMO] floor compute failed, using client estimate', err?.message ?? err)
       }
     }
-
-    // Deterministic read on the customer's message. Computed early because it
-    // also gates the defensive offer re-derivation below.
-    const intentAnalysis = analyzeIntent(interpretedMessage)
 
     let offer: number | null = typeof body.offer === 'number' ? body.offer : null
     if (offer != null) {
@@ -674,6 +680,19 @@ export async function POST(request: NextRequest) {
       recommendationsEnabled: recoEnabled,
     })
 
+    const engineResponse = sanitizeEngineResponseForCustomer(adaptNegotiationResult({
+      ...result,
+      metadata: {
+        ...(result.metadata ?? {}),
+        detectedIntent: intentAnalysis.intent,
+        detectedObjection: intentAnalysis.objection,
+        internalReasoningCategory: intentAnalysis.category,
+        requiresEscalation: intentAnalysis.needHumanSupport,
+        conversationState,
+        source: 'demo',
+      },
+    }))
+
     return NextResponse.json({
       reply: result.reply,
       decision: result.decision,
@@ -681,6 +700,10 @@ export async function POST(request: NextRequest) {
       tactic: result.tactic ?? 'conversational',
       sentiment: result.sentiment ?? 'neutral',
       conversationState,
+      detectedIntent: intentAnalysis.intent,
+      ...(intentAnalysis.objection ? { detectedObjection: intentAnalysis.objection } : {}),
+      objectionCategory: intentAnalysis.category,
+      engineResponse,
       persona,
       abuse: (result.metadata as any)?.abuse === true,
       goal: demoGoal,

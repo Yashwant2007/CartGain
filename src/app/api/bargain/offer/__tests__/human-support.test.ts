@@ -101,6 +101,9 @@ it('stops automated negotiation and tracks explicit human handoff', async () => 
   expect(body.terminal).toBe(true)
   expect(body.status).toBe('abandoned')
   expect(body.escalation).toBe('human_support_required')
+  expect(body.terminationKind).toBe('human_support')
+  expect(body.conversationState).toBe('HUMAN_SUPPORT_REQUIRED')
+  expect(body.engineResponse.decision).toBe('escalate')
   expect(modelCalls).toBe(0)
   expect(prismaMock.bargainSession.update).toHaveBeenCalledWith({
     where: { id: 'sess-human' },
@@ -115,5 +118,8 @@ it('stops automated negotiation on explicit opt-out phrases', async () => {
   const body = await res.json()
   expect(body.terminal).toBe(true)
   expect(body.status).toBe('abandoned')
+  expect(body.terminationKind).toBe('opt_out')
+  expect(body.conversationState).toBe('CANCELLED')
+  expect(body.engineResponse.decision).toBe('no_offer')
   expect(modelCalls).toBe(0)
 })

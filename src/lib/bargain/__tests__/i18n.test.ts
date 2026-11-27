@@ -54,7 +54,7 @@ describe('uiText', () => {
     const allKeys = [
       'farewell_friendly', 'farewell_strict', 'farewell_playful',
       'attempts_exhausted', 'terminal_accepted', 'terminal_rejected',
-      'terminal_expired', 'terminal_abandoned', 'opt_out',
+      'terminal_expired', 'terminal_abandoned', 'opt_out', 'human_support',
       'negotiate', 'dealTitle', 'skip', 'aiPowered', 'attemptsLeft',
       'connecting', 'assistant', 'notice', 'offered', 'typeOffer',
       'sessionEnded', 'acceptDeal', 'dealComplete', 'youSaved', 'newPrice',
@@ -67,7 +67,7 @@ describe('uiText', () => {
     const mustDiffer = [
       'farewell_friendly', 'farewell_strict', 'farewell_playful',
       'attempts_exhausted', 'terminal_accepted', 'terminal_rejected',
-      'terminal_expired', 'terminal_abandoned', 'opt_out',
+      'terminal_expired', 'terminal_abandoned', 'opt_out', 'human_support',
       'negotiate', 'dealTitle', 'skip', 'attemptsLeft', 'typeOffer',
       'acceptDeal', 'youSaved', 'newPrice', 'optOutMsg',
       'offersRemaining', 'sendOffer', 'addToCart', 'offerEnded', 'checking', 'tryAgain',

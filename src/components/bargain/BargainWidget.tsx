@@ -348,7 +348,7 @@ export default function BargainWidget({
   const [timeLeft, setTimeLeft] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
   const [returning, setReturning] = useState(false)
-  const [endedReason, setEndedReason] = useState<'accepted' | 'rejected' | 'expired' | 'abandoned' | 'optout' | null>(null)
+  const [endedReason, setEndedReason] = useState<'accepted' | 'rejected' | 'expired' | 'abandoned' | 'optout' | 'human_support' | null>(null)
   const [floorReached, setFloorReached] = useState(false)
   const [shippingInfo, setShippingInfo] = useState<BargainShippingView | null>(null)
   const [paymentInfo, setPaymentInfo] = useState<BargainPaymentView | null>(null)
@@ -967,12 +967,41 @@ export default function BargainWidget({
         message?: string
         terminal?: boolean
         status?: 'accepted' | 'rejected' | 'expired' | 'abandoned'
+        terminationKind?: 'opt_out' | 'human_support'
+        escalation?: 'human_support_required'
       }
       const endedForAvatar = avatarEndedFromSessionStatus(data.sessionStatus ?? data.status)
       if (data.sessionStatus && data.sessionStatus !== 'active') {
         setSessionEnded(true)
         if (data.sessionStatus === 'expired') setEndedReason('expired')
         if (data.sessionStatus === 'rejected') setDecision('reject')
+      }
+      if (data.terminal) {
+        setSessionEnded(true)
+        if (data.terminationKind === 'human_support' || data.escalation === 'human_support_required') {
+          setEndedReason('human_support')
+        } else if (data.terminationKind === 'opt_out') {
+          setEndedReason('optout')
+        } else if (data.status) {
+          setEndedReason(data.status)
+        }
+        if (data.discountCode) setDiscountCode(data.discountCode)
+        if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
+        if (data.finalPrice != null) setFinalPrice(data.finalPrice)
+        setMessages(prev => [...prev, {
+          id: createConversationId('s'), role: 'system', content: data.message ?? t('sessionEnded'),
+          offeredPrice: null, createdAt: new Date().toISOString(),
+        }])
+        if (data.status === 'rejected') setDecision('reject')
+        fireAvatar('session_ended', {
+          customerMessage: msg,
+          aiReply: data.message,
+          decision: data.status === 'rejected' ? 'reject' : 'chat',
+          ended: data.terminationKind === 'human_support' ? 'human_support_required' : data.status ?? 'abandoned',
+          originalPrice: livePrice,
+        })
+        lastFailedRef.current = null
+        return
       }
       if (!res.ok) {
         if (res.status === 410) {
@@ -984,30 +1013,6 @@ export default function BargainWidget({
             id: createConversationId('s'), role: 'system' as const, content: t('terminal_expired'),
             offeredPrice: null, createdAt: new Date().toISOString(),
           }])
-          lastFailedRef.current = null
-          return
-        }
-        if (data.terminal) {
-          setSessionEnded(true)
-          if (data.status) setEndedReason(data.status)
-          // The deal ended (rejected/abandoned) — but the backend still mints a
-          // retention code at the last price offered. Capture it so the shopper
-          // can still check out at that price.
-          if (data.discountCode) setDiscountCode(data.discountCode)
-          if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
-          if (data.finalPrice != null) setFinalPrice(data.finalPrice)
-          setMessages(prev => [...prev, {
-            id: createConversationId('s'), role: 'system', content: data.message ?? 'Session ended.',
-            offeredPrice: null, createdAt: new Date().toISOString(),
-          }])
-          if (data.status === 'rejected') setDecision('reject')
-          fireAvatar('session_ended', {
-            customerMessage: msg,
-            aiReply: data.message,
-            decision: data.status === 'rejected' ? 'reject' : 'chat',
-            ended: data.status ?? 'abandoned',
-            originalPrice: livePrice,
-          })
           lastFailedRef.current = null
           return
         }

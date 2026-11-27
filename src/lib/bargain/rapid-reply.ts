@@ -92,45 +92,45 @@ const COPY: Record<string, Copy> = { en: EN, hi: HINGLISH, mr: EN, hinglish: HIN
 
 const CONTEXT_TREND_COPY: Record<ContextFlavor, Partial<Record<string, string>>> = {
   political: {
-    en: "Nice reference ? I'll stay neutral and keep it friendly ?? For {item}, what price actually works for you?",
-    hinglish: "Reference samajh gaya ?? ? main neutral rehta hoon; {item} par aapka comfortable price kya hoga?",
-    hi: "Reference samajh gaya ?? ? main neutral rahunga; {item} ke liye aapka comfortable price kya hoga?",
+    en: "Nice reference 😄 I'll stay neutral and keep it friendly 🔥 For {item}, what price actually works for you?",
+    hinglish: "Reference samajh gaya 😄 main neutral rehta hoon; {item} par aapka comfortable price kya hoga?",
+    hi: "Reference samajh gaya 😄 main neutral rahunga; {item} ke liye aapka comfortable price kya hoga?",
   },
   devotional: {
-    en: "I get the good-vibes reference ?? For {item}, what price feels right to you?",
-    hinglish: "Achhe vibes wala reference samajh gaya ?? ? {item} ka deal clear karte hain, aapka price kya hoga?",
-    hi: "Achhe vibes wala reference samajh gaya ?? ? {item} par aapka comfortable price kya hoga?",
+    en: "I get the good-vibes reference 😄 For {item}, what price feels right to you?",
+    hinglish: "Achhe vibes wala reference samajh gaya 😄 {item} ka deal clear karte hain, aapka price kya hoga?",
+    hi: "Achhe vibes wala reference samajh gaya 😄 {item} par aapka comfortable price kya hoga?",
   },
   fashion: {
-    en: "Style point noted ?? For {item}, what price works for you?",
-    hinglish: "Style point noted ?? {item} ka price settle karte hain ? aapka price kya hoga?",
-    hi: "Style point noted ?? {item} ke liye aapka comfortable price kya hoga?",
+    en: "Style point noted 🔥 For {item}, what price works for you?",
+    hinglish: "Style point noted 🔥 {item} ka price settle karte hain, aapka price kya hoga?",
+    hi: "Style point noted 🔥 {item} ke liye aapka comfortable price kya hoga?",
   },
   meme: {
-    en: "Meme mode on ?? For {item}, give me your best price ? I deliver deals, not punchlines.",
-    hinglish: "Meme mode on ?? {item} ke liye aapka best price bataiye ? main punchline nahi, deal deliver karta hoon.",
+    en: "Meme mode on 😄 For {item}, give me your best price — I deliver deals, not punchlines.",
+    hinglish: "Meme mode on 😄 {item} ke liye aapka best price bataiye — main punchline nahi, deal deliver karta hoon.",
   },
   sport: {
-    en: "Nice reference ?? For {item}, what price should I aim for?",
-    hinglish: "Ye reference solid hai ?? {item} par aapka best price kya hoga?",
-    hi: "Reference samajh gaya ?? {item} ke liye aapka best price kya hoga?",
+    en: "Nice reference 🔥 For {item}, what price should I aim for?",
+    hinglish: "Ye reference solid hai 🔥 {item} par aapka best price kya hoga?",
+    hi: "Reference samajh gaya 🔥 {item} ke liye aapka best price kya hoga?",
   },
   soft_nudge: {
-    en: "You want a little more room ? fair enough ?? For {item}, what price can you actually do?",
-    hinglish: "Thoda aur comfort chahiye ? samajh gaya ?? {item} par aapka actual price kya hoga?",
-    hi: "Thoda aur comfort chahiye ? samajh gaya ?? {item} ke liye aapka actual price kya hoga?",
+    en: "You want a little more room — fair enough 😄 For {item}, what price can you actually do?",
+    hinglish: "Thoda aur comfort chahiye, samajh gaya 😄 {item} par aapka actual price kya hoga?",
+    hi: "Thoda aur comfort chahiye, samajh gaya 😄 {item} ke liye aapka actual price kya hoga?",
   },
   casual: {
-    en: "Nice reference ?? Want {item} details, or your best price?",
-    hinglish: "Vibe samajh gaya ?? {item} ke baare mein poochhiye ya apna best price bata dijiye.",
-    hi: "Vibe samajh gaya ?? {item} ke baare mein puchiye ya apna best price bataiye.",
+    en: "Nice reference 😄 Want {item} details, or your best price?",
+    hinglish: "Vibe samajh gaya 😄 {item} ke baare mein poochhiye ya apna best price bata dijiye.",
+    hi: "Vibe samajh gaya 😄 {item} ke baare mein puchiye ya apna best price bataiye.",
   },
 }
 
 const POLITICAL_NUDGE_COPY: Partial<Record<string, string>> = {
-  en: "Nice nudge ? I'll stay neutral, but I hear you ?? For {item}, what price can you genuinely do?",
-  hinglish: "Reference samajh gaya ?? ? main neutral rehta hoon; thoda aur comfort bhi samajh gaya. {item} par aapka comfortable price kya hoga?",
-  hi: "Reference samajh gaya ?? ? main neutral rahunga; thoda aur comfort bhi samajh gaya. {item} ke liye aapka comfortable price kya hoga?",
+  en: "Nice nudge 😄 I'll stay neutral, but I hear you 🔥 For {item}, what price can you genuinely do?",
+  hinglish: "Reference samajh gaya 😄 main neutral rehta hoon; thoda aur comfort bhi samajh gaya 🔥 {item} par aapka comfortable price kya hoga?",
+  hi: "Reference samajh gaya 😄 main neutral rahunga; thoda aur comfort bhi samajh gaya 🔥 {item} ke liye aapka comfortable price kya hoga?",
 }
 
 const EMOJI_G = /[\uD83C-\uD83E][\uDC00-\uDFFF]|[\u2600-\u27BF\u2B00-\u2BFF\uFE0F]/g

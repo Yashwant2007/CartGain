@@ -83,6 +83,8 @@ jest.mock('@/lib/shopify/discount', () => ({
   }),
 }))
 
+const { readFileSync } = require('node:fs')
+const { join } = require('node:path')
 const { runGenesisBenchmark } = require('@/lib/benchmark/genesis/run')
 const { runGenesisAdapter } = require('@/lib/benchmark/genesis/adapters')
 const { isGenesisLiveProvidersEnabled } = require('@/lib/benchmark/genesis/live-provider')
@@ -171,6 +173,21 @@ describe('CARTGAIN_GENESIS_BENCHMARK', () => {
         })
         expect(validateEngineResponse(normalized).ok).toBe(true)
       }
+    }
+  })
+
+  it('wires the shared engine contract into both production routes', () => {
+    const routes = [
+      'src/app/api/bargain/offer/route.ts',
+      'src/app/api/bargain/demo/route.ts',
+    ]
+    for (const route of routes) {
+      const source = readFileSync(join(process.cwd(), route), 'utf8')
+      expect(source).toContain('adaptNegotiationResult')
+      expect(source).toContain('sanitizeEngineResponseForCustomer')
+      expect(source).toContain('applicationTerminationBody')
+      expect(source).toContain('detectedIntent:')
+      expect(source).toContain('objectionCategory:')
     }
   })
 

@@ -25,6 +25,8 @@ import { buildBundle, validateBundleOffer, allocateDiscount, bundleSummary, type
 import { walkoutOutcome } from '@/lib/bargain/negotiation-state'
 import { buildGoalContextForNegotiation, publicGoalView } from '@/lib/bargain/goals'
 import { analyzeIntent, hasRecommendationStopRequest } from '@/lib/bargain/intent'
+import { adaptNegotiationResult, sanitizeEngineResponseForCustomer } from '@/lib/bargain/engine-contract'
+import { applicationTerminationBody } from '@/lib/bargain/application-termination'
 import {
   buildBargainIntelligence,
   conversationStateFromMetadata,
@@ -73,6 +75,22 @@ export const dynamic = 'force-dynamic'
 // merchant default; otherwise respect a configured language, then auto-mirror.
 function detectedLang(sessionOrConfig: string | null | undefined, customerMessage: string): string {
   return detectLanguageRequest(customerMessage) ?? (sessionOrConfig && sessionOrConfig !== 'auto' ? sessionOrConfig : detectLanguage(customerMessage) ?? 'auto')
+}
+
+function publicEngineResponseFor(
+  decision: string,
+  reply: string,
+  counterOffer: number | null | undefined,
+  conversationState: string | null | undefined,
+  hints: Record<string, unknown> = {},
+) {
+  return sanitizeEngineResponseForCustomer(adaptNegotiationResult({
+    reply,
+    decision,
+    counterOffer: counterOffer ?? undefined,
+    tactic: typeof hints.tactic === 'string' ? hints.tactic : undefined,
+    metadata: { ...hints, conversationState },
+  }))
 }
 
 function finalQuoteFor(session: any, minPrice: number): number {
@@ -313,6 +331,13 @@ function duplicateTurnPayload(session: any, ai: any | null): BargainOfferSuccess
   const publicIntelligence = meta.publicIntelligence as BargainOfferSuccess['negotiationIntelligence']
   const state = conversationStateFromMetadata(intelligenceMeta.conversationState)
     ?? conversationStateFromMetadata(meta.conversationState)
+  const engineResponse = publicEngineResponseFor(
+    decision,
+    typeof ai?.content === 'string' ? ai.content : '',
+    ai?.offeredPrice != null ? Number(ai.offeredPrice) : session.currentOffer ?? null,
+    state,
+    { source: 'duplicate_turn', tactic: meta.tactic },
+  )
   const offerInterpretation: BargainOfferSuccess['offerInterpretation'] = meta.offerBasis
     ? {
         basis: meta.offerBasis as NonNullable<BargainOfferSuccess['offerInterpretation']>['basis'],
@@ -338,6 +363,7 @@ function duplicateTurnPayload(session: any, ai: any | null): BargainOfferSuccess
     ...(status !== 'active' ? { terminal: true } : {}),
     ...(meta.tactic === 'final_offer' || meta.reason === 'budget_spent_but_acceptable' ? { floorReached: true } : {}),
     ...(state ? { conversationState: state } : {}),
+    engineResponse,
     ...(publicIntelligence ? { negotiationIntelligence: publicIntelligence } : {}),
     ...(offerInterpretation ? { offerInterpretation } : {}),
     discountCode: session.discountCode ?? null,
@@ -532,11 +558,7 @@ export async function POST(request: NextRequest) {
         where: { id: bargainSession.id },
         data: { status: 'abandoned' },
       })
-      return NextResponse.json({
-        message: uiText(lang, 'opt_out'),
-        terminal: true,
-        status: 'abandoned',
-      }, { status: 200 })
+      return NextResponse.json(applicationTerminationBody('opt_out', lang), { status: 200 })
     }
 
     if (intentAnalysis.needHumanSupport) {
@@ -549,12 +571,7 @@ export async function POST(request: NextRequest) {
         storeId: bargainSession.storeId,
         properties: { sessionId: bargainSession.id, state: 'HUMAN_SUPPORT_REQUIRED' },
       })
-      return NextResponse.json({
-        message: uiText(lang, 'human_support'),
-        terminal: true,
-        status: 'abandoned',
-        escalation: 'human_support_required',
-      }, { status: 200 })
+      return NextResponse.json(applicationTerminationBody('human_support', lang), { status: 200 })
     }
 
     const currencySymbol = currencySymbolFor(bargainSession.store.currency)
@@ -1928,12 +1945,30 @@ export async function POST(request: NextRequest) {
       : null
 
     const conversationState = intelligence.state.current
+    const engineResponse = publicEngineResponseFor(
+      result.decision,
+      customerReply,
+      safeCounter,
+      conversationState,
+      {
+        tactic: result.tactic,
+        detectedIntent: intentAnalysis.intent,
+        detectedObjection: intentAnalysis.objection,
+        internalReasoningCategory: intentAnalysis.category,
+        requiresEscalation: intentAnalysis.needHumanSupport,
+        source: 'production_offer',
+      },
+    )
 
     return NextResponse.json({
       reply: customerReply,
       decision: result.decision,
       counterOffer: safeCounter,
       conversationState,
+      detectedIntent: intentAnalysis.intent,
+      ...(intentAnalysis.objection ? { detectedObjection: intentAnalysis.objection } : {}),
+      objectionCategory: intentAnalysis.category,
+      engineResponse,
       negotiationIntelligence: publicIntelligenceView(intelligence),
       offerInterpretation: offerView,
       sessionStatus,

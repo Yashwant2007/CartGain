@@ -371,6 +371,22 @@ export default function StorefrontBargainWidget({
 
       const data = await res.json()
 
+      if (data.terminal) {
+        const human = data.terminationKind === 'human_support' || data.escalation === 'human_support_required'
+        await thinkingReady
+        pushAi(data.message ?? data.reply ?? t('sessionEnded'))
+        setStep('rejected')
+        reactAvatar('session_ended', {
+          customerMessage: userText,
+          aiReply: data.message ?? data.reply,
+          originalPrice,
+          decision: 'chat',
+          ended: human ? 'human_support_required' : data.status ?? 'abandoned',
+          conversationState: typeof data.conversationState === 'string' ? data.conversationState : null,
+        })
+        return
+      }
+
       if (!res.ok) {
         throw new Error(data.error || data.message || 'API error')
       }
