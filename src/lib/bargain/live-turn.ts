@@ -141,7 +141,7 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message
         replyLength: 'brief',
         compact: true,
         noPrice: true,
-        emojiBudget: playful ? 1 : 0,
+        emojiBudget: 1,
         humorAllowed: playful,
         prompt: 'The shopper sent mostly emoji. Read the mood lightly, do not over-interpret it as agreement or a bid, and ask ONE short clarifying question. Never quote or change a price from emoji alone.',
       }
@@ -185,7 +185,7 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message
         replyLength: 'brief',
         compact: true,
         noPrice: true,
-        prompt: 'They are greeting you. Greet back naturally, name the product once when relevant, and ask ONE short question about what they need. Do not open with a discount.',
+        prompt: 'They are greeting you. Greet back naturally, name the product once when relevant, and ask ONE short question about what they need. Use at most one light emoji if natural. Do not open with a discount.',
       }
     case 'small_talk':
       return {
@@ -193,7 +193,7 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message
         replyLength: 'brief',
         compact: true,
         noPrice: true,
-        prompt: 'This is low-information chat. Answer in one warm sentence and ask ONE focused question that moves toward product fit, concern or price. Do not invent a number.',
+        prompt: 'This is low-information chat. Answer in one warm human sentence and ask ONE focused question that moves toward product fit, concern or price. A light emoji is fine; do not invent a number.',
       }
     case 'discovery':
       return {
@@ -263,7 +263,7 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message
       return {
         ...base,
         replyLength: terse ? 'brief' : 'normal',
-        emojiBudget: light ? 1 : 0,
+        emojiBudget: 1,
         humorAllowed: light,
         prompt: casual
           ? 'This price turn also carries cultural, fashion, meme, sport or casual context (including Hinglish references). Acknowledge it in one warm, catchy, human line without claiming what is trending or inventing details, then validate the real budget or price concern and ask for a genuine price. Stay neutral on politics/religion and never claim favour or endorsement. Numbers inside titles, versions, model names, years, scores or saving goals are not bids; never echo them as offers. Keep any humor kind and never joke about money trouble.'

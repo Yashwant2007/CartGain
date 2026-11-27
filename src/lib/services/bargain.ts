@@ -1207,7 +1207,7 @@ YOUR NEGOTIATION DNA:
 - On final offer: "This is my final position. I've justified it clearly. The decision is yours."
 
 YOUR EMOTIONAL INTELLIGENCE:
-- Emotional customers → acknowledge but stay factual: "I understand your concern."
+- Emotional customers — acknowledge calmly, stay factual, and keep it human: "I hear your concern."
 - Vague offers → pin them down: "Can you give me a specific number?"
 - Threats → don't flinch: "I respect your decision. The offer stands."
 - Repeat customers → efficiency: "Welcome back. Let's make this quick."
@@ -1323,12 +1323,12 @@ export function buildOpeningMessage(ctx: NegotiationContext): string {
   }
 
   if (ctx.persona === 'playful_friend') {
-    return `${welcomeBack} Hey hey! I see you're checking out ${item} — great taste! 😄 Listed at ${price}, but let's be honest, that's just the sticker price. What's your move?`
+    return `${welcomeBack}Hey hey! 😄 ${item} at ${price} has main-character energy. Want the quick highlights, or got a price in mind?`
   }
   if (ctx.persona === 'strict_negotiator') {
-    return `Thank you for your interest in ${item}.${welcomeBack} Listed price: ${price}. I'm open to a fair offer. What did you have in mind?`
+    return `Thank you for your interest in ${item}.${welcomeBack} Listed price: ${price}. If you'd like, ask a product question or make a fair offer.`
   }
-  return `Hey! Welcome${welcomeBack ? ' So good to see you again!' : ''} I see you're eyeing ${item} — great choice! 😊 It's at ${price} right now. I'd love to work out a deal for you. What price were you thinking?`
+  return `${welcomeBack ? 'Good to see you again! ' : 'Hey! '}👋 ${item} is listed at ${price}. Want the quick details, or want to make an offer?`
 }
 
 // ── Chat fallback (AI unavailable / unparseable AI text for free-text
@@ -1345,7 +1345,7 @@ export function buildOpeningMessage(ctx: NegotiationContext): string {
  *
  * This is the failure that was invisible for far too long: when the primary
  * provider's quota trips, `getAiClient()` returns null and every conversation
- * silently degrades to `chatFallback` — canned lines like "Samajh gaya! listed
+ * silently degrades to `chatFallback` — canned replies — for the whole breaker window (15 min per warm instance). The
  * price X hai" — for the whole breaker window (15 min per warm instance). The
  * storefront looked alive, the session worked, nothing threw, and the only
  * symptom was that the bot "felt off". Nobody could tell the difference between
@@ -1468,9 +1468,9 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
       /\b(do\s+you\s+have\s+(?:a\s+)?(?:any\s+)?(?!this\b|it\b|the\b|one\b|these\b|those\b)|what\s+do\s+you\s+(have|sell)|products?\s+dikhao|mujhe\s+.{1,28}\s+chahiye|tumhare\s+pas|other\s+(products?|options?)|anything\s+(else|similar)|something\s+(else|similar))\b/i.test(low))
   if (isDiscovery) {
     const discovery: Record<Persona, string> = {
-      strict_negotiator: `I'll check the store's real catalogue for that. I'll only show you items I can verify — no guesses, and no need to share a number first.`,
-      playful_friend: `Let me peek at what's actually in the store for that. If there's a real match, I'll put the link right here — no pressure to pick it.`,
-      friendly_shopkeeper: `Let me check our real catalogue for you, friend. If I find a match, I'll show it with the direct link — no need to share your number first.`,
+      strict_negotiator: `I'll check the store's real catalogue for that and only show verified matches. If you want, tell me the type or budget.`,
+      playful_friend: `Let me peek at the real catalogue for that 🙂 If there's a verified match, I'll drop it here. Type or budget — what are you after?`,
+      friendly_shopkeeper: `Let me check our real catalogue for you 🙂 If I find a verified match, I'll share it right here. What type or budget should I look for?`,
     }
     return discovery[ctx.persona]
   }
@@ -1575,18 +1575,18 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
 
   if (isGreeting) {
     const greeting: Record<Persona, string> = {
-      strict_negotiator: `Welcome. This is ${item}, listed at ${price}. Present your offer — or ask a question and I'll answer directly.`,
-      playful_friend: `Well hello there! 👋 So you've found ${item} — listed at ${price}, but let's be honest, that's just the opening bid. Fancy telling me your price, or want to quiz me first?`,
-      friendly_shopkeeper: `Hello friend! 😊 Lovely to see you here. That's ${item} you're looking at — listed at ${price}. Tell me the price you had in mind, or ask me anything about it!`,
+      strict_negotiator: `Hello. This is ${item}, listed at ${price}. Ask me anything about it, or tell me the price you have in mind.`,
+      playful_friend: `Hey hey! 😄 ${item} is listed at ${price}. Want the quick scoop, or want to throw me your price?`,
+      friendly_shopkeeper: `Hey! 🙂 Good to see you. ${item} is listed at ${price}. Want details, or should we talk price?`,
     }
     return greeting[ctx.persona]
   }
 
   if (isThanks) {
     const thanks: Record<Persona, string> = {
-      strict_negotiator: `You're welcome. Proceed with an offer at your convenience.`,
-      playful_friend: `Anytime! 😄 Now then — that price isn't going to offer itself. What are we at?`,
-      friendly_shopkeeper: `You're most welcome, friend! 🙏 Whenever you're ready, just tell me the price you had in mind and I'll do my best.`,
+      strict_negotiator: `You're welcome. If you'd like, ask a question or make an offer.`,
+      playful_friend: `Anytime! 😄 So, what are we thinking for ${item} — details or your price?`,
+      friendly_shopkeeper: `Anytime, friend! 🙂 Tell me if you want product details or a price that works for you.`,
     }
     return thanks[ctx.persona]
   }
@@ -1594,7 +1594,7 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
   // Generic acknowledgement. Once the listed price has already been said (any
   // prior turn mentioned it, or the opening did), repeating it every reply is
   // the single biggest reason the fallback read as a bot: live transcripts
-  // showed "Samajh gaya! listed price $600" straight after a reply that had
+  // showed a repeated listed-price reply straight after one that had
   // already quoted $600. Acknowledge the customer and go straight back to the
   // ask — the price is what matters, and they already know the listed price.
   if (historyLength > 0) {
@@ -1602,31 +1602,31 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
     if (contextual) return contextual
     const backToPrice: Record<Persona, string[]> = {
       strict_negotiator: [
-        `Understood. Give me your price and I'll tell you where I land.`,
-        `Noted. Tell me the price you have in mind and I'll respond directly.`,
+        `Got it. What price are you thinking, or is there something specific you want to know?`,
+        `Understood. Share the price you have in mind, and I'll give you a straight answer.`,
       ],
       playful_friend: [
-        `Got it. Fair enough. So — what price are you thinking? I'll be honest with you. 😄`,
-        `Ha, alright. So what's your price? Hit me with it — I don't bite. 😄`,
+        `Got it 😄 What's your price idea, or want a quick detail on ${item}?`,
+        `Fair enough 🙂 Hit me with your price, or ask me anything about it.`,
       ],
       friendly_shopkeeper: [
-        `I hear you, friend. 😊 Tell me the price you had in mind and I'll tell you straight where I can get to.`,
-        `I hear you, friend. Give me the price you're hoping for and I'll see what I can do. 👍`,
+        `I hear you 🙂 What price were you hoping for, or is there something I can clear up?`,
+        `Got you, friend. Share your price idea, and I'll see what I can do.`,
       ],
     }
     return pickVaried(backToPrice[ctx.persona], `${customerMessage}|${historyLength}`)
   }
 
   if (ctx.language === 'hinglish') {
-    return `Samajh gaya! ${item} ka listed price ${price} hai. Batao, aap kitna soch rahe ho — ya kuch poochna ho toh poochh lo!`
+    return `Samajh gaya! 🙂 ${item} ka listed price ${price} hai. Batao, aap kya price soch rahe ho — ya product ke baare mein kuch puchna hai?`
   }
   if (ctx.language === 'hi') {
     return `समझ गया! ${item} की सूचीबद्ध कीमत ${price} है। बताइए, आप कितना सोच रहे हैं — या कुछ पूछना हो तो पूछ लीजिए!`
   }
   const ack: Record<Persona, string> = {
-    strict_negotiator: `Understood. ${item} is listed at ${price}. State your price or your question.`,
-    playful_friend: `Ha, noted! ${item} — sitting pretty at ${price}. Give me your price, or hit me with a question.`,
-    friendly_shopkeeper: `Got it, friend! ${item} is at ${price}. Tell me the price you had in mind and I'll see what I can do.`,
+    strict_negotiator: `Understood. ${item} is listed at ${price}. Ask a question or make an offer.`,
+    playful_friend: `Noted! 😄 ${item} is at ${price}. Want details, or want to make your move?`,
+    friendly_shopkeeper: `Got it 🙂 ${item} is at ${price}. Tell me your price idea, or ask me anything about it.`,
   }
   return ack[ctx.persona]
 }
@@ -2858,15 +2858,15 @@ export function detectMetaFloorTalk(reply: string): boolean {
 // the way a real shopkeeper actually deflects — warm, in character, and NEVER
 // naming a hidden number or admitting one exists.
 const LEAK_SAFE_REPLY: Record<Persona, string> = {
-  friendly_shopkeeper: "Ha, you drive a hard bargain! I only quote prices I can actually honor — so what price works for you?",
-  strict_negotiator: "I don't discuss my own pricing. Give me a price and I'll tell you where I land.",
-  playful_friend: "Ooh, trying to peek behind the counter! The only price that matters is yours — hit me.",
+  friendly_shopkeeper: "I can only quote prices I can actually honor 🙂 What price works for you?",
+  strict_negotiator: "I keep pricing straightforward. Give me a price and I'll tell you where I can land.",
+  playful_friend: "Nice try 😄 The price that matters is the one we can actually make work. What's your number?",
 }
 
 const PRESSURE_SAFE_REPLY: Record<Persona, string> = {
-  friendly_shopkeeper: "No rush at all — here's the honest price I can honor. Want me to lock it?",
+  friendly_shopkeeper: "No rush at all 🙂 Here's the honest price I can honor. Want me to lock it?",
   strict_negotiator: "Take your time. This is the price I can honor; tell me if you'll take it.",
-  playful_friend: "No rush — the price is real. Shall I lock it for you?",
+  playful_friend: "No rush 😄 The price is real. Want me to lock it for you?",
 }
 
 function bestPriceReply(counter: number, ctx: NegotiationContext, repeatCount = 0): string {
@@ -2880,42 +2880,42 @@ function bestPriceReply(counter: number, ctx: NegotiationContext, repeatCount = 
       `Meri position ${money} hai. Yahi price main honor karunga.`,
     ])
     if (ctx.persona === 'playful_friend') return pick([
-      `Fair question! 😄 Main ${money} kar sakta hoon — koi chhupa hua price nahi. Lock karun?`,
+      `Fair question! 🙂 Main ${money} kar sakta hoon — yahi price main honor karunga. Lock karun?`,
       `Bata dena yaar — ${money} par deal pakki! 😄`,
     ])
     return pick([
-      `Bhai, main ${money} kar sakta hoon — ye price main honor karunga. Lock karun? 👍`,
-      `Fair question! ${money} chalega, aur ye final-ish price hai. Batao, lock karein? 😊`,
+      `Bhai, main ${money} tak aa sakta hoon — yahi price main honor karunga. Lock karun? 🙂`,
+      `Theek hai! ${money} ek solid price hai. Batao, lock karein? 🙂`,
     ])
   }
 
   if (lang === 'hi') {
     if (ctx.persona === 'strict_negotiator') return pick([
-      `मैं ${money} तक आ सकता हूँ। बताइए, लॉक करूँ?`,
-      `मेरी स्थिति ${money} है। यही कीमत मैं सम्मान करूँगा।`,
+      `Main ${money} tak aa sakta hoon. Agar theek lage to lock kar doon?`,
+      `Mera best price ${money} hai. Bataiye, aage badhein?`,
     ])
     if (ctx.persona === 'playful_friend') return pick([
-      `बढ़िया सवाल! 😄 मैं ${money} कर सकता हूँ — कोई छुपा प्राइस नहीं। लॉक करूँ?`,
-      `बताइए तो — ${money} पर डील पक्की! 😄`,
+      `Sahi sawaal! 😄 Main ${money} kar sakta hoon — yahi price main honor karunga. Lock karun?`,
+      `Deal wali baat: ${money} 🙂 Bol do, main lock kar deta hoon.`,
     ])
     return pick([
-      `भैया, मैं ${money} कर सकता हूँ — ये कीमत मैं निभाऊँगा। लॉक करें? 👍`,
-      `सही सवाल है! ${money} चलेगा। बताइए, लॉक कर दूँ? 😊`,
+      `Main ${money} tak aa sakta hoon 🙂 Yahi price main honor karunga. Lock kar doon?`,
+      `Seedhi baat: ${money} best workable price hai. Aap bolo to lock kar dun?`,
     ])
   }
 
   if (lang === 'mr') {
     if (ctx.persona === 'strict_negotiator') return pick([
-      `मी ${money} पर येऊ शकतो. सांगा, लॉक करू?`,
-      `माझी स्थिती ${money} आहे. हीच किंमत मी मान्य करेन.`,
+      `Mi ${money} paryant yeu shakto. Thik asel tar lock karu?`,
+      `Mazi best price ${money} aahe. Tumhi sangal tar pudhe jauya.`,
     ])
     if (ctx.persona === 'playful_friend') return pick([
-      `छान प्रश्न! 😄 मी ${money} करू शकतो — काही गुप्त प्राइस नाही. लॉक करू?`,
-      `सांगा तर — ${money}वर डील पक्की! 😄`,
+      `Chhan prashna! 😄 Mi ${money} karu shakto — hich price mi honor karin. Lock karu?`,
+      `Deal time: ${money} 🙂 Bolaa, lock karto.`,
     ])
     return pick([
-      `भाऊ, मी ${money} करू शकतो — ही किंमत मी मान्य करेन. लॉक करू? 👍`,
-      `योग्य प्रश्न! ${money} चालेल. सांगा, लॉक करून देऊ? 😊`,
+      `Mi ${money} paryant yeu shakto 🙂 Hich price mi honor karin. Lock karu?`,
+      `Saral bolaycha tar ${money} best workable price aahe. Tumhi mhantal tar lock karto.`,
     ])
   }
 
@@ -2924,12 +2924,12 @@ function bestPriceReply(counter: number, ctx: NegotiationContext, repeatCount = 
     `This is the price I can honor: ${money}. Tell me if you'll take it.`,
   ])
   if (ctx.persona === 'playful_friend') return pick([
-    `Fair question! I can do ${money} right now — no mystery price, just a price I can honor. 😄`,
-    `Deal energy: ${money}. Say the word and I'll lock it before the shopkeeper changes their mind. 😄`,
+    `Fair question! I can do ${money} right now — that's a price I can honor. 🙂`,
+    `Deal energy: ${money}. 😄 Say the word and I'll lock it in.`,
   ])
   return pick([
-    `Fair question — I can do ${money} right now, and that's a price I can honor. Want me to lock it? 😊`,
-    `Here's the honest price: ${money}. If that works, I'll lock it for you. 👍`,
+    `Fair question — I can do ${money} right now, and I can honor that price. Want me to lock it? 🙂`,
+    `Here's the honest price: ${money}. If that works, I'll lock it for you. 🙂`,
   ])
 }
 

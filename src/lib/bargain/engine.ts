@@ -199,18 +199,18 @@ export function absurdOfferReply(offer: number, ctx: NegotiationContext): string
     },
     friendly_shopkeeper: {
       s1: [
-        `Oh friend, ${price} wouldn't even cover the packaging! What's a fair price you'd genuinely pay?`,
-        `Ha, ${price}? Friend, that's a warm-up, not an offer. What are you really thinking?`,
-        `I love the enthusiasm, friend — but ${price} won't work. What number feels fair to you?`,
+        `Oh friend, ${price} is a bit too far below for ${item}. What feels fair to you?`,
+        `Ha, ${price} is a warm-up 🙂 For ${item}, what's a price that feels fair?`,
+        `I love the enthusiasm, friend — but ${price} won't work for ${item}. What number feels right?`,
       ],
       s2: [
-        `I can tell you're inching up, friend, and I appreciate it — but ${price} is still too far off for ${item}. What feels fair?`,
-        `You're getting warmer, friend, but ${price} is still not workable. Give me a realistic price and I'll do my best.`,
+        `I can see you're inching up, friend — ${price} is still a bit far for ${item}. What's a fair number?`,
+        `You're getting warmer, friend 🙂 ${price} still won't quite work. What price should I try for?`,
       ],
       s3: [
-        `Friend, ${price} genuinely won't work, and I don't want to waste your time. A real starting point for ${item} is around ${anchor} — if that's workable, we'll make it happen.`,
-        `I want to be straight with you: ${price} is out of reach for ${item}. We can start around ${anchor}. Shall we try that?`,
-        `Honestly, ${price} isn't doable for ${item} — but I don't want you to walk away. Around ${anchor} I can make something work.`,
+        `I want to be straight with you, friend: ${price} won't work for ${item}. I can start around ${anchor} — if that's workable, we'll make it happen.`,
+        `I don't want to waste your time: ${price} is out of reach for ${item}. Around ${anchor} is a real starting point. Shall we try that?`,
+        `Honestly, ${price} isn't doable for ${item} — but I don't want you to walk away. Around ${anchor}, I can make something work.`,
       ],
     },
   }
