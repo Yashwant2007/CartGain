@@ -33,7 +33,7 @@ import { voicePromptBlock, type BrandVoice } from '@/lib/conversation/voice'
 import { shippingPromptBlock, type ShippingConfig } from '@/lib/bargain/shipping'
 import { paymentPromptBlock } from '@/lib/bargain/payment'
 import { analyzeIntent, hasRecommendationStopRequest, shopperIntentToPromptBlock, type IntentAnalysis } from '@/lib/bargain/intent'
-import { detectLanguageRequest } from '@/lib/bargain/language'
+import { detectLanguage, detectLanguageRequest } from '@/lib/bargain/language'
 import { deriveConversationState, conversationStateGuidance } from '@/lib/bargain/conversation-state'
 import { validateReplyClaimAdherence } from '@/lib/bargain/claims'
 import { rapidReplyForTurn } from '@/lib/bargain/rapid-reply'
@@ -1300,62 +1300,41 @@ function buildLanguageGuidance(language: string | undefined, currencySymbol: str
 
 export function buildOpeningMessage(ctx: NegotiationContext): string {
   const { originalPrice, currencySymbol, productTitle, customerContext, language } = ctx
-  const item = productTitle ? `this ${productTitle}` : 'this'
-  const welcomeBack = customerContext ? ' Welcome back! So good to see you again!' : ''
   const price = `${currencySymbol}${originalPrice.toFixed(2)}`
+  const customer = customerContext?.toLowerCase() ?? ''
+  const returning = /return|again|previous|past|history/.test(customer)
+  const persona = ctx.persona || 'friendly_shopkeeper'
+  const lang = detectLanguage(language || '') ?? (language as any) ?? 'en'
 
-  if (language === 'hinglish') {
-    const opening: Record<Persona, string> = {
-      playful_friend: `Arré arre! Aap ${productTitle ?? 'yeh item'} dekh rahe ho? Kamaal hai! Listed hai ${price} — par yeh to bas shuruwat hai. Bolo, aapka best rate kya hai?${welcomeBack}`,
-      strict_negotiator: `${productTitle ?? 'Is item'} mein interest ke liye dhanyavaad.${welcomeBack} Current price hai ${price}. Aapke mann mein kitna price hai?`,
-      friendly_shopkeeper: `Arré welcome!${welcomeBack} Main dekha ${productTitle ?? 'yeh item'} aapko pasand aaya. Thik hai, iska price ${price} hai — par hum bina jhagda ke achha deal kar sakte hain. Aap apna rate batao?`,
+  if (returning) {
+    if (persona === 'strict_negotiator') {
+      if (lang === 'hinglish') return `Welcome back. ${productTitle} abhi ${price} par listed hai. Koi sawal ho ya fair offer ho, bataiye.`
+      return `Welcome back. ${productTitle} is listed at ${price}. If you have a question or a fair offer in mind, I can assist.`
     }
-    return opening[ctx.persona] ?? opening.friendly_shopkeeper
-  }
-
-  if (language === 'hi') {
-    const opening: Record<Persona, string> = {
-      playful_friend: `अरे अरे! आप ${productTitle ?? 'ये आइटम'} देख रहे हैं — शानदार चुनाव! लिस्टेड कीमत है ${price}। पर ये तो बस शुरुआत है। चलिए, देखते हैं आप कितना अच्छा सौदा कर पाते हैं!${welcomeBack}`,
-      strict_negotiator: `${productTitle ?? 'इस आइटम'} में रुचि दिखाने के लिए धन्यवाद${welcomeBack}। वर्तमान कीमत ${price} है। आपका प्रस्ताव क्या है?`,
-      friendly_shopkeeper: `नमस्ते!${welcomeBack} आपको ${productTitle ?? 'ये आइटम'} पसंद आया, ये बहुत अच्छा है। कीमत है ${price}। आप क्या कीमत सोच रहे हैं?`,
+    if (persona === 'playful_friend') {
+      if (lang === 'hinglish') return `Welcome back! 😄 ${productTitle} abhi ${price} par hai. What's your move — details ya offer?`
+      return `Welcome back! 😄 ${productTitle} is still listed at ${price}. What's your move — quick details or an offer?`
     }
-    return opening[ctx.persona] ?? opening.friendly_shopkeeper
+    if (lang === 'hinglish') return `Welcome back! 😊 ${productTitle} abhi ${price} par listed hai. Details chahiye ya deal par baat karni hai?`
+    return `Welcome back, friend! So good to see you again. ${productTitle} is listed at ${price}. Want the details, or have a deal in mind?`
   }
 
-  if (ctx.persona === 'playful_friend') {
-    return `${welcomeBack}Hey hey! 😄 ${item} at ${price} has main-character energy. What's your move — want the quick highlights, or got a price in mind?`
+  if (persona === 'strict_negotiator') {
+    if (lang === 'hinglish') return `Hello. Yeh ${productTitle}, ${price} par listed hai. Aapka interest kis baat mein hai, ya koi fair offer hai?`
+    return `Thank you for your interest. ${productTitle} is listed at ${price}. If you have a question or a fair offer in mind, I can assist.`
   }
-  if (ctx.persona === 'strict_negotiator') {
-    return `Thank you for your interest in ${item}.${welcomeBack} Listed price: ${price}. If you'd like, ask a product question or make a fair offer.`
+
+  if (persona === 'playful_friend') {
+    if (lang === 'hinglish') return `Hey! 👋 ${productTitle} ${price} par listed hai. What's your move — details chahiye, ya apna offer?`
+    return `Hey! 👋 This is listed at ${price}. What's your move — want the quick details, or want to make an offer?`
   }
-  return `${welcomeBack ? 'Welcome! So good to see you again. ' : 'Hey! Welcome! '}👋 ${item} is listed at ${price}. I'd love to help you get a good deal — want the quick details, or want to make an offer?`
+
+  if (lang === 'hinglish') return `Welcome! 😊 ${productTitle} ${price} par listed hai. Details chahiye ya koi deal sochi hai?`
+  return `Welcome, friend! 😊 ${productTitle} is listed at ${price}. Want the details, or have a deal in mind?`
 }
-
-// ── Chat fallback (AI unavailable / unparseable AI text for free-text
-//    no-offer messages) ──
-// The previous behavior echoed the opening message in response to ANY free-text
-// no-offer message ("describe me this product" → another "Hey! Welcome…"),
-// which made the bot feel canned and scripted. Instead, acknowledge exactly
-// what the customer wrote and pivot warmly back to the deal, citing only the
-// store's verified product description. A true cold-open (no prior turns)
-// still deserves the warm opening message.
-/**
- * Loud, countable signal that a shopper is being served a template instead of
- * a real negotiation.
- *
- * This is the failure that was invisible for far too long: when the primary
- * provider's quota trips, `getAiClient()` returns null and every conversation
- * silently degrades to `chatFallback` — canned replies — for the whole breaker window (15 min per warm instance). The
- * price X hai" — for the whole breaker window (15 min per warm instance). The
- * storefront looked alive, the session worked, nothing threw, and the only
- * symptom was that the bot "felt off". Nobody could tell the difference between
- * a deliberately terse persona and a dead model.
- *
- * Never log message text or customer PII here — reason and tier only.
- */
 function reportAiDegradation(reason: 'ai_unavailable' | 'parse_fallback' | 'all_tiers_failed', detail?: string): void {
   console.error(
-    `[BARGAIN_AI_DEGRADED] reason=${reason}${detail ? ` detail=${detail}` : ''} — serving template replies; shoppers are NOT getting a live negotiation`,
+    `[BARGAIN_AI_DEGRADED] reason=${reason}${detail ? ` detail=${detail}` : ''} G�� serving template replies; shoppers are NOT getting a live negotiation`,
   )
   try {
     // Fire-and-forget: never block or throw on the negotiation hot path.
@@ -1368,7 +1347,7 @@ function reportAiDegradation(reason: 'ai_unavailable' | 'parse_fallback' | 'all_
 }
 
 // Deterministic variety for the offline fallback. When both AI tiers are down,
-// the template path is all a shopper sees — and returning the SAME fixed line
+// the template path is all a shopper sees G�� and returning the SAME fixed line
 // for every different question is what made the bot feel broken. These variants
 // are chosen from a stable hash of the message, so different questions get
 // different phrasing (while a repeat of the same message stays consistent).
@@ -1386,8 +1365,8 @@ function pickVaried<T>(options: T[], seed: string): T {
 }
 
 // Detect a near-verbatim repeat of one of the shopper's OWN earlier messages.
-// `kind` distinguishes a repeated price/offer (→ hold firm) from repeated plain
-// talk (→ change the approach). Pure and exported so it is unit-testable.
+// `kind` distinguishes a repeated price/offer (G�� hold firm) from repeated plain
+// talk (G�� change the approach). Pure and exported so it is unit-testable.
 export function detectRepeatedMessage(
   customerMessage: string,
   history: { role: 'customer' | 'ai'; content: string }[],
@@ -1398,7 +1377,7 @@ export function detectRepeatedMessage(
     (m) => m.role === 'customer' && normalizeForCompare(m.content) === currentNorm,
   )
   if (!repeated) return { repeated: false, kind: null }
-  const kind: 'offer' | 'talk' = /(?:₹|rs\.?\s*|inr\s*)?\d[\d,]*(?:\.\d+)?/i.test(customerMessage)
+  const kind: 'offer' | 'talk' = /(?:G�|rs\.?\s*|inr\s*)?\d[\d,]*(?:\.\d+)?/i.test(customerMessage)
     ? 'offer'
     : 'talk'
   return { repeated: true, kind }
@@ -1409,7 +1388,7 @@ function languageSwitchAck(ctx: NegotiationContext, lang: string): string {
   if (lang === 'hinglish') {
     return ctx.persona === 'strict_negotiator'
       ? `Bilkul, ab Hindi mein baat karenge. ${money} listed hai — apna price bataiye.`
-      : `Bilkul bhai, ab se Hinglish mein baat karta hoon 😊 ${money} challenge hai — batao, kya price chalega?`
+      : `Bilkul bhai, ab se Hinglish mein baat karta hoon 😊 ${money} listed hai — batao, kya price chalega?`
   }
   if (lang === 'hi') {
     return ctx.persona === 'strict_negotiator'
@@ -1428,7 +1407,6 @@ function languageSwitchAck(ctx: NegotiationContext, lang: string): string {
   }
   return `Sure — I'll continue in your language. ${money} is listed; what's your price?`
 }
-
 function contextAwareFallback(customerMessage: string, ctx: NegotiationContext, historyLength: number): string | null {
   if (historyLength === 0) return null
   const flavors = ctx.liveTurn?.contextFlavors ?? detectContextFlavors(customerMessage)
@@ -1443,6 +1421,7 @@ function contextAwareFallback(customerMessage: string, ctx: NegotiationContext, 
   })
   return reply?.reply ?? null
 }
+
 
 export function chatFallback(customerMessage: string, ctx: NegotiationContext, historyLength = 0): string {
   const item = ctx.productTitle ? `this ${ctx.productTitle}` : 'this item'
@@ -1468,9 +1447,9 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
       /\b(do\s+you\s+have\s+(?:a\s+)?(?:any\s+)?(?!this\b|it\b|the\b|one\b|these\b|those\b)|what\s+do\s+you\s+(have|sell)|products?\s+dikhao|mujhe\s+.{1,28}\s+chahiye|tumhare\s+pas|other\s+(products?|options?)|anything\s+(else|similar)|something\s+(else|similar))\b/i.test(low))
   if (isDiscovery) {
     const discovery: Record<Persona, string> = {
-      strict_negotiator: `I'll check the store's real catalogue for that and only show verified matches.`,
-      playful_friend: `Let me peek at the real catalogue for that 🙂 If there's a verified match, I'll drop it here. What kind of product are you after?`,
-      friendly_shopkeeper: `Let me check our real catalogue for you 🙂 If I find a verified match, I'll share it right here. What kind of product should I look for?`,
+      strict_negotiator: `I'll check the store's real catalogue for that and only show verified matches. If you want, tell me the type or price range.`,
+      playful_friend: `Let me peek at the real catalogue for that 🙂 If there's a verified match, I'll drop it here. Type or price range — what are you after?`,
+      friendly_shopkeeper: `Let me check our real catalogue for you 🙂 If I find a verified match, I'll share it right here. What type or price range should I look for?`,
     }
     return discovery[ctx.persona]
   }
@@ -1576,8 +1555,8 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
   if (isGreeting) {
     const greeting: Record<Persona, string> = {
       strict_negotiator: `Welcome. This is ${item}, listed at ${price}. Ask me anything about it, or present your offer.`,
-      playful_friend: `Hello there! 👋 ${item} is listed at ${price}. What's your move — want the opening bid, or want the quick scoop?`,
-      friendly_shopkeeper: `Hey friend, welcome! 🙂 Good to see you again. ${item} is listed at ${price}. Want details, or should we talk price?`,
+      playful_friend: `Hello there! 😄 ${item} is listed at ${price}. Want the quick scoop, or want to throw me your opening bid?`,
+      friendly_shopkeeper: `Hey, friend! 🙂 Good to see you. ${item} is listed at ${price}. Want details, or should we talk price?`,
     }
     return greeting[ctx.persona]
   }
