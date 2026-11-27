@@ -50,6 +50,7 @@
   data-cg-surface="product"
   {% unless request.design_mode %}data-cg-inline="true"{% endunless %}
   data-cg-shop="{{ shop.permanent_domain }}"
+  data-cg-customer-name="{% if customer %}{{ customer.first_name | escape }}{% endif %}"
   {{ block.shopify_attributes }}
   data-cg-src="{{ widget_src | escape }}"
   data-cg-variant="{{ v.id }}"

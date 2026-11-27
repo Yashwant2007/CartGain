@@ -1,4 +1,5 @@
 import type { SocialSignals } from './behavior'
+import { contextFlavorsPromptBlock, detectContextFlavors, hasContextFlavor, type ContextFlavor } from './context-flavor'
 import type { ShopperIntent } from './intent'
 import { maxEmojis, type BrandVoice } from '@/lib/conversation/voice'
 
@@ -36,6 +37,8 @@ export interface LiveTurnAnalysis {
   compact: boolean
   noPrice: boolean
   prompt: string
+  contextFlavor: ContextFlavor | null
+  contextFlavors?: ContextFlavor[] | null
 }
 
 export interface LiveTurnInput {
@@ -99,7 +102,7 @@ function modeFor(input: LiveTurnInput): LiveTurnMode {
   if (!textOnly(message) && EMOJI_RE.test(message)) return 'emoji_only'
   if (!textOnly(message)) return 'nonsense'
   if (isKeyboardMash(message)) return 'random'
-  if (CASUAL_TALK_RE.test(lowered) && !PRODUCT_RE.test(lowered) && !PRICE_RE.test(lowered)) return 'trend_talk'
+  if ((CASUAL_TALK_RE.test(lowered) || hasContextFlavor(message)) && !PRODUCT_RE.test(lowered) && !PRICE_RE.test(lowered)) return 'trend_talk'
   if (input.intent === 'PRODUCT_DISCOVERY' || input.intent === 'RECOMMENDATION_REQUEST' || DISCOVERY_RE.test(lowered)) return 'discovery'
   if (signals?.question || input.intent === 'PRODUCT_QUESTION') return 'question'
   if (OFF_TOPIC_RE.test(lowered) && !PRODUCT_RE.test(lowered) && !PRICE_RE.test(lowered)) return 'off_topic'
@@ -111,7 +114,7 @@ function modeFor(input: LiveTurnInput): LiveTurnMode {
   return 'ordinary'
 }
 
-function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message = ''): Omit<LiveTurnAnalysis, 'mode'> {
+function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message = ''): Omit<LiveTurnAnalysis, 'mode' | 'contextFlavor' | 'contextFlavors'> {
   const terse = signals?.terse === true
   const playful = signals?.emotion === 'playful' || signals?.emotion === 'excited'
   const base = {
@@ -148,9 +151,9 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message
         replyLength: 'brief',
         compact: true,
         noPrice: true,
-        emojiBudget: playful ? 1 : 0,
-        humorAllowed: playful,
-        prompt: 'The shopper brought up a game, show, sport, creator, saving goal or other casual/trend topic. Acknowledge it briefly in a human, current-feeling way without claiming what is trending or inventing details. Numbers in titles, versions, model names, years or goals are not offers. Then ask ONE focused question about this product, the real concern, or a genuine price they want checked. Do not lecture, discount, or follow the tangent.',
+        emojiBudget: 1,
+        humorAllowed: true,
+        prompt: 'The shopper brought a cultural, political/religious, fashion, meme, sport or casual reference. Mirror the flavour in one fresh, catchy, Hinglish-friendly line with warm, kind humour. Stay completely neutral on politics and religion: never endorse, criticize, or claim political/divine favour. Never claim what is trending or invent details. Numbers in titles, versions, model names, years, scores or goals are not offers. Then ask ONE focused question about this product, the real concern, or a genuine price they want checked. Do not lecture, discount, or follow the tangent.',
       }
     case 'off_topic':
       return {
@@ -158,7 +161,7 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message
         replyLength: 'brief',
         compact: true,
         noPrice: true,
-        prompt: 'This is friendly off-topic chatter. Acknowledge it in one short line, then steer back to this product or the number in one calm question. Do not lecture, do not discount, and do not follow the tangent.',
+        prompt: 'This is friendly off-topic chatter. Acknowledge it in one short line, then steer back to this product or the real price in one calm question. Do not lecture, do not discount, and do not follow the tangent.',
       }
     case 'probe':
       return {
@@ -209,7 +212,7 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message
       return {
         ...base,
         replyLength: 'brief',
-        prompt: 'They sound frustrated. De-escalate in one sincere line before any number, stay calm, and ask the single question that would actually resolve the problem. No jokes, no emoji, no pressure.',
+        prompt: 'They sound frustrated. De-escalate in one sincere line before any price, stay calm, and ask the single question that would actually resolve the problem. No jokes, no emoji, no pressure.',
       }
     case 'walkout':
       return {
@@ -246,7 +249,7 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message
         noPrice: true,
         emojiBudget: 1,
         humorAllowed: true,
-        prompt: 'They made a joke. Smile with one short line if it fits your persona, then return to the product or number. Keep humor kind, brief and non-financial.',
+        prompt: 'They made a joke. Smile with one short line if it fits your persona, then return to the product or price. Keep humor kind, brief and non-financial.',
       }
     case 'purchase':
       return {
@@ -263,7 +266,7 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message
         emojiBudget: light ? 1 : 0,
         humorAllowed: light,
         prompt: casual
-          ? 'This price turn also carries casual/trend context (game, show, sport, creator, saving goal or similar). Acknowledge it in one warm, human line without claiming what is trending or inventing details, then validate the real budget or price concern and ask for a genuine number. Numbers inside titles, versions, model names, years or saving goals are not bids; never echo them as offers. Keep any humor kind and never joke about money trouble.'
+          ? 'This price turn also carries cultural, fashion, meme, sport or casual context (including Hinglish references). Acknowledge it in one warm, catchy, human line without claiming what is trending or inventing details, then validate the real budget or price concern and ask for a genuine price. Stay neutral on politics/religion and never claim favour or endorsement. Numbers inside titles, versions, model names, years, scores or saving goals are not bids; never echo them as offers. Keep any humor kind and never joke about money trouble.'
           : 'This is a price turn. Diagnose or answer the real concern first, then make one honest, floor-safe move with a reason and one clear next step. Label any concession instead of silently folding.',
       }
     }
@@ -283,7 +286,16 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message
 
 export function analyzeLiveTurn(input: LiveTurnInput): LiveTurnAnalysis {
   const mode = modeFor(input)
-  return { mode, ...analysisFor(mode, input.signals, input.message) }
+  const flavors = detectContextFlavors(input.message)
+  const analysis = analysisFor(mode, input.signals, input.message)
+  const culturalPrompt = contextFlavorsPromptBlock(flavors)
+  return {
+    mode,
+    ...analysis,
+    prompt: culturalPrompt ? `${analysis.prompt}\n${culturalPrompt}` : analysis.prompt,
+    contextFlavor: flavors[0] ?? null,
+    contextFlavors: flavors,
+  }
 }
 
 export function voiceAdjustedLiveTurn(

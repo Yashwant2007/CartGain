@@ -18,6 +18,7 @@ import { POST } from '@/app/api/bargain/checkout-accept/route'
 import prisma from '@/lib/db'
 import { getBargainGate, decideDealMode, recordBargainDealOps } from '@/lib/bargain/gate'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
+import { loadQuoteByToken, markQuoteCheckoutPending, revalidateQuote } from '@/lib/bargain/quote'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
 
 jest.mock('@/lib/db', () => ({
@@ -53,6 +54,12 @@ jest.mock('@/lib/bargain/discount', () => ({
   generateBargainDiscountCode: jest.fn(async ({ code }: any) => ({ code, status: 'created' })),
 }))
 
+jest.mock('@/lib/bargain/quote', () => ({
+  loadQuoteByToken: jest.fn(async () => null),
+  revalidateQuote: jest.fn(() => ({ ok: true })),
+  markQuoteCheckoutPending: jest.fn(async () => ({})),
+}))
+
 jest.mock('@/lib/analytics/track', () => ({ track: jest.fn(async () => {}) }))
 
 jest.mock('@/lib/bargain/gate', () => ({
@@ -67,6 +74,9 @@ const getGateMock = getBargainGate as jest.Mock
 const decideDealModeMock = decideDealMode as jest.Mock
 const recordDealOpsMock = recordBargainDealOps as jest.Mock
 const mintMock = generateBargainDiscountCode as jest.Mock
+const loadQuoteMock = loadQuoteByToken as jest.Mock
+const revalidateQuoteMock = revalidateQuote as jest.Mock
+const markQuotePendingMock = markQuoteCheckoutPending as jest.Mock
 
 const store = {
   id: 'store-1',
@@ -90,14 +100,19 @@ function makeRequest(body: Record<string, unknown> = {}) {
       finalPrice: 850,
       discountPercent: 15,
       code: 'BARGAIN_ABC',
-      orderLevel: false,
       ...body,
     }),
   }) as any
 }
 
+const originalQuoteFlag = process.env.BARGAIN_QUOTE
+
 beforeEach(() => {
   jest.clearAllMocks()
+  delete process.env.BARGAIN_QUOTE
+  loadQuoteMock.mockResolvedValue(null)
+  revalidateQuoteMock.mockReturnValue({ ok: true })
+  markQuotePendingMock.mockResolvedValue({})
   prismaMock.store.findFirst.mockResolvedValue({ ...store })
   prismaMock.bargainConfig.findUnique.mockResolvedValue(null)
   prismaMock.bargainSession.findFirst.mockResolvedValue(null)
@@ -105,6 +120,11 @@ beforeEach(() => {
   decideDealModeMock.mockReturnValue('included')
   recordDealOpsMock.mockReturnValue([])
   mintMock.mockImplementation(async ({ code }: any) => ({ code, status: 'created' }))
+})
+
+afterAll(() => {
+  if (originalQuoteFlag == null) delete process.env.BARGAIN_QUOTE
+  else process.env.BARGAIN_QUOTE = originalQuoteFlag
 })
 
 describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
@@ -118,6 +138,10 @@ describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
     expect(mintMock).toHaveBeenCalledTimes(1)
     expect(mintMock.mock.calls[0][0].code).toBe(body.code)
     expect(checkSimpleRateLimit).toHaveBeenCalledWith(expect.stringContaining('bargain_checkout_accept_'))
+    expect(checkSimpleRateLimit).toHaveBeenCalledWith('bargain_codes_store-1', {
+      maxRequests: 250,
+      windowMs: 60 * 60 * 1000,
+    })
   })
 
   it('returns a purchase URL that applies the negotiated code to the variant cart', async () => {
@@ -127,6 +151,14 @@ describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
     expect(res.status).toBe(200)
     expect(body.purchaseUrl).toBe('https://test/cart/777:1?discount=BARGAIN_ABC')
     expect(prismaMock.bargainSession.create.mock.calls[0][0].data.purchaseUrl).toBe(body.purchaseUrl)
+    expect(mintMock.mock.calls[0][0]).toMatchObject({
+      shopifyProductId: 'gid://shopify/Product/1',
+      variantId: 'gid://shopify/ProductVariant/777',
+    })
+    expect(prismaMock.bargainSession.create.mock.calls[0][0].data).toMatchObject({
+      shopifyProductId: 'gid://shopify/Product/1',
+      variantId: 'gid://shopify/ProductVariant/777',
+    })
   })
 
   it('refuses a pending code and never records an accepted deal', async () => {
@@ -261,5 +293,84 @@ describe('POST /api/bargain/checkout-accept — master controls', () => {
     await POST(makeRequest())
     const created = prismaMock.bargainSession.create.mock.calls[0][0].data
     expect(created.acceptedAt).toBeInstanceOf(Date)
+  })
+})
+
+describe('POST /api/bargain/checkout-accept — product scope + quotes', () => {
+  it('rejects a client-declared whole-cart discount', async () => {
+    const res = await POST(makeRequest({ orderLevel: true }))
+    expect(res.status).toBe(400)
+    expect(mintMock).not.toHaveBeenCalled()
+    expect(prismaMock.bargainSession.create).not.toHaveBeenCalled()
+  })
+
+  it('requires a quote token when BARGAIN_QUOTE is enabled', async () => {
+    process.env.BARGAIN_QUOTE = 'true'
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(400)
+    expect(loadQuoteMock).not.toHaveBeenCalled()
+    expect(mintMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses an unknown quote before idempotent replay', async () => {
+    process.env.BARGAIN_QUOTE = 'true'
+    loadQuoteMock.mockResolvedValueOnce(null)
+    prismaMock.bargainSession.findFirst.mockResolvedValue({ discountCode: 'BARGAIN_ABC' })
+
+    const res = await POST(makeRequest({ quoteToken: 'bquote-unknown' }))
+    expect(res.status).toBe(409)
+    expect(mintMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a terminal quote', async () => {
+    process.env.BARGAIN_QUOTE = 'true'
+    loadQuoteMock.mockResolvedValueOnce({
+      id: 'q1',
+      storeId: 'store-1',
+      status: 'REDEEMED',
+      shopifyProductId: 'gid://shopify/Product/1',
+      variantId: null,
+      originalPrice: 1000,
+      finalPrice: 850,
+      discountCode: 'BARGAIN_ABC',
+      expiresAt: new Date(Date.now() + 60_000),
+    })
+
+    const res = await POST(makeRequest({ quoteToken: 'bquote-1' }))
+    expect(res.status).toBe(409)
+    expect(revalidateQuoteMock).not.toHaveBeenCalled()
+    expect(mintMock).not.toHaveBeenCalled()
+  })
+
+  it('honours an accepted quote and marks checkout pending', async () => {
+    process.env.BARGAIN_QUOTE = 'true'
+    const quote = {
+      id: 'q1',
+      storeId: 'store-1',
+      status: 'ACCEPTED',
+      shopifyProductId: 'gid://shopify/Product/1',
+      variantId: null,
+      originalPrice: 1000,
+      finalPrice: 850,
+      discountCode: 'BARGAIN_ABC',
+      expiresAt: new Date(Date.now() + 60_000),
+    }
+    loadQuoteMock.mockResolvedValueOnce(quote)
+
+    const res = await POST(makeRequest({ quoteToken: 'bquote-1' }))
+
+    expect(res.status).toBe(200)
+    expect(revalidateQuoteMock).toHaveBeenCalledWith(quote, { price: 1000, floor: 700 })
+    expect(markQuotePendingMock).toHaveBeenCalledWith(quote)
+    expect(mintMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the legacy path when BARGAIN_QUOTE is off', async () => {
+    process.env.BARGAIN_QUOTE = 'false'
+    loadQuoteMock.mockResolvedValueOnce(null)
+
+    const res = await POST(makeRequest({ quoteToken: 'bquote-bogus' }))
+    expect(res.status).toBe(200)
+    expect(mintMock).toHaveBeenCalledTimes(1)
   })
 })

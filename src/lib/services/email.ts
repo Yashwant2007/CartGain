@@ -203,7 +203,7 @@ export const EmailTemplates = {
   ) => {
     const firstName = (customerName || '').trim().split(/\s+/)[0] || ''
     const greetingName = firstName || 'there'
-    const hero = opts?.headline?.trim() || 'Your cart is still waiting'
+    const hero = opts?.headline?.trim() || 'Your picks are ready when you are'
     const ctaLabel = opts?.cta?.trim() || 'Complete Your Order'
     const showEmoji = opts?.emoji !== false
     const itemCount = items?.length || 0
@@ -242,7 +242,7 @@ export const EmailTemplates = {
 
     const textBody = aiBody
       ? escapeHtmlMultiline(aiBody)
-      : `Hey ${escapeHtml(greetingName)} ${showEmoji ? '✨' : ''}<br><br>Your ${itemCount > 1 ? 'items are' : 'item is'} still sitting in your cart at <strong>${escapeHtml(storeName)}</strong>, and we saved them just for you.<br><br>No rush — your cart is here whenever you're ready. ${showEmoji ? '🛒' : ''}`
+      : `Hey ${escapeHtml(greetingName)} ${showEmoji ? '✨' : ''}<br><br>Your ${itemCount > 1 ? 'items are' : 'item is'} right where you left them at <strong>${escapeHtml(storeName)}</strong>, saved and ready for checkout.<br><br>No rush — finish whenever you're ready. ${showEmoji ? '🛒' : ''}`
 
     return `<!DOCTYPE html>
 <html>
@@ -261,7 +261,7 @@ export const EmailTemplates = {
             <td style="background: radial-gradient(120% 120% at 50% 0%, #a5b4fc 0%, #6366f1 40%, #4f46e5 100%); padding: 40px 32px; text-align: center;">
               <div style="font-size: 42px; line-height: 1; margin-bottom: 16px;">${showEmoji ? '🛒' : ''}</div>
               <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 800; letter-spacing: -0.02em;">${escapeHtml(hero)} ${showEmoji ? '✨' : ''}</h1>
-              <p style="margin: 12px 0 0; color: rgba(255,255,255,0.92); font-size: 16px;">Hey <strong>${escapeHtml(greetingName)}</strong>, your picks are saved & ready for checkout.</p>
+              <p style="margin: 12px 0 0; color: rgba(255,255,255,0.92); font-size: 16px;">Your ${itemCount > 1 ? 'picks are' : 'pick is'} saved & ready when you are.</p>
             </td>
           </tr>
 

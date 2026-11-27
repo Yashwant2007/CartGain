@@ -194,33 +194,21 @@ describe('retentionOffer', () => {
 // ── bulkFloorFactor ──
 
 describe('bulkFloorFactor', () => {
-  it('returns 1.0 for non-bulk quantities (0 or 1)', () => {
-    expect(bulkFloorFactor(0)).toBe(1.0)
-    expect(bulkFloorFactor(1)).toBe(1.0)
-  })
-
-  it('returns 1.0 for small multi-packs (2-4 units)', () => {
-    expect(bulkFloorFactor(2)).toBe(1.0)
-    expect(bulkFloorFactor(3)).toBe(1.0)
-    expect(bulkFloorFactor(4)).toBe(1.0)
-  })
-
-  it('unlocks 5% deeper floor for 5-9 units', () => {
-    expect(bulkFloorFactor(5)).toBe(0.95)
-    expect(bulkFloorFactor(7)).toBe(0.95)
-    expect(bulkFloorFactor(9)).toBe(0.95)
-  })
-
-  it('unlocks 10% deeper floor for 10-19 units', () => {
-    expect(bulkFloorFactor(10)).toBe(0.90)
-    expect(bulkFloorFactor(15)).toBe(0.90)
-    expect(bulkFloorFactor(19)).toBe(0.90)
-  })
-
-  it('unlocks 15% deeper floor for 20+ units', () => {
-    expect(bulkFloorFactor(20)).toBe(0.85)
-    expect(bulkFloorFactor(50)).toBe(0.85)
-    expect(bulkFloorFactor(1000)).toBe(0.85)
+  it('never lowers the floor for unverified quantities', () => {
+    expect(bulkFloorFactor(0)).toBe(1)
+    expect(bulkFloorFactor(1)).toBe(1)
+    expect(bulkFloorFactor(2)).toBe(1)
+    expect(bulkFloorFactor(3)).toBe(1)
+    expect(bulkFloorFactor(4)).toBe(1)
+    expect(bulkFloorFactor(5)).toBe(1)
+    expect(bulkFloorFactor(7)).toBe(1)
+    expect(bulkFloorFactor(9)).toBe(1)
+    expect(bulkFloorFactor(10)).toBe(1)
+    expect(bulkFloorFactor(15)).toBe(1)
+    expect(bulkFloorFactor(19)).toBe(1)
+    expect(bulkFloorFactor(20)).toBe(1)
+    expect(bulkFloorFactor(50)).toBe(1)
+    expect(bulkFloorFactor(1000)).toBe(1)
   })
 })
 

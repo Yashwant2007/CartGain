@@ -20,8 +20,8 @@ export function isProduction(): boolean {
 /** Short commit sha (or 'dev' when not running from a Vercel build). */
 export function currentRelease(): string {
   const sha =
-    process.env.VERCEL_GIT_COMMIT_SHA ||
     process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ||
+    process.env.VERCEL_GIT_COMMIT_SHA ||
     process.env.RENDER_GIT_COMMIT ||
     ''
   if (!sha) return process.env.NODE_ENV === 'production' ? 'release-unknown' : 'dev'

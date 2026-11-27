@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { CheckCircle2, XCircle, Settings, ExternalLink, Copy, Key, Webhook } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
+import { getShopifyEmbedParams, isInShopifyEmbed } from '@/lib/shopify-embed'
 
 type IntegrationItem = {
   id: string
@@ -57,6 +58,8 @@ export default function IntegrationsPage() {
   const [wooError, setWooError] = useState<string | null>(null)
   const [shopifyModal, setShopifyModal] = useState(false)
   const [shopifyDomain, setShopifyDomain] = useState('')
+  const [shopifyEmbedded, setShopifyEmbedded] = useState(false)
+  const [embeddedShop, setEmbeddedShop] = useState('')
   const [shopifyConnecting, setShopifyConnecting] = useState(false)
   const [shopifyInputError, setShopifyInputError] = useState<string | null>(null)
   const [shopifyHealth, setShopifyHealth] = useState<{ connected: boolean; error?: string; reauthRequired?: boolean; shopName?: string } | null>(null)
@@ -79,6 +82,13 @@ export default function IntegrationsPage() {
   }, [storeId])
 
   useEffect(() => { loadStatus() }, [loadStatus])
+
+  useEffect(() => {
+    if (!isInShopifyEmbed()) return
+    const { shop } = getShopifyEmbedParams()
+    setShopifyEmbedded(true)
+    if (shop) setEmbeddedShop(shop)
+  }, [])
 
   // Listen for the shopify-connected page to signal back when OAuth completes
   useEffect(() => {
@@ -201,7 +211,9 @@ export default function IntegrationsPage() {
     const popup = window.open('', '_blank')
 
     try {
-      let domain = rawDomain.trim().toLowerCase()
+      const source = shopifyEmbedded ? embeddedShop : rawDomain
+      let domain = source.trim().toLowerCase()
+      if (!domain) throw new Error('Shopify store was not detected in this embedded session.')
       if (domain.startsWith('http://') || domain.startsWith('https://')) {
         domain = new URL(domain).hostname
       }
@@ -314,7 +326,12 @@ export default function IntegrationsPage() {
 
   const platformActions: Record<string, { onConnect: () => void; onDisconnect: () => void }> = {
     shopify: {
-      onConnect: () => { setShopifyDomain(''); setShopifyInputError(null); setShopifyModal(true) },
+      onConnect: () => {
+        setShopifyDomain('')
+        if (!shopifyEmbedded) setEmbeddedShop('')
+        setShopifyInputError(null)
+        setShopifyModal(true)
+      },
       onDisconnect: () => handleDisconnect(integrations.find(i => i.id === 'shopify')!),
     },
     woocommerce: {
@@ -547,29 +564,38 @@ export default function IntegrationsPage() {
             )}
 
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-blue-200 mb-1">Store name</label>
-                <p className="text-xs text-blue-300/60 mb-2">Found in your Shopify admin URL:</p>
-                <div className="flex items-center bg-slate-700/50 border border-blue-700/50 rounded-lg overflow-hidden focus-within:border-cyan-400/70 focus-within:ring-1 focus-within:ring-cyan-400/30">
-                  <input
-                    type="text"
-                    value={shopifyDomain}
-                    onChange={e => setShopifyDomain(e.target.value)}
-                    placeholder="your-store-name"
-                    className="flex-1 px-3 py-2 bg-transparent text-white text-sm focus:outline-none placeholder-blue-400/40"
-                    autoFocus
-                    required
-                  />
-                  <span className="pr-3 text-sm text-blue-400/60 select-none">.myshopify.com</span>
+              {shopifyEmbedded ? (
+                <div>
+                  <label className="block text-sm font-medium text-blue-200 mb-1">Shopify store</label>
+                  <div className="px-3 py-2 bg-slate-700/50 border border-blue-700/50 rounded-lg text-sm text-white">
+                    {embeddedShop || 'Detecting store from your Shopify admin session…'}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-blue-200 mb-1">Store name</label>
+                  <p className="text-xs text-blue-300/60 mb-2">Found in your Shopify admin URL:</p>
+                  <div className="flex items-center bg-slate-700/50 border border-blue-700/50 rounded-lg overflow-hidden focus-within:border-cyan-400/70 focus-within:ring-1 focus-within:ring-cyan-400/30">
+                    <input
+                      type="text"
+                      value={shopifyDomain}
+                      onChange={e => setShopifyDomain(e.target.value)}
+                      placeholder="your-store-name"
+                      className="flex-1 px-3 py-2 bg-transparent text-white text-sm focus:outline-none placeholder-blue-400/40"
+                      autoFocus
+                      required
+                    />
+                    <span className="pr-3 text-sm text-blue-400/60 select-none">.myshopify.com</span>
+                  </div>
+                </div>
+              )}
 
               <div className="bg-slate-700/40 border border-blue-700/30 rounded-lg p-4 space-y-3">
                 <p className="text-sm font-medium text-cyan-300">Permissions requested</p>
                 <div className="space-y-1.5 text-sm text-blue-300/70">
                   <div className="flex items-start space-x-2">
                     <span className="text-emerald-400 mt-0.5">✓</span>
-                    <span><strong className="text-blue-200">Orders</strong> — read &amp; write</span>
+                    <span><strong className="text-blue-200">Orders</strong> — read</span>
                   </div>
                   <div className="flex items-start space-x-2">
                     <span className="text-emerald-400 mt-0.5">✓</span>
@@ -581,7 +607,7 @@ export default function IntegrationsPage() {
                   </div>
                   <div className="flex items-start space-x-2">
                     <span className="text-emerald-400 mt-0.5">✓</span>
-                    <span><strong className="text-blue-200">Checkouts</strong> — read &amp; write</span>
+                    <span><strong className="text-blue-200">Discounts</strong> — write</span>
                   </div>
                 </div>
                 <p className="text-xs text-blue-300/40 mt-2">
@@ -605,7 +631,7 @@ export default function IntegrationsPage() {
                 </button>
                 <button
                   onClick={() => handleShopifyConnect(shopifyDomain)}
-                  disabled={shopifyConnecting || !shopifyDomain.trim()}
+                  disabled={shopifyConnecting || (shopifyEmbedded ? !embeddedShop : !shopifyDomain.trim())}
                   className="flex-1 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-lg hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all"
                 >
                   {shopifyConnecting ? 'Connecting...' : 'Continue to Shopify →'}

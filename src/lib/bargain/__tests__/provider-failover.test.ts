@@ -297,6 +297,22 @@ describe('primary outage is absorbed inside the same request', () => {
     expect((res.metadata as any)?.aiFallbackReason).toBe('malformed_output')
   })
 
+  it('clears half-open probes when both providers return empty content', async () => {
+    quota.tripTierBreaker('primary')
+    quota.tripTierBreaker('fallback')
+    ;(globalThis as any).__nextCreate = jest.fn(async () => ({
+      choices: [{ message: { content: '' } }],
+      usage: {},
+    }))
+
+    await negotiateStep(ctx(), [], '90?', 90, 'sess-empty-both-probe')
+
+    expect(quota.beginTierProbe('primary')).toBe(true)
+    expect(quota.beginTierProbe('fallback')).toBe(true)
+    quota.finishTierProbe('primary', false)
+    quota.finishTierProbe('fallback', false)
+  })
+
   it('passes the selected learning guidance to the fallback agent too', async () => {
     ;(globalThis as any).__nextCreate = jest.fn(async (req: any) => {
       if (req.model === 'gpt-4o') throw { status: 429, error: { code: 'insufficient_quota' } }
@@ -308,6 +324,21 @@ describe('primary outage is absorbed inside the same request', () => {
 
     const fallbackSystem = (globalThis as any).__nextCreate.mock.calls[1][0].messages[0].content
     expect(fallbackSystem).toContain('LEARNING-HINT-XYZ')
+  })
+
+  it('passes the same trend context to the primary and fallback agents', async () => {
+    const systems: string[] = []
+    ;(globalThis as any).__nextCreate = jest.fn(async (req: any) => {
+      systems.push(req.messages[0].content)
+      if (req.model === 'gpt-4o') return { choices: [{ message: { content: '' } }], usage: {} }
+      return modelReply(90)
+    })
+
+    await negotiateStep(ctx({ trendPrompt: 'TREND INTELLIGENCE: bounded test context.' }), [], '90?', 90, 'sess-trend-fb')
+
+    expect(sentModels).toEqual(['gpt-4o', 'openai/gpt-oss-120b'])
+    expect(systems[0]).toContain('TREND INTELLIGENCE: bounded test context.')
+    expect(systems[1]).toContain('TREND INTELLIGENCE: bounded test context.')
   })
 
   it('salvages a non-JSON prose reply from Groq instead of serving a template', async () => {

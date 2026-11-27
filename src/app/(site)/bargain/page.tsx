@@ -48,17 +48,17 @@ const CAPABILITIES = [
     title: 'Turns Negotiations Into Sales',
     description: 'Every hard-won agreement becomes revenue — fully automated.',
     features: [
-      'Accepted deal auto-generates a Shopify discount code',
-      'Codes bound to that customer + that cart — no sharing',
-      'Walkout retention saves customers who threaten to leave',
-      'Memory of returning customers rewards loyalty',
+      'Accepted deals show your store-configured discount code',
+      'Codes follow your Shopify or WooCommerce discount settings',
+      'Final retention offers respect your floor price and limits',
+      'Conversation history helps the agent stay consistent',
     ],
   },
 ]
 
 const SCENARIOS = [
   'Lowball openers ("₹200 take it or leave it")',
-  'Comparison shoppers ("Amazon has it cheaper")',
+  'Comparison shoppers ("I found a lower price elsewhere")',
   'Price haggling ("can you do better?")',
   'Emotional appeals (student, birthday, budget)',
   'Budget can\'t stretch — verified in-budget alternatives shown',
@@ -67,7 +67,7 @@ const SCENARIOS = [
   '"My manager / partner" excuses',
   'Round-number games & split-the-difference',
   'Bulk / multi-unit wholesale requests',
-  'Cash & UPI payment haggling',
+  'Shipping and delivery questions',
   'Flattery & charm attacks',
   'Quality & feature complaints',
   'Loyalty & returning-customer rewards',
@@ -152,30 +152,30 @@ export default function BargainPage() {
                 </div>
                 <div className="relative">
                   <div className="rounded-2xl border border-blue-700/40 bg-slate-900/80 backdrop-blur-sm p-6 shadow-xl">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-blue-300/70 mb-4">Live Negotiation Preview</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-blue-300/70 mb-4">Illustrative Negotiation</div>
                     <div className="space-y-3">
                       <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm text-white">I love this serum, but ₹1,499 is too much for me. Can you do ₹1,200?</div>
                       </div>
                       <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ animationDelay: '300ms' }}>
-                        <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-slate-700/70 px-4 py-3 text-sm text-blue-100">I get it — it&apos;s our best-seller for a reason. For you today, I can do ₹1,349. That&apos;s 10% off. Deal?</div>
+                        <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-slate-700/70 px-4 py-3 text-sm text-blue-100">I get it — for this example, I can do ₹1,349. That&apos;s 10% off. Deal?</div>
                       </div>
                       <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ animationDelay: '600ms' }}>
-                        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm text-white">Amazon has it for ₹1,280. Match that?</div>
+                        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm text-white">I have a lower quote elsewhere — can you match it?</div>
                       </div>
                       <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ animationDelay: '900ms' }}>
-                        <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-slate-700/70 px-4 py-3 text-sm text-blue-100">You&apos;ve done your homework! I can&apos;t match Amazon blindly, but I&apos;ll split the difference at ₹1,299 — with our 90-day quality guarantee included. Fair?</div>
+                        <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-slate-700/70 px-4 py-3 text-sm text-blue-100">You&apos;ve done your homework! I can&apos;t match an unverified quote blindly, but I&apos;ll move to ₹1,299. Fair?</div>
                       </div>
                       <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ animationDelay: '1200ms' }}>
                         <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm text-white">Deal!</div>
                       </div>
                       <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ animationDelay: '1500ms' }}>
-                        <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-emerald-600/40 border border-emerald-500/40 px-4 py-3 text-sm text-emerald-200">Done! Here&apos;s your code: <span className="font-bold">BARGAIN10</span> — 24 hours only.</div>
+                        <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-emerald-600/40 border border-emerald-500/40 px-4 py-3 text-sm text-emerald-200">Done! Example code: <span className="font-bold">BARGAIN10</span> — terms are set by your store.</div>
                       </div>
                     </div>
                     <div className="mt-5 pt-4 border-t border-blue-700/30 flex items-center justify-between text-xs text-blue-300/60">
-                      <span>Floor price set by you: ₹1,250</span>
-                      <span className="text-emerald-400">Margin protected ✓</span>
+                      <span>Pricing rules: configured by your store</span>
+                      <span className="text-emerald-400">Rules enforced ✓</span>
                     </div>
                   </div>
                   <p className="mt-3 text-[11px] text-blue-300/50 text-center">

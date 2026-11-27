@@ -1,11 +1,13 @@
 import OpenAI from 'openai'
 import {
   AiTier,
+  beginTierProbe,
+  finishTierProbe,
   isTierTripped,
   tripTierBreaker,
   shouldLogQuota,
   isInsufficientQuotaError,
-  rateLimitBreakerMs,
+  rateLimitCooldownMs,
 } from '@/lib/ai-quota'
 
 export type { AiTier }
@@ -183,10 +185,16 @@ function forceFallbackEnabled(): boolean {
   return value === 'true' || value === '1'
 }
 
-export function getPrimaryAiClient(): AiResolved | null {
-  if (forceFallbackEnabled() || isTierTripped('primary')) return null
+export type AiClientOptions = { force?: boolean; emergency?: boolean; probeStarted?: boolean }
+
+export function getPrimaryAiClient(options: AiClientOptions = {}): AiResolved | null {
+  if (forceFallbackEnabled() && !options.force) return null
   const key = envTrimmed('OPENAI_API_KEY')
   if (!key) return null
+  if (isTierTripped('primary')) {
+    if (!options.force) return null
+    if (!options.probeStarted && !beginTierProbe('primary')) return null
+  }
   if (!primaryClient) {
     primaryClient = new OpenAI({
       apiKey: key,
@@ -197,19 +205,19 @@ export function getPrimaryAiClient(): AiResolved | null {
   return { client: primaryClient, tier: 'primary' }
 }
 
-export function getAiClient(userKey?: string): AiResolved | null {
-  if (userKey && isUserOnCooldown(userKey)) return null
+export function getAiClient(userKey?: string, options: AiClientOptions = {}): AiResolved | null {
+  if (userKey && !options.emergency && isUserOnCooldown(userKey)) return null
 
-  const primary = getPrimaryAiClient()
+  const primary = getPrimaryAiClient(options)
   if (primary) return primary
 
-  if (!isTierTripped('fallback')) {
+  if (isTierTripped('fallback') && options.force && !options.probeStarted && !beginTierProbe('fallback')) return null
+  if (!isTierTripped('fallback') || options.force) {
     const fbClient = makeFallbackClient()
     if (fbClient) return { client: fbClient, tier: 'fallback' }
   }
 
-  // If fallback is the only configured tier and it is briefly cooling down,
-  // let the caller see it as unavailable rather than silently re-entering it.
+  if (options.emergency) return getPrimaryAiClient({ force: true })
   return null
 }
 
@@ -218,8 +226,11 @@ export function getAiClient(userKey?: string): AiResolved | null {
  * non-tripping error (for example a timeout) but the request can still be
  * completed inside the overall latency budget.
  */
-export function getFallbackAiClient(): AiResolved | null {
-  if (isTierTripped('fallback')) return null
+export function getFallbackAiClient(options: AiClientOptions = {}): AiResolved | null {
+  if (isTierTripped('fallback')) {
+    if (!options.force) return null
+    if (!options.probeStarted && !beginTierProbe('fallback')) return null
+  }
   const fbClient = makeFallbackClient()
   return fbClient ? { client: fbClient, tier: 'fallback' } : null
 }
@@ -291,15 +302,16 @@ export function handleAiFailure(
 ): AiFailureClassification {
   const classification = classifyAiFailure(err)
   const status = classification.status
+  finishTierProbe(tier, false)
   // A slow reply is NOT an outage: tripping a tier for 15 minutes because of one
   // timeout would push every shopper onto the fallback, so timeouts stay local.
   if (classification.tripBreaker) {
-    // A 429 is transient. Cool the tier for ~30s so it can recover, not for 15
-    // minutes, which would serve templates long after the provider recovered.
+    // A 429 is transient. Honour the provider's Retry-After when present, then
+    // fall back to a short cooldown instead of a 15-minute outage.
     tripTierBreaker(
       tier,
       Date.now(),
-      classification.category === 'rate_limit' ? rateLimitBreakerMs() : undefined,
+      classification.category === 'rate_limit' ? rateLimitCooldownMs(err) : undefined,
     )
     if (tier === 'fallback' && userKey) applyUserCooldown(userKey, MAX_COOLDOWN_MS)
     if (shouldLogQuota()) {
@@ -327,6 +339,10 @@ export function handleAiFailure(
     console.error(`[AI] ${context}: ${classification.category}`, err)
   }
   return classification
+}
+
+export function reportAiSuccess(tier: AiTier): void {
+  finishTierProbe(tier, true)
 }
 
 export function getAiHealth() {

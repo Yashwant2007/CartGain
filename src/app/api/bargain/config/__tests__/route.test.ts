@@ -73,6 +73,11 @@ describe('PUT /api/bargain/config', () => {
       dealFollowupEnabled: true,
       dealFollowupDelaysMinutes: [15, 180],
       dealFollowupMax: 2,
+      trendIntelligenceEnabled: true,
+      trendRegion: 'IN',
+      trendTopics: ['fitness', 'gaming'],
+      trendExcludedTopics: ['wellness', 'public_events'],
+      trendHumorEnabled: true,
     }
 
     const res = await PUT(request(body))
@@ -86,5 +91,25 @@ describe('PUT /api/bargain/config', () => {
       goalStartTime: new Date(body.goalStartTime),
       goalEndTime: new Date(body.goalEndTime),
     })
+  })
+
+  it('rejects unknown trend topics and keeps the merchant write unchanged', async () => {
+    const res = await PUT(request({ trendIntelligenceEnabled: true, trendTopics: ['politics', 'made_up'] }))
+
+    expect(res.status).toBe(400)
+    expect(db.bargainConfig.upsert).not.toHaveBeenCalled()
+  })
+
+  it('limits curated trend topics to eight and excluded topics to the full catalog', async () => {
+    const res = await PUT(request({
+      trendIntelligenceEnabled: true,
+      trendTopics: [
+        'fitness', 'music', 'gaming', 'bollywood', 'festivals', 'seasonal', 'photography', 'travel',
+        'public_events', 'pets',
+      ],
+    }))
+
+    expect(res.status).toBe(400)
+    expect(db.bargainConfig.upsert).not.toHaveBeenCalled()
   })
 })

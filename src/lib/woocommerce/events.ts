@@ -181,12 +181,15 @@ function consentTimestamp(value: unknown): Date | null {
 
 async function upsertCustomerIdentity(event: WebhookEvent, ctx: Context) {
   const root = record(event.data) ?? {}
-  const cartKey = text(root.cartId) ?? text(root.cart_key) ?? text(root.cartToken)
+  const cartKeys = [text(root.cartId) ?? text(root.cart_key), text(root.cartToken)].filter(
+    (value): value is string => Boolean(value),
+  )
   let cartContact: Record<string, unknown> = {}
-  if (cartKey) {
+  for (const cartKey of cartKeys) {
     const cart = await prisma.cart.findFirst({
       where: {
         storeId: ctx.store.id,
+        platform: 'woocommerce',
         OR: [{ cartId: cartKey }, { platformCartId: cartKey }],
       },
       select: {
@@ -203,6 +206,7 @@ async function upsertCustomerIdentity(event: WebhookEvent, ctx: Context) {
         email: cart.customerEmail,
         phone: cart.customerPhone,
       }
+      break
     }
   }
 

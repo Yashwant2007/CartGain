@@ -5,6 +5,10 @@ import {
   isInsufficientQuotaError,
   resetQuotaBreakForTests,
   rateLimitBreakerMs,
+  rateLimitCooldownMs,
+  clearTierBreaker,
+  beginTierProbe,
+  finishTierProbe,
 } from '../ai-quota'
 
 describe('AI quota circuit breakers', () => {
@@ -68,6 +72,42 @@ describe('AI quota circuit breakers', () => {
       tripTierBreaker('primary')
       jest.setSystemTime(Date.now() + 10 * 60_000)
       expect(isTierTripped('primary')).toBe(false)
+    })
+  })
+
+  describe('half-open probes', () => {
+    it('allows one probe while tripped and clears the breaker on success', () => {
+      tripTierBreaker('primary')
+      expect(beginTierProbe('primary')).toBe(true)
+      expect(beginTierProbe('primary')).toBe(false)
+      finishTierProbe('primary', true)
+      expect(isTierTripped('primary')).toBe(false)
+      expect(beginTierProbe('primary')).toBe(true)
+      finishTierProbe('primary', false)
+    })
+
+    it('keeps the breaker tripped when a probe fails', () => {
+      tripTierBreaker('fallback', Date.now(), rateLimitBreakerMs())
+      expect(beginTierProbe('fallback')).toBe(true)
+      finishTierProbe('fallback', false)
+      expect(isTierTripped('fallback')).toBe(true)
+      expect(beginTierProbe('fallback')).toBe(true)
+      finishTierProbe('fallback', false)
+      clearTierBreaker('fallback')
+      expect(isTierTripped('fallback')).toBe(false)
+    })
+  })
+
+  describe('rateLimitCooldownMs', () => {
+    it('uses Retry-After seconds when the provider supplies them', () => {
+      expect(rateLimitCooldownMs({ headers: { 'retry-after': '2' } })).toBe(2_000)
+      expect(rateLimitCooldownMs({ response: { headers: { get: () => '7' } } })).toBe(7_000)
+    })
+
+    it('falls back to the configured cooldown and clamps absurd hints', () => {
+      expect(rateLimitCooldownMs()).toBe(rateLimitBreakerMs())
+      expect(rateLimitCooldownMs({ headers: { 'retry-after': '9999' } })).toBe(5 * 60_000)
+      expect(rateLimitCooldownMs({ headers: { 'retry-after': '0' } })).toBe(1_000)
     })
   })
 

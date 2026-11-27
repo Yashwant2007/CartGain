@@ -72,7 +72,7 @@ export default function DPAPage() {
                 </div>
                 <div>
                   <p className="font-semibold text-white">Nature and Purpose of Processing:</p>
-                  <p>Automated sending of cart recovery notifications via email and WhatsApp to encourage customers to complete their purchases; optional AI price negotiation within merchant-set limits; storefront experience measurement; order and refund attribution for Shopify and WooCommerce stores; and bounded evaluation of negotiation strategies. CartGain may send WhatsApp messages from a shared sender number or a merchant-supplied WhatsApp Business number. Inbound STOP/START replies are matched to the relevant store using the recipient&apos;s phone number and cart history.</p>
+                  <p>Automated sending of cart recovery notifications via email and WhatsApp to encourage customers to complete their purchases; optional AI price negotiation within merchant-set limits; storefront experience measurement; order and refund attribution for Shopify and WooCommerce stores; and bounded evaluation of negotiation strategies. Approved WhatsApp templates are sent after an explicit storefront or checkout opt-in and do not require a START reply. A signed-in Shopify first name may be used only for greetings and personalised reminders. CartGain may send WhatsApp messages from a shared sender number or a merchant-supplied WhatsApp Business number. Inbound STOP replies are matched to the relevant store using the recipient&apos;s phone number and cart history.</p>
                 </div>
                 <div>
                   <p className="font-semibold text-white">Duration of Processing:</p>

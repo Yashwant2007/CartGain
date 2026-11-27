@@ -8,6 +8,7 @@ import { BargainLearningSettings } from './bargain-learning-settings'
 import { CustomerPaymentSettings } from './customer-payment-settings'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
+import { getShopifyEmbedParams, isInShopifyEmbed } from '@/lib/shopify-embed'
 
 type SessionUser = {
   name?: string | null
@@ -536,6 +537,8 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
   const [shopifyError, setShopifyError] = useState<string | null>(null)
   const [connectMessage, setConnectMessage] = useState<string | null>(null)
   const [shopifyConsentModal, setShopifyConsentModal] = useState(false)
+  const [shopifyEmbedded, setShopifyEmbedded] = useState(false)
+  const [embeddedShop, setEmbeddedShop] = useState('')
   const popupRef = useRef<Window | null>(null)
 
   useEffect(() => {
@@ -551,6 +554,13 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
       }
     }
   }, [store])
+
+  useEffect(() => {
+    if (!isInShopifyEmbed()) return
+    const { shop } = getShopifyEmbedParams()
+    setShopifyEmbedded(true)
+    if (shop) setEmbeddedShop(shop)
+  }, [])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -623,8 +633,13 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
   }
 
   const handleConnectShopify = async () => {
-    if (!shopifyShop.trim()) {
-      setShopifyError('Please enter your Shopify store domain')
+    const shopDomain = shopifyEmbedded ? embeddedShop : shopifyShop
+    if (!shopDomain.trim()) {
+      setShopifyError(
+        shopifyEmbedded
+          ? 'Shopify store was not detected in this embedded session.'
+          : 'Please enter your Shopify store domain',
+      )
       return
     }
 
@@ -643,7 +658,7 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
       const res = await shopifySessionFetch('/api/shopify/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shop: shopifyShop, storeId }),
+        body: JSON.stringify({ shop: shopDomain, storeId }),
       })
 
       const data = await res.json()
@@ -744,16 +759,22 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
             <div>
               <label className="block text-sm font-medium text-blue-200 mb-2">Shopify Store Domain</label>
               <div className="flex space-x-2">
-                <input
-                  type="text"
-                  placeholder="mystore.myshopify.com"
-                  value={shopifyShop}
-                  onChange={(e) => setShopifyShop(e.target.value)}
-                  className="flex-1 px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white placeholder-blue-300/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
-                />
+                {shopifyEmbedded ? (
+                  <div className="flex-1 px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white rounded-lg">
+                    {embeddedShop || 'Detecting store from your Shopify admin session…'}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="mystore.myshopify.com"
+                    value={shopifyShop}
+                    onChange={(e) => setShopifyShop(e.target.value)}
+                    className="flex-1 px-4 py-2 bg-slate-700/50 border border-blue-700/50 text-white placeholder-blue-300/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                  />
+                )}
                 <button
                   onClick={() => setShopifyConsentModal(true)}
-                  disabled={!shopifyShop.trim()}
+                  disabled={shopifyEmbedded ? !embeddedShop : !shopifyShop.trim()}
                   className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/50 disabled:opacity-50 transition-all whitespace-nowrap"
                 >
                   Connect
@@ -785,7 +806,7 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
               <div className="space-y-1.5 text-sm text-blue-300/70">
                 <div className="flex items-start space-x-2">
                   <span className="text-emerald-400 mt-0.5">✓</span>
-                  <span><strong className="text-blue-200">Orders</strong> — read &amp; write</span>
+                  <span><strong className="text-blue-200">Orders</strong> — read</span>
                 </div>
                 <div className="flex items-start space-x-2">
                   <span className="text-emerald-400 mt-0.5">✓</span>
@@ -797,7 +818,7 @@ function GeneralSettings({ store, onSave }: { store: StoreSettings | null; onSav
                 </div>
                 <div className="flex items-start space-x-2">
                   <span className="text-emerald-400 mt-0.5">✓</span>
-                  <span><strong className="text-blue-200">Checkouts</strong> — read &amp; write</span>
+                  <span><strong className="text-blue-200">Discounts</strong> — write</span>
                 </div>
               </div>
               <p className="text-xs text-blue-300/40 mt-2">

@@ -6,13 +6,19 @@ import BrandIntro from './BrandIntro'
 
 const INTRO_SEEN_KEY = 'cartgain_intro_seen'
 
-export default function AppIntroWrapper({ children }: { children: React.ReactNode }) {
+export default function AppIntroWrapper({
+  children,
+  skipIntro = false,
+}: {
+  children: React.ReactNode
+  skipIntro?: boolean
+}) {
   const [showIntro, setShowIntro] = useState(false)
   const [isReady, setIsReady] = useState(false)
   const pathname = usePathname()
 
   useEffect(() => {
-    if (!pathname?.startsWith('/dashboard')) {
+    if (skipIntro || !pathname?.startsWith('/dashboard')) {
       setShowIntro(false)
       setIsReady(true)
       return
@@ -31,7 +37,7 @@ export default function AppIntroWrapper({ children }: { children: React.ReactNod
     }
 
     setShowIntro(true)
-  }, [pathname])
+  }, [pathname, skipIntro])
 
   const handleIntroComplete = () => {
     try {

@@ -142,6 +142,20 @@ describe('WooCommerce bargain adapter helpers', () => {
     }))
   })
 
+  it('passes the bargained product scope into coupon creation', async () => {
+    await createOrReuseWooCommerceCoupon({
+      store,
+      code: 'GAIN456',
+      value: 10,
+      type: 'percentage',
+      productIds: ['woo-42', '77'],
+    })
+    expect(couponMock).toHaveBeenCalledWith(store.id, expect.objectContaining({
+      code: 'GAIN456',
+      productIds: ['woo-42', '77'],
+    }))
+  })
+
   it('maps an existing coupon to the reused status', async () => {
     couponMock.mockResolvedValue({ code: 'GAIN123', status: 'existing', verified: true })
     await expect(createOrReuseWooCommerceCoupon({

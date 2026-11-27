@@ -7,7 +7,16 @@ const mockPrisma = {
   bargainSession: { findMany: jest.fn() },
   optOut: { findMany: jest.fn() },
   customerIdentity: { findMany: jest.fn() },
+  bargainPurchaseMemory: { findMany: jest.fn().mockResolvedValue([]) },
+  bargainQuote: { findMany: jest.fn().mockResolvedValue([]) },
+  bargainDealFollowup: { findMany: jest.fn().mockResolvedValue([]) },
+  bargainExperienceEvent: { findMany: jest.fn().mockResolvedValue([]) },
+  behavioralEvent: { findMany: jest.fn().mockResolvedValue([]) },
+  recoveryJourney: { findMany: jest.fn().mockResolvedValue([]) },
+  recoveryReminder: { findMany: jest.fn().mockResolvedValue([]) },
+  platformOrder: { findMany: jest.fn().mockResolvedValue([]) },
   customerDataExport: {
+    findMany: jest.fn().mockResolvedValue([]),
     create: jest.fn(),
     update: jest.fn(),
     deleteMany: jest.fn(),
@@ -69,7 +78,7 @@ describe('collectCustomerData', () => {
         isRecovered: true,
         recoveredAt: new Date(),
         recoveredCart: { recoveredValue: 95, channel: 'whatsapp', refundStatus: 'none' },
-        messages: [{ id: 'm1', channel: 'email', content: 'hi', status: 'sent', sentAt: new Date() }],
+        messages: [{ id: 'm1', channel: 'email', content: 'hi https://cart-gain.com/r/secret', status: 'sent', sentAt: new Date() }],
       },
     ])
     mockPrisma.customer.findMany.mockResolvedValue([
@@ -110,6 +119,12 @@ describe('collectCustomerData', () => {
     mockPrisma.optOut.findMany.mockResolvedValue([
       { id: 'oo1', email: 'a@test.com', phone: null, reason: 'asked', optedOutAt: new Date() },
     ])
+    mockPrisma.bargainQuote.findMany.mockResolvedValue([
+      { id: 'q1', token: 'secret_quote_token', floorPrice: 700, discountCode: 'SAVE15', customerEmail: 'a@test.com' },
+    ])
+    mockPrisma.platformOrder.findMany.mockResolvedValue([
+      { id: 'po1', raw: { secret: 'do-not-export' }, customerEmail: 'a@test.com', customerName: 'A' },
+    ])
     mockPrisma.customerIdentity.findMany.mockResolvedValue([
       {
         id: 'id1',
@@ -145,9 +160,22 @@ describe('collectCustomerData', () => {
       bargainSessions: 1,
       optOuts: 1,
       identities: 1,
+      purchaseMemories: 0,
+      bargainQuotes: 1,
+      dealFollowups: 0,
+      experienceEvents: 0,
+      behavioralEvents: 0,
+      recoveryJourneys: 0,
+      recoveryReminders: 0,
+      platformOrders: 1,
+      priorExports: 0,
     })
     expect(payload.carts[0]).not.toHaveProperty('cartId')
+    expect(payload.carts[0].messages[0].content).toBe('hi [link redacted]')
     expect(payload.bargainSessions[0]).not.toHaveProperty('cartToken')
+    expect(payload.bargainQuotes[0]).not.toHaveProperty('token')
+    expect(payload.bargainQuotes[0]).not.toHaveProperty('floorPrice')
+    expect(payload.platformOrders[0]).not.toHaveProperty('raw')
     expect(payload.carts[0].recoveredValue).toBe(95)
     expect(payload.customers[0].shopifyCustomerId).toBe('9001')
     expect(payload.bargainSessions[0].discountCode).toBe('SAVE15')

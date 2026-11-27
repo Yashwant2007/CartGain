@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySecureToken } from '@/lib/links'
-import { markPaymentRecovered } from '@/lib/payments/recovery'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,12 +9,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   const data = verifySecureToken(token)
   if (!data) {
     return NextResponse.redirect(new URL('/?status=invalid_link', process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'))
-  }
-
-  try {
-    await markPaymentRecovered(token)
-  } catch (error) {
-    console.error('[resume-payment] markPaymentRecovered failed:', error)
   }
 
   const checkoutUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://cart-gain.com'}/checkout?resume=1&token=${token}`

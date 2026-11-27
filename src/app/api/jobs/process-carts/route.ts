@@ -117,7 +117,15 @@ export async function GET(request: NextRequest) {
         const syncCursor = await getSyncCursor()
         const stores = await prisma.store.findMany({
           where: { platform: 'shopify', isActive: true, apiKey: { not: null } },
-          select: { id: true, domain: true, apiKey: true, shopifyRefreshToken: true, shopifyTokenExpiresAt: true },
+          select: {
+            id: true,
+            domain: true,
+            apiKey: true,
+            shopifyRefreshToken: true,
+            shopifyTokenExpiresAt: true,
+            abandonedCheckoutUrlAccess: true,
+            abandonedCheckoutUrlCheckedAt: true,
+          },
           orderBy: { id: 'asc' },
         })
         let targetStores = stores

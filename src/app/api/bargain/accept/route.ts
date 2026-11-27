@@ -9,7 +9,7 @@ import { computeMinPrice } from '@/lib/services/bargain'
 import { generateBargainCode, buildBargainCheckoutUrl } from '@/lib/bargain/purchase'
 import { fetchShopifyProductPrice, fetchShopifyProductDetail } from '@/lib/shopify'
 import { buildExecutablePrice } from '@/lib/financial-safety'
-import { validateOffer } from '@/lib/bargain/offer-validation'
+import { publicOfferRejection, validateOffer } from '@/lib/bargain/offer-validation'
 import { bargainCampaignStatus, couponMentionedInMessages } from '@/lib/bargain/policy'
 import { track } from '@/lib/analytics/track'
 import { recordLearningAcceptance } from '@/lib/bargain/learning/outcomes'
@@ -346,11 +346,7 @@ export async function POST(request: NextRequest) {
         storeId: bargainSession.storeId,
         properties: { reason: validation.reason },
       })
-      return NextResponse.json({
-        message: validation.message ?? 'Cannot accept this purchase right now.',
-        reason: validation.reason,
-        code: `OFFER_REJECTED_${validation.reason}`,
-      }, { status: 409 })
+      return NextResponse.json(publicOfferRejection(validation), { status: 409 })
     }
     await track({
       name: 'cartgain_offer_approved',

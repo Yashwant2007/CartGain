@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { CheckCircle2, Zap, Building2, ArrowRight, MessageSquare, ShoppingCart, Handshake, Percent } from 'lucide-react'
-import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/payment'
+import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/plan-constants'
 
 const fmt = (n: number) => (Number.isFinite(n) ? n.toLocaleString('en-IN') : 'Unlimited')
 const fmtCurrency = (n: number) => `₹${n.toLocaleString('en-IN')}`
@@ -104,7 +104,7 @@ export default function PricingPage() {
           <div className="text-center mb-4">
             <div className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-cyan-100 bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-cyan-500/15 border border-cyan-400/30 rounded-full px-4 py-1.5 mb-5">
               <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-              Founding member rates: first 100 stores keep today&apos;s prices for life
+              Simple monthly plans — review current pricing and limits below
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">Pricing that grows with you</h1>
             <p className="text-lg text-blue-300/80 max-w-2xl mx-auto">

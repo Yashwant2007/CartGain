@@ -95,12 +95,12 @@ export default function TermsPage() {
                 CartGain sends recovery messages via email and WhatsApp on behalf of merchants. By using these channels, you agree to:
               </p>
               <ul className="list-disc pl-5 space-y-2">
-                <li><strong>Consent:</strong> You have obtained explicit, verifiable consent from your customers before sending them WhatsApp or email messages. Consent must be documented and maintained for compliance purposes.</li>
+                <li><strong>Consent:</strong> You have obtained explicit, verifiable consent from your customers before sending them WhatsApp or email messages. A storefront or checkout opt-in checkbox is the consent record; a START reply is not required for approved WhatsApp templates. Consent must be documented and maintained for compliance purposes.</li>
                 <li><strong>TCPA Compliance (US):</strong> You comply with the Telephone Consumer Protection Act, including maintaining opt-in records and honoring opt-out requests promptly.</li>
                 <li><strong>GDPR Compliance (EU):</strong> You have a lawful basis for processing customer data and have provided clear privacy notices to your customers.</li>
                 <li><strong>Opt-Out:</strong> All WhatsApp and email messages include a clear, working opt-out mechanism (e.g., an unsubscribe link or WhatsApp opt-out). You must honor opt-out requests immediately.</li>
                 <li><strong>Message Frequency:</strong> You will not send excessive messages. CartGain&apos;s default settings include reasonable frequency limits.</li>
-                <li><strong>Shared sender number:</strong> CartGain may send messages from a shared WhatsApp Business number. Inbound STOP/START replies are routed using the recipient&apos;s phone number and cart history; the shared number is not a store-specific brand asset. Merchants using their own WhatsApp Business number are responsible for its Meta approval, quality, and compliance.</li>
+                <li><strong>Shared sender number:</strong> CartGain may send messages from a shared WhatsApp Business number. Inbound STOP replies are routed using the recipient&apos;s phone number and cart history; the shared number is not a store-specific brand asset. Merchants using their own WhatsApp Business number are responsible for its Meta approval, quality, and compliance.</li>
                 <li><strong>Indemnification:</strong> You agree to indemnify and hold CartGain harmless from any claims, damages, or fines arising from your non-compliance with messaging regulations.</li>
               </ul>
             </section>
@@ -114,7 +114,7 @@ export default function TermsPage() {
                 <li>CartGain processes only the minimum personal data necessary to detect abandoned carts and recover revenue for merchants.</li>
                 <li>You retain full ownership of your customer data. CartGain acts as a data processor on your behalf.</li>
                 <li>We process customer data only for the purpose of providing cart recovery services, optional negotiation, storefront experience measurement, and bounded learning, as described in our <Link href="/privacy" className="text-cyan-400 hover:underline">Privacy Policy</Link>.</li>
-                <li>Storefront experience events are limited to presentation signals and a pseudonymous visitor key; they do not include chat message text. Learning keys are pseudonymous and the hard price floor always remains authoritative.</li>
+                <li>Storefront experience events are limited to presentation signals and a pseudonymous visitor key; they do not include chat message text. A signed-in Shopify first name may be passed from the merchant page to the bargain widget for greetings and personalised reminders. Learning keys are pseudonymous and the hard price floor always remains authoritative.</li>
                 <li>We implement industry-standard security measures to protect all data, including encryption, access controls, and logging of sensitive administrative access.</li>
                 <li>We do not sell your customer data to third parties.</li>
                 <li>You may request deletion of your data at any time; store-scoped data is also purged automatically upon account deletion or app uninstall.</li>

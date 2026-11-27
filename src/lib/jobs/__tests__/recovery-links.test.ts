@@ -178,7 +178,7 @@ describe('recovery message wiring', () => {
     expect(body[0]).toBe('Priya')
     expect(body[2]).toMatch(/^Priya, your /)
     expect(body[2]).toContain('is waiting 🛒')
-    expect(body[2]).toContain("It's still yours — claim it now!")
+    expect(body[2]).toContain('Still yours — claim it now!')
   })
 
   it('falls back to the consented identity name and backfills the cart', async () => {
@@ -221,7 +221,7 @@ describe('recovery message wiring', () => {
     const body: string[] = lastWhatsAppParams().body
     expect(body[2]).toContain('SAVE15')
     expect(body[2]).toContain('15% off')
-    expect(body[2]).toContain("It's still yours — claim it now!")
+    expect(body[2]).toContain('Still yours — claim it now!')
     expect(body[2]).not.toContain('https://')
     expect(body[2]).not.toContain('to=bargain')
     // Button should use the classy CTA for the checkout link
@@ -235,7 +235,7 @@ describe('recovery message wiring', () => {
 
     const body: string[] = lastWhatsAppParams().body
     expect(body[2]).not.toContain('code')
-    expect(body[2]).toContain("It's still yours — claim it now!")
+    expect(body[2]).toContain('Still yours — claim it now!')
     expect(body[2]).not.toContain('https://')
     expect(body[2]).not.toContain('to=bargain')
     expect(lastWhatsAppParams().buttons).toEqual([
@@ -263,6 +263,21 @@ describe('recovery message wiring', () => {
     expect(opts.offer).toMatchObject({ code: 'SAVE10', value: 10, type: 'percentage' })
     expect(opts.checkoutUrl).toBe('https://cart-gain.com/r/lCheck123')
     expect(opts.bargainUrl).toBe('https://cart-gain.com/r/lBarg1234')
+  })
+
+  it('never sends duplicate lines in the email text body', async () => {
+    prismaMock.campaign.findMany.mockResolvedValue([campaign({ channels: ['email'] })])
+    prismaMock.cart.findMany.mockReset()
+    prismaMock.cart.findMany.mockResolvedValueOnce([cart({ customerEmail: 'priya@example.com' })]).mockResolvedValue([])
+
+    await processAbandonedCarts(25)
+
+    const opts = sendEmailMock.mock.calls[0][0] as any
+    const lines = String(opts.text)
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+    expect(new Set(lines).size).toBe(lines.length)
   })
 
   it('always sends the image header the approved template declares', async () => {

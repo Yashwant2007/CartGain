@@ -60,7 +60,7 @@ export function buildRecoveryOfferLine(input: RecoveryOfferLineInput): string {
   }
 
   const nameBit = firstName ? `${firstName}, ` : ''
-  const base = `${nameBit}your ${products}${priceBit}${storeBit} is waiting 🛒${offer}. It's still yours — claim it now!`
+  const base = `${nameBit}your ${products}${priceBit}${storeBit} is waiting 🛒${offer}. Still yours — claim it now!`
 
   // Append one link as text so the customer can tap it even if the button
   // doesn't render. Only one link per message — checkout on reminder 1,

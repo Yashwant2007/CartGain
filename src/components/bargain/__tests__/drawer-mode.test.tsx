@@ -117,6 +117,37 @@ describe('BargainWidget drawer mode (view=drawer)', () => {
     expect(postMessage).toHaveBeenCalledWith({ type: 'cg_open_drawer' }, '*')
   })
 
+  it('uses the signed-in name pushed by the parent in the start request', async () => {
+    const fetchMock = jest.fn(async () =>
+      new Response(
+        JSON.stringify({
+          sessionId: 'session-1',
+          existingSession: true,
+          session: { status: 'active' },
+          expiresAt: new Date(Date.now() + 600000).toISOString(),
+        }),
+        { status: 200 },
+      ),
+    )
+    global.fetch = fetchMock as unknown as typeof fetch
+    render(<BargainWidget {...baseProps} view="drawer" />)
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'cg_customer_identity', name: 'Priya Sharma' },
+          origin: window.location.origin,
+        }),
+      )
+    })
+    await new Promise((r) => setTimeout(r, 700))
+
+    const calls = (fetchMock as jest.Mock).mock.calls as Array<[string, { body: string }]>
+    const startCall = calls.find(([url]) => String(url).includes('/api/bargain/start'))
+    expect(startCall).toBeTruthy()
+    expect(JSON.parse(startCall![1].body).customerName).toBe('Priya Sharma')
+  })
+
   it('never announces cg_resize in drawer mode (stale controllers must not shrink it)', async () => {
     const postMessage = jest.fn()
     Object.defineProperty(window, 'parent', {

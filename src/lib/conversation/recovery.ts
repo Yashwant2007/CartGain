@@ -14,6 +14,7 @@ import { ConversationDiscount, ConversationFacts } from './facts'
 import { BrandVoice } from './voice'
 import { ConversationStage } from './prompts'
 import { GeneratedMessage, buildFallbackMessage, generateRecoveryMessage } from './generate'
+import { dedupeCopy } from './validate'
 
 export type RecoveryCartInput = {
   storeId: string
@@ -93,7 +94,7 @@ export async function composeRecoveryMessage(input: RecoveryCartInput): Promise<
  * a parameter, so the newline-separated email body is collapsed.
  */
 export function singleLineMessage(body: string): string {
-  return body.replace(/\s*\n+\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
+  return dedupeCopy(body).replace(/\s*\n+\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
 }
 
 /**

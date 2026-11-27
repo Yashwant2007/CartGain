@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { currencySymbolFor, uiText, type UiKey } from '@/lib/bargain/i18n'
 import { parseDraftOffer } from '@/lib/bargain/offers'
+import { cleanCustomerName } from '@/lib/names'
 import ShopkeeperStage from '@/components/bargain/ShopkeeperStage'
 import ShopkeeperAvatar from '@/components/bargain/ShopkeeperAvatar'
 import V2ShopkeeperAvatar from '@/components/bargain/V2ShopkeeperAvatar'
@@ -391,6 +392,7 @@ export default function BargainWidget({
   // cg_product_update arrives) so a variant picked before opening is bound into
   // the START call instead of the default variant.
   const [productPending, setProductPending] = useState(isDrawer)
+  const [identityName, setIdentityName] = useState<string | null>(customerName ?? null)
 
   const livePrice = productCtx.price
 
@@ -412,6 +414,20 @@ export default function BargainWidget({
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
   }, [isDrawer, parentOrigin])
+
+  useEffect(() => {
+    if (!isEmbed || typeof window === 'undefined') return
+    const onMessage = (e: MessageEvent) => {
+      if (parentOrigin && e.origin !== parentOrigin) return
+      if (e.source && e.source !== window.parent) return
+      const d = (e.data ?? null) as CgParentMessage | null
+      if (d?.type !== 'cg_customer_identity') return
+      const cleaned = cleanCustomerName(d.name, customerEmail ?? null)
+      if (cleaned) setIdentityName(cleaned)
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [isEmbed, parentOrigin, customerEmail])
 
   useEffect(() => {
     if (!isDrawer || !productPending) return
@@ -756,7 +772,7 @@ export default function BargainWidget({
           cartToken,
           customerEmail,
           customerPhone,
-          customerName,
+          customerName: identityName ?? customerName,
           customerFingerprint: bargainFingerprint(cartToken ?? ''),
           language,
         }),
@@ -877,7 +893,7 @@ export default function BargainWidget({
       customerFingerprint: bargainFingerprint(cartToken ?? ''),
       cartToken: cartToken ?? undefined,
       customerEmail: customerEmail ?? undefined,
-      customerName: customerName ?? undefined,
+      customerName: identityName ?? customerName ?? undefined,
       sessionToken: sessionToken ?? undefined,
     }
   }
@@ -2414,9 +2430,9 @@ export default function BargainWidget({
         .cartgain-bargain .cg-panel-fixed {
           position: fixed; z-index: 9999;
           right: 16px; bottom: 16px;
-          width: clamp(420px, 42vw, 540px);
+          width: clamp(440px, 44vw, 560px);
           max-width: calc(100vw - 32px);
-          height: min(820px, calc(100dvh - 32px));
+          height: min(860px, calc(100dvh - 32px));
           max-height: calc(100dvh - 32px);
           min-height: 0;
           border-radius: 24px;

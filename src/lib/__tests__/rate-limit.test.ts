@@ -1,6 +1,6 @@
 import { headers } from 'next/headers'
 import { redisIncrOrNull, redisExpire } from '@/lib/redis'
-import { checkRateLimit } from '@/lib/rate-limit'
+import { checkRateLimit, checkSimpleRateLimit } from '@/lib/rate-limit'
 
 jest.mock('next/headers', () => ({ headers: jest.fn() }))
 jest.mock('@/lib/redis', () => ({
@@ -47,5 +47,16 @@ describe('checkRateLimit', () => {
     mockIncr.mockResolvedValue(11)
     const result = await checkRateLimit(`redis-block-${Date.now()}`, { maxAttempts: 10 })
     expect(result.success).toBe(false)
+  })
+})
+
+describe('checkSimpleRateLimit', () => {
+  it('honours a custom budget and reports the configured window as Retry-After', async () => {
+    mockIncr.mockResolvedValue(3)
+    const result = await checkSimpleRateLimit(`custom-${Date.now()}`, {
+      maxRequests: 2,
+      windowMs: 60_000,
+    })
+    expect(result).toEqual({ allowed: false, retryAfter: 60 })
   })
 })

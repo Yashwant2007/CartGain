@@ -327,36 +327,38 @@ export async function attributeBargainPurchase(params: PurchaseAttribution): Pro
         create: { userId: store.userId, date: today, bargainPurchases: 1, bargainRevenue: base },
       })
 
-      const existing = await tx.bargainRevenueShareEvent.findUnique({ where: { sessionId: session.id } })
-      if (existing) {
-        await tx.bargainRevenueShareEvent.update({
-          where: { sessionId: session.id },
-          data: { shopifyOrderId, purchasedAt: new Date() },
-        })
-      } else {
-        const gate = await getBargainGate(store.id)
-        const rate = gate.plan.revSharePercent
-        if (rate > 0) {
-          const revShareAmount = round2((base * rate) / 100)
-          await tx.bargainRevenueShareEvent.create({
-            data: {
-              subscriptionId: gate.subscriptionId,
-              sessionId: session.id,
-              storeId: store.id,
-              shopifyProductId: session.shopifyProductId ?? null,
-              grossAmount: round2(session.originalPrice),
-              discountAmount: round2(Math.max(0, session.originalPrice - base)),
-              netAmount: base,
-              revSharePercent: rate,
-              revShareAmount,
-              shopifyOrderId,
-              purchasedAt: new Date(),
-            },
+      const gate = await getBargainGate(store.id)
+      if (gate.billingKind === 'shopify') {
+        const existing = await tx.bargainRevenueShareEvent.findUnique({ where: { sessionId: session.id } })
+        if (existing) {
+          await tx.bargainRevenueShareEvent.update({
+            where: { sessionId: session.id },
+            data: { shopifyOrderId, purchasedAt: new Date() },
           })
-          await tx.subscription.update({
-            where: { id: gate.subscriptionId },
-            data: { bargainAccrued: { increment: revShareAmount }, bargainAccruedValue: { increment: base } },
-          })
+        } else {
+          const rate = gate.plan.revSharePercent
+          if (rate > 0) {
+            const revShareAmount = round2((base * rate) / 100)
+            await tx.bargainRevenueShareEvent.create({
+              data: {
+                subscriptionId: gate.subscriptionId,
+                sessionId: session.id,
+                storeId: store.id,
+                shopifyProductId: session.shopifyProductId ?? null,
+                grossAmount: round2(session.originalPrice),
+                discountAmount: round2(Math.max(0, session.originalPrice - base)),
+                netAmount: base,
+                revSharePercent: rate,
+                revShareAmount,
+                shopifyOrderId,
+                purchasedAt: new Date(),
+              },
+            })
+            await tx.subscription.update({
+              where: { id: gate.subscriptionId },
+              data: { bargainAccrued: { increment: revShareAmount }, bargainAccruedValue: { increment: base } },
+            })
+          }
         }
       }
     })

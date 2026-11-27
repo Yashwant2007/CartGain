@@ -3,32 +3,9 @@ import prisma from '@/lib/db'
 import { cashfreeAdapter } from '@/lib/payments/cashfree-adapter'
 import { handlePaymentFailure } from '@/lib/payments/recovery'
 import { sendAlert } from '@/lib/alerter'
+import { resolveCustomerContact } from './contact'
 
 export const dynamic = 'force-dynamic'
-
-async function resolveCustomerContact(merchantId: string, orderRef: string): Promise<{ email?: string; phone?: string } | undefined> {
-  try {
-    const cart = await prisma.cart.findFirst({
-      where: { storeId: merchantId, cartId: orderRef },
-      select: { customerEmail: true, customerPhone: true },
-    })
-    if (cart?.customerEmail || cart?.customerPhone) {
-      return { email: cart.customerEmail ?? undefined, phone: cart.customerPhone ?? undefined }
-    }
-
-    const customer = await prisma.customer.findFirst({
-      where: { storeId: merchantId },
-      select: { email: true, phone: true },
-    })
-    if (customer?.email || customer?.phone) {
-      return { email: customer.email ?? undefined, phone: customer.phone ?? undefined }
-    }
-
-    return undefined
-  } catch {
-    return undefined
-  }
-}
 
 export async function POST(req: NextRequest) {
   try {

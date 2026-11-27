@@ -560,7 +560,6 @@ export default function StorefrontBargainWidget({
           finalPrice,
           discountPercent: Math.round((1 - finalPrice / originalPrice) * 100),
           ...(discountCode ? { code: discountCode } : {}),
-          orderLevel: isCart,
         }),
       })
       const data = await res.json()

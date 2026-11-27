@@ -283,7 +283,7 @@ export function socialSignalsToPromptBlock(signals: SocialSignals): string {
     lines.push(`- They are being polite/courteous — mirror their courtesy and warmth in your wording.`)
   }
   if (signals.terse) {
-    lines.push(`- They reply tersely (≤3 words) — keep YOUR reply short: one warm line, then the number. No filler, no lecture.`)
+    lines.push(`- They reply tersely (≤3 words) — keep YOUR reply short: one warm line, then the price. No filler, no lecture.`)
   }
   if (signals.verbose) {
     lines.push(`- They wrote at length — match with a fuller, well-structured reply.`)
@@ -292,7 +292,7 @@ export function socialSignalsToPromptBlock(signals: SocialSignals): string {
     lines.push(`- They framed this as time-sensitive — be decisive, minimize backtracking, and never invent delivery/speed promises you cannot verify.`)
   }
   if (signals.emotion === 'frustrated') {
-    lines.push(`- They sound frustrated — acknowledge the feeling sincerely in ONE short line BEFORE any number ("I hear you — that's not fair, let's fix it"). Stay calm; never lecture or argue.`)
+    lines.push(`- They sound frustrated — acknowledge the feeling sincerely in ONE short line BEFORE any price ("I hear you — that's not fair, let's fix it"). Stay calm; never lecture or argue.`)
   } else if (signals.emotion === 'skeptical') {
     lines.push(`- They sound skeptical — answer their doubt directly and briefly using only verified product facts; never invent credentials, and don't get defensive.`)
   } else if (signals.emotion === 'hesitant') {

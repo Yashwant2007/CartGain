@@ -16,6 +16,7 @@ import crypto from 'crypto'
 import prisma from '@/lib/db'
 import { generateSecureToken, verifySecureToken } from '@/lib/links'
 import { isFeatureEnabled } from '@/lib/feature-flags'
+import { exactPercentOff } from '@/lib/financial-safety'
 
 export const QUOTE_STATUSES = [
   'CREATED',
@@ -197,7 +198,7 @@ export function toPublicQuote(quote: {
     quantity: quote.quantity,
     originalPrice: quote.originalPrice,
     finalPrice: quote.finalPrice,
-    discountPercent: quote.discountPercent,
+    discountPercent: exactPercentOff(quote.originalPrice, quote.finalPrice),
     currency: quote.currency,
     discountCode: quote.discountCode,
     expiresAt: quote.expiresAt.toISOString(),

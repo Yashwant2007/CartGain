@@ -477,6 +477,22 @@ type AbandonedCheckoutCoreNode = {
 
 /** How long a denied capability is trusted before re-probing (approval may land). */
 const URL_ACCESS_DENIED_TTL_MS = 6 * 60 * 60 * 1000
+const URL_RETRIEVAL_FAILED_TTL_MS = 15 * 60 * 1000
+
+function recoveryUrlCapabilityIsFresh(
+  state: StoreUrlAccessState,
+  checkedAt: unknown,
+): boolean {
+  if (state !== 'ACCESS_DENIED' && state !== 'RETRIEVAL_FAILED') return false
+  const timestamp = checkedAt instanceof Date
+    ? checkedAt.getTime()
+    : typeof checkedAt === 'string'
+      ? Date.parse(checkedAt)
+      : Number.NaN
+  if (!Number.isFinite(timestamp)) return false
+  const ttl = state === 'ACCESS_DENIED' ? URL_ACCESS_DENIED_TTL_MS : URL_RETRIEVAL_FAILED_TTL_MS
+  return Date.now() - timestamp < ttl
+}
 
 /**
  * List open abandoned checkouts through the GraphQL Admin API with the recovery
@@ -549,12 +565,12 @@ export async function fetchAbandonedCheckoutsDetailed(
   let deniedReason: string | undefined
   const urlById = new Map<string, { status: RecoveryUrlStatus; url?: string; token?: string }>()
 
-  const deniedRecently =
-    urlAccess === 'ACCESS_DENIED' &&
-    store.abandonedCheckoutUrlCheckedAt instanceof Date &&
-    Date.now() - store.abandonedCheckoutUrlCheckedAt.getTime() < URL_ACCESS_DENIED_TTL_MS
+  const capabilityIsFresh = recoveryUrlCapabilityIsFresh(
+    urlAccess,
+    store.abandonedCheckoutUrlCheckedAt,
+  )
 
-  if (coreNodes.length > 0 && !deniedRecently) {
+  if (coreNodes.length > 0 && !capabilityIsFresh) {
     try {
       const urlData = await shopifyGraphQL<{
         abandonedCheckouts?: { nodes?: Array<{ id: string; abandonedCheckoutUrl?: string | null }> } | null
@@ -1178,7 +1194,7 @@ export async function syncAbandonedCheckouts(store: any): Promise<number> {
   // instead of breaking checkout discovery on every sweep.
   const capabilityChanged =
     normalizeStoreUrlAccessState(store.abandonedCheckoutUrlAccess) !== urlAccess
-  if (capabilityChanged || !store.abandonedCheckoutUrlCheckedAt) {
+  if (capabilityChanged || !store.abandonedCheckoutUrlCheckedAt || Boolean(deniedReason)) {
     await prisma.store
       .update({
         where: { id: store.id },

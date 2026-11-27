@@ -25,6 +25,11 @@ final class CartGain_WC_REST
             'callback' => array($this, 'health'),
             'permission_callback' => array($this, 'health_permission'),
         ));
+        register_rest_route('cartgain/v1', '/credentials', array(
+            'methods' => 'DELETE',
+            'callback' => array($this, 'revoke_credentials'),
+            'permission_callback' => array($this, 'credentials_permission'),
+        ));
         register_rest_route('cartgain/v1', '/events', array(
             'methods' => 'POST',
             'callback' => array($this, 'events'),
@@ -46,10 +51,8 @@ final class CartGain_WC_REST
         if ($secret === '') {
             return false;
         }
-        $timestamp = $request->get_header('X-CartGain-Timestamp');
-        $signature = $request->get_header('X-CartGain-Signature');
-        $canonical = $timestamp . '.';
-        return cartgain_wc_hmac_matches(cartgain_wc_hmac_hex($canonical, $secret), $signature, $timestamp);
+        $stored = $this->credentials->get_all();
+        return cartgain_wc_signed_request_valid($request, $secret, isset($stored['store_id']) ? $stored['store_id'] : '');
     }
 
     public function health($request)
@@ -59,6 +62,8 @@ final class CartGain_WC_REST
             $hpos = (bool) Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
         }
         return rest_ensure_response(array(
+            'ok' => true,
+            'status' => 'ok',
             'plugin' => 'cartgain-woocommerce',
             'version' => CGW_VERSION,
             'php' => PHP_VERSION,
@@ -67,9 +72,41 @@ final class CartGain_WC_REST
             'woocommerceActive' => class_exists('WooCommerce'),
             'hpos' => $hpos,
             'connected' => $this->credentials->is_connected(),
+            'webhook' => $this->credentials->is_connected() && $this->credentials->signing_secret() !== '',
             'queue' => $this->queue->stats(),
             'scheduler' => cartgain_wc()->scheduler && cartgain_wc()->scheduler->uses_action_scheduler() ? 'action_scheduler' : 'wp_cron',
             'timestamp' => current_time('timestamp'),
+        ));
+    }
+
+    public function credentials_permission($request)
+    {
+        if (!cartgain_wc_rate_limit('rest_credentials', 10, 5 * MINUTE_IN_SECONDS)) {
+            return new WP_Error('cgw_rate_limited', __('Too many revocation attempts.', 'cartgain-woocommerce'), array('status' => 429));
+        }
+        $secret = $this->credentials->signing_secret();
+        $stored = $this->credentials->get_all();
+        $store_id = isset($stored['store_id']) ? $stored['store_id'] : '';
+        if ($secret !== '' && cartgain_wc_signed_request_valid($request, $secret, $store_id)) {
+            return true;
+        }
+        $nonce = (string) $request->get_header('X-WP-Nonce');
+        if ($nonce === '') {
+            $nonce = (string) $request->get_param('nonce');
+        }
+        return current_user_can('manage_options') && wp_verify_nonce($nonce, 'cartgain_wc_revoke');
+    }
+
+    public function revoke_credentials($request)
+    {
+        $stored = $this->credentials->get_all();
+        $was_connected = !empty($stored['connection_id']) || !empty($stored['consumer_key']);
+        $this->credentials->remove_all();
+        delete_transient('cartgain_wc_recovery_status');
+        return rest_ensure_response(array(
+            'ok' => true,
+            'status' => 'ok',
+            'revoked' => $was_connected,
         ));
     }
 
@@ -133,7 +170,13 @@ final class CartGain_WC_REST
             'whatsapp' => !empty($body['whatsapp']),
             'whatsappPhone' => isset($body['whatsappPhone']) ? (string) $body['whatsappPhone'] : '',
         );
-        $accepted = $this->tracking->set_consent($input, $source);
+        $identity = array();
+        foreach (array('cartId', 'cartToken', 'customerId', 'customerEmail', 'customerPhone') as $key) {
+            if (isset($body[$key]) && is_scalar($body[$key])) {
+                $identity[$key] = sanitize_text_field((string) $body[$key]);
+            }
+        }
+        $accepted = $this->tracking->set_consent($input, $source, $identity);
         return rest_ensure_response(array('accepted' => $accepted));
     }
 }

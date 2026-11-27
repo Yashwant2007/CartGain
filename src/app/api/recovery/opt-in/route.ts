@@ -131,6 +131,8 @@ export async function POST(request: NextRequest) {
 
     const cartToken = text((body as any).cartToken, 255)
     let linkedCart = false
+    let linkedCartId: string | null = null
+    let linkedCartPending = false
 
     if (cartToken) {
       const cart = await prisma.cart.findUnique({
@@ -146,6 +148,8 @@ export async function POST(request: NextRequest) {
       })
       if (cart) {
         linkedCart = true
+        linkedCartId = cart.id
+        linkedCartPending = !cart.convertedAt && !cart.isRecovered
         const update: {
           customerEmail?: string
           customerPhone?: string
@@ -232,6 +236,42 @@ export async function POST(request: NextRequest) {
             productTitle,
             productUrl,
             productImage,
+          },
+        })
+        reminderScheduled = true
+      }
+    }
+
+    if (whatsappApplied && linkedCartId && linkedCartPending) {
+      const recent = await prisma.recoveryJourney.findFirst({
+        where: {
+          storeId,
+          cartId: linkedCartId,
+          createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          status: { in: ['SCHEDULED', 'SENT'] },
+          reminders: {
+            some: {
+              channel: 'whatsapp',
+              sentAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+            },
+          },
+        },
+        select: { id: true },
+      })
+      if (!recent) {
+        await createOrUpdateJourney({
+          storeId,
+          journeyType: 'checkout_abandon',
+          customerIdentityId: identity.id,
+          sessionId,
+          cartId: linkedCartId,
+          priority: 10,
+          delayMinutes: 0,
+          rescheduleImmediate: true,
+          metadata: {
+            source,
+            optInImmediate: true,
+            cartUrl: `https://${shop}/cart/${encodeURIComponent(cartToken!)}`,
           },
         })
         reminderScheduled = true

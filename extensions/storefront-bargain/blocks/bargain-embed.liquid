@@ -53,6 +53,7 @@
   data-cg-surface="{{ cg_surface | default: 'product' }}"
   {% unless request.design_mode %}data-cg-inline="true"{% endunless %}
   data-cg-shop="{{ shop.permanent_domain }}"
+  data-cg-customer-name="{% if customer %}{{ customer.first_name | escape }}{% endif %}"
   data-cg-src="{{ widget_src | escape }}"
   data-cg-variant=""
   data-cg-variants=""

@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
         by: ['cartId'],
         where: {
           campaign: { userId },
+          cart: { storeId: store.id },
           status: 'sent',
         },
       })
@@ -72,6 +73,17 @@ export async function GET(request: NextRequest) {
           })
       : []
 
+    let revenueSharePaid = resolved?.revenueSharePaid ?? 0
+    if (resolved && isRazorpay) {
+      const paidInvoiceIds = invoices.filter((invoice: any) => invoice.status === 'paid').map((invoice: any) => invoice.id)
+      if (paidInvoiceIds.length) {
+        const usage = await prisma.razorpayUsageEvent.aggregate({
+          where: { subscriptionId: resolved.id, kind: 'revenue_share', invoiceId: { in: paidInvoiceIds } },
+          _sum: { chargeAmount: true },
+        })
+        revenueSharePaid = usage._sum.chargeAmount || 0
+      }
+    }
     const entitlement = evaluateSubscriptionEntitlement(resolved)
     const resolvedPlan = Object.values(PLANS).find(p => p.id === entitlement.effectivePlanId) || PLANS.FREE
     const razorpayMissing = [...missingRazorpayBaseEnv(), ...missingRazorpayPlanEnv()]
@@ -87,7 +99,7 @@ export async function GET(request: NextRequest) {
             storeId: resolved.storeId,
             shopDomain: resolved.shopDomain ?? null,
             revenueShareAccrued: resolved.revenueShareAccrued,
-            revenueSharePaid: 0,
+            revenueSharePaid,
             currentPeriodEnd: resolved.currentPeriodEnd,
             currentPeriodStart: resolved.currentPeriodStart,
             billingPeriod: resolved.billingPeriod ?? null,

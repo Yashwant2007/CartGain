@@ -3,7 +3,7 @@
  * Plugin Name: CartGain for WooCommerce
  * Plugin URI: https://cart-gain.com
  * Description: Cart tracking, product sync, order recovery events, and the CartGain bargain widget for WooCommerce.
- * Version: 1.0.9
+ * Version: 1.1.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: CartGain
@@ -11,7 +11,7 @@
  * Text Domain: cartgain-woocommerce
  * Domain Path: /languages
  * WC requires at least: 7.0
- * WC tested up to: 9.0
+ * WC tested up to: 11.3.1
  * License: GPLv2 or later
  */
 
@@ -19,7 +19,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('CGW_VERSION', '1.0.9');
+define('CGW_VERSION', '1.1.0');
 define('CGW_PLUGIN_FILE', __FILE__);
 define('CGW_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CGW_PLUGIN_URL', plugin_dir_url(__FILE__));

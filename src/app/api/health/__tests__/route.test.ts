@@ -15,8 +15,9 @@ jest.mock('@/lib/ai-client', () => ({
   getAiHealth: jest.fn().mockReturnValue({
     status: 'ok',
     activeTier: 'primary',
-    primary: { configured: true },
+    primary: { configured: true, tripped: false },
     fallback: { configured: true, tripped: false, model: '', baseUrl: '' },
+    forceFallback: false,
   }),
 }))
 

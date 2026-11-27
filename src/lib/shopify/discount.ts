@@ -117,7 +117,7 @@ export function buildBasicCodeDiscount(input: CreateShopifyDiscountInput): Recor
     appliesOncePerCustomer: input.appliesOncePerCustomer ?? true,
     combinesWith: {
       orderDiscounts: false,
-      productDiscounts: true,
+      productDiscounts: false,
       shippingDiscounts: false,
     },
   }

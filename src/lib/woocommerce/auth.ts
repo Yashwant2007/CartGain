@@ -54,8 +54,17 @@ async function requireWooPluginStore(req: NextRequest): Promise<MerchantResult> 
   }
   if (!secret) return { ok: false, response: unauthorizedResponse() }
 
+  let rawBody = ''
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    try {
+      rawBody = await req.clone().text()
+    } catch {
+      return { ok: false, response: unauthorizedResponse() }
+    }
+  }
+
   const valid = verifyPluginRequest({
-    path: req.nextUrl.pathname,
+    rawBody,
     signature,
     timestamp,
     storeId,

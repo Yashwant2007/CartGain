@@ -5,12 +5,12 @@ import { generateBargainDiscountCode } from '@/lib/bargain/discount'
 import { buildBargainCheckoutUrl, generateBargainCode } from '@/lib/bargain/purchase'
 import { computeMinPrice } from '@/lib/services/bargain'
 import { fetchShopifyProductPrice, fetchShopifyProductDetail } from '@/lib/shopify'
-import { buildExecutablePrice, clampOrderPercentForProduct } from '@/lib/financial-safety'
-import { validateOffer } from '@/lib/bargain/offer-validation'
+import { buildExecutablePrice } from '@/lib/financial-safety'
+import { publicOfferRejection, validateOffer } from '@/lib/bargain/offer-validation'
 import { bargainCampaignStatus } from '@/lib/bargain/policy'
 import { getBargainGate, decideDealMode, recordBargainDealOps, BARGAIN_DEALS_EXHAUSTED } from '@/lib/bargain/gate'
 import { track } from '@/lib/analytics/track'
-import { redisIncr, redisExpire } from '@/lib/redis'
+import { isFeatureEnabled } from '@/lib/feature-flags'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { normalizeShopDomain, shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
 import { loadQuoteByToken, revalidateQuote, markQuoteCheckoutPending } from '@/lib/bargain/quote'
@@ -26,11 +26,6 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-// Public (storefront + checkout) tier — cap how many discount codes each shop
-// can mint per hour to prevent spam, while staying generous for real traffic.
-const MAX_CODES_PER_SHOP_HOUR = 250
-const CODE_WINDOW_SECONDS = 60 * 60
-
 // Accepts a raw numeric Shopify customer id or a `gid://shopify/Customer/<id>`
 // and returns it in the raw-numeric form `buildCustomerSelection` expects, or
 // null for anything else. Strict allow-list keeps client input out of the
@@ -39,18 +34,6 @@ function normalizeShopifyCustomerId(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const m = value.trim().match(/^(?:gid:\/\/shopify\/Customer\/)?(\d{1,20})$/)
   return m ? m[1] : null
-}
-
-async function underCodeBudget(shopKey: string): Promise<boolean> {
-  try {
-    const count = await redisIncr(`bargain:codes:${shopKey}`)
-    if (count === 1) {
-      await redisExpire(`bargain:codes:${shopKey}`, CODE_WINDOW_SECONDS * 1000)
-    }
-    return count <= MAX_CODES_PER_SHOP_HOUR
-  } catch {
-    return true
-  }
 }
 
 // Checkout UI extensions run on https://checkout.shopify.com — allow those
@@ -94,10 +77,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, discountPercent, code, orderLevel, bulkQuantity, shopifyCustomerId, customerEmail, quoteToken } = body
+    const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, code, bulkQuantity, shopifyCustomerId, customerEmail, quoteToken } = body
     const platform = bargainPlatformFor(null, body?.platform)
     const domainValue = shopDomain ?? body?.domain ?? body?.storeDomain
     const productId = body?.productId ?? body?.platformProductId ?? shopifyProductId
+    const quotesRequired = platform !== 'woocommerce' && isFeatureEnabled('BARGAIN_QUOTE')
 
     if (
       (platform !== 'woocommerce' && (typeof shopDomain !== 'string' || !shopDomain)) ||
@@ -107,6 +91,9 @@ export async function POST(request: NextRequest) {
       !originalPrice || !finalPrice
     ) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400, headers })
+    }
+    if (body?.orderLevel === true) {
+      return NextResponse.json({ message: 'Whole-cart discounts are not supported' }, { status: 400, headers })
     }
 
     // Buyer binding: the Checkout UI Extension forwards the logged-in customer
@@ -151,11 +138,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404, headers })
     }
 
-    const withinBudget = await underCodeBudget(cleanDomain || store.id)
-    if (!withinBudget) {
+    const budget = await checkSimpleRateLimit(`bargain_codes_${store.id}`, {
+      maxRequests: 250,
+      windowMs: 60 * 60 * 1000,
+    })
+    if (!budget.allowed) {
       return NextResponse.json(
         { message: 'Too many codes generated for this store recently. Try again later.' },
-        { status: 429, headers }
+        { status: 429, headers: { ...headers, 'Retry-After': String(budget.retryAfter) } }
       )
     }
 
@@ -166,31 +156,6 @@ export async function POST(request: NextRequest) {
     // retry safely, but it can never invent one and show it as a real code.
     let issuedCode = typeof code === 'string' && code.trim() ? code.trim() : generateBargainCode()
 
-    // ── IDEMPOTENT REPLAY ──
-    // The client can retry with the SAME code (flaky network / double tap). A
-    // retried request must never mint a second Shopify code (Shopify would reject
-    // the duplicate and surface a 500) or double-meter the deal.
-    const existing = await prisma.bargainSession.findFirst({
-      where: { storeId: store.id, discountCode: issuedCode, status: 'accepted' },
-      select: { discountCode: true },
-    })
-    if (existing?.discountCode) {
-      return NextResponse.json({
-        success: true,
-        code: existing.discountCode,
-        status: 'created',
-        platform,
-        ...(platform === 'woocommerce'
-          ? { purchaseUrl: buildWooCommerceCheckoutUrl({ domain: store.domain, code: existing.discountCode }) }
-          : {}),
-      }, { headers })
-    }
-
-    // ── FINANCIAL SAFETY ──
-    // This endpoint mints codes purely from client-supplied values (the Checkout
-    // UI Extension cannot carry a bargain session), so the merchant floor must be
-    // enforced HERE, mathematically, from the AUTHORITATIVE current Shopify price.
-    // 1) Re-fetch the price; reject when the client price drifted noticeably.
     const wooFacts = platform === 'woocommerce'
       ? await getWooCommerceProductFacts({
           store,
@@ -210,7 +175,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Price mismatch — product price has changed' }, { status: 409, headers })
     }
 
-    // 2) Floor derived server-side from the merchant's own config/product overrides.
     const { minPrice } = await computeMinPrice({
       storeId: store.id,
       shopifyProductId: String(productId ?? shopifyProductId ?? ''),
@@ -220,11 +184,44 @@ export async function POST(request: NextRequest) {
       platformProductId: platform === 'woocommerce' ? String(productId) : null,
     })
 
-    // ── MODULE 3 — revalidate a supplied quote ──
-    // Optional and additive: when the caller hands us the signed quote token, we
-    // re-check it against the CURRENT price/floor before minting. No token means
-    // the legacy path is unchanged. A stale/expired/revoked quote is refused.
-    if (platform !== 'woocommerce' && typeof quoteToken === 'string' && quoteToken) {
+    if (quotesRequired) {
+      if (typeof quoteToken !== 'string' || !quoteToken) {
+        return NextResponse.json({ message: 'Quote token required' }, { status: 400, headers })
+      }
+      const quote = await loadQuoteByToken(quoteToken)
+      if (!quote) {
+        return NextResponse.json({ message: 'Quote is no longer valid' }, { status: 409, headers })
+      }
+      if (quote.storeId !== store.id) {
+        return NextResponse.json({ message: 'Quote does not belong to this store' }, { status: 409, headers })
+      }
+      if (quote.status !== 'ACCEPTED' && quote.status !== 'CHECKOUT_PENDING') {
+        return NextResponse.json({ message: 'Quote is not ready for checkout' }, { status: 409, headers })
+      }
+      if (String(quote.shopifyProductId) !== String(productId ?? shopifyProductId ?? '')) {
+        return NextResponse.json({ message: 'Quote does not match this product' }, { status: 409, headers })
+      }
+      if ((quote.variantId ?? null) !== (variantId ?? null)) {
+        return NextResponse.json({ message: 'Quote does not match this variant' }, { status: 409, headers })
+      }
+      if (Math.abs(Number(quote.finalPrice) - Number(finalPrice)) > 0.01) {
+        return NextResponse.json({ message: 'Quote price has changed' }, { status: 409, headers })
+      }
+      if (quote.discountCode) {
+        if (code && issuedCode !== quote.discountCode) {
+          return NextResponse.json({ message: 'Quote code mismatch' }, { status: 409, headers })
+        }
+        issuedCode = quote.discountCode
+      }
+      const verdict = revalidateQuote(quote, { price: currentPrice, floor: minPrice })
+      if (!verdict.ok) {
+        return NextResponse.json(
+          { message: 'This deal has expired or changed — please renegotiate.', reason: verdict.reason, code: `QUOTE_REJECTED_${verdict.reason}` },
+          { status: 409, headers },
+        )
+      }
+      await markQuoteCheckoutPending(quote)
+    } else if (platform !== 'woocommerce' && typeof quoteToken === 'string' && quoteToken) {
       const quote = await loadQuoteByToken(quoteToken)
       if (quote) {
         if (quote.storeId !== store.id) {
@@ -245,6 +242,26 @@ export async function POST(request: NextRequest) {
         }
         await markQuoteCheckoutPending(quote)
       }
+    }
+
+    // ── IDEMPOTENT REPLAY ──
+    // The client can retry with the SAME code (flaky network / double tap). A
+    // retried request must never mint a second Shopify code (Shopify would reject
+    // the duplicate and surface a 500) or double-meter the deal.
+    const existing = await prisma.bargainSession.findFirst({
+      where: { storeId: store.id, discountCode: issuedCode, status: 'accepted' },
+      select: { discountCode: true },
+    })
+    if (existing?.discountCode) {
+      return NextResponse.json({
+        success: true,
+        code: existing.discountCode,
+        status: 'created',
+        platform,
+        ...(platform === 'woocommerce'
+          ? { purchaseUrl: buildWooCommerceCheckoutUrl({ domain: store.domain, code: existing.discountCode }) }
+          : {}),
+      }, { headers })
     }
 
     // 2b) Live availability + machine reason codes. Only an explicit false from
@@ -286,50 +303,23 @@ export async function POST(request: NextRequest) {
       emergencyPaused: config?.emergencyPaused === true,
     })
     if (!validation.ok) {
+      return NextResponse.json(publicOfferRejection(validation), { status: 409, headers })
+    }
+
+    const executable = buildExecutablePrice({
+      originalPrice: currentPrice,
+      finalPrice: Number(finalPrice),
+      floorPrice: minPrice,
+      bulkQuantity: safeBulk,
+    })
+    if (!executable.ok) {
       return NextResponse.json(
-        { message: validation.message ?? 'Cannot accept this purchase right now.', reason: validation.reason, code: `OFFER_REJECTED_${validation.reason}` },
+        { message: 'Price mismatch — please refresh the page and renegotiate.' },
         { status: 409, headers }
       )
     }
-
-    let calculatedPercent: number
-    let finalPriceSafe: number
-    if (orderLevel) {
-      // An order-level percentage discounts the WHOLE basket (unrelated items
-      // too), so clamp its depth to the featured product's margin floor. This is
-      // what keeps a "₹1 finalPrice" attack from converting into 99%-off-everything.
-      const clientPercent = discountPercent != null
-        ? Number(discountPercent)
-        : 100 - (Number(finalPrice) / currentPrice) * 100
-      const clamped = clampOrderPercentForProduct({
-        originalPrice: currentPrice,
-        floorPrice: minPrice,
-        requestedPercent: clientPercent,
-      })
-      if (!clamped.ok) {
-        return NextResponse.json(
-          { message: 'That discount is beyond what I can offer — please choose a smaller one.' },
-          { status: 409, headers }
-        )
-      }
-      calculatedPercent = clamped.percent
-      finalPriceSafe = currentPrice * (1 - clamped.percent / 100)
-    } else {
-      const executable = buildExecutablePrice({
-        originalPrice: currentPrice,
-        finalPrice: Number(finalPrice),
-        floorPrice: minPrice,
-        bulkQuantity: safeBulk,
-      })
-      if (!executable.ok) {
-        return NextResponse.json(
-          { message: 'Price mismatch — please refresh the page and renegotiate.' },
-          { status: 409, headers }
-        )
-      }
-      calculatedPercent = executable.discountPercent
-      finalPriceSafe = executable.finalPrice
-    }
+    const calculatedPercent = executable.discountPercent
+    const finalPriceSafe = executable.finalPrice
 
     // ── PLAN GATE ──
     // Deals are the metered/billed unit. Gate BEFORE minting so a store over its
@@ -358,8 +348,8 @@ export async function POST(request: NextRequest) {
         code: issuedCode,
         value: calculatedPercent,
         type: 'percentage',
-        minimumSubtotal: orderLevel ? null : currentPrice,
-        productIds: orderLevel ? [] : [String(productId)],
+        minimumSubtotal: currentPrice,
+        productIds: [String(productId)],
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         description: `CartGain bargain ${issuedCode}`,
       })
@@ -371,8 +361,8 @@ export async function POST(request: NextRequest) {
     } else {
       result = await generateBargainDiscountCode({
         store,
-        shopifyProductId: orderLevel ? null : shopifyProductId,
-        variantId: orderLevel ? null : variantId || null,
+        shopifyProductId,
+        variantId: variantId || null,
         originalPrice: currentPrice,
         finalPrice: finalPriceSafe,
         discountPercent: calculatedPercent,
@@ -384,7 +374,7 @@ export async function POST(request: NextRequest) {
       purchaseUrl = buildBargainCheckoutUrl({
         domain: store.domain,
         code: result.code,
-        variantId: orderLevel ? null : (variantId || null),
+        variantId: variantId || null,
         quantity: safeBulk,
       })
     }
@@ -419,8 +409,8 @@ export async function POST(request: NextRequest) {
         data: {
           id: sessionId,
           storeId: store.id,
-          shopifyProductId: orderLevel ? '' : String(productId ?? shopifyProductId ?? ''),
-          variantId: orderLevel ? null : (variantId || null),
+          shopifyProductId: String(productId ?? shopifyProductId ?? ''),
+          variantId: variantId || null,
           originalPrice: currentPrice,
           currentOffer: finalPriceSafe,
           finalPrice: finalPriceSafe,
@@ -443,12 +433,12 @@ export async function POST(request: NextRequest) {
     await track({
       name: 'cartgain_checkout_started',
       storeId: store.id,
-      properties: { orderLevel: orderLevel === true },
+      properties: { scope: 'product' },
     })
     await track({
       name: 'cartgain_bargain_deal_accepted',
       storeId: store.id,
-      properties: { source: 'checkout', orderLevel: orderLevel === true, dealMode },
+      properties: { source: 'checkout', scope: 'product', dealMode },
     })
 
     return NextResponse.json({

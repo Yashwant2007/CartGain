@@ -25,6 +25,7 @@ export type CgParentMessage =
   | { type: 'cg_get_height'; height?: never }
   | { type: 'cg_close'; height?: never }
   | { type: 'cg_drawer_opened'; height?: never }
+  | { type: 'cg_customer_identity'; name?: string | null; height?: never }
   | {
       type: 'cg_product_update'
       variantId?: string | null

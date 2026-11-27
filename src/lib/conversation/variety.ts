@@ -36,19 +36,19 @@ export function pickVariant<T>(seed: string, variants: readonly T[]): T | undefi
  */
 export const OPENERS: Record<'email' | 'whatsapp', string[]> = {
   email: [
-    'You left something behind.',
+    'You left something good behind.',
     'Still thinking it over?',
-    'Your cart is waiting.',
+    'Your picks are saved and ready.',
     'Picked the right things?',
-    'Your picks are on hold.',
+    'Your cart kept your seat warm.',
   ],
   whatsapp: [
     'Still thinking it over? 🤔',
-    'Your cart is waiting 🛒',
+    'Your picks are saved 🛒',
     'Picked the right things? ✨',
-    'You left something behind 😅',
-    'Psst… your cart misses you 😉',
-    'Your cart is looking lonely 😏',
+    'You left something good behind 😅',
+    'Psst… your cart saved your spot 😉',
+    'Your cart kept your seat warm 😄',
     'It’s just sitting there… 🛒',
   ],
 }

@@ -3,6 +3,8 @@ export type AiTier = 'primary' | 'fallback'
 let primaryBreakerUntil = 0
 let fallbackBreakerUntil = 0
 let breakerLoggedAt = 0
+let primaryProbeInFlight = false
+let fallbackProbeInFlight = false
 
 const QUOTA_BREAKER_MS = 15 * 60_000
 
@@ -19,6 +21,27 @@ export function rateLimitBreakerMs(): number {
   return envMs('AI_RATE_LIMIT_COOLDOWN_MS', 30_000, 1_000, 5 * 60_000)
 }
 
+function retryAfterMs(err: any, now: number): number | undefined {
+  const headers = err?.headers ?? err?.response?.headers ?? err?.error?.headers
+  const raw = typeof headers?.get === 'function'
+    ? headers.get('retry-after')
+    : headers?.['retry-after'] ?? headers?.['Retry-After']
+  if (raw == null || raw === '') return undefined
+  const seconds = Number(raw)
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(5 * 60_000, Math.max(1_000, Math.round(seconds * 1_000)))
+  }
+  const date = Date.parse(String(raw))
+  if (!Number.isNaN(date)) {
+    return Math.min(5 * 60_000, Math.max(1_000, date - now))
+  }
+  return undefined
+}
+
+export function rateLimitCooldownMs(err?: any, now: number = Date.now()): number {
+  return retryAfterMs(err, now) ?? rateLimitBreakerMs()
+}
+
 export function isTierTripped(tier: AiTier, now: number = Date.now()): boolean {
   return now < (tier === 'primary' ? primaryBreakerUntil : fallbackBreakerUntil)
 }
@@ -32,6 +55,25 @@ export function tripTierBreaker(
   const until = now + Math.max(1_000, Math.round(durationMs))
   if (tier === 'primary') primaryBreakerUntil = until
   else fallbackBreakerUntil = until
+}
+
+export function clearTierBreaker(tier: AiTier): void {
+  if (tier === 'primary') primaryBreakerUntil = 0
+  else fallbackBreakerUntil = 0
+}
+
+export function beginTierProbe(tier: AiTier): boolean {
+  const inFlight = tier === 'primary' ? primaryProbeInFlight : fallbackProbeInFlight
+  if (inFlight) return false
+  if (tier === 'primary') primaryProbeInFlight = true
+  else fallbackProbeInFlight = true
+  return true
+}
+
+export function finishTierProbe(tier: AiTier, success: boolean): void {
+  if (tier === 'primary') primaryProbeInFlight = false
+  else fallbackProbeInFlight = false
+  if (success) clearTierBreaker(tier)
 }
 
 export function shouldLogQuota(now: number = Date.now()): boolean {
@@ -50,4 +92,6 @@ export function resetQuotaBreakForTests(): void {
   primaryBreakerUntil = 0
   fallbackBreakerUntil = 0
   breakerLoggedAt = 0
+  primaryProbeInFlight = false
+  fallbackProbeInFlight = false
 }

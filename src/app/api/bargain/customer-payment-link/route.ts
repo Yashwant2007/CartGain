@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { decrypt } from '@/lib/encryption'
@@ -16,6 +17,10 @@ export const dynamic = 'force-dynamic'
 
 const CREDENTIAL_KIND = 'customer_order_key_secret'
 const RAZORPAY_API = 'https://api.razorpay.com/v1/payment_links'
+const PENDING_TTL_MS = 2 * 60 * 1000
+const ACCEPTABLE_STATUSES = ['ACCEPTED', 'CHECKOUT_PENDING']
+
+type Conditions = Record<string, any>
 
 function unavailable() {
   return NextResponse.json({ message: 'Not available' }, { status: 404 })
@@ -25,6 +30,86 @@ function bounded(value: unknown, max: number): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   return trimmed.length > 0 && trimmed.length <= max ? trimmed : null
+}
+
+function asConditions(value: unknown): Conditions {
+  return value && typeof value === 'object' ? (value as Conditions) : {}
+}
+
+function validCustomerPayment(conditions: Conditions, now: number): Conditions | null {
+  const payment = conditions.customerPayment
+  if (!payment || typeof payment !== 'object') return null
+  if (typeof payment.url !== 'string' || !payment.url.startsWith('https://')) return null
+  if (typeof payment.expiresAt !== 'string' || !(Date.parse(payment.expiresAt) > now)) return null
+  return payment
+}
+
+function pendingRequestId(conditions: Conditions): string | null {
+  const pending = conditions.customerPaymentPending
+  return pending && typeof pending === 'object' && typeof pending.requestId === 'string'
+    ? pending.requestId
+    : null
+}
+
+function claimGuards(now: number, nowIso: string) {
+  return [
+    {
+      NOT: {
+        AND: [
+          { conditions: { path: ['customerPayment', 'url'], string_starts_with: 'https://' } },
+          {
+            OR: [
+              { conditions: { path: ['customerPayment', 'expiresAtMs'], gt: now } },
+              { conditions: { path: ['customerPayment', 'expiresAt'], gt: nowIso } },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      NOT: {
+        OR: [
+          { conditions: { path: ['customerPaymentPending', 'expiresAtMs'], gt: now } },
+          { conditions: { path: ['customerPaymentPending', 'expiresAt'], gt: nowIso } },
+        ],
+      },
+    },
+  ]
+}
+
+async function clearPendingMarker(quoteId: string, requestId: string) {
+  try {
+    const current = await prisma.bargainQuote.findUnique({
+      where: { id: quoteId },
+      select: { conditions: true, updatedAt: true },
+    })
+    if (!current || pendingRequestId(asConditions(current.conditions)) !== requestId) return
+    const next = asConditions(current.conditions)
+    delete next.customerPaymentPending
+    await prisma.bargainQuote.updateMany({
+      where: {
+        id: quoteId,
+        updatedAt: current.updatedAt,
+        conditions: { path: ['customerPaymentPending', 'requestId'], equals: requestId },
+      },
+      data: { conditions: next as any },
+    })
+  } catch {}
+}
+
+async function cancelProviderLink(id: string, keyId: string, keySecret: string) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 5000)
+  try {
+    await fetch(`${RAZORPAY_API}/${encodeURIComponent(id)}/cancel`, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}` },
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+  } catch {} finally {
+    clearTimeout(timeout)
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -46,7 +131,7 @@ export async function POST(request: NextRequest) {
 
   const quote = await loadQuoteByToken(quoteToken)
   if (!quote) return NextResponse.json({ message: 'Quote not found' }, { status: 404 })
-  if (quote.status !== 'ACCEPTED' && quote.status !== 'CHECKOUT_PENDING') {
+  if (!ACCEPTABLE_STATUSES.includes(quote.status)) {
     return NextResponse.json({ message: `Cannot create a payment link for a ${quote.status} quote`, status: quote.status }, { status: 409 })
   }
 
@@ -72,17 +157,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: ownership.reason ?? 'Not authorized for this offer' }, { status: 403 })
   }
 
-  const conditions = quote.conditions && typeof quote.conditions === 'object'
-    ? (quote.conditions as Record<string, any>)
-    : {}
-  const existing = conditions.customerPayment
-  if (
-    existing &&
-    typeof existing.url === 'string' &&
-    existing.url.startsWith('https://') &&
-    typeof existing.expiresAt === 'string' &&
-    Date.parse(existing.expiresAt) > Date.now()
-  ) {
+  const conditions = asConditions(quote.conditions)
+  const existing = validCustomerPayment(conditions, Date.now())
+  if (existing) {
     return NextResponse.json({
       paymentLink: existing,
       quoteStatus: quote.status,
@@ -148,6 +225,73 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: `Offer is not eligible for a payment link: ${built.reason}`, reason: built.reason }, { status })
   }
 
+  const requestId = crypto.randomUUID()
+  const now = Date.now()
+  const nowIso = new Date(now).toISOString()
+  const fresh = await loadQuoteByToken(quoteToken)
+  if (!fresh || fresh.id !== quote.id || !ACCEPTABLE_STATUSES.includes(fresh.status)) {
+    return NextResponse.json({ message: 'Payment link creation conflict' }, { status: 409 })
+  }
+  const freshConditions = asConditions(fresh.conditions)
+  if (validCustomerPayment(freshConditions, Date.now())) {
+    return NextResponse.json({
+      paymentLink: freshConditions.customerPayment,
+      quoteStatus: fresh.status,
+      idempotent: true,
+    })
+  }
+
+  const pendingExpiresAt = new Date(now + PENDING_TTL_MS)
+  const claimedConditions = {
+    ...freshConditions,
+    customerPaymentPending: {
+      requestId,
+      createdAt: nowIso,
+      expiresAt: pendingExpiresAt.toISOString(),
+      expiresAtMs: pendingExpiresAt.getTime(),
+    },
+  }
+  let claim: { count: number }
+  try {
+    claim = await prisma.bargainQuote.updateMany({
+      where: {
+        id: fresh.id,
+        updatedAt: fresh.updatedAt,
+        status: { in: ACCEPTABLE_STATUSES },
+        AND: claimGuards(now, nowIso),
+      },
+      data: { conditions: claimedConditions as any },
+    })
+  } catch {
+    return NextResponse.json({ message: 'Payment link creation conflict' }, { status: 409 })
+  }
+  if (claim.count !== 1) {
+    const raced = await prisma.bargainQuote.findUnique({
+      where: { id: fresh.id },
+      select: { status: true, conditions: true },
+    })
+    const racedPayment = raced ? validCustomerPayment(asConditions(raced.conditions), Date.now()) : null
+    if (racedPayment) {
+      return NextResponse.json({
+        paymentLink: racedPayment,
+        quoteStatus: raced?.status ?? fresh.status,
+        idempotent: true,
+      })
+    }
+    return NextResponse.json({ message: 'Payment link creation is already in progress' }, { status: 409 })
+  }
+
+  const claimed = await prisma.bargainQuote.findUnique({
+    where: { id: fresh.id },
+    select: { status: true, conditions: true, updatedAt: true },
+  })
+  const claimedPaymentConditions = claimed ? asConditions(claimed.conditions) : {}
+  if (!claimed || pendingRequestId(claimedPaymentConditions) !== requestId || !ACCEPTABLE_STATUSES.includes(claimed.status)) {
+    await clearPendingMarker(fresh.id, requestId)
+    return NextResponse.json({ message: 'Payment link creation conflict' }, { status: 409 })
+  }
+  const claimVersion = claimed.updatedAt
+
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10000)
   let providerResponse: Response
@@ -163,6 +307,7 @@ export async function POST(request: NextRequest) {
       signal: controller.signal,
     })
   } catch {
+    await clearPendingMarker(fresh.id, requestId)
     return NextResponse.json({ message: 'Payment provider is unavailable' }, { status: 502 })
   } finally {
     clearTimeout(timeout)
@@ -175,6 +320,7 @@ export async function POST(request: NextRequest) {
     provider = null
   }
   if (!providerResponse.ok || typeof provider?.id !== 'string' || typeof provider?.url !== 'string' || !provider.url.startsWith('https://')) {
+    await clearPendingMarker(fresh.id, requestId)
     return NextResponse.json(
       { message: 'Payment provider rejected the request', providerStatus: providerResponse.status },
       { status: 502 },
@@ -193,27 +339,47 @@ export async function POST(request: NextRequest) {
     status: 'active',
     createdAt: new Date().toISOString(),
   }
-  const nextConditions = { ...conditions, customerPayment: paymentLink }
+  const nextConditions = { ...claimedPaymentConditions }
+  delete nextConditions.customerPaymentPending
+  nextConditions.customerPayment = paymentLink
 
-  await prisma.$transaction([
-    prisma.bargainQuote.update({
-      where: { id: quote.id },
-      data: { conditions: nextConditions as any },
-    }),
-    prisma.bargainQuoteEvent.create({
-      data: {
-        quoteId: quote.id,
-        storeId: quote.storeId,
-        type: 'customer_payment_link_created',
-        detail: { provider: 'razorpay', id: provider.id, referenceId, amountMinor: built.amountMinor } as any,
-      },
-    }),
-  ])
-  const transition = await markQuoteCheckoutPending({ id: quote.id, status: quote.status })
+  let finalized = false
+  try {
+    finalized = await prisma.$transaction(async (tx) => {
+      const updated = await tx.bargainQuote.updateMany({
+        where: {
+          id: fresh.id,
+          updatedAt: claimVersion,
+          status: { in: ACCEPTABLE_STATUSES },
+          conditions: { path: ['customerPaymentPending', 'requestId'], equals: requestId },
+        },
+        data: { conditions: nextConditions as any },
+      })
+      if (updated.count !== 1) return false
+      await tx.bargainQuoteEvent.create({
+        data: {
+          quoteId: quote.id,
+          storeId: quote.storeId,
+          type: 'customer_payment_link_created',
+          detail: { provider: 'razorpay', id: provider.id, referenceId, amountMinor: built.amountMinor } as any,
+        },
+      })
+      return true
+    })
+  } catch {
+    finalized = false
+  }
+  if (!finalized) {
+    await cancelProviderLink(provider.id, keyId, keySecret)
+    await clearPendingMarker(fresh.id, requestId)
+    return NextResponse.json({ message: 'Payment link creation conflict' }, { status: 409 })
+  }
+
+  const transition = await markQuoteCheckoutPending({ id: quote.id, status: claimed.status })
 
   return NextResponse.json({
     paymentLink,
-    quoteStatus: transition?.status ?? quote.status,
+    quoteStatus: transition?.status ?? claimed.status,
     idempotent: false,
   })
 }

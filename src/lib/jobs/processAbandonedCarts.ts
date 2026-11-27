@@ -16,6 +16,7 @@ import { buildRecoveryLink, recoveryAppBase } from '@/lib/recovery/links'
 import { getRecoveryShortLink } from '@/lib/recovery/short-links'
 import { buildRecoveryOfferLine } from '@/lib/recovery/offer-line'
 import { composeRecoveryMessage, singleLineMessage, stripLeadingGreeting } from '@/lib/conversation/recovery'
+import { dedupeCopy } from '@/lib/conversation/validate'
 import type { ConversationDiscount } from '@/lib/conversation/facts'
 import { isWithinQuietHours } from '@/lib/conversation/variety'
 import { resolveVoice } from '@/lib/conversation/voice'
@@ -1125,7 +1126,7 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
           to: cart.customerEmail!,
           subject: composed.subject || `${personalName ? `${personalName}, ` : ''}your cart is still saved`,
           html: emailHtml,
-          text: [composed.body, ...textLinks].join('\n\n'),
+          text: dedupeCopy([composed.body, ...textLinks].join('\n\n')),
         })
         sendSuccess = emailResult.success
         providerId = emailResult.messageId
@@ -1253,13 +1254,13 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
             linkType === 'bargain'
               ? `Name your price: ${linkUrl}`
               : `Complete your order: ${linkUrl}`
-          whatsappFreeFormBody = [
+          whatsappFreeFormBody = dedupeCopy([
             stripLeadingGreeting(composed.body, personalName).trim(),
             offerLine,
             freeFormLinkLine,
           ]
             .filter(Boolean)
-            .join('\n\n')
+            .join('\n\n'))
           console.log(`[recovery] cart=${cart.id} whatsapp free-form (24h window)`)
           whatsappResult = await sendWhatsAppMessage({
             to: sanitizePhoneNumber(whatsappPhone!),

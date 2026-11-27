@@ -114,6 +114,7 @@ export class WooCommerceClient {
     for (const [key, value] of Object.entries(request.query ?? {})) {
       if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value))
     }
+    const rawBody = request.body ? JSON.stringify(request.body) : ''
 
     const headers: Record<string, string> = {
       Accept: 'application/json',
@@ -130,7 +131,7 @@ export class WooCommerceClient {
       }
       const timestamp = String(Math.floor(Date.now() / 1000))
       headers['x-cartgain-timestamp'] = timestamp
-      headers['x-cartgain-signature'] = signPluginRequest(this.webhookSecret, timestamp, this.storeId, path)
+      headers['x-cartgain-signature'] = signPluginRequest(this.webhookSecret, timestamp, rawBody)
       headers['x-cartgain-store-id'] = this.storeId
     }
 
@@ -143,7 +144,7 @@ export class WooCommerceClient {
         response = await fetchImpl(url.toString(), {
           method: request.method ?? 'GET',
           headers,
-          body: request.body ? JSON.stringify(request.body) : undefined,
+          body: rawBody || undefined,
           signal: AbortSignal.timeout(this.options.timeoutMs),
           redirect: 'manual',
           cache: 'no-store',

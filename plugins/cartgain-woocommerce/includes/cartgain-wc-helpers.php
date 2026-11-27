@@ -178,3 +178,24 @@ function cartgain_wc_hmac_matches($expected_hex, $header, $timestamp, $max_age =
     }
     return hash_equals(strtolower($expected_hex), $provided);
 }
+
+function cartgain_wc_signed_request_valid($request, $secret, $store_id = '')
+{
+    if (!is_object($request) || !method_exists($request, 'get_header')) {
+        return false;
+    }
+    $secret = (string) $secret;
+    if ($secret === '') {
+        return false;
+    }
+    $timestamp = (string) $request->get_header('X-CartGain-Timestamp');
+    $signature = (string) $request->get_header('X-CartGain-Signature');
+    if ($store_id !== '') {
+        $header = (string) $request->get_header('X-CartGain-Store-Id');
+        if ($header !== '' && $header !== (string) $store_id) {
+            return false;
+        }
+    }
+    $canonical = $timestamp . '.' . $request->get_body();
+    return cartgain_wc_hmac_matches(cartgain_wc_hmac_hex($canonical, $secret), $signature, $timestamp);
+}

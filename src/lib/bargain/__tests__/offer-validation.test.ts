@@ -1,4 +1,4 @@
-import { validateOffer, type OfferValidationReason } from '../offer-validation'
+import { publicOfferRejection, validateOffer, type OfferValidationReason } from '../offer-validation'
 
 describe('validateOffer', () => {
   const base = { requestedPrice: 900, originalPrice: 1000, floorPrice: 800 }
@@ -67,6 +67,25 @@ describe('validateOffer', () => {
     expect(r.ok).toBe(false)
     expect(r.reason).toBe('AMBIGUOUS_OFFER_BASIS')
     expect(r.message).toMatch(/per item or the total/i)
+  })
+
+  it('does not expose the floor oracle in public rejection payloads', () => {
+    const result = validateOffer({ ...base, requestedPrice: 799 })
+    expect(publicOfferRejection(result)).toEqual({
+      message: expect.any(String),
+      reason: 'OFFER_NOT_AVAILABLE',
+      code: 'OFFER_REJECTED_OFFER_NOT_AVAILABLE',
+    })
+    expect(JSON.stringify(publicOfferRejection(result))).not.toContain('BELOW_FLOOR')
+    expect(JSON.stringify(publicOfferRejection(result))).not.toContain('floor')
+  })
+
+  it('keeps safe rejection reasons public', () => {
+    const result = validateOffer({ ...base, variantAvailable: false })
+    expect(publicOfferRejection(result)).toMatchObject({
+      reason: 'VARIANT_UNAVAILABLE',
+      code: 'OFFER_REJECTED_VARIANT_UNAVAILABLE',
+    })
   })
 
   it('produces stable reason codes for every rejection', () => {

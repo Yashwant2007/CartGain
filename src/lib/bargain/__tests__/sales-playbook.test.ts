@@ -38,6 +38,16 @@ describe('salesperson playbook', () => {
     expect(buildSystemPrompt(ctx, analysis, { compact: true })).toContain('SALES BEHAVIOR')
   })
 
+  it('never instructs the agent to claim unverified guarantees or easy returns', () => {
+    const prompt = buildSystemPrompt(ctx, analysis)
+    expect(prompt).not.toContain('product comes with a guarantee')
+    expect(prompt).not.toContain('easy returns')
+    expect(prompt).not.toContain('quality guarantee')
+    expect(prompt).not.toContain('with our guarantee')
+    expect(prompt).toContain('verified store policy supports them')
+    expect(prompt).toContain('verified details here')
+  })
+
   it('never exposes scarcity/urgency as selectable tactics', () => {
     const prompt = buildSystemPrompt(ctx, analysis)
     expect(prompt).not.toContain('quality_reframe, scarcity, urgency')

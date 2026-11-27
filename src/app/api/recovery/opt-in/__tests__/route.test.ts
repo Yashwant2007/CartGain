@@ -155,7 +155,7 @@ describe('POST /api/recovery/opt-in', () => {
     expect(journeyMock).not.toHaveBeenCalled()
   })
 
-  it('links an existing cart, fills missing contact fields, and does not double-schedule', async () => {
+  it('links an existing cart, fills missing contact fields, and schedules an immediate WhatsApp reminder', async () => {
     prismaMock.cart.findUnique.mockResolvedValue({
       id: 'cart-row-1',
       customerEmail: null,
@@ -172,6 +172,7 @@ describe('POST /api/recovery/opt-in', () => {
 
     expect(res.status).toBe(200)
     expect(body.linkedCart).toBe(true)
+    expect(body.reminderScheduled).toBe(true)
     expect(prismaMock.cart.update).toHaveBeenCalledWith({
       where: { id: 'cart-row-1' },
       data: {
@@ -179,6 +180,40 @@ describe('POST /api/recovery/opt-in', () => {
         customerPhone: '+919876543210',
       },
     })
+    expect(journeyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        storeId: 'store-1',
+        journeyType: 'checkout_abandon',
+        customerIdentityId: 'identity-1',
+        cartId: 'cart-row-1',
+        delayMinutes: 0,
+        rescheduleImmediate: true,
+        metadata: expect.objectContaining({
+          optInImmediate: true,
+          cartUrl: 'https://test.myshopify.com/cart/cart-token-1',
+        }),
+      }),
+    )
+  })
+
+  it('does not schedule another linked-cart WhatsApp reminder after a recent send', async () => {
+    prismaMock.cart.findUnique.mockResolvedValue({
+      id: 'cart-row-1',
+      customerEmail: 'buyer@example.com',
+      customerPhone: '+919876543210',
+      customerName: 'Buyer',
+      convertedAt: null,
+      isRecovered: false,
+    })
+    prismaMock.recoveryJourney.findFirst.mockResolvedValueOnce({ id: 'journey-1' })
+
+    const res = await POST(
+      makeRequest({ source: 'storefront_cart', cartToken: 'cart-token-1' }),
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.reminderScheduled).toBe(false)
     expect(journeyMock).not.toHaveBeenCalled()
   })
 

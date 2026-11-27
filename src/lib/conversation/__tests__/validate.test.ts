@@ -1,6 +1,6 @@
 import { ConversationFacts } from '../facts'
 import { DEFAULT_VOICE, resolveVoice } from '../voice'
-import { isNearDuplicate, validateMessage } from '../validate'
+import { dedupeCopy, isNearDuplicate, validateMessage } from '../validate'
 
 const facts: ConversationFacts = {
   storeName: 'Acme',
@@ -188,6 +188,28 @@ describe('regression: the old hardcoded fallbacks are now blocked', () => {
   it('still allows neutral flattery (not a factual claim)', () => {
     const text = "Asha, you've got incredible taste ✨ Vitamin C Serum looks absolutely stunning — we saved it all for you. Just one tap and it's yours 🚚"
     expect(validateMessage(text, facts, DEFAULT_VOICE).ok).toBe(true)
+  })
+})
+
+describe('dedupeCopy', () => {
+  it('removes a repeated sentence from email body copy', () => {
+    const text = 'Hi Asha, your Vitamin C Serum is still saved.\nYour Vitamin C Serum is still saved.\nCome back when ready.'
+    const result = validateMessage(text, facts, DEFAULT_VOICE)
+    expect(result.ok).toBe(true)
+    expect(result.text).toBe('Hi Asha, your Vitamin C Serum is still saved.\n\nCome back when ready.')
+    expect(result.issues).toContainEqual(expect.objectContaining({ code: 'duplicate' }))
+  })
+
+  it('removes a repeated sentence from WhatsApp body copy', () => {
+    const wa: ConversationFacts = { ...facts, channel: 'whatsapp' }
+    const result = validateMessage('Your Sneaker is saved. Your Sneaker is saved.', wa, DEFAULT_VOICE)
+    expect(result.ok).toBe(true)
+    expect(result.text).toBe('Your Sneaker is saved.')
+  })
+
+  it('keeps distinct lines that only share a few words', () => {
+    const text = 'Your Vitamin C Serum is still saved.\nCome back when you are ready.'
+    expect(dedupeCopy(text)).toBe(text)
   })
 })
 

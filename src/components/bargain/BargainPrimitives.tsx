@@ -438,7 +438,7 @@ export function DealInfoPanel({ t, currencySymbol, originalPrice, finalPrice, de
           fontSize: 12, color: '#64748b', padding: '3px 1px',
         }}>
           <ShieldCheck size={13} style={{ color: '#16a34a', flexShrink: 0 }} />
-          Price is guaranteed while you negotiate — it resets if you leave and come back.
+          Final pricing is confirmed by the store before your discount code is issued.
         </div>
       )}
     </div>

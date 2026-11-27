@@ -46,6 +46,16 @@ export interface OfferValidationResult {
   message: string | null
 }
 
+export type PublicOfferValidationReason =
+  | Exclude<OfferValidationReason, 'BELOW_FLOOR_REJECTED'>
+  | 'OFFER_NOT_AVAILABLE'
+
+export interface PublicOfferRejection {
+  message: string
+  reason: PublicOfferValidationReason
+  code: string
+}
+
 const HUMAN: Record<OfferValidationReason, string | null> = {
   OFFER_ACCEPTED: null,
   INVALID_PRICE: 'That price doesn\'t look right — let\'s agree on a clean number.',
@@ -116,5 +126,16 @@ export function validateOffer(input: ValidateOfferInput): OfferValidationResult 
     ok: true,
     reason: 'OFFER_ACCEPTED',
     ...base,
+  }
+}
+
+export function publicOfferRejection(result: OfferValidationResult): PublicOfferRejection {
+  const internalReason = result.reason ?? 'BELOW_FLOOR_REJECTED'
+  const reason: PublicOfferValidationReason =
+    internalReason === 'BELOW_FLOOR_REJECTED' ? 'OFFER_NOT_AVAILABLE' : internalReason
+  return {
+    message: result.message ?? 'Cannot accept this purchase right now.',
+    reason,
+    code: `OFFER_REJECTED_${reason}`,
   }
 }

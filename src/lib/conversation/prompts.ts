@@ -10,25 +10,26 @@
  * deliberate: the prompt makes the model *likely* to comply, the validator
  * makes compliance *guaranteed*.
  */
-import { ConversationFacts } from './facts'
+import { ConversationFacts, trustedFirstName } from './facts'
 import { BrandVoice, maxEmojis, maxWords, voicePromptBlock } from './voice'
 
-export const CONVERSATION_PROMPT_VERSION = 'recovery-v5'
+export const CONVERSATION_PROMPT_VERSION = 'recovery-v7'
 
 export type ConversationStage = 'reminder_1' | 'reminder_2' | 'reminder_3'
 
 const STAGE_OBJECTIVE: Record<ConversationStage, string> = {
-  reminder_1: 'First reminder: remind them of what they chose and give one clear next step. Warm, brief, no pressure.',
-  reminder_2: 'Second reminder: acknowledge they may still be deciding, and (if an offer exists) mention it once, naturally.',
-  reminder_3: 'Final reminder: say plainly that this is the last message about this cart, and stop. No false urgency, no threats.',
+  reminder_1: 'First reminder: remind them by name of the exact item they chose, make finishing feel easy and natural, and give one specific next step. Warm, brief, no pressure.',
+  reminder_2: 'Second reminder: acknowledge they may still be deciding, gently remind them the exact item is still in their cart, and (if an authorised offer exists) mention it once with its code. Make the next step feel effortless.',
+  reminder_3: 'Final reminder: say plainly that this is the last message about this cart, and stop there. No false urgency, no threats, no invented scarcity.',
 }
 
 function factsBlock(facts: ConversationFacts): string {
   const lines: string[] = []
   lines.push(`Store: ${facts.storeName}`)
+  const firstName = trustedFirstName(facts.customerName)
   lines.push(
-    facts.customerName
-      ? `Customer first name: ${facts.customerName}`
+    firstName
+      ? `Customer first name: ${firstName}`
       : 'Customer first name: NOT PROVIDED — do not invent or use a name.',
   )
   lines.push(`Items: ${facts.items.map((i) => `${i.name} x${i.quantity} (${facts.currencySymbol}${i.price})`).join('; ') || 'none'}`)
@@ -78,25 +79,29 @@ TASK
 ${STAGE_OBJECTIVE[stage]}
 
 STYLE (how it should read)
-- Make it feel like a real shopkeeper speaking to ONE customer by name. Open warmly with the customer's first name ("Priya," "Arjun,") when it is in the FACTS — otherwise a simple friendly opener without a fake name.
+- Make it feel like a real shopkeeper speaking to ONE customer by name. Open warmly with the exact first name from FACTS ("Priya," "Arjun,"), never a nickname, correction or invented name. If no name is given, use a friendly opener without a fake name.
+- Put the first name to work in the subject/headline/body where it reads naturally — personal beats generic, but never repeat it in every sentence.
 - Name the actual item(s) the customer chose ("the linen shirt you picked") instead of "your items". Use concrete detail ONLY from the item name/description above.
 - Be confident, warm and classy — shoppers skim, so keep sentences short and the tone assured rather than desperate. No hype, no "Hurry", no "Grab it now", no stacked exclamation marks.
-- Make the customer feel the item is already theirs: "your [item] is still waiting", "it's yours whenever you're ready", "right where you left it". Never invent scarcity.
+- Make finishing feel easy and already familiar: "your [item] is right where you left it", "it's saved and ready", "one step from yours", "finish when you're ready". Never invent scarcity.
+- Add ONE line of light, situational humour when the merchant voice allows it. Keep the joke about the cart or the act of choosing ("your cart has been waiting patiently"), never about pressure, scarcity or a person.
 - Sound like the shopkeeper at ${facts.storeName}, not a marketing robot: contractions, short sentences, one idea per line.
 - Name the store naturally when it helps ("the shirt you picked at ${facts.storeName}") so the message clearly comes from them.
 - If an authorised offer exists in the FACTS, weave it in as something reserved for THIS customer: "There's [X]% off waiting for you, [Name] — use code [CODE]." Never imply you personally set it aside.
-- Use emoji sparingly (max ${maxEmojis(voice, facts.channel)}), at most one or two in a short WhatsApp message, and only where it adds meaning.
-- End with ONE polished CTA: "Claim Your Item", "Complete Your Order", or "Make an Offer" when a bargain link is supplied. Avoid generic "Buy Now".
+- Use emoji sparingly (max ${maxEmojis(voice, facts.channel)}), at most one in a short WhatsApp message, and only where it adds meaning.
+- End with ONE polished, stage-specific CTA: "Claim Your Item", "Complete Your Order", "Finish Checkout", or "Make an Offer" when a bargain link is supplied. Avoid generic "Buy Now".
 - Make the headline and CTA specific to THIS stage and THESE items. Never use a generic "Your cart is waiting" on every message.
 - Vary your opening and sentence rhythm. Do not reuse the previous message's opener, structure or joke.
+- Never repeat a line or sentence inside the message. Say each idea once; a second version of the same thought is worse than leaving it out.
 - If the item detail is present, use ONE concrete detail from it (colour, material, flavour, size) — never invent one.
-- Avoid repeating "saved" or "still saved" from an earlier message. Prefer "waiting", "still yours", or "right where you left it". Variety matters.
+- Avoid repeating "saved" or "still saved" from an earlier message. Prefer "right where you left it", "still yours", or "ready for checkout". Variety matters.
 
 FACTS (the ONLY things you are allowed to state)
 ${factsBlock(facts)}
 
 HARD RULES
 - Every statement you make must be supported by a line above. If a fact is missing, you do not mention it.
+- Use the customer's first name exactly as given in FACTS. Never shorten it, change it, add a nickname, or invent one.
 - Never state or imply that something is popular, a bestseller, trending, reviewed, in stock or running out unless a "Verified fact" line says so.
 - Never claim a discount, a code, a price, a saving or a deadline that is not in the FACTS.
 - Never say the cart "expires", that stock is "limited", that this is your "last chance" unless the FACTS say so.

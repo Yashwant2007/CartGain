@@ -97,13 +97,13 @@ describe('WooCommerce plugin request signatures', () => {
   const secret = 'plugin-secret'
   const timestamp = '1700000000'
   const storeId = 'store-123'
-  const path = 'api/integrations/woocommerce/status'
+  const rawBody = JSON.stringify({ type: 'store_api_cart', payload: { cartToken: 'token-1' } })
 
-  it('accepts a valid path-bound signature with or without the sha256 prefix', () => {
-    const signature = signPluginRequest(secret, timestamp, storeId, path)
+  it('accepts a valid raw-body signature with or without the sha256 prefix', () => {
+    const signature = signPluginRequest(secret, timestamp, rawBody)
     expect(
       verifyPluginRequest({
-        path: `/${path}`,
+        rawBody,
         signature,
         timestamp,
         storeId,
@@ -113,7 +113,7 @@ describe('WooCommerce plugin request signatures', () => {
     ).toBe(true)
     expect(
       verifyPluginRequest({
-        path,
+        rawBody,
         signature: `sha256=${signature.toUpperCase()}`,
         timestamp,
         storeId,
@@ -123,18 +123,18 @@ describe('WooCommerce plugin request signatures', () => {
     ).toBe(true)
   })
 
-  it('rejects signatures reused for another path, store, or stale timestamp', () => {
-    const signature = signPluginRequest(secret, timestamp, storeId, path)
+  it('rejects tampered bodies, missing store headers, stale timestamps, and malformed signatures', () => {
+    const signature = signPluginRequest(secret, timestamp, rawBody)
     const input = {
-      path,
+      rawBody,
       signature,
       timestamp,
       storeId,
       secret,
       now: 1700000000000,
     }
-    expect(verifyPluginRequest({ ...input, path: 'api/integrations/woocommerce/disconnect' })).toBe(false)
-    expect(verifyPluginRequest({ ...input, storeId: 'store-456' })).toBe(false)
+    expect(verifyPluginRequest({ ...input, rawBody: `${rawBody} ` })).toBe(false)
+    expect(verifyPluginRequest({ ...input, storeId: null })).toBe(false)
     expect(verifyPluginRequest({ ...input, now: 1700000300001 })).toBe(false)
     expect(verifyPluginRequest({ ...input, signature: 'abc' })).toBe(false)
   })

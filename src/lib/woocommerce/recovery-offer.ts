@@ -10,6 +10,7 @@ export type WooCommerceRecoveryCouponInput = {
   type: 'percentage' | 'fixed'
   cartTotal?: number | null
   cartId?: string
+  productIds?: string[]
 }
 
 export async function resolveWooCommerceRecoveryCoupon(opts: WooCommerceRecoveryCouponInput) {
@@ -22,6 +23,7 @@ export async function resolveWooCommerceRecoveryCoupon(opts: WooCommerceRecovery
     minimumSubtotal: opts.cartTotal ?? null,
     expiresAt,
     description: `CartGain recovery ${opts.code}`,
+    productIds: opts.productIds,
   })
   if (!result) return null
   return {

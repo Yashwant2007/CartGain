@@ -26,12 +26,33 @@ export async function POST(request: NextRequest) {
   }
 
   const event = normalizeCustomerPaymentEvent(parsed)
+  const signature = request.headers.get('x-razorpay-signature')
+  const connections = await prisma.platformConnection.findMany({
+    where: { platform: CUSTOMER_PAYMENT_PROVIDER, webhookSecret: { not: null } },
+    select: { storeId: true, webhookSecret: true },
+  })
+  const verifiedStoreIds: string[] = []
+  for (const connection of connections) {
+    let webhookSecret: string
+    try {
+      webhookSecret = decrypt(connection.webhookSecret as string)
+    } catch {
+      continue
+    }
+    if (verifyCustomerPaymentWebhook(rawBody, signature, webhookSecret)) {
+      verifiedStoreIds.push(connection.storeId)
+    }
+  }
+  if (verifiedStoreIds.length === 0) {
+    return NextResponse.json({ message: 'Invalid signature' }, { status: 401 })
+  }
+
   if (!event.quoteId) {
     return NextResponse.json({ received: true, ignored: true, reason: 'no_quote_reference' })
   }
 
-  const quote = await prisma.bargainQuote.findUnique({
-    where: { id: event.quoteId },
+  const quote = await prisma.bargainQuote.findFirst({
+    where: { id: event.quoteId, storeId: { in: verifiedStoreIds } },
     select: {
       id: true,
       storeId: true,
@@ -43,26 +64,6 @@ export async function POST(request: NextRequest) {
   })
   if (!quote) {
     return NextResponse.json({ received: true, ignored: true, reason: 'quote_not_found' })
-  }
-
-  const connection = await prisma.platformConnection.findUnique({
-    where: {
-      storeId_platform: { storeId: quote.storeId, platform: CUSTOMER_PAYMENT_PROVIDER },
-    },
-    select: { id: true, webhookSecret: true },
-  })
-  if (!connection?.webhookSecret) {
-    return NextResponse.json({ message: 'Merchant webhook secret is not configured' }, { status: 409 })
-  }
-
-  let webhookSecret: string
-  try {
-    webhookSecret = decrypt(connection.webhookSecret)
-  } catch {
-    return NextResponse.json({ message: 'Merchant webhook secret cannot be decrypted' }, { status: 409 })
-  }
-  if (!verifyCustomerPaymentWebhook(rawBody, request.headers.get('x-razorpay-signature'), webhookSecret)) {
-    return NextResponse.json({ message: 'Invalid signature' }, { status: 401 })
   }
 
   const entityId = customerPaymentIdempotencyKey(event, request.headers.get('x-razorpay-event-id'))

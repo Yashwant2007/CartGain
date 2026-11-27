@@ -244,7 +244,7 @@ describe('attributeBargainPurchase', () => {
   }
 
   beforeEach(() => {
-    ;(getBargainGate as jest.Mock).mockResolvedValue({ subscriptionId: 'sub1', plan: { revSharePercent: 3.5 } })
+    ;(getBargainGate as jest.Mock).mockResolvedValue({ subscriptionId: 'sub1', billingKind: 'shopify', plan: { revSharePercent: 3.5 } })
     ;(prisma.bargainSession.findFirst as jest.Mock).mockResolvedValue({
       id: 'sess1',
       finalPrice: 820,
@@ -281,6 +281,20 @@ describe('attributeBargainPurchase', () => {
     await attributeBargainPurchase(params)
     expect(tx.bargainRevenueShareEvent.update).toHaveBeenCalledTimes(1)
     expect(tx.bargainRevenueShareEvent.create).not.toHaveBeenCalled()
+  })
+
+  it('does not book a Shopify revenue share event for Razorpay billing', async () => {
+    mockGate.mockResolvedValue({ subscriptionId: 'rzp_sub1', billingKind: 'razorpay', plan: { revSharePercent: 3.5 } })
+    const tx = txMock(1, null)
+    ;(prisma.$transaction as jest.Mock).mockImplementation(async (cb: any) => cb(tx))
+
+    const ok = await attributeBargainPurchase(params)
+
+    expect(ok).toBe(true)
+    expect(tx.analytics.upsert).toHaveBeenCalledTimes(1)
+    expect(tx.bargainRevenueShareEvent.findUnique).not.toHaveBeenCalled()
+    expect(tx.bargainRevenueShareEvent.create).not.toHaveBeenCalled()
+    expect(tx.subscription.update).not.toHaveBeenCalled()
   })
 
   it('does not double-credit when the order was already claimed', async () => {

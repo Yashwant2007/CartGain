@@ -125,7 +125,7 @@ export function tacticalCounter(ctx: NegotiationContext): number {
 // ── Absurd offers get a PERSONA REPLY, never a counter ──
 // An offer so far below the merchant's floor that treating it as a genuine bid
 // would be theatre. The old engine "countered" these on the schedule, which did
-// two bad things: (1) it rewarded a joke with a real number, and (2) it taught
+// two bad things: (1) it rewarded a joke with a real price, and (2) it taught
 // shoppers that patient lowballing walks the price down to the floor. Instead
 // such a turn earns a persona-true reply with NO counter price.
 //
@@ -133,7 +133,7 @@ export function tacticalCounter(ctx: NegotiationContext): number {
 // looping script: the first joke gets light banter, a rising series of jokes gets
 // acknowledged ("you're inching up"), and a sustained streak gets a firm,
 // floor-safe ANCHOR (the quotable floor, always ABOVE the hidden minimum) so the
-// shopper is handed a real number to work from instead of a dead end. The variant
+// shopper is handed a real price to work from instead of a dead end. The variant
 // is picked deterministically from the offer value and the streak, so two
 // identical requests always get identical copy (idempotent) while consecutive
 // turns never repeat verbatim.
@@ -167,29 +167,29 @@ export function absurdOfferReply(offer: number, ctx: NegotiationContext): string
   const banks: Record<Persona, { s1: string[]; s2: string[]; s3: string[] }> = {
     strict_negotiator: {
       s1: [
-        `${price} is a little too ambitious for ${item}. No hard feelings — give me a realistic number and I'll see what I can do.`,
-        `That one made me smile. ${price} won't get you ${item}, but a realistic number gives us something to work with.`,
-        `Let's keep it real: ${price} isn't in the ballpark for ${item}. Name a realistic number and we'll talk.`,
+        `${price} is a little too ambitious for ${item}. No hard feelings — give me a realistic price and I'll see what I can do.`,
+        `That one made me smile. ${price} won't get you ${item}, but a realistic price gives us something to work with.`,
+        `Let's keep it real: ${price} isn't in the ballpark for ${item}. Name a realistic price and we'll talk.`,
       ],
       s2: [
-        `You're edging up, and I see it. ${price} is still not in the conversation for ${item} — give me a realistic number.`,
-        `${price} is still far off. I hear the bump, and it helps; a realistic number would help more.`,
+        `You're edging up, and I see it. ${price} is still not in the conversation for ${item} — give me a realistic price.`,
+        `${price} is still far off. I hear the bump, and it helps; a realistic price would help more.`,
       ],
       s3: [
         `We're going in circles. ${price} isn't happening. My realistic starting point is ${anchor} — meet me near that and we have a deal.`,
         `I want to close this for you. ${price} won't work for ${item}, but I can start around ${anchor}; if that's workable, the deal is yours.`,
-        `Straight talk: ${price} is off the table. My position starts at ${anchor}. Bring a real number and we'll close.`,
+        `Straight talk: ${price} is off the table. My position starts at ${anchor}. Bring a real price and we'll close.`,
       ],
     },
     playful_friend: {
       s1: [
-        `Ha! ${price}? For that I'll throw in the box it came in. Come on — play ball with a real number!`,
-        `${price}?! You're joking — for that I'll throw in the box it came in! Give me a real number and let's play ball.`,
-        `Nice try! ${price} won't do it — but I like the hustle. Throw a real number at me and we'll play ball.`,
+        `Ha! ${price}? For that I'll throw in the box it came in. Come on — play ball with a real price!`,
+        `${price}?! You're joking — for that I'll throw in the box it came in! Give me a real price and let's play ball.`,
+        `Nice try! ${price} won't do it — but I like the hustle. Throw a real price at me and we'll play ball.`,
       ],
       s2: [
-        `You keep nudging it up — I see the game! But ${price} is still a no. Play ball with a real number.`,
-        `Ooh, inching up! ${price} still won't fly, though. Throw me a number I can actually play ball with.`,
+        `You keep nudging it up — I see the game! But ${price} is still a no. Play ball with a real price.`,
+        `Ooh, inching up! ${price} still won't fly, though. Throw me a price I can actually play ball with.`,
       ],
       s3: [
         `Okay, enough games — you're clearly testing me! ${price} won't fly, but let's get real: my ballpark starts around ${anchor}. Play in that range!`,
@@ -199,13 +199,13 @@ export function absurdOfferReply(offer: number, ctx: NegotiationContext): string
     },
     friendly_shopkeeper: {
       s1: [
-        `Oh friend, ${price} wouldn't even cover the packaging! What's a fair number you'd genuinely pay?`,
+        `Oh friend, ${price} wouldn't even cover the packaging! What's a fair price you'd genuinely pay?`,
         `Ha, ${price}? Friend, that's a warm-up, not an offer. What are you really thinking?`,
         `I love the enthusiasm, friend — but ${price} won't work. What number feels fair to you?`,
       ],
       s2: [
         `I can tell you're inching up, friend, and I appreciate it — but ${price} is still too far off for ${item}. What feels fair?`,
-        `You're getting warmer, friend, but ${price} is still not workable. Give me a realistic number and I'll do my best.`,
+        `You're getting warmer, friend, but ${price} is still not workable. Give me a realistic price and I'll do my best.`,
       ],
       s3: [
         `Friend, ${price} genuinely won't work, and I don't want to waste your time. A real starting point for ${item} is around ${anchor} — if that's workable, we'll make it happen.`,
@@ -224,18 +224,18 @@ export function absurdOfferReply(offer: number, ctx: NegotiationContext): string
   if (lang === 'hinglish') {
     const pools: Record<Persona, { s1: string[]; s2: string[]; s3: string[] }> = {
       strict_negotiator: {
-        s1: [`${price} thoda zyada hai. Real number batao, phir baat karenge.`, `Bhai, ${price} se ye ${item} nahi milega. Sahi figure do.`, `Himmat achhi hai, par ${price} kam hai. Real offer bhejo.`],
-        s2: [`Thoda upar aa gaye ho, par ${price} abhi door hai. Real number batao.`, `${price} abhi bhi nahi chalega. Batao, final kya soch rahe ho?`],
-        s3: [`Bhai, ${price} to nahi hoga. Main ${anchor} se shuru kar sakta hoon — uske paas aa jao, deal kar deta hoon.`, `Seedhi baat: ${price} off the table hai. Meri position ${anchor} hai. Real number lao.`, `Do baar bata diya — ${price} nahi. ${anchor} ke aas-paas khelo, pakka deal.`,],
+        s1: [`${price} thoda zyada hai. Real price batao, phir baat karenge.`, `Bhai, ${price} se ye ${item} nahi milega. Sahi price do.`, `Himmat achhi hai, par ${price} kam hai. Real offer bhejo.`],
+        s2: [`Thoda upar aa gaye ho, par ${price} abhi door hai. Real price batao.`, `${price} abhi bhi nahi chalega. Batao, final kya soch rahe ho?`],
+        s3: [`Bhai, ${price} to nahi hoga. Main ${anchor} se shuru kar sakta hoon — uske paas aa jao, deal kar deta hoon.`, `Seedhi baat: ${price} off the table hai. Meri position ${anchor} hai. Real price lao.`, `Do baar bata diya — ${price} nahi. ${anchor} ke aas-paas khelo, pakka deal.`,],
       },
       playful_friend: {
-        s1: [`Ha! ${price}? Isse to box bhi free mein mil jayega 😄 Chalo, real number maro!`, `${price}?? Bhai mazaakachhi! Ek solid number bhejo, haggling ka maza lenge 😄`, `Nice try! 😄 ${price} se kaam nahi chalega, par effort pasand hai. Real number?`],
-        s2: [`Dekha, thoda upar aa gaye! 😄 ${price} phir bhi no. Play ball karo.`, `Ooh ${price} — abhi bhi bahut chhota hai. Koi number jise main seriously le sakoon?`],
+        s1: [`Ha! ${price}? Isse to box bhi free mein mil jayega 😄 Chalo, real price maro!`, `${price}?? Bhai mazaakachhi! Ek solid price bhejo, haggling ka maza lenge 😄`, `Nice try! 😄 ${price} se kaam nahi chalega, par effort pasand hai. Real price?`],
+        s2: [`Dekha, thoda upar aa gaye! 😄 ${price} phir bhi no. Play ball karo.`, `Ooh ${price} — abhi bhi bahut chhota hai. Koi price jise main seriously le sakoon?`],
         s3: [`Bas bas, test samajh gaya 😄 ${price} nahi, par main ${anchor} se khel sakta hoon.`, `Bhai tum persistent ho! ${price} masih joke hai. Real talk — ${anchor} se start karein?`, `Cards table pe: ${price} nahi. ${anchor} ke around aa jao, deal pakki 😄`],
       },
       friendly_shopkeeper: {
-        s1: [`Bhaiya, ${price} se to packing bhi nahi milegi 😄 Thoda real number batao, dekhte hain kya kar sakta hoon.`, `Ha bhai, ${price} warm-up hai, offer nahi. Sach me kitna dena chahte ho?`, `Mujhe tumhari himmat pasand hai, par ${price} kaam nahi karega. Fair number batao?`],
-        s2: [`Tum thoda upar aa rahe ho bhai, aur main dekh raha hoon — par ${price} abhi bhi door hai.`, `Bhai, ${price} se deal nahi banegi. Thoda realistic number do, main try karunga.`],
+        s1: [`Bhaiya, ${price} se to packing bhi nahi milegi 😄 Thoda real price batao, dekhte hain kya kar sakta hoon.`, `Ha bhai, ${price} warm-up hai, offer nahi. Sach me kitna dena chahte ho?`, `Mujhe tumhari himmat pasand hai, par ${price} kaam nahi karega. Fair price batao?`],
+        s2: [`Tum thoda upar aa rahe ho bhai, aur main dekh raha hoon — par ${price} abhi bhi door hai.`, `Bhai, ${price} se deal nahi banegi. Thoda realistic price do, main try karunga.`],
         s3: [`Bhai, ${price} genuinely nahi chalega. Main ${anchor} se start kar sakta hoon — agar ye theek hai to deal kar deta hoon.`, `Straight bol raha hoon: ${price} is item ke liye possible nahi. ${anchor} ke aas-paas kuch kar sakta hoon.`, `${price} to nahi, par main tumhe khali nahi bhejna chahta. ${anchor} ke around chalega?`],
       },
     }
@@ -441,12 +441,10 @@ export function clampOfferToSafety(opts: {
   return Math.min(originalPrice, Math.max(minPrice, rounded))
 }
 
-// ── Bulk-volume floor factor (deeper per-unit floor for larger orders) ──
+// ── Bulk-volume floor factor (quantity is not verifiable, so never lowers the floor) ──
 export function bulkFloorFactor(quantity: number): number {
-  if (quantity >= 20) return 0.85
-  if (quantity >= 10) return 0.90
-  if (quantity >= 5) return 0.95
-  return 1.0
+  void quantity
+  return 1
 }
 
 // ── Default opening message (persona-aware, language-aware) ──
@@ -479,7 +477,7 @@ export function buildOpeningMessage(ctx: NegotiationContext): string {
   }
 
   if (ctx.persona === 'playful_friend') {
-    return `${warmup} Hey hey! I see you're checking out ${item} — nice choice! Listed at ${price}, and it's yours for the right price. What's your move — name a number, or ask me anything about it?`
+    return `${warmup} Hey hey! I see you're checking out ${item} — nice choice! Listed at ${price}, and it's yours for the right price. What's your move — name a price, or ask me anything about it?`
   }
   if (ctx.persona === 'strict_negotiator') {
     return `Thank you for your interest in ${item}.${warmup} The current price is ${price}. I'm open to a reasonable offer — what price did you have in mind?`
@@ -545,7 +543,7 @@ export function ruleBasedDecision(
 
   // An absurd offer is NOT a bid to be answered with a price. Reply in persona
   // (strict handles it strictly, playful jokes, friendly stays warm) and invite a
-  // real number — never reward a joke with a number, and never burn a scheduled
+  // real price — never reward a joke with a price, and never burn a scheduled
   // step on it.
   if (isAbsurdOffer(boundedOffer, ctx)) {
     return {

@@ -53,6 +53,13 @@ function normalizeAmount(value: number): number {
   return Math.round(value * 100) / 100
 }
 
+export function trustedFirstName(value: string | null | undefined): string | undefined {
+  const cleaned = (value || '').replace(/@\S+/g, ' ').replace(/[<>]/g, ' ').trim().split(/\s+/)[0]
+  if (!cleaned) return undefined
+  if (/^(hi|hey|hello|dear|valued|guest|customer|shopper|there)$/i.test(cleaned)) return undefined
+  return cleaned.slice(0, 40)
+}
+
 /** Every monetary amount the copy is allowed to mention. */
 export function allowedAmounts(facts: ConversationFacts): number[] {
   const amounts = new Set<number>()

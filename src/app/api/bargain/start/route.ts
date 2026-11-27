@@ -16,6 +16,7 @@ import { generateClaimToken } from '@/lib/bargain/purchase'
 import { sessionIdFromToken, signSessionToken } from '@/lib/bargain/session-bind'
 import {
   bargainSessionIdentityClauses,
+  hasStrongBuyerProof,
   hasStrongProofForSession,
   isCheckoutLocked,
   latestPurchase,
@@ -282,10 +283,13 @@ export async function POST(request: NextRequest) {
       tokenSessionId,
     }
     const identityClauses = bargainSessionIdentityClauses(identity)
-    const rejoinClauses = [
-      ...strongSessionIdentityClauses(identity),
-      ...(tokenSessionId ? [{ id: tokenSessionId }] : []),
-    ]
+    const hasStrongProof = hasStrongBuyerProof(callerProof)
+    const rejoinClauses = hasStrongProof
+      ? [
+          ...strongSessionIdentityClauses(identity),
+          ...(tokenSessionId ? [{ id: tokenSessionId }] : []),
+        ]
+      : []
     const purchaseIdentityClauses = purchaseMemoryIdentityClauses({
       customerEmail,
       cartToken: data.cartToken,
@@ -390,15 +394,15 @@ export async function POST(request: NextRequest) {
       }, { status: 200 })
     }
 
-    // Last line of defense for fully anonymous buyers (no fingerprint, no email):
-    // never start more than ONE active session per store+product at a time.
-    if (!buyerId) {
+    if (!hasStrongProof && !buyerId) {
       const anonExisting = await prisma.bargainSession.findFirst({
         where: {
           storeId: data.storeId,
           shopifyProductId: data.shopifyProductId,
           customerFingerprint: null,
           customerEmail: null,
+          customerPhone: null,
+          cartToken: null,
           status: 'active',
           expiredAt: { gt: new Date() },
         },
@@ -407,13 +411,10 @@ export async function POST(request: NextRequest) {
       })
       if (anonExisting) {
         return NextResponse.json({
-          message: 'An active bargaining session already exists for this item. Please continue it.',
-          sessionId: anonExisting.id,
-          sessionToken: signSessionToken(anonExisting.id) ?? undefined,
+          message: 'An active bargaining session already exists for this item. Continue from the browser that started it.',
           existingSession: true,
-          lastBought,
           goal: publicGoalView(goalCtx),
-        }, { status: 200 })
+        }, { status: 409 })
       }
     }
 

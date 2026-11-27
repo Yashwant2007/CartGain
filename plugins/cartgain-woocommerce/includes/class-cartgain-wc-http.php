@@ -22,10 +22,7 @@ final class CartGain_WC_HTTP
         $body = (null === $payload) ? '' : cartgain_wc_json_encode($payload);
         $timestamp = time();
         $store_id = isset($extra_headers['X-CartGain-Store-Id']) ? trim((string) $extra_headers['X-CartGain-Store-Id']) : '';
-        $signature_path = '/' . ltrim((string) $path, '/');
-        $canonical = $store_id === ''
-            ? $timestamp . '.' . $body
-            : $timestamp . '.' . $store_id . '.' . $signature_path;
+        $canonical = $timestamp . '.' . $body;
 
         $headers = array(
             'Content-Type' => 'application/json',

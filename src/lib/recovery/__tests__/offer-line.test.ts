@@ -14,7 +14,7 @@ describe('buildRecoveryOfferLine', () => {
     expect(line).toContain('10% off')
     expect(line).toContain('code GAINABC123')
     expect(line).toContain('is waiting 🛒')
-    expect(line).toContain('claim it now!')
+    expect(line).toContain('Still yours — claim it now!')
     expect(line.indexOf('claim it now!')).toBeGreaterThan(line.indexOf('Snowboard'))
   })
 

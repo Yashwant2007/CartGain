@@ -214,6 +214,49 @@ describe('processWooWebhookEvent', () => {
     )
   })
 
+  it('falls back from a hashed cart id to the real cart token without inventing an identity', async () => {
+    mockPrisma.cart.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        customerName: 'Grace Hopper',
+        customerEmail: 'grace@example.com',
+        customerPhone: '+15557654321',
+        externalCustomerId: null,
+      })
+
+    await processWooWebhookEvent(
+      event({
+        type: 'customer_identified',
+        data: {
+          cartId: 'hashed-cart-key',
+          cartToken: 'cart-token-1',
+          email: 'direct@example.com',
+          source: 'store_api',
+          consent: { source: 'store_api', at: occurredAt, email: true, whatsapp: false },
+        },
+      }),
+      ctx,
+      eventRef,
+    )
+
+    expect(mockPrisma.cart.findFirst).toHaveBeenCalledTimes(2)
+    expect(mockPrisma.cart.findFirst.mock.calls[0][0].where).toMatchObject({
+      storeId: 'store-1',
+      platform: 'woocommerce',
+    })
+    expect(mockPrisma.cart.findFirst.mock.calls[1][0].where.OR).toEqual([
+      { cartId: 'cart-token-1' },
+      { platformCartId: 'cart-token-1' },
+    ])
+    const created = mockPrisma.customerIdentity.create.mock.calls[0][0]
+    expect(created.data).toMatchObject({
+      email: 'direct@example.com',
+      name: 'Grace Hopper',
+      phone: '+15557654321',
+      consentEmail: true,
+    })
+  })
+
   it('marks a cart converted and cancels recovery only when an order is paid', async () => {
     const orderData = { order: { id: '9001', cart_id: 'cart-1', total: '100.00', customer_id: 5 } }
     mockPrisma.cart.findUnique.mockResolvedValue({ id: 'cart-row-1' })

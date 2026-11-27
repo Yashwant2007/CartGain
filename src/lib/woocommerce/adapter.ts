@@ -38,6 +38,49 @@ function errorCode(error: unknown): string {
   return error instanceof WooCommerceClientError ? error.code : 'unexpected_error'
 }
 
+function couponIdValues(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const ids = value
+    .map((entry) => {
+      const raw = typeof entry === 'number' && Number.isFinite(entry) ? String(entry) : text(entry)
+      if (!raw) return null
+      const normalized = raw.replace(/^woo-/i, '')
+      return normalized.match(/\d+/)?.[0] ?? null
+    })
+    .filter((entry): entry is string => Boolean(entry))
+  return Array.from(new Set(ids)).sort()
+}
+
+function couponMatches(existing: unknown, coupon: PlatformCouponInput, now: number): boolean {
+  const row = record(existing)
+  if (!row) return false
+  if ((text(row.status) ?? 'publish') !== 'publish') return false
+
+  const expires = text(row.date_expires)
+  if (expires) {
+    const parsed = new Date(expires)
+    if (Number.isFinite(parsed.getTime()) && parsed.getTime() <= now) return false
+  }
+  const expectedExpiry = coupon.expiresAt ? coupon.expiresAt.toISOString().slice(0, 10) : ''
+  if ((expires?.slice(0, 10) ?? '') !== expectedExpiry) return false
+
+  const usageLimit = Number(row.usage_limit ?? 0)
+  const usageCount = Number(row.usage_count ?? 0)
+  if (usageLimit > 0 && usageCount >= usageLimit) return false
+
+  const expectedType = coupon.type === 'percentage' ? 'percent' : 'fixed_cart'
+  if (text(row.discount_type) !== expectedType) return false
+  if (Math.abs(Number(row.amount ?? -1) - Number(coupon.value)) > 0.001) return false
+
+  const expectedMinimum = coupon.minimumSubtotal && coupon.minimumSubtotal > 0 ? coupon.minimumSubtotal.toFixed(2) : ''
+  const actualMinimum = Number(row.minimum_amount ?? 0) > 0 ? Number(row.minimum_amount).toFixed(2) : ''
+  if (actualMinimum !== expectedMinimum) return false
+
+  const expectedIds = couponIdValues(coupon.productIds)
+  if (JSON.stringify(couponIdValues(row.product_ids)) !== JSON.stringify(expectedIds)) return false
+  return true
+}
+
 export const wooCommerceAdapter: PlatformAdapter = {
   id: 'woocommerce',
 
@@ -98,10 +141,18 @@ export const wooCommerceAdapter: PlatformAdapter = {
     try {
       const client = new WooCommerceClient(input)
       const existing = await client.listCoupons(coupon.code)
-      if (Array.isArray(existing) && existing.some((entry) => text(record(entry)?.code) === coupon.code)) {
-        return { code: coupon.code, status: 'existing', verified: true }
+      const now = Date.now()
+      if (Array.isArray(existing)) {
+        const match = existing.find((entry) => text(record(entry)?.code) === coupon.code)
+        if (match) {
+          if (!couponMatches(match, coupon, now)) {
+            return { code: coupon.code, status: 'failed', verified: false, errorCode: 'coupon_unusable' }
+          }
+          return { code: coupon.code, status: 'existing', verified: true }
+        }
       }
 
+      const productIds = couponIdValues(coupon.productIds).map((id) => Number(id)).filter((id) => Number.isInteger(id))
       await client.createCoupon({
         code: coupon.code,
         discount_type: coupon.type === 'percentage' ? 'percent' : 'fixed_cart',
@@ -112,11 +163,17 @@ export const wooCommerceAdapter: PlatformAdapter = {
         ...(coupon.minimumSubtotal && coupon.minimumSubtotal > 0
           ? { minimum_amount: coupon.minimumSubtotal.toFixed(2) }
           : {}),
+        ...(productIds.length > 0 ? { product_ids: productIds } : {}),
       })
 
       const readback = await client.listCoupons(coupon.code)
-      const verified = Array.isArray(readback) && readback.some((entry) => text(record(entry)?.code) === coupon.code)
-      return { code: coupon.code, status: 'created', verified }
+      const created = Array.isArray(readback)
+        ? readback.find((entry) => text(record(entry)?.code) === coupon.code)
+        : null
+      if (!created || !couponMatches(created, coupon, now)) {
+        return { code: coupon.code, status: 'failed', verified: false, errorCode: 'coupon_verification_failed' }
+      }
+      return { code: coupon.code, status: 'created', verified: true }
     } catch (error) {
       return { code: coupon.code, status: 'failed', verified: false, errorCode: errorCode(error) }
     }

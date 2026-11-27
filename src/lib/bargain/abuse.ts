@@ -275,14 +275,14 @@ const OFF_TOPIC_PATTERNS: RegExp[] = [
 // in a row (a repeated static reply reads as "broken bot" to shoppers).
 const OFF_TOPIC_RESPONSES = [
   `I'm happy to chat, but let's keep our eyes on the deal — what price would feel fair for this item?`,
-  `Ha, I like the vibe. Now let's win this one — what's the number you're hoping for?`,
+  `Ha, I like the vibe. Now let's win this one — what price are you hoping for?`,
   `I'm right here for you — just tell me the price you have in mind and we'll make it work.`,
 ]
 
 const FLOODING_RESPONSES = [
   `Whoa, one at a time — I'm right here. Send me a single price and I'll see what I can do.`,
   `Slow down a sec, no need to rush — what's the one price you'd be happy with?`,
-  `Easy there, let's take this one step at a time — what number works for you?`,
+  `Easy there, let's take this one step at a time — what price works for you?`,
 ]
 
 function pickResponse(options: string[], seed: number): string {
@@ -293,9 +293,9 @@ const BOUNDARY_RESPONSES: Record<string, string> = {
   profanity:
     "I'm happy to keep helping, but let's keep it respectful. What price did you have in mind?",
   jailbreak:
-    'I can only help with this product and its price. What number works for you?',
+    'I can only help with this product and its price. What price works for you?',
   prompt_injection:
-    'I can only help with this product and its price. What number works for you?',
+    'I can only help with this product and its price. What price works for you?',
   data_exfiltration:
     "I can't share internal pricing rules, but I can help you with a fair price for this item.",
 }

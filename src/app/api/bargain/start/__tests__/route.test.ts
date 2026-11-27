@@ -230,6 +230,7 @@ describe('/api/bargain/start — ownership-aware rejoin and disclosure', () => {
 
     expect(res.status).toBe(201)
     expect(body.sessionId).toBe('new-session')
-    expect(db.bargainSession.findFirst).toHaveBeenCalledTimes(3)
+    expect(body.existingSession).toBeFalsy()
+    expect(db.bargainSession.findFirst).toHaveBeenCalledTimes(2)
   })
 })

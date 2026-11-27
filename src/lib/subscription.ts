@@ -89,7 +89,15 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
       status: 'sent',
     },
   })
-  const cartsUsed = sentCartsCount.length
+  const sentCartIds = sentCartsCount.map((row: any) => row.cartId).filter(Boolean)
+  const cartsByStore = sentCartIds.length
+    ? await prisma.cart.groupBy({
+        by: ['storeId'],
+        where: { id: { in: sentCartIds } },
+        _count: { _all: true },
+      })
+    : []
+  const cartsUsed = cartsByStore.reduce((max, group: any) => Math.max(max, group._count._all), 0)
   const maxCarts = isFree ? FREE_CARTS_THRESHOLD : planConfig.maxCarts
   const cartsRemaining = Math.max(0, maxCarts - cartsUsed)
   const isExhausted = isFree && cartsUsed >= FREE_CARTS_THRESHOLD

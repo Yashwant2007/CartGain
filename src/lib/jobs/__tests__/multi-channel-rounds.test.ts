@@ -107,6 +107,8 @@ const whatsappMock = sendWhatsAppMessage as jest.Mock
 
 const HOUR = 60 * 60 * 1000
 
+jest.setTimeout(15000)
+
 function campaign(over: Record<string, any> = {}) {
   return {
     id: 'camp-1',

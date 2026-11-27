@@ -503,6 +503,7 @@ export async function createOrReuseWooCommerceCoupon(opts: {
       usageLimit: 1,
       minimumSubtotal: opts.minimumSubtotal ?? null,
       description: opts.description ?? `CartGain ${opts.code}`,
+      productIds: opts.productIds,
     })
     if (!result.verified || (result.status !== 'created' && result.status !== 'existing')) return null
     return {

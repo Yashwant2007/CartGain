@@ -36,6 +36,7 @@ import { isAbuseStrictness, isNegotiationStyle } from '@/lib/bargain/merchant-mo
 import { enginePersonaFor } from '@/lib/bargain/experience/personality'
 import { publishedPersonality } from '@/lib/bargain/experience/config'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
+import { getBargainTrendPrompt, sanitizeTrendConfig } from '@/lib/bargain/trend'
 import {
   searchRecommendations,
   recommendationReason,
@@ -1151,6 +1152,12 @@ export async function POST(request: NextRequest) {
 
     const lastCounter = [...bargainSession.messages].reverse()
       .find((m: any) => m.role === 'ai' && m.offeredPrice != null)?.offeredPrice ?? null
+    const trendPrompt = await getBargainTrendPrompt({
+      storeId: bargainSession.storeId,
+      config,
+      product: productCtx,
+    })
+    const trendRegion = sanitizeTrendConfig(config).region
 
     const ctx: NegotiationContext = {
       storeName: bargainSession.store.name,
@@ -1191,6 +1198,7 @@ export async function POST(request: NextRequest) {
     ctx.liveTurn = liveTurn
     ctx.adaptive = adaptive
     ctx.voice = voice
+    ctx.trendPrompt = trendPrompt
     ctx.sessionMemory = buildSessionMemory({
       intent: intentAnalysis,
       signals: shopperSignals,
@@ -1267,6 +1275,8 @@ export async function POST(request: NextRequest) {
           agentCount: intelligence.metadata.agentCount,
           llmCalls: 0,
           durationMs: intelligence.metadata.durationMs,
+          trendUsed: Boolean(trendPrompt),
+          trendRegion: trendPrompt ? trendRegion : null,
           offerBasis: offerView.basis,
           offerClarificationNeeded: true,
         },
@@ -1729,6 +1739,8 @@ export async function POST(request: NextRequest) {
         agentCount: intelligence.metadata.agentCount,
         llmCalls: 0,
         durationMs: intelligence.metadata.durationMs,
+        trendUsed: Boolean(trendPrompt),
+        trendRegion: trendPrompt ? trendRegion : null,
         offerBasis: offerView.basis,
         offerClarificationNeeded: offerView.needsClarification,
       },

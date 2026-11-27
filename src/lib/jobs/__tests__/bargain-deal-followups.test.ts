@@ -24,6 +24,16 @@ const p = prisma as any
 const gate = canSendToIdentity as jest.Mock
 const email = sendEmail as jest.Mock
 
+const consentedIdentity = {
+  id: 'i1',
+  consentEmail: true,
+  consentWhatsApp: false,
+  emailConsentBasis: 'explicit',
+  suppressed: false,
+  optedOutAt: null,
+  lastInboundAt: null,
+}
+
 const baseSession = {
   id: 's1',
   storeId: 'store-1',
@@ -49,7 +59,7 @@ beforeEach(() => {
   p.bargainDealFollowup.findMany.mockResolvedValue([])
   p.bargainDealFollowup.create.mockResolvedValue({ id: 'f1' })
   p.bargainDealFollowup.update.mockResolvedValue({})
-  p.customerIdentity.findFirst.mockResolvedValue(null)
+  p.customerIdentity.findFirst.mockResolvedValue(consentedIdentity)
   p.cart.findUnique.mockResolvedValue(null)
 })
 
@@ -108,6 +118,16 @@ describe('processBargainDealFollowups', () => {
     const res = await processBargainDealFollowups()
     expect(res.sent).toBe(0)
     expect(email).not.toHaveBeenCalled()
+  })
+
+  it('does not email a shopper with no consent identity', async () => {
+    p.bargainSession.findMany.mockResolvedValue([baseSession])
+    p.bargainSession.findUnique.mockResolvedValue(baseSession)
+    p.customerIdentity.findFirst.mockResolvedValue(null)
+    const res = await processBargainDealFollowups()
+    expect(res.sent).toBe(0)
+    expect(email).not.toHaveBeenCalled()
+    expect(p.bargainDealFollowup.create).not.toHaveBeenCalled()
   })
 
   it('respects consent — an opted-out identity is skipped', async () => {

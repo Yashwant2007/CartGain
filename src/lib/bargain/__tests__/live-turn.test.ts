@@ -39,7 +39,7 @@ describe('live turn analysis', () => {
     expect(turn.mode).toBe('price')
     expect(turn.noPrice).toBe(false)
     expect(turn.humorAllowed).toBe(true)
-    expect(turn.prompt).toContain('casual/trend context')
+    expect(turn.prompt).toContain('casual context')
     expect(turn.prompt).toContain('never echo them as offers')
   })
 
@@ -48,7 +48,7 @@ describe('live turn analysis', () => {
     expect(turn.mode).toBe('trend_talk')
     expect(turn.compact).toBe(true)
     expect(turn.noPrice).toBe(true)
-    expect(turn.prompt).toContain('without claiming what is trending')
+    expect(turn.prompt).toContain('Never claim what is trending')
   })
 
   it('routes catalog questions to a non-compact discovery mode', () => {

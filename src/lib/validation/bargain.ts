@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { TREND_TOPIC_IDS } from '@/lib/bargain/trend/catalog'
+import { TREND_REGION_VALUES } from '@/lib/bargain/trend/types'
 
 // Re-export helpers from root validation module so bargain routes can import
 // everything they need from `@/lib/validation/bargain`.
@@ -72,6 +74,11 @@ export const bargainConfigUpsertSchema = z.object({
   // ── Bundle / multi-item negotiation (Module 6) ──
   bundleNegotiationEnabled: z.boolean().optional(),
   bundleDiscountPercent: z.number().min(0).max(90).nullable().optional(),
+  trendIntelligenceEnabled: z.boolean().optional(),
+  trendRegion: z.enum(TREND_REGION_VALUES as unknown as [string, ...string[]]).nullable().optional(),
+  trendTopics: z.array(z.string().refine((id) => TREND_TOPIC_IDS.includes(id), 'Unknown trend topic')).max(8).nullable().optional(),
+  trendExcludedTopics: z.array(z.string().refine((id) => TREND_TOPIC_IDS.includes(id), 'Unknown trend topic')).max(26).nullable().optional(),
+  trendHumorEnabled: z.boolean().optional(),
   // ── Emergency controls (Module 8) ──
   emergencyPaused: z.boolean().optional(),
   aiPaused: z.boolean().optional(),

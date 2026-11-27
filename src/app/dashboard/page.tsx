@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 import {
@@ -16,10 +17,17 @@ import {
   Zap,
   Trophy,
 } from 'lucide-react'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { MetricCard } from '@/components/dashboard/MetricCard'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import ROICalculator from '@/components/ROICalculator'
+
+const DashboardRevenueChart = dynamic(
+  () => import('@/components/dashboard/RevenueChartClient').then((mod) => mod.DashboardRevenueChart),
+  {
+    ssr: false,
+    loading: () => <div className="h-64 w-full animate-pulse rounded-lg bg-slate-700/30" />,
+  },
+)
 
 type Campaign = {
   id: string
@@ -272,26 +280,7 @@ export default function DashboardPage() {
               <div className="animate-pulse w-full h-full bg-slate-700/30 rounded-lg" />
             </div>
           ) : chartData.length > 0 ? (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                  <defs>
-                    <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f" />
-                  <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={{ stroke: '#1e3a5f' }} interval="preserveStartEnd" />
-                  <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${v}`} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e3a5f', borderRadius: '8px', color: '#e2e8f0', fontSize: '12px' }}
-                    formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Revenue']}
-                  />
-                  <Area type="monotone" dataKey="revenue" stroke="#06b6d4" strokeWidth={2} fill="url(#revenueGradient)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            <DashboardRevenueChart data={chartData} />
           ) : (
             <div className="h-64 bg-gradient-to-br from-blue-900/40 to-slate-900/40 rounded-lg flex items-center justify-center border border-blue-700/20">
               <div className="text-center text-blue-300/50">

@@ -23,6 +23,11 @@ export function normalizeCustomerId(id: string | number | null | undefined): str
   return base || null
 }
 
+function redactUrls(value: unknown): string | null {
+  if (value == null) return null
+  return String(value).replace(/https?:\/\/\S+/gi, '[link redacted]')
+}
+
 export async function collectCustomerData(input: {
   storeId: string
   shopifyCustomerId?: string | null
@@ -33,14 +38,16 @@ export async function collectCustomerData(input: {
   const normalize = (v: string | null | undefined) => (v ? v.trim().toLowerCase() : null)
   const emailNorm = normalize(email)
   const phoneNorm = phone ? phone.replace(/\D/g, '') || null : null
-  const idMatch = shopifyCustomerId ? { equals: shopifyCustomerId } : undefined
+  const idVariants = Array.from(new Set(
+    [shopifyCustomerId, normalizeCustomerId(shopifyCustomerId)].filter(Boolean),
+  )) as string[]
 
   const [carts, customers, sessions, optOuts, identities] = await Promise.all([
     prisma.cart.findMany({
       where: {
         storeId,
         OR: [
-          ...(idMatch ? [{ customerId: idMatch }] : []),
+          ...idVariants.map((id) => ({ customerId: { equals: id } })),
           ...(emailNorm ? [{ customerEmail: emailNorm }] : []),
           ...(phoneNorm ? [{ customerPhone: { contains: phoneNorm } }] : []),
         ],
@@ -53,7 +60,7 @@ export async function collectCustomerData(input: {
       where: {
         storeId,
         OR: [
-          ...(idMatch ? [{ customerId: idMatch }] : []),
+          ...idVariants.map((id) => ({ customerId: { equals: id } })),
           ...(emailNorm ? [{ email: emailNorm }] : []),
           ...(phoneNorm ? [{ phone: { contains: phoneNorm } }] : []),
         ],
@@ -67,7 +74,7 @@ export async function collectCustomerData(input: {
         OR: [
           ...(emailNorm ? [{ customerEmail: emailNorm }] : []),
           ...(phoneNorm ? [{ customerPhone: { contains: phoneNorm } }] : []),
-          ...(idMatch ? [{ cartToken: { in: (await prisma.cart.findMany({ where: { storeId, customerId: idMatch }, select: { cartId: true } })).map(c => c.cartId) } }] : []),
+          ...(idVariants.length ? [{ cartToken: { in: (await prisma.cart.findMany({ where: { storeId, customerId: { in: idVariants } }, select: { cartId: true } })).map(c => c.cartId) } }] : []),
         ],
       },
       include: { messages: true, learningOutcome: true, learningEvents: true },
@@ -88,7 +95,7 @@ export async function collectCustomerData(input: {
       where: {
         storeId,
         OR: [
-          ...(idMatch ? [{ shopifyCustomerId: shopifyCustomerId }] : []),
+          ...(idVariants.length ? [{ shopifyCustomerId: { in: idVariants } }] : []),
           ...(emailNorm ? [{ email: emailNorm }] : []),
           ...(phoneNorm ? [{ phone: { contains: phoneNorm } }] : []),
         ],
@@ -97,6 +104,113 @@ export async function collectCustomerData(input: {
       take: 20,
     }),
   ])
+
+  const cartIds = carts.map((c: any) => c.id).filter(Boolean)
+  const cartTokens = carts.map((c: any) => c.cartId).filter(Boolean)
+  const sessionIds = sessions.map((s: any) => s.id).filter(Boolean)
+  const sessionFingerprints = sessions.map((s: any) => s.customerFingerprint).filter(Boolean)
+  const identityIds = identities.map((i: any) => i.id).filter(Boolean)
+  const emailMatches = Array.from(new Set([
+    ...(emailNorm ? [emailNorm] : []),
+    ...carts.map((c: any) => c.customerEmail).filter(Boolean),
+    ...identities.map((i: any) => i.email).filter(Boolean),
+  ])) as string[]
+  const phoneMatches = Array.from(new Set([
+    ...(phoneNorm ? [phoneNorm] : []),
+    ...carts.map((c: any) => (c.customerPhone ? String(c.customerPhone).replace(/\D/g, '') : null)).filter(Boolean),
+    ...identities.map((i: any) => (i.phone ? String(i.phone).replace(/\D/g, '') : null)).filter(Boolean),
+  ])) as string[]
+
+  const [
+    purchaseMemory,
+    quotes,
+    dealFollowups,
+    experienceEvents,
+    behavioralEvents,
+    journeys,
+    platformOrders,
+    priorExports,
+  ] = await Promise.all([
+    prisma.bargainPurchaseMemory.findMany({
+      where: {
+        storeId,
+        OR: [
+          ...idVariants.map((id) => ({ customerId: id })),
+          ...emailMatches.map((e) => ({ customerEmail: e })),
+          ...phoneMatches.map((p) => ({ customerPhone: { contains: p } })),
+          ...cartTokens.map((token) => ({ cartToken: token })),
+        ],
+      },
+      take: 200,
+    }),
+    prisma.bargainQuote.findMany({
+      where: {
+        storeId,
+        OR: [
+          ...idVariants.map((id) => ({ shopifyCustomerId: id })),
+          ...emailMatches.map((e) => ({ customerEmail: e })),
+          ...sessionFingerprints.map((fingerprint) => ({ customerFingerprint: fingerprint })),
+          ...cartTokens.map((token) => ({ cartToken: token })),
+        ],
+      },
+      take: 200,
+    }),
+    sessionIds.length
+      ? prisma.bargainDealFollowup.findMany({ where: { storeId, sessionId: { in: sessionIds } }, take: 200 })
+      : Promise.resolve([]),
+    sessionIds.length
+      ? prisma.bargainExperienceEvent.findMany({ where: { storeId, sessionId: { in: sessionIds } }, take: 200 })
+      : Promise.resolve([]),
+    prisma.behavioralEvent.findMany({
+      where: {
+        storeId,
+        OR: [
+          ...idVariants.map((id) => ({ customerId: id })),
+          ...emailMatches.map((e) => ({ email: e })),
+          ...phoneMatches.map((p) => ({ phone: { contains: p } })),
+        ],
+      },
+      take: 200,
+    }),
+    prisma.recoveryJourney.findMany({
+      where: {
+        storeId,
+        OR: [
+          ...cartTokens.map((token) => ({ cartId: token })),
+          ...identityIds.map((id) => ({ customerIdentityId: id })),
+          ...sessionIds.map((id) => ({ sessionId: id })),
+        ],
+      },
+      take: 200,
+    }),
+    prisma.platformOrder.findMany({
+      where: {
+        storeId,
+        OR: [
+          ...idVariants.map((id) => ({ externalCustomerId: id })),
+          ...emailMatches.map((e) => ({ customerEmail: e })),
+          ...phoneMatches.map((p) => ({ customerPhone: { contains: p } })),
+          ...cartIds.map((id) => ({ cartId: id })),
+        ],
+      },
+      take: 200,
+    }),
+    prisma.customerDataExport.findMany({
+      where: {
+        storeId,
+        OR: [
+          ...idVariants.map((id) => ({ shopifyCustomerId: id })),
+          ...emailMatches.map((e) => ({ email: e })),
+        ],
+      },
+      take: 50,
+    }),
+  ])
+
+  const journeyIds = (journeys as any[]).map((j) => j.id).filter(Boolean)
+  const reminders = journeyIds.length
+    ? await prisma.recoveryReminder.findMany({ where: { storeId, journeyId: { in: journeyIds } }, take: 200 })
+    : []
 
   const exportPayload: Record<string, unknown> = {
     generatedAt: new Date().toISOString(),
@@ -111,6 +225,15 @@ export async function collectCustomerData(input: {
       bargainSessions: sessions.length,
       optOuts: optOuts.length,
       identities: identities.length,
+      purchaseMemories: (purchaseMemory as any[]).length,
+      bargainQuotes: (quotes as any[]).length,
+      dealFollowups: (dealFollowups as any[]).length,
+      experienceEvents: (experienceEvents as any[]).length,
+      behavioralEvents: (behavioralEvents as any[]).length,
+      recoveryJourneys: (journeys as any[]).length,
+      recoveryReminders: (reminders as any[]).length,
+      platformOrders: (platformOrders as any[]).length,
+      priorExports: (priorExports as any[]).length,
     },
     identities: identities.map(i => ({
       phone: i.phone,
@@ -147,11 +270,11 @@ export async function collectCustomerData(input: {
       recoveredValue: c.recoveredCart?.recoveredValue ?? null,
       channel: c.recoveredCart?.channel ?? null,
       recoveryStatus: c.recoveredCart?.refundStatus ?? null,
-      messages: c.messages.map(m => ({
-        id: m.id,
-        channel: m.channel,
-        content: m.content,
-        status: m.status,
+        messages: c.messages.map(m => ({
+          id: m.id,
+          channel: m.channel,
+          content: redactUrls(m.content),
+          status: m.status,
         sentAt: m.sentAt,
         deliveredAt: m.deliveredAt,
         clickedAt: m.clickedAt,
@@ -199,7 +322,7 @@ export async function collectCustomerData(input: {
       messages: s.messages.map(m => ({
         id: m.id,
         role: m.role,
-        content: m.content,
+        content: redactUrls(m.content),
         offeredPrice: m.offeredPrice,
         createdAt: m.createdAt,
       })),
@@ -235,6 +358,123 @@ export async function collectCustomerData(input: {
       phone: o.phone,
       reason: o.reason,
       optedOutAt: o.optedOutAt,
+    })),
+    purchaseMemories: (purchaseMemory as any[]).map((p) => ({
+      id: p.id,
+      shopifyOrderId: p.shopifyOrderId,
+      customerEmail: p.customerEmail,
+      customerPhone: p.customerPhone,
+      cartToken: p.cartToken,
+      customerId: p.customerId,
+      shopifyProductId: p.shopifyProductId,
+      productTitle: p.productTitle,
+      price: p.price,
+      currency: p.currency,
+      platform: p.platform,
+      platformOrderId: p.platformOrderId,
+      externalCustomerId: p.externalCustomerId,
+      purchasedAt: p.purchasedAt,
+    })),
+    bargainQuotes: (quotes as any[]).map((q) => ({
+      id: q.id,
+      sessionId: q.sessionId,
+      cartToken: q.cartToken,
+      shopifyProductId: q.shopifyProductId,
+      variantId: q.variantId,
+      quantity: q.quantity,
+      originalPrice: q.originalPrice,
+      finalPrice: q.finalPrice,
+      discountPercent: q.discountPercent,
+      currency: q.currency,
+      customerEmail: q.customerEmail,
+      shopifyCustomerId: q.shopifyCustomerId,
+      status: q.status,
+      discountCode: q.discountCode,
+      orderId: q.orderId,
+      expiresAt: q.expiresAt,
+      acceptedAt: q.acceptedAt,
+      redeemedAt: q.redeemedAt,
+      createdAt: q.createdAt,
+    })),
+    dealFollowups: (dealFollowups as any[]).map((f) => ({
+      id: f.id,
+      sessionId: f.sessionId,
+      stage: f.stage,
+      channel: f.channel,
+      status: f.status,
+      sentAt: f.sentAt,
+    })),
+    experienceEvents: (experienceEvents as any[]).map((e) => ({
+      id: e.id,
+      eventType: e.eventType,
+      designVariant: e.designVariant,
+      personality: e.personality,
+      productId: e.productId,
+      occurredAt: e.occurredAt,
+      receivedAt: e.receivedAt,
+    })),
+    behavioralEvents: (behavioralEvents as any[]).map((e) => ({
+      id: e.id,
+      eventType: e.eventType,
+      productId: e.productId,
+      variantId: e.variantId,
+      cartId: e.cartId,
+      checkoutId: e.checkoutId,
+      orderId: e.orderId,
+      occurredAt: e.occurredAt,
+      ip: e.ip,
+      userAgent: e.userAgent,
+      createdAt: e.createdAt,
+    })),
+    recoveryJourneys: (journeys as any[]).map((j) => ({
+      id: j.id,
+      cartId: j.cartId,
+      checkoutId: j.checkoutId,
+      journeyType: j.journeyType,
+      status: j.status,
+      scheduledFor: j.scheduledFor,
+      convertedAt: j.convertedAt,
+      createdAt: j.createdAt,
+    })),
+    recoveryReminders: (reminders as any[]).map((r) => ({
+      id: r.id,
+      journeyId: r.journeyId,
+      channel: r.channel,
+      status: r.status,
+      scheduledFor: r.scheduledFor,
+      sentAt: r.sentAt,
+      deliveredAt: r.deliveredAt,
+      failedAt: r.failedAt,
+      reasonCode: r.reasonCode,
+      attemptCount: r.attemptCount,
+      createdAt: r.createdAt,
+    })),
+    platformOrders: (platformOrders as any[]).map((o) => ({
+      id: o.id,
+      platform: o.platform,
+      platformOrderId: o.platformOrderId,
+      status: o.status,
+      currency: o.currency,
+      total: o.total,
+      refundedTotal: o.refundedTotal,
+      customerEmail: o.customerEmail,
+      customerPhone: o.customerPhone,
+      customerName: o.customerName,
+      items: o.items,
+      couponCodes: o.couponCodes,
+      placedAt: o.placedAt,
+      paidAt: o.paidAt,
+      cancelledAt: o.cancelledAt,
+      refundedAt: o.refundedAt,
+      createdAt: o.createdAt,
+    })),
+    priorExports: (priorExports as any[]).map((e) => ({
+      id: e.id,
+      shopifyCustomerId: e.shopifyCustomerId,
+      email: e.email,
+      status: e.status,
+      requestedAt: e.requestedAt,
+      createdAt: e.createdAt,
     })),
   }
 

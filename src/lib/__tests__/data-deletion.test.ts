@@ -21,7 +21,19 @@ const mockPrisma = {
   message: { deleteMany: jest.fn() },
   recoveredCart: { deleteMany: jest.fn() },
   bargainMessage: { deleteMany: jest.fn() },
-  bargainSession: { findMany: jest.fn(), deleteMany: jest.fn(), delete: jest.fn() },
+  bargainSession: {
+    findMany: jest.fn().mockResolvedValue([]),
+    deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    delete: jest.fn(),
+  },
+  bargainQuote: {
+    findMany: jest.fn().mockResolvedValue([]),
+    deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+  },
+  bargainDealFollowup: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+  bargainExperienceEvent: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+  bargainPurchaseMemory: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+  platformOrder: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
   customer: { findFirst: jest.fn(), delete: jest.fn() },
   customerInsight: { deleteMany: jest.fn() },
   optOut: { deleteMany },
@@ -66,6 +78,18 @@ describe('purgeStoreData', () => {
     expect(mockPrisma.paymentAttempt.deleteMany).toHaveBeenCalledWith({
       where: { merchantId: 'store_1' },
     })
+    expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM "Message" WHERE "cartId"'),
+      'store_1',
+    )
+    expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM "PlatformCredential" WHERE "connectionId"'),
+      'store_1',
+    )
+    expect(mockPrisma.$executeRawUnsafe).toHaveBeenCalledWith(
+      'DELETE FROM "BargainPurchaseMemory" WHERE "storeId" = $1',
+      'store_1',
+    )
     expect(result.deletedRows).toBeGreaterThanOrEqual(2)
   })
 })

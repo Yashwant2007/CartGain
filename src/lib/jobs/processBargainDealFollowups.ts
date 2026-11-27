@@ -92,7 +92,7 @@ export async function processBargainDealFollowups(limitStores = 50) {
 
       let channel: 'email' | 'whatsapp' | null = null
       if (email) {
-        const ok = identity ? (await canSendToIdentity(identity, 'email')).ok : true
+        const ok = identity ? (await canSendToIdentity(identity, 'email')).ok : false
         if (ok) channel = 'email'
       }
       if (!channel && phone) {

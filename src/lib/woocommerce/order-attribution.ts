@@ -11,6 +11,8 @@ import {
 import { findQuoteByDiscountCode, redeemQuote } from '@/lib/bargain/quote'
 import { track } from '@/lib/analytics/track'
 import { ATTRIBUTION_WINDOW_HOURS, FREE_CARTS_THRESHOLD, getPlan, resolvePlanId } from '@/lib/payment'
+import { resolveStoreSubscription } from '@/lib/billing/store-subscription'
+import { recordRazorpayUsageEvent } from '@/lib/billing/razorpay/service'
 import type { PlatformOrderRecord } from '@/lib/platforms/types'
 
 type StoreContext = {
@@ -120,10 +122,8 @@ async function accrueRevenueShare(params: {
   attributedMessageId: string
   recoveredAt: Date
 }): Promise<void> {
-  const subscription = await prisma.subscription.findFirst({
-    where: { userId: params.store.userId, status: 'active' },
-  })
-  if (!subscription) return
+  const subscription = await resolveStoreSubscription(params.store.userId, params.store.id, params.store)
+  if (!subscription || subscription.status !== 'active') return
 
   const plan = getPlan(subscription.plan)
   if (!plan || plan.revSharePercent <= 0) return
@@ -132,6 +132,25 @@ async function accrueRevenueShare(params: {
   if (resolvePlanId(subscription.plan) === 'free' && totalRecovered <= FREE_CARTS_THRESHOLD) return
 
   const revShareAmount = params.netAmount * (plan.revSharePercent / 100)
+  if (subscription.kind === 'razorpay') {
+    const usage = await recordRazorpayUsageEvent({
+      userId: params.store.userId,
+      storeId: params.store.id,
+      subscriptionId: subscription.id,
+      kind: 'revenue_share',
+      referenceId: params.cartId,
+      netAmount: params.netAmount,
+      chargeAmount: revShareAmount,
+      revSharePercent: plan.revSharePercent,
+    })
+    if (!usage) return
+    await prisma.razorpaySubscription.update({
+      where: { id: subscription.id },
+      data: { revenueShareAccrued: { increment: revShareAmount } },
+    })
+    return
+  }
+
   await prisma.$transaction([
     prisma.revenueShareEvent.create({
       data: {
@@ -256,8 +275,19 @@ export async function netWooOrderRefund(
     })
     if (netting.deltaRefunded > 0) {
       const event = recovered.revenueShareEvent
+      const subscription = await resolveStoreSubscription(store.userId, store.id, store)
       let revShareDelta = 0
-      if (event && !event.invoiceId) {
+      let razorpayUsage: { id: string; chargeAmount: number; revSharePercent: number | null; invoicedAt: Date | null; invoiceId: string | null } | null = null
+      if (subscription?.kind === 'razorpay') {
+        razorpayUsage = await prisma.razorpayUsageEvent.findFirst({
+          where: { storeId: store.id, kind: 'revenue_share', referenceId: recovered.cartId },
+        })
+        if (razorpayUsage?.invoicedAt || razorpayUsage?.invoiceId) {
+          console.error(`[WOO_REFUND_INVOICED] order ${orderId} revenue share already invoiced: ${razorpayUsage.invoiceId ?? razorpayUsage.invoicedAt?.toISOString()}`)
+        } else if (razorpayUsage) {
+          revShareDelta = Math.max(0, razorpayUsage.chargeAmount - (netting.recognizedNet * (razorpayUsage.revSharePercent || 0)) / 100)
+        }
+      } else if (event && !event.invoiceId) {
         revShareDelta = Math.max(0, (event.revShareAmount || 0) - (netting.recognizedNet * (event.revSharePercent || 0)) / 100)
       } else if (event?.invoiceId) {
         console.error(`[WOO_REFUND_INVOICED] order ${orderId} revenue share already invoiced: ${event.invoiceId}`)
@@ -272,7 +302,7 @@ export async function netWooOrderRefund(
             refundStatus: netting.fullyRefunded ? 'fully_refunded' : 'partially_refunded',
           },
         })
-        if (event && revShareDelta > 0) {
+        if (event && revShareDelta > 0 && subscription?.kind !== 'razorpay') {
           await tx.revenueShareEvent.update({
             where: { id: event.id },
             data: {
@@ -282,6 +312,20 @@ export async function netWooOrderRefund(
           })
           await tx.subscription.update({
             where: { id: event.subscriptionId },
+            data: { revenueShareAccrued: { decrement: revShareDelta } },
+          })
+        }
+        if (razorpayUsage && revShareDelta > 0 && subscription?.kind === 'razorpay') {
+          const revisedCharge = Math.max(0, razorpayUsage.chargeAmount - revShareDelta)
+          await tx.razorpayUsageEvent.update({
+            where: { id: razorpayUsage.id },
+            data: {
+              netAmount: netting.recognizedNet,
+              chargeAmount: revisedCharge,
+            },
+          })
+          await tx.razorpaySubscription.update({
+            where: { id: subscription.id },
             data: { revenueShareAccrued: { decrement: revShareDelta } },
           })
         }

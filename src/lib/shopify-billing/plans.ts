@@ -1,5 +1,4 @@
-import { resolvePlanId } from '@/lib/plan-constants'
-import { PLANS } from '@/lib/payment'
+import { PLANS, resolvePlanId } from '@/lib/plan-constants'
 
 export type BillingCurrency = 'INR' | 'USD'
 export type BillingPeriod = 'monthly' | 'yearly'

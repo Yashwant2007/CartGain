@@ -170,7 +170,7 @@ export default async function RootLayout({
                   name: 'Why not just use email for cart recovery?',
                   acceptedAnswer: {
                     '@type': 'Answer',
-                    text: 'Email alone only recovers 3-5% of abandoned carts. WhatsApp (85% open rate) + Email creates multiple touchpoints. Industry benchmarks show 18-25% recovery with multi-channel vs 3-5% with email alone.',
+                    text: 'Email alone recovers a small share of abandoned carts. CartGain adds consent-based WhatsApp recovery where shoppers have opted in, plus a live AI negotiator. Results vary by store, category, and checkout flow; your dashboard reports the carts and net revenue actually attributed to CartGain instead of a blanket recovery-rate promise.',
                   },
                 },
                 {
@@ -232,7 +232,7 @@ export default async function RootLayout({
         <ClientErrorBoundary>
           <Providers>
             <EmbeddedAuthBootstrap />
-            <AppIntroWrapper>{children}</AppIntroWrapper>
+            <AppIntroWrapper skipIntro={embedRequest}>{children}</AppIntroWrapper>
           </Providers>
         </ClientErrorBoundary>
       </body>

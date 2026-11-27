@@ -306,7 +306,7 @@ final class CartGain_WC_Tracking
         return $stored;
     }
 
-    public function set_consent($input, $source)
+    public function set_consent($input, $source, $identity = array())
     {
         if (!is_array($input)) {
             return false;
@@ -345,11 +345,50 @@ final class CartGain_WC_Tracking
             update_user_meta(get_current_user_id(), '_cartgain_consent', $consent);
         }
         $this->touch_row($consent);
-        $this->queue->enqueue('customer_identified', array(
+
+        $snapshot = $this->snapshot();
+        $identity = is_array($identity) ? $identity : array();
+        $cart_id = isset($snapshot['cartId']) ? (string) $snapshot['cartId'] : '';
+        $cart_token = isset($snapshot['cartToken']) ? (string) $snapshot['cartToken'] : '';
+        $cart_hash = isset($snapshot['cartHash']) ? (string) $snapshot['cartHash'] : '';
+        $contact = $this->customer_fields();
+
+        foreach (array('cartId', 'cartToken') as $key) {
+            if (isset($identity[$key]) && is_scalar($identity[$key]) && (string) $identity[$key] !== '') {
+                if ($key === 'cartId') {
+                    $cart_id = (string) $identity[$key];
+                } else {
+                    $cart_token = (string) $identity[$key];
+                }
+            }
+        }
+        if (isset($identity['customerEmail']) && is_email((string) $identity['customerEmail'])) {
+            $contact['email'] = sanitize_email((string) $identity['customerEmail']);
+        }
+        if (isset($identity['customerPhone']) && (string) $identity['customerPhone'] !== '') {
+            $contact['phone'] = sanitize_text_field((string) $identity['customerPhone']);
+        }
+
+        $payload = array(
+            'platform' => 'woocommerce',
             'consent' => $consent,
-            'cartId' => $this->cart_identity_key(),
+            'cartId' => $cart_id,
+            'cartToken' => $cart_token,
+            'cartHash' => $cart_hash,
             'source' => $source,
-        ), 'consent_' . md5(cartgain_wc_json_encode($consent)) . '|' . $source);
+        );
+        if (isset($identity['customerId']) && (string) $identity['customerId'] !== '') {
+            $payload['externalCustomerId'] = sanitize_text_field((string) $identity['customerId']);
+        }
+        $payload = array_merge($payload, $contact);
+        $dedupe = 'consent_' . md5(cartgain_wc_json_encode(array(
+            $cart_id,
+            $cart_token,
+            $contact,
+            $consent,
+            $source,
+        )));
+        $this->queue->enqueue('customer_identified', $payload, $dedupe);
         return true;
     }
 
@@ -448,11 +487,14 @@ final class CartGain_WC_Tracking
         if (empty($fields)) {
             return false;
         }
+        $consent = $this->get_consent();
         return $this->queue->enqueue('customer_identified', array_merge(array(
+            'platform' => 'woocommerce',
             'cartId' => $token,
             'cartToken' => $token,
             'source' => 'store_api',
-        ), $fields), hash('sha256', $token) . '|customer|' . md5(cartgain_wc_json_encode($fields)));
+            'consent' => is_array($consent) ? $consent : array(),
+        ), $fields), hash('sha256', $token) . '|customer|' . md5(cartgain_wc_json_encode(array($fields, $consent))));
     }
 
     private function sanitize_items($items)

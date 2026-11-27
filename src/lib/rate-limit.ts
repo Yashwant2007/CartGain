@@ -126,13 +126,18 @@ export async function checkRateLimit(
   }
 }
 
-export async function checkSimpleRateLimit(key: string): Promise<{ allowed: boolean; retryAfter: number }> {
+export async function checkSimpleRateLimit(
+  key: string,
+  config: { maxRequests?: number; windowMs?: number } = {},
+): Promise<{ allowed: boolean; retryAfter: number }> {
+  const maxRequests = config.maxRequests ?? SIMPLE_MAX_REQUESTS
+  const windowMs = config.windowMs ?? SIMPLE_WINDOW_MS
   const redisKey = `ratelimit:${key}`
 
-  const count = (await redisCountOrNull(redisKey, SIMPLE_WINDOW_MS)) ?? memoryInc(redisKey, SIMPLE_WINDOW_MS)
+  const count = (await redisCountOrNull(redisKey, windowMs)) ?? memoryInc(redisKey, windowMs)
 
-  if (count > SIMPLE_MAX_REQUESTS) {
-    return { allowed: false, retryAfter: 60 }
+  if (count > maxRequests) {
+    return { allowed: false, retryAfter: Math.ceil(windowMs / 1000) }
   }
 
   return { allowed: true, retryAfter: 0 }

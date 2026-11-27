@@ -22,6 +22,7 @@ export interface ResolvedStoreSubscription {
   bargainDealsUsed: number
   bargainOverageDeals: number
   revenueShareAccrued: number
+  revenueSharePaid: number
   bargainAccrued: number
   billingPeriod?: string
   cancelAtPeriodEnd?: boolean
@@ -57,6 +58,7 @@ function normalizeRazorpaySubscription(row: any): ResolvedStoreSubscription {
     status: row.status,
     currentPeriodStart: row.currentPeriodStart,
     currentPeriodEnd: row.currentPeriodEnd,
+    revenueSharePaid: 0,
     customerId: row.razorpayCustomerId,
     subscriptionId: row.razorpaySubscriptionId,
     cartsUsedInPeriod: row.cartsUsedInPeriod || 0,
@@ -100,6 +102,7 @@ function normalizeShopifySubscription(row: any): ResolvedStoreSubscription {
     bargainDealsUsed: row.bargainDealsUsed || 0,
     bargainOverageDeals: row.bargainOverageDeals || 0,
     revenueShareAccrued: row.revenueShareAccrued || 0,
+    revenueSharePaid: row.revenueSharePaid || 0,
     bargainAccrued: row.bargainAccrued || 0,
   }
 }

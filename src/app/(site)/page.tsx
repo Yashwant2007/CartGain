@@ -129,11 +129,11 @@ const LATEST_UPDATES = [
 const FAQS = [
   {
     q: 'Why not just use email for cart recovery?',
-    a: 'Email alone typically recovers 3-5% of abandoned carts. CartGain layers WhatsApp (~85% industry-average open rate) on top, plus a live AI negotiator that settles price objections a static email cannot. Results vary by category and checkout flow — our trailing multi-channel average is ~8.5%, with top stores at ~22%.',
+    a: 'Email alone recovers a small share of abandoned carts. CartGain adds consent-based WhatsApp recovery where shoppers have opted in, plus a live AI negotiator that can address price objections a static email cannot. Results vary by store, category, and checkout flow; your dashboard reports the carts and net revenue actually attributed to CartGain instead of a blanket recovery-rate promise.',
   },
   {
     q: 'How do you handle customer data & privacy?',
-    a: 'We process only the minimum data needed for recovery — the abandoned cart contact details and line items, nothing more. Customer data is encrypted at rest and in transit, retained only as long as needed (cart PII anonymized after 90 days), and never sold or shared for advertising. Customers can opt out on every channel, and AI negotiations offer a "Skip AI" opt-out for automated decision-making. We follow Shopify\'s protected-customer-data practices plus India\'s DPDP Act 2023 and GDPR principles. See our Privacy Policy, DPA, and Security Policy for full details.',
+    a: 'We process the cart contact and line-item records needed to run recovery, attribution, and the AI negotiation you enable, plus consent and delivery records so we can honor opt-outs. Customer data is encrypted at rest and in transit, retained under the schedule in our Privacy Policy, and never sold or shared for advertising. Customers can opt out on every channel, and AI negotiations offer a "Skip AI" opt-out for automated decision-making. We follow Shopify\'s protected-customer-data practices plus India\'s DPDP Act 2023 and GDPR principles. See our Privacy Policy, DPA, and Security Policy for full details.',
   },
   {
     q: 'What if my platform isn\'t Shopify?',
@@ -274,7 +274,7 @@ export default function HomePage() {
                 className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-cyan-100 bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-cyan-500/15 border border-cyan-400/30 rounded-full px-4 py-1.5 hover:border-cyan-400/60 transition-colors"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-                Founding access: first 100 stores lock today&apos;s rates for life
+                Predictable monthly plans with capped usage — see full pricing
               </Link>
             </div>
             <div className="flex justify-center mb-6 sm:mb-8">
@@ -331,7 +331,7 @@ export default function HomePage() {
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 flex-shrink-0" />
-                <span><strong>~8.5%</strong> average multi-channel recovery (top ~22%)</span>
+                <span><strong>Measured in your dashboard</strong> — no blanket recovery-rate promise</span>
               </div>
             </div>
 
@@ -421,7 +421,7 @@ export default function HomePage() {
                         </div>
                         <div>
                           <p className="font-semibold text-white text-sm sm:text-base">WhatsApp-first recovery</p>
-                          <p className="text-blue-200 text-xs sm:text-sm">85% industry-average open rates vs 20% for email bring back what still leaves — with product images, instantly.</p>
+                          <p className="text-blue-200 text-xs sm:text-sm">Consent-based WhatsApp reminders reach shoppers where they already are — with product images and clear opt-outs.</p>
                         </div>
                       </div>
                       <div className="flex gap-3">
@@ -447,8 +447,8 @@ export default function HomePage() {
                           <BarChart3 className="w-4 h-4 text-cyan-400" />
                         </div>
                         <div>
-                          <p className="font-semibold text-white text-sm sm:text-base">~8.5% average multi-channel recovery</p>
-                          <p className="text-blue-200 text-xs sm:text-sm">Top stores reach ~22%; versus 3–5% for email-only recovery stacks.</p>
+                          <p className="font-semibold text-white text-sm sm:text-base">Recovery you can verify</p>
+                          <p className="text-blue-200 text-xs sm:text-sm">Your dashboard reports attributed carts and net revenue — no blanket recovery-rate promise.</p>
                         </div>
                       </div>
                       <div className="flex gap-3">
@@ -533,7 +533,7 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center gap-2 text-green-400">
                     <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                    <span className="text-sm font-semibold">85% industry-avg open rate</span>
+                    <span className="text-sm font-semibold">Consent-based WhatsApp recovery</span>
                   </div>
                 </div>
 </div>
@@ -617,35 +617,35 @@ export default function HomePage() {
               <h3 className="text-2xl sm:text-3xl font-bold text-white mb-2">The result</h3>
               <p className="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-green-400 to-cyan-400 bg-clip-text text-transparent mb-4">Cart Recovered</p>
               <p className="text-base sm:text-lg text-blue-100 max-w-2xl mx-auto">
-                The negotiated deal becomes a one-use, 24-hour code — and the order closes at checkout, tracked back to CartGain on your dashboard.
+                The negotiated deal becomes a store-configured discount code — and the order closes at checkout, tracked back to CartGain on your dashboard.
               </p>
             </div>
           </div>
         </section>
 
         {/* ── Benchmarks strip ─────────────────────────────────── */}
-        <section aria-label="Benchmarks and typical figures" className="py-10 sm:py-14 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-900/20 to-slate-950">
+        <section aria-label="Illustrative figures for context" className="py-10 sm:py-14 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-blue-900/20 to-slate-950">
           <div className="w-full max-w-7xl mx-auto">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 md:gap-8">
               <div className="text-center">
-                <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-300 mb-2">~8.5%</div>
-                <div className="text-xs sm:text-sm md:text-base text-blue-200 font-medium">Avg Recovery Rate</div>
-                <p className="text-xs text-blue-400/70 mt-1">CartGain trailing average; top stores ~22%</p>
+                <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-300 mb-2">Measured</div>
+                <div className="text-xs sm:text-sm md:text-base text-blue-200 font-medium">Recovery Reporting</div>
+                <p className="text-xs text-blue-400/70 mt-1">Your CartGain dashboard reports attributed carts and net revenue</p>
               </div>
               <div className="text-center">
-                <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-300 mb-2">85%</div>
-                <div className="text-xs sm:text-sm md:text-base text-blue-200 font-medium">WhatsApp Open Rate</div>
-                <p className="text-xs text-blue-400/70 mt-1">Industry average for WhatsApp Business</p>
+                <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-300 mb-2">Consent</div>
+                <div className="text-xs sm:text-sm md:text-base text-blue-200 font-medium">Opt-in Messaging</div>
+                <p className="text-xs text-blue-400/70 mt-1">WhatsApp reminders are sent only to shoppers who opt in</p>
               </div>
               <div className="text-center">
                 <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-300 mb-2">₹3-5K</div>
                 <div className="text-xs sm:text-sm md:text-base text-blue-200 font-medium">Typical Cart Value</div>
-                <p className="text-xs text-blue-400/70 mt-1">Representative for D2C beauty SKUs</p>
+                <p className="text-xs text-blue-400/70 mt-1">Illustrative D2C example</p>
               </div>
               <div className="text-center">
                 <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-300 mb-2">30%</div>
                 <div className="text-xs sm:text-sm md:text-base text-blue-200 font-medium">Abandonment Rate</div>
-                <p className="text-xs text-blue-400/70 mt-1">Standard across D2C e-commerce</p>
+                <p className="text-xs text-blue-400/70 mt-1">Illustrative industry figure</p>
               </div>
             </div>
             <p className="text-center text-xs text-blue-200/80 mt-6">Benchmark and industry-average figures shown for context — not a guarantee of your results.</p>
@@ -670,7 +670,7 @@ export default function HomePage() {
                   </p>
                   <ul className="space-y-3 mb-8">
                     {[
-                      'Real negotiation psychology: anchoring, scarcity, loss aversion',
+                      'Real negotiation patterns: anchoring, objection handling, clear next steps',
                       '3 shopkeeper personas that match your brand voice',
                       'Margin enforced at the engine level, not by prompt',
                       'Speaks English, Hinglish, Hindi & 9 more regional languages',
@@ -693,7 +693,7 @@ export default function HomePage() {
                 </div>
                 <div className="relative">
                   <div className="rounded-2xl border border-blue-700/40 bg-slate-900/80 backdrop-blur-sm p-6 shadow-xl">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-blue-200/90 mb-4">Live Negotiation Preview</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-blue-200/90 mb-4">Illustrative Negotiation</div>
                     <div className="space-y-3">
                       <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm text-white">I love this serum, but ₹1,499 is too much. Can you do ₹1,200?</div>
@@ -702,21 +702,21 @@ export default function HomePage() {
                         <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-slate-700/70 px-4 py-3 text-sm text-blue-100">I get it — for you today I can do ₹1,349. That&apos;s 10% off. Deal?</div>
                       </div>
                       <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ animationDelay: '600ms' }}>
-                        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm text-white">Amazon has it for ₹1,280. Match that?</div>
+                        <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm text-white">I have a lower quote elsewhere — can you match it?</div>
                       </div>
                       <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ animationDelay: '900ms' }}>
-                        <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-slate-700/70 px-4 py-3 text-sm text-blue-100">I&apos;ll split the difference at ₹1,299 — with our 90-day guarantee. Fair?</div>
+                        <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-slate-700/70 px-4 py-3 text-sm text-blue-100">I can&apos;t match an unverified quote blindly, but I&apos;ll move to ₹1,299. Fair?</div>
                       </div>
                       <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ animationDelay: '1200ms' }}>
                         <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm text-white">Deal!</div>
                       </div>
                       <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ animationDelay: '1500ms' }}>
-                        <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-emerald-600/40 border border-emerald-500/40 px-4 py-3 text-sm text-emerald-200">Done! Here&apos;s your code: <span className="font-bold">BARGAIN10</span> — 24 hours only.</div>
+                        <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-emerald-600/40 border border-emerald-500/40 px-4 py-3 text-sm text-emerald-200">Done! Example code: <span className="font-bold">BARGAIN10</span> — terms are set by your store.</div>
                       </div>
                     </div>
                     <div className="mt-5 pt-4 border-t border-blue-700/30 flex items-center justify-between text-xs text-blue-200/90">
-                      <span>Floor price set by you: ₹1,250</span>
-                      <span className="text-emerald-400">Margin protected ✓</span>
+                      <span>Pricing rules: configured by your store</span>
+                      <span className="text-emerald-400">Rules enforced ✓</span>
                     </div>
                   </div>
                   <p className="mt-3 text-xs text-blue-200/80 text-center">

@@ -114,6 +114,7 @@ export async function createOrUpdateJourney(opts: {
   productId?: string | null
   priority?: number
   delayMinutes?: number
+  rescheduleImmediate?: boolean
   metadata?: any
 }) {
   const delayMinutes = opts.delayMinutes ?? 30
@@ -134,7 +135,7 @@ export async function createOrUpdateJourney(opts: {
         data: {
           customerIdentityId: opts.customerIdentityId || existing.customerIdentityId,
           status: existing.status === 'OBSERVED' ? 'IDENTIFIED' : existing.status,
-          scheduledFor: existing.scheduledFor || scheduledFor,
+          scheduledFor: opts.rescheduleImmediate ? scheduledFor : existing.scheduledFor || scheduledFor,
           priority: Math.max(existing.priority, opts.priority ?? 0),
           metadata: opts.metadata || existing.metadata,
           updatedAt: new Date(),

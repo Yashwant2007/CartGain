@@ -31,8 +31,9 @@ interface HealthStatus {
     ai: {
       status: 'ok' | 'degraded'
       activeTier: 'primary' | 'fallback' | 'none'
-      primary: { configured: boolean }
+      primary: { configured: boolean; tripped: boolean }
       fallback: { configured: boolean; tripped: boolean }
+      forceFallback: boolean
     }
     email: {
       status: 'ok' | 'degraded'
@@ -171,13 +172,14 @@ export async function GET() {
   const aiStatus: HealthStatus['checks']['ai'] = {
     status: ai.activeTier === 'none' ? 'degraded' : 'ok',
     activeTier: ai.activeTier,
-    primary: { configured: ai.primary.configured },
+    primary: { configured: ai.primary.configured, tripped: ai.primary.tripped },
     // /api/health is unauthenticated — never disclose the fallback provider's
     // model name or base URL (that would fingerprint our AI vendor/keys).
     fallback: {
       configured: ai.fallback.configured,
       tripped: ai.fallback.tripped,
     },
+    forceFallback: ai.forceFallback,
   }
 
   // Transactional email: with no provider configured every verification/reset

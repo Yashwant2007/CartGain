@@ -47,6 +47,8 @@ import {
   NEGOTIATION_STYLE_VALUES,
 } from '@/lib/bargain/merchant-modes'
 import { defaultGoalWindow, formatZonedDateTimeInput, parseZonedDateTimeInput } from '@/lib/bargain/dashboard-goal-time'
+import { TREND_REGION_VALUES } from '@/lib/bargain/trend/types'
+import { sanitizeTrendConfig, TREND_TOPIC_CATALOG, TREND_TOPIC_IDS } from '@/lib/bargain/trend/catalog'
 
 type BargainConfig = {
   id: string
@@ -94,6 +96,11 @@ type BargainConfig = {
   dealFollowupEnabled: boolean
   dealFollowupDelaysMinutes: number[] | null
   dealFollowupMax: number
+  trendIntelligenceEnabled: boolean
+  trendRegion: string | null
+  trendTopics: string[]
+  trendExcludedTopics: string[]
+  trendHumorEnabled: boolean
 }
 
 // All supported negotiation languages (mirrors SUPPORTED_LANGUAGES in the engine).
@@ -133,6 +140,12 @@ function normalizeConfigForm(config: Partial<BargainConfig> & Record<string, unk
   delete rest.aiModel
   delete rest.complementRecommendationsEnabled
   delete rest.aiPersona
+  const trend = sanitizeTrendConfig(rest)
+  rest.trendIntelligenceEnabled = trend.enabled
+  rest.trendRegion = trend.region
+  rest.trendTopics = trend.topics
+  rest.trendExcludedTopics = trend.excludedTopics
+  rest.trendHumorEnabled = trend.humorEnabled
   return rest
 }
 
@@ -898,6 +911,113 @@ void fetchConfig()
                         className={CONTROL_CLS}
                       />
                     </Field>
+                  )}
+                </ConfigCard>
+
+                <ConfigCard
+                  className="lg:col-span-2"
+                  icon={TrendingUp}
+                  title="Trend intelligence"
+                  description="Optionally let the agent use cached public-interest context when it is genuinely relevant to what the shopper says. Data refreshes once daily from public page views; it is never treated as local demand, price evidence, or a reason for a discount."
+                >
+                  <ToggleRow
+                    title="Enable trend intelligence"
+                    description="Adds a bounded, source-tagged context block to the agent. No extra AI call is made and sensitive topics stay blocked."
+                    checked={configForm.trendIntelligenceEnabled ?? false}
+                    onChange={v => setConfigForm({ ...configForm, trendIntelligenceEnabled: v })}
+                  />
+                  {configForm.trendIntelligenceEnabled && (
+                    <>
+                      <Field
+                        label="Region"
+                        hint="Chooses the public-interest edition used for the daily cache."
+                      >
+                        <select
+                          value={configForm.trendRegion ?? 'US'}
+                          onChange={e => setConfigForm({ ...configForm, trendRegion: e.target.value })}
+                          className={CONTROL_CLS}
+                        >
+                          {TREND_REGION_VALUES.map(region => (
+                            <option key={region} value={region}>{region}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field
+                        label="Allowed topics (up to 8)"
+                        hint="Leave empty to infer relevant, non-sensitive topics from the product being bought."
+                      >
+                        <div className="flex flex-wrap gap-2">
+                          {TREND_TOPIC_CATALOG.filter(topic => !topic.sensitive).map(topic => {
+                            const selected = (configForm.trendTopics ?? []).includes(topic.id)
+                            return (
+                              <label
+                                key={topic.id}
+                                className={`rounded-full border px-3 py-1.5 text-xs transition ${
+                                  selected
+                                    ? 'border-blue-400 bg-blue-600/30 text-blue-100'
+                                    : 'border-blue-800/40 bg-slate-950/60 text-blue-300/70'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="sr-only"
+                                  checked={selected}
+                                  onChange={e => {
+                                    const current = configForm.trendTopics ?? []
+                                    const next = e.target.checked
+                                      ? [...current, topic.id].slice(0, 8)
+                                      : current.filter(id => id !== topic.id)
+                                    setConfigForm({ ...configForm, trendTopics: next })
+                                  }}
+                                />
+                                {topic.label}
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </Field>
+                      <Field
+                        label="Excluded topics"
+                        hint="These are removed even when the product or allowed-topic list would match them."
+                      >
+                        <div className="flex flex-wrap gap-2">
+                          {TREND_TOPIC_IDS.map(id => {
+                            const topic = TREND_TOPIC_CATALOG.find(entry => entry.id === id)
+                            const excluded = (configForm.trendExcludedTopics ?? []).includes(id)
+                            return (
+                              <label
+                                key={id}
+                                className={`rounded-full border px-3 py-1.5 text-xs transition ${
+                                  excluded
+                                    ? 'border-amber-400 bg-amber-600/20 text-amber-100'
+                                    : 'border-blue-800/40 bg-slate-950/60 text-blue-300/70'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="sr-only"
+                                  checked={excluded}
+                                  onChange={e => {
+                                    const current = configForm.trendExcludedTopics ?? []
+                                    const next = e.target.checked
+                                      ? [...current, id].slice(0, 26)
+                                      : current.filter(entry => entry !== id)
+                                    setConfigForm({ ...configForm, trendExcludedTopics: next })
+                                  }}
+                                />
+                                {topic?.label ?? id}
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </Field>
+                      <ToggleRow
+                        title="Allow tasteful references"
+                        description="Permits one light, kind reference only when the shopper already cares about the topic. Off keeps every reply strictly factual."
+                        checked={configForm.trendHumorEnabled ?? false}
+                        onChange={v => setConfigForm({ ...configForm, trendHumorEnabled: v })}
+                      />
+                    </>
                   )}
                 </ConfigCard>
 

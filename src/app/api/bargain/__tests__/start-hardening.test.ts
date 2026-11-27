@@ -15,6 +15,7 @@
  * real supported currency while the store is still on the schema default (USD).
  */
 import { POST } from '@/app/api/bargain/start/route'
+import { signSessionToken, verifySessionToken } from '@/lib/bargain/session-bind'
 import prisma from '@/lib/db'
 
 jest.mock('@/lib/db', () => ({
@@ -105,6 +106,8 @@ const baseStore = {
   apiKey: 'shpat_x',
 }
 
+const originalLinkSecret = process.env.LINK_SECRET
+
 function enableBargaining() {
   prismaMock.bargainConfig.upsert.mockResolvedValue({
     enabled: true,
@@ -119,6 +122,7 @@ function enableBargaining() {
 
 beforeEach(() => {
   jest.clearAllMocks()
+  process.env.LINK_SECRET = 'test-link-secret-long-enough'
   prismaMock.store.findUnique.mockResolvedValue({ ...baseStore })
   prismaMock.store.update.mockResolvedValue({ ...baseStore })
   // Merchant has bargaining DISABLED → the gate must refuse.
@@ -137,6 +141,11 @@ beforeEach(() => {
   prismaMock.bargainPurchaseMemory.findMany.mockResolvedValue([])
   prismaMock.cart.findUnique.mockResolvedValue(null)
   prismaMock.cart.update.mockResolvedValue({})
+})
+
+afterAll(() => {
+  if (originalLinkSecret == null) delete process.env.LINK_SECRET
+  else process.env.LINK_SECRET = originalLinkSecret
 })
 
 describe('POST /api/bargain/start — hardening', () => {
@@ -262,5 +271,67 @@ describe('POST /api/bargain/start — hardening', () => {
     expect(body.session).toMatchObject({ attemptsUsed: 2, currentOffer: 750, finalPrice: 700, status: 'active' })
     const include = prismaMock.bargainSession.findFirst.mock.calls[1][0].include
     expect(include.messages.take).toBe(200)
+  })
+
+  it('never hands a proofless duplicate caller another browser session', async () => {
+    enableBargaining()
+    prismaMock.bargainSession.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'sess-anon' })
+
+    const res = await POST(makeRequest({}))
+    const body = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(body).not.toHaveProperty('sessionId')
+    expect(body).not.toHaveProperty('sessionToken')
+    expect(body).not.toHaveProperty('session')
+    expect(body).not.toHaveProperty('lastBought')
+    expect(body).not.toHaveProperty('finalCode')
+    expect(prismaMock.bargainSession.create).not.toHaveBeenCalled()
+
+    const anonWhere = prismaMock.bargainSession.findFirst.mock.calls[1][0].where
+    expect(anonWhere).toMatchObject({ cartToken: null, customerPhone: null })
+  })
+
+  it('does not treat an email address as rejoin proof', async () => {
+    enableBargaining()
+    prismaMock.bargainSession.findFirst.mockResolvedValueOnce(null)
+
+    const res = await POST(makeRequest({ customerEmail: 'buyer@example.com' }))
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(prismaMock.bargainSession.findFirst).toHaveBeenCalledTimes(1)
+    expect(prismaMock.bargainSession.create).toHaveBeenCalledTimes(1)
+  })
+
+  it('still rejoins with a signed session token', async () => {
+    enableBargaining()
+    const token = signSessionToken('sess-1')!
+    prismaMock.bargainSession.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'sess-1',
+        shopifyProductId: 'gid://shopify/Product/1',
+        originalPrice: 1000,
+        currentOffer: 750,
+        finalPrice: 700,
+        status: 'active',
+        attemptsUsed: 1,
+        discountCode: 'BARGAIN_ABC',
+        purchaseUrl: null,
+        language: 'en',
+        startedAt: new Date('2026-11-23T10:00:00Z'),
+        expiredAt: new Date(Date.now() + 600_000),
+        messages: [],
+      })
+
+    const res = await POST(makeRequest({ sessionToken: token }))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(verifySessionToken('sess-1', body.sessionToken)).toBe(true)
+    expect(prismaMock.bargainSession.findFirst.mock.calls[1][0].where).toMatchObject({ OR: [{ id: 'sess-1' }] })
   })
 })

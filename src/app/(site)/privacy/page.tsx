@@ -86,7 +86,7 @@ export default function PrivacyPolicyPage() {
                     <h3 className="text-lg font-semibold text-white mb-3">2. Business Data</h3>
                     <ul className="list-disc pl-5 space-y-2">
                       <li><strong>Store Information:</strong> E-commerce platform (Shopify or WooCommerce), store URL, webhook configuration, and scoped API credentials.</li>
-                      <li><strong>Customer Data:</strong> Abandoned cart information including customer names, emails, phone numbers, and cart contents.</li>
+                      <li><strong>Customer Data:</strong> Abandoned cart information including customer names, emails, phone numbers, and cart contents. Where a shopper is signed in, Shopify may also provide a first name, which is used only for greetings and personalised reminders.</li>
                       <li><strong>Storefront Experience Data:</strong> Limited presentation events from the bargain widget (invitation impression, invitation click, chat open) with a pseudonymous visitor key, the store, product, design variant, personality, and version. These events measure storefront performance; they do not include chat message text.</li>
                       <li><strong>Analytics Data:</strong> Recovery rates, conversion metrics, campaign performance, storefront funnel metrics, and purchase values adjusted for refunds and cancellations.</li>
                       <li><strong>Negotiation Learning Data:</strong> Pseudonymous session keys, negotiation context buckets, strategy identifiers, and commercial outcomes used to evaluate and improve negotiation strategies. Raw chat text is not used as a learning key.</li>
@@ -113,7 +113,7 @@ export default function PrivacyPolicyPage() {
                 <ul className="list-disc pl-5 space-y-2">
                   <li><strong>Data Minimization:</strong> We collect and process only the minimum personal data required to provide cart recovery value to merchants.</li>
                   <li><strong>Service Delivery:</strong> To provide, maintain, and improve our cart recovery services.</li>
-                  <li><strong>Communication:</strong> To send recovery notifications via WhatsApp and email on your behalf (the corresponding providers are configured and activated before these channels go live).</li>
+                  <li><strong>Communication:</strong> To send recovery notifications via WhatsApp and email on your behalf after an explicit storefront or checkout opt-in. Approved WhatsApp templates do not require the shopper to send START first; the corresponding providers are configured and activated before these channels go live.</li>
                   <li><strong>Analytics:</strong> To track recovery performance, measure the storefront experience funnel, compare presentation variants, adjust recovered-revenue reporting for refunds and cancellations, and understand aggregate traffic on public marketing pages through Google Analytics.</li>
                   <li><strong>Bounded learning:</strong> To evaluate negotiation strategies and improve future offers. Learning is optional, can run in shadow mode, stays within merchant-approved pricing rules, and never replaces the hard price floor. Merchant voice settings (tone, humour level, emoji use and language) guide style only.</li>
                   <li><strong>Security:</strong> To detect and prevent fraud, unauthorized access, and security incidents.</li>
@@ -142,7 +142,7 @@ export default function PrivacyPolicyPage() {
                 <p className="mb-4">We share data with the following categories of third parties:</p>
                 <ul className="list-disc pl-5 space-y-2">
                   <li><strong>E-commerce Platform:</strong> Shopify or your self-hosted WooCommerce store, to sync cart, product, order, refund, and discount data.</li>
-                  <li><strong>Communication Providers:</strong> WhatsApp Business API (operated by Meta) and Resend (Email) — activated as configured. Messages may be sent from a shared CartGain WhatsApp number or a merchant-supplied WhatsApp Business number. Inbound STOP/START replies are matched to the relevant merchant store using the recipient phone number and cart history.</li>
+                  <li><strong>Communication Providers:</strong> WhatsApp Business API (operated by Meta) and Resend (Email) — activated as configured. Messages may be sent from a shared CartGain WhatsApp number or a merchant-supplied WhatsApp Business number. Inbound STOP replies are matched to the relevant merchant store using the recipient phone number and cart history.</li>
                   <li><strong>AI Services:</strong> OpenAI (GPT-4o / GPT-4o-mini) and, as a fallback, Groq (gpt-oss-120b) for AI-powered message generation — customer names and cart product details are processed to generate personalized recovery messages. Per OpenAI&apos;s published API data-usage policy, API inputs and outputs are not used for model training; the same applies to Groq for the OSS model used.</li>
                   <li><strong>Payment Processors:</strong> Shopify Billing for Shopify subscriptions and usage charges; Razorpay for WooCommerce subscriptions.</li>
                   <li><strong>Cloud Infrastructure:</strong> Vercel and Supabase for hosting and database.</li>
@@ -232,9 +232,9 @@ export default function PrivacyPolicyPage() {
                   <ul className="list-disc pl-5 space-y-2">
                     <li><strong>Consent:</strong> You confirm that you have obtained explicit consent from your customers to receive WhatsApp and email messages on your behalf.</li>
                     <li><strong>Opt-out:</strong> All messages include clear instructions to opt-out (e.g., an unsubscribe link or WhatsApp opt-out).</li>
-                    <li><strong>Message Frequency:</strong> Messages are sent based on cart abandonment events, not exceeding reasonable frequency.</li>
+                    <li><strong>Message Frequency:</strong> Messages are sent based on cart abandonment events or your explicit opt-in, not exceeding reasonable frequency. Opt-in reminders do not require a START reply.</li>
                     <li><strong>Message &amp; Data Rates:</strong> Standard messaging and data rates may apply to recipients.</li>
-                    <li><strong>Shared sender:</strong> CartGain may send messages from a shared WhatsApp Business number. A STOP or START reply is applied to the store identified by the recipient&apos;s phone number and cart history; merchants remain responsible for their own customer communications.</li>
+                    <li><strong>Shared sender:</strong> CartGain may send messages from a shared WhatsApp Business number. A STOP reply is applied to the store identified by the recipient&apos;s phone number and cart history; merchants remain responsible for their own customer communications.</li>
                     <li><strong>Support:</strong> For help, recipients can contact your support team.</li>
                   </ul>
                 </div>

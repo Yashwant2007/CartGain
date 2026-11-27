@@ -13,13 +13,26 @@ import { shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
 // Models that hold a storeId column and should be cleared when a store is purged.
 // Order matters: child rows that reference other rows are deleted first.
 const STORE_SCOPED_MODELS = [
+  'RazorpayInvoice',
+  'RazorpayUsageEvent',
+  'RazorpayPayment',
+  'RazorpaySubscription',
+  'RazorpayCustomer',
   'BargainLearningEvent',
   'BargainLearningOutcome',
   'BargainLearningArmStat',
   'BargainLearningAudit',
   'BargainLearningConfig',
+  'BargainQuoteEvent',
+  'BargainDealFollowup',
+  'BargainExperienceEvent',
+  'BargainExperiencePublish',
+  'BargainDailyGoalIncrement',
+  'BargainDailyGoal',
   'BargainMessage',
   'BargainSession',
+  'BargainPurchaseMemory',
+  'BargainQuote',
   'BargainProduct',
   'BargainConfig',
   'CodNudge',
@@ -28,24 +41,28 @@ const STORE_SCOPED_MODELS = [
   'AiSuggestion',
   'RtoRiskScore',
   'PincodeStats',
+  'MerchantVoice',
   'MerchantConfig',
   'CustomerInsight',
   'Customer',
   'RevenueShareEvent',
+  'BargainRevenueShareEvent',
   'RecoveredCart',
-  'Message',
   'OptOut',
   'Cart',
   'Campaign',
   'ABTest',
-  'BargainRevenueShareEvent',
   'CustomerDataExport',
   'RecoveryReminder',
   'RecoveryJourney',
   'CustomerIdentity',
   'BehavioralEvent',
-  // Observability/analytics rows scoped by storeId — removed so an uninstall
-  // or shop/redact does not leave orphan rows behind.
+  'ConnectionIntent',
+  'PlatformEvent',
+  'PlatformProduct',
+  'PlatformOrder',
+  'WebhookDelivery',
+  'PlatformConnection',
   'ProductEvent',
   'ErrorLog',
 ] as const
@@ -81,10 +98,44 @@ async function rawDelete(table: string, column: string, value: string): Promise<
       value,
     )
   } catch (err: any) {
-    // Table or column missing in older deployments — treat as no-op.
     if (err?.code === 'P2021' || err?.code === 'P2022') return 0
     if (String(err?.message || '').includes('does not exist')) return 0
     console.warn(`[rawDelete] skipping ${table}.${column}: ${err?.message}`)
+    return 0
+  }
+}
+
+async function rawDeleteChildRows(
+  table: string,
+  column: string,
+  parentTable: string,
+  value: string,
+): Promise<number> {
+  try {
+    return await prisma.$executeRawUnsafe(
+      `DELETE FROM "${table}" WHERE "${column}" IN (SELECT "id" FROM "${parentTable}" WHERE "storeId" = $1)`,
+      value,
+    )
+  } catch (err: any) {
+    if (err?.code === 'P2021' || err?.code === 'P2022') return 0
+    if (String(err?.message || '').includes('does not exist')) return 0
+    console.warn(`[rawDeleteChildRows] skipping ${table}.${column}: ${err?.message}`)
+    return 0
+  }
+}
+
+async function rawDeleteByIds(table: string, column: string, values: string[]): Promise<number> {
+  if (values.length === 0) return 0
+  const placeholders = values.map((_, index) => `$${index + 1}`).join(', ')
+  try {
+    return await prisma.$executeRawUnsafe(
+      `DELETE FROM "${table}" WHERE "${column}" IN (${placeholders})`,
+      ...values,
+    )
+  } catch (err: any) {
+    if (err?.code === 'P2021' || err?.code === 'P2022') return 0
+    if (String(err?.message || '').includes('does not exist')) return 0
+    console.warn(`[rawDeleteByIds] skipping ${table}.${column}: ${err?.message}`)
     return 0
   }
 }
@@ -105,6 +156,20 @@ export async function purgeStoreData(store: {
   userId: string
 }): Promise<{ deletedRows: number }> {
   let deletedRows = 0
+
+  const childRows = [
+    ['Message', 'cartId', 'Cart'],
+    ['RecoveryShortLink', 'cartId', 'Cart'],
+    ['BargainMessage', 'sessionId', 'BargainSession'],
+    ['PlatformCredential', 'connectionId', 'PlatformConnection'],
+  ] as const
+  for (const [table, column, parentTable] of childRows) {
+    const affected = await rawDeleteChildRows(table, column, parentTable, store.id)
+    deletedRows += affected
+    if (affected > 0) {
+      console.log(`[purgeStoreData] ${table}: ${affected} rows for store ${store.id}`)
+    }
+  }
 
   for (const model of STORE_SCOPED_MODELS) {
     const affected = await rawDelete(model, 'storeId', store.id)
@@ -200,6 +265,7 @@ export async function redactCustomer(
 
   const storeId = store.id
   let affected = 0
+  const sessionIds = new Set<string>()
   const emailVariants = (value?: string | null) =>
     value ? Array.from(new Set([value.trim().toLowerCase(), value.trim()])).filter(Boolean) : []
   const phoneVariants = (value?: string | null) => {
@@ -232,14 +298,26 @@ export async function redactCustomer(
   const cartPhones = new Set<string>()
   for (const cart of carts) {
     await prisma.message.deleteMany({ where: { cartId: cart.id } })
+    await rawDeleteByIds('RecoveryShortLink', 'cartId', [cart.id])
+    await rawDeleteByIds('CartPrediction', 'cartId', [cart.id])
     await prisma.recoveredCart.deleteMany({ where: { cartId: cart.id } })
-    // Any bargain session tied to this cart token.
-    await prisma.bargainMessage.deleteMany({
-      where: { session: { cartToken: cart.cartId, storeId } },
-    })
-    await prisma.bargainSession.deleteMany({
+    const cartSessions = await prisma.bargainSession.findMany({
       where: { cartToken: cart.cartId, storeId },
+      select: { id: true },
     })
+    const cartSessionIds = cartSessions.map((s) => s.id)
+    for (const id of cartSessionIds) sessionIds.add(id)
+    await rawDeleteByIds('BargainMessage', 'sessionId', cartSessionIds)
+    await prisma.bargainDealFollowup.deleteMany({ where: { sessionId: { in: cartSessionIds } } })
+    await prisma.bargainExperienceEvent.deleteMany({ where: { sessionId: { in: cartSessionIds } } })
+    const cartQuotes = await prisma.bargainQuote.findMany({
+      where: { storeId, sessionId: { in: cartSessionIds } },
+      select: { id: true },
+    })
+    const cartQuoteIds = cartQuotes.map((q) => q.id)
+    await rawDeleteByIds('BargainQuoteEvent', 'quoteId', cartQuoteIds)
+    await prisma.bargainQuote.deleteMany({ where: { id: { in: cartQuoteIds } } })
+    await prisma.bargainSession.deleteMany({ where: { id: { in: cartSessionIds } } })
     const cartJourneys = await prisma.recoveryJourney.findMany({
       where: { storeId, cartId: cart.cartId },
       select: { id: true },
@@ -340,7 +418,6 @@ export async function redactCustomer(
   // either; session data includes both in most flows).
   const emailMatches = Array.from(allEmails)
   const phoneMatches = Array.from(allPhones)
-  const sessionIds = new Set<string>()
   const sessionMatch = await prisma.bargainSession.findMany({
     where: {
       storeId,
@@ -354,10 +431,62 @@ export async function redactCustomer(
   for (const s of sessionMatch) sessionIds.add(s.id)
 
   for (const id of Array.from(sessionIds)) {
-    await prisma.bargainMessage.deleteMany({ where: { sessionId: id } })
-    await prisma.bargainSession.delete({ where: { id } }).catch(() => {})
-    affected++
+    await rawDeleteByIds('BargainMessage', 'sessionId', [id])
+    await prisma.bargainDealFollowup.deleteMany({ where: { sessionId: id } })
+    await prisma.bargainExperienceEvent.deleteMany({ where: { sessionId: id } })
+    const quoteRows = await prisma.bargainQuote.findMany({
+      where: { storeId, sessionId: id },
+      select: { id: true },
+    })
+    const quoteIds = quoteRows.map((q) => q.id)
+    await rawDeleteByIds('BargainQuoteEvent', 'quoteId', quoteIds)
+    await prisma.bargainQuote.deleteMany({ where: { id: { in: quoteIds } } })
+    const deletedSessions = await prisma.bargainSession.deleteMany({ where: { id } })
+    affected += deletedSessions.count
   }
+
+  const identityCleanupWhere = {
+    storeId,
+    OR: [
+      ...idVariants.map((id) => ({ customerId: id })),
+      ...emailMatches.map((email) => ({ customerEmail: email })),
+      ...phoneMatches.map((phone) => ({ customerPhone: { contains: phone } })),
+      ...Array.from(carts).map((cart) => ({ cartToken: cart.cartId })),
+    ],
+  }
+  const purchaseMemoryCleanup = await prisma.bargainPurchaseMemory.deleteMany({
+    where: identityCleanupWhere as any,
+  })
+  affected += purchaseMemoryCleanup.count
+
+  const quoteIdentityWhere = {
+    storeId,
+    OR: [
+      ...idVariants.map((id) => ({ shopifyCustomerId: id })),
+      ...emailMatches.map((email) => ({ customerEmail: email })),
+      ...Array.from(sessionIds).map((id) => ({ sessionId: id })),
+      ...Array.from(carts).map((cart) => ({ cartToken: cart.cartId })),
+    ],
+  }
+  const quoteCleanupRows = await prisma.bargainQuote.findMany({
+    where: quoteIdentityWhere as any,
+    select: { id: true },
+  })
+  const quoteCleanupIds = quoteCleanupRows.map((q) => q.id)
+  await rawDeleteByIds('BargainQuoteEvent', 'quoteId', quoteCleanupIds)
+  await prisma.bargainQuote.deleteMany({ where: { id: { in: quoteCleanupIds } } })
+
+  await prisma.platformOrder.deleteMany({
+    where: {
+      storeId,
+      OR: [
+        ...idVariants.map((id) => ({ externalCustomerId: id })),
+        ...emailMatches.map((email) => ({ customerEmail: email })),
+        ...phoneMatches.map((phone) => ({ customerPhone: { contains: phone } })),
+        ...Array.from(carts).map((cart) => ({ cartId: cart.id })),
+      ],
+    } as any,
+  })
 
   // Consent/opt-out rows hold raw email/phone for that customer — remove them
   // too; keeping them would retain the PCD customers/redact requires deleting.

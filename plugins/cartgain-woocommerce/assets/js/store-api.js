@@ -39,6 +39,15 @@
         return match ? decodeURIComponent(match[1]) : '';
     }
 
+    function customerContact() {
+        var email = document.querySelector('#billing_email, input[name="billing_email"]');
+        var phone = document.querySelector('#billing_phone, input[name="billing_phone"]');
+        return {
+            customerEmail: email && email.value ? email.value : '',
+            customerPhone: phone && phone.value ? phone.value : ''
+        };
+    }
+
     function cartSnapshot() {
         var cart = {};
         if (window.wp && wp.data && wp.data.select) {
@@ -138,8 +147,12 @@
             var email = document.querySelector('input[name="cartgain_email_consent"]');
             var whatsapp = document.querySelector('input[name="cartgain_whatsapp_consent"]');
             var phone = document.querySelector('input[name="cartgain_whatsapp_phone"]');
+            var contact = customerContact();
             post('/consent', {
                 source: 'checkout',
+                cartToken: cartToken(),
+                customerEmail: contact.customerEmail,
+                customerPhone: contact.customerPhone,
                 email: email ? email.checked : undefined,
                 whatsapp: whatsapp ? whatsapp.checked : undefined,
                 whatsappPhone: phone ? phone.value : undefined
@@ -149,8 +162,12 @@
         var emailBox = box.querySelector('[data-cartgain-consent="email"]');
         var whatsappBox = box.querySelector('[data-cartgain-consent="whatsapp"]');
         var whatsappPhone = box.querySelector('[data-cartgain-whatsapp-phone]');
+        var contact = customerContact();
         post('/consent', {
             source: box.getAttribute('data-cartgain-source') || 'shortcode',
+            cartToken: cartToken(),
+            customerEmail: contact.customerEmail,
+            customerPhone: contact.customerPhone,
             email: emailBox ? emailBox.checked : undefined,
             whatsapp: whatsappBox ? whatsappBox.checked : undefined,
             whatsappPhone: whatsappPhone ? whatsappPhone.value : undefined

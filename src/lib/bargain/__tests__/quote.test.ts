@@ -124,6 +124,15 @@ describe('toPublicQuote never leaks the floor', () => {
     expect(pub.finalPrice).toBe(850)
     expect(pub.token).toBe('t')
   })
+
+  it('derives an exact public percentage instead of exposing the rounded db value', () => {
+    const pub = toPublicQuote({
+      id: 'q2', token: 't2', status: 'ACCEPTED', shopifyProductId: '1', variantId: null,
+      quantity: 1, originalPrice: 1000, finalPrice: 853.33, discountPercent: 15,
+      currency: 'INR', discountCode: 'BARGAIN-CD', expiresAt: new Date(),
+    } as any)
+    expect(pub.discountPercent).toBe(14.67)
+  })
 })
 
 describe('createQuote', () => {

@@ -11,21 +11,12 @@ function canonical(timestamp: string, rawBody: string): string {
   return `${timestamp}.${rawBody}`
 }
 
-function canonicalPath(path: string): string {
-  const trimmed = path.trim()
-  const leading = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
-  return leading.length > 1 ? leading.replace(/\/+$/, '') : leading
-}
-
 export function signWebhookPayload(secret: string, timestamp: string, rawBody: string): string {
   return crypto.createHmac('sha256', secret).update(canonical(timestamp, rawBody), 'utf8').digest('hex')
 }
 
-export function signPluginRequest(secret: string, timestamp: string, storeId: string, path: string): string {
-  return crypto
-    .createHmac('sha256', secret)
-    .update(`${timestamp}.${storeId}.${canonicalPath(path)}`, 'utf8')
-    .digest('hex')
+export function signPluginRequest(secret: string, timestamp: string, rawBody: string): string {
+  return signWebhookPayload(secret, timestamp, rawBody)
 }
 
 export function verifyWebhookSignature(input: {
@@ -55,7 +46,7 @@ export function verifyWebhookSignature(input: {
 }
 
 export function verifyPluginRequest(input: {
-  path: string
+  rawBody: string
   signature: string | null
   timestamp: string | null
   storeId: string | null
@@ -63,7 +54,7 @@ export function verifyPluginRequest(input: {
   now?: number
   toleranceMs?: number
 }): boolean {
-  const { path, signature, timestamp, storeId, secret } = input
+  const { rawBody, signature, timestamp, storeId, secret } = input
   if (!signature || !timestamp || !storeId || !secret) return false
   if (!/^\d{10,16}$/.test(timestamp)) return false
 
@@ -75,7 +66,7 @@ export function verifyPluginRequest(input: {
 
   const normalized = signature.trim().replace(/^sha256=/i, '').toLowerCase()
   if (!/^[0-9a-f]{64}$/.test(normalized)) return false
-  const expected = signPluginRequest(secret, timestamp, storeId, path)
+  const expected = signPluginRequest(secret, timestamp, rawBody)
   const a = Buffer.from(normalized, 'hex')
   const b = Buffer.from(expected, 'hex')
   return a.length === b.length && crypto.timingSafeEqual(a, b)

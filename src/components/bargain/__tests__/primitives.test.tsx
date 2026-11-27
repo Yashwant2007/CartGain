@@ -12,6 +12,7 @@ import {
   QuickChip,
   ProductContextCard,
   TypingIndicator,
+  DealInfoPanel,
 } from '@/components/bargain/BargainPrimitives'
 import type { UiKey } from '@/lib/bargain/i18n'
 
@@ -229,6 +230,24 @@ describe('PriceRail (progress, server-sourced numbers only)', () => {
     expect(screen.getByText('−15%')).toBeTruthy()
     expect(container.textContent).toContain('₹1,000')
     expect(container.textContent).toContain('₹850')
+  })
+
+  it('never promises a price guarantee or reset in the deal details', () => {
+    const { container } = render(
+      <DealInfoPanel
+        t={t as any}
+        currencySymbol="₹"
+        originalPrice={1000}
+        finalPrice={900}
+        decision="counter"
+        discountCode={null}
+        productTitle="Test product"
+        sessEnded={false}
+      />,
+    )
+    expect(container.textContent).not.toMatch(/guarantee/i)
+    expect(container.textContent).not.toMatch(/resets?/i)
+    expect(container.textContent).toContain('confirmed by the store')
   })
 })
 

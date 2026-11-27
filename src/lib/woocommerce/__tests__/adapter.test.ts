@@ -55,4 +55,22 @@ describe('WooCommerce connection verification fallback', () => {
 
     expect(result).toMatchObject({ verified: false, errorCode: 'invalid_credentials' })
   })
+
+  it('reports plugin health and webhook configuration from the signed health endpoint', async () => {
+    mockFetch((url) => {
+      if (url.endsWith('/wp-json')) return response({ namespaces: ['wc/v3'] })
+      if (url.includes('/cartgain/v1/health')) {
+        return response({ ok: true, status: 'ok', webhook: true, version: '1.1.0' })
+      }
+      return response({}, 404)
+    })
+
+    const result = await wooCommerceAdapter.healthCheck({ ...input, webhookSecret: 'plugin-secret' })
+
+    expect(result).toMatchObject({
+      ok: true,
+      status: 'ok',
+      checks: { credentials: 'ok', plugin: 'ok', webhook: 'ok' },
+    })
+  })
 })

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Plus, Copy, Edit2, Trash2, Play, Pause, BarChart3, Split, Trophy, Info } from 'lucide-react'
 import { useResolvedStoreId } from '@/hooks/useResolvedStoreId'
 import { campaignCreateSchema, abTestCreateSchema } from '@/lib/validation'
-import { PLANS } from '@/lib/payment'
+import { PLANS } from '@/lib/plan-constants'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 
 type Campaign = {

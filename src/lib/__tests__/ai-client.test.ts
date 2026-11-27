@@ -268,3 +268,72 @@ describe('classifyAiFailure', () => {
     expect(classifyAiFailure({ name: 'APIConnectionError' }).category).toBe('provider_unavailable')
   })
 })
+
+describe('emergency tier probing', () => {
+  const ORIGINAL = { ...process.env }
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL }
+    jest.resetModules()
+  })
+
+  it('probes a tripped primary once when no other tier is available', async () => {
+    process.env.OPENAI_API_KEY = 'sk-test'
+    delete process.env.AI_FALLBACK_API_KEY
+    delete process.env.AI_FALLBACK_BASE_URL
+    delete process.env.AI_FORCE_FALLBACK
+    jest.resetModules()
+
+    const { getAiClient, reportAiSuccess } = await import('../ai-client')
+    const { isTierTripped, resetQuotaBreakForTests, tripTierBreaker } = await import('../ai-quota')
+    resetQuotaBreakForTests()
+    tripTierBreaker('primary')
+
+    expect(getAiClient(undefined, { emergency: true })?.tier).toBe('primary')
+    expect(getAiClient(undefined, { emergency: true })).toBeNull()
+    reportAiSuccess('primary')
+    expect(isTierTripped('primary')).toBe(false)
+  })
+
+  it('forces one fallback probe when both tiers are cooling down', async () => {
+    process.env.OPENAI_API_KEY = 'sk-test'
+    process.env.AI_FALLBACK_API_KEY = 'gsk-test'
+    delete process.env.AI_FORCE_FALLBACK
+    jest.resetModules()
+
+    const { getFallbackAiClient, reportAiSuccess } = await import('../ai-client')
+    const { isTierTripped, resetQuotaBreakForTests, tripTierBreaker } = await import('../ai-quota')
+    resetQuotaBreakForTests()
+    tripTierBreaker('primary')
+    tripTierBreaker('fallback')
+
+    expect(getFallbackAiClient({ force: true })?.tier).toBe('fallback')
+    expect(getFallbackAiClient({ force: true })).toBeNull()
+    reportAiSuccess('fallback')
+    expect(isTierTripped('fallback')).toBe(false)
+  })
+
+  it('honours Retry-After for a rate-limited tier', async () => {
+    jest.useFakeTimers()
+    jest.setSystemTime(new Date('2026-11-26T10:00:00Z'))
+    try {
+      const { handleAiFailure } = await import('../ai-client')
+      const { isTierTripped, resetQuotaBreakForTests } = await import('../ai-quota')
+      resetQuotaBreakForTests()
+
+      handleAiFailure(
+        { status: 429, headers: { 'retry-after': '3' }, error: { code: 'rate_limit_exceeded' } },
+        'test',
+        undefined,
+        'fallback',
+      )
+      expect(isTierTripped('fallback')).toBe(true)
+      jest.setSystemTime(Date.now() + 2_000)
+      expect(isTierTripped('fallback')).toBe(true)
+      jest.setSystemTime(Date.now() + 2_000)
+      expect(isTierTripped('fallback')).toBe(false)
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+})

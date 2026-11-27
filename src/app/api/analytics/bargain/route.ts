@@ -500,6 +500,7 @@ function buildIntelligenceAnalytics(rows: IntelligenceEventRow[]) {
   const states = new Map<string, CountBucket>()
   const reasons = new Map<string, CountBucket>()
   const offerBases = new Map<string, CountBucket>()
+  const trendRegions = new Map<string, CountBucket>()
   const sessionIds = new Set<string>()
   const durations: number[] = []
   let checkedTurns = 0
@@ -508,6 +509,7 @@ function buildIntelligenceAnalytics(rows: IntelligenceEventRow[]) {
   let llmCalls = 0
   let agentContributions = 0
   let clarificationTurns = 0
+  let trendTurns = 0
 
   for (const row of rows) {
     countBucket(readiness, stringProperty(row, 'readiness'))
@@ -515,6 +517,10 @@ function buildIntelligenceAnalytics(rows: IntelligenceEventRow[]) {
     countBucket(recommendations, stringProperty(row, 'recommendation'))
     countBucket(states, stringProperty(row, 'state'))
     countBucket(offerBases, stringProperty(row, 'offerBasis'))
+    if (propertyBag(row.properties).trendUsed === true) {
+      trendTurns++
+      countBucket(trendRegions, stringProperty(row, 'trendRegion'))
+    }
     if (propertyBag(row.properties).offerClarificationNeeded === true) clarificationTurns++
     const reason = stringProperty(row, 'validationReason')
     if (reason) countBucket(reasons, reason)
@@ -548,6 +554,12 @@ function buildIntelligenceAnalytics(rows: IntelligenceEventRow[]) {
     states: countRows(states, rows.length),
     offerBases: countRows(offerBases, rows.length),
     clarificationTurns,
+    trend: {
+      turns: trendTurns,
+      share: rows.length > 0 ? Math.round((trendTurns / rows.length) * 1000) / 10 : 0,
+      regions: countRows(trendRegions, trendTurns),
+      note: 'Trend use means a cached, source-tagged public-interest reference was available to the agent. It is not proof of local demand or purchase intent.',
+    },
     validation: {
       checkedTurns,
       compliantTurns,

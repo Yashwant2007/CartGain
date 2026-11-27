@@ -100,6 +100,53 @@ function normalize(text: string): string {
   return text.replace(/\r\n/g, '\n').replace(/[ \t]{2,}/g, ' ').trim()
 }
 
+function copyKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(EMOJI_RE, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function hasEnoughWordsForDedupe(key: string): boolean {
+  return key.split(' ').filter(Boolean).length >= 4
+}
+
+export function dedupeCopy(raw: string): string {
+  const sentenceKeys = new Set<string>()
+  const lineKeys = new Set<string>()
+  const keptLines: string[] = []
+
+  for (const line of raw.replace(/\r\n/g, '\n').split('\n')) {
+    const keptSentences: string[] = []
+    for (const sentence of line.split(/(?<=[.!?])\s+/)) {
+      const key = copyKey(sentence)
+      const meaningful = key.length > 0 && hasEnoughWordsForDedupe(key)
+      if (meaningful) {
+        const repeated =
+          sentenceKeys.has(key) ||
+          Array.from(sentenceKeys).some((seen) => seen.includes(key) || key.includes(seen))
+        if (repeated) continue
+        sentenceKeys.add(key)
+      }
+      keptSentences.push(sentence.trim())
+    }
+
+    const dedupedLine = keptSentences.join(' ').trim()
+    const lineKey = copyKey(dedupedLine)
+    if (!lineKey) {
+      if (keptLines.length > 0 && keptLines[keptLines.length - 1] !== '') keptLines.push('')
+      continue
+    }
+    if (lineKeys.has(lineKey)) continue
+    lineKeys.add(lineKey)
+    keptLines.push(dedupedLine)
+  }
+
+  return keptLines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
 function moneyAmounts(text: string): number[] {
   const out: number[] = []
   let match: RegExpExecArray | null
@@ -159,6 +206,11 @@ export function validateMessage(
 
   // Repairs that cannot change meaning are applied before the checks.
   let body = normalize(raw)
+  const deduped = dedupeCopy(body)
+  if (deduped !== body) {
+    issues.push({ code: 'duplicate', severity: 'warn', detail: 'repeated line or sentence removed' })
+  }
+  body = deduped
   const emojiCount = countEmoji(body)
   if (voice.emojiIntensity === 'off' && emojiCount > 0) {
     body = stripEmoji(body)

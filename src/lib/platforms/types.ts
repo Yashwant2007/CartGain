@@ -80,6 +80,7 @@ export type PlatformCouponInput = {
   usageLimit?: number
   minimumSubtotal?: number | null
   description?: string | null
+  productIds?: string[]
 }
 
 export type PlatformCouponResult = {

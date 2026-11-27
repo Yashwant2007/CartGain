@@ -149,13 +149,13 @@ describe('retentionOffer', () => {
 })
 
 describe('bulkFloorFactor', () => {
-  it('unlocks deeper floors for larger orders only', () => {
+  it('never lowers the floor for unverified quantities', () => {
     expect(bulkFloorFactor(2)).toBe(1)
     expect(bulkFloorFactor(4)).toBe(1)
-    expect(bulkFloorFactor(5)).toBe(0.95)
-    expect(bulkFloorFactor(10)).toBe(0.9)
-    expect(bulkFloorFactor(20)).toBe(0.85)
-    expect(bulkFloorFactor(100)).toBe(0.85)
+    expect(bulkFloorFactor(5)).toBe(1)
+    expect(bulkFloorFactor(10)).toBe(1)
+    expect(bulkFloorFactor(20)).toBe(1)
+    expect(bulkFloorFactor(100)).toBe(1)
   })
 })
 
@@ -204,11 +204,11 @@ describe('computeMinPrice', () => {
     expect(result.minPrice).toBe(60)
   })
 
-  it('applies bulk factor to the absolute floor', async () => {
+  it('does not lower the absolute floor for bulk orders', async () => {
     prismaMock.bargainConfig.findUnique.mockResolvedValue({ enabled: true })
     prismaMock.bargainProduct.findUnique.mockResolvedValue({ minPrice: 60, isBargainable: true })
     const result = await computeMinPrice({ storeId: 's1', shopifyProductId: 'p1', originalPrice: 100, bulkQuantity: 10 })
-    expect(result.minPrice).toBe(54)
+    expect(result.minPrice).toBe(60)
   })
 
   it('defaults to 20% profit protection when no override exists', async () => {
@@ -232,11 +232,11 @@ describe('computeMinPrice', () => {
     expect(result.minPrice).toBe(85)
   })
 
-  it('deepens the floor for bulk orders', async () => {
+  it('keeps the profit floor unchanged for bulk orders', async () => {
     prismaMock.bargainConfig.findUnique.mockResolvedValue({ enabled: true, minProfitPercent: 20 })
     prismaMock.bargainProduct.findUnique.mockResolvedValue(null)
     const result = await computeMinPrice({ storeId: 's1', shopifyProductId: 'p1', originalPrice: 100, bulkQuantity: 20 })
-    expect(result.minPrice).toBe(68)
+    expect(result.minPrice).toBe(80)
   })
 
   it('never returns a floor above the original price', async () => {
@@ -599,12 +599,12 @@ describe('Edge Cases - Bulk Orders', () => {
     delete process.env.OPENAI_API_KEY
   })
 
-  it('bulk order unlocks deeper floor', async () => {
+  it('bulk orders keep the single-unit floor', async () => {
     prismaMock.bargainConfig.findUnique.mockResolvedValue({ enabled: true, minProfitPercent: 20 })
     prismaMock.bargainProduct.findUnique.mockResolvedValue(null)
     const single = await computeMinPrice({ storeId: 's1', shopifyProductId: 'p1', originalPrice: 100 })
     const bulk = await computeMinPrice({ storeId: 's1', shopifyProductId: 'p1', originalPrice: 100, bulkQuantity: 10 })
-    expect(bulk.minPrice).toBeLessThan(single.minPrice)
+    expect(bulk.minPrice).toBe(single.minPrice)
   })
 
   it('bulk 2-4 units gets no extra depth', async () => {
@@ -614,11 +614,11 @@ describe('Edge Cases - Bulk Orders', () => {
     expect(result.minPrice).toBe(80)
   })
 
-  it('bulk 20+ units gets max depth', async () => {
+  it('bulk 20+ units gets no extra depth', async () => {
     prismaMock.bargainConfig.findUnique.mockResolvedValue({ enabled: true, minProfitPercent: 20 })
     prismaMock.bargainProduct.findUnique.mockResolvedValue(null)
     const result = await computeMinPrice({ storeId: 's1', shopifyProductId: 'p1', originalPrice: 100, bulkQuantity: 20 })
-    expect(result.minPrice).toBe(68)
+    expect(result.minPrice).toBe(80)
   })
 })
 
@@ -661,7 +661,7 @@ describe('Edge Cases - Persona Consistency', () => {
     const friendly = ruleBasedDecision(absurd, baseCtx({ persona: 'friendly_shopkeeper' }))
 
     expect(strict.reply.toLowerCase()).not.toContain('😄')
-    expect(strict.reply).toMatch(/realistic number/i)
+    expect(strict.reply).toMatch(/realistic price/i)
     expect(strict.reply).not.toMatch(/I'll be blunt|not a serious offer/i)
     expect(playful.reply).toMatch(/play ball|throw in the box/i)
     expect(friendly.reply.toLowerCase()).toMatch(/friend/)
@@ -725,17 +725,17 @@ describe('Edge Cases - Persona Consistency', () => {
     }
   })
 
-  it('mid-conversation acknowledgement asks for a number WITHOUT re-quoting the listed price', () => {
+  it('mid-conversation acknowledgement asks for a price WITHOUT re-quoting the listed price', () => {
     // Live storefront transcript: "…listed price $600.00 hai…" came back turn
     // after turn, immediately after $600 had already been quoted. The shopper
     // reads that as a bot, not a shopkeeper. Past the opening, the price is
-    // known — the reply should just ask for their number.
+    // known — the reply should just ask for their price.
     const personas = ['strict_negotiator', 'playful_friend', 'friendly_shopkeeper'] as const
     for (const persona of personas) {
       const ctx = { ...baseCtx(), persona } as NegotiationContext
       const reply = chatFallback('i am a student and it is too expensive', ctx, 2)
       expect(reply).not.toMatch(/\d/)
-      expect(reply).toMatch(/number|figure|your offer/i)
+      expect(reply).toMatch(/price|your offer/i)
     }
   })
 
@@ -997,6 +997,7 @@ describe('negotiateStep (strict persona rapid replies)', () => {
           compact: true,
           noPrice: true,
           prompt: '',
+          contextFlavor: null,
         },
       }),
       [],

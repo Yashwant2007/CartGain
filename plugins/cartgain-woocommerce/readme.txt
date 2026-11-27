@@ -2,11 +2,11 @@
 Contributors: CartGain
 Tags: woocommerce, cart recovery, bargain, abandoned cart, consent
 Requires at least: 6.0
-Tested up to: 6.8
+Tested up to: 7.1.5
 Requires PHP: 7.4
 WC requires at least: 7.0
-WC tested up to: 9.0
-Stable tag: 1.0.9
+WC tested up to: 11.3.1
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -105,6 +105,10 @@ No. The plugin only sends consent and cart/order data. CartGain's recovery engin
 On CartGain servers. The iframe only receives public product data and a cart token.
 
 == Changelog ==
+
+= 1.1.0 =
+* Verify signed plugin requests against the exact raw request body, support remote credential revocation, and attach real cart identity details to consent events.
+* Limit coupon reuse to coupons with a matching amount, scope, expiry and remaining usage, and declare tested compatibility with WordPress 7.1.5 and WooCommerce 11.3.1.
 
 = 1.0.9 =
 * Widen and flatten the bargain invitation while enlarging its avatar and the chat shopkeeper.

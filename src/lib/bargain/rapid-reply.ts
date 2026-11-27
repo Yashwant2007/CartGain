@@ -1,3 +1,5 @@
+import { detectContextFlavors, type ContextFlavor } from './context-flavor'
+
 export const RAPID_REPLY_MODES = [
   'greeting',
   'small_talk',
@@ -20,6 +22,9 @@ export interface RapidReplyInput {
   language?: string | null
   productTitle?: string | null
   emojiBudget?: number
+  message?: string | null
+  contextFlavor?: ContextFlavor | null
+  contextFlavors?: ContextFlavor[] | null
 }
 
 export interface RapidReplyResult {
@@ -32,6 +37,8 @@ export interface RapidReplyResult {
     aiFallbackReason: 'rapid_low_information'
     rapidReply: true
     liveTurnMode: string
+    contextFlavor: ContextFlavor | null
+    contextFlavors: ContextFlavor[]
   }
 }
 
@@ -49,7 +56,7 @@ const EN: Copy = {
   hesitation: "No rush. What is holding you back on {item} — fit, trust, or the number?",
   probe: "I'm here to help with this item and its price. Ask me about the product or make an offer.",
   insult: "Let's keep it respectful. I'm happy to help with {item} when you are ready.",
-  trend_talk: "Nice reference — I won't pretend to know what is trending. Want {item} details, or a number you're comfortable with?",
+  trend_talk: "Nice reference — I won't pretend to know what is trending. Want {item} details, or a price you're comfortable with?",
 }
 
 const HINGLISH: Copy = {
@@ -172,6 +179,50 @@ const ITEM_WORD: Record<string, string> = {
   pa: 'ਇਸ ਉਤਪਾਦ',
 }
 
+const CONTEXT_TREND_COPY: Record<ContextFlavor, Partial<Record<string, string>>> = {
+  political: {
+    en: 'Nice reference — I will stay neutral, but I get the nudge 😄 For {item}, what price actually works for you? 🔥',
+    hinglish: 'Reference samajh gaya 😄 — main neutral rehta hoon; {item} par aapka comfortable price kya hoga? 🔥',
+    hi: 'रेफरेंस समझ गया 😄 — मैं तटस्थ रहता हूँ; {item} पर आपका comfortable प्राइस क्या होगा? 🔥',
+  },
+  devotional: {
+    en: 'I get the good-vibes reference 😄 For {item}, what price feels right to you? 🔥',
+    hinglish: 'Achhe vibes wala reference samajh gaya 🙏 — {item} ka deal clear karte hain, aapka price kya hoga? 🔥',
+    hi: 'अच्छे विचारों वाला रेफरेंस समझ गया 🙏 — {item} की डील क्लियर करते हैं, आपका प्राइस क्या होगा? 🔥',
+  },
+  fashion: {
+    en: 'Drip check passed 😄🔥 For {item}, what price works with that style?',
+    hinglish: 'Drip check passed 😄🔥 {item} ka style aur price dono settle karte hain — aapka price kya hoga?',
+    hi: 'ड्रिप चेक पास 😄🔥 {item} का स्टाइल और प्राइस दोनों सेटल करते हैं — आपका प्राइस क्या होगा?',
+  },
+  meme: {
+    en: 'Meme mode on 😄 For {item}, give me your best price — I deliver deals, not punchlines 🔥',
+    hinglish: 'Meme mode on 😄 {item} ke liye aapka best price bataiye — main punchline nahi, deal deliver karta hoon 🔥',
+    hi: 'मीम मोड ऑन 😄 {item} के लिए आपका बेस्ट प्राइस बताइए — मैं पंचलाइन नहीं, डील डिलीवर करता हूँ 🔥',
+  },
+  sport: {
+    en: 'That sports reference is a full toss 😄 For {item}, what price should I hit? 🔥',
+    hinglish: 'Ye reference full toss hai 😄 {item} par aapka best price kya hoga? Main boundary cross karke deal closer kar dunga 🔥',
+    hi: 'यह रेफरेंस फुल टॉस है 😄 {item} पर आपका बेस्ट प्राइस क्या होगा? मैं बाउंड्री क्रॉस करके डील क्लोज़ कर दूँगा 🔥',
+  },
+  soft_nudge: {
+    en: 'You want a little more room — fair 😄 For {item}, what price can you actually honour? 🔥',
+    hinglish: 'Thoda aur comfort chahiye — samajh gaya 😄 {item} par aapka actual price kya hoga? Main wahan tak aane ki koshish karunga 🔥',
+    hi: 'थोड़ी और ढील चाहिए — समझ गया 😄 {item} पर आपका असली प्राइस क्या होगा? मैं वहाँ तक आने की कोशिश करूँगा 🔥',
+  },
+  casual: {
+    en: 'Nice reference 😄 Want {item} details, or your best price? 🔥',
+    hinglish: 'Vibe samajh gaya 😄 {item} ke baare mein poochhiye ya apna best price bata dijiye 🔥',
+    hi: 'वाइब समझ गया 😄 {item} के बारे में पूछिए या अपना बेस्ट प्राइस बताइए 🔥',
+  },
+}
+
+const POLITICAL_NUDGE_COPY: Partial<Record<string, string>> = {
+  en: 'Nice nudge — I will stay neutral, but that was smooth 😄 For {item}, what price can you genuinely do? 🔥',
+  hinglish: 'Reference century hai 😄 — main neutral rehta hoon; thoda aur comfort bhi samajh gaya. {item} par aapka comfortable price kya hoga? 🔥',
+  hi: 'रेफरेंस शानदार है 😄 — मैं तटस्थ रहता हूँ; थोड़ी और ढील भी समझ गया। {item} पर आपका comfortable प्राइस क्या होगा? 🔥',
+}
+
 function normalizedLang(language?: string | null): string {
   const value = (language ?? '').toLowerCase().replace(/[-_]/g, '')
   if (COPY[value]) return value
@@ -187,6 +238,16 @@ function safeProductTitle(value?: string | null): string | null {
   return cleaned.length > 60 ? `${cleaned.slice(0, 57)}...` : cleaned
 }
 
+const EMOJI_G = /[\uD83C-\uD83E][\uDC00-\uDFFF]|[\u2600-\u27BF\u2B00-\u2BFF\uFE0F]/g
+
+function applyEmojiBudget(reply: string, budget: number): string {
+  const allowed = Number.isFinite(budget) ? Math.max(0, Math.floor(budget)) : 0
+  const found = reply.match(EMOJI_G) ?? []
+  let remove = Math.max(0, found.length - allowed)
+  const limited = reply.replace(EMOJI_G, (emoji) => (remove-- > 0 ? '' : emoji))
+  return limited.replace(/\s{2,}/g, ' ').trim()
+}
+
 export function isRapidReplyMode(mode: string): mode is RapidReplyMode {
   return (RAPID_REPLY_MODES as readonly string[]).includes(mode)
 }
@@ -196,10 +257,20 @@ export function rapidReplyForTurn(input: RapidReplyInput): RapidReplyResult | nu
   const lang = normalizedLang(input.language)
   const table = COPY[lang] ?? EN
   const product = safeProductTitle(input.productTitle) ?? ITEM_WORD[lang] ?? ITEM_WORD.en
-  let reply = (table[input.mode] ?? EN[input.mode] ?? EN.small_talk ?? '').replace('{item}', product)
-  if ((input.emojiBudget ?? 0) <= 0) {
-    reply = reply.replace(/^🙂\s*/, '')
-  }
+  const contextFlavors = Array.from(new Set(
+    input.contextFlavors ?? (input.contextFlavor ? [input.contextFlavor] : detectContextFlavors(input.message)),
+  ))
+  const contextFlavor = contextFlavors[0] ?? null
+  const combinedCopy = contextFlavor === 'political' && contextFlavors.includes('soft_nudge')
+    ? POLITICAL_NUDGE_COPY[lang] ?? POLITICAL_NUDGE_COPY.en
+    : null
+  const contextCopy = input.mode === 'trend_talk'
+    ? combinedCopy ?? (contextFlavor
+      ? CONTEXT_TREND_COPY[contextFlavor][lang] ?? CONTEXT_TREND_COPY[contextFlavor].en
+      : null)
+    : null
+  const source = contextCopy ?? table[input.mode] ?? EN[input.mode] ?? EN.small_talk ?? ''
+  const reply = applyEmojiBudget(source.replace('{item}', product), input.emojiBudget ?? 0)
   return {
     reply,
     decision: 'chat',
@@ -210,6 +281,8 @@ export function rapidReplyForTurn(input: RapidReplyInput): RapidReplyResult | nu
       aiFallbackReason: 'rapid_low_information',
       rapidReply: true,
       liveTurnMode: input.mode,
+      contextFlavor,
+      contextFlavors,
     },
   }
 }

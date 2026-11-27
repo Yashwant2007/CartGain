@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { Check, Shield, Percent, Zap, FileText, Download, ToggleLeft, Mail, MessageSquare } from 'lucide-react'
-import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/payment'
+import { PLANS, FREE_CARTS_THRESHOLD } from '@/lib/plan-constants'
 import { resolveBillingPrice, resolveUsageCap, resolveOveragePrices } from '@/lib/shopify-billing/plans'
 import { shopifySessionFetch } from '@/lib/shopify-session-fetch'
 import { subscriptionStatusApiPath } from '@/lib/shopify-billing/return-url'

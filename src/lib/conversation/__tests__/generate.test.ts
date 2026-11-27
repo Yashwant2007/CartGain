@@ -89,6 +89,27 @@ describe('generateRecoveryMessage', () => {
     expect(result.body).toContain('Vitamin C Serum')
   })
 
+  it('removes repeated lines from model email copy', async () => {
+    aiReturning(JSON.stringify({
+      subject: 'Your serum is saved',
+      headline: 'Asha, your serum is still saved',
+      body: 'Hi Asha, your Vitamin C Serum is still saved.\nYour Vitamin C Serum is still saved.\nCome back when ready.',
+      cta: 'Finish checkout',
+    }))
+    const result = await generateRecoveryMessage(baseArgs)
+    expect(result.source).toBe('ai')
+    expect(result.body).toBe('Hi Asha, your Vitamin C Serum is still saved.\n\nCome back when ready.')
+    expect(result.body.match(/still saved/g)).toHaveLength(1)
+  })
+
+  it('removes repeated lines from model WhatsApp copy', async () => {
+    aiReturning('Hi Asha, your Vitamin C Serum is still saved.\nYour Vitamin C Serum is still saved.\nCome back when ready.')
+    const result = await generateRecoveryMessage({ ...baseArgs, facts: { ...facts, channel: 'whatsapp' } })
+    expect(result.source).toBe('ai')
+    expect(result.body).toBe('Hi Asha, your Vitamin C Serum is still saved.\n\nCome back when ready.')
+    expect(result.body.match(/still saved/g)).toHaveLength(1)
+  })
+
   it('drops an invalid headline or CTA instead of rejecting good body copy', async () => {
     aiReturning(JSON.stringify({
       subject: 'Your serum is saved',
@@ -134,6 +155,22 @@ describe('generateRecoveryMessage', () => {
     // subject is used instead.
     expect(result.source).toBe('fallback')
     expect(result.subject).not.toContain('✨')
+  })
+
+  it('personalizes the fallback with the first name and a clear conversion CTA', () => {
+    const fallback = buildFallbackMessage(facts, { stage: 'reminder_1', seed: 'seed-a' })
+    expect(fallback.body).toContain('Hi Asha!')
+    expect(fallback.subject).toContain('Asha')
+    expect(fallback.headline).toContain('Asha,')
+    expect(fallback.cta).toMatch(/Claim Your Item|Complete Your Order|Finish Checkout/)
+    expect(fallback.body).not.toMatch(/last chance|selling out|expires today/i)
+  })
+
+  it('keeps WhatsApp fallback copy urgency-free and within one emoji', () => {
+    const fallback = buildFallbackMessage({ ...facts, channel: 'whatsapp' }, { stage: 'reminder_3', seed: 'seed-a' })
+    const emojiCount = (fallback.body.match(/[\u2600-\u27BF\uFE0F]|[\uD83C-\uD83E][\uDC00-\uDFFF]/g) || []).length
+    expect(emojiCount).toBeLessThanOrEqual(1)
+    expect(fallback.body).not.toMatch(/final reminder|last chance/i)
   })
 
   it('uses a concrete item detail and varies fallback copy by stage and seed', () => {

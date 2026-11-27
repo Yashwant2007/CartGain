@@ -24,6 +24,7 @@ import { loadStoreVoice } from '@/lib/conversation/store'
 import { adaptiveContextForTurn } from '@/lib/bargain/learning/behavior-context'
 import { buildSessionMemory } from '@/lib/bargain/session-memory'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
+import { getBargainTrendPrompt } from '@/lib/bargain/trend'
 import {
   buildGoalContextForNegotiation,
   publicGoalView,
@@ -404,6 +405,13 @@ export async function POST(request: NextRequest) {
       disallowedClaims: merchant.config?.disallowedClaims ?? [],
     })
     ctx.claims = claims
+    if (merchant.store) {
+      ctx.trendPrompt = await getBargainTrendPrompt({
+        storeId: merchant.store.id,
+        config: merchant.config,
+        product: ctx.product ?? null,
+      })
+    }
     const demoQuarantined = claims.manipulation
 
     const learningContextIsReady =
