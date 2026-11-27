@@ -134,8 +134,17 @@ function strongerEmailBasis(a: EmailConsentBasis, b: EmailConsentBasis): EmailCo
   return rank[a] >= rank[b] ? a : b
 }
 
+const TRANSACTIONAL_EMAIL_SOURCES = new Set([
+  'shopify_cart',
+  'shopify_checkout',
+  'shopify_checkout_contact',
+  'shopify_order',
+  'shopify_customer',
+  'shopify_customer_update',
+])
+
 function isTransactionalSource(source: string | null | undefined): boolean {
-  return typeof source === 'string' && /^shopify_/.test(source)
+  return typeof source === 'string' && TRANSACTIONAL_EMAIL_SOURCES.has(source)
 }
 
 function combineIdentities(primary: RecipientLike, all: RecipientLike[]) {

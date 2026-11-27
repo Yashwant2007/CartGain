@@ -118,7 +118,6 @@ export default function SecurityPolicyPage() {
               <li>Resend — transactional email</li>
               <li>Meta (WhatsApp Cloud API) — WhatsApp delivery</li>
               <li>Shopify Billing — Shopify app subscriptions and usage charges</li>
-              <li>Razorpay — WooCommerce subscription payments</li>
             </ul>
             <p className="text-xs text-slate-400 mt-3">
               Data processed by each provider is purpose-limited and minimized (for example, only

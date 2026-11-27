@@ -22,9 +22,7 @@ with shoppers in real time — safely, within merchant-set price floors.
   retry campaigns.
 - **Analytics** — recovered revenue, ROI, campaign A/B tests, bargain KPIs.
 - **Billing** — Shopify Billing for Shopify app subscriptions and capped usage
-  charges, with a revenue-share ledger. WooCommerce stores use Razorpay
-  subscriptions and usage invoices; the two providers are isolated by store
-  platform.
+  charges, with a revenue-share ledger. 
 
 ## Tech stack
 
@@ -35,7 +33,7 @@ with shoppers in real time — safely, within merchant-set price floors.
 | Database | PostgreSQL (Supabase) |
 | Queue | Bull + ioredis (in-process on Vercel serverless) |
 | Auth | NextAuth.js v4 (credentials, 2FA/TOTP) |
-| Payments | Shopify Billing (Shopify stores); Razorpay subscriptions and usage invoices (WooCommerce stores) |
+| Payments | Shopify Billing for Shopify app subscriptions and capped usage charges |
 | WhatsApp | Meta Graph API (webhook, HMAC-verified) |
 | Email | Resend |
 | AI | OpenAI (primary) + OpenAI-compatible fallback (Groq) |
@@ -55,10 +53,7 @@ Open http://localhost:3000
 
 Required env: `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`,
 `ENCRYPTION_KEY`, `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `RESEND_API_KEY`,
-`OPENAI_API_KEY`. Razorpay keys and the four `RAZORPAY_PLAN_ID_*` values are
-required only for WooCommerce billing; register
-`https://cart-gain.com/api/webhooks/razorpay` in the Razorpay dashboard. See
-`.env.example` for the full list. Validate any missing
+`OPENAI_API_KEY`. Validate any missing
 variable with:
 `npm run typecheck` and the `/api/health` endpoint (renders missing vars).
 

@@ -14,6 +14,7 @@ import { resolveRecoveryOffer } from '@/lib/recovery/offer'
 import { enrichCartItemsWithImages } from '@/lib/recovery/product-image'
 import { buildRecoveryLink, recoveryAppBase } from '@/lib/recovery/links'
 import { getRecoveryShortLink } from '@/lib/recovery/short-links'
+import { cartHasResumeToken } from '@/lib/recovery/checkout-url'
 import { buildRecoveryOfferLine } from '@/lib/recovery/offer-line'
 import { composeRecoveryMessage, singleLineMessage, stripLeadingGreeting } from '@/lib/conversation/recovery'
 import type { ConversationDiscount } from '@/lib/conversation/facts'
@@ -773,14 +774,40 @@ async function getCustomerMessageCounts(storeId: string, carts: any[]): Promise<
     if (channelSkipReason) {
       // A step whose channel cannot deliver is recorded as skipped and the
       // sequence advances on its own schedule. The next configured channel is
-      // never sent from inside this sweep — that is what caused email and
+      // never sent from inside this sweep �?" that is what caused email and
       // WhatsApp to fire together.
       await recordSkippedStep(cart.messages, {
         cartId: cart.id,
         campaignId: campaign.id,
         channel,
-        step,
+        step: step,
         reason: channelSkipReason,
+      })
+      return { sent: 0, failed: 0 }
+    }
+
+    const resumableCheckout = cartHasResumeToken({
+      cartId: cart.cartId,
+      recoveryUrlStatus: cart.recoveryUrlStatus,
+    })
+    if (!resumableCheckout) {
+      await recordSkippedStep(cart.messages, {
+        cartId: cart.id,
+        campaignId: campaign.id,
+        channel,
+        step: step,
+        reason: `recovery_url_${String(cart.recoveryUrlStatus || 'missing').toLowerCase()}`,
+      })
+      return { sent: 0, failed: 0 }
+    }
+
+    if (cart.isRecovered || cart.convertedAt || String((cart as any).status || '').toLowerCase() === 'purchased') {
+      await recordSkippedStep(cart.messages, {
+        cartId: cart.id,
+        campaignId: campaign.id,
+        channel,
+        step: step,
+        reason: 'already_converted',
       })
       return { sent: 0, failed: 0 }
     }

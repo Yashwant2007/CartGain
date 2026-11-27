@@ -41,7 +41,7 @@ const INTEGRATION_DETAILS = {
       'Works with classic and block themes',
       'HPOS-compatible order sync',
       'Bargain widget shortcode and app block',
-      'Shopify billing or Razorpay subscriptions',
+      'Shopify Billing for app subscriptions and usage',
       'Regular updates',
     ],
     setup: 'Install the CartGain WooCommerce plugin, enter your store URL, and paste the connection code from your CartGain dashboard.',

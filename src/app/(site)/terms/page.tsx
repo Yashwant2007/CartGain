@@ -77,9 +77,9 @@ export default function TermsPage() {
                 5. Fees, Payments &amp; Renewals
               </h2>
               <ul className="list-disc pl-5 space-y-2">
-                <li><strong>Subscription Fees:</strong> Paid Shopify plans are billed monthly or annually through Shopify Billing in the store currency. Paid WooCommerce plans are billed through Razorpay in INR.</li>
+                <li><strong>Subscription Fees:</strong> Paid Shopify plans are billed monthly or annually through Shopify Billing in the store currency.</li>
                 <li><strong>Revenue Share:</strong> In addition to the subscription fee, a revenue share percentage applies to net recovered revenue after the first 50 free carts. Net recovered revenue means the gross order value less verified refunds, cancellations, chargebacks, and applicable taxes. Rates: Growth 3.5% and Pro 3%, capped monthly at the amount shown when you approve billing (₹5,000 / US$60 for Growth; ₹10,000 / US$120 for Pro).</li>
-                <li><strong>Payment Processor:</strong> Shopify app charges are processed securely through Shopify Billing and appear on your Shopify invoice. WooCommerce subscriptions are processed through Razorpay. We do not store your full payment card details.</li>
+                <li><strong>Payment Processor:</strong> Shopify app charges are processed securely through Shopify Billing and appear on your Shopify invoice. We do not store your full payment card details.</li>
                 <li><strong>Auto-Renewal:</strong> Subscriptions automatically renew at the end of each billing period unless cancelled before the renewal date.</li>
                 <li><strong>Refunds:</strong> Subscription fees are non-refundable except as required by applicable law. Revenue share is calculated on net recovered revenue and may be adjusted for verified refunds or cancellations that occur after an order is attributed to CartGain.</li>
                 <li><strong>Taxes:</strong> You are responsible for all applicable taxes, including GST, VAT, or similar transaction taxes.</li>

@@ -61,19 +61,9 @@ async function resolveInboundStoreIds(
   const resolved = Array.from(new Set([...carts, ...identities].map((c) => c.storeId)))
   if (resolved.length > 0) return resolved
 
-  // Last resort for the shared sender: if there is exactly one active store,
-  // attribute the inbound message to it so START/STOP and the 24h window are
-  // recorded instead of being silently dropped.
-  try {
-    const activeStores = await prisma.store.findMany({
-      where: { isActive: true },
-      select: { id: true },
-      take: 2,
-    })
-    if (activeStores.length === 1) return [activeStores[0].id]
-  } catch {
-    // ignore
-  }
+  // Do not attribute inbound consent/opt-out to an arbitrary active store.
+  // Without a direct phone-number mapping or a cart/identity match, we cannot
+  // prove which merchant the shopper intended to contact.
   return []
 }
 

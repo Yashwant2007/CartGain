@@ -2,7 +2,7 @@ jest.mock('@/lib/db', () => ({
   __esModule: true,
   default: {
     cart: { findUnique: jest.fn() },
-    recoveryShortLink: { findUnique: jest.fn() },
+    recoveryShortLink: { findUnique: jest.fn(), findFirst: jest.fn() },
     message: { findFirst: jest.fn(), update: jest.fn() },
     analytics: { upsert: jest.fn() },
   },
@@ -53,7 +53,8 @@ describe('GET /r/[id] — recovery redirect', () => {
     expect(location(res)).toBe('https://cart-gain.com/cart/cart_1?focus=bargain#bargain')
   })
 
-  it('sends checkout clicks to the store with the code applied', async () => {
+  it('sends checkout clicks to the store with a bound code applied', async () => {
+    prismaMock.recoveryShortLink.findFirst.mockResolvedValue({ code: 'short1' })
     const res = await GET(request('?c=whatsapp&to=checkout&code=GAINABC123'), {
       params: { id: 'cart_1' },
     })
@@ -67,6 +68,18 @@ describe('GET /r/[id] — recovery redirect', () => {
       params: { id: 'cart_1' },
     })
     expect(location(res)).toBe('https://shop.myshopify.com/cart/shopify_cart_123')
+  })
+
+  it('does not apply an unbound discount code from a long URL', async () => {
+    prismaMock.recoveryShortLink.findFirst.mockResolvedValue(null)
+    const res = await GET(request('?c=whatsapp&to=checkout&code=GAINABC123'), {
+      params: { id: 'cart_1' },
+    })
+    expect(location(res)).toBe('https://shop.myshopify.com/cart/shopify_cart_123')
+    expect(prismaMock.recoveryShortLink.findFirst).toHaveBeenCalledWith({
+      where: { cartId: 'cart_1', kind: 'checkout', discountCode: 'GAINABC123' },
+      select: { code: true },
+    })
   })
 
   it('resolves a compact /r/<code> link to the store checkout', async () => {
@@ -89,6 +102,7 @@ describe('GET /r/[id] — recovery redirect', () => {
     expect(location(res)).toBe(
       'https://shop.myshopify.com/discount/GAINABC123?redirect=%2Fcart%2Fshopify_cart_123'
     )
+    expect(prismaMock.recoveryShortLink.findFirst).not.toHaveBeenCalled()
   })
 
   it('records the click on the most recent sent message', async () => {

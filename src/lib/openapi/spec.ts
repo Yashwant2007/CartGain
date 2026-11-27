@@ -121,7 +121,7 @@ export const openApiSpec = {
     '/api/recovery/opt-in': {
       post: publicOp(
         'Storefront recovery opt-in',
-        'Records explicit email/WhatsApp consent for a shopper and optionally links an existing cart by its unguessable token. Consent is stored before any reminder can be sent.',
+        'Records explicit shopper consent for recovery reminders. Email storefront opt-ins require confirmation before reminders are enabled; WhatsApp consent requires an inbound START from the shopper.',
         {
           requestBody: {
             required: true,
@@ -129,12 +129,15 @@ export const openApiSpec = {
               'application/json': {
                 schema: {
                   type: 'object',
-                  required: ['email'],
                   properties: {
+                    shop: { type: 'string' },
                     email: { type: 'string', format: 'email' },
                     phone: { type: 'string' },
                     name: { type: 'string' },
                     cartToken: { type: 'string', description: 'Shopify cart token' },
+                    productId: { type: 'string' },
+                    sessionId: { type: 'string' },
+                    source: { type: 'string', enum: ['storefront_product', 'storefront_cart', 'checkout_extension'] },
                     consentEmail: { type: 'boolean' },
                     consentWhatsApp: { type: 'boolean' },
                   },
@@ -166,6 +169,21 @@ export const openApiSpec = {
                 },
               },
             },
+          },
+        },
+      ),
+    },
+    '/api/recovery/confirm': {
+      get: publicOp(
+        'Confirm recovery email opt-in',
+        'Confirms a signed email opt-in token and enables email reminders only after confirmation. Invalid or expired tokens return an error page.',
+        {
+          parameters: [
+            { name: 'token', in: 'query', required: true, schema: { type: 'string' } },
+          ],
+          responses: {
+            200: { description: 'Confirmation page' },
+            400: { description: 'Invalid or expired token' },
           },
         },
       ),

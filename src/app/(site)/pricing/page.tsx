@@ -142,7 +142,7 @@ export default function PricingPage() {
               Yearly prices shown per month. Growth ₹{displayPrice(PLANS.GROWTH).toLocaleString('en-IN')}/mo · Pro ₹{displayPrice(PLANS.PRO).toLocaleString('en-IN')}/mo
             </p>
             <p className="text-xs text-blue-300/40 mt-1">
-              Shopify stores are billed through Shopify Billing in the store currency (for example US$19 Growth / US$49 Pro monthly). WooCommerce stores are billed through Razorpay in INR.
+              Shopify stores are billed through Shopify Billing in the store currency (for example US$19 Growth / US$49 Pro monthly).
             </p>
           </div>
 

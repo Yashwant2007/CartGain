@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import prisma from '@/lib/db'
 import { logInfo, logWarn } from '@/lib/observability/logger'
+import { recordOptOut } from '@/lib/opt-out'
 
 export const dynamic = 'force-dynamic'
 
@@ -98,10 +99,21 @@ export async function POST(request: NextRequest) {
     }
 
     if (type === 'email.bounced' || type === 'email.failed' || type === 'email.complained') {
+      const reason = type === 'email.complained' ? 'email_complaint' : 'email_bounce'
+      const affected = await prisma.message.findMany({
+        where: { providerId, channel: 'email' },
+        select: { cart: { select: { storeId: true, customerEmail: true } } },
+      }).catch(() => [])
       const updated = await prisma.message.updateMany({
         where: { providerId },
-        data: { status: 'failed' },
+        data: { status: 'failed', reasonCode: reason },
       })
+      for (const row of affected) {
+        const email = row.cart?.customerEmail
+        const storeId = row.cart?.storeId
+        if (!email || !storeId) continue
+        await recordOptOut(storeId, { email }, reason).catch(() => {})
+      }
       logInfo('email', 'delivery_status', `Email ${type}`, { providerId, updated: updated.count })
       return NextResponse.json({ status: 'ok' })
     }

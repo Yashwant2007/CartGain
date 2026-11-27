@@ -3,7 +3,10 @@ import crypto from 'crypto'
 jest.mock('@/lib/db', () => ({
   __esModule: true,
   default: {
-    message: { updateMany: jest.fn(async () => ({ count: 1 })) },
+    message: {
+      updateMany: jest.fn(async () => ({ count: 1 })),
+      findMany: jest.fn(async () => [{ cart: { storeId: 'store-1', customerEmail: 'buyer@example.com' } }]),
+    },
   },
 }))
 
@@ -12,10 +15,16 @@ jest.mock('@/lib/observability/logger', () => ({
   logWarn: jest.fn(),
 }))
 
+jest.mock('@/lib/opt-out', () => ({
+  recordOptOut: jest.fn(async () => ({})),
+}))
+
 import prisma from '@/lib/db'
+import { recordOptOut } from '@/lib/opt-out'
 import { POST } from '../route'
 
 const prismaMock = prisma as any
+const recordOptOutMock = recordOptOut as jest.Mock
 const SECRET = 'whsec_' + Buffer.from('test-signing-secret-32-bytes-long!!').toString('base64')
 
 function signedRequest(payload: unknown, opts?: { secret?: string; timestamp?: number; id?: string }) {
@@ -80,12 +89,22 @@ describe('POST /api/webhooks/email', () => {
     })
   })
 
-  it('marks bounces and complaints as failed', async () => {
+  it('marks bounces and complaints as failed and records opt-out', async () => {
     await POST(signedRequest({ type: 'email.bounced', data: { email_id: 're_456' } }))
+    expect(prismaMock.message.findMany).toHaveBeenCalledWith({
+      where: { providerId: 're_456', channel: 'email' },
+      select: { cart: { select: { storeId: true, customerEmail: true } } },
+    })
     expect(prismaMock.message.updateMany).toHaveBeenCalledWith({
       where: { providerId: 're_456' },
-      data: { status: 'failed' },
+      data: { status: 'failed', reasonCode: 'email_bounce' },
     })
+    expect(recordOptOutMock).toHaveBeenCalledWith('store-1', { email: 'buyer@example.com' }, 'email_bounce')
+  })
+
+  it('records complaint opt-out', async () => {
+    await POST(signedRequest({ type: 'email.complained', data: { email_id: 're_457' } }))
+    expect(recordOptOutMock).toHaveBeenCalledWith('store-1', { email: 'buyer@example.com' }, 'email_complaint')
   })
 
   it('ignores unknown event types', async () => {

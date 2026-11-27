@@ -18,6 +18,7 @@ jest.mock('@/lib/db', () => ({
     recoveryReminder: { create: jest.fn() },
     cart: { findUnique: jest.fn() },
     customerIdentity: { findUnique: jest.fn() },
+    optOut: { findFirst: jest.fn() },
   },
 }))
 
@@ -49,7 +50,9 @@ function journey(over: Record<string, any> = {}) {
   return {
     id: 'journey-1',
     storeId: 'store-1',
-    cartId: null,
+    cartId: 'shopify-cart-token-1',
+    recoveryUrlStatus: 'AVAILABLE',
+    abandonedCheckoutUrl: 'https://test-store.myshopify.com/checkouts/shopify-cart-token-1/recover?key=abc',
     customerIdentityId: 'identity-1',
     status: 'SCHEDULED',
     scheduledFor: new Date('2026-10-28T09:00:00Z'),
@@ -73,7 +76,15 @@ beforeEach(() => {
   prismaMock.recoveryJourney.update.mockResolvedValue({})
   prismaMock.recoveryJourney.updateMany.mockResolvedValue({ count: 1 })
   prismaMock.recoveryReminder.create.mockResolvedValue({})
-  prismaMock.cart.findUnique.mockResolvedValue(null)
+  prismaMock.cart.findUnique.mockResolvedValue({
+    id: 'cart-1',
+    cartId: 'shopify-cart-token-1',
+    recoveryUrlStatus: 'AVAILABLE',
+    recoveredCart: null,
+    convertedAt: null,
+    isRecovered: false,
+    status: 'abandoned',
+  })
   prismaMock.customerIdentity.findUnique.mockResolvedValue({
     id: 'identity-1',
     email: 'buyer@example.com',
@@ -85,6 +96,7 @@ beforeEach(() => {
     suppressed: false,
     optedOutAt: null,
   })
+  prismaMock.optOut.findFirst.mockResolvedValue(null)
   gateMock.mockResolvedValue({ ok: true })
   emailMock.mockResolvedValue({ success: true, messageId: 'email-1' })
   whatsappMock.mockResolvedValue({ success: false })
@@ -135,12 +147,11 @@ describe('processRecoveryJourneys', () => {
     })
   })
 
-  it('falls back to the storefront cart instead of a broken platform link', async () => {
+  it('falls back to the CartGain cart page when product/cart links are missing', async () => {
     const result = await processRecoveryJourneys()
 
     expect(result.sent).toBe(1)
-    expect(emailMock.mock.calls[0][0].html).toContain('https://test-store.myshopify.com/cart')
-    expect(emailMock.mock.calls[0][0].html).not.toContain('cart-gain.com/cart/')
+    expect(emailMock.mock.calls[0][0].html).toContain('https://cart-gain.com/cart/cart-1')
   })
 
   it('uses WhatsApp with the product image when WhatsApp consent exists', async () => {
@@ -238,5 +249,18 @@ describe('processRecoveryJourneys', () => {
     expect(prismaMock.recoveryJourney.update).not.toHaveBeenCalled()
     expect(emailMock).not.toHaveBeenCalled()
     expect(whatsappMock).not.toHaveBeenCalled()
+  })
+
+  it('suppresses when a matching contact opt-out exists', async () => {
+    prismaMock.optOut.findFirst.mockResolvedValue({ id: 'opt-1' })
+
+    const result = await processRecoveryJourneys()
+
+    expect(result).toEqual({ sent: 0, failed: 0, suppressed: 1, processed: 1 })
+    expect(emailMock).not.toHaveBeenCalled()
+    expect(prismaMock.recoveryJourney.update).toHaveBeenCalledWith({
+      where: { id: 'journey-1' },
+      data: { status: 'SUPPRESSED', reasonCode: 'opted_out' },
+    })
   })
 })

@@ -1,5 +1,6 @@
 import prisma from '@/lib/db'
 import { canSendToIdentity } from '@/lib/recovery/journeys/service'
+import { cartHasResumeToken } from '@/lib/recovery/checkout-url'
 import { sendEmail } from '@/lib/services/email'
 import { sendWhatsAppMessage } from '@/lib/services/whatsapp'
 import { isWhatsAppConfigured, resolveWhatsAppUtilityTemplateName } from '@/lib/whatsapp/config'
@@ -66,21 +67,31 @@ export async function processRecoveryJourneys(limit = 50) {
       })
       if (claimed.count !== 1) continue
 
+      let cart: any = null
       if (journey.cartId) {
-        const cart = await prisma.cart.findUnique({ where: { id: journey.cartId }, include: { recoveredCart: true } })
-        if (cart?.recoveredCart) {
+        cart = await prisma.cart.findUnique({
+          where: { id: journey.cartId },
+          include: { recoveredCart: true },
+        })
+        if (cart?.recoveredCart || cart?.convertedAt || cart?.isRecovered || String(cart?.status || '').toLowerCase() === 'purchased') {
           await prisma.recoveryJourney.update({
             where: { id: journey.id },
-            data: { status: 'CONVERTED', convertedAt: new Date(), reasonCode: 'already_converted' },
+            data: {
+              status: 'CONVERTED',
+              convertedAt: new Date(),
+              reasonCode: 'already_converted',
+            },
           })
           suppressed++
           continue
         }
-        // @ts-ignore
-        if ((cart as any)?.status === 'purchased') {
+        if (!cartHasResumeToken(cart)) {
           await prisma.recoveryJourney.update({
             where: { id: journey.id },
-            data: { status: 'CONVERTED', convertedAt: new Date(), reasonCode: 'already_purchased' },
+            data: {
+              status: 'SUPPRESSED',
+              reasonCode: `recovery_url_${String(cart?.recoveryUrlStatus || 'missing').toLowerCase()}`,
+            },
           })
           suppressed++
           continue
@@ -97,6 +108,27 @@ export async function processRecoveryJourneys(limit = 50) {
         await prisma.recoveryJourney.update({
           where: { id: journey.id },
           data: { status: 'SUPPRESSED', reasonCode: gate.reason },
+        })
+        suppressed++
+        continue
+      }
+
+      const email = identity?.email
+      const phone = identity?.phone
+      const contactOptOut = await prisma.optOut.findFirst({
+        where: {
+          storeId: journey.storeId,
+          OR: [
+            ...(email ? [{ email: String(email).toLowerCase().trim() }] : []),
+            ...(phone ? [{ phone: { contains: String(phone).replace(/\D/g, '') } }] : []),
+          ],
+        },
+        select: { id: true },
+      }).catch(() => null)
+      if (contactOptOut) {
+        await prisma.recoveryJourney.update({
+          where: { id: journey.id },
+          data: { status: 'SUPPRESSED', reasonCode: 'opted_out' },
         })
         suppressed++
         continue
@@ -125,9 +157,6 @@ export async function processRecoveryJourneys(limit = 50) {
         continue
       }
 
-      const email = identity?.email
-      const phone = identity?.phone
-
       if (!email && !phone) {
         await prisma.recoveryJourney.update({
           where: { id: journey.id },
@@ -147,7 +176,9 @@ export async function processRecoveryJourneys(limit = 50) {
       const productUrl = safeHttpUrl(meta.productUrl)
       const cartUrl = safeHttpUrl(meta.cartUrl)
       const productImage = safeHttpUrl(meta.productImage)
-      const fallbackCartUrl = `${storefrontBase(store)}/cart`
+      const fallbackCartUrl = cart?.id
+        ? `${appUrl}/cart/${cart.id}`
+        : productUrl || `${storefrontBase(store)}/cart`
       const destination = cartUrl || productUrl || fallbackCartUrl
       const firstName = (identity?.name || 'there').split(' ')[0]
       const subject = productTitle
@@ -158,6 +189,15 @@ export async function processRecoveryJourneys(limit = 50) {
         : `Your picks at ${store.name} are still waiting. Finish whenever you are ready: ${destination}`
 
       let didSend = false
+      if (!cartUrl && !productUrl && cart?.recoveryUrlStatus && cart.recoveryUrlStatus !== 'AVAILABLE') {
+        await prisma.recoveryJourney.update({
+          where: { id: journey.id },
+          data: { status: 'SUPPRESSED', reasonCode: `recovery_url_${String(cart.recoveryUrlStatus).toLowerCase()}` },
+        })
+        suppressed++
+        continue
+      }
+
       const whatsappGate = await canSendToIdentity(identity, 'whatsapp')
       if (phone && whatsappGate.ok) {
         try {
@@ -200,8 +240,8 @@ export async function processRecoveryJourneys(limit = 50) {
                       body: [
                         firstName,
                         productTitle
-                          ? `Your ${productTitle} at ${store.name} is still waiting 🛒`
-                          : `Your picks at ${store.name} are still waiting 🛒`,
+                          ? `Your ${productTitle} at ${store.name} is still waiting ðŸ›’`
+                          : `Your picks at ${store.name} are still waiting ðŸ›’`,
                         `Claim Your Item: ${destination}`,
                       ],
                     },
@@ -261,7 +301,7 @@ export async function processRecoveryJourneys(limit = 50) {
         })
         sent++
       } else {
-        await prisma.recoveryJourney.update({
+          await prisma.recoveryJourney.update({
           where: { id: journey.id },
           data: { status: 'FAILED', reasonCode: 'send_failed', lastProcessedAt: new Date() },
         })

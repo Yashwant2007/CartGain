@@ -77,7 +77,7 @@ export default function PrivacyPolicyPage() {
                     <h3 className="text-lg font-semibold text-white mb-3">1. Personal Data</h3>
                     <ul className="list-disc pl-5 space-y-2">
                       <li><strong>Account Information:</strong> Name, email address, phone number, company name, and password when you create an account.</li>
-                      <li><strong>Payment Information:</strong> Subscription and invoice records. Shopify store charges are processed by Shopify Billing; WooCommerce store charges are processed by Razorpay. Payment card details are handled by the relevant processor and are not stored by CartGain.</li>
+                      <li><strong>Payment Information:</strong> Subscription and invoice records. Shopify app charges are processed by Shopify Billing. Payment card details are handled by Shopify and are not stored by CartGain.</li>
                       <li><strong>Communication Data:</strong> Messages you send us via support, chat, or email.</li>
                     </ul>
                   </div>
@@ -144,7 +144,7 @@ export default function PrivacyPolicyPage() {
                   <li><strong>E-commerce Platform:</strong> Shopify or your self-hosted WooCommerce store, to sync cart, product, order, refund, and discount data.</li>
                   <li><strong>Communication Providers:</strong> WhatsApp Business API (operated by Meta) and Resend (Email) — activated as configured. Messages may be sent from a shared CartGain WhatsApp number or a merchant-supplied WhatsApp Business number. Inbound STOP/START replies are matched to the relevant merchant store using the recipient phone number and cart history.</li>
                   <li><strong>AI Services:</strong> OpenAI (GPT-4o / GPT-4o-mini) and, as a fallback, Groq (gpt-oss-120b) for AI-powered message generation — customer names and cart product details are processed to generate personalized recovery messages. Per OpenAI&apos;s published API data-usage policy, API inputs and outputs are not used for model training; the same applies to Groq for the OSS model used.</li>
-                  <li><strong>Payment Processors:</strong> Shopify Billing for Shopify subscriptions and usage charges; Razorpay for WooCommerce subscriptions.</li>
+                  <li><strong>Payment Processor:</strong> Shopify Billing for Shopify subscriptions and usage charges.</li>
                   <li><strong>Cloud Infrastructure:</strong> Vercel and Supabase for hosting and database.</li>
                   <li><strong>Legal Authorities:</strong> When required by law or to protect our rights.</li>
                 </ul>

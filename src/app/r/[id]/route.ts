@@ -37,6 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     items: unknown
     store: { domain: string; platform: string }
   } | null = null
+  let codeFromShortLink = false
   try {
     cart = await prisma.cart.findUnique({
       where: { id: params.id },
@@ -58,6 +59,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         to = short.kind
         requestedCode = short.discountCode || requestedCode
         channel = short.channel
+        codeFromShortLink = Boolean(short.discountCode)
         cart = await prisma.cart.findUnique({
           where: { id: short.cartId },
           select: {
@@ -75,6 +77,24 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   const cartId = cart?.id || params.id
+  const safeRequestedCode = isSafeDiscountCode(requestedCode) ? requestedCode : null
+  let authorizedCode: string | null = codeFromShortLink ? safeRequestedCode : null
+  if (!authorizedCode && to === 'checkout' && cart && safeRequestedCode) {
+    try {
+      const bound = await prisma.recoveryShortLink.findFirst({
+        where: {
+          cartId: cart.id,
+          kind: 'checkout',
+          discountCode: safeRequestedCode,
+        },
+        select: { code: true },
+      })
+      if (bound) authorizedCode = safeRequestedCode
+    } catch (err) {
+      console.error('Recovery redirect discount validation failed:', err)
+    }
+  }
+
   let destination: string
   if (to === 'checkout' && cart) {
     if (cart.store.platform === 'woocommerce') {
@@ -82,7 +102,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         platform: 'woocommerce',
         domain: cart.store.domain,
         cartId: cart.cartId,
-        discountCode: isSafeDiscountCode(requestedCode) ? requestedCode : null,
+        discountCode: authorizedCode,
         items: cart.items,
       })
     } else if (cartHasResumeToken(cart)) {
@@ -90,7 +110,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         domain: cart.store.domain,
         cartId: cart.cartId,
         recoveryUrlStatus: cart.recoveryUrlStatus,
-        discountCode: isSafeDiscountCode(requestedCode) ? requestedCode : null,
+        discountCode: authorizedCode,
         items: cart.items,
       })
     } else {

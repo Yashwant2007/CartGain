@@ -67,6 +67,7 @@ const CSRF_EXEMPT_PREFIXES = [
   '/api/health',
   '/api/opt-out', // public unsubscribe
   '/api/analytics/events', // public funnel events
+  '/api/recovery/', // public storefront opt-in/confirmation/contact; CORS + rate limited
 ]
 
 // Public storefront/bargain endpoints nested under /api/bargain/ that run on

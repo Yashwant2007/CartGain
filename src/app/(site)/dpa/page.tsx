@@ -157,11 +157,6 @@ export default function DPAPage() {
                       <td className="py-3">Global (Shopify processing)</td>
                     </tr>
                     <tr>
-                      <td className="py-3">Razorpay</td>
-                      <td className="py-3">WooCommerce subscription payments</td>
-                      <td className="py-3">India / processor-determined regions</td>
-                    </tr>
-                    <tr>
                       <td className="py-3">OpenAI</td>
                       <td className="py-3">AI-powered message generation (GPT-4o / GPT-4o-mini)</td>
                       <td className="py-3">US (OpenAI processing)</td>

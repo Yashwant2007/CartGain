@@ -1,4 +1,4 @@
-import { createHash } from 'crypto'
+﻿import { createHash } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { cleanCustomerName } from '@/lib/names'
@@ -9,15 +9,9 @@ import {
   normalizeRecipientPhone,
   upsertRecipient,
 } from '@/lib/recovery/recipients'
+import { storefrontCorsHeaders } from '@/lib/cors/storefront'
 
 export const dynamic = 'force-dynamic'
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Max-Age': '86400',
-}
 
 function text(value: unknown, max: number): string | null {
   if (typeof value !== 'string') return null
@@ -25,12 +19,12 @@ function text(value: unknown, max: number): string | null {
   return trimmed ? trimmed.slice(0, max) : null
 }
 
-function json(body: unknown, status = 200) {
-  return NextResponse.json(body, { status, headers: CORS_HEADERS })
+function json(request: NextRequest, body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: storefrontCorsHeaders(request.headers.get('origin')) })
 }
 
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, { status: 204, headers: storefrontCorsHeaders(request.headers.get('origin')) })
 }
 
 /**
@@ -50,32 +44,32 @@ export async function POST(request: NextRequest) {
   try {
     const rate = await checkSimpleRateLimit(`recovery_checkout_contact_${clientIp(request.headers)}`)
     if (!rate.allowed) {
-      return json({ message: 'Too many requests. Please try again later.' }, 429)
+      return json(request, { message: 'Too many requests. Please try again later.' }, 429)
     }
 
     const body = await request.json().catch(() => null)
     if (!body || typeof body !== 'object') {
-      return json({ message: 'Invalid request' }, 400)
+      return json(request, { message: 'Invalid request' }, 400)
     }
 
     const shop = text((body as any).shop, 255)
     const cartToken = text((body as any).cartToken, 255)
-    if (!shop) return json({ message: 'shop is required' }, 400)
-    if (!cartToken) return json({ message: 'cartToken is required' }, 400)
+    if (!shop) return json(request, { message: 'shop is required' }, 400)
+    if (!cartToken) return json(request, { message: 'cartToken is required' }, 400)
 
     const storeId = await resolveActiveStoreIdByShopDomain(prisma, shop)
-    if (!storeId) return json({ message: 'Store not found' }, 404)
+    if (!storeId) return json(request, { message: 'Store not found' }, 404)
 
     const email = normalizeRecipientEmail(text((body as any).email, 320))
     const phone = normalizeRecipientPhone(text((body as any).phone, 40))
     const name = cleanCustomerName(text((body as any).name, 120), email)
-    if (!email && !phone && !name) return json({ ok: true, linkedCart: false })
+    if (!email && !phone && !name) return json(request, { ok: true, linkedCart: false })
 
     const contactKey = (email || phone || name || '').toLowerCase()
     const contactHash = createHash('sha256').update(contactKey).digest('hex').slice(0, 24)
     const contactRate = await checkSimpleRateLimit(`recovery_checkout_contact_${contactHash}`)
     if (!contactRate.allowed) {
-      return json({ message: 'Too many requests. Please try again later.' }, 429)
+      return json(request, { message: 'Too many requests. Please try again later.' }, 429)
     }
 
     const cart = await prisma.cart.findUnique({
@@ -87,7 +81,7 @@ export async function POST(request: NextRequest) {
         customerName: true,
       },
     })
-    if (!cart) return json({ message: 'Cart not found' }, 404)
+    if (!cart) return json(request, { message: 'Cart not found' }, 404)
 
     const update: {
       customerEmail?: string
@@ -112,7 +106,7 @@ export async function POST(request: NextRequest) {
       return null
     })
 
-    return json({
+    return json(request, {
       ok: true,
       linkedCart: true,
       hasEmail: Boolean(update.customerEmail),
@@ -122,6 +116,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('[RECOVERY_CHECKOUT_CONTACT]', error?.message || error)
-    return json({ message: 'Something went wrong' }, 500)
+    return json(request, { message: 'Something went wrong' }, 500)
   }
 }

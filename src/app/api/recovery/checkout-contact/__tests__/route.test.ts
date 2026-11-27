@@ -149,8 +149,12 @@ describe('POST /api/recovery/checkout-contact', () => {
   })
 
   it('answers CORS preflight', async () => {
-    const res = await OPTIONS()
+    const req = new Request('https://cart-gain.com/api/recovery/checkout-contact', {
+      method: 'OPTIONS',
+      headers: { origin: 'https://test.myshopify.com' },
+    }) as any
+    const res = await OPTIONS(req)
     expect(res.status).toBe(204)
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://test.myshopify.com')
   })
 })

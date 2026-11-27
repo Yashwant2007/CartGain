@@ -236,3 +236,12 @@ describe('POST /api/webhooks/whatsapp — opt-out persistence', () => {
     })
   })
 })
+  it('does not record START consent when no store can be resolved', async () => {
+    prismaMock.store.findMany.mockResolvedValueOnce([])
+    prismaMock.cart.findMany.mockResolvedValueOnce([])
+    prismaMock.customerIdentity.findMany.mockResolvedValueOnce([])
+    const res = await POST(signedRequest(bodyWithText('START')))
+    expect(res.status).toBe(200)
+    expect(prismaMock.customerIdentity.update).not.toHaveBeenCalled()
+    expect(prismaMock.customerIdentity.create).not.toHaveBeenCalled()
+  })
