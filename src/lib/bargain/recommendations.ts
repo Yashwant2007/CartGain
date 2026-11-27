@@ -6,11 +6,11 @@ import {
   type ShopperObjection,
 } from './intent'
 
-// AI Salesperson — deterministic product recommendation engine.
+// AI Salesperson  -  deterministic product recommendation engine.
 //
 // When the shopper's budget, fit, or intent makes the current product a losing
 // conversation, the engine surfaces REAL, verified alternatives from the store's
-// own Shopify catalog. Everything here is deterministic and datasource-bound —
+// own Shopify catalog. Everything here is deterministic and datasource-bound  - 
 // no LLM inventing product names, prices, or availability. The merchant's
 // financial secrets (floor, margin, max discount) never appear on a card.
 
@@ -33,7 +33,7 @@ export interface RecommendationCard {
   vendor?: string | null
   variantOptions?: string[]
   tags: string[]
-  /** Short, honest "why this suits you" rationale — verified facts only. */
+  /** Short, honest "why this suits you" rationale  -  verified facts only. */
   reason: string
 }
 
@@ -500,7 +500,7 @@ export function scoreRecoCandidate(c: RecoCandidate, opts: RecoScoreOptions): nu
   return score
 }
 
-/** A ranked, still-internal card — not yet sanitized for the customer wire. */
+/** A ranked, still-internal card  -  not yet sanitized for the customer wire. */
 export interface RankedCard {
   productId: string
   variantId: string

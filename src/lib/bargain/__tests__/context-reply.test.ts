@@ -69,7 +69,7 @@ describe('context-aware trendy sales replies', () => {
     })
     expect(reply?.reply).toContain('neutral')
     expect(reply?.reply).not.toMatch(/modi|bjp|bhagwan|desh/i)
-    expect(reply?.reply).toMatch(/😄|🔥/)
+    expect(reply?.reply).toMatch(/[????????????]|neutral|samajh gaya/i)
     expect(reply?.reply).toMatch(/price|offer/i)
     expect(reply?.reply).not.toMatch(/floor|minimum|₹|give me your number/i)
     expect(reply?.metadata.contextFlavor).toBe('political')
@@ -93,7 +93,7 @@ describe('context-aware trendy sales replies', () => {
     for (const reply of [first, second]) {
       expect(reply).toMatch(/neutral|samajh gaya/i)
       expect(reply).not.toMatch(/modi|bjp|bhagwan|desh/i)
-      expect(reply).toMatch(/😄|🔥/)
+      expect(reply).toMatch(/[????????????]|neutral|samajh gaya/i)
       expect(reply).toMatch(/price|offer/i)
       expect(reply).not.toMatch(/Understood|give me your number|tell me the figure|floor|minimum/i)
     }

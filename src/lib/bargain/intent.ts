@@ -1,4 +1,4 @@
-// AI Salesperson — deterministic shopper intent & objection classification.
+// AI Salesperson  -  deterministic shopper intent & objection classification.
 //
 // A lightweight, deterministic classifier that labels the shopper's message so
 // the system prompt (and, later, the recommended-item layer) can react with
@@ -362,33 +362,33 @@ export function objectionCategory(objection: ShopperObjection): ObjectionCategor
 const INTENT_LABEL: Record<ShopperIntent, string> = {
   UNKNOWN: 'not clearly expressed',
   PRICE_ONLY: 'primarily price-driven',
-  VALUE_UNCLEAR: 'unsure the product is worth the price — needs value framing',
+  VALUE_UNCLEAR: 'unsure the product is worth the price  -  needs value framing',
   BUDGET_CONSTRAINT: 'working within a specific budget',
   PRODUCT_MISMATCH: 'checking whether the product fits a specific need/variant',
   COMPARISON: 'comparing price elsewhere',
   PRODUCT_QUESTION: 'asking a product-information question before deciding',
   PURCHASE_READY: 'ready to buy, price is the last step',
-  PURCHASE_HESITATION: 'interested but not ready — needs reassurance or time, not necessarily a discount',
+  PURCHASE_HESITATION: 'interested but not ready  -  needs reassurance or time, not necessarily a discount',
   WALKOUT: 'threatening to leave the negotiation',
   GENERIC_CHAT: 'casual conversation',
   RECOMMENDATION_REQUEST: 'asking for other product options from this store',
-  PRODUCT_DISCOVERY: 'browsing — wants the store to surface matching products',
+  PRODUCT_DISCOVERY: 'browsing  -  wants the store to surface matching products',
 }
 
 const OBJECTION_LABEL: Record<NonNullable<ShopperObjection>, string> = {
-  PRICE: 'price objection — respond with value framing and a concrete counter',
-  BUDGET: 'budget objection — the shopper has a hard ceiling; meet it if the floor allows, otherwise pivot to alternatives ONCE',
-  SHIPPING: 'shipping-cost objection — explain the real shipping options/incentives; do not discount the product to hide shipping',
-  QUALITY: 'quality/durability concern — explain verified materials/build/benefits only; never invent certifications',
-  FIT_VARIANT: 'variant/size mismatch — steer to the matching option if verified, otherwise honestly say you cannot confirm availability',
-  AVAILABILITY: 'availability concern — only state verified stock; never fabricate',
-  TRUST: 'trust/authenticity concern — use only merchant-approved selling points; never invent credentials',
-  SHIPPING_DELAY: 'shipping/timeline concern — do not promise delivery times you cannot verify',
-  COMPARISON: 'comparison objection — explain factual, verified differentiators; never invent a competitor price',
-  PRODUCT_INFORMATION: 'product-information need — answer from verified facts before any discount',
-  PURCHASE_HESITATION: 'purchase hesitation — reassure and reduce friction; do NOT rush to a discount',
-  PAYMENT_FRICTION: 'payment-method concern — reassure with the store\'s real options if known, otherwise offer checkout details',
-  VALUE: 'value uncertainty — break what the price includes',
+  PRICE: 'price objection  -  respond with value framing and a concrete counter',
+  BUDGET: 'budget objection  -  the shopper has a hard ceiling; meet it if the floor allows, otherwise pivot to alternatives ONCE',
+  SHIPPING: 'shipping-cost objection  -  explain the real shipping options/incentives; do not discount the product to hide shipping',
+  QUALITY: 'quality/durability concern  -  explain verified materials/build/benefits only; never invent certifications',
+  FIT_VARIANT: 'variant/size mismatch  -  steer to the matching option if verified, otherwise honestly say you cannot confirm availability',
+  AVAILABILITY: 'availability concern  -  only state verified stock; never fabricate',
+  TRUST: 'trust/authenticity concern  -  use only merchant-approved selling points; never invent credentials',
+  SHIPPING_DELAY: 'shipping/timeline concern  -  do not promise delivery times you cannot verify',
+  COMPARISON: 'comparison objection  -  explain factual, verified differentiators; never invent a competitor price',
+  PRODUCT_INFORMATION: 'product-information need  -  answer from verified facts before any discount',
+  PURCHASE_HESITATION: 'purchase hesitation  -  reassure and reduce friction; do NOT rush to a discount',
+  PAYMENT_FRICTION: 'payment-method concern  -  reassure with the store\'s real options if known, otherwise offer checkout details',
+  VALUE: 'value uncertainty  -  break what the price includes',
 }
 
 // Published intent→action mapping (Phase 1). Pure lookup, no side effects.
@@ -414,7 +414,7 @@ export function shopperIntentToPromptBlock(analysis: IntentAnalysis): string {
     ? SHOPPER_INTENT_CATEGORIES[analysis.shopperCategory]
     : classifyShopperIntentCategory(analysis)
   const lines = [
-    `SHOPPER INTENT (deterministic classification of the current message — reason about it, but never say "my model says"):`,
+    `SHOPPER INTENT (deterministic classification of the current message  -  reason about it, but never say "my model says"):`,
     `- Intent: ${INTENT_LABEL[analysis.intent]}`,
     `- Shopper category: ${category.code} (${category.name})`,
   ]
@@ -423,7 +423,7 @@ export function shopperIntentToPromptBlock(analysis: IntentAnalysis): string {
     lines.push(`- Objection category: ${analysis.category} → recommended action: ${objectionAction(analysis.category)}`)
   }
   if (analysis.intent === 'PURCHASE_HESITATION') {
-    lines.push(`- The shopper is hesitating, not rejecting. Do NOT lead with a discount — reduce friction, answer the real concern, and give them room.`)
+    lines.push(`- The shopper is hesitating, not rejecting. Do NOT lead with a discount  -  reduce friction, answer the real concern, and give them room.`)
   }
   if (analysis.asksBestPrice) {
     lines.push(
@@ -432,7 +432,7 @@ export function shopperIntentToPromptBlock(analysis: IntentAnalysis): string {
   }
   if (analysis.priceComplaint) {
     lines.push(
-      `- The shopper is COMPLAINING about the price — they are NOT making an offer. Any figure in this message is the price they are objecting to. NEVER read it as their bid, NEVER echo it back as "you offered X", and NEVER accept it. Acknowledge the concern briefly, justify the value from verified facts, and propose a genuine counter (still above the listed-price gap you normally open with).`,
+      `- The shopper is COMPLAINING about the price  -  they are NOT making an offer. Any figure in this message is the price they are objecting to. NEVER read it as their bid, NEVER echo it back as "you offered X", and NEVER accept it. Acknowledge the concern briefly, justify the value from verified facts, and propose a genuine counter (still above the listed-price gap you normally open with).`,
     )
   }
   if (analysis.offerClarificationNeeded) {
@@ -460,7 +460,7 @@ export function shopperIntentToPromptBlock(analysis: IntentAnalysis): string {
       budget: 'a budget ceiling',
       contact: 'a phone/contact detail',
       percent: 'a percentage',
-      comparison: 'somebody else’s price',
+      comparison: 'somebody else\'s price',
       complaint: 'a price they are objecting to',
       reference: 'a listed/reference price',
       duration: 'a time or age',

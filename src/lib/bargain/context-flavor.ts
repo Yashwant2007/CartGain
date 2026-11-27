@@ -79,19 +79,19 @@ const GUIDANCE: Record<ContextFlavor, string> = {
 
 const EXAMPLES: Record<ContextFlavor, string> = {
   political:
-    'Example shape: "Reference samajh gaya 😄 — main yahin neutral rehta hoon; {product} par aapka comfortable price kya hoga?"',
+    'Example shape: "Reference samajh gaya 😄  -  main yahin neutral rehta hoon; {product} par aapka comfortable price kya hoga?"',
   devotional:
-    'Example shape: "Achhe vibes wala reference samajh gaya 🙏 — {product} ka deal clear karte hain, aapka price kya hoga?"',
+    'Example shape: "Achhe vibes wala reference samajh gaya 🙏  -  {product} ka deal clear karte hain, aapka price kya hoga?"',
   fashion:
-    'Example shape: "Drip check passed 😄 — {product} ka style aur price dono settle karte hain."',
+    'Example shape: "Drip check passed 😄  -  {product} ka style aur price dono settle karte hain."',
   meme:
-    'Example shape: "Meme mode on 😄 — {product} ke liye aapka best price bataiye; main punchline nahi, deal deliver karta hoon."',
+    'Example shape: "Meme mode on 😄  -  {product} ke liye aapka best price bataiye; main punchline nahi, deal deliver karta hoon."',
   sport:
-    'Example shape: "Full toss hai 😄 — {product} par aapka best price kya hoga? Boundary cross karke deal close kar deta hoon."',
+    'Example shape: "Full toss hai 😄  -  {product} par aapka best price kya hoga? Boundary cross karke deal close kar deta hoon."',
   soft_nudge:
-    'Example shape: "Thoda aur comfort chahiye — samajh gaya 😄 {product} par aapka actual price kya hoga?"',
+    'Example shape: "Thoda aur comfort chahiye  -  samajh gaya 😄 {product} par aapka actual price kya hoga?"',
   casual:
-    'Example shape: "Vibe samajh gaya 😄 — {product} ki details chahiye ya apna best price bata dijiye?"',
+    'Example shape: "Vibe samajh gaya 😄  -  {product} ki details chahiye ya apna best price bata dijiye?"',
 }
 
 export function contextFlavorsPromptBlock(flavors?: ContextFlavor[] | null): string {

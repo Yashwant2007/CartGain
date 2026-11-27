@@ -49,14 +49,14 @@ const EN: Copy = {
   small_talk: 'All good here 🙂 What would you like to know about {item}, or what price feels right?',
   emoji_only: '🙂 Got you. Want {item} details, or should we talk price?',
   nonsense: "I didn't quite catch that. Want help with {item}, or want to share a price?",
-  random: "That came through a bit scrambled 😅 No worries — ask me about {item}, or drop a price you're thinking of.",
+  random: "That came through a bit scrambled 😅 No worries  -  ask me about {item}, or drop a price you're thinking of.",
   off_topic: "Let's keep it on {item} for now. Product question, or a price you want me to check?",
-  joke: "Haha, fair one 😄 Back to {item} — quick details, or your best price?",
-  flattery: "That's kind of you 🙂 Let's make it useful — {item} details, or a price that works for you?",
-  hesitation: "No rush at all. What's holding you back on {item} — fit, trust, or the price?",
+  joke: "Haha, fair one 😄 Back to {item}  -  quick details, or your best price?",
+  flattery: "That's kind of you 🙂 Let's make it useful  -  {item} details, or a price that works for you?",
+  hesitation: "No rush at all. What's holding you back on {item}  -  fit, trust, or the price?",
   probe: "I'm here for {item} details and a fair deal. Ask me anything about it, or make an offer.",
   insult: "I'm happy to keep this helpful and respectful. When you're ready, I can help with {item} or your offer.",
-  trend_talk: "Nice reference 😄 I won't guess what's trending, but for {item} — want details or a comfortable price?",
+  trend_talk: "Nice reference 😄 I won't guess what's trending, but for {item}  -  want details or a comfortable price?",
 }
 
 const HINGLISH: Copy = {
@@ -64,14 +64,14 @@ const HINGLISH: Copy = {
   small_talk: 'Sab badhiya 🙂 {item} ke baare mein kya jaan-na hai, ya kya price sahi lagega?',
   emoji_only: '🙂 Samajh gaya. {item} ki details chahiye ya apna price?',
   nonsense: 'Yeh thoda clear nahi hua. {item} ke baare mein help chahiye, ya price share karoge?',
-  random: 'Thoda scrambled aa gaya 😅 Koi baat nahi — {item} ka sawaal pucho ya apna price batao.',
+  random: 'Thoda scrambled aa gaya 😅 Koi baat nahi  -  {item} ka sawaal pucho ya apna price batao.',
   off_topic: 'Chalo {item} par wapas aate hain. Koi question hai, ya price batana hai?',
-  joke: 'Haha, sahi hai 😄 Ab {item} ki baat — details chahiye ya best price check karun?',
-  flattery: 'Shukriya 🙂 Ab kaam ki baat — {item} ke baare mein kya jaana hai, ya price kya socha hai?',
-  hesitation: 'Koi jaldi nahi. {item} mein kya soch mein daal raha hai — fit, trust, ya price?',
+  joke: 'Haha, sahi hai 😄 Ab {item} ki baat  -  details chahiye ya best price check karun?',
+  flattery: 'Shukriya 🙂 Ab kaam ki baat  -  {item} ke baare mein kya jaana hai, ya price kya socha hai?',
+  hesitation: 'Koi jaldi nahi. {item} mein kya soch mein daal raha hai  -  fit, trust, ya price?',
   probe: 'Main {item} aur uske price mein help kar sakta hoon. Product pucho ya apna offer do.',
   insult: 'Main respectfully help karna chahta hoon. Jab ready ho, {item} ya price par baat karte hain.',
-  trend_talk: 'Reference mast tha 😄 Trend ka claim nahi karunga, par {item} pe — details chahiye ya comfortable price?',
+  trend_talk: 'Reference mast tha 😄 Trend ka claim nahi karunga, par {item} pe  -  details chahiye ya comfortable price?',
 }
 
 function normalizedLang(language?: string | null): string {

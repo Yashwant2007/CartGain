@@ -279,7 +279,7 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message
     default:
       return {
         ...base,
-        prompt: 'Handle this turn naturally from the verified context and keep the conversation moving.',
+        prompt: 'Handle this turn naturally from verified context. Acknowledge what they said, answer clearly, and move the conversation forward with one useful next step. If they hint at price, invite a real number; if they ask a question, answer it first. Do not repeat earlier openings or generic filler.',
       }
   }
 }
