@@ -1457,6 +1457,7 @@ function contextAwareFallback(customerMessage: string, ctx: NegotiationContext, 
     mode: 'trend_talk',
     language: ctx.language,
     productTitle: ctx.productTitle,
+    persona: ctx.persona,
     emojiBudget: ctx.persona === 'strict_negotiator' ? 0 : ctx.persona === 'playful_friend' ? 2 : 1,
     message: customerMessage,
     contextFlavors: flavors,
@@ -1636,30 +1637,40 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
     return thanks[ctx.persona]
   }
 
-  // Generic acknowledgement. Once the listed price has already been said (any
-  // prior turn mentioned it, or the opening did), repeating it every reply is
-  // the single biggest reason the fallback read as a bot: live transcripts
-  // showed a repeated listed-price reply straight after one that had
-  // already quoted $600. Acknowledge the customer and go straight back to the
-  // ask  -  the price is what matters, and they already know the listed price.
+  // Generic/unknown acknowledgement. Keep it smooth, persona-true, and helpful
+  // even when the message is unclear or out of context. Never guess facts.
   if (historyLength > 0) {
     const contextual = contextAwareFallback(customerMessage, ctx, historyLength)
     if (contextual) return contextual
-    const backToPrice: Record<Persona, string[]> = {
+    const unclear = /\b(?:huh|what\?|idk|dunno|random|asdf|qwerty|nonsense)\b/i.test(low) || low.replace(/[^a-z0-9\s]/gi, '').trim().length < 2
+    const backToPrice: Record<Persona, string[]> = unclear ? {
       strict_negotiator: [
-        `Got it. What price are you thinking, or is there something specific you want to know?`,
-        `Understood. Share the price you have in mind, and I'll give you a straight answer.`,
+        `I didn't fully catch that. If you clarify, I can help with ${item} details or evaluate a fair offer.`,
+        `I want to be precise. Ask a product question, or share the price you have in mind for ${item}.`,
       ],
       playful_friend: [
-        `Got it 😄 What's your price idea, or want a quick detail on ${item}?`,
-        `Fair enough 🙂 Hit me with your price, or ask me anything about it.`,
+        `That one went past me a bit ?? No stress ? ask about ${item} or drop the price you're thinking.`,
+        `I missed that one ?? Want ${item} details, or should we talk your best price?`,
       ],
       friendly_shopkeeper: [
-        `I hear you 🙂 What price were you hoping for, or is there something I can clear up?`,
-        `Got you, friend. Share your price idea, and I'll see what I can do.`,
+        `I didn't quite catch that, friend ?? No worries ? ask about ${item}, or tell me the price you had in mind.`,
+        `I may have missed that ?? I can help with ${item} details, or we can talk about a price that works for you.`,
+      ],
+    } : {
+      strict_negotiator: [
+        `Understood. What price are you thinking for ${item}, or is there a specific detail you want verified?`,
+        `Got it. Share the price you have in mind, and I'll give you a clear, fair answer.`,
+      ],
+      playful_friend: [
+        `Got you ?? What price are you thinking for ${item}, or want a quick detail first?`,
+        `Fair enough ?? Hit me with your price idea, or ask me anything about ${item}.`,
+      ],
+      friendly_shopkeeper: [
+        `I hear you ?? What price were you hoping for on ${item}, or is there something I can clear up?`,
+        `Got you, friend. Share your price idea, and I'll see what fair option works for you.`,
       ],
     }
-    return pickVaried(backToPrice[ctx.persona], `${customerMessage}|${historyLength}`)
+    return pickVaried(backToPrice[ctx.persona] ?? backToPrice.friendly_shopkeeper, `${customerMessage}|${historyLength}|${unclear ? 'u' : 'c'}`)
   }
 
   if (ctx.language === 'hinglish') {
@@ -3186,6 +3197,7 @@ export async function negotiateStep(
         mode: ctx.liveTurn.mode,
         language: ctx.language,
         productTitle: ctx.productTitle,
+        persona: ctx.persona,
         emojiBudget: ctx.persona === 'strict_negotiator' ? 0 : ctx.persona === 'playful_friend' ? 2 : 1,
         message: customerMessage,
         contextFlavor: ctx.liveTurn.contextFlavor,
