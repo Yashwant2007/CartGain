@@ -1334,7 +1334,7 @@ export function buildOpeningMessage(ctx: NegotiationContext): string {
 }
 function reportAiDegradation(reason: 'ai_unavailable' | 'parse_fallback' | 'all_tiers_failed', detail?: string): void {
   console.error(
-    `[BARGAIN_AI_DEGRADED] reason=${reason}${detail ? ` detail=${detail}` : ''} G�� serving template replies; shoppers are NOT getting a live negotiation`,
+    `[BARGAIN_AI_DEGRADED] reason=${reason}${detail ? ` detail=${detail}` : ''} - serving template replies; shoppers are NOT getting a live negotiation`,
   )
   try {
     // Fire-and-forget: never block or throw on the negotiation hot path.
@@ -1347,7 +1347,7 @@ function reportAiDegradation(reason: 'ai_unavailable' | 'parse_fallback' | 'all_
 }
 
 // Deterministic variety for the offline fallback. When both AI tiers are down,
-// the template path is all a shopper sees G�� and returning the SAME fixed line
+// the template path is all a shopper sees - and returning the SAME fixed line
 // for every different question is what made the bot feel broken. These variants
 // are chosen from a stable hash of the message, so different questions get
 // different phrasing (while a repeat of the same message stays consistent).
@@ -1365,8 +1365,8 @@ function pickVaried<T>(options: T[], seed: string): T {
 }
 
 // Detect a near-verbatim repeat of one of the shopper's OWN earlier messages.
-// `kind` distinguishes a repeated price/offer (G�� hold firm) from repeated plain
-// talk (G�� change the approach). Pure and exported so it is unit-testable.
+// `kind` distinguishes a repeated price/offer (hold firm) from repeated plain
+// talk (change the approach). Pure and exported so it is unit-testable.
 export function detectRepeatedMessage(
   customerMessage: string,
   history: { role: 'customer' | 'ai'; content: string }[],
@@ -1377,7 +1377,7 @@ export function detectRepeatedMessage(
     (m) => m.role === 'customer' && normalizeForCompare(m.content) === currentNorm,
   )
   if (!repeated) return { repeated: false, kind: null }
-  const kind: 'offer' | 'talk' = /(?:G�|rs\.?\s*|inr\s*)?\d[\d,]*(?:\.\d+)?/i.test(customerMessage)
+  const kind: 'offer' | 'talk' = /(?:[\u20B9?$??]|rs\.?\s*|inr\s*|usd\s*|eur\s*|gbp\s*)?\d[\d,]*(?:\.\d+)?/i.test(customerMessage)
     ? 'offer'
     : 'talk'
   return { repeated: true, kind }
@@ -1457,6 +1457,8 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
   const isProductQuestion =
     /(?:describe|explain|tell me (?:about|more)|what (?:is|are|about)|about (?:this|the)|details?|features?|specs?|material|quality|how (?:is|good)|worth\s+(?:it|the)|think of|review)/i.test(low) &&
     !/(?:offer|price|discount)/i.test(low)
+  const isShippingOrPolicyQuestion =
+    /\b(shipping|delivery|dispatch|courier|arrive|eta|return|refund|exchange|warranty|guarantee|cod|cash on delivery)\b/i.test(low)
   const isGreeting =
     /(?:^|\b)(?:hi+|hello|hey|namaste|namaskar|hola|yo|good\s+(?:morning|afternoon|evening))(?:\b|!|,)/i.test(low)
   const isThanks =
@@ -1509,7 +1511,21 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
     ctx.intent?.nonOfferNumberContext === 'comparison' ||
     /\b(?:other|another)\s+(?:brand|company|maker|store|shop|site|seller)|competitor|elsewhere/i.test(low)
   if (isComparison) {
-    return strengthenComparisonPitch(`I can't confirm prices elsewhere, but I can work with you here at ${price}.`, ctx)
+    const comparisonReply: Record<Persona, string> = {
+      strict_negotiator: `I can't verify prices elsewhere, but I can work with the value and price here on ${item}.`,
+      playful_friend: `I can't vouch for other shops' prices 😄, but I can make sure this one feels worth it. ${item} is listed at ${price} — want the details or a price that works for you?`,
+      friendly_shopkeeper: `I can't confirm prices elsewhere, but I can help you get good value here 😊 ${item} is listed at ${price}. Want the key details, or is there a price you'd like me to check?`,
+    }
+    return strengthenComparisonPitch(comparisonReply[ctx.persona], ctx)
+  }
+
+  if (isShippingOrPolicyQuestion) {
+    const policyReply: Record<Persona, string> = {
+      strict_negotiator: `I can only confirm what's shown in the verified store/product details. ${ctx.shipping?.publicSummary ? `Shipping: ${ctx.shipping.publicSummary}.` : 'I don\'t have verified shipping, return, warranty, or COD details here.'} If you want, we can focus on ${item} at ${price}.`,
+      playful_friend: `Good question 🙂 I don't want to guess policy details. ${ctx.shipping?.publicSummary ? `What I can confirm on shipping is: ${ctx.shipping.publicSummary}.` : 'I don\'t have verified shipping, return, warranty, or COD details here.'} Want me to help with ${item} itself, or check a price?`,
+      friendly_shopkeeper: `Great question — I only want to share confirmed details 😊 ${ctx.shipping?.publicSummary ? `Shipping: ${ctx.shipping.publicSummary}.` : 'I don\'t have verified shipping, return, warranty, or COD details here.'} I can still help with ${item} details or a fair price if you'd like.`,
+    }
+    return policyReply[ctx.persona]
   }
 
   const bulkQty = ctx.bulkQuantity != null && ctx.bulkQuantity >= 2 ? Math.floor(ctx.bulkQuantity) : null
