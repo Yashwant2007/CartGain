@@ -86,8 +86,10 @@ jest.mock('@/lib/shopify/discount', () => ({
 const { runGenesisBenchmark } = require('@/lib/benchmark/genesis/run')
 const { runGenesisAdapter } = require('@/lib/benchmark/genesis/adapters')
 const { isGenesisLiveProvidersEnabled } = require('@/lib/benchmark/genesis/live-provider')
-const { GENESIS_SCENARIOS } = require('@/lib/benchmark/genesis/dataset')
+const { GENESIS_SCENARIOS, scenariosByCategory } = require('@/lib/benchmark/genesis/dataset')
+const { adaptNegotiationResult, validateEngineResponse } = require('@/lib/bargain/engine-contract')
 const {
+  GENESIS_CATEGORIES,
   GENESIS_CATEGORY_WEIGHTS,
   GENESIS_ENGINES,
   GENESIS_LIVE_VERIFICATION,
@@ -96,6 +98,19 @@ const {
   GENESIS_SUITE_NAME,
   GENESIS_UNVERIFIED_QUALITY_CATEGORIES,
 } = require('@/lib/benchmark/genesis/types')
+
+function normalizeGenesisReply(reply: string): string {
+  return reply.replace(/[\u0000-\u001F\u007F\u200B-\u200D\uFEFF]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function isAuthorizedGenesisAccept(scenario: any, entry: any): boolean {
+  if (entry.decision !== 'accept' || entry.passed !== true) return false
+  if (scenario.offer != null && scenario.offer < GENESIS_PRICE_CONTEXT.floorPrice) return false
+  if (entry.counterOffer != null && entry.counterOffer < GENESIS_PRICE_CONTEXT.floorPrice) return false
+  if (scenario.failureMode && scenario.failureMode !== 'none' && entry.engine === 'deterministic') return true
+  if (scenario.expectedDecision !== 'accept') return false
+  return scenario.offer == null || entry.counterOffer === scenario.offer
+}
 
 describe('CARTGAIN_GENESIS_BENCHMARK', () => {
   let report: any
@@ -120,6 +135,83 @@ describe('CARTGAIN_GENESIS_BENCHMARK', () => {
     for (const engine of report.engines) {
       const categories = engine.categories.map((entry: any) => entry.category)
       expect(new Set(categories).size).toBe(12)
+    }
+  })
+
+  it('gives every weighted category scenarios and objective checks', () => {
+    const grouped = scenariosByCategory()
+    for (const category of GENESIS_CATEGORIES) {
+      expect((grouped[category] ?? []).length).toBeGreaterThan(0)
+    }
+    for (const engine of report.engines) {
+      for (const category of GENESIS_CATEGORIES) {
+        const cases = engine.cases.filter((entry: any) => entry.category === category)
+        expect(cases.length).toBeGreaterThan(0)
+        const objective = cases.flatMap((entry: any) =>
+          entry.checks.filter((check: any) => check.kind === 'objective'),
+        )
+        expect(objective.length).toBeGreaterThan(0)
+        expect(objective.every((check: any) => check.passed)).toBe(true)
+        const score = engine.categories.find((entry: any) => entry.category === category)
+        expect(score.totalObjectiveChecks).toBe(objective.length)
+        expect(score.passedChecks).toBe(objective.length)
+      }
+    }
+  })
+
+  it('normalizes every benchmark result through the shared engine contract', () => {
+    for (const engine of report.engines) {
+      for (const entry of engine.cases) {
+        const normalized = adaptNegotiationResult({
+          reply: entry.reply,
+          decision: entry.decision,
+          counterOffer: entry.counterOffer,
+          tactic: entry.tactic,
+          metadata: {},
+        })
+        expect(validateEngineResponse(normalized).ok).toBe(true)
+      }
+    }
+  })
+
+  it('keeps simulated provider decisions and replies in parity with the rule engine', async () => {
+    const scenarios = GENESIS_SCENARIOS.filter((scenario: any) =>
+      !scenario.failureMode || scenario.failureMode === 'none',
+    )
+    expect(scenarios.length).toBeGreaterThan(0)
+    for (const scenario of scenarios) {
+      const results: any[] = []
+      for (const engine of GENESIS_ENGINES) {
+        results.push(await runGenesisAdapter(engine, scenario))
+      }
+      const [primary, fallback, deterministic] = results
+      for (const result of [primary, fallback]) {
+        expect(result.decision).toBe(deterministic.decision)
+        expect(result.counterOffer).toBe(deterministic.counterOffer)
+        expect(normalizeGenesisReply(result.reply)).toBe(normalizeGenesisReply(deterministic.reply))
+      }
+    }
+  })
+
+  it('never authorizes acceptance for the mandatory price list', () => {
+    const mandatory = ['3000', '2800', '2500', '2650', '2700', '2400', '1000', '50%']
+    const unauthorized = new Set(['2500', '2650', '2700', '2400', '1000', '50%'])
+    for (const token of mandatory) {
+      const scenarios = GENESIS_SCENARIOS.filter((scenario: any) => scenario.message.includes(token))
+      expect(scenarios.length).toBeGreaterThan(0)
+      const cases = report.engines.flatMap((engine: any) =>
+        engine.cases.filter((entry: any) => scenarios.some((scenario: any) => scenario.id === entry.id)),
+      )
+      expect(cases.length).toBeGreaterThan(0)
+      for (const entry of cases) {
+        const scenario = scenarios.find((candidate: any) => candidate.id === entry.id)
+        if (unauthorized.has(token)) {
+          expect(entry.decision).not.toBe('accept')
+        }
+        if (entry.decision === 'accept') {
+          expect(isAuthorizedGenesisAccept(scenario, entry)).toBe(true)
+        }
+      }
     }
   })
 
@@ -180,6 +272,17 @@ describe('CARTGAIN_GENESIS_BENCHMARK', () => {
       real_provider_failover: 'pending',
     })
     expect(report.releaseGate.items.every((item: any) => item.reasons.length > 0)).toBe(true)
+  })
+
+  it('keeps gate reasons honest about unverified quality and live gaps', () => {
+    const items = Object.fromEntries(report.releaseGate.items.map((item: any) => [item.id, item]))
+    expect(report.releaseGate.status).toBe('pending')
+    expect(items.ai_response_quality.status).toBe('pending')
+    expect(items.ai_response_quality.reasons.join(' ')).toMatch(/simulated_unverified_ai_quality/)
+    expect(items.ai_response_quality.reasons.join(' ')).toMatch(/human review/)
+    expect(items.live_shopify_redemption.reasons.join(' ')).toMatch(/in-memory mocks only/)
+    expect(items.live_db_concurrency.reasons.join(' ')).toMatch(/real database/)
+    expect(items.real_provider_failover.reasons.join(' ')).toMatch(/not exercised in deterministic CI/)
   })
 
   it('never prints secrets or the hidden floor in the report', () => {
@@ -289,6 +392,9 @@ describe('CARTGAIN_GENESIS_BENCHMARK live provider opt-in', () => {
     const statuses = Object.fromEntries(liveReport.releaseGate.items.map((item: any) => [item.id, item.status]))
     expect(statuses.live_provider_quality).toBe('pending')
     expect(statuses.ai_response_quality).toBe('pending')
+    const reasons = Object.fromEntries(liveReport.releaseGate.items.map((item: any) => [item.id, item.reasons.join(' ')]))
+    expect(reasons.ai_response_quality).toContain('live_provider_unreviewed_quality')
+    expect(reasons.live_provider_quality).toMatch(/unverified until each tier is reviewed by a human/)
 
     for (const engine of liveReport.engines) {
       if (engine.engine === 'deterministic') continue

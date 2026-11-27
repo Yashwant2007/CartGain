@@ -46,6 +46,7 @@ export type UiKey =
   | 'terminal_expired'
   | 'terminal_abandoned'
   | 'opt_out'
+  | 'human_support'
   | 'negotiate'
   | 'dealTitle'
   | 'skip'
@@ -248,6 +249,7 @@ const EN: Record<UiKey, string> = {
     terminal_expired: "This session expired. Please start a new one if you're still interested.",
     terminal_abandoned: 'This session was abandoned. Please start a new one.',
     opt_out: 'You opted out of AI pricing. Buy at the regular price instead.',
+    human_support: 'I have paused automated negotiation. Please contact the store support team for help.',
     negotiate: 'Negotiate Price',
     dealTitle: "Let's make a deal",
     skip: 'Skip — buy at full price →',

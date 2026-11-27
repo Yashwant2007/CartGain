@@ -37,6 +37,7 @@ jest.mock('@/lib/db', () => ({
     merchantConfig: { findUnique: jest.fn() },
     bargainProduct: { findUnique: jest.fn() },
     bargainMessage: { create: jest.fn() },
+    bargainTurnClaim: { create: jest.fn(async () => ({})), delete: jest.fn(async () => ({})) },
     // The route persists messages + session state inside $transaction([...]).
     $transaction: jest.fn(async (ops: any[]) => Promise.all(ops)),
   },
@@ -84,6 +85,7 @@ const prismaMock = prisma as unknown as {
   merchantConfig: { findUnique: jest.Mock }
   bargainProduct: { findUnique: jest.Mock }
   bargainMessage: { create: jest.Mock }
+  bargainTurnClaim: { create: jest.Mock; delete: jest.Mock }
 }
 
 jest.mock('@/lib/rate-limit', () => ({

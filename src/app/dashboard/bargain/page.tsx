@@ -518,14 +518,14 @@ void fetchConfig()
                     </Field>
                     <Field
                       label="Session timeout (seconds)"
-                      hint="After this, an open offer expires. Adds gentle urgency without pressure."
+                      hint="Negotiations persist for 24 hours by default; an expired offer is never reused."
                     >
                       <input
                         type="number"
                         min={30}
-                        max={3600}
-                        value={configForm.sessionTimeout ?? 300}
-                        onChange={e => setConfigForm({ ...configForm, sessionTimeout: Math.min(3600, Math.max(30, parseInt(e.target.value) || 30)) })}
+                        max={604800}
+                        value={configForm.sessionTimeout ?? 86400}
+                        onChange={e => setConfigForm({ ...configForm, sessionTimeout: Math.min(604800, Math.max(30, parseInt(e.target.value) || 30)) })}
                         className={CONTROL_CLS}
                       />
                     </Field>

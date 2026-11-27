@@ -74,6 +74,21 @@ describe('analyzeIntent', () => {
     expect(a.intent).toBe('GENERIC_CHAT')
   })
 
+  it('flags explicit human handoff requests', () => {
+    expect(analyzeIntent('I want to speak to a human').needHumanSupport).toBe(true)
+    expect(analyzeIntent('connect me to a live agent please').needHumanSupport).toBe(true)
+    expect(analyzeIntent('mujhe support se baat chahiye').needHumanSupport).toBe(true)
+    expect(analyzeIntent('what is the best price').needHumanSupport).toBe(false)
+  })
+
+  it('flags explicit opt-out requests', () => {
+    expect(analyzeIntent('opt-out').optOutRequested).toBe(true)
+    expect(analyzeIntent('please unsubscribe').optOutRequested).toBe(true)
+    expect(analyzeIntent('do not contact me').optOutRequested).toBe(true)
+    expect(analyzeIntent('stop messaging me').optOutRequested).toBe(true)
+    expect(analyzeIntent('stop showing more alternatives').optOutRequested).toBe(false)
+  })
+
   it('records price signal when money appears', () => {
     const a = analyzeIntent('₹600 is all I can do')
     expect(a.offersPriceSignal).toBe(true)

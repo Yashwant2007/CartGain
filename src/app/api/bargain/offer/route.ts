@@ -346,6 +346,10 @@ function duplicateTurnPayload(session: any, ai: any | null): BargainOfferSuccess
   }
 }
 
+function isPrismaUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002'
+}
+
 type OfferView = NonNullable<BargainOfferSuccess['offerInterpretation']>
 
 function intelligenceResponseFields(intelligence: BargainIntelligenceState, offerView: OfferView) {
@@ -370,7 +374,8 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const data = validateOrThrow(bargainOfferSchema, body)
-    let turnMetadata: Record<string, unknown> = data.turnId ? { turnId: data.turnId } : {}
+    const turnId = data.turnId
+    let turnMetadata: Record<string, unknown> = turnId ? { turnId } : {}
     const interpretedMessage = normalizeCustomerText(data.message)
     const isWalkout = detectWalkout(interpretedMessage)
 
@@ -389,8 +394,8 @@ export async function POST(request: NextRequest) {
     }
     const platform = bargainPlatformFor(bargainSession.store, body?.platform)
 
-    if (data.turnId) {
-      const matchedTurn = duplicateTurnMatch(bargainSession.messages, data.turnId)
+    if (turnId) {
+      const matchedTurn = duplicateTurnMatch(bargainSession.messages, turnId)
       if (matchedTurn) {
         const duplicateOwnership = assertSessionOwnership(bargainSession, {
           customerFingerprint: data.customerFingerprint,
@@ -402,6 +407,38 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ message: duplicateOwnership.reason }, { status: 403 })
         }
         return NextResponse.json(duplicateTurnPayload(bargainSession, matchedTurn.ai), { status: 200 })
+      }
+
+      try {
+        await prisma.bargainTurnClaim.create({
+          data: { sessionId: bargainSession.id, turnId },
+        })
+      } catch (error) {
+        if (!isPrismaUniqueViolation(error)) throw error
+        const claimedSession = await prisma.bargainSession.findUnique({
+          where: { id: data.sessionId },
+          include: {
+            messages: { orderBy: { createdAt: 'asc' } },
+            store: true,
+          },
+        })
+        if (!claimedSession) {
+          return NextResponse.json({ message: 'Bargain session not found' }, { status: 404 })
+        }
+        const claimedTurn = duplicateTurnMatch(claimedSession.messages, turnId)
+        if (!claimedTurn) {
+          return NextResponse.json({ message: 'Duplicate turn' }, { status: 409 })
+        }
+        const claimedOwnership = assertSessionOwnership(claimedSession, {
+          customerFingerprint: data.customerFingerprint,
+          customerEmail: data.customerEmail,
+          cartToken: data.cartToken,
+          tokenOk: verifySessionToken(claimedSession.id, data.sessionToken),
+        })
+        if (!claimedOwnership.ok) {
+          return NextResponse.json({ message: claimedOwnership.reason }, { status: 403 })
+        }
+        return NextResponse.json(duplicateTurnPayload(claimedSession, claimedTurn.ai), { status: 200 })
       }
     }
 
@@ -486,9 +523,11 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    const intentAnalysis = analyzeIntent(interpretedMessage)
+
     // Automated decision-making opt-out (DPDP Act 2023, GDPR Art. 22): end the
     // session without the AI consuming an attempt or responding.
-    if (interpretedMessage.trim().toLowerCase() === 'opt-out') {
+    if (intentAnalysis.optOutRequested) {
       await prisma.bargainSession.update({
         where: { id: bargainSession.id },
         data: { status: 'abandoned' },
@@ -497,6 +536,24 @@ export async function POST(request: NextRequest) {
         message: uiText(lang, 'opt_out'),
         terminal: true,
         status: 'abandoned',
+      }, { status: 200 })
+    }
+
+    if (intentAnalysis.needHumanSupport) {
+      await prisma.bargainSession.update({
+        where: { id: bargainSession.id },
+        data: { status: 'abandoned' },
+      })
+      await track({
+        name: 'cartgain_bargain_human_support',
+        storeId: bargainSession.storeId,
+        properties: { sessionId: bargainSession.id, state: 'HUMAN_SUPPORT_REQUIRED' },
+      })
+      return NextResponse.json({
+        message: uiText(lang, 'human_support'),
+        terminal: true,
+        status: 'abandoned',
+        escalation: 'human_support_required',
       }, { status: 200 })
     }
 
@@ -584,10 +641,6 @@ export async function POST(request: NextRequest) {
       ? (async () => ({ products: await listWooCommerceRecommendationProducts(bargainSession.storeId, bargainSession.store) })) as any
       : fetchShopifyProducts
 
-    // Deterministic shopper-intent classification of the current message. Cheap,
-    // predictable, and merchant-controlled — the LLM is told about it, it never
-    // decides it.
-    const intentAnalysis = analyzeIntent(interpretedMessage)
     const claimAssessment = assessCustomerClaims(interpretedMessage, {
       product: productCtx,
       originalPrice: bargainSession.originalPrice,
@@ -1707,7 +1760,7 @@ export async function POST(request: NextRequest) {
       goal: goalCtx,
       couponMentioned,
       couponsAllowed,
-      needHumanSupport: isAbuseNoConsume,
+      needHumanSupport: isAbuseNoConsume || intentAnalysis.needHumanSupport,
       dealAccepted: sessionStatus === 'accepted',
       pendingAccept: result.decision === 'accept',
       checkoutStarted: Boolean(bargainSession.checkoutOpenedAt),
@@ -1776,43 +1829,52 @@ export async function POST(request: NextRequest) {
         : `${result.reply} ${uiText(lang, 'farewell_friendly')}`
     }
 
-    const [customerMsg, aiMsg, updatedSession] = await prisma.$transaction([
-      prisma.bargainMessage.create({
-        data: {
-          sessionId: bargainSession.id, role: 'customer', content: data.message,
-          offeredPrice: customerOffer ?? null,
-          metadata: {
-            ...turnMetadata,
-            ...(bulkQuantity ? { bulkQuantity } : {}),
-            ...(couponMentioned ? { couponMentioned: true } : {}),
-            ...(paymentConfig.enabled && paymentIntent !== 'unknown' ? { paymentIntent } : {}),
-          } as any,
-        },
-      }),
-      prisma.bargainMessage.create({
-        data: {
-          sessionId: bargainSession.id, role: 'ai', content: customerReply,
-          // Financial safety: a pure-chat reply (no AI counter) must NOT
-          // persist `offeredPrice` — otherwise `minPrice` would be written as an
-          // accept-able offer and the customer could lock the floor without the
-          // AI ever offering it. Only real counters (decision counter/accept)
-          // carry an offeredPrice.
-          offeredPrice: safeCounter,
-          metadata: { ...turnMetadata, decision: result.decision, tactic: result.tactic, sentiment: result.sentiment, ...(result.metadata ?? {}), ...(terminalRetention ? { discountCode: terminalRetention.code } : {}), ...recommendationMetadata } as any,
-        },
-      }),
-      prisma.bargainSession.update({
-        where: { id: bargainSession.id },
-        data: {
-          currentOffer: customerOffer ?? bargainSession.currentOffer,
-          status: sessionStatus,
-          finalPrice: result.decision === 'accept' ? (safeCounter ?? customerOffer ?? bargainSession.currentOffer) : null,
-          lastAiSource: aiSource,
-          lastAiModel: aiModel,
-          lastAiFailure: aiFailure,
-        },
-      }),
-    ])
+    let persistedTurn: [unknown, unknown, unknown]
+    try {
+      persistedTurn = await prisma.$transaction([
+        prisma.bargainMessage.create({
+          data: {
+            sessionId: bargainSession.id, role: 'customer', content: data.message,
+            offeredPrice: customerOffer ?? null,
+            metadata: {
+              ...turnMetadata,
+              ...(bulkQuantity ? { bulkQuantity } : {}),
+              ...(couponMentioned ? { couponMentioned: true } : {}),
+              ...(paymentConfig.enabled && paymentIntent !== 'unknown' ? { paymentIntent } : {}),
+            } as any,
+          },
+        }),
+        prisma.bargainMessage.create({
+          data: {
+            sessionId: bargainSession.id, role: 'ai', content: customerReply,
+            // Financial safety: a pure-chat reply (no AI counter) must NOT
+            // persist `offeredPrice` — otherwise `minPrice` would be written as an
+            // accept-able offer and the customer could lock the floor without the
+            // AI ever offering it. Only real counters (decision counter/accept)
+            // carry an offeredPrice.
+            offeredPrice: safeCounter,
+            metadata: { ...turnMetadata, decision: result.decision, tactic: result.tactic, sentiment: result.sentiment, ...(result.metadata ?? {}), ...(terminalRetention ? { discountCode: terminalRetention.code } : {}), ...recommendationMetadata } as any,
+          },
+        }),
+        prisma.bargainSession.update({
+          where: { id: bargainSession.id },
+          data: {
+            currentOffer: customerOffer ?? bargainSession.currentOffer,
+            status: sessionStatus,
+            finalPrice: result.decision === 'accept' ? (safeCounter ?? customerOffer ?? bargainSession.currentOffer) : null,
+            lastAiSource: aiSource,
+            lastAiModel: aiModel,
+            lastAiFailure: aiFailure,
+          },
+        }),
+      ]) as [unknown, unknown, unknown]
+    } catch (error) {
+      await prisma.bargainTurnClaim.delete({
+        where: { sessionId_turnId: { sessionId: bargainSession.id, turnId: turnId! } },
+      }).catch(() => {})
+      throw error
+    }
+    const [customerMsg, aiMsg, updatedSession] = persistedTurn as [any, any, any]
 
     if (learningResolved) {
       await recordLearningEvent({

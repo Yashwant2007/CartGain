@@ -16,6 +16,7 @@ jest.mock('@/lib/db', () => ({
     merchantConfig: { findUnique: jest.fn() },
     bargainProduct: { findUnique: jest.fn() },
     bargainMessage: { create: jest.fn() },
+    bargainTurnClaim: { create: jest.fn(async () => ({})), delete: jest.fn(async () => ({})) },
     $transaction: jest.fn(async (ops: any[]) => Promise.all(ops)),
   },
 }))
@@ -63,6 +64,7 @@ const prismaMock = prisma as unknown as {
   merchantConfig: { findUnique: jest.Mock }
   bargainProduct: { findUnique: jest.Mock }
   bargainMessage: { create: jest.Mock }
+  bargainTurnClaim: { create: jest.Mock; delete: jest.Mock }
   $transaction: jest.Mock
 }
 const trackMock = track as jest.Mock
@@ -244,6 +246,35 @@ describe('offer route turn idempotency', () => {
     expect(created.find((m: any) => m.role === 'customer').metadata.turnId).toBe('turn-3')
     expect(created.find((m: any) => m.role === 'ai').metadata.turnId).toBe('turn-3')
     expect(prismaMock.bargainSession.updateMany).toHaveBeenCalled()
+  })
+
+  it('releases the database turn claim when persistence fails', async () => {
+    prismaMock.bargainSession.findUnique.mockResolvedValue(session())
+    prismaMock.$transaction.mockRejectedValueOnce(new Error('database unavailable'))
+
+    const res = await POST(request('turn-5'))
+
+    expect(res.status).toBe(500)
+    expect(prismaMock.bargainTurnClaim.delete).toHaveBeenCalledWith({
+      where: { sessionId_turnId: { sessionId: 'sess-1', turnId: 'turn-5' } },
+    })
+  })
+
+  it('replays when the database turn claim is already taken', async () => {
+    prismaMock.bargainSession.findUnique
+      .mockResolvedValueOnce(session())
+      .mockResolvedValueOnce(session(completedTurn))
+    prismaMock.bargainTurnClaim.create.mockRejectedValueOnce({ code: 'P2002' })
+
+    const res = await POST(request('turn-1'))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.duplicateTurn).toBe(true)
+    expect(body.reply).toBe('I can do 450')
+    expect(prismaMock.bargainSession.findUnique).toHaveBeenCalledTimes(2)
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+    expect(modelCalls).toBe(0)
   })
 
   it('does not replay when the turnId is new', async () => {

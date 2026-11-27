@@ -141,7 +141,7 @@ function analysisFor(mode: LiveTurnMode, signals?: SocialSignals | null, message
         replyLength: 'brief',
         compact: true,
         noPrice: true,
-        emojiBudget: 1,
+        emojiBudget: 0,
         humorAllowed: playful,
         prompt: 'The shopper sent mostly emoji. Read the mood lightly, do not over-interpret it as agreement or a bid, and ask ONE short clarifying question. Never quote or change a price from emoji alone.',
       }

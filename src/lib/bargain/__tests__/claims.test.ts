@@ -273,4 +273,28 @@ describe('reply claim adherence', () => {
     expect(guarded).toContain('₹850 is my best.')
     expect(guarded).not.toMatch(/Amazon is cheaper/)
   })
+
+  test('rewrites an invented concrete feature even when the shopper made no claim', () => {
+    const reply = 'It is waterproof and I can do ₹950.'
+    const guarded = validateReplyClaimAdherence(reply, assessment(), undefined, product({ body_html: '<p>Breathable mesh upper.</p>' }))
+    expect(guarded).not.toMatch(/waterproof/i)
+    expect(guarded).toMatch(/don't have verified details/i)
+    expect(guarded).toMatch(/features listed for this product/i)
+  })
+
+  test('keeps a concrete feature that is present in verified product facts', () => {
+    const reply = 'It is waterproof and I can do ₹950.'
+    expect(validateReplyClaimAdherence(reply, assessment(), undefined, product())).toBe(reply)
+  })
+
+  test('rewrites a feature the merchant disallowed even if the catalog text contains it', () => {
+    const p = normalizeProduct(source, {
+      currency: 'INR',
+      overrides: { approvedSellingPoints: ['waterproof'], disallowedClaims: ['waterproof'] },
+    })
+    const reply = 'It is waterproof, so ₹950 is fair.'
+    const guarded = validateReplyClaimAdherence(reply, assessment(), undefined, p)
+    expect(guarded).not.toMatch(/waterproof/i)
+    expect(guarded).toMatch(/don't have verified details/i)
+  })
 })

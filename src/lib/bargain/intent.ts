@@ -100,6 +100,10 @@ export interface IntentAnalysis {
   asksBestPrice: boolean
   /** Rough product topic the shopper is after (e.g. "for oily skin"), if detectable. */
   need: string | null
+  /** True when the shopper explicitly asks for a human/live agent. */
+  needHumanSupport: boolean
+  /** True when the shopper explicitly asks to stop automated messages/offers. */
+  optOutRequested: boolean
   /** Published nine-category objection taxonomy (Phase 1 intent→action routing). */
   category: ObjectionCategory
   shopperCategory: ShopperIntentCategoryCode
@@ -130,6 +134,8 @@ const RE = {
   recommendationRequest: /\b(recommend|suggest(ion)?s?|anything\s+(else|similar|better)|something\s+(else|similar|cheaper)|show\s+(me\s+)?(more|other|alternat)|what\s+(else|other|alternat|more)\s|other\s+(options?|products?|alternatives?)|alternatives?|second\s+options?|any\s+other|koi\s+aur|kuch\s+aur|aur\s+(bhi|koi|kuch)|chahiye)\b/i,
   discovery: /\b(looking\s+for|searching\s+for|need\s+something|want\s+something|find\s+(me\s+)?a\s|help\s+me\s+find|explore\s+|browse\b|see\s+what\s+(you\s+|else\s+)?(have|exist)|do\s+you\s+have\s+(?:a\s+)?(?:any\s+)?(?!this\b|it\b|the\b|one\b|these\b|those\b)|what\s+do\s+you\s+(have|sell)|show(?: me)?\s+your|show(?: me)?\s+(me\s+)?(more\s+|other\s+)?products?|kya\s+(hai|options?|recommend|suggest)|dikha(?:o|ye)|options?\s+dikhao|products?\s+dikhao|mujhe\s+[a-z][a-z\s-]{1,28}\s+(bhi\s+)?chahiye|tumhare\s+pas|[a-z][a-z\s-]{1,28}\s+(bhi\s+)?chahiye)\b/i,
   stopRecommendations: /\b(no\s+more|nothing\s+else|don'?t\s+show|stop\s+showing|not\s+interested\s+in\s+(more|other|alternatives)|aur\s+nahi|aur\s+mat|mat\s+dikhao|mat\s+bhejo)\b/i,
+  humanSupportRequest: /\b(?:talk|speak|chat)\s+(?:to|with)\s+(?:a\s+)?(?:human|person|agent|support|representative|someone)\b|\b(?:human|live)\s+(?:agent|support|person)\b|\b(?:connect|transfer)\s+me\s+to\s+(?:a\s+)?(?:human|agent|support|person|someone)\b|\b(?:insaan|vyakti|support)\s+(?:se|ke\s+sath)\s+(?:baat|bole|chahiye)\b/i,
+  optOutRequest: /^\s*stop\s*$|\b(?:stop|do\s+not|don'?t)\s+(?:messag(?:e|ing)|contact|call|text|email|send|bother)(?:s|ed)?\s+(?:me|us)?\b|\bunsubscribe\b|\bopt\s*-?\s*out\b|\bno\s+more\s+(?:messages|offers|contact)\b|\band\s+nahi\s+(?:bhej|message|call)\b/i,
 }
 
 const STOPWORDS_NEED = new Set(['this', 'that', 'it', 'the', 'a', 'an', 'me', 'you', 'your', 'my', 'for', 'of', 'in', 'within', 'with', 'like', 'some', 'something', 'looking', 'want', 'wanted', 'need', 'needed', 'instead', 'near', 'under', 'price', 'budget', 'amount', 'money', 'option', 'options', 'alternative', 'alternatives', 'product', 'products', 'cheaper', 'sasta', 'discount', 'better', 'ese', 'aise', 'ye', 'wo', 'vo', 'h', 'kya', 'pas', 'tumhare', 'bhi', 'aur', 'do', 'you', 'have', 'store', 'shop', 'hai', 'chahiye'])
@@ -221,6 +227,8 @@ export function analyzeIntent(input: string): IntentAnalysis {
   const payment = hits('payment', 'payment_signal')
   const recRequest = hits('recommendationRequest', 'recommendation_request')
   const discovery = hits('discovery', 'discovery_signal')
+  const needHumanSupport = hits('humanSupportRequest', 'human_support_request')
+  const optOutRequested = hits('optOutRequest', 'opt_out_request')
 
   const budget = extractBudget(message)
   const need = extractNeed(message)
@@ -273,6 +281,8 @@ export function analyzeIntent(input: string): IntentAnalysis {
     nonOfferNumberContext,
     asksBestPrice,
     need,
+    needHumanSupport,
+    optOutRequested,
     category: objectionCategory(objection),
   }
   const shopperCategory = classifyShopperIntentCategory(analysis, message)

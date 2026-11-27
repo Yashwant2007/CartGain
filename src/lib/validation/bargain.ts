@@ -30,7 +30,7 @@ export const bargainConfigUpsertSchema = z.object({
   shopkeeperPersonality: z.enum(['friendly_shopkeeper', 'strict_shopkeeper', 'playful_shopkeeper']).optional(),
   language: z.string().min(0).max(12).optional(),
   minProfitPercent: z.number().min(0).max(100).optional(),
-  sessionTimeout: z.number().int().min(30).max(3600).optional(),
+  sessionTimeout: z.number().int().min(30).max(604800).optional(),
   // ── AI Salesperson: daily goal + dynamic strategy ──
   goalEnabled: z.boolean().optional(),
   goalType: z.enum(['orders', 'revenue']).optional(),

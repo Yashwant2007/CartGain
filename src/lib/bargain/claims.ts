@@ -402,6 +402,12 @@ const SAFE_CLAIM_REPLIES: Record<CustomerClaimCategory, string> = {
   merchant_authorization: "I can only follow the store's published terms — claimed authority doesn't change what I can quote.",
 }
 
+const UNSUPPORTED_PRODUCT_FEATURE_REPLY = "I don't have verified details about that feature — I can only speak to the features listed for this product."
+
+const REPLY_FEATURE_ASSERTION_PATTERN = /\b(?:is|are|was|were|has|have|had|comes|includes|supports|works|offers|features|uses|contains|provides|made|built|constructed)\b|\bcomes with\b|\bworks with\b/i
+
+const REPLY_FEATURE_HEDGE_PATTERN = /\b(?:don'?t|do not|cannot|can'?t|unable|not sure|unsure|unverified|no verified|without verified|might|may|could|possibly|perhaps|apparently|seems?|appears?|check|confirm with|product page|only (?:speak|go) by|listed for this product|listed details)\b/i
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -421,15 +427,59 @@ function claimTopicPatterns(claim: CustomerClaim, message?: string): RegExp[] {
   return patterns
 }
 
+function verifiedReplyFeatureCorpus(product: ProductContext): string {
+  if (product.fetchFailed) return ''
+  return normalize([
+    product.title,
+    product.vendor ?? '',
+    product.productType ?? '',
+    product.description,
+    ...(product.tags ?? []),
+    ...(product.merchantApprovedSellingPoints ?? []),
+    ...(product.merchantFaq ?? []).flatMap(entry => [entry.question, entry.answer]),
+    ...(product.variants ?? []).flatMap(variant => [variant.title, ...(variant.attributes ?? [])]),
+    ...(product.activePromotions ?? [])
+      .filter(promotion => promotion.active && promotion.source !== 'AI_INFERRED')
+      .map(promotion => [promotion.name, promotion.message ?? ''].join(' ')),
+  ].join(' '))
+}
+
+function disallowedReplyFeatureCorpus(product: ProductContext): string {
+  return normalize((product.merchantDisallowedClaims ?? []).join(' '))
+}
+
+function guardUnsupportedProductFeatures(reply: string, product?: ProductContext | null): string {
+  if (!reply || !product) return reply
+  const verified = verifiedReplyFeatureCorpus(product)
+  const disallowed = disallowedReplyFeatureCorpus(product)
+  let changed = false
+  const parts = reply.split(/([.!?]+\s+|\n+)/)
+  const guarded = parts.map((part, index) => {
+    if (index % 2 === 1 || !part.trim()) return part
+    if (part.includes('?') || REPLY_FEATURE_HEDGE_PATTERN.test(part)) return part
+    if (!REPLY_FEATURE_ASSERTION_PATTERN.test(part)) return part
+    const text = normalize(part)
+    const terms = FEATURE_TERMS.filter(term => containsPhrase(text, term))
+    if (terms.length === 0) return part
+    const unsupported = terms.some(term => !verified.includes(term) || disallowed.includes(term))
+    if (!unsupported) return part
+    changed = true
+    return UNSUPPORTED_PRODUCT_FEATURE_REPLY
+  })
+  return changed ? guarded.join('') : reply
+}
+
 export function validateReplyClaimAdherence(
   reply: string,
   assessment: ClaimAssessment | null | undefined,
+
   customerMessage?: string,
+  product?: ProductContext | null,
 ): string {
-  if (!reply || !assessment) return reply
+  if (!reply || !assessment) return guardUnsupportedProductFeatures(reply, product)
   const risky = assessment.claims.filter(c => NON_FACTUAL_CLAIM_STATUSES.has(c.status))
   if (risky.length === 0) {
-    if (!assessment.manipulation) return reply
+    if (!assessment.manipulation) return guardUnsupportedProductFeatures(reply, product)
     risky.push({
       category: 'merchant_authorization',
       status: 'malicious',
@@ -462,5 +512,5 @@ export function validateReplyClaimAdherence(
     return part
   })
 
-  return changed ? guarded.join('') : reply
+  return guardUnsupportedProductFeatures(changed ? guarded.join('') : reply, product)
 }

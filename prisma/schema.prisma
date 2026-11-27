@@ -600,7 +600,7 @@ model BargainConfig {
   aiPersona                         String    @default("friendly_shopkeeper") // friendly_shopkeeper, strict_negotiator, playful_friend
   language                          String    @default("auto") // auto, en, hinglish, hi, ta, te, bn, mr, gu, kn, ml, pa, or
   minProfitPercent                  Float     @default(20) // global fallback floor (% margin to protect)
-  sessionTimeout                    Int       @default(300) // seconds
+  sessionTimeout                    Int       @default(86400) // seconds (24h; persistent negotiation memory)
   // ── AI Salesperson: daily goal + dynamic strategy ──
   goalEnabled                       Boolean   @default(false)
   goalType                          String    @default("orders") // orders | revenue
@@ -794,6 +794,7 @@ model BargainSession {
 
   store            Store                    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   messages         BargainMessage[]
+  turnClaims       BargainTurnClaim[]
   learningEvents   BargainLearningEvent[]
   learningOutcome  BargainLearningOutcome?
   experienceEvents BargainExperienceEvent[]
@@ -935,6 +936,18 @@ model BargainMessage {
 
   @@index([sessionId])
   @@index([createdAt])
+}
+
+model BargainTurnClaim {
+  id        String   @id @default(cuid())
+  sessionId String
+  turnId    String
+  createdAt DateTime @default(now())
+
+  session BargainSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, turnId])
+  @@index([sessionId])
 }
 
 /// One accepted-deal reminder (Phase 5). Idempotent per (session, stage,

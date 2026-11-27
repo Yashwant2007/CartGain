@@ -10,9 +10,9 @@ const mockPrisma: any = {
     deleteMany: jest.fn(),
     findMany: jest.fn(),
   },
-  bargainLearningArmStat: { findMany: jest.fn() },
-  bargainLearningEvent: { count: jest.fn() },
-  bargainLearningOutcome: { count: jest.fn() },
+  bargainLearningArmStat: { findMany: jest.fn(), upsert: jest.fn(), deleteMany: jest.fn() },
+  bargainLearningEvent: { count: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
+  bargainLearningOutcome: { count: jest.fn(), deleteMany: jest.fn() },
   bargainLearningAudit: { create: jest.fn() },
 }
 
@@ -20,6 +20,7 @@ jest.mock('@/lib/db', () => ({ __esModule: true, default: mockPrisma }))
 jest.mock('@/lib/auth', () => ({ authOptions: {} }))
 jest.mock('next-auth/next', () => ({ getServerSession: jest.fn() }))
 
+import { learningConfigDefaults } from '@/lib/bargain/learning/strategies'
 import { DELETE, GET, POST } from '../route'
 
 const configRow = {
@@ -171,11 +172,51 @@ describe('/api/merchant/bargain-learning', () => {
     expect(res.status).toBe(400)
   })
 
+  test('rolls active learning back to baseline with an audit row and no training writes', async () => {
+    mockPrisma.bargainLearningConfig.findUnique.mockResolvedValue({
+      ...configRow,
+      shadowMode: false,
+    })
+
+    const res = await POST(request('POST', { enabled: false }))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.enabled).toBe(false)
+    expect(body.shadowMode).toBe(false)
+    expect(mockPrisma.bargainLearningConfig.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { storeId: 'store-1' },
+        update: expect.objectContaining({ enabled: false, shadowMode: false }),
+      }),
+    )
+    expect(mockPrisma.bargainLearningAudit.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          storeId: 'store-1',
+          action: 'disable',
+          resourceType: 'bargain_learning_config',
+          before: expect.objectContaining({ enabled: true }),
+          after: expect.objectContaining({ enabled: false }),
+        }),
+      }),
+    )
+    expect(mockPrisma.bargainLearningEvent.create).not.toHaveBeenCalled()
+    expect(mockPrisma.bargainLearningArmStat.upsert).not.toHaveBeenCalled()
+  })
+
   test('reset removes only the store config', async () => {
     const res = await DELETE(request('DELETE'))
+    const body = await res.json()
     expect(res.status).toBe(200)
+    expect(body).toEqual({ configured: false, ...learningConfigDefaults() })
     expect(mockPrisma.bargainLearningConfig.deleteMany).toHaveBeenCalledWith({
       where: { storeId: 'store-1' },
     })
+    expect(mockPrisma.bargainLearningEvent.deleteMany).not.toHaveBeenCalled()
+    expect(mockPrisma.bargainLearningOutcome.deleteMany).not.toHaveBeenCalled()
+    expect(mockPrisma.bargainLearningArmStat.deleteMany).not.toHaveBeenCalled()
+    expect(mockPrisma.bargainLearningEvent.count).not.toHaveBeenCalled()
+    expect(mockPrisma.bargainLearningOutcome.count).not.toHaveBeenCalled()
   })
 })
