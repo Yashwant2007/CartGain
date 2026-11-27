@@ -1469,8 +1469,8 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
   if (isDiscovery) {
     const discovery: Record<Persona, string> = {
       strict_negotiator: `I'll check the store's real catalogue for that and only show verified matches.`,
-      playful_friend: `Let me peek at the real catalogue for that 🙂 If there's a verified match, I'll drop it here. Type or budget — what are you after?`,
-      friendly_shopkeeper: `Let me check our real catalogue for you 🙂 If I find a verified match, I'll share it right here. What type or budget should I look for?`,
+      playful_friend: `Let me peek at the real catalogue for that 🙂 If there's a verified match, I'll drop it here. What kind of product are you after?`,
+      friendly_shopkeeper: `Let me check our real catalogue for you 🙂 If I find a verified match, I'll share it right here. What kind of product should I look for?`,
     }
     return discovery[ctx.persona]
   }
@@ -1575,9 +1575,9 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
 
   if (isGreeting) {
     const greeting: Record<Persona, string> = {
-      strict_negotiator: `Hello. This is ${item}, listed at ${price}. Ask me anything about it, or tell me the price you have in mind.`,
-      playful_friend: `Hey hey! 😄 ${item} is listed at ${price}. What's your move — want the quick scoop, or want to throw me your price?`,
-      friendly_shopkeeper: `Hey! Welcome! 🙂 Good to see you again. ${item} is listed at ${price}. Want details, or should we talk price?`,
+      strict_negotiator: `Welcome. This is ${item}, listed at ${price}. Ask me anything about it, or present your offer.`,
+      playful_friend: `Hello there! 👋 ${item} is listed at ${price}. What's your move — want the opening bid, or want the quick scoop?`,
+      friendly_shopkeeper: `Hey friend, welcome! 🙂 Good to see you again. ${item} is listed at ${price}. Want details, or should we talk price?`,
     }
     return greeting[ctx.persona]
   }
