@@ -332,32 +332,53 @@ function CartGainBargainWidget() {
     try {
       const shopDomain = api.shop?.myshopifyDomain || '';
       if (!shopDomain) throw new Error('Shop domain not available');
+      if (isThankYou) throw new Error('Bargaining is available before checkout only.');
 
       const variantId = line?.merchandise?.id?.includes('ProductVariant/')
         ? line.merchandise.id
         : null;
+      const productId = line?.merchandise?.id || null;
+      const checkoutToken = await api.checkoutToken.current;
+      if (!checkoutToken) throw new Error('Checkout token not available');
 
       // Buyer identity (available when the app has protected customer data
-      // access). Sent so the server can bind the discount code to this customer
-      // — a shared screenshot then can't be redeemed by anyone else. Fields are
-      // absent for guest checkouts, in which case the code stays unbound.
+      // access). Sent so the quote and code can be bound to this checkout.
       const shopifyCustomerId = api.buyerIdentity?.customer?.current?.id || null;
       const customerEmail = api.buyerIdentity?.email?.current || null;
+      const buyerPayload = {
+        shopDomain,
+        platform: 'shopify',
+        shopifyProductId: productId,
+        productId,
+        variantId,
+        cartToken: checkoutToken,
+        shopifyCustomerId,
+        customerEmail,
+      };
+
+      // First ask CartGain to re-price and sign the deal. The extension's local
+      // number is only a request — the server re-checks the live price and floor
+      // and returns the only price it is willing to honour.
+      const quoteResponse = await fetch(`https://cart-gain.com/api/bargain/checkout-quote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...buyerPayload, requestedPrice: finalPrice }),
+      });
+      const quoteData = await quoteResponse.json();
+      if (!quoteResponse.ok) throw new Error(quoteData.message || 'Could not confirm your negotiated price');
+      if (typeof quoteData.quoteToken !== 'string' || !quoteData.quoteToken) {
+        throw new Error('The negotiated price could not be secured');
+      }
 
       const response = await fetch(`https://cart-gain.com/api/bargain/checkout-accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          shopDomain,
-          shopifyProductId: isThankYou ? null : line?.merchandise?.id,
-          variantId: isThankYou ? null : variantId,
-          originalPrice,
-          finalPrice,
-          discountPercent: Math.round((1 - finalPrice / originalPrice) * 100),
-          ...(discountCode ? { code: discountCode } : {}),
-          orderLevel: isThankYou,
-          shopifyCustomerId,
-          customerEmail,
+          ...buyerPayload,
+          originalPrice: quoteData.originalPrice,
+          finalPrice: quoteData.finalPrice,
+          code: quoteData.discountCode,
+          quoteToken: quoteData.quoteToken,
         }),
       });
 
@@ -368,13 +389,6 @@ function CartGainBargainWidget() {
         throw new Error('Shopify did not confirm a discount code');
       }
       setDiscountCode(issuedCode);
-
-      if (isThankYou) {
-        // Order already placed — nothing to apply now; the code is for the next
-        // checkout.
-        setCodeSaved(true);
-        return;
-      }
 
       const result = await api.applyDiscountCodeChange({
         type: 'addDiscountCode',

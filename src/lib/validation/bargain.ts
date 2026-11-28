@@ -127,6 +127,8 @@ export const bargainStartSchema = z.object({
   customerName: z.string().max(200).optional().or(z.literal('')),
   customerFingerprint: z.string().min(8, 'customerFingerprint is required').max(128).optional(),
   sessionToken: z.string().max(500).optional(),
+  platform: z.enum(['shopify', 'woocommerce']).optional(),
+  cartContext: z.unknown().optional(),
 })
 
 export type BargainStartInput = z.infer<typeof bargainStartSchema>
@@ -139,6 +141,8 @@ export const bargainOfferSchema = z.object({
   customerEmail: z.string().email().optional().or(z.literal('')),
   cartToken: z.string().max(200).optional(),
   sessionToken: z.string().max(500).optional(),
+  platform: z.enum(['shopify', 'woocommerce']).optional(),
+  cartContext: z.unknown().optional(),
 })
 
 export type BargainOfferInput = z.infer<typeof bargainOfferSchema>
@@ -149,6 +153,8 @@ export const bargainAcceptSchema = z.object({
   customerEmail: z.string().email().optional().or(z.literal('')),
   cartToken: z.string().max(200).optional(),
   sessionToken: z.string().max(500).optional(),
+  quoteToken: z.string().max(500).optional(),
+  platform: z.enum(['shopify', 'woocommerce']).optional(),
 })
 
 export type BargainAcceptInput = z.infer<typeof bargainAcceptSchema>

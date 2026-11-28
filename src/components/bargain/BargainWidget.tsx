@@ -340,6 +340,7 @@ export default function BargainWidget({
   const [sessionEnded, setSessionEnded] = useState(false)
   const [finalPrice, setFinalPrice] = useState<number | null>(null)
   const [discountCode, setDiscountCode] = useState<string | null>(null)
+  const [quoteToken, setQuoteToken] = useState<string | null>(null)
   const [purchaseUrl, setPurchaseUrl] = useState<string | null>(null)
   const [checkoutLocked, setCheckoutLocked] = useState(false)
   const [lastBought, setLastBought] = useState<LastBoughtView | null>(null)
@@ -393,6 +394,7 @@ export default function BargainWidget({
   // the START call instead of the default variant.
   const [productPending, setProductPending] = useState(isDrawer)
   const [identityName, setIdentityName] = useState<string | null>(customerName ?? null)
+  const [cartContext, setCartContext] = useState<unknown>(null)
 
   const livePrice = productCtx.price
 
@@ -428,6 +430,19 @@ export default function BargainWidget({
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
   }, [isEmbed, parentOrigin, customerEmail])
+
+  useEffect(() => {
+    if (!isEmbed || typeof window === 'undefined') return
+    const onMessage = (e: MessageEvent) => {
+      if (parentOrigin && e.origin !== parentOrigin) return
+      if (e.source && e.source !== window.parent) return
+      const d = (e.data ?? null) as CgParentMessage | null
+      if (d?.type !== 'cg_cart_context') return
+      setCartContext(d.cartContext ?? null)
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [isEmbed, parentOrigin])
 
   useEffect(() => {
     if (!isDrawer || !productPending) return
@@ -775,6 +790,7 @@ export default function BargainWidget({
           customerName: identityName ?? customerName,
           customerFingerprint: bargainFingerprint(cartToken ?? ''),
           language,
+          cartContext,
         }),
       })
       const data = (await res.json()) as BargainStartSuccess & {
@@ -806,6 +822,7 @@ export default function BargainWidget({
       setSessionEnded(false)
       setFinalPrice(null)
       setDiscountCode(null)
+      setQuoteToken(null)
       setPurchaseUrl(null)
       setEndedReason(null)
       setFloorReached(false)
@@ -945,6 +962,7 @@ export default function BargainWidget({
     const msg = (text ?? input).trim()
     if (!msg) { setError(t('typeAMessage')); return }
     const seq = ++requestSeqRef.current
+    setQuoteToken(null)
     const turnId = retryTurnId ?? createConversationId('turn')
     const localId = retryTurnId ?? createConversationId('c')
     busyRef.current = true
@@ -984,7 +1002,7 @@ export default function BargainWidget({
       const res = await fetch(`${apiBase}/api/bargain/offer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, platform, message: msg, turnId, ...buyerIdentity() }),
+        body: JSON.stringify({ sessionId, platform, message: msg, turnId, cartContext, ...buyerIdentity() }),
         signal: controller.signal,
       })
       const data = (await res.json()) as BargainOfferSuccess & {
@@ -1092,6 +1110,7 @@ export default function BargainWidget({
         conversationState: data.conversationState ?? null,
       })
       if (data.discountCode) setDiscountCode(data.discountCode)
+      if (data.quoteToken) setQuoteToken(data.quoteToken)
       if (data.purchaseUrl) setPurchaseUrl(data.purchaseUrl)
       if (data.floorReached === true) setFloorReached(true)
       setShippingInfo(data.shipping ?? null)
@@ -1225,7 +1244,7 @@ export default function BargainWidget({
       const res = await fetch(`${apiBase}/api/bargain/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, platform, ...buyerIdentity() }),
+        body: JSON.stringify({ sessionId, platform, ...buyerIdentity(), quoteToken }),
       })
       const data = (await res.json()) as BargainAcceptSuccess & {
         message?: string
@@ -1269,6 +1288,7 @@ export default function BargainWidget({
       fireAvatar('deal_accepted', { decision: 'accept', ended: 'accepted' })
       setFinalPrice(data.finalPrice)
       setDiscountCode(data.discountCode)
+      setQuoteToken(data.quoteToken ?? null)
       setPurchaseUrl(data.purchaseUrl ?? null)
       setShopifyStatus(data.shopifyStatus)
       setShippingInfo(data.shipping ?? null)
@@ -1309,6 +1329,7 @@ export default function BargainWidget({
     setDecision('idle')
     setFinalPrice(null)
     setDiscountCode(null)
+    setQuoteToken(null)
     setPurchaseUrl(null)
     setEndedReason(null)
     setLimit(null)

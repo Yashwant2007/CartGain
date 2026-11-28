@@ -14,6 +14,8 @@ import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { getBargainGate, recordBargainSessionOp, BARGAIN_SESSIONS_EXHAUSTED } from '@/lib/bargain/gate'
 import { generateClaimToken } from '@/lib/bargain/purchase'
 import { sessionIdFromToken, signSessionToken } from '@/lib/bargain/session-bind'
+import { cartContextPromptBlock, publicCartContext } from '@/lib/bargain/cart-context'
+import { resolveVerifiedCartContext } from '@/lib/bargain/cart-context-server'
 import { restoredApplicationTerminationFromMessages } from '@/lib/bargain/application-termination'
 import {
   bargainSessionIdentityClauses,
@@ -419,6 +421,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const verifiedCartContext = await resolveVerifiedCartContext(data.cartContext, {
+      store,
+      platform,
+      config,
+      expectedCartToken: data.cartToken ?? null,
+    })
+    const cartContextPrompt = verifiedCartContext ? cartContextPromptBlock(verifiedCartContext) : null
+
     const currencySymbol = currencySymbolFor(store.currency)
     const language = data.language && SUPPORTED_LANGUAGES.includes(data.language as any)
       ? data.language
@@ -434,7 +444,9 @@ export async function POST(request: NextRequest) {
     const rememberedContext = lastBoughtPurchase
       ? `Verified last purchase: ${purchaseDisplayName(lastBoughtPurchase)}${lastBought?.priceLabel ? ` for ${lastBought.priceLabel}` : ''}.`
       : null
-    const customerContextWithMemory = [customerContext, rememberedContext].filter(Boolean).join('. ')
+    const customerContextWithMemory = [customerContext, rememberedContext, cartContextPrompt]
+      .filter(Boolean)
+      .join('. ')
 
     const ctx: NegotiationContext = {
       storeName: store.name,
@@ -467,7 +479,10 @@ export async function POST(request: NextRequest) {
     // negotiation turn. Asking a model here made the widget wait on provider
     // quota/retries before it could paint, with no benefit to the shopper.
     const openingReply = buildOpeningMessage(ctx)
-    const openingMeta: any = { source: 'deterministic' }
+    const openingMeta: any = {
+      source: 'deterministic',
+      ...(verifiedCartContext ? { cartContext: publicCartContext(verifiedCartContext) } : {}),
+    }
 
     const [bargainSession] = await prisma.$transaction([
       prisma.bargainSession.create({

@@ -27,6 +27,7 @@ export type CgParentMessage =
   | { type: 'cg_close'; height?: never }
   | { type: 'cg_drawer_opened'; height?: never }
   | { type: 'cg_customer_identity'; name?: string | null; height?: never }
+  | { type: 'cg_cart_context'; cartContext?: unknown; height?: never }
   | {
       type: 'cg_product_update'
       variantId?: string | null
@@ -104,7 +105,10 @@ export type BargainStartBody = {
   customerEmail?: string | null
   customerPhone?: string | null
   customerFingerprint?: string | null
+  customerName?: string | null
   language?: string | null
+  platform?: 'shopify' | 'woocommerce'
+  cartContext?: unknown
 }
 
 // ── Daily sales goal (customer-safe projection) ─────────────────────────────
@@ -175,12 +179,24 @@ export type BargainOfferBody = {
   cartToken?: string | null
   customerEmail?: string | null
   sessionToken?: string | null
+  platform?: 'shopify' | 'woocommerce'
 }
 
 export type BargainOfferSuccess = {
   reply: string
   decision: BargainDecision
   counterOffer?: number | null
+  quoteToken?: string | null
+  cartOffer?: {
+    mode: string
+    subtotal: number
+    discountAmount: number
+    finalTotal: number
+    percentOff: number
+    quantity: number
+    payableTotal: number
+    contextVersion: string
+  }
   sessionStatus?: string
   sessionId?: string
   finalPrice?: number | null
@@ -261,6 +277,7 @@ export type BargainAcceptBody = {
   cartToken?: string | null
   customerEmail?: string | null
   sessionToken?: string | null
+  quoteToken?: string | null
 }
 
 export type BargainAcceptSuccess = {
@@ -270,6 +287,8 @@ export type BargainAcceptSuccess = {
   finalPrice: number
   discountPercent: number
   discountCode: string
+  /** Signed server-issued quote for the accepted deal; never expose floors. */
+  quoteToken?: string | null
   shopifyStatus: 'created' | 'pending' | 'failed'
   /** Link that applies the code and drops the shopper straight into checkout. */
   purchaseUrl?: string | null

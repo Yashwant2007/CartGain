@@ -12,6 +12,9 @@ import { adaptiveContextForTurn } from '@/lib/bargain/learning/behavior-context'
 import { rapidReplyForTurn } from '@/lib/bargain/rapid-reply'
 import { buildSessionMemory, countSessionMemorySignals, readSessionMemoryFromMessages } from '@/lib/bargain/session-memory'
 import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
+import { cartContextPromptBlock, publicCartContext } from '@/lib/bargain/cart-context'
+import { computeCartOffer, formatCartOfferSummary, type CartOffer } from '@/lib/bargain/cart-offer'
+import { resolveVerifiedCartContext } from '@/lib/bargain/cart-context-server'
 import { uiText, currencySymbolFor, formatMoney } from '@/lib/bargain/i18n'
 import { detectLanguage, detectLanguageRequest } from '@/lib/bargain/language'
 import { logDataAccess } from '@/lib/data-protection'
@@ -56,6 +59,7 @@ import {
 import { fetchShopifyProducts } from '@/lib/shopify'
 import { toNumericId } from '@/lib/shopify-line-items'
 import { issueRetentionDiscount, buildBargainClaimUrl, generateBargainCode, type IssuedBargainCode } from '@/lib/bargain/purchase'
+import { createQuote } from '@/lib/bargain/quote'
 import { track } from '@/lib/analytics/track'
 import { resolveSessionLearning, recordLearningEvent, loadLearningConfig } from '@/lib/bargain/learning/service'
 import { isFeatureEnabled } from '@/lib/feature-flags'
@@ -378,10 +382,13 @@ function duplicateTurnPayload(session: any, ai: any | null): BargainOfferSuccess
     ...(status !== 'active' ? { terminal: true } : {}),
     ...(meta.tactic === 'final_offer' || meta.reason === 'budget_spent_but_acceptable' ? { floorReached: true } : {}),
     ...(state ? { conversationState: state } : {}),
+    ...(terminationKind ? { terminationKind } : {}),
+    ...(meta.escalation === 'human_support_required' ? { escalation: meta.escalation } : {}),
     engineResponse,
     ...(publicIntelligence ? { negotiationIntelligence: publicIntelligence } : {}),
     ...(offerInterpretation ? { offerInterpretation } : {}),
     discountCode: session.discountCode ?? null,
+    quoteToken: typeof meta.quoteToken === 'string' ? meta.quoteToken : null,
     purchaseUrl: session.purchaseUrl ?? null,
     claimUrl: session.claimToken ? buildBargainClaimUrl(session.claimToken) : null,
   }
@@ -528,6 +535,17 @@ export async function POST(request: NextRequest) {
     }
     if ((config as any).emergencyPaused === true) {
       return NextResponse.json({ message: 'Bargaining is temporarily paused by the merchant.', paused: true }, { status: 503 })
+    }
+
+    const verifiedCartContext = await resolveVerifiedCartContext(data.cartContext, {
+      store: bargainSession.store,
+      platform,
+      config,
+      expectedCartToken: bargainSession.cartToken ?? null,
+    })
+    const cartContextPrompt = verifiedCartContext ? cartContextPromptBlock(verifiedCartContext) : null
+    if (verifiedCartContext) {
+      turnMetadata = { ...turnMetadata, cartContext: publicCartContext(verifiedCartContext) }
     }
 
     // §24 Coupon-stacking detection — deterministic classifier on the customer's
@@ -801,7 +819,129 @@ export async function POST(request: NextRequest) {
     // attempt claim (an informational redirect does not burn a negotiation
     // attempt) and keep the session open on THIS product. Falls back to cards
     // for budget-fit alternatives when reco is enabled.
-    if (bundleRequested) {
+    const cartDealRequested = verifiedCartContext != null
+      && verifiedCartContext.mode !== 'product_only'
+      && (customerOffer != null || intentAnalysis.priceComplaint === true
+        || /\b(?:percent|%|off|discount|deal|total|cart|whole)\b/i.test(interpretedMessage))
+
+    if (bundleRequested || cartDealRequested) {
+      let cartOffer: CartOffer | null = null
+      if (verifiedCartContext && verifiedCartContext.mode !== 'product_only') {
+        try {
+          const floorResults = await Promise.all(verifiedCartContext.lines.map((line) => computeMinPrice({
+            storeId: bargainSession.storeId,
+            shopifyProductId: line.productId || line.variantId || '',
+            platform,
+            platformProductId: line.productId || line.variantId || undefined,
+            originalPrice: line.unitPrice,
+          })))
+          const floorTotal = verifiedCartContext.lines.reduce((sum, line, index) => {
+            const floor = Math.min(line.unitPrice, floorResults[index]?.minPrice ?? line.unitPrice)
+            return sum + Math.round(floor * line.quantity * 100) / 100
+          }, 0)
+          const result = computeCartOffer({
+            mode: verifiedCartContext.mode,
+            context: verifiedCartContext,
+            requestedPercent: config.bundleDiscountPercent ?? 10,
+            floorTotal,
+          })
+          if (result.ok) cartOffer = result.offer
+        } catch {
+          cartOffer = null
+        }
+      }
+
+      if (cartOffer && verifiedCartContext) {
+        let cartOfferQuoteToken: string | null = null
+        try {
+          const anchor = verifiedCartContext.lines.find((line) => line.productId || line.variantId)
+          const quote = await createQuote({
+            force: true,
+            storeId: bargainSession.storeId,
+            sessionId: bargainSession.id,
+            cartToken: data.cartToken ?? bargainSession.cartToken ?? null,
+            shopifyProductId: String(anchor?.productId || anchor?.variantId || bargainSession.shopifyProductId || ''),
+            variantId: anchor?.variantId ?? null,
+            quantity: cartOffer.quantity,
+            originalPrice: cartOffer.subtotal,
+            finalPrice: cartOffer.finalTotal,
+            discountPercent: cartOffer.percentOff,
+            floorPrice: cartOffer.floorTotal,
+            currency: bargainSession.store.currency,
+            customerEmail: data.customerEmail || bargainSession.customerEmail || null,
+            customerFingerprint: data.customerFingerprint ?? bargainSession.customerFingerprint ?? null,
+            conditions: {
+              kind: 'cart_offer',
+              versionHash: verifiedCartContext.versionHash,
+              cartContext: verifiedCartContext,
+              mode: verifiedCartContext.mode,
+              percentOff: cartOffer.percentOff,
+              subtotal: cartOffer.subtotal,
+              finalTotal: cartOffer.finalTotal,
+              discountAmount: cartOffer.discountAmount,
+              quantity: cartOffer.quantity,
+            },
+          })
+          if (quote) cartOfferQuoteToken = quote.token
+        } catch (quoteError) {
+          console.error('[BARGAIN_CART_QUOTE]', (quoteError as Error)?.message ?? quoteError)
+        }
+
+        const reply = formatCartOfferSummary(cartOffer)
+        const engineResponse = earlyEngineResponse(intelligence, 'counter', reply, cartOffer.finalTotal, {
+          tactic: 'cart_offer',
+          policy: 'cart_negotiation',
+          cartMode: verifiedCartContext.mode,
+          source: 'cart_offer',
+        })
+        await prisma.$transaction([
+          prisma.bargainMessage.create({
+            data: {
+              sessionId: bargainSession.id, role: 'customer', content: data.message,
+              offeredPrice: customerOffer ?? null,
+              metadata: { ...turnMetadata, cartRequested: true, cartMode: verifiedCartContext.mode } as any,
+            },
+          }),
+          prisma.bargainMessage.create({
+            data: {
+              sessionId: bargainSession.id, role: 'ai', content: reply,
+              offeredPrice: cartOffer.finalTotal,
+              metadata: { ...turnMetadata, decision: 'counter', tactic: 'cart_offer', policy: 'cart_negotiation', cartRequested: true, cartMode: verifiedCartContext.mode, engineResponse, quoteToken: cartOfferQuoteToken } as any,
+            },
+          }),
+        ])
+        await track({
+          name: 'cartgain_cart_offer',
+          storeId: bargainSession.storeId,
+          properties: {
+            mode: verifiedCartContext.mode,
+            lineCount: verifiedCartContext.lines.length,
+            discountAmount: cartOffer.discountAmount,
+            percentOff: cartOffer.percentOff,
+          },
+        })
+        return NextResponse.json({
+          reply,
+          decision: 'counter',
+          sessionStatus: 'active',
+          sessionId: bargainSession.id,
+          ...intelligenceResponseFields(intelligence, offerView),
+          engineResponse,
+          counterOffer: cartOffer.finalTotal,
+          quoteToken: cartOfferQuoteToken,
+          cartOffer: {
+            mode: verifiedCartContext.mode,
+            subtotal: cartOffer.subtotal,
+            discountAmount: cartOffer.discountAmount,
+            finalTotal: cartOffer.finalTotal,
+            percentOff: cartOffer.percentOff,
+            quantity: cartOffer.quantity,
+            payableTotal: cartOffer.payableTotal,
+            contextVersion: verifiedCartContext.versionHash,
+          },
+        })
+      }
+
       // ── §27 BUNDLE NEGOTIATION (Module 6) ──
       // When the merchant opted in, try to resolve the distinct products and
       // mint a deterministic, floor-safe bundle offer. The AI never invents a
@@ -871,7 +1011,7 @@ export async function POST(request: NextRequest) {
           prisma.bargainMessage.create({
             data: {
               sessionId: bargainSession.id, role: 'ai', content: reply,
-              metadata: { ...turnMetadata, decision: 'chat', tactic: 'bundle_offer', policy: 'bundle_negotiation', bundleRequested: true } as any,
+              metadata: { ...turnMetadata, decision: 'chat', tactic: 'bundle_offer', policy: 'bundle_negotiation', bundleRequested: true, engineResponse } as any,
             },
           }),
         ])
@@ -955,6 +1095,7 @@ export async function POST(request: NextRequest) {
               ...turnMetadata,
               decision: 'chat', tactic: 'bundle_redirect',
               policy: 'multi_product_not_supported', bundleRequested: true,
+              engineResponse,
             } as any,
           },
         }),
@@ -970,6 +1111,7 @@ export async function POST(request: NextRequest) {
         sessionStatus: 'active',
         sessionId: bargainSession.id,
         ...intelligenceResponseFields(responseIntelligence, offerView),
+        engineResponse,
         ...(bundleReco
           ? {
               recommendations: bundleReco,
@@ -1058,6 +1200,7 @@ export async function POST(request: NextRequest) {
                 tactic: overListOffer ? 'accept_over_list_offer_final_round' : 'accept_final_round',
                 reason: overListOffer ? 'budget_spent_but_generous_over_list' : 'budget_spent_but_acceptable',
                 ...(overListOffer ? { overListOffer: true, rawOffer: customerOffer } : {}),
+                engineResponse,
               } as any,
             },
           }),
@@ -1077,6 +1220,7 @@ export async function POST(request: NextRequest) {
           sessionStatus: 'active',
           sessionId: bargainSession.id,
           ...intelligenceResponseFields(intelligence, offerView),
+          engineResponse,
           floorReached: true,
           attemptsUsed,
         })
@@ -1087,6 +1231,11 @@ export async function POST(request: NextRequest) {
       const rejectReply = retention
         ? withFinalCode(uiText(lang, 'attempts_exhausted'), lang, retention, bargainSession.store.currency)
         : `${uiText(lang, 'attempts_exhausted')} ${uiText(lang, 'farewell_friendly')}`
+      const engineResponse = earlyEngineResponse(intelligence, 'reject', rejectReply, null, {
+        tactic: 'reject_graceful',
+        reason: 'attempts_exhausted',
+        source: 'attempts_exhausted_reject',
+      })
       await prisma.$transaction([
         prisma.bargainMessage.create({
           data: {
@@ -1097,7 +1246,7 @@ export async function POST(request: NextRequest) {
         prisma.bargainMessage.create({
           data: {
             sessionId: bargainSession.id, role: 'ai', content: rejectReply,
-            metadata: { ...turnMetadata, tactic: 'reject_graceful', reason: 'attempts_exhausted', ...(retention ? { discountCode: retention.code } : {}) } as any,
+            metadata: { ...turnMetadata, tactic: 'reject_graceful', reason: 'attempts_exhausted', ...(retention ? { discountCode: retention.code } : {}), engineResponse } as any,
           },
         }),
         prisma.bargainSession.update({
@@ -1110,6 +1259,7 @@ export async function POST(request: NextRequest) {
         decision: 'reject',
         sessionStatus: 'rejected',
         ...intelligenceResponseFields(intelligence, offerView),
+        engineResponse,
         attemptsUsed,
         discountCode: retention?.code ?? null,
         finalPrice: retention?.finalPrice ?? null,
@@ -1306,11 +1456,14 @@ export async function POST(request: NextRequest) {
       customerOfferTotal: effectiveOfferStructure.totalAmount ?? undefined,
       walkoutTriggered: isWalkout,
       language: lang,
-      customerContext: await buildCustomerContext(bargainSession.storeId, {
-        customerEmail: bargainSession.customerEmail,
-        customerFingerprint: bargainSession.customerFingerprint,
-        cartToken: bargainSession.cartToken,
-      }),
+      customerContext: [
+        await buildCustomerContext(bargainSession.storeId, {
+          customerEmail: bargainSession.customerEmail,
+          customerFingerprint: bargainSession.customerFingerprint,
+          cartToken: bargainSession.cartToken,
+        }),
+        cartContextPrompt,
+      ].filter(Boolean).join('. ') || undefined,
       customerOfferTrend,
       goal: goalCtx,
       product: productCtx,

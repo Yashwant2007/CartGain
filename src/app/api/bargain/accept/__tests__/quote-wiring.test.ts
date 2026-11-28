@@ -1,16 +1,18 @@
 /**
  * @jest-environment node
  *
- * Module 3 wiring: a successful accept must mint a secure quote (signed token,
- * ACCEPTED status, audit event) and surface `quoteToken` on the response —
- * additively, without disturbing the existing discount-code response. With the
- * BARGAIN_QUOTE flag off the response keeps `quoteToken: null`.
+ * Module 3 wiring: every successful accept must mint a secure quote (signed
+ * token, ACCEPTED status, audit event) and surface `quoteToken` on the response
+ * so checkout always has a server-authoritative deal to redeem. The legacy
+ * BARGAIN_QUOTE flag no longer disables quote minting.
  */
 import { POST } from '@/app/api/bargain/accept/route'
 import prisma from '@/lib/db'
-import { verifyQuoteToken } from '@/lib/bargain/quote'
+import { signQuoteToken, verifyQuoteToken } from '@/lib/bargain/quote'
 import { validateOffer } from '@/lib/bargain/offer-validation'
 import { fetchShopifyProductPrice } from '@/lib/shopify'
+import { resolveVerifiedCartContext } from '@/lib/bargain/cart-context-server'
+import { computeCartOffer } from '@/lib/bargain/cart-offer'
 
 jest.mock('@/lib/db', () => {
   const mock: any = {
@@ -75,12 +77,22 @@ jest.mock('@/lib/bargain/policy', () => ({
 jest.mock('@/lib/bargain/purchase', () => ({
   generateBargainCode: jest.fn(() => 'BARGAIN_XYZ'),
   buildBargainCheckoutUrl: jest.fn(() => 'https://test.myshopify.com/cart'),
+  buildBargainCartCheckoutUrl: jest.fn(() => 'https://test.myshopify.com/discount/BARGAIN_XYZ?redirect=%2Fcart%2Fcart-1'),
 }))
 
 jest.mock('@/lib/analytics/track', () => ({ track: jest.fn(async () => {}) }))
 jest.mock('@/lib/bargain/learning/outcomes', () => ({ recordLearningAcceptance: jest.fn(async () => {}) }))
 jest.mock('@/lib/bargain/discount', () => ({
   generateBargainDiscountCode: jest.fn(async ({ code }: any) => ({ code, status: 'created' })),
+  generateBargainCartDiscountCode: jest.fn(async ({ code }: any) => ({ code, status: 'created' })),
+}))
+
+jest.mock('@/lib/bargain/cart-context-server', () => ({
+  resolveVerifiedCartContext: jest.fn(async () => null),
+}))
+
+jest.mock('@/lib/bargain/cart-offer', () => ({
+  computeCartOffer: jest.fn(() => ({ ok: false })),
 }))
 
 const mockPrisma = prisma as any
@@ -98,7 +110,7 @@ function session(overrides: Record<string, unknown> = {}) {
     attemptsUsed: 1,
     customerEmail: 'buyer@example.com',
     customerPhone: null,
-    customerFingerprint: 'fp-1',
+    customerFingerprint: 'fingerprint-1',
     language: 'en',
     cartToken: null,
     bulkQuantity: null,
@@ -132,6 +144,8 @@ beforeEach(() => {
   mockPrisma.bargainQuote.create.mockImplementation(({ data }: any) => Promise.resolve(data))
   mockPrisma.bargainQuote.updateMany.mockResolvedValue({ count: 1 })
   mockPrisma.bargainQuoteEvent.create.mockResolvedValue({})
+  jest.mocked(resolveVerifiedCartContext).mockResolvedValue(null as any)
+  jest.mocked(computeCartOffer).mockReturnValue({ ok: false } as any)
 })
 
 afterAll(() => {
@@ -162,14 +176,15 @@ describe('accept → secure quote wiring', () => {
     expect(mockPrisma.bargainQuote.updateMany).toHaveBeenCalled()
   })
 
-  it('leaves quoteToken null and mints no quote when the flag is off', async () => {
+  it('still mints a quote when the legacy flag is off', async () => {
     process.env.BARGAIN_QUOTE = 'false'
     const res = await POST(makeRequest())
     const body = await res.json()
 
     expect(res.status).toBe(200)
-    expect(body.quoteToken).toBeNull()
-    expect(mockPrisma.bargainQuote.create).not.toHaveBeenCalled()
+    expect(typeof body.quoteToken).toBe('string')
+    expect(body.quoteToken).toBeTruthy()
+    expect(mockPrisma.bargainQuote.create).toHaveBeenCalledTimes(1)
   })
 
   it('blocks acceptance when the merchant has disabled bargaining', async () => {
@@ -245,5 +260,86 @@ describe('accept → secure quote wiring', () => {
       freeShipping: false,
     })
     expect(body.payment).toMatchObject({ intent: 'unknown', prepaidSaving: null })
+  })
+
+  it('redeems a signed cart quote with authoritative cart totals', async () => {
+    const quoteToken = signQuoteToken('quote-cart-1')!
+    mockPrisma.bargainQuote.findUnique.mockResolvedValue({
+      id: 'quote-cart-1',
+      token: quoteToken,
+      storeId: 'store-1',
+      sessionId: 'sess-1',
+      shopifyProductId: 'gid://shopify/Product/1',
+      cartToken: 'cart-1',
+      customerEmail: 'buyer@example.com',
+      customerFingerprint: 'fingerprint-1',
+      originalPrice: 1000,
+      finalPrice: 850,
+      discountPercent: 15,
+      floorPrice: 700,
+      currency: 'INR',
+      status: 'CREATED',
+      discountCode: null,
+      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+      conditions: {
+        kind: 'cart_offer',
+        versionHash: 'v1',
+        cartContext: {},
+        percentOff: 15,
+      },
+    })
+    jest.mocked(resolveVerifiedCartContext).mockResolvedValue({
+      versionHash: 'v1',
+      mode: 'cart_percentage',
+      lines: [{
+        lineId: 'line-1',
+        productId: 'gid://shopify/Product/1',
+        variantId: null,
+        quantity: 1,
+        unitPrice: 1000,
+        lineTotal: 1000,
+        title: 'Test product',
+      }],
+      subtotal: 1000,
+      customerId: null,
+      cartToken: 'cart-1',
+    } as any)
+    jest.mocked(computeCartOffer).mockReturnValue({
+      ok: true,
+      offer: {
+        kind: 'cart_offer',
+        mode: 'cart_percentage',
+        subtotal: 1000,
+        finalTotal: 850,
+        floorTotal: 700,
+        discountAmount: 150,
+        percentOff: 15,
+        quantity: 1,
+        lineAdjustments: [],
+      },
+    } as any)
+
+    const res = await POST(new Request('https://cart-gain.com/api/bargain/accept', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'sess-1',
+        sessionToken: 'tok',
+        quoteToken,
+        cartToken: 'cart-1',
+        customerFingerprint: 'fingerprint-1',
+        customerEmail: 'buyer@example.com',
+      }),
+    }) as any)
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.finalPrice).toBe(850)
+    expect(body.discountPercent).toBe(15)
+    expect(body.discountCode).toBe('BARGAIN_XYZ')
+    expect(body.purchaseUrl).toContain('/discount/BARGAIN_XYZ')
+    expect(mockPrisma.bargainQuote.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'ACCEPTED' }) }),
+    )
   })
 })

@@ -1,24 +1,25 @@
 /**
  * @jest-environment node
  *
- * Regression tests for /api/bargain/checkout-accept hardening.
+ * Genesis 3.0 regression tests for /api/bargain/checkout-accept.
  *
- * Fault: the endpoint minted REAL Shopify discount codes from client-supplied
- * values (the Checkout UI Extension cannot carry a bargain session) with NO plan
- * gate and NO metering. Every checkout-origin deal bypassed the deal quota and
- * never booked a rev-share event — a billing/revenue black hole.
- *
- * Fix: gate on the plan deal quota BEFORE minting, then create a BargainSession
- * and meter the deal (recordBargainDealOps) exactly like /api/bargain/accept, so
- * the deal counts against quota and a rev-share event is booked. The issued code
- * is stored on the session so orders/create can attribute the purchase (the code
- * must actually appear on the order, so attribution cannot be faked).
+ * The old endpoint minted a real Shopify discount code from client-supplied
+ * prices with no signed deal authorisation. It now REQUIRES a server-issued,
+ * HMAC-signed quote, verifies the product/variant/price/quantity/code and the
+ * checkout-token/customer bindings, claims the quote with an atomic CAS, then
+ * gates and meters the deal exactly like /api/bargain/accept.
  */
 import { POST } from '@/app/api/bargain/checkout-accept/route'
 import prisma from '@/lib/db'
 import { getBargainGate, decideDealMode, recordBargainDealOps } from '@/lib/bargain/gate'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
-import { loadQuoteByToken, markQuoteCheckoutPending, revalidateQuote } from '@/lib/bargain/quote'
+import {
+  loadQuoteByToken,
+  markQuoteCheckoutPending,
+  quoteBindingMatches,
+  quoteMatchesDeal,
+  revalidateQuote,
+} from '@/lib/bargain/quote'
 import { checkSimpleRateLimit } from '@/lib/rate-limit'
 
 jest.mock('@/lib/db', () => ({
@@ -58,6 +59,8 @@ jest.mock('@/lib/bargain/quote', () => ({
   loadQuoteByToken: jest.fn(async () => null),
   revalidateQuote: jest.fn(() => ({ ok: true })),
   markQuoteCheckoutPending: jest.fn(async () => ({})),
+  quoteMatchesDeal: jest.fn(() => true),
+  quoteBindingMatches: jest.fn(() => true),
 }))
 
 jest.mock('@/lib/analytics/track', () => ({ track: jest.fn(async () => {}) }))
@@ -77,6 +80,8 @@ const mintMock = generateBargainDiscountCode as jest.Mock
 const loadQuoteMock = loadQuoteByToken as jest.Mock
 const revalidateQuoteMock = revalidateQuote as jest.Mock
 const markQuotePendingMock = markQuoteCheckoutPending as jest.Mock
+const quoteMatchesMock = quoteMatchesDeal as jest.Mock
+const quoteBindingMock = quoteBindingMatches as jest.Mock
 
 const store = {
   id: 'store-1',
@@ -88,60 +93,242 @@ const store = {
   timezone: 'Asia/Kolkata',
 }
 
+function validQuote(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'q1',
+    storeId: 'store-1',
+    sessionId: null,
+    status: 'ACCEPTED',
+    shopifyProductId: 'gid://shopify/Product/1',
+    variantId: null,
+    quantity: 1,
+    originalPrice: 1000,
+    finalPrice: 850,
+    discountCode: 'BARGAIN_ABC',
+    cartToken: 'checkout-token',
+    customerEmail: null,
+    customerFingerprint: null,
+    shopifyCustomerId: null,
+    expiresAt: new Date(Date.now() + 60_000),
+    ...overrides,
+  }
+}
+
+function validCartQuote(overrides: Record<string, unknown> = {}) {
+  return {
+    ...validQuote({ sessionId: 'sess-cart', originalPrice: 1800, finalPrice: 1530 }),
+    conditions: {
+      kind: 'cart_offer',
+      mode: 'bundle',
+      subtotal: 1800,
+      finalTotal: 1530,
+      percentOff: 15,
+    },
+    ...overrides,
+  }
+}
+
 function makeRequest(body: Record<string, unknown> = {}) {
   return new Request('https://cart-gain.com/api/bargain/checkout-accept', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       shopDomain: 'test.myshopify.com',
+      platform: 'shopify',
       shopifyProductId: 'gid://shopify/Product/1',
       variantId: null,
       originalPrice: 1000,
       finalPrice: 850,
       discountPercent: 15,
       code: 'BARGAIN_ABC',
+      quoteToken: 'bquote-1',
+      cartToken: 'checkout-token',
       ...body,
     }),
   }) as any
 }
 
-const originalQuoteFlag = process.env.BARGAIN_QUOTE
-
 beforeEach(() => {
   jest.clearAllMocks()
-  delete process.env.BARGAIN_QUOTE
-  loadQuoteMock.mockResolvedValue(null)
+  loadQuoteMock.mockResolvedValue(validQuote())
   revalidateQuoteMock.mockReturnValue({ ok: true })
   markQuotePendingMock.mockResolvedValue({})
+  quoteMatchesMock.mockReturnValue(true)
+  quoteBindingMock.mockReturnValue(true)
   prismaMock.store.findFirst.mockResolvedValue({ ...store })
   prismaMock.bargainConfig.findUnique.mockResolvedValue(null)
   prismaMock.bargainSession.findFirst.mockResolvedValue(null)
   prismaMock.bargainSession.create.mockResolvedValue({})
+  getGateMock.mockResolvedValue({ planId: 'free', subscriptionId: 'sub-1' })
   decideDealModeMock.mockReturnValue('included')
   recordDealOpsMock.mockReturnValue([])
   mintMock.mockImplementation(async ({ code }: any) => ({ code, status: 'created' }))
 })
 
-afterAll(() => {
-  if (originalQuoteFlag == null) delete process.env.BARGAIN_QUOTE
-  else process.env.BARGAIN_QUOTE = originalQuoteFlag
+describe('POST /api/bargain/checkout-accept — signed quote authority', () => {
+  it('always uses the code authorised by the quote, never a client-invented code', async () => {
+    const res = await POST(makeRequest({ code: 'ATTACKER_CODE' }))
+    const body = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(body.message).toBe('Quote code mismatch')
+    expect(mintMock).not.toHaveBeenCalled()
+  })
+
+  it('requires a quote token even when BARGAIN_QUOTE is off', async () => {
+    process.env.BARGAIN_QUOTE = 'false'
+    const res = await POST(makeRequest({ quoteToken: undefined, code: undefined }))
+
+    expect(res.status).toBe(400)
+    expect(loadQuoteMock).not.toHaveBeenCalled()
+    expect(mintMock).not.toHaveBeenCalled()
+    delete process.env.BARGAIN_QUOTE
+  })
+
+  it('refuses an unknown quote before idempotent replay', async () => {
+    loadQuoteMock.mockResolvedValueOnce(null)
+    prismaMock.bargainSession.findFirst.mockResolvedValue({ discountCode: 'BARGAIN_ABC' })
+
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(409)
+    expect(mintMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a terminal quote', async () => {
+    loadQuoteMock.mockResolvedValueOnce(validQuote({ status: 'REDEEMED' }))
+
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(409)
+    expect(revalidateQuoteMock).not.toHaveBeenCalled()
+    expect(mintMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a quote that does not match the checkout deal', async () => {
+    quoteMatchesMock.mockReturnValueOnce(false)
+
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(409)
+    expect(res.status).toBe(409)
+    expect(bodyMessage(await res.json())).toContain('does not match')
+    expect(mintMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a quote bound to a different checkout token/customer', async () => {
+    quoteBindingMock.mockReturnValueOnce(false)
+
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(403)
+    expect(mintMock).not.toHaveBeenCalled()
+  })
+
+  it('honours an accepted quote, claims it, and meters the deal', async () => {
+    const quote = validQuote()
+    loadQuoteMock.mockResolvedValueOnce(quote)
+
+    const res = await POST(makeRequest())
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({ success: true, code: 'BARGAIN_ABC', platform: 'shopify' })
+    expect(revalidateQuoteMock).toHaveBeenCalledWith(quote, { price: 1000, floor: 700 })
+    expect(markQuotePendingMock).toHaveBeenCalledWith(quote)
+    expect(mintMock).toHaveBeenCalledTimes(1)
+    expect(prismaMock.bargainSession.create).toHaveBeenCalledTimes(1)
+    expect(recordDealOpsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns an already-authorised cart quote code without minting or re-metering', async () => {
+    const quote = validCartQuote()
+    loadQuoteMock.mockResolvedValueOnce(quote)
+    prismaMock.bargainSession.findFirst.mockResolvedValueOnce({
+      discountCode: 'BARGAIN_ABC',
+      purchaseUrl: 'https://test/discount/BARGAIN_ABC',
+    })
+
+    const res = await POST(makeRequest({ originalPrice: 1800, finalPrice: 1530 }))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body).toMatchObject({
+      success: true,
+      code: 'BARGAIN_ABC',
+      scope: 'cart',
+      purchaseUrl: 'https://test/discount/BARGAIN_ABC',
+    })
+    expect(markQuotePendingMock).toHaveBeenCalledWith(quote)
+    expect(mintMock).not.toHaveBeenCalled()
+    expect(prismaMock.bargainSession.create).not.toHaveBeenCalled()
+    expect(recordDealOpsMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a client-invented code for a cart quote', async () => {
+    loadQuoteMock.mockResolvedValueOnce(validCartQuote())
+
+    const res = await POST(makeRequest({ code: 'ATTACKER_CODE', originalPrice: 1800, finalPrice: 1530 }))
+
+    expect(res.status).toBe(409)
+    expect(bodyMessage(await res.json())).toBe('Quote code mismatch')
+    expect(mintMock).not.toHaveBeenCalled()
+  })
+
+  it('stores checkout binding fields on the accepted session', async () => {
+    await POST(makeRequest({ shopifyCustomerId: 'gid://shopify/Customer/555', customerEmail: 'buyer@example.com' }))
+    const created = prismaMock.bargainSession.create.mock.calls[0][0].data
+
+    expect(created).toMatchObject({
+      cartToken: 'checkout-token',
+      discountCodeCartToken: 'checkout-token',
+      discountCodeCustomerEmail: 'buyer@example.com',
+      customerEmail: 'buyer@example.com',
+      externalCustomerId: '555',
+      platform: 'shopify',
+      status: 'accepted',
+    })
+  })
+
+  it('fails closed when the quote cannot be atomically claimed', async () => {
+    markQuotePendingMock.mockResolvedValueOnce(null)
+
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(409)
+    expect(mintMock).not.toHaveBeenCalled()
+    expect(prismaMock.bargainSession.create).not.toHaveBeenCalled()
+  })
 })
 
+function bodyMessage(body: { message?: string }) {
+  return body.message ?? ''
+}
+
 describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
-  it('issues the code server-side when the client does not supply one', async () => {
-    const res = await POST(makeRequest({ code: undefined }))
+  it('mints and meters the deal when quota remains', async () => {
+    const res = await POST(makeRequest())
     const body = await res.json()
 
     expect(res.status).toBe(200)
     expect(body.success).toBe(true)
-    expect(body.code).toMatch(/^BARGAIN-[0-9A-F]{8}$/)
     expect(mintMock).toHaveBeenCalledTimes(1)
-    expect(mintMock.mock.calls[0][0].code).toBe(body.code)
     expect(checkSimpleRateLimit).toHaveBeenCalledWith(expect.stringContaining('bargain_checkout_accept_'))
     expect(checkSimpleRateLimit).toHaveBeenCalledWith('bargain_codes_store-1', {
       maxRequests: 250,
       windowMs: 60 * 60 * 1000,
     })
+    expect(prismaMock.bargainSession.create).toHaveBeenCalledTimes(1)
+    const created = prismaMock.bargainSession.create.mock.calls[0][0].data
+    expect(created).toMatchObject({
+      storeId: 'store-1',
+      discountCode: 'BARGAIN_ABC',
+      finalPrice: 850,
+      bargainFloor: 700,
+      status: 'accepted',
+    })
+    expect(recordDealOpsMock.mock.calls[0]).toEqual([
+      expect.objectContaining({ subscriptionId: 'sub-1' }),
+      created.id,
+      1000,
+      850,
+      'included',
+    ])
   })
 
   it('returns a purchase URL that applies the negotiated code to the variant cart', async () => {
@@ -155,49 +342,15 @@ describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
       shopifyProductId: 'gid://shopify/Product/1',
       variantId: 'gid://shopify/ProductVariant/777',
     })
-    expect(prismaMock.bargainSession.create.mock.calls[0][0].data).toMatchObject({
-      shopifyProductId: 'gid://shopify/Product/1',
-      variantId: 'gid://shopify/ProductVariant/777',
-    })
   })
 
   it('refuses a pending code and never records an accepted deal', async () => {
     mintMock.mockResolvedValueOnce({ code: 'BARGAIN_PENDING', status: 'pending', verified: false })
-    const res = await POST(makeRequest())
 
+    const res = await POST(makeRequest())
     expect(res.status).toBe(503)
     expect(prismaMock.bargainSession.create).not.toHaveBeenCalled()
     expect(recordDealOpsMock).not.toHaveBeenCalled()
-  })
-
-  it('mints a Shopify code AND meters the deal when quota remains', async () => {
-    const res = await POST(makeRequest())
-    const body = await res.json()
-
-    expect(res.status).toBe(200)
-    expect(body.success).toBe(true)
-    expect(mintMock).toHaveBeenCalledTimes(1)
-
-    // The deal is recorded against the plan: one BargainSession is created…
-    expect(prismaMock.bargainSession.create).toHaveBeenCalledTimes(1)
-    const created = prismaMock.bargainSession.create.mock.calls[0][0].data
-    expect(created).toMatchObject({
-      storeId: 'store-1',
-      discountCode: 'BARGAIN_ABC',
-      finalPrice: 850,
-      bargainFloor: 700,
-      status: 'accepted',
-    })
-
-    // …and the deal meter/rev-share ops run against the new session id.
-    expect(recordDealOpsMock).toHaveBeenCalledTimes(1)
-    expect(recordDealOpsMock.mock.calls[0]).toEqual([
-      expect.objectContaining({ subscriptionId: 'sub-1' }),
-      created.id,
-      1000,
-      850,
-      'included',
-    ])
   })
 
   it('BLOCKS (402) an exhausted free store before minting a single code', async () => {
@@ -205,20 +358,16 @@ describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
 
     const res = await POST(makeRequest())
     const body = await res.json()
-
     expect(res.status).toBe(402)
     expect(body.code).toBe('bargain_deals_exhausted')
-    // Nothing was minted or metered — the leak is closed.
     expect(mintMock).not.toHaveBeenCalled()
     expect(prismaMock.bargainSession.create).not.toHaveBeenCalled()
-    expect(recordDealOpsMock).not.toHaveBeenCalled()
   })
 
   it('BLOCKS (402) a paid store whose overage is disabled', async () => {
     decideDealModeMock.mockReturnValue('blocked_no_overage')
 
     const res = await POST(makeRequest())
-
     expect(res.status).toBe(402)
     expect(mintMock).not.toHaveBeenCalled()
   })
@@ -227,17 +376,15 @@ describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
     decideDealModeMock.mockReturnValue('overage')
 
     const res = await POST(makeRequest())
-
     expect(res.status).toBe(200)
     expect(recordDealOpsMock.mock.calls[0][4]).toBe('overage')
   })
 
-  it('is idempotent — a retried code is NOT re-minted or double-metered', async () => {
+  it('is idempotent — a retried quote/code is NOT re-minted or double-metered', async () => {
     prismaMock.bargainSession.findFirst.mockResolvedValue({ discountCode: 'BARGAIN_ABC' })
 
     const res = await POST(makeRequest())
     const body = await res.json()
-
     expect(res.status).toBe(200)
     expect(body).toMatchObject({ success: true, code: 'BARGAIN_ABC' })
     expect(mintMock).not.toHaveBeenCalled()
@@ -247,28 +394,19 @@ describe('POST /api/bargain/checkout-accept — plan gate + metering', () => {
 })
 
 describe('POST /api/bargain/checkout-accept — buyer binding', () => {
-  it('binds the code to the customer when a gid id is supplied', async () => {
+  it('normalizes a gid customer id before it reaches Shopify', async () => {
     await POST(makeRequest({ shopifyCustomerId: 'gid://shopify/Customer/555' }))
-
-    const opts = mintMock.mock.calls[0][0]
-    // Normalized to the raw numeric id `buildCustomerSelection` expects.
-    expect(opts.shopifyCustomerId).toBe('555')
+    expect(mintMock.mock.calls[0][0].shopifyCustomerId).toBe('555')
   })
 
-  it('binds the code when a raw numeric customer id is supplied', async () => {
+  it('normalizes a raw numeric customer id', async () => {
     await POST(makeRequest({ shopifyCustomerId: '555' }))
     expect(mintMock.mock.calls[0][0].shopifyCustomerId).toBe('555')
   })
 
-  it('IGNORES a malformed customer id (never reaches the Shopify discount body)', async () => {
+  it('IGNORES a malformed customer id', async () => {
     await POST(makeRequest({ shopifyCustomerId: 'gid://shopify/Customer/1) { evil' }))
     expect(mintMock.mock.calls[0][0].shopifyCustomerId).toBeNull()
-  })
-
-  it('stores the customer email on the deal session when provided', async () => {
-    await POST(makeRequest({ customerEmail: 'buyer@example.com' }))
-    const created = prismaMock.bargainSession.create.mock.calls[0][0].data
-    expect(created.customerEmail).toBe('buyer@example.com')
   })
 
   it('drops a non-email value rather than persisting it', async () => {
@@ -283,7 +421,6 @@ describe('POST /api/bargain/checkout-accept — master controls', () => {
     prismaMock.bargainConfig.findUnique.mockResolvedValue({ enabled: false })
 
     const res = await POST(makeRequest())
-
     expect(res.status).toBe(403)
     expect(mintMock).not.toHaveBeenCalled()
     expect(prismaMock.bargainSession.create).not.toHaveBeenCalled()
@@ -294,83 +431,11 @@ describe('POST /api/bargain/checkout-accept — master controls', () => {
     const created = prismaMock.bargainSession.create.mock.calls[0][0].data
     expect(created.acceptedAt).toBeInstanceOf(Date)
   })
-})
 
-describe('POST /api/bargain/checkout-accept — product scope + quotes', () => {
   it('rejects a client-declared whole-cart discount', async () => {
     const res = await POST(makeRequest({ orderLevel: true }))
     expect(res.status).toBe(400)
     expect(mintMock).not.toHaveBeenCalled()
     expect(prismaMock.bargainSession.create).not.toHaveBeenCalled()
-  })
-
-  it('requires a quote token when BARGAIN_QUOTE is enabled', async () => {
-    process.env.BARGAIN_QUOTE = 'true'
-    const res = await POST(makeRequest())
-    expect(res.status).toBe(400)
-    expect(loadQuoteMock).not.toHaveBeenCalled()
-    expect(mintMock).not.toHaveBeenCalled()
-  })
-
-  it('refuses an unknown quote before idempotent replay', async () => {
-    process.env.BARGAIN_QUOTE = 'true'
-    loadQuoteMock.mockResolvedValueOnce(null)
-    prismaMock.bargainSession.findFirst.mockResolvedValue({ discountCode: 'BARGAIN_ABC' })
-
-    const res = await POST(makeRequest({ quoteToken: 'bquote-unknown' }))
-    expect(res.status).toBe(409)
-    expect(mintMock).not.toHaveBeenCalled()
-  })
-
-  it('refuses a terminal quote', async () => {
-    process.env.BARGAIN_QUOTE = 'true'
-    loadQuoteMock.mockResolvedValueOnce({
-      id: 'q1',
-      storeId: 'store-1',
-      status: 'REDEEMED',
-      shopifyProductId: 'gid://shopify/Product/1',
-      variantId: null,
-      originalPrice: 1000,
-      finalPrice: 850,
-      discountCode: 'BARGAIN_ABC',
-      expiresAt: new Date(Date.now() + 60_000),
-    })
-
-    const res = await POST(makeRequest({ quoteToken: 'bquote-1' }))
-    expect(res.status).toBe(409)
-    expect(revalidateQuoteMock).not.toHaveBeenCalled()
-    expect(mintMock).not.toHaveBeenCalled()
-  })
-
-  it('honours an accepted quote and marks checkout pending', async () => {
-    process.env.BARGAIN_QUOTE = 'true'
-    const quote = {
-      id: 'q1',
-      storeId: 'store-1',
-      status: 'ACCEPTED',
-      shopifyProductId: 'gid://shopify/Product/1',
-      variantId: null,
-      originalPrice: 1000,
-      finalPrice: 850,
-      discountCode: 'BARGAIN_ABC',
-      expiresAt: new Date(Date.now() + 60_000),
-    }
-    loadQuoteMock.mockResolvedValueOnce(quote)
-
-    const res = await POST(makeRequest({ quoteToken: 'bquote-1' }))
-
-    expect(res.status).toBe(200)
-    expect(revalidateQuoteMock).toHaveBeenCalledWith(quote, { price: 1000, floor: 700 })
-    expect(markQuotePendingMock).toHaveBeenCalledWith(quote)
-    expect(mintMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps the legacy path when BARGAIN_QUOTE is off', async () => {
-    process.env.BARGAIN_QUOTE = 'false'
-    loadQuoteMock.mockResolvedValueOnce(null)
-
-    const res = await POST(makeRequest({ quoteToken: 'bquote-bogus' }))
-    expect(res.status).toBe(200)
-    expect(mintMock).toHaveBeenCalledTimes(1)
   })
 })

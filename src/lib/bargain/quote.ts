@@ -157,6 +157,9 @@ export interface CreateQuoteInput {
   discountCode?: string | null
   conditions?: Record<string, unknown>
   ttlMs?: number
+  /** Internal only: lets a server-issued checkout quote work while the public
+   *  BARGAIN_QUOTE flag is off. Never accepted from a client payload. */
+  force?: boolean
 }
 
 export interface PublicQuote {
@@ -211,7 +214,7 @@ export function toPublicQuote(quote: {
  * continue with the legacy path. Never throws for the common disabled case.
  */
 export async function createQuote(input: CreateQuoteInput) {
-  if (!isFeatureEnabled('BARGAIN_QUOTE')) return null
+  if (!input.force && !isFeatureEnabled('BARGAIN_QUOTE')) return null
   const id = crypto.randomUUID()
   const token = signQuoteToken(id)
   if (!token) return null
@@ -284,6 +287,82 @@ export async function findQuoteBySessionId(sessionId: string) {
 export async function findQuoteByDiscountCode(storeId: string, discountCode: string) {
   if (!storeId || !discountCode) return null
   return prisma.bargainQuote.findFirst({ where: { storeId, discountCode } })
+}
+
+export interface QuoteBindingInput {
+  cartToken?: string | null
+  customerFingerprint?: string | null
+  customerEmail?: string | null
+  shopifyCustomerId?: string | null
+}
+
+export interface QuoteDealMatchInput {
+  storeId: string
+  productId: string | null | undefined
+  variantId?: string | null
+  finalPrice: number
+  quantity?: number | null
+  discountCode?: string | null
+}
+
+function sameIdentity(a: unknown, b: unknown): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
+function normalizeVariantId(value: unknown): string | null {
+  if (typeof value !== 'string' || !value) return null
+  return value.replace(/^gid:\/\/shopify\/ProductVariant\//, '')
+}
+
+/**
+ * A quote must carry at least one server-observed buyer handle, and every other
+ * handle it carries must agree with the checkout request. Unbound quotes are
+ * deliberately rejected: a bare signed token can still be screenshotted, while
+ * a checkout token or device fingerprint cannot.
+ */
+export function quoteBindingMatches(
+  quote: {
+    cartToken?: string | null
+    customerFingerprint?: string | null
+    customerEmail?: string | null
+    shopifyCustomerId?: string | null
+  },
+  input: QuoteBindingInput,
+): boolean {
+  const bound =
+    quote.cartToken ||
+    quote.customerFingerprint ||
+    quote.customerEmail ||
+    quote.shopifyCustomerId
+  if (!bound) return false
+  if (quote.cartToken && !sameIdentity(quote.cartToken, input.cartToken)) return false
+  if (quote.customerFingerprint && !sameIdentity(quote.customerFingerprint, input.customerFingerprint)) return false
+  if (quote.customerEmail && !sameIdentity(quote.customerEmail, input.customerEmail)) return false
+  if (quote.shopifyCustomerId && !sameIdentity(quote.shopifyCustomerId, input.shopifyCustomerId)) return false
+  return true
+}
+
+/** Server-only deal equality check used before a quote can mint a discount code. */
+export function quoteMatchesDeal(
+  quote: {
+    storeId: string
+    shopifyProductId: string
+    variantId?: string | null
+    quantity?: number | null
+    finalPrice: number
+    discountCode?: string | null
+  },
+  input: QuoteDealMatchInput,
+): boolean {
+  if (quote.storeId !== input.storeId) return false
+  if (!input.productId || String(quote.shopifyProductId) !== String(input.productId)) return false
+  if (normalizeVariantId(quote.variantId) !== normalizeVariantId(input.variantId)) return false
+  if (Math.abs(Number(quote.finalPrice) - Number(input.finalPrice)) > 0.01) return false
+  const quantity = Math.max(1, Math.floor(Number(input.quantity) || 1))
+  if (Math.max(1, Math.floor(Number(quote.quantity) || 1)) !== quantity) return false
+  if (quote.discountCode && input.discountCode != null && quote.discountCode !== input.discountCode) return false
+  return true
 }
 
 export interface TransitionResult {

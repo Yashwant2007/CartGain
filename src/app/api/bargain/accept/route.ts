@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { bargainAcceptSchema, validateOrThrow, handleValidationError } from '@/lib/validation/bargain'
-import { generateBargainDiscountCode } from '@/lib/bargain/discount'
+import { generateBargainCartDiscountCode, generateBargainDiscountCode } from '@/lib/bargain/discount'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
+import { computeCartOffer } from '@/lib/bargain/cart-offer'
+import { resolveVerifiedCartContext } from '@/lib/bargain/cart-context-server'
 import { getBargainGate, decideDealMode, recordBargainDealOps, BARGAIN_DEALS_EXHAUSTED } from '@/lib/bargain/gate'
 import { computeMinPrice } from '@/lib/services/bargain'
-import { generateBargainCode, buildBargainCheckoutUrl } from '@/lib/bargain/purchase'
+import { generateBargainCode, buildBargainCartCheckoutUrl, buildBargainCheckoutUrl } from '@/lib/bargain/purchase'
 import { fetchShopifyProductPrice, fetchShopifyProductDetail } from '@/lib/shopify'
 import { buildExecutablePrice } from '@/lib/financial-safety'
 import { publicOfferRejection, validateOffer } from '@/lib/bargain/offer-validation'
 import { bargainCampaignStatus, couponMentionedInMessages } from '@/lib/bargain/policy'
 import { track } from '@/lib/analytics/track'
 import { recordLearningAcceptance } from '@/lib/bargain/learning/outcomes'
-import { createQuote, acceptQuote, findQuoteBySessionId } from '@/lib/bargain/quote'
+import { createQuote, acceptQuote, findQuoteBySessionId, loadQuoteByToken, quoteBindingMatches } from '@/lib/bargain/quote'
 import {
   detectPaymentIntent,
   normalizePaymentConfig,
@@ -93,6 +95,297 @@ async function priceChangedResponse(opts: {
   }, { status: 409 })
 }
 
+function cartQuoteRejection(message: string, status = 409) {
+  return NextResponse.json({
+    message,
+    reason: 'OFFER_NOT_AVAILABLE',
+    code: 'OFFER_REJECTED_OFFER_NOT_AVAILABLE',
+  }, { status })
+}
+
+async function rollbackSessionClaim(sessionId: string) {
+  await prisma.bargainSession.updateMany({
+    where: { id: sessionId, status: 'accepting', discountCode: null },
+    data: { status: 'active' },
+  })
+}
+
+async function acceptCartQuoteDeal(opts: {
+  data: {
+    quoteToken?: string | null
+    customerFingerprint?: string | null
+    customerEmail?: string | null
+    cartToken?: string | null
+  }
+  bargainSession: any
+  config: any
+  platform: 'shopify' | 'woocommerce'
+  campaignActive: boolean
+  couponMentioned: boolean
+  couponsAllowed: boolean
+  paymentIntent: string
+}): Promise<NextResponse | null> {
+  if (!opts.data.quoteToken) return null
+
+  const quote = await loadQuoteByToken(opts.data.quoteToken)
+  const unavailable = () => cartQuoteRejection('That cart offer is no longer available. Please refresh and try again.')
+  if (!quote || quote.storeId !== opts.bargainSession.storeId) return unavailable()
+  if (quote.sessionId && quote.sessionId !== opts.bargainSession.id) return unavailable()
+  if (quote.status !== 'CREATED' && quote.status !== 'ACCEPTED') return unavailable()
+
+  const conditions = quote.conditions && typeof quote.conditions === 'object' && !Array.isArray(quote.conditions)
+    ? (quote.conditions as Record<string, unknown>)
+    : {}
+  if (conditions.kind !== 'cart_offer') return unavailable()
+
+  const bound = quoteBindingMatches(quote, {
+    cartToken: opts.data.cartToken ?? opts.bargainSession.cartToken ?? null,
+    customerFingerprint: opts.data.customerFingerprint ?? opts.bargainSession.customerFingerprint ?? null,
+    customerEmail: opts.data.customerEmail ?? opts.bargainSession.customerEmail ?? null,
+  })
+  if (!bound) {
+    return NextResponse.json({ message: 'This offer belongs to a different shopper.' }, { status: 403 })
+  }
+
+  if (opts.bargainSession.expiredAt.getTime() <= Date.now()) return unavailable()
+  if (opts.config?.emergencyPaused === true) return cartQuoteRejection('Bargaining is paused for this store right now.')
+  if (!opts.campaignActive) return cartQuoteRejection('That offer window has ended.')
+  if (opts.couponMentioned && !opts.couponsAllowed) {
+    return cartQuoteRejection('This price cannot be combined with another discount code.')
+  }
+
+  const storedContext = conditions.cartContext
+  if (!storedContext || typeof storedContext !== 'object' || Array.isArray(storedContext)) return unavailable()
+  const verified = await resolveVerifiedCartContext(
+    { ...(storedContext as Record<string, unknown>), source: 'client' },
+    {
+      store: opts.bargainSession.store,
+      platform: opts.platform,
+      config: opts.config,
+      expectedCartToken: opts.data.cartToken ?? opts.bargainSession.cartToken ?? null,
+    },
+  )
+  if (!verified || verified.versionHash !== conditions.versionHash) return unavailable()
+
+  const floorResults = await Promise.all(verified.lines.map((line) => computeMinPrice({
+    storeId: opts.bargainSession.storeId,
+    shopifyProductId: line.productId || line.variantId || '',
+    platform: opts.platform,
+    platformProductId: line.productId || line.variantId || undefined,
+    originalPrice: line.unitPrice,
+  })))
+  const floorTotal = verified.lines.reduce((sum, line, index) => {
+    const floor = Math.min(line.unitPrice, floorResults[index]?.minPrice ?? line.unitPrice)
+    return sum + Math.round(floor * line.quantity * 100) / 100
+  }, 0)
+  const requestedPercent = Number(conditions.percentOff ?? quote.discountPercent)
+  const requestedAmount = verified.mode === 'cart_fixed' && Number.isFinite(Number(conditions.discountAmount))
+    ? Number(conditions.discountAmount)
+    : null
+  const recomputed = computeCartOffer({
+    mode: verified.mode,
+    context: verified,
+    requestedPercent,
+    requestedAmount,
+    floorTotal,
+  })
+  if (
+    !recomputed.ok ||
+    Math.abs(recomputed.offer.finalTotal - Number(quote.finalPrice)) > 0.01 ||
+    Math.abs(recomputed.offer.subtotal - Number(quote.originalPrice)) > 0.01
+  ) {
+    return unavailable()
+  }
+
+  const gate = await getBargainGate(opts.bargainSession.storeId)
+  const dealMode = decideDealMode(gate)
+  if (dealMode === 'blocked_free' || dealMode === 'blocked_no_overage') {
+    return NextResponse.json({
+      message:
+        dealMode === 'blocked_free'
+          ? 'This store has reached its free bargain deal limit. Please ask the store to upgrade.'
+          : 'This store has reached its bargain deal limit. Please ask the store to upgrade or contact you directly.',
+      code: BARGAIN_DEALS_EXHAUSTED,
+      planId: gate.planId,
+      mode: dealMode,
+      upgradeUrl: 'https://cart-gain.com/pricing',
+    }, { status: 402 })
+  }
+
+  const code = quote.discountCode ?? generateBargainCode()
+  const customerEmail = opts.data.customerEmail ?? opts.bargainSession.customerEmail ?? null
+  const cartToken = opts.data.cartToken ?? opts.bargainSession.cartToken ?? null
+  const shopifyCustomerId = verified.customerId ?? null
+  const expiresAt = new Date(Math.min(quote.expiresAt.getTime(), opts.bargainSession.expiredAt.getTime()))
+  let codeResult: { code: string; status: 'created' | 'pending' | 'failed'; error?: string }
+
+  if (opts.platform === 'woocommerce') {
+    try {
+      const productIds = Array.from(new Set(verified.lines.map((line) => line.productId || line.variantId).filter(Boolean))) as string[]
+      const coupon = await createOrReuseWooCommerceCoupon({
+        store: opts.bargainSession.store,
+        code,
+        value: recomputed.offer.percentOff,
+        type: 'percentage',
+        minimumSubtotal: recomputed.offer.subtotal,
+        productIds,
+        expiresAt,
+        description: `CartGain cart bargain ${code}`,
+      })
+      codeResult = coupon
+        ? { code: coupon.code, status: 'created' }
+        : { code, status: 'failed', error: 'WooCommerce coupon creation failed' }
+    } catch (err: any) {
+      codeResult = { code, status: 'failed', error: err?.message ?? 'unknown' }
+    }
+  } else {
+    try {
+      const result = await generateBargainCartDiscountCode({
+        store: opts.bargainSession.store,
+        lines: verified.lines,
+        listTotal: recomputed.offer.subtotal,
+        offerTotal: recomputed.offer.finalTotal,
+        discountPercent: recomputed.offer.percentOff,
+        code,
+        floorTotal: recomputed.offer.floorTotal,
+        customerEmail,
+        cartToken,
+        shopifyCustomerId,
+      })
+      codeResult = { code: result.code, status: result.status, error: result.error }
+    } catch (err: any) {
+      codeResult = { code, status: 'failed', error: err?.message ?? 'unknown' }
+    }
+  }
+
+  if (codeResult.status === 'failed') {
+    return NextResponse.json({
+      message: `Discount code creation failed — please try again. ${codeResult.error || ''}`,
+    }, { status: 500 })
+  }
+
+  const claim = await prisma.bargainSession.updateMany({
+    where: {
+      id: opts.bargainSession.id,
+      status: { in: ['active', 'accepted'] },
+      discountCode: null,
+    },
+    data: { status: 'accepting' },
+  })
+  if (claim.count === 0) return unavailable()
+
+  if (!quote.discountCode) {
+    const claimedQuote = await prisma.bargainQuote.updateMany({
+      where: { id: quote.id, status: { in: ['CREATED', 'ACCEPTED'] }, discountCode: null },
+      data: { discountCode: codeResult.code },
+    })
+    if (claimedQuote.count === 0) {
+      await rollbackSessionClaim(opts.bargainSession.id)
+      return unavailable()
+    }
+  }
+  const acceptedQuote = await acceptQuote({ id: quote.id, status: quote.status })
+  if (!acceptedQuote) {
+    await rollbackSessionClaim(opts.bargainSession.id)
+    return unavailable()
+  }
+
+  const currencySymbol = currencySymbolFor(opts.bargainSession.store.currency)
+  const shippingConfig = normalizeShippingConfig((opts.config ?? {}) as any)
+  const paymentConfig = normalizePaymentConfig((opts.config ?? {}) as any)
+  const shippingView = shippingConfig.enabled
+    ? (() => {
+        const shippingQuote = computeShipping({
+          config: shippingConfig,
+          unitPrice: recomputed.offer.finalTotal,
+          quantity: 1,
+        })
+        return { ...shippingQuote, upsell: shippingUpsellLine(shippingQuote, currencySymbol, { config: shippingConfig }) }
+      })()
+    : null
+  const paymentView = paymentConfig.enabled
+    ? { intent: opts.paymentIntent, prepaidSaving: prepaidSaving(paymentConfig) }
+    : null
+
+  const purchaseUrl = opts.platform === 'woocommerce'
+    ? buildWooCommerceCheckoutUrl({
+        domain: opts.bargainSession.store.domain,
+        code: codeResult.code,
+        productId: verified.lines[0]?.productId ?? null,
+        variantId: verified.lines[0]?.variantId ?? null,
+      })
+    : buildBargainCartCheckoutUrl({
+        domain: opts.bargainSession.store.domain,
+        code: codeResult.code,
+        cartToken,
+      })
+
+  await prisma.$transaction([
+    ...recordBargainDealOps(gate, opts.bargainSession.id, recomputed.offer.subtotal, recomputed.offer.finalTotal, dealMode as 'included' | 'overage'),
+    prisma.bargainMessage.create({
+      data: {
+        sessionId: opts.bargainSession.id,
+        role: 'system',
+        content: `Customer accepted the cart offer of ${formatMoney(recomputed.offer.finalTotal, opts.bargainSession.store.currency)}. Discount code issued: ${codeResult.code} (${recomputed.offer.percentOff}% off)`,
+        metadata: {
+          event: 'accept',
+          finalPrice: recomputed.offer.finalTotal,
+          discountPercent: recomputed.offer.percentOff,
+          code: codeResult.code,
+          customerEmail,
+          cartToken,
+          dealMode,
+          cartMode: verified.mode,
+          cartLineCount: verified.lines.length,
+        } as any,
+      },
+    }),
+    prisma.bargainSession.updateMany({
+      where: { id: opts.bargainSession.id, status: 'accepting' },
+      data: {
+        status: 'accepted',
+        acceptedAt: new Date(),
+        finalPrice: recomputed.offer.finalTotal,
+        bargainFloor: recomputed.offer.floorTotal,
+        bulkQuantity: recomputed.offer.quantity,
+        discountCode: codeResult.code,
+        discountCodeCustomerEmail: customerEmail,
+        discountCodeCartToken: cartToken,
+        purchaseUrl,
+      },
+    }),
+  ])
+
+  await recordLearningAcceptance(opts.bargainSession.id)
+  await track({
+    name: 'cartgain_cart_offer_accepted',
+    storeId: opts.bargainSession.storeId,
+    properties: { mode: verified.mode, lineCount: verified.lines.length, percentOff: recomputed.offer.percentOff },
+  })
+
+  return NextResponse.json({
+    sessionId: opts.bargainSession.id,
+    originalPrice: recomputed.offer.subtotal,
+    finalPrice: recomputed.offer.finalTotal,
+    discountPercent: recomputed.offer.percentOff,
+    discountCode: codeResult.code,
+    quoteToken: quote.token,
+    shopifyStatus: 'created',
+    platform: opts.platform,
+    purchaseUrl,
+    currency: opts.bargainSession.store.currency,
+    expiresAt: opts.bargainSession.expiredAt.toISOString(),
+    shipping: shippingView,
+    payment: paymentView,
+    message: dealAcceptedMessage({
+      price: formatMoney(recomputed.offer.finalTotal, opts.bargainSession.store.currency),
+      code: codeResult.code,
+      verified: true,
+      persona: enginePersonaFor(publishedPersonality(opts.config)),
+    }),
+  })
+}
+
 // POST /api/bargain/accept — customer accepts the final price; generate Shopify discount code
 export async function POST(request: NextRequest) {
   try {
@@ -164,6 +457,65 @@ export async function POST(request: NextRequest) {
         message: `Cannot accept — session is ${bargainSession.status}`,
       }, { status: 409 })
     }
+
+    const config = await prisma.bargainConfig.findUnique({
+      where: { storeId: bargainSession.storeId },
+      select: {
+        enabled: true,
+        campaignStart: true,
+        campaignEnd: true,
+        couponStackingEnabled: true,
+        emergencyPaused: true,
+        maxAttempts: true,
+        shippingAwareEnabled: true,
+        shippingFlatCost: true,
+        freeShippingThreshold: true,
+        paymentAwareEnabled: true,
+        prepaidIncentivePercent: true,
+        recommendationsEnabled: true,
+        alternativeRecommendationsEnabled: true,
+        bundleNegotiationEnabled: true,
+        bundleDiscountPercent: true,
+      },
+    })
+    if (config?.enabled === false) {
+      return NextResponse.json({ message: 'Bargaining disabled' }, { status: 403 })
+    }
+    const campaignActive = bargainCampaignStatus(config, new Date()) === 'active'
+
+    const recentCustomerMessages = await prisma.bargainMessage.findMany({
+      where: { sessionId: bargainSession.id, role: 'customer' },
+      orderBy: { createdAt: 'desc' },
+      take: 25,
+      select: { content: true, metadata: true },
+    })
+    const couponMentioned =
+      couponMentionedInMessages(recentCustomerMessages) ||
+      recentCustomerMessages.some((m) => (m.metadata as any)?.couponMentioned === true)
+    const couponsAllowed = config?.couponStackingEnabled === true
+    const paymentIntent =
+      (recentCustomerMessages.find((m) => (m.metadata as any)?.paymentIntent)?.metadata as any)?.paymentIntent ??
+      detectPaymentIntent(
+        recentCustomerMessages[0]?.content ?? '',
+        recentCustomerMessages.slice(1).map((m) => m.content),
+      )
+
+    const cartResponse = await acceptCartQuoteDeal({
+      data: {
+        quoteToken: data.quoteToken,
+        customerFingerprint: data.customerFingerprint,
+        customerEmail: data.customerEmail,
+        cartToken: data.cartToken,
+      },
+      bargainSession,
+      config,
+      platform,
+      campaignActive,
+      couponMentioned,
+      couponsAllowed,
+      paymentIntent,
+    })
+    if (cartResponse) return cartResponse
 
     // ── What can be accepted? Only a REAL AI counteroffer or an inline-accept
     // finalPrice. Pure-chat replies (decision 'chat') never carry an offer —
@@ -263,58 +615,6 @@ export async function POST(request: NextRequest) {
       platform,
       platformProductId: productId,
     })
-
-    // ── MERCHANT POLICY GATES (deterministic, independent of the AI) ──
-    // §25 Campaign lifecycle: an offer must not be accepted once the campaign
-    // window closed — `campaignStart/campaignEnd` are validated on write (they
-    // are set together and ordered).
-    const config = await prisma.bargainConfig.findUnique({
-      where: { storeId: bargainSession.storeId },
-      select: {
-        enabled: true,
-        campaignStart: true,
-        campaignEnd: true,
-        couponStackingEnabled: true,
-        emergencyPaused: true,
-        maxAttempts: true,
-        shippingAwareEnabled: true,
-        shippingFlatCost: true,
-        freeShippingThreshold: true,
-        paymentAwareEnabled: true,
-        prepaidIncentivePercent: true,
-        recommendationsEnabled: true,
-        alternativeRecommendationsEnabled: true,
-      },
-    })
-    if (config?.enabled === false) {
-      return NextResponse.json({ message: 'Bargaining disabled' }, { status: 403 })
-    }
-    const campaignActive = bargainCampaignStatus(config, new Date()) === 'active'
-
-    // §24 Coupon stacking: if the customer ever mentioned another coupon/promo
-    // during this session and the merchant disabled stacking, the accept is
-    // blocked with a machine reason code. Scans the recent customer transcript
-    // (metadata from the offer pipeline is bonus; the transcript is authoritative).
-    const recentCustomerMessages = await prisma.bargainMessage.findMany({
-      where: { sessionId: bargainSession.id, role: 'customer' },
-      orderBy: { createdAt: 'desc' },
-      take: 25,
-      select: { content: true, metadata: true },
-    })
-    const couponMentioned =
-      couponMentionedInMessages(recentCustomerMessages) ||
-      recentCustomerMessages.some((m) => (m.metadata as any)?.couponMentioned === true)
-    const couponsAllowed = config?.couponStackingEnabled === true
-
-    // Module 5 — payment intent for the quote conditions (informational; the
-    // price path is unchanged). Prefer the server-tagged metadata, else classify
-    // from the transcript.
-    const paymentIntent =
-      (recentCustomerMessages.find((m) => (m.metadata as any)?.paymentIntent)?.metadata as any)?.paymentIntent ??
-      detectPaymentIntent(
-        recentCustomerMessages[0]?.content ?? '',
-        recentCustomerMessages.slice(1).map((m) => m.content),
-      )
 
     const validation = validateOffer({
       requestedPrice: finalPrice,
@@ -585,12 +885,13 @@ export async function POST(request: NextRequest) {
     // authoritative artifact; the quote adds a signed, revocable, audited record
     // of the same deal. A failure here must NEVER fail the accept response.
     let quoteToken: string | null = null
-    if (platform !== 'woocommerce') try {
+    try {
       const quote = await createQuote({
+        force: true,
         storeId: bargainSession.storeId,
         sessionId: bargainSession.id,
         cartToken,
-        shopifyProductId: bargainSession.shopifyProductId,
+        shopifyProductId: String(bargainSession.shopifyProductId ?? productId ?? ''),
         variantId: bargainSession.variantId,
         quantity: executable.bulkQuantity,
         originalPrice: currentPrice,

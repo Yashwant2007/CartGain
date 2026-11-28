@@ -50,6 +50,18 @@ export function buildBargainCheckoutUrl(opts: {
   return `https://${domain}/discount/${encodeURIComponent(opts.code)}`
 }
 
+export function buildBargainCartCheckoutUrl(opts: {
+  domain: string
+  code: string
+  cartToken?: string | null
+}): string {
+  const domain = opts.domain.replace(/^https?:\/\//, '').replace(/\/$/, '')
+  const base = `https://${domain}/discount/${encodeURIComponent(opts.code)}`
+  const token = typeof opts.cartToken === 'string' ? opts.cartToken.trim() : ''
+  if (!token) return base
+  return `${base}?redirect=${encodeURIComponent(`/cart/${token}`)}`
+}
+
 export function buildBargainClaimUrl(token: string): string {
   return `${appBaseUrl()}/bargain/claim/${token}`
 }

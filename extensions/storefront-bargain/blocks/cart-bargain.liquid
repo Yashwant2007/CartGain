@@ -14,6 +14,22 @@
   {% assign ititle = first_item.title | url_encode %}
   {% assign iimg_enc = iimg | url_encode %}
 {% endif %}
+{% assign cg_cart_lines = '' %}
+{% for item in cart.items %}
+  {% assign cg_unit_price = item.final_price | times: 1.0 | divided_by: 100 %}
+  {% assign cg_line_total = item.final_line_price | times: 1.0 | divided_by: 100 %}
+  {% capture cg_line_json %}
+    {% unless forloop.first %},{% endunless %}{"lineId":{{ item.key | json }},"productId":{{ item.product.id | json }},"variantId":{{ item.variant.id | json }},"title":{{ item.title | json }},"quantity":{{ item.quantity | json }},"unitPrice":{{ cg_unit_price | json }},"lineTotal":{{ cg_line_total | json }}}
+  {% endcapture %}
+  {% assign cg_cart_lines = cg_cart_lines | append: cg_line_json %}
+{% endfor %}
+{% assign cg_cart_subtotal = cart.items_subtotal_price | times: 1.0 | divided_by: 100 %}
+{% assign cg_cart_total = cart.total_price | times: 1.0 | divided_by: 100 %}
+{% assign cg_cart_mode = 'cart_percentage' %}
+{% if cart.items.size > 1 %}{% assign cg_cart_mode = 'bundle' %}{% endif %}
+{% capture cg_cart_context %}
+{"platform":"shopify","cartToken":{{ cart.token | json }},"cartId":{{ cart.token | json }},"storeId":{{ shop.permanent_domain | json }},"currency":{{ currency | json }},"lines":[{{ cg_cart_lines }}],"subtotal":{{ cg_cart_subtotal | json }},"totalValue":{{ cg_cart_total | json }},"discountCodes":[{% for code in cart.discount_codes %}{{ code.code | json }}{% unless forloop.last %},{% endunless %}{% endfor %}],"requestedMode":"{{ cg_cart_mode }}","customerEmail":{% if customer %}{{ customer.email | json }}{% else %}null{% endif %},"customerId":{% if customer %}{{ customer.id | json }}{% else %}null{% endif %}}
+{% endcapture %}
 {% assign widget_src = 'https://cart-gain.com/bargain/embed'
   | append: '?mode=' | append: 'cart'
   | append: '&shop=' | append: shop_domain
@@ -36,6 +52,7 @@
   data-cg-src="{{ widget_src | escape }}"
   data-cg-variant="{{ first_item.variant.id }}"
   data-cg-variants=""
+  data-cg-cart="{{ cg_cart_context | escape }}"
   data-accent="{{ block.settings.accent | default: '#1d4ed8' | escape }}"
   style="--cg-accent: {{ block.settings.accent | default: '#1d4ed8' }};"
 >

@@ -1,6 +1,7 @@
 import {
   buildBasicCodeDiscount,
   createShopifyDiscountCode,
+  type DiscountTarget,
   friendlyDiscountError,
   resolveDiscountTarget,
   toShopifyGid,
@@ -154,6 +155,75 @@ export async function generateBargainBundleDiscountCode(opts: {
     value: { kind: 'percentage', percentage: discountPercent },
     target: { scope: 'product', productGids },
     minimumSubtotal: fromMinorUnits(toMinorUnits(opts.listTotal)),
+    shopifyCustomerId: opts.shopifyCustomerId,
+  })
+
+  return {
+    code: result.code,
+    status: result.status,
+    verified: result.verified,
+    ...(result.error ? { error: friendlyDiscountError(result.error) } : {}),
+    ...(result.discountNodeId ? { discountNodeId: result.discountNodeId } : {}),
+    ...(result.endsAt ? { endsAt: result.endsAt } : {}),
+    ...(customerEmail ? { customerEmail } : {}),
+    ...(cartToken ? { cartToken } : {}),
+  }
+}
+
+export async function generateBargainCartDiscountCode(opts: {
+  store: Store
+  lines: { productId?: string | null; variantId?: string | null }[]
+  listTotal: number
+  offerTotal: number
+  discountPercent: number
+  code: string
+  floorTotal?: number | null
+  customerEmail?: string | null
+  cartToken?: string | null
+  shopifyCustomerId?: string | null
+}): Promise<GeneratedBargainDiscount> {
+  const { store, code, customerEmail, cartToken } = opts
+  const discountPercent = Math.max(0, Math.min(100, Math.round(Number(opts.discountPercent) * 100) / 100))
+  const listMinor = toMinorUnits(opts.listTotal)
+  const offerMinor = toMinorUnits(opts.offerTotal)
+  const floorMinor = toMinorUnits(opts.floorTotal ?? 0)
+  if (!Number.isFinite(listMinor) || listMinor <= 0 || !Number.isFinite(offerMinor) || offerMinor <= 0) {
+    return { code, status: 'failed', verified: false, error: 'Invalid cart discount' }
+  }
+  if (offerMinor > listMinor || (floorMinor > 0 && offerMinor < floorMinor)) {
+    return { code, status: 'failed', verified: false, error: 'Cart discount would breach merchant floor' }
+  }
+  if (discountPercent <= 0 || discountPercent >= 100) {
+    return { code, status: 'failed', verified: false, error: 'Invalid cart discount' }
+  }
+
+  const productGids = Array.from(
+    new Set(
+      opts.lines
+        .map((line) => toShopifyGid('Product', line.productId))
+        .filter((gid): gid is string => !!gid),
+    ),
+  )
+  const variantGids = Array.from(
+    new Set(
+      opts.lines
+        .map((line) => toShopifyGid('ProductVariant', line.variantId))
+        .filter((gid): gid is string => !!gid),
+    ),
+  )
+  const target: DiscountTarget = variantGids.length === opts.lines.length && variantGids.length > 0
+    ? { scope: 'variant', variantGids }
+    : productGids.length > 0
+      ? { scope: 'product', productGids }
+      : { scope: 'order' }
+
+  const result = await createShopifyDiscountCode({
+    store,
+    code,
+    title: `Bargain cart ${code}`,
+    value: { kind: 'percentage', percentage: discountPercent },
+    target,
+    minimumSubtotal: fromMinorUnits(listMinor),
     shopifyCustomerId: opts.shopifyCustomerId,
   })
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import prisma from '@/lib/db'
 import { generateBargainDiscountCode } from '@/lib/bargain/discount'
-import { buildBargainCheckoutUrl, generateBargainCode } from '@/lib/bargain/purchase'
+import { buildBargainCartCheckoutUrl, buildBargainCheckoutUrl, generateBargainCode } from '@/lib/bargain/purchase'
 import { computeMinPrice } from '@/lib/services/bargain'
 import { fetchShopifyProductPrice, fetchShopifyProductDetail } from '@/lib/shopify'
 import { buildExecutablePrice } from '@/lib/financial-safety'
@@ -10,10 +10,20 @@ import { publicOfferRejection, validateOffer } from '@/lib/bargain/offer-validat
 import { bargainCampaignStatus } from '@/lib/bargain/policy'
 import { getBargainGate, decideDealMode, recordBargainDealOps, BARGAIN_DEALS_EXHAUSTED } from '@/lib/bargain/gate'
 import { track } from '@/lib/analytics/track'
-import { isFeatureEnabled } from '@/lib/feature-flags'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
-import { normalizeShopDomain, shopDomainCandidates } from '@/lib/stores/resolve-by-domain'
-import { loadQuoteByToken, revalidateQuote, markQuoteCheckoutPending } from '@/lib/bargain/quote'
+import {
+  checkoutBuyerFromBody,
+  checkoutOriginCorsHeaders,
+  checkoutPlatform,
+  resolveCheckoutStore,
+} from '@/lib/bargain/checkout-origin'
+import {
+  loadQuoteByToken,
+  markQuoteCheckoutPending,
+  quoteBindingMatches,
+  quoteMatchesDeal,
+  revalidateQuote,
+} from '@/lib/bargain/quote'
 import { checkoutAcceptedMessage } from '@/lib/bargain/post-deal'
 import { enginePersonaFor } from '@/lib/bargain/experience/personality'
 import { publishedPersonality } from '@/lib/bargain/experience/config'
@@ -28,43 +38,16 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-// Accepts a raw numeric Shopify customer id or a `gid://shopify/Customer/<id>`
-// and returns it in the raw-numeric form `buildCustomerSelection` expects, or
-// null for anything else. Strict allow-list keeps client input out of the
-// GraphQL body shape.
-function normalizeShopifyCustomerId(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  const m = value.trim().match(/^(?:gid:\/\/shopify\/Customer\/)?(\d{1,20})$/)
-  return m ? m[1] : null
-}
-
-// Checkout UI extensions run on https://checkout.shopify.com — allow those
-// cross-origin requests (plus the storefront admin/preview origins).
-const ALLOWED_ORIGINS = [
-  'https://checkout.shopify.com',
-  'https://cart-gain.com',
-  /^https:\/\/[a-z0-9-]+\.myshopify\.com$/,
-]
-
-function corsHeaders(origin: string | null): Record<string, string> {
-  const allowed = origin && ALLOWED_ORIGINS.some(
-    (o) => o === origin || (o instanceof RegExp && o.test(origin))
-  )
-  return {
-    'Access-Control-Allow-Origin': allowed ? origin : '',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Max-Age': '86400',
-  }
-}
-
 export async function OPTIONS(request: NextRequest) {
-  return new NextResponse(null, { status: 204, headers: corsHeaders(request.headers.get('origin')) })
+  return new NextResponse(null, {
+    status: 204,
+    headers: checkoutOriginCorsHeaders(request.headers.get('origin')),
+  })
 }
 
 // POST /api/bargain/checkout-accept — called from Checkout UI Extension when bargain accepted
 export async function POST(request: NextRequest) {
-  const headers = corsHeaders(request.headers.get('origin'))
+  const headers = checkoutOriginCorsHeaders(request.headers.get('origin'))
   try {
     // Per-IP throttle. This endpoint mints codes from client-supplied prices and
     // returns a distinguishable below-floor rejection, so unbounded probing
@@ -79,62 +62,41 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, code, bulkQuantity, shopifyCustomerId, customerEmail, quoteToken } = body
-    const platform = bargainPlatformFor(null, body?.platform)
+    const { shopDomain, shopifyProductId, variantId, originalPrice, finalPrice, code, bulkQuantity, quoteToken } = body
+    const platform = checkoutPlatform(body)
     const domainValue = shopDomain ?? body?.domain ?? body?.storeDomain
     const productId = body?.productId ?? body?.platformProductId ?? shopifyProductId
-    const quotesRequired = platform !== 'woocommerce' && isFeatureEnabled('BARGAIN_QUOTE')
+    // Signed quotes are mandatory for every checkout-origin Shopify deal, not
+    // just when the dashboard quote flag is on. The flag only controls the
+    // optional storefront quote mirror; checkout code minting must always prove
+    // a server-authorised deal.
+    const quotesRequired = platform === 'shopify'
 
     if (
-      (platform !== 'woocommerce' && (typeof shopDomain !== 'string' || !shopDomain)) ||
+      (platform === 'shopify' && (typeof shopDomain !== 'string' || !shopDomain)) ||
       (platform === 'woocommerce' && typeof domainValue !== 'string' && typeof body?.storeId !== 'string') ||
       (platform === 'woocommerce' && !productId) ||
       (code != null && (typeof code !== 'string' || code.length > 100)) ||
-      !originalPrice || !finalPrice
+      (platform === 'woocommerce' && (!originalPrice || !finalPrice))
     ) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400, headers })
     }
     if (body?.orderLevel === true) {
       return NextResponse.json({ message: 'Whole-cart discounts are not supported' }, { status: 400, headers })
     }
+    if (quotesRequired && typeof quoteToken !== 'string' && typeof code === 'string') {
+      return NextResponse.json({ message: 'Quote token required' }, { status: 400, headers })
+    }
 
-    // Buyer binding: the Checkout UI Extension forwards the logged-in customer
-    // id/email when it has protected-customer-data access. The id is strictly
-    // validated (numeric or gid) before it reaches the Shopify discount, so it
-    // can only ever bind a code to a real customer — never inject GraphQL.
-    const normalizedCustomerId = normalizeShopifyCustomerId(shopifyCustomerId)
-    const safeCustomerEmail =
-      typeof customerEmail === 'string' && customerEmail.length <= 254 && customerEmail.includes('@')
-        ? customerEmail
-        : null
+    const buyer = checkoutBuyerFromBody(body)
+    const normalizedCustomerId = buyer.shopifyCustomerId
+    const safeCustomerEmail = buyer.customerEmail
 
     // Find the store by its Shopify domain. Domain is not proof of ownership
     // (signup can park an unconnected row on any domain), so the lookup requires
     // a real OAuth connection and matches both the permanent domain and the bare
     // legacy handle.
-    const cleanDomain = normalizeShopDomain(typeof domainValue === 'string' ? domainValue : '')
-    let store: any = null
-    if (platform === 'woocommerce') {
-      store = await resolveActiveWooCommerceStore({
-        storeId: body?.storeId,
-        domain: domainValue,
-      })
-    } else {
-      const domainCandidates = shopDomainCandidates(cleanDomain)
-      const matches = await Promise.all(
-        domainCandidates.map((domain) =>
-          prisma.store.findFirst({
-            where: {
-              domain: { equals: domain, mode: 'insensitive' },
-              platform: 'shopify',
-              apiKey: { not: null },
-            },
-            orderBy: { createdAt: 'asc' },
-          }),
-        ),
-      )
-      store = matches.find((s) => s !== null) ?? null
-    }
+    const store = await resolveCheckoutStore(platform, body)
 
     if (!store) {
       return NextResponse.json({ message: 'Store not found' }, { status: 404, headers })
@@ -157,6 +119,58 @@ export async function POST(request: NextRequest) {
     // Codes are server-issued. A client may echo a previously returned code to
     // retry safely, but it can never invent one and show it as a real code.
     let issuedCode = typeof code === 'string' && code.trim() ? code.trim() : generateBargainCode()
+
+    const preloadedQuote = typeof quoteToken === 'string' && quoteToken
+      ? await loadQuoteByToken(quoteToken)
+      : null
+    const cartQuoteConditions = preloadedQuote?.conditions && typeof preloadedQuote.conditions === 'object' && !Array.isArray(preloadedQuote.conditions)
+      ? (preloadedQuote.conditions as Record<string, unknown>)
+      : null
+    if (cartQuoteConditions?.kind === 'cart_offer') {
+      const cartQuote = preloadedQuote!
+      if (cartQuote.storeId !== store.id) {
+        return NextResponse.json({ message: 'Quote does not belong to this store' }, { status: 409, headers })
+      }
+      if (cartQuote.status !== 'ACCEPTED' && cartQuote.status !== 'CHECKOUT_PENDING') {
+        return NextResponse.json({ message: 'Quote is not ready for checkout' }, { status: 409, headers })
+      }
+      if (!quoteBindingMatches(cartQuote, {
+        cartToken: buyer.cartToken,
+        customerFingerprint: buyer.customerFingerprint,
+        customerEmail: buyer.customerEmail,
+        shopifyCustomerId: buyer.shopifyCustomerId,
+      })) {
+        return NextResponse.json({ message: 'Quote was issued for a different checkout' }, { status: 403, headers })
+      }
+      if (!cartQuote.discountCode) {
+        return NextResponse.json({ message: 'Cart quote has no authorised discount code' }, { status: 409, headers })
+      }
+      if (code && code !== cartQuote.discountCode) {
+        return NextResponse.json({ message: 'Quote code mismatch' }, { status: 409, headers })
+      }
+      const pending = await markQuoteCheckoutPending(cartQuote)
+      if (!pending && cartQuote.status !== 'CHECKOUT_PENDING') {
+        return NextResponse.json({ message: 'Quote could not be claimed for checkout' }, { status: 409, headers })
+      }
+      const cartSession = cartQuote.sessionId
+        ? await prisma.bargainSession.findFirst({
+            where: { id: cartQuote.sessionId, storeId: store.id },
+            select: { discountCode: true, purchaseUrl: true },
+          })
+        : null
+      return NextResponse.json({
+        success: true,
+        code: cartQuote.discountCode,
+        status: 'created',
+        platform,
+        scope: 'cart',
+        purchaseUrl: cartSession?.purchaseUrl ?? buildBargainCartCheckoutUrl({
+          domain: store.domain,
+          code: cartQuote.discountCode,
+          cartToken: buyer.cartToken,
+        }),
+      }, { headers })
+    }
 
     const wooFacts = platform === 'woocommerce'
       ? await getWooCommerceProductFacts({
@@ -186,11 +200,13 @@ export async function POST(request: NextRequest) {
       platformProductId: platform === 'woocommerce' ? String(productId) : null,
     })
 
+    let authorisedQuote: any = null
+    let agreedPrice = Number(finalPrice)
     if (quotesRequired) {
       if (typeof quoteToken !== 'string' || !quoteToken) {
         return NextResponse.json({ message: 'Quote token required' }, { status: 400, headers })
       }
-      const quote = await loadQuoteByToken(quoteToken)
+      const quote = preloadedQuote
       if (!quote) {
         return NextResponse.json({ message: 'Quote is no longer valid' }, { status: 409, headers })
       }
@@ -200,17 +216,27 @@ export async function POST(request: NextRequest) {
       if (quote.status !== 'ACCEPTED' && quote.status !== 'CHECKOUT_PENDING') {
         return NextResponse.json({ message: 'Quote is not ready for checkout' }, { status: 409, headers })
       }
-      if (String(quote.shopifyProductId) !== String(productId ?? shopifyProductId ?? '')) {
-        return NextResponse.json({ message: 'Quote does not match this product' }, { status: 409, headers })
+      if (!quoteMatchesDeal(quote, {
+        storeId: store.id,
+        productId: productId ?? shopifyProductId,
+        variantId,
+        finalPrice: Number(finalPrice),
+        quantity: safeBulk ?? 1,
+        discountCode: code,
+      })) {
+        return NextResponse.json({ message: 'Quote does not match this checkout' }, { status: 409, headers })
       }
-      if ((quote.variantId ?? null) !== (variantId ?? null)) {
-        return NextResponse.json({ message: 'Quote does not match this variant' }, { status: 409, headers })
+      if (!quoteBindingMatches(quote, {
+        cartToken: buyer.cartToken,
+        customerFingerprint: buyer.customerFingerprint,
+        customerEmail: buyer.customerEmail,
+        shopifyCustomerId: buyer.shopifyCustomerId,
+      })) {
+        return NextResponse.json({ message: 'Quote was issued for a different checkout' }, { status: 403, headers })
       }
-      if (Math.abs(Number(quote.finalPrice) - Number(finalPrice)) > 0.01) {
-        return NextResponse.json({ message: 'Quote price has changed' }, { status: 409, headers })
-      }
+      agreedPrice = Number(quote.finalPrice)
       if (quote.discountCode) {
-        if (code && issuedCode !== quote.discountCode) {
+        if (code && code !== quote.discountCode) {
           return NextResponse.json({ message: 'Quote code mismatch' }, { status: 409, headers })
         }
         issuedCode = quote.discountCode
@@ -222,9 +248,13 @@ export async function POST(request: NextRequest) {
           { status: 409, headers },
         )
       }
-      await markQuoteCheckoutPending(quote)
-    } else if (platform !== 'woocommerce' && typeof quoteToken === 'string' && quoteToken) {
-      const quote = await loadQuoteByToken(quoteToken)
+      const pending = await markQuoteCheckoutPending(quote)
+      if (!pending && quote.status !== 'CHECKOUT_PENDING') {
+        return NextResponse.json({ message: 'Quote could not be claimed for checkout' }, { status: 409, headers })
+      }
+      authorisedQuote = quote
+    } else if (typeof quoteToken === 'string' && quoteToken) {
+      const quote = preloadedQuote
       if (quote) {
         if (quote.storeId !== store.id) {
           return NextResponse.json({ message: 'Quote does not belong to this store' }, { status: 409, headers })
@@ -296,7 +326,7 @@ export async function POST(request: NextRequest) {
     const campaignActive = bargainCampaignStatus(config, new Date()) === 'active'
 
     const validation = validateOffer({
-      requestedPrice: Number(finalPrice),
+      requestedPrice: agreedPrice,
       originalPrice: currentPrice,
       floorPrice: minPrice,
       variantAvailable,
@@ -310,7 +340,7 @@ export async function POST(request: NextRequest) {
 
     const executable = buildExecutablePrice({
       originalPrice: currentPrice,
-      finalPrice: Number(finalPrice),
+      finalPrice: agreedPrice,
       floorPrice: minPrice,
       bulkQuantity: safeBulk,
     })
@@ -405,7 +435,7 @@ export async function POST(request: NextRequest) {
     // on the session lets orders/create attribute the purchase back to it (the
     // code must actually appear on the order, so attribution cannot be faked).
     // Atomic: the session row and its meter/rev-share ops commit together.
-    const sessionId = crypto.randomUUID()
+    const sessionId = authorisedQuote?.sessionId || crypto.randomUUID()
     await prisma.$transaction([
       prisma.bargainSession.create({
         data: {
@@ -419,11 +449,19 @@ export async function POST(request: NextRequest) {
           bargainFloor: minPrice,
           bulkQuantity: safeBulk,
           discountCode: result.code,
+          discountCodeCartToken: buyer.cartToken,
+          discountCodeCustomerEmail: safeCustomerEmail,
           purchaseUrl,
           customerEmail: safeCustomerEmail,
+          customerFingerprint: buyer.customerFingerprint,
+          cartToken: buyer.cartToken,
+          platform,
+          platformProductId: platform === 'woocommerce' ? String(productId) : null,
+          platformVariantId: variantId || null,
+          externalCustomerId: normalizedCustomerId,
           status: 'accepted',
           acceptedAt: new Date(),
-          expiredAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          expiredAt: authorisedQuote?.expiresAt ?? new Date(Date.now() + 24 * 60 * 60 * 1000),
         },
       }),
       ...recordBargainDealOps(gate, sessionId, currentPrice, finalPriceSafe, dealMode as 'included' | 'overage'),
