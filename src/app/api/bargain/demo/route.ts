@@ -22,7 +22,7 @@ import { analyzeSocialSignals } from '@/lib/bargain/behavior'
 import { analyzeLiveTurn, voiceAdjustedLiveTurn } from '@/lib/bargain/live-turn'
 import { loadStoreVoice } from '@/lib/conversation/store'
 import { adaptiveContextForTurn } from '@/lib/bargain/learning/behavior-context'
-import { buildSessionMemory } from '@/lib/bargain/session-memory'
+import { buildSessionMemory, countSessionMemorySignals, readSessionMemoryFromMessages } from '@/lib/bargain/session-memory'
 import { buildProductContext } from '@/lib/bargain/product-fetcher'
 import { getBargainTrendPrompt } from '@/lib/bargain/trend'
 import {
@@ -31,6 +31,7 @@ import {
 } from '@/lib/bargain/goals'
 import { analyzeIntent } from '@/lib/bargain/intent'
 import { adaptNegotiationResult, sanitizeEngineResponseForCustomer } from '@/lib/bargain/engine-contract'
+import { buildUniversalConversationState, universalPromptBlock } from '@/lib/bargain/universal-intelligence'
 import { applicationTerminationBody } from '@/lib/bargain/application-termination'
 import { deriveConversationState } from '@/lib/bargain/conversation-state'
 import { assessCustomerClaims } from '@/lib/bargain/claims'
@@ -373,6 +374,12 @@ export async function POST(request: NextRequest) {
     ctx.liveTurn = liveTurn
     ctx.adaptive = adaptive
     ctx.voice = voice
+    const memoryHistory = Array.isArray(body.history)
+      ? body.history.slice(-12).map((m: any) => ({
+          role: m?.role === 'ai' ? 'ai' : 'customer',
+          metadata: m?.metadata,
+        }))
+      : []
     ctx.sessionMemory = buildSessionMemory({
       intent: intentAnalysis,
       signals: shopperSignals,
@@ -380,6 +387,8 @@ export async function POST(request: NextRequest) {
       customerOfferTrend,
       seriousness: ctx.seriousness,
       currencySymbol,
+      prior: readSessionMemoryFromMessages(memoryHistory),
+      ...countSessionMemorySignals(memoryHistory, liveTurn.mode),
     })
 
     // Real catalog facts for item demos: when the merchant's store + a real
@@ -495,6 +504,16 @@ export async function POST(request: NextRequest) {
     const dealAccepted = body.dealAccepted === true
     const acceptedPrice = typeof body.finalPrice === 'number' ? clamp(body.finalPrice, 1, 1_000_000) : undefined
     const ctx2 = dealAccepted ? { ...ctx, dealAccepted, acceptedPrice } : ctx
+    ctx2.universalPrompt = universalPromptBlock(buildUniversalConversationState({
+      message: interpretedMessage,
+      intent: intentAnalysis,
+      liveTurn: ctx2.liveTurn,
+      history,
+      product: ctx2.product,
+      productTitle: ctx2.productTitle,
+      persona: ctx2.persona,
+      language: ctx2.language,
+    }))
 
     const turnStartedAt = Date.now()
     let turnSource: string | undefined
@@ -690,6 +709,8 @@ export async function POST(request: NextRequest) {
         requiresEscalation: intentAnalysis.needHumanSupport,
         conversationState,
         source: 'demo',
+        sessionMemory: ctx.sessionMemory,
+        liveTurnMode: liveTurn.mode,
       },
     }))
 

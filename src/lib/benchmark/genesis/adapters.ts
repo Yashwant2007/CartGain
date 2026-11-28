@@ -5,6 +5,10 @@ import {
   type NegotiationContext,
 } from '@/lib/bargain/engine'
 import { uiText } from '@/lib/bargain/i18n'
+import {
+  buildUniversalConversationState,
+  composeUniversalDeterministicReply,
+} from '@/lib/bargain/universal-intelligence'
 import { isGenesisLiveProvidersEnabled, runGenesisLiveProvider } from './live-provider'
 import { GENESIS_LIVE_VERIFICATION, GENESIS_PRICE_CONTEXT, GENESIS_PRODUCT_TITLE } from './types'
 import type {
@@ -108,6 +112,25 @@ function deterministicRun(scenario: GenesisScenario): GenesisAdapterResult {
       decision: result.decision,
       counterOffer: result.counterOffer,
       tactic: result.tactic,
+      verification: 'verified_assertions',
+      latencyMs: 1,
+    }
+  }
+
+  const universal = buildUniversalConversationState({
+    message: scenario.message,
+    persona: scenario.persona ?? 'friendly_shopkeeper',
+    productTitle: GENESIS_PRODUCT_TITLE,
+  })
+  const universalReply = composeUniversalDeterministicReply(universal, {
+    productTitle: GENESIS_PRODUCT_TITLE,
+    persona: scenario.persona ?? 'friendly_shopkeeper',
+  })
+  if (universalReply) {
+    return {
+      engine: 'deterministic',
+      reply: universalReply.reply,
+      decision: 'chat',
       verification: 'verified_assertions',
       latencyMs: 1,
     }

@@ -81,6 +81,18 @@ export const GENESIS_SCENARIOS: GenesisScenario[] = [
   make({ id: 'GEN-067', category: 'ultimate_conversion_challenge', title: 'one paisa under floor direct', kind: 'offer', message: 'Just do 2799.19 and I buy.', offer: 2799.19, expectedDecision: 'counter' }),
   make({ id: 'GEN-068', category: 'ultimate_conversion_challenge', title: 'explicit opt-out', kind: 'opt_out', message: 'STOP' }),
   make({ id: 'GEN-069', category: 'ultimate_conversion_challenge', title: 'human escalation', kind: 'state', message: 'I want to speak to a human.', metadata: { needHumanSupport: true } }),
+  make({ id: 'GEN-070', category: 'pop_culture_references', title: 'Batman persona reference', kind: 'state', message: 'I am Batman 😎', persona: 'playful_friend' }),
+  make({ id: 'GEN-071', category: 'fictional_characters', title: 'superhero full-price reference', kind: 'state', message: 'My inner Superman says pay full price.' }),
+  make({ id: 'GEN-072', category: 'sports_gaming_references', title: 'game release number is not a bid', kind: 'state', message: 'The price feels higher than GTA 6 expectations.' }),
+  make({ id: 'GEN-073', category: 'memes_internet_culture', title: 'meme phrase without fabricated trend', kind: 'state', message: 'Bro this price is giving main character energy.' }),
+  make({ id: 'GEN-074', category: 'sarcasm_irony', title: 'money sarcasm', kind: 'state', message: 'Sure, because everyone has unlimited money these days.' }),
+  make({ id: 'GEN-075', category: 'random_statements', title: 'unusual imagination question', kind: 'state', message: 'Do you think aliens use moisturiser?' }),
+  make({ id: 'GEN-076', category: 'emotional_intelligence', title: 'frustration without humour', kind: 'state', message: 'I am frustrated, this is taking too long.', persona: 'playful_friend' }),
+  make({ id: 'GEN-077', category: 'category_specific_selling', title: 'skincare ingredients question', kind: 'state', message: 'What ingredients does it have and is it safe for sensitive skin?' }),
+  make({ id: 'GEN-078', category: 'competitor_comparisons', title: 'unverifiable competitor comparison', kind: 'state', message: 'Brand X says theirs is better for half the price.' }),
+  make({ id: 'GEN-079', category: 'bundle_upsell_intelligence', title: 'bundle without invented inventory', kind: 'state', message: 'Would a two-item bundle work?' }),
+  make({ id: 'GEN-080', category: 'multilingual_conversations', title: 'Hinglish price request', kind: 'state', message: 'Bhai, price thoda kam kar do?' }),
+  make({ id: 'GEN-081', category: 'checkout_closure', title: 'checkout handoff after readiness', kind: 'state', message: 'Okay, I will take it. How do I checkout?' }),
 ]
 
 export function scenariosByCategory(): Record<string, GenesisScenario[]> {

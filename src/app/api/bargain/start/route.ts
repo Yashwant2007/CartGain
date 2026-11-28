@@ -14,6 +14,7 @@ import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { getBargainGate, recordBargainSessionOp, BARGAIN_SESSIONS_EXHAUSTED } from '@/lib/bargain/gate'
 import { generateClaimToken } from '@/lib/bargain/purchase'
 import { sessionIdFromToken, signSessionToken } from '@/lib/bargain/session-bind'
+import { restoredApplicationTerminationFromMessages } from '@/lib/bargain/application-termination'
 import {
   bargainSessionIdentityClauses,
   hasStrongBuyerProof,
@@ -62,6 +63,7 @@ function publicSession(s: any) {
       offeredPrice: m.offeredPrice ?? null,
       createdAt: m.createdAt,
     })),
+    termination: restoredApplicationTerminationFromMessages(s.messages),
   }
 }
 
@@ -89,7 +91,6 @@ export async function POST(request: NextRequest) {
     }
 
     let body: any = await request.json()
-    const presentedSessionToken = typeof body?.sessionToken === 'string' ? body.sessionToken : null
     let platform = bargainPlatformFor(null, body?.platform)
     let wooStore: any = null
 
@@ -276,7 +277,7 @@ export async function POST(request: NextRequest) {
       customerEmail,
       customerPhone: data.customerPhone,
     }
-    const tokenSessionId = sessionIdFromToken(presentedSessionToken)
+    const tokenSessionId = sessionIdFromToken(typeof data.sessionToken === 'string' ? data.sessionToken : null)
     const callerProof = {
       customerFingerprint: data.customerFingerprint,
       cartToken: data.cartToken,

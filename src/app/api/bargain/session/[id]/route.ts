@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { checkSimpleRateLimit, clientIp } from '@/lib/rate-limit'
 import { issueRetentionDiscount } from '@/lib/bargain/purchase'
 import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
+import { restoredApplicationTerminationFromMessages } from '@/lib/bargain/application-termination'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,7 +29,7 @@ export async function GET(
       include: {
         messages: {
           orderBy: { createdAt: 'asc' },
-          select: { id: true, role: true, content: true, offeredPrice: true, createdAt: true },
+          select: { id: true, role: true, content: true, offeredPrice: true, createdAt: true, metadata: true },
         },
       },
     })
@@ -72,6 +73,7 @@ export async function GET(
       attemptsUsed: bargainSession.attemptsUsed,
       expiresAt: bargainSession.expiredAt.toISOString(),
       messages: bargainSession.messages,
+      termination: restoredApplicationTerminationFromMessages(bargainSession.messages),
     })
   } catch (error) {
     console.error('[BARGAIN_SESSION_POLL]', error)

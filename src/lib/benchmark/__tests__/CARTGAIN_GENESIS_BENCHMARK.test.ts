@@ -130,13 +130,13 @@ describe('CARTGAIN_GENESIS_BENCHMARK', () => {
     }
   })
 
-  it('covers all twelve weighted categories', () => {
+  it('covers all twenty-four weighted categories', () => {
     const weights: number[] = Object.values(GENESIS_CATEGORY_WEIGHTS)
-    expect(weights).toHaveLength(12)
+    expect(weights).toHaveLength(24)
     expect(weights.reduce((total, weight) => total + weight, 0)).toBe(100)
     for (const engine of report.engines) {
       const categories = engine.categories.map((entry: any) => entry.category)
-      expect(new Set(categories).size).toBe(12)
+      expect(new Set(categories).size).toBe(24)
     }
   })
 
@@ -189,6 +189,22 @@ describe('CARTGAIN_GENESIS_BENCHMARK', () => {
       expect(source).toContain('detectedIntent:')
       expect(source).toContain('objectionCategory:')
     }
+  })
+
+  it('wires universal conversation intelligence into the shared engine and benchmark', () => {
+    const source = readFileSync(join(process.cwd(), 'src/lib/services/bargain.ts'), 'utf8')
+    expect(source).toContain('buildUniversalConversationState')
+    expect(source).toContain('composeUniversalDeterministicReply')
+    expect(source).toContain('universalPromptBlock')
+    expect(source).toContain('ctx.universalPrompt')
+
+    const adapter = readFileSync(join(process.cwd(), 'src/lib/benchmark/genesis/adapters.ts'), 'utf8')
+    expect(adapter).toContain('buildUniversalConversationState')
+    expect(adapter).toContain('composeUniversalDeterministicReply')
+
+    const liveProvider = readFileSync(join(process.cwd(), 'src/lib/benchmark/genesis/live-provider.ts'), 'utf8')
+    expect(liveProvider).toContain('buildUniversalConversationState')
+    expect(liveProvider).toContain('universalPromptBlock')
   })
 
   it('keeps simulated provider decisions and replies in parity with the rule engine', async () => {

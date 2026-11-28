@@ -9,6 +9,8 @@ import {
   ruleBasedDecision,
   type NegotiationContext,
 } from '@/lib/services/bargain'
+import { adaptNegotiationResult, sanitizeEngineResponseForCustomer } from '@/lib/bargain/engine-contract'
+import { buildUniversalConversationState, universalPromptBlock } from '@/lib/bargain/universal-intelligence'
 import { deriveConversationState } from '@/lib/bargain/conversation-state'
 import { analyzeIntent } from '@/lib/bargain/intent'
 import { analyzeLiveTurn } from '@/lib/bargain/live-turn'
@@ -109,6 +111,15 @@ export async function POST(request: NextRequest) {
     ctx.seriousness = classifySeriousness(history, interpretedMessage, ctx, 0)
     ctx.lastCounter = [...history].reverse()
       .find((m) => m.role === 'ai' && typeof m.offeredPrice === 'number')?.offeredPrice ?? null
+    ctx.universalPrompt = universalPromptBlock(buildUniversalConversationState({
+      message: interpretedMessage,
+      intent,
+      liveTurn,
+      history,
+      persona: ctx.persona,
+      productTitle: ctx.productTitle,
+      language: ctx.language,
+    }))
 
     let result
     try {
@@ -137,6 +148,22 @@ export async function POST(request: NextRequest) {
       recommendationsEnabled: false,
     })
 
+    const engineResponse = sanitizeEngineResponseForCustomer(adaptNegotiationResult({
+      ...result,
+      reply,
+      decision,
+      counterOffer,
+      metadata: {
+        ...(result.metadata ?? {}),
+        detectedIntent: intent.intent,
+        detectedObjection: intent.objection,
+        internalReasoningCategory: intent.category,
+        requiresEscalation: intent.needHumanSupport,
+        conversationState,
+        source: 'home_demo',
+      },
+    }))
+
     return NextResponse.json({
       reply,
       decision,
@@ -145,6 +172,10 @@ export async function POST(request: NextRequest) {
       offerDetected: offer != null,
       attemptsUsed: Math.min(MAX_ATTEMPTS, attemptsUsed),
       conversationState,
+      detectedIntent: intent.intent,
+      ...(intent.objection ? { detectedObjection: intent.objection } : {}),
+      objectionCategory: intent.category,
+      engineResponse,
       product: PUBLIC_PRODUCT,
     })
   } catch (error) {

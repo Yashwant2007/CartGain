@@ -23,22 +23,28 @@ function cleanFact(value: unknown, max = 130): string | null {
   return trimmed.length > max ? `${trimmed.slice(0, max).trimEnd()}…` : trimmed
 }
 
-function verifiedValueFact(ctx: ComparisonPitchContext): string | null {
+function factList(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string' && value.trim()) return [value]
+  return []
+}
+
+export function verifiedProductFact(ctx: ComparisonPitchContext): string | null {
   const product = ctx.product
   if (!product || product.fetchFailed) return null
-  const approved = product.merchantApprovedSellingPoints.map((p) => cleanFact(p)).filter(Boolean)
+  const approved = factList(product.merchantApprovedSellingPoints).map((p) => cleanFact(p)).filter(Boolean)
   if (approved.length > 0) return approved[0] as string
   const description = cleanFact(product.description, 150)
   if (description) return description
   const identity = [cleanFact(product.vendor, 40), cleanFact(product.productType, 40)].filter(Boolean).join(' ')
   if (identity) return identity
-  const tags = product.tags.map((tag) => cleanFact(tag, 40)).filter(Boolean).slice(0, 3)
+  const tags = factList(product.tags).map((tag) => cleanFact(tag, 40)).filter(Boolean).slice(0, 3)
   if (tags.length > 0) return tags.join(', ')
   return cleanFact(product.title || ctx.productTitle, 80)
 }
 
 function pitchLine(ctx: ComparisonPitchContext): string {
-  const fact = verifiedValueFact(ctx)
+  const fact = verifiedProductFact(ctx)
   return fact
     ? `I can't verify prices elsewhere, but here I can stand behind the value: ${fact}.`
     : "I can't verify prices elsewhere, but I can stand behind the price I've offered here."
@@ -62,7 +68,7 @@ function salesPitchClose(ctx: ComparisonPitchContext): string {
 
 export function buildSalesPitch(ctx: ComparisonPitchContext): string {
   const title = cleanFact(ctx.product?.title || ctx.productTitle, 80) || 'this item'
-  const candidate = verifiedValueFact(ctx)
+  const candidate = verifiedProductFact(ctx)
   const fact = candidate && candidate.toLowerCase() !== title.toLowerCase() ? candidate : null
   const listed = cleanFact(ctx.listedPrice, 40)
   const lead = fact

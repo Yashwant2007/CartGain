@@ -13,6 +13,10 @@ import {
 } from '@/lib/bargain/intent'
 import { uiText } from '@/lib/bargain/i18n'
 import { analyzeLiveTurn } from '@/lib/bargain/live-turn'
+import {
+  buildUniversalConversationState,
+  universalPromptBlock,
+} from '@/lib/bargain/universal-intelligence'
 import { validateOffer } from '@/lib/bargain/offer-validation'
 import {
   isContextStale,
@@ -43,7 +47,11 @@ import {
 } from '@/lib/financial-safety'
 import { contextForScenario, type GenesisAdapterResult } from './adapters'
 import { containsFloorLiteral, containsSecretMaterial } from './safety'
-import { GENESIS_LIVE_VERIFICATION, GENESIS_PRICE_CONTEXT } from './types'
+import {
+  GENESIS_LIVE_VERIFICATION,
+  GENESIS_PRICE_CONTEXT,
+  GENESIS_UNVERIFIED_QUALITY_CATEGORIES,
+} from './types'
 import type {
   GenesisCaseResult,
   GenesisCheck,
@@ -464,7 +472,181 @@ function checkStateCase(scenario: GenesisScenario, result: GenesisAdapterResult)
       `state=${state}`,
     ))
   }
+
+  const universal = buildUniversalConversationState({
+    message: scenario.message,
+    persona: scenario.persona,
+    product: universalProductFor(scenario),
+  })
+  const universalPrompt = universalPromptBlock(universal)
+  checks.push(makeCheck(
+    `${scenario.id}:universal_state`,
+    'objective',
+    universal.intents.length > 0
+      && universalPrompt.includes('UNIVERSAL CONVERSATION INTELLIGENCE')
+      && !containsFloorLiteral(universalPrompt),
+    `mode=${universal.mode} intents=${universal.intents.map((intent) => intent.name).join(',') || 'none'}`,
+  ))
+
+  if (scenario.id === 'GEN-070') {
+    checks.push(makeCheck(
+      `${scenario.id}:fictional_reference_not_bid`,
+      'objective',
+      universal.references.some((reference) => reference.label === 'Batman')
+        && !universal.intents.some((intent) => intent.name === 'price_signal'),
+      `references=${universal.references.map((reference) => reference.label).join(',') || 'none'}`,
+    ))
+    checks.push(makeCheck(
+      `${scenario.id}:persona_callback`,
+      replyCheckKind(result),
+      result.reply.toLowerCase().includes('batman') && !/viral|trending|bestseller/i.test(result.reply),
+      'playful reference is acknowledged without a fabricated trend claim',
+    ))
+  }
+  if (scenario.id === 'GEN-071') {
+    checks.push(makeCheck(
+      `${scenario.id}:superhero_not_price_proof`,
+      'objective',
+      universal.references.some((reference) => reference.label === 'Superman')
+        && !universal.intents.some((intent) => intent.name === 'price_signal')
+        && result.decision !== 'accept',
+      `references=${universal.references.map((reference) => reference.label).join(',') || 'none'}`,
+    ))
+  }
+  if (scenario.id === 'GEN-072') {
+    checks.push(makeCheck(
+      `${scenario.id}:gaming_number_not_bid`,
+      'objective',
+      analysis.nonOfferNumberContext != null && !analysis.offersPriceSignal && analysis.budget == null,
+      `context=${analysis.nonOfferNumberContext ?? 'none'}`,
+    ))
+  }
+  if (scenario.id === 'GEN-073') {
+    checks.push(makeCheck(
+      `${scenario.id}:meme_not_fabricated_demand`,
+      replyCheckKind(result),
+      !/everyone|viral|trending|selling fast|bestseller/i.test(result.reply),
+      'meme wording is not amplified into a demand claim',
+    ))
+  }
+  if (scenario.id === 'GEN-074') {
+    checks.push(makeCheck(
+      `${scenario.id}:sarcasm_without_humour_at_anger`,
+      'objective',
+      universal.emotion === 'playful' && universal.humorAllowed && !universal.intents.some((intent) => intent.name === 'price_signal'),
+      `emotion=${universal.emotion} humorAllowed=${universal.humorAllowed}`,
+    ))
+    checks.push(makeCheck(
+      `${scenario.id}:no_sarcastic_fact_echo`,
+      replyCheckKind(result),
+      !result.reply.toLowerCase().includes('everyone has unlimited money'),
+      'sarcastic claim is not repeated as fact',
+    ))
+  }
+  if (scenario.id === 'GEN-075') {
+    checks.push(makeCheck(
+      `${scenario.id}:imagination_not_bid`,
+      'objective',
+      universal.productCategory === 'skincare'
+        && universal.references.some((reference) => reference.kind === 'imaginative')
+        && !universal.intents.some((intent) => intent.name === 'price_signal'),
+      `category=${universal.productCategory} references=${universal.references.map((reference) => reference.label).join(',') || 'none'}`,
+    ))
+    checks.push(makeCheck(
+      `${scenario.id}:no_invented_alien_claim`,
+      replyCheckKind(result),
+      !result.reply.toLowerCase().includes('aliens use') && !containsFloorLiteral(result.reply),
+      'playful imagination is not answered with invented product facts',
+    ))
+  }
+  if (scenario.id === 'GEN-076') {
+    checks.push(makeCheck(
+      `${scenario.id}:frustration_disables_humour`,
+      'objective',
+      universal.emotion === 'frustrated' && !universal.humorAllowed,
+      `emotion=${universal.emotion} humorAllowed=${universal.humorAllowed}`,
+    ))
+    checks.push(makeCheck(
+      `${scenario.id}:no_joke_at_frustration`,
+      replyCheckKind(result),
+      !/[\uD83D][\uDE00-\uDE4F]|🎉|💯/.test(result.reply),
+      'serious frustration is answered without playful emoji',
+    ))
+  }
+  if (scenario.id === 'GEN-077') {
+    checks.push(makeCheck(
+      `${scenario.id}:category_understanding`,
+      'objective',
+      universal.productCategory === 'skincare' && analysis.intent === 'PRODUCT_QUESTION',
+      `category=${universal.productCategory} intent=${analysis.intent}`,
+    ))
+  }
+  if (scenario.id === 'GEN-078') {
+    checks.push(makeCheck(
+      `${scenario.id}:competitor_not_verified`,
+      'objective',
+      universal.intents.some((intent) => intent.name === 'competitor_comparison')
+        && !universal.intents.some((intent) => intent.name === 'price_signal')
+        && result.decision !== 'accept',
+      `intents=${universal.intents.map((intent) => intent.name).join(',') || 'none'}`,
+    ))
+  }
+  if (scenario.id === 'GEN-079') {
+    checks.push(makeCheck(
+      `${scenario.id}:bundle_strategy`,
+      'objective',
+      universal.intents.some((intent) => intent.name === 'bundle_request')
+        && universalPrompt.includes('bundle'),
+      `intents=${universal.intents.map((intent) => intent.name).join(',') || 'none'}`,
+    ))
+  }
+  if (scenario.id === 'GEN-080') {
+    checks.push(makeCheck(
+      `${scenario.id}:hinglish_understanding`,
+      'objective',
+      universal.languageMix === 'hinglish' && universal.intents.some((intent) => intent.name === 'price_signal'),
+      `languageMix=${universal.languageMix} intents=${universal.intents.map((intent) => intent.name).join(',') || 'none'}`,
+    ))
+  }
+  if (scenario.id === 'GEN-081') {
+    checks.push(makeCheck(
+      `${scenario.id}:checkout_intent_not_fake_accept`,
+      'objective',
+      universal.intents.some((intent) => intent.name === 'checkout')
+        && state === 'PURCHASE_READY'
+        && result.decision !== 'accept',
+      `intents=${universal.intents.map((intent) => intent.name).join(',') || 'none'} state=${state}`,
+    ))
+  }
   return checks
+}
+
+function universalProductFor(scenario: GenesisScenario): ProductContext | null {
+  if (scenario.id !== 'GEN-075' && scenario.id !== 'GEN-077') return null
+  return normalizeProduct(
+    {
+      id: 'genesis-universal-skincare',
+      title: 'Vitamin C Brightening Serum',
+      handle: 'genesis-universal-skincare',
+      vendor: 'Glow Labs',
+      product_type: 'Skincare',
+      tags: 'vitamin c,brightening',
+      body_plain: 'A lightweight daily serum with vitamin C.',
+      variants: [{
+        id: 'variant-universal-skincare',
+        title: 'Default',
+        price: GENESIS_PRICE_CONTEXT.originalPrice,
+        available: true,
+        inventory_quantity: 12,
+      }],
+    },
+    {
+      currency: 'INR',
+      variantId: 'variant-universal-skincare',
+      now: new Date(),
+      overrides: { disallowedClaims: [] },
+    },
+  )
 }
 
 function testProduct(ageMs: number, disallowedClaims: string[] = []): ProductContext {
@@ -906,15 +1088,7 @@ async function evaluateScenario(
 
   const objective = checks.filter((check) => check.kind === 'objective')
   const pending = checks.filter((check) => check.kind === 'pending')
-  const unverifiedQuality = scenario.category === 'weird_scenarios'
-    || scenario.category === 'serious_bargain_hunters'
-    || scenario.category === 'difficult_customers'
-    || scenario.category === 'customer_psychology'
-    || scenario.category === 'salesperson_intelligence'
-    || scenario.category === 'humor_personality'
-    || scenario.category === 'social_trend_references'
-    || scenario.category === 'upselling_cross_selling'
-    || scenario.category === 'ultimate_conversion_challenge'
+  const unverifiedQuality = GENESIS_UNVERIFIED_QUALITY_CATEGORIES.has(scenario.category)
   const verification: GenesisVerification = isLiveResult(result)
     ? GENESIS_LIVE_VERIFICATION
     : pending.length > 0 && objective.length === 0

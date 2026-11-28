@@ -10,7 +10,7 @@ import { analyzeLiveTurn, voiceAdjustedLiveTurn } from '@/lib/bargain/live-turn'
 import { loadStoreVoice } from '@/lib/conversation/store'
 import { adaptiveContextForTurn } from '@/lib/bargain/learning/behavior-context'
 import { rapidReplyForTurn } from '@/lib/bargain/rapid-reply'
-import { buildSessionMemory } from '@/lib/bargain/session-memory'
+import { buildSessionMemory, countSessionMemorySignals, readSessionMemoryFromMessages } from '@/lib/bargain/session-memory'
 import { assertSessionOwnership, verifySessionToken } from '@/lib/bargain/session-bind'
 import { uiText, currencySymbolFor, formatMoney } from '@/lib/bargain/i18n'
 import { detectLanguage, detectLanguageRequest } from '@/lib/bargain/language'
@@ -91,6 +91,16 @@ function publicEngineResponseFor(
     tactic: typeof hints.tactic === 'string' ? hints.tactic : undefined,
     metadata: { ...hints, conversationState },
   }))
+}
+
+function earlyEngineResponse(
+  intelligence: BargainIntelligenceState,
+  decision: string,
+  reply: string,
+  counterOffer: number | null | undefined,
+  hints: Record<string, unknown> = {},
+) {
+  return publicEngineResponseFor(decision, reply, counterOffer, intelligence.state.current, hints)
 }
 
 function finalQuoteFor(session: any, minPrice: number): number {
@@ -331,13 +341,18 @@ function duplicateTurnPayload(session: any, ai: any | null): BargainOfferSuccess
   const publicIntelligence = meta.publicIntelligence as BargainOfferSuccess['negotiationIntelligence']
   const state = conversationStateFromMetadata(intelligenceMeta.conversationState)
     ?? conversationStateFromMetadata(meta.conversationState)
-  const engineResponse = publicEngineResponseFor(
-    decision,
-    typeof ai?.content === 'string' ? ai.content : '',
-    ai?.offeredPrice != null ? Number(ai.offeredPrice) : session.currentOffer ?? null,
-    state,
-    { source: 'duplicate_turn', tactic: meta.tactic },
-  )
+  const engineResponse = meta.engineResponse && typeof meta.engineResponse === 'object'
+    ? meta.engineResponse as BargainOfferSuccess['engineResponse']
+    : publicEngineResponseFor(
+        decision,
+        typeof ai?.content === 'string' ? ai.content : '',
+        ai?.offeredPrice != null ? Number(ai.offeredPrice) : session.currentOffer ?? null,
+        state,
+        { source: 'duplicate_turn', tactic: meta.tactic },
+      )
+  const terminationKind = meta.terminationKind === 'opt_out' || meta.terminationKind === 'human_support'
+    ? meta.terminationKind
+    : undefined
   const offerInterpretation: BargainOfferSuccess['offerInterpretation'] = meta.offerBasis
     ? {
         basis: meta.offerBasis as NonNullable<BargainOfferSuccess['offerInterpretation']>['basis'],
@@ -554,24 +569,64 @@ export async function POST(request: NextRequest) {
     // Automated decision-making opt-out (DPDP Act 2023, GDPR Art. 22): end the
     // session without the AI consuming an attempt or responding.
     if (intentAnalysis.optOutRequested) {
-      await prisma.bargainSession.update({
-        where: { id: bargainSession.id },
-        data: { status: 'abandoned' },
-      })
-      return NextResponse.json(applicationTerminationBody('opt_out', lang), { status: 200 })
+      const termination = applicationTerminationBody('opt_out', lang)
+      await prisma.$transaction([
+        prisma.bargainMessage.create({
+          data: {
+            sessionId: bargainSession.id, role: 'customer', content: data.message,
+            metadata: { ...turnMetadata, terminationKind: termination.terminationKind } as any,
+          },
+        }),
+        prisma.bargainMessage.create({
+          data: {
+            sessionId: bargainSession.id, role: 'ai', content: termination.message,
+            metadata: {
+              ...turnMetadata,
+              decision: 'no_offer',
+              tactic: 'application_termination',
+              ...termination,
+            } as any,
+          },
+        }),
+        prisma.bargainSession.update({
+          where: { id: bargainSession.id },
+          data: { status: termination.status },
+        }),
+      ])
+      return NextResponse.json(termination, { status: 200 })
     }
 
     if (intentAnalysis.needHumanSupport) {
-      await prisma.bargainSession.update({
-        where: { id: bargainSession.id },
-        data: { status: 'abandoned' },
-      })
+      const termination = applicationTerminationBody('human_support', lang)
+      await prisma.$transaction([
+        prisma.bargainMessage.create({
+          data: {
+            sessionId: bargainSession.id, role: 'customer', content: data.message,
+            metadata: { ...turnMetadata, terminationKind: termination.terminationKind } as any,
+          },
+        }),
+        prisma.bargainMessage.create({
+          data: {
+            sessionId: bargainSession.id, role: 'ai', content: termination.message,
+            metadata: {
+              ...turnMetadata,
+              decision: 'escalate',
+              tactic: 'human_support_termination',
+              ...termination,
+            } as any,
+          },
+        }),
+        prisma.bargainSession.update({
+          where: { id: bargainSession.id },
+          data: { status: termination.status },
+        }),
+      ])
       await track({
         name: 'cartgain_bargain_human_support',
         storeId: bargainSession.storeId,
         properties: { sessionId: bargainSession.id, state: 'HUMAN_SUPPORT_REQUIRED' },
       })
-      return NextResponse.json(applicationTerminationBody('human_support', lang), { status: 200 })
+      return NextResponse.json(termination, { status: 200 })
     }
 
     const currencySymbol = currencySymbolFor(bargainSession.store.currency)
@@ -804,6 +859,7 @@ export async function POST(request: NextRequest) {
 
       if (bundleOffer) {
         const reply = `Bundle deal: ${bundleSummary(bundleOffer.items.map((a) => ({ productId: a.productId, title: a.title, price: a.listPrice, floor: 0, quantity: a.quantity })), currencySymbol)} — ${currencySymbol}${bundleOffer.offerTotal} (was ${currencySymbol}${bundleOffer.listTotal}, ${bundleOffer.discountPercent}% off).`
+        const engineResponse = earlyEngineResponse(intelligence, 'chat', reply, null, { tactic: 'bundle_offer', source: 'bundle_offer' })
         await prisma.$transaction([
           prisma.bargainMessage.create({
             data: {
@@ -825,6 +881,7 @@ export async function POST(request: NextRequest) {
           sessionStatus: 'active',
           sessionId: bargainSession.id,
           ...intelligenceResponseFields(intelligence, offerView),
+          engineResponse,
           bundleOffer: {
             items: bundleOffer.items,
             listTotal: bundleOffer.listTotal,
@@ -881,6 +938,7 @@ export async function POST(request: NextRequest) {
       const reply = couponMentioned
         ? uiText(lang, 'bundle_coupon_redirect')
         : uiText(lang, 'bundle_redirect')
+      const engineResponse = earlyEngineResponse(responseIntelligence, 'chat', reply, null, { tactic: 'bundle_redirect', source: 'bundle_redirect' })
 
       await prisma.$transaction([
         prisma.bargainMessage.create({
@@ -980,6 +1038,10 @@ export async function POST(request: NextRequest) {
               customerMessage: interpretedMessage,
             })
           : `Done! ${formatMoney(finalPrice, bargainSession.store.currency)} works for me — that's my last round, so let's lock it in. Tap "Accept" and your discount code is generated.`
+        const engineResponse = earlyEngineResponse(intelligence, 'accept', acceptReply, finalPrice, {
+          tactic: overListOffer ? 'accept_over_list_offer_final_round' : 'accept_final_round',
+          source: 'attempts_exhausted_accept',
+        })
         await prisma.$transaction([
           prisma.bargainMessage.create({
             data: {
@@ -1269,6 +1331,8 @@ export async function POST(request: NextRequest) {
     ctx.adaptive = adaptive
     ctx.voice = voice
     ctx.trendPrompt = trendPrompt
+    const restoredSessionMemory = readSessionMemoryFromMessages(bargainSession.messages)
+    const memorySignals = countSessionMemorySignals(bargainSession.messages, liveTurn.mode)
     ctx.sessionMemory = buildSessionMemory({
       intent: intentAnalysis,
       signals: shopperSignals,
@@ -1276,7 +1340,16 @@ export async function POST(request: NextRequest) {
       customerOfferTrend,
       seriousness: ctx.seriousness,
       currencySymbol,
+      prior: restoredSessionMemory,
+      offTopicCount: memorySignals.offTopicCount,
+      concessionCount: memorySignals.concessionCount,
     })
+    turnMetadata = {
+      ...turnMetadata,
+      liveTurnMode: liveTurn.mode,
+      customerOfferTrend,
+      sessionMemory: ctx.sessionMemory,
+    }
 
     const secondIntelligenceStartedAt = Date.now()
     intelligence = buildBargainIntelligence({
@@ -1314,6 +1387,11 @@ export async function POST(request: NextRequest) {
 
     if (effectiveOfferStructure.needsClarification && !isWalkout) {
       const clarificationReply = uiText(lang, 'clarify_offer_basis')
+      const engineResponse = earlyEngineResponse(intelligence, 'chat', clarificationReply, null, {
+        tactic: 'offer_basis_clarification',
+        reason: 'AMBIGUOUS_OFFER_BASIS',
+        source: 'offer_clarification',
+      })
       await prisma.$transaction([
         prisma.bargainMessage.create({
           data: {
@@ -1325,7 +1403,7 @@ export async function POST(request: NextRequest) {
         prisma.bargainMessage.create({
           data: {
             sessionId: bargainSession.id, role: 'ai', content: clarificationReply,
-            metadata: { ...turnMetadata, decision: 'chat', tactic: 'offer_basis_clarification', reason: 'AMBIGUOUS_OFFER_BASIS' } as any,
+            metadata: { ...turnMetadata, decision: 'chat', tactic: 'offer_basis_clarification', reason: 'AMBIGUOUS_OFFER_BASIS', engineResponse } as any,
           },
         }),
       ])
@@ -1359,6 +1437,7 @@ export async function POST(request: NextRequest) {
         attemptsUsed: bargainSession.attemptsUsed,
         needsClarification: true,
         conversationState: intelligence.state.current,
+        engineResponse,
         offerInterpretation: offerView,
         negotiationIntelligence: publicIntelligenceView(intelligence),
       })
@@ -1379,6 +1458,11 @@ export async function POST(request: NextRequest) {
         const farewell = retention
           ? withFinalCode(baseFarewell, lang, retention, bargainSession.store.currency)
           : baseFarewell
+        const engineResponse = earlyEngineResponse(intelligence, 'reject', farewell, null, {
+          tactic: 'walkout_final',
+          reason: hadRetention ? 'second_walkout' : 'no_attempts_left',
+          source: 'walkout_abandon',
+        })
         await prisma.$transaction([
           prisma.bargainMessage.create({
             data: {
@@ -1389,7 +1473,7 @@ export async function POST(request: NextRequest) {
           prisma.bargainMessage.create({
             data: {
               sessionId: bargainSession.id, role: 'ai', content: farewell,
-              metadata: { ...turnMetadata, tactic: 'walkout_final', reason: hadRetention ? 'second_walkout' : 'no_attempts_left', ...(retention ? { discountCode: retention.code } : {}) } as any,
+              metadata: { ...turnMetadata, tactic: 'walkout_final', reason: hadRetention ? 'second_walkout' : 'no_attempts_left', ...(retention ? { discountCode: retention.code } : {}), engineResponse } as any,
             },
           }),
           prisma.bargainSession.update({
@@ -1403,6 +1487,7 @@ export async function POST(request: NextRequest) {
           sessionStatus: 'abandoned',
           terminal: true,
           ...intelligenceResponseFields(intelligence, offerView),
+          engineResponse,
           discountCode: retention?.code ?? null,
           finalPrice: retention?.finalPrice ?? null,
           purchaseUrl: retention?.purchaseUrl ?? null,
@@ -1423,6 +1508,10 @@ export async function POST(request: NextRequest) {
           quotedFloor({ minPrice, originalPrice: bargainSession.originalPrice }),
       })
       const retentionReply = retentionResult.reply || retentionOffer(ctx, lastCounter).reply
+      const engineResponse = earlyEngineResponse(intelligence, 'counter', retentionReply, retentionPrice, {
+        tactic: 'walkout_retention',
+        source: 'walkout_retention',
+      })
 
       await prisma.$transaction([
         prisma.bargainMessage.create({
@@ -1436,7 +1525,7 @@ export async function POST(request: NextRequest) {
           data: {
             sessionId: bargainSession.id, role: 'ai', content: retentionReply,
             offeredPrice: retentionPrice,
-            metadata: { ...turnMetadata, decision: 'counter', tactic: 'walkout_retention', sentiment: 'urgent' } as any,
+            metadata: { ...turnMetadata, decision: 'counter', tactic: 'walkout_retention', sentiment: 'urgent', engineResponse } as any,
           },
         }),
         prisma.bargainSession.update({
@@ -1451,6 +1540,7 @@ export async function POST(request: NextRequest) {
         sessionStatus: 'active',
         sessionId: bargainSession.id,
         ...intelligenceResponseFields(intelligence, offerView),
+        engineResponse,
         // The retention turn still consumed an attempt — report it so the UI
         // round meter stays in step with the server.
         attemptsUsed,
@@ -1846,6 +1936,22 @@ export async function POST(request: NextRequest) {
         : `${result.reply} ${uiText(lang, 'farewell_friendly')}`
     }
 
+    const conversationState = intelligence.state.current
+    const engineResponse = publicEngineResponseFor(
+      result.decision,
+      customerReply,
+      safeCounter,
+      conversationState,
+      {
+        tactic: result.tactic,
+        detectedIntent: intentAnalysis.intent,
+        detectedObjection: intentAnalysis.objection,
+        internalReasoningCategory: intentAnalysis.category,
+        requiresEscalation: intentAnalysis.needHumanSupport,
+        source: 'production_offer',
+      },
+    )
+
     let persistedTurn: [unknown, unknown, unknown]
     try {
       persistedTurn = await prisma.$transaction([
@@ -1870,7 +1976,7 @@ export async function POST(request: NextRequest) {
             // AI ever offering it. Only real counters (decision counter/accept)
             // carry an offeredPrice.
             offeredPrice: safeCounter,
-            metadata: { ...turnMetadata, decision: result.decision, tactic: result.tactic, sentiment: result.sentiment, ...(result.metadata ?? {}), ...(terminalRetention ? { discountCode: terminalRetention.code } : {}), ...recommendationMetadata } as any,
+            metadata: { ...turnMetadata, decision: result.decision, tactic: result.tactic, sentiment: result.sentiment, ...(result.metadata ?? {}), ...(terminalRetention ? { discountCode: terminalRetention.code } : {}), ...recommendationMetadata, engineResponse } as any,
           },
         }),
         prisma.bargainSession.update({
@@ -1943,22 +2049,6 @@ export async function POST(request: NextRequest) {
           return { ...quote, upsell: shippingUpsellLine(quote, currencySymbol, { config: shippingConfig }) }
         })()
       : null
-
-    const conversationState = intelligence.state.current
-    const engineResponse = publicEngineResponseFor(
-      result.decision,
-      customerReply,
-      safeCounter,
-      conversationState,
-      {
-        tactic: result.tactic,
-        detectedIntent: intentAnalysis.intent,
-        detectedObjection: intentAnalysis.objection,
-        internalReasoningCategory: intentAnalysis.category,
-        requiresEscalation: intentAnalysis.needHumanSupport,
-        source: 'production_offer',
-      },
-    )
 
     return NextResponse.json({
       reply: customerReply,

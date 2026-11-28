@@ -126,6 +126,7 @@ export const bargainStartSchema = z.object({
   customerPhone: z.string().max(20).optional().or(z.literal('')),
   customerName: z.string().max(200).optional().or(z.literal('')),
   customerFingerprint: z.string().min(8, 'customerFingerprint is required').max(128).optional(),
+  sessionToken: z.string().max(500).optional(),
 })
 
 export type BargainStartInput = z.infer<typeof bargainStartSchema>

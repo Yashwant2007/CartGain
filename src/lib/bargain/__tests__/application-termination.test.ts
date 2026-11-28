@@ -1,4 +1,4 @@
-import { applicationTerminationBody } from '../application-termination'
+import { applicationTerminationBody, restoredApplicationTerminationFromMessages } from '../application-termination'
 import { I18N_LANGS, uiText } from '../i18n'
 
 describe('applicationTerminationBody', () => {
@@ -33,5 +33,44 @@ describe('applicationTerminationBody', () => {
       expect(uiText(lang, 'human_support')).not.toBe(uiText('en', 'human_support'))
       expect(uiText(lang, 'human_support').length).toBeGreaterThan(20)
     }
+  })
+})
+
+describe('restoredApplicationTerminationFromMessages', () => {
+  it('restores the latest terminal handoff without exposing other metadata', () => {
+    const body = applicationTerminationBody('human_support', 'en')
+    const restored = restoredApplicationTerminationFromMessages([
+      { role: 'customer', metadata: { terminationKind: 'opt_out' } },
+      { role: 'ai', metadata: { source: 'internal', floorPrice: 100 } },
+      {
+        role: 'ai',
+        metadata: {
+          terminationKind: body.terminationKind,
+          conversationState: body.conversationState,
+          escalation: body.escalation,
+          engineResponse: body.engineResponse,
+          floorPrice: 100,
+        },
+      },
+    ])
+
+    expect(restored.terminationKind).toBe('human_support')
+    expect(restored.conversationState).toBe('HUMAN_SUPPORT_REQUIRED')
+    expect(restored.escalation).toBe('human_support_required')
+    expect(restored.engineResponse?.message).toBe(body.message)
+    expect(JSON.stringify(restored)).not.toContain('floorPrice')
+  })
+
+  it('returns an empty terminal state when no AI message carries one', () => {
+    expect(restoredApplicationTerminationFromMessages([
+      { role: 'customer', metadata: { terminationKind: 'opt_out' } },
+      { role: 'ai', metadata: null },
+      { role: 'system' },
+    ])).toEqual({
+      terminationKind: null,
+      conversationState: null,
+      escalation: null,
+      engineResponse: null,
+    })
   })
 })

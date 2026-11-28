@@ -11,6 +11,8 @@ export interface SessionMemory {
   tone: 'brief' | 'warm' | 'playful' | 'calm' | 'detailed'
   offerTrend: 'new' | 'rising' | 'flat' | 'falling' | null
   seriousness: 'serious' | 'casual' | 'time_waster' | null
+  offTopicCount: number
+  concessionCount: number
   pattern: string
   nextMove: string
 }
@@ -24,6 +26,7 @@ export interface SessionMemoryInput {
   offTopicCount?: number
   concessionCount?: number
   currencySymbol?: string
+  prior?: SessionMemory | null
 }
 
 const RANDOM_MODES = new Set(['nonsense', 'emoji_only', 'off_topic', 'probe', 'insult', 'joke'])
@@ -105,18 +108,120 @@ function nextMoveFor(input: SessionMemoryInput): string {
 }
 
 export function buildSessionMemory(input: SessionMemoryInput): SessionMemory {
-  return {
-    name: input.signals?.name ?? null,
-    need: safeNeed(input.intent?.need),
-    budget: input.intent?.budget ?? null,
-    objection: input.intent?.objection ?? null,
-    emotion: input.signals?.emotion ?? 'neutral',
-    tone: toneFor(input.signals),
-    offerTrend: input.customerOfferTrend ?? null,
-    seriousness: input.seriousness ?? null,
-    pattern: patternFor(input),
-    nextMove: nextMoveFor(input),
+  const prior = input.prior ?? null
+  const name = input.signals?.name ?? prior?.name ?? null
+  const need = safeNeed(input.intent?.need) ?? prior?.need ?? null
+  const budget = input.intent?.budget ?? prior?.budget ?? null
+  const objection = input.intent?.objection ?? prior?.objection ?? null
+  const emotion = input.signals?.emotion ?? prior?.emotion ?? 'neutral'
+  const tone = input.signals ? toneFor(input.signals) : prior?.tone ?? 'warm'
+  const offerTrend = input.customerOfferTrend ?? prior?.offerTrend ?? null
+  const seriousness = input.seriousness ?? prior?.seriousness ?? null
+  const offTopicCount = Math.max(0, Math.round(input.offTopicCount ?? prior?.offTopicCount ?? 0))
+  const concessionCount = Math.max(0, Math.round(input.concessionCount ?? prior?.concessionCount ?? 0))
+  const resolvedInput: SessionMemoryInput = {
+    ...input,
+    seriousness,
+    customerOfferTrend: offerTrend,
+    offTopicCount,
+    concessionCount,
   }
+  return {
+    name,
+    need,
+    budget,
+    objection,
+    emotion,
+    tone,
+    offerTrend,
+    seriousness,
+    offTopicCount,
+    concessionCount,
+    pattern: patternFor(resolvedInput),
+    nextMove: nextMoveFor(resolvedInput),
+  }
+}
+
+const TONES = new Set<SessionMemory['tone']>(['brief', 'warm', 'playful', 'calm', 'detailed'])
+const EMOTIONS = new Set<CustomerEmotion>(['neutral', 'playful', 'frustrated', 'hesitant', 'excited', 'skeptical', 'apologetic'])
+const TRENDS = new Set<NonNullable<SessionMemory['offerTrend']>>(['new', 'rising', 'flat', 'falling'])
+const SERIOUSNESS = new Set<NonNullable<SessionMemory['seriousness']>>(['serious', 'casual', 'time_waster'])
+
+function boundedMemoryText(value: unknown, max: number): string | null {
+  if (typeof value !== 'string') return null
+  const cleaned = value.replace(/\s+/g, ' ').trim().slice(0, max)
+  return cleaned || null
+}
+
+export function readSessionMemory(value: unknown): SessionMemory | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  if (typeof record.pattern !== 'string' || typeof record.nextMove !== 'string') return null
+  const tone = TONES.has(record.tone as SessionMemory['tone']) ? record.tone as SessionMemory['tone'] : 'warm'
+  const emotion = EMOTIONS.has(record.emotion as CustomerEmotion) ? record.emotion as CustomerEmotion : 'neutral'
+  const offerTrend = TRENDS.has(record.offerTrend as NonNullable<SessionMemory['offerTrend']>)
+    ? record.offerTrend as NonNullable<SessionMemory['offerTrend']>
+    : null
+  const seriousness = SERIOUSNESS.has(record.seriousness as NonNullable<SessionMemory['seriousness']>)
+    ? record.seriousness as NonNullable<SessionMemory['seriousness']>
+    : null
+  return {
+    name: boundedMemoryText(record.name, 80),
+    need: boundedMemoryText(record.need, 60),
+    budget: typeof record.budget === 'number' && Number.isFinite(record.budget) ? record.budget : null,
+    objection: boundedMemoryText(record.objection, 60),
+    emotion,
+    tone,
+    offerTrend,
+    seriousness,
+    offTopicCount: typeof record.offTopicCount === 'number' && Number.isFinite(record.offTopicCount)
+      ? Math.max(0, Math.round(record.offTopicCount))
+      : 0,
+    concessionCount: typeof record.concessionCount === 'number' && Number.isFinite(record.concessionCount)
+      ? Math.max(0, Math.round(record.concessionCount))
+      : 0,
+    pattern: record.pattern.slice(0, 240),
+    nextMove: record.nextMove.slice(0, 240),
+  }
+}
+
+export function readSessionMemoryFromMessages(
+  messages: Array<{ role?: unknown; metadata?: unknown }> | null | undefined,
+): SessionMemory | null {
+  if (!Array.isArray(messages)) return null
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index]
+    if (!message || message.role !== 'ai') continue
+    const memory = readSessionMemory(
+      message.metadata && typeof message.metadata === 'object' && !Array.isArray(message.metadata)
+        ? (message.metadata as Record<string, unknown>).sessionMemory
+        : null,
+    )
+    if (memory) return memory
+  }
+  return null
+}
+
+export function countSessionMemorySignals(
+  messages: Array<{ role?: unknown; metadata?: unknown }> | null | undefined,
+  currentLiveTurnMode?: string | null,
+): { offTopicCount: number; concessionCount: number } {
+  let offTopicCount = 0
+  let concessionCount = 0
+  if (Array.isArray(messages)) {
+    for (const message of messages) {
+      if (!message || message.role !== 'ai') continue
+      if (!message.metadata || typeof message.metadata !== 'object' || Array.isArray(message.metadata)) continue
+      const metadata = message.metadata as Record<string, unknown>
+      const mode = metadata.liveTurnMode
+      if ((typeof mode === 'string' && RANDOM_MODES.has(mode)) || mode === 'probe' || mode === 'nonsense') offTopicCount++
+      if (metadata.decision === 'counter') concessionCount++
+    }
+  }
+  if (currentLiveTurnMode && (RANDOM_MODES.has(currentLiveTurnMode) || currentLiveTurnMode === 'probe' || currentLiveTurnMode === 'nonsense')) {
+    offTopicCount++
+  }
+  return { offTopicCount, concessionCount }
 }
 
 export function sessionMemoryPromptBlock(memory?: SessionMemory | null, currencySymbol = ''): string {

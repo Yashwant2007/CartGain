@@ -38,6 +38,11 @@ import { deriveConversationState, conversationStateGuidance } from '@/lib/bargai
 import { validateReplyClaimAdherence } from '@/lib/bargain/claims'
 import { rapidReplyForTurn } from '@/lib/bargain/rapid-reply'
 import { buildSalesPitch, strengthenComparisonPitch } from '@/lib/bargain/sales-pitch'
+import {
+  buildUniversalConversationState,
+  composeUniversalDeterministicReply,
+  universalPromptBlock,
+} from '@/lib/bargain/universal-intelligence'
 import { COMPACT_SALESPERSON_PLAYBOOK, SALESPERSON_PLAYBOOK } from '@/lib/bargain/sales-playbook'
 import { contextFlavorsPromptBlock, detectContextFlavors } from '@/lib/bargain/context-flavor'
 import { scrubPressureLanguage } from '@/lib/bargain/reply-safety'
@@ -266,6 +271,7 @@ export interface NegotiationContext {
   sessionMemory?: SessionMemory
   adaptive?: AdaptiveContext
   intelligencePrompt?: string
+  universalPrompt?: string
   trendPrompt?: string
   voice?: BrandVoice
   /** The AI's most recent standing counter. Lets the reciprocal pacing stay
@@ -1474,6 +1480,23 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
   const requestedLanguage = detectLanguageRequest(customerMessage)
   if (requestedLanguage) return languageSwitchAck(ctx, requestedLanguage)
 
+  const universal = buildUniversalConversationState({
+    message: customerMessage,
+    intent: ctx.intent ?? analyzeIntent(customerMessage),
+    liveTurn: ctx.liveTurn,
+    product: ctx.product,
+    productTitle: ctx.productTitle,
+    persona: ctx.persona,
+    language: ctx.language,
+  })
+  const universalReply = composeUniversalDeterministicReply(universal, {
+    product: ctx.product,
+    productTitle: ctx.productTitle,
+    persona: ctx.persona,
+    language: ctx.language,
+  })
+  if (universalReply) return universalReply.reply
+
   const asksFloor = ctx.intent?.asksBestPrice === true || analyzeIntent(customerMessage).asksBestPrice
   if (asksFloor) {
     const standing = ctx.lastCounter
@@ -2426,6 +2449,10 @@ export function buildSystemPrompt(
     contextParts.push('\n' + memoryBlock)
   }
 
+  if (ctx.universalPrompt) {
+    contextParts.push('\n' + ctx.universalPrompt)
+  }
+
   const adaptiveBlock = adaptivePromptBlock(ctx.adaptive)
   if (adaptiveBlock) {
     contextParts.push('\n' + adaptiveBlock)
@@ -3215,6 +3242,25 @@ export async function negotiateStep(
       })
     : null
   if (rapidReply) return rapidReply
+
+  const universalState = buildUniversalConversationState({
+    message: customerMessage,
+    intent: ctx.intent ?? analyzeIntent(customerMessage),
+    liveTurn: ctx.liveTurn,
+    history,
+    product: ctx.product,
+    productTitle: ctx.productTitle,
+    persona: ctx.persona,
+    language: ctx.language,
+  })
+  ctx.universalPrompt = ctx.universalPrompt ?? universalPromptBlock(universalState)
+  const universalReply = composeUniversalDeterministicReply(universalState, {
+    product: ctx.product,
+    productTitle: ctx.productTitle,
+    persona: ctx.persona,
+    language: ctx.language,
+  })
+  if (universalReply) return universalReply
 
   // ── ABSURD OFFER: reply in persona, NEVER counter ──
   // An offer so far below the merchant's floor is not a bid to answer with a

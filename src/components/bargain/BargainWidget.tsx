@@ -813,8 +813,21 @@ export default function BargainWidget({
       setAttemptsUsed(null)
       setShippingInfo(null)
       setPaymentInfo(null)
+      const restoredTermination = (data.session as (typeof data.session & {
+        termination?: {
+          terminationKind?: 'opt_out' | 'human_support' | null
+          conversationState?: string | null
+          escalation?: 'human_support_required' | null
+        }
+      }) | null | undefined)?.termination
       if (data.session) {
-        const restoredSession = data.session
+        const restoredSession = data.session as typeof data.session & {
+          termination?: {
+            terminationKind?: 'opt_out' | 'human_support' | null
+            conversationState?: string | null
+            escalation?: 'human_support_required' | null
+          }
+        }
         if (typeof restoredSession.attemptsUsed === 'number') setAttemptsUsed(restoredSession.attemptsUsed)
         if (typeof restoredSession.finalPrice === 'number') setFinalPrice(restoredSession.finalPrice)
         if (restoredSession.discountCode) setDiscountCode(restoredSession.discountCode)
@@ -830,7 +843,13 @@ export default function BargainWidget({
           setEndedReason('rejected')
         } else if (restoredSession.status === 'expired' || restoredSession.status === 'abandoned') {
           setSessionEnded(true)
-          setEndedReason(restoredSession.status)
+          if (restoredTermination?.terminationKind === 'human_support' || restoredTermination?.escalation === 'human_support_required') {
+            setEndedReason('human_support')
+          } else if (restoredTermination?.terminationKind === 'opt_out') {
+            setEndedReason('optout')
+          } else {
+            setEndedReason(restoredSession.status)
+          }
         }
       }
       setSessionId(data.sessionId)
@@ -859,7 +878,12 @@ export default function BargainWidget({
           // the last price we offered — surface it as a ready-to-use deal.
           if (data.session.discountCode) setDiscountCode(data.session.discountCode)
           if (data.session.purchaseUrl) setPurchaseUrl(data.session.purchaseUrl)
-          const restoredEnded = avatarEndedFromSessionStatus(data.session.status)
+          const restoredEnded =
+            restoredTermination?.terminationKind === 'human_support' || restoredTermination?.escalation === 'human_support_required'
+              ? 'human_support_required'
+              : restoredTermination?.terminationKind === 'opt_out'
+                ? 'optout'
+                : avatarEndedFromSessionStatus(data.session.status)
           if (restoredEnded === 'accepted') {
             fireAvatar('deal_accepted', { ended: 'accepted', originalPrice: livePrice })
           } else if (restoredEnded) {
