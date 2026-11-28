@@ -8,6 +8,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:browser": "node scripts/browser-acceptance.mjs",
+    "benchmark:genesis": "jest src/lib/benchmark/__tests__/CARTGAIN_GENESIS_BENCHMARK.test.ts --runInBand --silent",
+    "benchmark:genesis:live": "node scripts/run-genesis-live.mjs",
     "typecheck": "tsc --noEmit",
     "avatar:validate": "node scripts/validate-cartgain-robot-avatar.mjs",
     "build": "prisma generate && next build",

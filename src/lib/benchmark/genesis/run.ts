@@ -27,6 +27,7 @@ export function summarizeGenesisReport(report: GenesisReport): string {
         engine.engine,
         `verified=${engine.overall.verifiedWeightedScore ?? 'n/a'}`,
         `simulated=${engine.overall.simulatedUnverifiedWeightedScore ?? 'n/a'}`,
+        `live_objective=${engine.overall.liveProviderObjectiveWeightedScore ?? 'n/a'}`,
         `live_unreviewed=${engine.overall.liveProviderUnreviewedWeightedScore ?? 'n/a'}`,
       ].join(' '),
     )

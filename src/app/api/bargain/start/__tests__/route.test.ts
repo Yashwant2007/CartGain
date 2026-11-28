@@ -4,6 +4,7 @@
 import { POST } from '@/app/api/bargain/start/route'
 import prisma from '@/lib/db'
 import { signSessionToken } from '@/lib/bargain/session-bind'
+import { track } from '@/lib/analytics/track'
 
 jest.mock('@/lib/db', () => ({
   __esModule: true,
@@ -232,5 +233,32 @@ describe('/api/bargain/start — ownership-aware rejoin and disclosure', () => {
     expect(body.sessionId).toBe('new-session')
     expect(body.existingSession).toBeFalsy()
     expect(db.bargainSession.findFirst).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('/api/bargain/start — experiment telemetry', () => {
+  it('persists a deterministic arm and emits it with the dual-agent flag state', async () => {
+    const previousFlag = process.env.BARGAIN_DUAL_AGENT
+    delete process.env.BARGAIN_DUAL_AGENT
+    try {
+      const res = await POST(makeRequest({
+        customerFingerprint: 'fp-12345678',
+        cartToken: 'cart-1',
+      }))
+      expect(res.status).toBe(201)
+
+      const created = db.bargainSession.create.mock.calls[0][0].data
+      expect(['control', 'treatment']).toContain(created.experimentArm)
+      expect(track).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'cartgain_bargain_opened',
+        properties: expect.objectContaining({
+          experimentArm: created.experimentArm,
+          dualAgentEnabled: false,
+        }),
+      }))
+    } finally {
+      if (previousFlag === undefined) delete process.env.BARGAIN_DUAL_AGENT
+      else process.env.BARGAIN_DUAL_AGENT = previousFlag
+    }
   })
 })

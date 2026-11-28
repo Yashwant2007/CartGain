@@ -1,3 +1,5 @@
+export {}
+
 process.env.BARGAIN_QUOTE = 'true'
 process.env.LINK_SECRET = 'test-secret-at-least-16-chars-long'
 delete process.env.CARTGAIN_GENESIS_LIVE_PROVIDERS
@@ -423,6 +425,7 @@ describe('CARTGAIN_GENESIS_BENCHMARK live provider opt-in', () => {
 
     expect(liveReport.releaseGate.status).toBe('pending')
     const statuses = Object.fromEntries(liveReport.releaseGate.items.map((item: any) => [item.id, item.status]))
+    expect(statuses.live_provider_objective_safety).toBe('pass')
     expect(statuses.live_provider_quality).toBe('pending')
     expect(statuses.ai_response_quality).toBe('pending')
     const reasons = Object.fromEntries(liveReport.releaseGate.items.map((item: any) => [item.id, item.reasons.join(' ')]))
@@ -431,11 +434,14 @@ describe('CARTGAIN_GENESIS_BENCHMARK live provider opt-in', () => {
 
     for (const engine of liveReport.engines) {
       if (engine.engine === 'deterministic') continue
+      expect(engine.overall.liveProviderObjectiveWeightedScore).not.toBeNull()
+      expect(engine.overall.liveProviderObjectiveWeight).toBe(100)
       expect(engine.overall.liveProviderUnreviewedWeightedScore).toBeNull()
       expect(engine.overall.liveProviderUnreviewedWeight).toBe(100)
       for (const category of engine.categories) {
         expect(category.verification).toBe(GENESIS_LIVE_VERIFICATION)
         expect(category.objectiveScore).toBeNull()
+        expect(category.liveObjectiveScore).not.toBeNull()
       }
     }
   }, 30000)

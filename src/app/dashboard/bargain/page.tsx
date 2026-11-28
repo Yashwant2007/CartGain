@@ -39,6 +39,7 @@ import {
 import { DemoPanel } from './demo-panel'
 import { ProductCatalogPanel } from './product-catalog'
 import { BargainExperienceStudio } from './experience-studio'
+import { StorefrontPerformance } from './storefront-performance'
 import { isShopkeeperPersonality } from '@/lib/bargain/experience/personality'
 import {
   ABUSE_STRICTNESS_LABELS,
@@ -1325,6 +1326,8 @@ void fetchConfig()
           ) : (
             <div className="text-blue-300/60 text-sm">No analytics yet.</div>
           )}
+
+          <StorefrontPerformance />
 
           <div className="bg-slate-900/60 border border-blue-800/30 rounded-xl overflow-hidden">
             <div className="px-5 py-3 border-b border-blue-800/30 text-blue-100 font-semibold">Recent Sessions</div>

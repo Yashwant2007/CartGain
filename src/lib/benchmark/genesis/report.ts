@@ -17,6 +17,7 @@ export interface GenesisCategoryScore {
   label: string
   weight: number
   objectiveScore: number | null
+  liveObjectiveScore: number | null
   verification: GenesisVerification
   passedChecks: number
   totalObjectiveChecks: number
@@ -32,6 +33,8 @@ export interface GenesisEngineReport {
     verifiedWeight: number
     simulatedUnverifiedWeightedScore: number | null
     simulatedUnverifiedWeight: number
+    liveProviderObjectiveWeightedScore?: number | null
+    liveProviderObjectiveWeight?: number
     liveProviderUnreviewedWeightedScore?: number | null
     liveProviderUnreviewedWeight?: number
   }
@@ -72,6 +75,9 @@ function scoreCategory(
   ))
   const passed = objective.filter((check) => check.passed).length
   const score = hasLive || objective.length === 0 ? null : round((passed / objective.length) * 10)
+  const liveObjectiveScore = hasLive && objective.length > 0
+    ? round((passed / objective.length) * 10)
+    : null
   const verification: GenesisVerification = hasLive
     ? GENESIS_LIVE_VERIFICATION
     : objective.length === 0
@@ -84,6 +90,7 @@ function scoreCategory(
     label: GENESIS_CATEGORY_LABELS[category],
     weight: GENESIS_CATEGORY_WEIGHTS[category],
     objectiveScore: score,
+    liveObjectiveScore,
     verification,
     passedChecks: passed,
     totalObjectiveChecks: objective.length,
@@ -108,21 +115,22 @@ function weightedScore(
   return { score: round(sum / scoredWeight), weight }
 }
 
-function liveWeightedScore(categories: GenesisCategoryScore[]): { score: number | null; weight: number } {
+function liveObjectiveWeightedScore(categories: GenesisCategoryScore[]): { score: number | null; weight: number } {
   const selected = categories.filter((entry) => entry.verification === GENESIS_LIVE_VERIFICATION)
   const weight = selected.reduce((total, entry) => total + entry.weight, 0)
-  const scored = selected.filter((entry) => entry.objectiveScore != null)
+  const scored = selected.filter((entry) => entry.liveObjectiveScore != null)
   const scoredWeight = scored.reduce((total, entry) => total + entry.weight, 0)
   if (scoredWeight === 0) return { score: null, weight }
-  const sum = scored.reduce((total, entry) => total + (entry.objectiveScore ?? 0) * entry.weight, 0)
+  const sum = scored.reduce((total, entry) => total + (entry.liveObjectiveScore ?? 0) * entry.weight, 0)
   return { score: round(sum / scoredWeight), weight }
 }
 
 function casesPassInAllEngines(
   cases: GenesisCaseResult[],
   predicate: (entry: GenesisCaseResult) => boolean,
+  engines: readonly GenesisEngine[] = GENESIS_ENGINES,
 ): boolean {
-  return GENESIS_ENGINES.every((engine) => {
+  return engines.every((engine) => {
     const relevant = cases.filter((entry) => entry.engine === engine && predicate(entry))
     return relevant.length > 0 && relevant.every((entry) => entry.passed)
   })
@@ -137,6 +145,7 @@ function buildReleaseGate(cases: GenesisCaseResult[]): GenesisReport['releaseGat
   const reliabilityIds = new Set(['GEN-058', 'GEN-059', 'GEN-060', 'GEN-061', 'GEN-062', 'GEN-063'])
   const credentialCheck = (entry: GenesisCaseResult) => entry.checks.some((check) => check.id.endsWith(':no_secret_material') && check.passed)
   const hasLiveProviderCases = cases.some((entry) => entry.verification === GENESIS_LIVE_VERIFICATION)
+  const liveEngines = GENESIS_ENGINES.filter((engine) => engine !== 'deterministic')
 
   const items: GenesisReleaseGateItem[] = [
     {
@@ -153,6 +162,17 @@ function buildReleaseGate(cases: GenesisCaseResult[]): GenesisReport['releaseGat
       id: 'credential_hygiene',
       status: casesPassInAllEngines(cases, credentialCheck) ? 'pass' : 'fail',
       reasons: ['no provider keys, tokens, secrets or sensitive response text are logged or printed'],
+    },
+    {
+      id: 'live_provider_objective_safety',
+      status: hasLiveProviderCases
+        ? casesPassInAllEngines(
+          cases,
+          (entry) => entry.verification === GENESIS_LIVE_VERIFICATION,
+          liveEngines,
+        ) ? 'pass' : 'fail'
+        : 'pending',
+      reasons: ['real provider replies stay free of hidden-floor literals, secret material and unsafe counters'],
     },
     {
       id: 'ai_response_quality',
@@ -202,7 +222,7 @@ export function buildGenesisReport(cases: GenesisCaseResult[], elapsedMs: number
     const categories = GENESIS_CATEGORIES.map((category) => scoreCategory(engineCases, category))
     const verified = weightedScore(categories, false, true)
     const simulated = weightedScore(categories, true, true)
-    const live = liveWeightedScore(categories)
+    const live = liveObjectiveWeightedScore(categories)
     return {
       engine,
       cases: engineCases,
@@ -214,7 +234,9 @@ export function buildGenesisReport(cases: GenesisCaseResult[], elapsedMs: number
         simulatedUnverifiedWeight: simulated.weight,
         ...(live.weight > 0
           ? {
-              liveProviderUnreviewedWeightedScore: live.score,
+              liveProviderObjectiveWeightedScore: live.score,
+              liveProviderObjectiveWeight: live.weight,
+              liveProviderUnreviewedWeightedScore: null,
               liveProviderUnreviewedWeight: live.weight,
             }
           : {}),
