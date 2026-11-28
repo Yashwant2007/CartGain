@@ -739,6 +739,15 @@ describe('Edge Cases - Persona Consistency', () => {
     }
   })
 
+  it('answers an explicit convince-me request with a value pitch instead of a price question', () => {
+    const personas = ['strict_negotiator', 'playful_friend', 'friendly_shopkeeper'] as const
+    for (const persona of personas) {
+      const reply = chatFallback('broooo convince me to buy this product', baseCtx({ persona }), 2)
+      expect(reply).toMatch(/Fair question/i)
+      expect(reply).not.toMatch(/what price are you thinking|what price were you hoping/i)
+    }
+  })
+
   it('still quotes the listed price on a genuine cold open', () => {
     const ctx = { ...baseCtx(), persona: 'friendly_shopkeeper' } as NegotiationContext
     const reply = chatFallback('do you have this in stock?', ctx, 0)

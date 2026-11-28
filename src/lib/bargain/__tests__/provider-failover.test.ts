@@ -97,6 +97,20 @@ afterAll(() => {
 })
 
 describe('primary outage is absorbed inside the same request', () => {
+  it('answers a pure convince-me request without calling any provider', async () => {
+    ;(globalThis as any).__nextCreate = jest.fn(async () => {
+      throw new Error('provider should not be called for a deterministic value pitch')
+    })
+
+    const res = await negotiateStep(ctx(), [], 'broooo convince me to buy this product', undefined, 'sess-value-pitch')
+
+    expect(res.reply).toMatch(/Fair question/i)
+    expect(res.reply).not.toMatch(/what price are you thinking/i)
+    expect((res.metadata as any)?.aiSource).toBe('reflex')
+    expect((res.metadata as any)?.salesPitchRequest).toBe(true)
+    expect(sentModels).toEqual([])
+  })
+
   it('serves a real Groq reply when OpenAI returns insufficient quota', async () => {
     // First call (primary) dies with the exact error that degraded the
     // storefront; the retry must land on the Groq tier.
@@ -155,6 +169,37 @@ describe('primary outage is absorbed inside the same request', () => {
     expect(res.decision).toBe('counter')
     expect(sentModels).toEqual(['gpt-4o', 'openai/gpt-oss-120b'])
     expect(isTierTripped('primary')).toBe(true)
+  })
+
+  it('still fails over on a primary rate-limit when the fallback breaker is cooling', async () => {
+    quota.tripTierBreaker('fallback')
+    expect(quota.beginTierProbe('fallback')).toBe(true)
+    ;(globalThis as any).__nextCreate = jest.fn(async (req: any) => {
+      if (req.model === 'gpt-4o') throw { status: 429, error: { code: 'rate_limit_exceeded' } }
+      return modelReply(90)
+    })
+
+    const res = await negotiateStep(ctx(), [{ role: 'customer', content: 'hi' }], 'can you do 90?', 90, 'sess-fb-cooling')
+
+    expect(sentModels).toEqual(['gpt-4o', 'openai/gpt-oss-120b'])
+    expect(res.reply).toBe('Groq answered you.')
+    expect((res.metadata as any)?.aiSource).toBe('fallback')
+    expect(isTierTripped('fallback')).toBe(false)
+  })
+
+  it('does not bypass a cooling fallback for non-rate-limit failures', async () => {
+    quota.tripTierBreaker('fallback')
+    expect(quota.beginTierProbe('fallback')).toBe(true)
+    ;(globalThis as any).__nextCreate = jest.fn(async (req: any) => {
+      if (req.model === 'gpt-4o') throw { status: 401, error: { message: 'Invalid API key' } }
+      return modelReply(90)
+    })
+
+    const res = await negotiateStep(ctx(), [], '90?', 90, 'sess-fb-cooling-auth')
+
+    expect(sentModels).toEqual(['gpt-4o'])
+    expect((res.metadata as any)?.aiSource).toBe('emergency')
+    expect(isTierTripped('fallback')).toBe(true)
   })
 
   it('retries the primary when the fallback itself is rate-limited', async () => {

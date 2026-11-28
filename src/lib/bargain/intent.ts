@@ -104,6 +104,8 @@ export interface IntentAnalysis {
   needHumanSupport: boolean
   /** True when the shopper explicitly asks to stop automated messages/offers. */
   optOutRequested: boolean
+  /** True when the shopper explicitly asks to be convinced or sold on the product. */
+  salesPitchRequest: boolean
   /** Published nine-category objection taxonomy (Phase 1 intent→action routing). */
   category: ObjectionCategory
   shopperCategory: ShopperIntentCategoryCode
@@ -136,6 +138,7 @@ const RE = {
   stopRecommendations: /\b(no\s+more|nothing\s+else|don'?t\s+show|stop\s+showing|not\s+interested\s+in\s+(more|other|alternatives)|aur\s+nahi|aur\s+mat|mat\s+dikhao|mat\s+bhejo)\b/i,
   humanSupportRequest: /\b(?:talk|speak|chat)\s+(?:to|with)\s+(?:a\s+)?(?:human|person|agent|support|representative|someone)\b|\b(?:human|live)\s+(?:agent|support|person)\b|\b(?:connect|transfer)\s+me\s+to\s+(?:a\s+)?(?:human|agent|support|person|someone)\b|\b(?:insaan|vyakti|support)\s+(?:se|ke\s+sath)\s+(?:baat|bole|chahiye)\b/i,
   optOutRequest: /^\s*stop\s*$|\b(?:stop|do\s+not|don'?t)\s+(?:messag(?:e|ing)|contact|call|text|email|send|bother)(?:s|ed)?\s+(?:me|us)?\b|\bunsubscribe\b|\bopt\s*-?\s*out\b|\bno\s+more\s+(?:messages|offers|contact)\b|\band\s+nahi\s+(?:bhej|message|call)\b/i,
+  salesPitch: /\b(?:convince\s+me|persuade\s+me|sell\s+me|talk\s+me\s+into|why\s+should\s+i\s+(?:buy|get|choose|pick)|give\s+me\s+(?:a\s+)?reasons?|make\s+me\s+want|what\s+makes\s+(?:this|it)\s+worth|kyun\s+kharidu|kyon\s+kharidu|manaao|samjhao)\b/i,
 }
 
 const STOPWORDS_NEED = new Set(['this', 'that', 'it', 'the', 'a', 'an', 'me', 'you', 'your', 'my', 'for', 'of', 'in', 'within', 'with', 'like', 'some', 'something', 'looking', 'want', 'wanted', 'need', 'needed', 'instead', 'near', 'under', 'price', 'budget', 'amount', 'money', 'option', 'options', 'alternative', 'alternatives', 'product', 'products', 'cheaper', 'sasta', 'discount', 'better', 'ese', 'aise', 'ye', 'wo', 'vo', 'h', 'kya', 'pas', 'tumhare', 'bhi', 'aur', 'do', 'you', 'have', 'store', 'shop', 'hai', 'chahiye'])
@@ -229,6 +232,7 @@ export function analyzeIntent(input: string): IntentAnalysis {
   const discovery = hits('discovery', 'discovery_signal')
   const needHumanSupport = hits('humanSupportRequest', 'human_support_request')
   const optOutRequested = hits('optOutRequest', 'opt_out_request')
+  const salesPitchRequest = hits('salesPitch', 'sales_pitch_request')
 
   const budget = extractBudget(message)
   const need = extractNeed(message)
@@ -247,6 +251,7 @@ export function analyzeIntent(input: string): IntentAnalysis {
   else if (recRequest) intent = 'RECOMMENDATION_REQUEST'
   else if (discovery) intent = 'PRODUCT_DISCOVERY'
   else if (budgetIntent || budget) intent = 'BUDGET_CONSTRAINT'
+  else if (salesPitchRequest) intent = 'VALUE_UNCLEAR'
   else if (asksBestPrice || priceIntent || isMoney || priceComplaint) intent = 'PRICE_ONLY'
   else if (valueIntent) intent = 'VALUE_UNCLEAR'
   else if (message.trim().length > 0) intent = 'GENERIC_CHAT'
@@ -261,6 +266,7 @@ export function analyzeIntent(input: string): IntentAnalysis {
   else if (shipping) objection = 'SHIPPING'
   else if (comparisonIntent) objection = 'COMPARISON'
   else if (hesitation) objection = 'PURCHASE_HESITATION'
+  else if (salesPitchRequest) objection = 'VALUE'
   else if (budgetIntent || budget) objection = 'BUDGET'
   else if (asksBestPrice || priceIntent || isMoney || priceComplaint) objection = 'PRICE'
   else if (productQ) objection = 'PRODUCT_INFORMATION'
@@ -283,6 +289,7 @@ export function analyzeIntent(input: string): IntentAnalysis {
     need,
     needHumanSupport,
     optOutRequested,
+    salesPitchRequest,
     category: objectionCategory(objection),
   }
   const shopperCategory = classifyShopperIntentCategory(analysis, message)
@@ -424,6 +431,11 @@ export function shopperIntentToPromptBlock(analysis: IntentAnalysis): string {
   }
   if (analysis.intent === 'PURCHASE_HESITATION') {
     lines.push(`- The shopper is hesitating, not rejecting. Do NOT lead with a discount  -  reduce friction, answer the real concern, and give them room.`)
+  }
+  if (analysis.salesPitchRequest) {
+    lines.push(
+      `- The shopper explicitly asks to be CONVINCED. Lead with a concise, truthful value pitch from verified product facts and merchant-approved selling points. Do NOT ask them to name a price first, do NOT invent claims, and do NOT reveal pricing guardrails.`,
+    )
   }
   if (analysis.asksBestPrice) {
     lines.push(

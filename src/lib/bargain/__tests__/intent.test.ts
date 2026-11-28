@@ -8,6 +8,15 @@ describe('analyzeIntent', () => {
     expect(a.asksBestPrice).toBe(true)
   })
 
+  it('classifies explicit requests to be convinced as value pitches, not price asks', () => {
+    const a = analyzeIntent('broooo convince me to buy this product')
+    expect(a.salesPitchRequest).toBe(true)
+    expect(a.intent).toBe('VALUE_UNCLEAR')
+    expect(a.objection).toBe('VALUE')
+    expect(a.asksBestPrice).toBe(false)
+    expect(shopperIntentToPromptBlock(a)).toMatch(/CONVINCED/i)
+  })
+
   it('classifies "how low can you go" as a direct best-price ask', () => {
     const a = analyzeIntent('HII HOW ARE YOU HOW MUCH LOW CAN YOU GO')
     expect(a.intent).toBe('PRICE_ONLY')

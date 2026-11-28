@@ -1,4 +1,4 @@
-import { strengthenComparisonPitch } from '../sales-pitch'
+import { buildSalesPitch, strengthenComparisonPitch } from '../sales-pitch'
 import type { ProductContext } from '../product-context'
 
 function product(over: Partial<ProductContext> = {}): ProductContext {
@@ -30,6 +30,32 @@ function product(over: Partial<ProductContext> = {}): ProductContext {
     ...over,
   } as ProductContext
 }
+
+describe('buildSalesPitch', () => {
+  it('leads with verified value and does not ask the shopper to name a price', () => {
+    const out = buildSalesPitch({
+      persona: 'strict_negotiator',
+      product: product(),
+      productTitle: 'Trail Sneaker',
+      listedPrice: '₹999.00',
+    })
+
+    expect(out).toContain('reinforced stitching and a 2-year replacement')
+    expect(out).toContain('₹999.00')
+    expect(out).not.toMatch(/what price|share (?:the|your) price|name a price/i)
+  })
+
+  it('stays honest when no verified product facts exist', () => {
+    const out = buildSalesPitch({
+      persona: 'friendly_shopkeeper',
+      product: product({ fetchFailed: true, merchantApprovedSellingPoints: [], description: '' }),
+      productTitle: 'Trail Sneaker',
+    })
+
+    expect(out).toMatch(/won't invent reasons/i)
+    expect(out).not.toMatch(/best|guarantee|bestseller|selling out/i)
+  })
+})
 
 describe('strengthenComparisonPitch', () => {
   it('replaces the dismissive opener with a verified value pitch and a close', () => {

@@ -4,6 +4,7 @@ export type ComparisonPitchContext = {
   persona?: 'friendly_shopkeeper' | 'strict_negotiator' | 'playful_friend'
   productTitle?: string
   product?: ProductContext
+  listedPrice?: string | null
 }
 
 const VALUE_PATTERN =
@@ -51,6 +52,24 @@ function closeLine(ctx: ComparisonPitchContext): string {
 
 function splitSentences(reply: string): string[] {
   return reply.match(/[^.!?]+[.!?]?\s*/g) ?? [reply]
+}
+
+function salesPitchClose(ctx: ComparisonPitchContext): string {
+  if (ctx.persona === 'strict_negotiator') return 'If that fits your need, I can review a fair offer.'
+  if (ctx.persona === 'playful_friend') return 'If that sounds like your kind of thing, I can make the next step easy.'
+  return 'If that fits what you were looking for, I can help you take the next step.'
+}
+
+export function buildSalesPitch(ctx: ComparisonPitchContext): string {
+  const title = cleanFact(ctx.product?.title || ctx.productTitle, 80) || 'this item'
+  const candidate = verifiedValueFact(ctx)
+  const fact = candidate && candidate.toLowerCase() !== title.toLowerCase() ? candidate : null
+  const listed = cleanFact(ctx.listedPrice, 40)
+  const lead = fact
+    ? `Fair question. For ${title}, what I can honestly stand behind is this: ${fact}.`
+    : `Fair question. I won't invent reasons to buy ${title}, but I can help you judge it against what matters to you.`
+  const priceLine = listed ? ` It's listed at ${listed}, so you know exactly what we're working from.` : ''
+  return `${lead}${priceLine} ${salesPitchClose(ctx)}`
 }
 
 export function strengthenComparisonPitch(reply: string, ctx: ComparisonPitchContext): string {

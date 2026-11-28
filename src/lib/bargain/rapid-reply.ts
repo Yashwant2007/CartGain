@@ -47,22 +47,20 @@ export interface RapidReplyResult {
 type Copy = Partial<Record<RapidReplyMode, string>>
 type PersonaCopy = Record<RapidPersona, Copy>
 
-const ITEM_WORD: Record<string, string> = { en: 'this item', hi: '?? ????', mr: '?? ????', hinglish: 'yeh item' }
-
 const EN: PersonaCopy = {
   friendly_shopkeeper: {
-    greeting: 'Hey there! ?? Looking for details on {item}, or want to try a price?',
-    small_talk: 'All good here ?? What would you like to know about {item}, or what price feels right?',
-    emoji_only: 'Got you ?? Want {item} details, or should we talk price?',
+    greeting: 'Hey there! 👋 Looking for details on {item}, or want to try a price?',
+    small_talk: 'All good here 🙂 What would you like to know about {item}, or what price feels right?',
+    emoji_only: '🙂 Got you. Want {item} details, or should we talk price?',
     nonsense: "I didn't quite catch that, but I'm here to help. Want details on {item}, or want to share a price?",
-    random: "That came through a bit scrambled ?? No worries ? ask me about {item}, or drop a price you're thinking of.",
+    random: "That came through a bit scrambled 😅 No worries  -  ask me about {item}, or drop a price you're thinking of.",
     off_topic: "I can keep it helpful around {item}. Want product details, or a price you want me to check?",
-    joke: "Haha, good one ?? Back to {item} ? quick details, or your best price?",
-    flattery: "That's kind of you ?? Let's make it useful ? {item} details, or a price that works for you?",
-    hesitation: "No rush at all. What's holding you back on {item} ? fit, trust, or the price?",
+    joke: "Haha, good one 😄 Back to {item}  -  quick details, or your best price?",
+    flattery: "That's kind of you 🙂 Let's make it useful  -  {item} details, or a price that works for you?",
+    hesitation: "No rush at all. What's holding you back on {item}  -  fit, trust, or the price?",
     probe: "I'm here for {item} details and a fair deal. Ask me anything about it, or make an offer.",
     insult: "I'm happy to keep this helpful and respectful. When you're ready, I can help with {item} or your offer.",
-    trend_talk: "Nice reference ?? I won't guess what's trending, but for {item} ? want details or a comfortable price?",
+    trend_talk: "Nice reference 😄 I won't guess what's trending, but for {item}  -  want details or a comfortable price?",
   },
   strict_negotiator: {
     greeting: 'Hello. Would you like details on {item}, or would you like to make an offer?',
@@ -71,118 +69,75 @@ const EN: PersonaCopy = {
     nonsense: "I didn't understand that message. If you clarify, I can help with {item} details or your offer.",
     random: "That message wasn't clear. I can help with {item} details, or you can share a serious price.",
     off_topic: "I can only help with {item}. Ask a product question or make an offer.",
-    joke: "Noted. Back to {item} ? do you want details, or a price I can evaluate?",
+    joke: "Noted. Back to {item}  -  do you want details, or a price I can evaluate?",
     flattery: 'Thank you. If helpful, I can share verified details on {item} or review your offer.',
-    hesitation: "Take your time. If it helps, tell me what's holding you back on {item} ? details or price.",
+    hesitation: "Take your time. If it helps, tell me what's holding you back on {item}  -  details or price.",
     probe: "I can provide verified details on {item} or evaluate a fair offer.",
     insult: "I'll keep this professional. When you're ready, I can help with {item} or your offer.",
     trend_talk: "I'll stay factual. For {item}, I can share verified details or review a reasonable price.",
   },
   playful_friend: {
-    greeting: 'Hey! ?? Want the quick scoop on {item}, or want to throw in a price?',
-    small_talk: 'All good here ?? What do you want to know about {item}, or what price feels right?',
-    emoji_only: 'Got the vibe ?? Want {item} details, or should we talk price?',
-    nonsense: "That one flew past me ?? No stress ? ask about {item} or drop a price.",
-    random: "That came in a little scrambled ?? All good ? {item} details or your best price?",
-    off_topic: "I?m better at deals than detours ?? Want {item} details or a price check?",
-    joke: "Haha, fair ?? Back to {item} ? details, or your best price?",
-    flattery: "Smooth ?? Now let?s make it useful ? {item} details or a price that works?",
-    hesitation: "No rush ?? What?s holding you back on {item} ? fit, trust, or price?",
-    probe: "I?ve got {item} details and fair-deal energy ?? Ask away or make an offer.",
-    insult: "I?ll keep it friendly and useful ?? When you?re ready, we can talk {item} or your offer.",
-    trend_talk: "Nice reference ?? I won?t guess the trend, but for {item} ? details or a comfy price?",
+    greeting: 'Hey! 😄 Want the quick scoop on {item}, or want to throw in a price?',
+    small_talk: 'All good here 😄 What do you want to know about {item}, or what price feels right?',
+    emoji_only: 'Got the vibe 🙂 Want {item} details, or should we talk price?',
+    nonsense: "That one flew past me 😅 No stress  -  ask about {item} or drop a price.",
+    random: "That came in a little scrambled 😅 All good  -  {item} details or your best price?",
+    off_topic: "I'm better at deals than detours 😄 Want {item} details or a price check?",
+    joke: "Haha, fair 😄 Back to {item}  -  details, or your best price?",
+    flattery: "Smooth 😄 Now let's make it useful  -  {item} details or a price that works?",
+    hesitation: "No rush 😄 What's holding you back on {item}  -  fit, trust, or price?",
+    probe: "I've got {item} details and fair-deal energy 😄 Ask away or make an offer.",
+    insult: "I'll keep it friendly and useful 🙂 When you're ready, we can talk {item} or your offer.",
+    trend_talk: "Nice reference 😄 I won't guess the trend, but for {item}  -  details or a comfy price?",
   },
 }
 
 const HINGLISH: PersonaCopy = {
   friendly_shopkeeper: {
-    greeting: 'Hey! ?? {item} ke baare mein puchna hai, ya apna price batana hai?',
-    small_talk: 'Sab badhiya ?? {item} ke baare mein kya jaan-na hai, ya kya price sahi lagega?',
-    emoji_only: 'Samajh gaya ?? {item} ki details chahiye ya apna price?',
+    greeting: 'Hey! 👋 {item} ke baare mein puchna hai, ya apna price batana hai?',
+    small_talk: 'Sab badhiya 🙂 {item} ke baare mein kya jaan-na hai, ya kya price sahi lagega?',
+    emoji_only: '🙂 Samajh gaya. {item} ki details chahiye ya apna price?',
     nonsense: 'Yeh thoda clear nahi hua, par main help kar sakta hoon. {item} ki details chahiye ya price share karoge?',
-    random: 'Thoda scrambled aa gaya ?? Koi baat nahi ? {item} ka sawaal pucho ya apna price batao.',
+    random: 'Thoda scrambled aa gaya 😅 Koi baat nahi  -  {item} ka sawaal pucho ya apna price batao.',
     off_topic: 'Chalo {item} par focus karte hain. Koi question hai, ya price batana hai?',
-    joke: 'Haha, sahi tha ?? Ab {item} ki baat ? details chahiye ya best price?',
-    flattery: 'Shukriya ?? Kaam ki baat karein ? {item} details ya aapka price?',
-    hesitation: 'Koi jaldi nahi. {item} mein kya rok raha hai ? fit, trust, ya price?',
+    joke: 'Haha, sahi tha 😄 Ab {item} ki baat  -  details chahiye ya best price?',
+    flattery: 'Shukriya 🙂 Kaam ki baat karein  -  {item} details ya aapka price?',
+    hesitation: 'Koi jaldi nahi. {item} mein kya rok raha hai  -  fit, trust, ya price?',
     probe: 'Main {item} ki verified details aur fair deal mein help kar sakta hoon. Sawaal pucho ya offer do.',
     insult: 'Main respectfully help karna chahta hoon. Jab ready ho, {item} ya price par baat karte hain.',
-    trend_talk: 'Reference samajh gaya ?? Trend ka guess nahi karunga, par {item} pe ? details chahiye ya comfortable price?',
+    trend_talk: 'Reference samajh gaya 😄 Trend ka guess nahi karunga, par {item} pe  -  details chahiye ya comfortable price?',
   },
   strict_negotiator: {
     greeting: 'Hello. {item} ki details chahiye, ya aap offer dena chahte hain?',
     small_talk: 'Main {item} mein help kar sakta hoon. Product sawal hai ya price batana hai?',
     emoji_only: 'Samajh gaya. {item} ki details chahiye ya offer dena hai?',
-    nonsense: 'Message clear nahi hua. Kripya clear likhein ? main {item} details ya offer par help kar sakta hoon.',
+    nonsense: 'Message clear nahi hua. Kripya clear likhein  -  main {item} details ya offer par help kar sakta hoon.',
     random: 'Yeh message clear nahi tha. {item} ka specific sawaal puchiye ya serious price bataiye.',
     off_topic: 'Main sirf {item} par help kar sakta hoon. Product sawaal ya offer bataiye.',
-    joke: 'Theek hai. {item} par wapas aayein ? details chahiye ya price evaluate karun?',
+    joke: 'Theek hai. {item} par wapas aayein  -  details chahiye ya price evaluate karun?',
     flattery: 'Dhanyavaad. Main {item} ki verified details ya aapka offer dekh sakta hoon.',
-    hesitation: 'Koi jaldi nahi. {item} mein kya concern hai ? details ya price?',
+    hesitation: 'Koi jaldi nahi. {item} mein kya concern hai  -  details ya price?',
     probe: 'Main {item} ki verified details de sakta hoon ya fair offer evaluate kar sakta hoon.',
     insult: 'Main professional rahunga. Jab ready ho, {item} ya offer par baat kar sakte hain.',
     trend_talk: 'Main guess nahi karunga. {item} par verified details chahiye ya reasonable price batana hai?',
   },
   playful_friend: {
-    greeting: 'Hey! ?? {item} ka quick scoop chahiye, ya apna price fenkna hai?',
-    small_talk: 'Sab mast ?? {item} ke baare mein kya jaan-na hai, ya kya price sahi lagega?',
-    emoji_only: 'Vibe mil gayi ?? {item} details ya price?',
-    nonsense: 'Woh thoda upar se gaya ?? Koi tension nahi ? {item} pucho ya price batao.',
-    random: 'Thoda scrambled aa gaya ?? No problem ? {item} details ya best price?',
-    off_topic: 'Main deals mein better hoon ?? {item} ki baat karein ? details ya price?',
-    joke: 'Haha, sahi ?? Wapas {item} ? details chahiye ya best price?',
-    flattery: 'Smooth ?? Ab useful baat ? {item} details ya aapka price?',
-    hesitation: 'Koi jaldi nahi ?? {item} mein kya atka hai ? fit, trust, ya price?',
-    probe: 'Mere paas {item} details aur fair-deal energy hai ?? Pucho ya offer do.',
-    insult: 'Main friendly aur helpful rahunga ?? Jab ready ho, {item} ya offer par baat karte hain.',
-    trend_talk: 'Reference mast tha ?? Trend guess nahi karunga, par {item} pe ? details ya comfortable price?',
+    greeting: 'Hey! 😄 {item} ka quick scoop chahiye, ya apna price fenkna hai?',
+    small_talk: 'Sab mast 😄 {item} ke baare mein kya jaan-na hai, ya kya price sahi lagega?',
+    emoji_only: 'Vibe mil gayi 🙂 {item} details ya price?',
+    nonsense: 'Woh thoda upar se gaya 😅 Koi tension nahi  -  {item} pucho ya price batao.',
+    random: 'Thoda scrambled aa gaya 😅 No problem  -  {item} details ya best price?',
+    off_topic: 'Main deals mein better hoon 😄 {item} ki baat karein  -  details ya price?',
+    joke: 'Haha, sahi 😄 Wapas {item}  -  details chahiye ya best price?',
+    flattery: 'Smooth 😄 Ab useful baat  -  {item} details ya aapka price?',
+    hesitation: 'Koi jaldi nahi 😄 {item} mein kya atka hai  -  fit, trust, ya price?',
+    probe: 'Mere paas {item} details aur fair-deal energy hai 😄 Pucho ya offer do.',
+    insult: 'Main friendly aur helpful rahunga 🙂 Jab ready ho, {item} ya offer par baat karte hain.',
+    trend_talk: 'Reference mast tha 😄 Trend guess nahi karunga, par {item} pe  -  details ya comfortable price?',
   },
 }
 
-const HI: PersonaCopy = {
-  friendly_shopkeeper: {
-    greeting: '??????! ?? {item} ?? ???? ??? ????? ?? ?? ???? ???? ????? ???',
-    small_talk: '?? ?????? ?? {item} ?? ???? ??? ???? ????? ???????, ?? ???? ???? ??? ??????',
-    emoji_only: '??? ??? ?? {item} ?? ??????? ????? ?? ???? ?? ??? ?????',
-    nonsense: '?? ????? ??? ???? ???, ?? ??? ??? ?? ???? ???? {item} ?? ??????? ????? ?? ???? ???? ??????',
-    random: '?? ????? ????? ???? ??? ??? ?? ??? ??? ???? ? {item} ????? ?? ???? ???? ??????',
-    off_topic: '???? {item} ?? ?? ???? ???? ???? ????? ?? ?? ???? ????? ???',
-    joke: '?? ??, ????? ?? ?? ?? {item} ?? ??? ? ??????? ????? ?? ???? ?????',
-    flattery: '???????? ?? ??? ?? ??? ???? ? {item} ?? ??????? ?? ???? ?????',
-    hesitation: '??? ????? ????? {item} ??? ???? ??? ??? ?? ? ???, ?????, ?? ?????',
-    probe: '??? {item} ?? verified ??????? ?? fair deal ??? ??? ?? ???? ???? ???? ????? ?? ??? ??????',
-    insult: '??? ???????????? ??? ???? ???????? ?? ?? ????? ???, {item} ?? ???? ?? ??? ?????',
-    trend_talk: '?????? ??? ??? ?? ??? trend ?? ??????? ???? ???????, ?? {item} ?? ? ??????? ????? ?? comfortable ?????',
-  },
-  strict_negotiator: {
-    greeting: '??????? {item} ?? ??????? ????? ?? ?? ??? ???? ????? ????',
-    small_talk: '??? {item} ??? ??? ?? ???? ???? ?????? ?????? ?? ?? ???? ????? ???',
-    emoji_only: '??? ???? {item} ?? ??????? ????? ?? ??? ???? ???',
-    nonsense: '????? ?????? ???? ???? ????? ?????? ????? ? ??? {item} ?? ??????? ?? ??? ??? ??? ?? ???? ????',
-    random: '?? ????? ?????? ???? ??? {item} ?? ??????? ?????? ????? ?? ????? ???? ??????',
-    off_topic: '??? ???? {item} ?? ??? ?? ???? ???? ?????? ?????? ?? ??? ??????',
-    joke: '??? ??? {item} ?? ????? ??? ? ??????? ????? ?? ?????',
-    flattery: '???????? ??? {item} ?? verified ??????? ?? ???? ??? ?? ???? ??? ??? ???? ????',
-    hesitation: '??? ????? ????? {item} ??? ???? ????? ?? ? ??????? ?? ?????',
-    probe: '??? {item} ?? verified ??????? ?? ???? ??? ?? ???? ??? ??? ???? ????',
-    insult: '??? ?????? ??????? ?? ?? ????? ???, {item} ?? ??? ?? ??? ?? ???? ????',
-    trend_talk: '??? ??????? ???? ???????? {item} ?? verified ??????? ????? ?? ???? ???? ????? ???',
-  },
-  playful_friend: {
-    greeting: '???! ?? {item} ?? quick scoop ????? ?? ???? ???? ?????? ???',
-    small_talk: '?? ?????? ?? {item} ?? ???? ??? ???? ????? ??, ?? ???? ???? ??? ??????',
-    emoji_only: '???? ??? ?? ?? {item} details ?? price?',
-    nonsense: '?? ????? ??? ?? ???? ??? ?? ??? ??? ???? ? {item} ????? ?? ???? ??????',
-    random: '????? scrambled ??? ?? ??? ?????? ???? ? {item} details ?? best price?',
-    off_topic: '??? deals ??? ????? ??? ?? {item} ?? ??? ???? ? details ?? price?',
-    joke: '?? ??, ??? ?? ???? {item} ? details ?? best price?',
-    flattery: 'Smooth ?? ?? useful ??? ? {item} details ?? ???? ?????',
-    hesitation: '??? ????? ???? ?? {item} ??? ???? ???? ?? ? fit, trust, ?? price?',
-    probe: '???? ??? {item} details ?? fair-deal energy ?? ?? ????? ?? offer ??????',
-    insult: '??? friendly ?? helpful ?????? ?? ????? ??? ?? {item} ?? offer ?? ??? ?????',
-    trend_talk: 'Reference ??????? ?? ?? Trend guess ???? ??????, ?? {item} ?? ? details ?? comfortable price?',
-  },
-}
+const HI: PersonaCopy = HINGLISH
 
 function normalizedLang(language?: string | null): string {
   const raw = (language || 'en').toLowerCase().trim()
@@ -197,49 +152,50 @@ function safeProductTitle(title?: string | null): string | null {
   return clean || null
 }
 
+const ITEM_WORD: Record<string, string> = { en: 'this item', hi: 'yeh item', mr: 'ha item', hinglish: 'yeh item' }
 const COPY: Record<string, PersonaCopy> = { en: EN, hinglish: HINGLISH, hi: HI, mr: HI }
 
 const CONTEXT_TREND_COPY: Record<ContextFlavor, Partial<Record<string, string>>> = {
   political: {
-    en: "I get the reference ?? I'll stay neutral and keep it friendly. For {item}, what price actually works for you?",
-    hinglish: "Reference samajh gaya ?? main neutral rehta hoon. {item} par aapka comfortable price kya hoga?",
-    hi: "Reference ??? ??? ?? ??? neutral ??????? {item} ?? ??? ???? comfortable ???? ???? ?????",
+    en: "Nice reference 😄 I'll stay neutral and keep it friendly 🔥 For {item}, what price actually works for you?",
+    hinglish: "Reference samajh gaya 😄 main neutral rehta hoon; {item} par aapka comfortable price kya hoga?",
+    hi: "Reference samajh gaya 😄 main neutral rahunga; {item} ke liye aapka comfortable price kya hoga?",
   },
   devotional: {
-    en: "I get the good-vibes reference ?? For {item}, what price feels right to you?",
-    hinglish: "Achhe vibes wala reference samajh gaya ?? {item} par aapka comfortable price kya hoga?",
-    hi: "????? vibes ???? reference ??? ??? ?? {item} ?? ??? ???? comfortable ???? ???? ?????",
+    en: "I get the good-vibes reference 😄 For {item}, what price feels right to you?",
+    hinglish: "Achhe vibes wala reference samajh gaya 😄 {item} ka deal clear karte hain, aapka price kya hoga?",
+    hi: "Achhe vibes wala reference samajh gaya 😄 {item} par aapka comfortable price kya hoga?",
   },
   fashion: {
-    en: "Style point noted ?? For {item}, what price works for you?",
-    hinglish: "Style point noted ?? {item} ka price settle karte hain, aapka price kya hoga?",
-    hi: "Style point noted ?? {item} ?? ??? ???? comfortable ???? ???? ?????",
+    en: "Style point noted 🔥 For {item}, what price works for you?",
+    hinglish: "Style point noted 🔥 {item} ka price settle karte hain, aapka price kya hoga?",
+    hi: "Style point noted 🔥 {item} ke liye aapka comfortable price kya hoga?",
   },
   meme: {
-    en: "Meme mode noted ?? For {item}, give me your best price ? I deliver deals, not punchlines.",
-    hinglish: "Meme mode on ?? {item} ke liye aapka best price bataiye ? main punchline nahi, deal deliver karta hoon.",
+    en: "Meme mode on 😄 For {item}, give me your best price  -  I deliver deals, not punchlines.",
+    hinglish: "Meme mode on 😄 {item} ke liye aapka best price bataiye  -  main punchline nahi, deal deliver karta hoon.",
   },
   sport: {
-    en: "Nice reference ?? For {item}, what price should I aim for?",
-    hinglish: "Ye reference solid hai ?? {item} par aapka best price kya hoga?",
-    hi: "Reference ??? ??? ?? {item} ?? ??? ???? best price ???? ?????",
+    en: "Nice reference 🔥 For {item}, what price should I aim for?",
+    hinglish: "Ye reference solid hai 🔥 {item} par aapka best price kya hoga?",
+    hi: "Reference samajh gaya 🔥 {item} ke liye aapka best price kya hoga?",
   },
   soft_nudge: {
-    en: "You want a little more room ? fair enough ?? For {item}, what price can you actually do?",
-    hinglish: "Thoda aur comfort chahiye, samajh gaya ?? {item} par aapka actual price kya hoga?",
-    hi: "????? ?? comfort ?????, ??? ??? ?? {item} ?? ??? ???? actual ???? ???? ?????",
+    en: "You want a little more room  -  fair enough 😄 For {item}, what price can you actually do?",
+    hinglish: "Thoda aur comfort chahiye, samajh gaya 😄 {item} par aapka actual price kya hoga?",
+    hi: "Thoda aur comfort chahiye, samajh gaya 😄 {item} ke liye aapka actual price kya hoga?",
   },
   casual: {
-    en: "I get the vibe ?? Want {item} details, or your best price?",
-    hinglish: "Vibe samajh gaya ?? {item} ke baare mein poochhiye ya apna best price bataiye.",
-    hi: "Vibe ??? ??? ?? {item} ?? ???? ??? ????? ?? ???? best price ??????",
+    en: "Nice reference 😄 Want {item} details, or your best price?",
+    hinglish: "Vibe samajh gaya 😄 {item} ke baare mein poochhiye ya apna best price bata dijiye.",
+    hi: "Vibe samajh gaya 😄 {item} ke baare mein puchiye ya apna best price bataiye.",
   },
 }
 
 const POLITICAL_NUDGE_COPY: Partial<Record<string, string>> = {
-  en: "I hear the nudge ?? I'll stay neutral. For {item}, what price can you genuinely do?",
-  hinglish: "Reference samajh gaya ?? main neutral rehta hoon. {item} par aapka comfortable price kya hoga?",
-  hi: "Reference ??? ??? ?? ??? neutral ??????? {item} ?? ??? ???? comfortable ???? ???? ?????",
+  en: "Nice nudge 😄 I'll stay neutral, but I hear you 🔥 For {item}, what price can you genuinely do?",
+  hinglish: "Reference samajh gaya 😄 main neutral rehta hoon; thoda aur comfort bhi samajh gaya 🔥 {item} par aapka comfortable price kya hoga?",
+  hi: "Reference samajh gaya 😄 main neutral rahunga; thoda aur comfort bhi samajh gaya 🔥 {item} ke liye aapka comfortable price kya hoga?",
 }
 
 const EMOJI_G = /[\uD83C-\uD83E][\uDC00-\uDFFF]|[\u2600-\u27BF\u2B00-\u2BFF\uFE0F]/g
@@ -276,10 +232,7 @@ export function rapidReplyForTurn(input: RapidReplyInput): RapidReplyResult | nu
       : null)
     : null
   const source = contextCopy ?? personaTable[input.mode] ?? EN[persona][input.mode] ?? EN.friendly_shopkeeper[input.mode] ?? ''
-  const budget = typeof input.emojiBudget === 'number'
-    ? input.emojiBudget
-    : persona === 'strict_negotiator' ? 0 : persona === 'playful_friend' ? 1 : 1
-  const reply = applyEmojiBudget(source.replace(/\{item\}/g, product), budget)
+  const reply = applyEmojiBudget(source.replace(/\{item\}/g, product), input.emojiBudget ?? 0)
   return {
     reply,
     decision: 'chat',

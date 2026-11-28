@@ -185,13 +185,18 @@ function forceFallbackEnabled(): boolean {
   return value === 'true' || value === '1'
 }
 
-export type AiClientOptions = { force?: boolean; emergency?: boolean; probeStarted?: boolean }
+export type AiClientOptions = {
+  force?: boolean
+  emergency?: boolean
+  probeStarted?: boolean
+  bypassBreaker?: boolean
+}
 
 export function getPrimaryAiClient(options: AiClientOptions = {}): AiResolved | null {
   if (forceFallbackEnabled() && !options.force) return null
   const key = envTrimmed('OPENAI_API_KEY')
   if (!key) return null
-  if (isTierTripped('primary')) {
+  if (isTierTripped('primary') && !options.bypassBreaker) {
     if (!options.force) return null
     if (!options.probeStarted && !beginTierProbe('primary')) return null
   }
@@ -211,8 +216,8 @@ export function getAiClient(userKey?: string, options: AiClientOptions = {}): Ai
   const primary = getPrimaryAiClient(options)
   if (primary) return primary
 
-  if (isTierTripped('fallback') && options.force && !options.probeStarted && !beginTierProbe('fallback')) return null
-  if (!isTierTripped('fallback') || options.force) {
+  if (isTierTripped('fallback') && options.force && !options.probeStarted && !options.bypassBreaker && !beginTierProbe('fallback')) return null
+  if (!isTierTripped('fallback') || options.force || options.bypassBreaker) {
     const fbClient = makeFallbackClient()
     if (fbClient) return { client: fbClient, tier: 'fallback' }
   }
@@ -227,7 +232,7 @@ export function getAiClient(userKey?: string, options: AiClientOptions = {}): Ai
  * completed inside the overall latency budget.
  */
 export function getFallbackAiClient(options: AiClientOptions = {}): AiResolved | null {
-  if (isTierTripped('fallback')) {
+  if (isTierTripped('fallback') && !options.bypassBreaker) {
     if (!options.force) return null
     if (!options.probeStarted && !beginTierProbe('fallback')) return null
   }

@@ -37,7 +37,7 @@ import { detectLanguage, detectLanguageRequest } from '@/lib/bargain/language'
 import { deriveConversationState, conversationStateGuidance } from '@/lib/bargain/conversation-state'
 import { validateReplyClaimAdherence } from '@/lib/bargain/claims'
 import { rapidReplyForTurn } from '@/lib/bargain/rapid-reply'
-import { strengthenComparisonPitch } from '@/lib/bargain/sales-pitch'
+import { buildSalesPitch, strengthenComparisonPitch } from '@/lib/bargain/sales-pitch'
 import { COMPACT_SALESPERSON_PLAYBOOK, SALESPERSON_PLAYBOOK } from '@/lib/bargain/sales-playbook'
 import { contextFlavorsPromptBlock, detectContextFlavors } from '@/lib/bargain/context-flavor'
 import { scrubPressureLanguage } from '@/lib/bargain/reply-safety'
@@ -130,12 +130,12 @@ function avoidReplyRepetition(
       price ? `My clear offer is ${price}. Tell me if you want me to proceed.` : `Tell me your target price for ${item}, and I will respond clearly.`,
     ],
     playful_friend: [
-      price ? `Fresh take ?? I can do ${price} for ${item}. Want me to lock it in?` : `New angle ?? What price are you thinking for ${item}?`,
-      price ? `I can still make ${price} happen ?? Ready to grab it?` : `Tell me your number for ${item} and I?ll give you a straight answer.`,
+      price ? `Fresh take 😄 I can do ${price} for ${item}. Want me to lock it in?` : `New angle 😄 What price are you thinking for ${item}?`,
+      price ? `I can still make ${price} happen 🙂 Ready to grab it?` : `Tell me your number for ${item} and I'll give you a straight answer.`,
     ],
     friendly_shopkeeper: [
-      price ? `I can do ${price} for ${item} ?? If that works, I?ll lock it in for you.` : `I?m here to help ?? What price felt right for ${item}?`,
-      price ? `For you, I can confirm ${price} ?? Want me to go ahead?` : `Share the price you had in mind for ${item}, and I?ll see the best I can do.`,
+      price ? `I can do ${price} for ${item} 🙂 If that works, I'll lock it in for you.` : `I'm here to help 🙂 What price felt right for ${item}?`,
+      price ? `For you, I can confirm ${price} 🙂 Want me to go ahead?` : `Share the price you had in mind for ${item}, and I'll see the best I can do.`,
     ],
   }
   const pool = alt[ctx.persona] ?? alt.friendly_shopkeeper
@@ -1484,6 +1484,16 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
     return bestPriceReply(best, ctx, historyLength)
   }
 
+  const asksForSalesPitch = ctx.intent?.salesPitchRequest === true || analyzeIntent(customerMessage).salesPitchRequest
+  if (asksForSalesPitch) {
+    return buildSalesPitch({
+      persona: ctx.persona,
+      product: ctx.product,
+      productTitle: ctx.productTitle,
+      listedPrice: price,
+    })
+  }
+
   const isDiscovery =
     !hasRecommendationStopRequest(customerMessage) &&
     (ctx.intent?.intent === 'PRODUCT_DISCOVERY' || ctx.intent?.intent === 'RECOMMENDATION_REQUEST' ||
@@ -1572,8 +1582,8 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
       : null
     const policyReply: Record<Persona, string> = {
       strict_negotiator: `I can only confirm what's shown in the verified store/product details. ${shippingSummary ? shippingSummary : "I don't have verified shipping, return, warranty, or COD details here."} If you want, we can focus on ${item} at ${price}.`,
-      playful_friend: `Good question ?? I don't want to guess policy details. ${shippingSummary ? `What I can confirm: ${shippingSummary}` : "I don't have verified shipping, return, warranty, or COD details here."} Want me to help with ${item} itself, or check a price?`,
-      friendly_shopkeeper: `Great question ? I only want to share confirmed details ?? ${shippingSummary ? shippingSummary : "I don't have verified shipping, return, warranty, or COD details here."} I can still help with ${item} details or a fair price if you'd like.`,
+      playful_friend: `Good question 🙂 I don't want to guess policy details. ${shippingSummary ? `What I can confirm: ${shippingSummary}` : "I don't have verified shipping, return, warranty, or COD details here."} Want me to help with ${item} itself, or check a price?`,
+      friendly_shopkeeper: `Great question 🙂 I only want to share confirmed details. ${shippingSummary ? shippingSummary : "I don't have verified shipping, return, warranty, or COD details here."} I can still help with ${item} details or a fair price if you'd like.`,
     }
     return policyReply[ctx.persona]
   }
@@ -1649,12 +1659,12 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
         `I want to be precise. Ask a product question, or share the price you have in mind for ${item}.`,
       ],
       playful_friend: [
-        `That one went past me a bit ?? No stress ? ask about ${item} or drop the price you're thinking.`,
-        `I missed that one ?? Want ${item} details, or should we talk your best price?`,
+        `That one went past me a bit 😅 No stress  -  ask about ${item} or drop the price you're thinking.`,
+        `I missed that one 😅 Want ${item} details, or should we talk your best price?`,
       ],
       friendly_shopkeeper: [
-        `I didn't quite catch that, friend ?? No worries ? ask about ${item}, or tell me the price you had in mind.`,
-        `I may have missed that ?? I can help with ${item} details, or we can talk about a price that works for you.`,
+        `I didn't quite catch that, friend 🙂 No worries  -  ask about ${item}, or tell me the price you had in mind.`,
+        `I may have missed that 🙂 I can help with ${item} details, or we can talk about a price that works for you.`,
       ],
     } : {
       strict_negotiator: [
@@ -1662,11 +1672,11 @@ export function chatFallback(customerMessage: string, ctx: NegotiationContext, h
         `Got it. Share the price you have in mind, and I'll give you a clear, fair answer.`,
       ],
       playful_friend: [
-        `Got you ?? What price are you thinking for ${item}, or want a quick detail first?`,
-        `Fair enough ?? Hit me with your price idea, or ask me anything about ${item}.`,
+        `Got you 😄 What price are you thinking for ${item}, or want a quick detail first?`,
+        `Fair enough 🙂 Hit me with your price idea, or ask me anything about ${item}.`,
       ],
       friendly_shopkeeper: [
-        `I hear you ?? What price were you hoping for on ${item}, or is there something I can clear up?`,
+        `I hear you 🙂 What price were you hoping for on ${item}, or is there something I can clear up?`,
         `Got you, friend. Share your price idea, and I'll see what fair option works for you.`,
       ],
     }
@@ -3261,6 +3271,21 @@ export async function negotiateStep(
   }
 
   const bestPriceIntent = ctx.intent ?? analyzeIntent(customerMessage)
+  const asksForSalesPitch = bestPriceIntent.salesPitchRequest || analyzeIntent(customerMessage).salesPitchRequest
+  if (asksForSalesPitch && validatedOffer == null) {
+    return {
+      reply: buildSalesPitch({
+        persona: ctx.persona,
+        product: ctx.product,
+        productTitle: ctx.productTitle,
+        listedPrice: `${ctx.currencySymbol}${ctx.originalPrice.toFixed(2)}`,
+      }),
+      decision: 'chat',
+      tactic: 'value_pitch',
+      sentiment: ctx.persona === 'strict_negotiator' ? 'firm' : ctx.persona === 'playful_friend' ? 'playful' : 'warm',
+      metadata: { aiSource: 'reflex', salesPitchRequest: true },
+    }
+  }
   if (bestPriceIntent.asksBestPrice && validatedOffer == null) {
     const standing = conversationAnalysis.lastAIOffer
     const candidate = standing != null && standing > quotedFloor(ctx) && standing < ctx.originalPrice
@@ -3288,9 +3313,13 @@ export async function negotiateStep(
   // must explicitly keep using the fallback tier instead of re-resolving the
   // primary we already tried.
   const resolved = trace?.primaryForced
-    ? getPrimaryAiClient({ force: true, probeStarted: true })
+    ? getPrimaryAiClient({ force: true, probeStarted: true, bypassBreaker: trace?.fallbackReason === 'rate_limit' })
     : trace?.attempted.includes('primary') && !trace.attempted.includes('fallback')
-      ? getFallbackAiClient({ force: trace?.fallbackForced, probeStarted: trace?.fallbackForced })
+      ? getFallbackAiClient({
+          force: trace?.fallbackForced,
+          probeStarted: trace?.fallbackForced,
+          bypassBreaker: trace?.fallbackReason === 'rate_limit',
+        })
       : getAiClient(undefined, { emergency: !trace })
   if (!resolved) {
     reportAiDegradation('ai_unavailable', 'no provider tier available')
@@ -3615,7 +3644,7 @@ export async function negotiateStep(
     // must never drop a real conversation into heuristics mid-message.
     // Recursion is bounded to one attempt per configured tier.
     if (tier === 'primary' && !attempted.includes('fallback')) {
-      const fallback = getFallbackAiClient({ force: true })
+      const fallback = getFallbackAiClient({ force: true, bypassBreaker: failure.category === 'rate_limit' })
       if (fallback) {
         return negotiateStep(ctx, history, customerMessage, customerOffer, sessionId, forceCompact, {
           ...nextTrace,
@@ -3629,7 +3658,7 @@ export async function negotiateStep(
       // a timeout does not trip the primary breaker, so retry it once before
       // dropping a real shopper onto heuristics. Other fallback failures (e.g.
       // a second timeout) are not retried to keep one bad turn bounded.
-      const primary = getPrimaryAiClient({ force: true })
+      const primary = getPrimaryAiClient({ force: true, bypassBreaker: failure.category === 'rate_limit' })
       if (primary) {
         return negotiateStep(ctx, history, customerMessage, customerOffer, sessionId, forceCompact, {
           ...nextTrace,

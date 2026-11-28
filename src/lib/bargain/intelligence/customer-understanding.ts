@@ -117,7 +117,7 @@ function secondaryIntentsFor(input: CustomerUnderstandingInput): ShopperIntent[]
   if (input.intent.category === 'COMPARISON_OBJECTION' || input.intent.objection === 'COMPARISON') found.push('COMPARISON')
   if (input.intent.objection === 'AVAILABILITY' || input.intent.objection === 'FIT_VARIANT') found.push('PRODUCT_MISMATCH')
   if (input.intent.intent === 'RECOMMENDATION_REQUEST') found.push('RECOMMENDATION_REQUEST')
-  if (input.intent.asksBestPrice) found.push('VALUE_UNCLEAR')
+  if (input.intent.asksBestPrice || input.intent.salesPitchRequest) found.push('VALUE_UNCLEAR')
   if (input.intent.objection === 'PURCHASE_HESITATION') found.push('PURCHASE_HESITATION')
   if (input.intent.intent === 'WALKOUT') found.push('WALKOUT')
   if (input.dealAccepted || input.checkoutStarted) found.push('PURCHASE_READY')
